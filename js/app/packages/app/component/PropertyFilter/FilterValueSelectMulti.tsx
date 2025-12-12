@@ -4,7 +4,14 @@ import XIcon from '@phosphor-icons/core/assets/regular/x.svg';
 import { propertiesServiceClient } from '@service-properties/client';
 import type { PropertyOption } from '@service-properties/generated/schemas/propertyOption';
 import type { Component } from 'solid-js';
-import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
+import {
+  createMemo,
+  createSignal,
+  For,
+  onCleanup,
+  onMount,
+  Show,
+} from 'solid-js';
 
 export type FilterValueSelectMultiProps = {
   propertyId: string;
@@ -16,11 +23,13 @@ export type FilterValueSelectMultiProps = {
 export const FilterValueSelectMulti: Component<FilterValueSelectMultiProps> = (
   props
 ) => {
-  const [isOpen, setIsOpen] = createSignal(false);
+  const [isAdding, setIsAdding] = createSignal(false);
   const [options, setOptions] = createSignal<PropertyOption[]>([]);
   const [isLoading, setIsLoading] = createSignal(true);
+  const [searchQuery, setSearchQuery] = createSignal('');
 
-  let addButtonRef!: HTMLButtonElement;
+  let inputRef!: HTMLInputElement;
+  let containerRef!: HTMLDivElement;
   let dropdownRef!: HTMLDivElement;
 
   // Fetch options for this property
@@ -62,32 +71,46 @@ export const FilterValueSelectMulti: Component<FilterValueSelectMultiProps> = (
     return options().find((o) => o.id === id);
   };
 
-  // Get available options (not already selected)
-  const availableOptions = () => {
-    return options().filter((o) => !props.values.includes(o.id));
+  // Get available options (not already selected, filtered by search)
+  const availableOptions = createMemo(() => {
+    const query = searchQuery().toLowerCase().trim();
+    return options()
+      .filter((o) => !props.values.includes(o.id))
+      .filter((o) => {
+        if (!query) return true;
+        return getOptionDisplayValue(o).toLowerCase().includes(query);
+      });
+  });
+
+  const handleAddClick = () => {
+    setIsAdding(true);
+    setSearchQuery('');
+    setTimeout(() => inputRef?.focus(), 0);
   };
 
   const handleSelectOption = (option: PropertyOption) => {
     if (!props.values.includes(option.id)) {
       props.onChange([...props.values, option.id]);
     }
-    setIsOpen(false);
+    setSearchQuery('');
+    setIsAdding(false);
   };
 
   const handleRemoveValue = (optionId: string) => {
     props.onChange(props.values.filter((id) => id !== optionId));
   };
 
-  // Close dropdown when clicking outside
+  // Close when clicking outside
   const handleClickOutside = (event: MouseEvent) => {
     const target = event.target;
     if (!(target instanceof Node)) return;
 
-    const isInsideButton = addButtonRef?.contains(target);
+    const isInsideContainer = containerRef?.contains(target);
     const isInsideDropdown = dropdownRef?.contains(target);
 
-    if (!isInsideButton && !isInsideDropdown) {
-      setIsOpen(false);
+    if (!isInsideContainer && !isInsideDropdown) {
+      setIsAdding(false);
+      setSearchQuery('');
     }
   };
 
@@ -123,20 +146,35 @@ export const FilterValueSelectMulti: Component<FilterValueSelectMultiProps> = (
         }}
       </For>
 
-      {/* Add button / dropdown */}
-      <div class="relative flex items-center">
-        <button
-          ref={addButtonRef}
-          type="button"
-          onClick={() => setIsOpen(!isOpen())}
-          class="h-6 px-2 text-[10px] text-ink-muted border border-edge hover:bg-hover cursor-pointer font-mono flex items-center"
+      {/* Add button / input */}
+      <div ref={containerRef} class="relative flex items-center">
+        <Show
+          when={isAdding()}
+          fallback={
+            <button
+              type="button"
+              onClick={handleAddClick}
+              class="h-6 px-2 text-[10px] text-ink-muted border border-edge hover:bg-hover cursor-pointer font-mono flex items-center"
+            >
+              {isLoading()
+                ? '...'
+                : props.values.length === 0
+                  ? 'Select...'
+                  : '+'}
+            </button>
+          }
         >
-          {isLoading() ? '...' : props.values.length === 0 ? 'Select...' : '+'}
-        </button>
-        <Show when={isOpen()}>
+          <input
+            ref={inputRef}
+            type="text"
+            value={searchQuery()}
+            onInput={(e) => setSearchQuery(e.currentTarget.value)}
+            placeholder="Search..."
+            class="h-6 px-2 min-w-16 w-fit text-[10px] text-ink border border-edge hover:bg-hover focus:ring-1 focus:ring-accent font-mono placeholder:text-ink-muted"
+          />
           <div
             ref={dropdownRef}
-            class="absolute left-0 top-full mt-1 border border-edge bg-menu shadow-lg max-h-48 overflow-y-auto font-mono min-w-[120px]"
+            class="absolute left-0 top-full mt-1 border border-edge bg-menu shadow-lg font-mono min-w-[160px] max-h-48 overflow-y-auto"
             style={{ 'z-index': zSidePanelSearchAndFilter }}
           >
             <Show
@@ -147,7 +185,9 @@ export const FilterValueSelectMulti: Component<FilterValueSelectMultiProps> = (
                     ? 'Loading...'
                     : options().length === 0
                       ? 'No options available'
-                      : 'All options selected'}
+                      : searchQuery()
+                        ? 'No matches'
+                        : 'All options selected'}
                 </div>
               }
             >

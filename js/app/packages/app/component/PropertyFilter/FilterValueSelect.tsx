@@ -3,7 +3,14 @@ import { isErr } from '@core/util/maybeResult';
 import { propertiesServiceClient } from '@service-properties/client';
 import type { PropertyOption } from '@service-properties/generated/schemas/propertyOption';
 import type { Component } from 'solid-js';
-import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
+import {
+  createMemo,
+  createSignal,
+  For,
+  onCleanup,
+  onMount,
+  Show,
+} from 'solid-js';
 
 export type FilterValueSelectProps = {
   propertyId: string;
@@ -13,11 +20,13 @@ export type FilterValueSelectProps = {
 };
 
 export const FilterValueSelect: Component<FilterValueSelectProps> = (props) => {
-  const [isOpen, setIsOpen] = createSignal(false);
+  const [isEditing, setIsEditing] = createSignal(false);
   const [options, setOptions] = createSignal<PropertyOption[]>([]);
   const [isLoading, setIsLoading] = createSignal(true);
+  const [searchQuery, setSearchQuery] = createSignal('');
 
-  let buttonRef!: HTMLButtonElement;
+  let inputRef!: HTMLInputElement;
+  let containerRef!: HTMLDivElement;
   let dropdownRef!: HTMLDivElement;
 
   // Fetch options for this property
@@ -56,27 +65,45 @@ export const FilterValueSelect: Component<FilterValueSelectProps> = (props) => {
 
   // Get selected option display
   const selectedDisplay = () => {
+    if (isLoading()) return '...';
     if (!props.value) return 'Select...';
     const option = options().find((o) => o.id === props.value);
     if (!option) return 'Select...';
     return getOptionDisplayValue(option);
   };
 
-  const handleSelectOption = (option: PropertyOption) => {
-    props.onChange(option.id);
-    setIsOpen(false);
+  // Filter options by search query
+  const filteredOptions = createMemo(() => {
+    const query = searchQuery().toLowerCase().trim();
+    if (!query) return options();
+    return options().filter((o) =>
+      getOptionDisplayValue(o).toLowerCase().includes(query)
+    );
+  });
+
+  const handleClick = () => {
+    setIsEditing(true);
+    setSearchQuery('');
+    setTimeout(() => inputRef?.focus(), 0);
   };
 
-  // Close dropdown when clicking outside
+  const handleSelectOption = (option: PropertyOption) => {
+    props.onChange(option.id);
+    setSearchQuery('');
+    setIsEditing(false);
+  };
+
+  // Close when clicking outside
   const handleClickOutside = (event: MouseEvent) => {
     const target = event.target;
     if (!(target instanceof Node)) return;
 
-    const isInsideButton = buttonRef?.contains(target);
+    const isInsideContainer = containerRef?.contains(target);
     const isInsideDropdown = dropdownRef?.contains(target);
 
-    if (!isInsideButton && !isInsideDropdown) {
-      setIsOpen(false);
+    if (!isInsideContainer && !isInsideDropdown) {
+      setIsEditing(false);
+      setSearchQuery('');
     }
   };
 
@@ -88,34 +115,49 @@ export const FilterValueSelect: Component<FilterValueSelectProps> = (props) => {
   });
 
   return (
-    <div class="relative">
-      <button
-        ref={buttonRef}
-        type="button"
-        onClick={() => setIsOpen(!isOpen())}
-        class="h-6 px-2 w-fit text-[10px] border border-edge hover:bg-hover text-left font-mono cursor-pointer flex items-center"
-        classList={{
-          'text-ink': props.value !== null,
-          'text-ink-muted': props.value === null,
-        }}
+    <div ref={containerRef} class="relative">
+      <Show
+        when={isEditing()}
+        fallback={
+          <button
+            type="button"
+            onClick={handleClick}
+            class="h-6 px-2 w-fit text-[10px] border border-edge hover:bg-hover text-left font-mono cursor-pointer flex items-center"
+            classList={{
+              'text-ink': props.value !== null,
+              'text-ink-muted': props.value === null,
+            }}
+          >
+            {selectedDisplay()}
+          </button>
+        }
       >
-        {isLoading() ? '...' : selectedDisplay()}
-      </button>
-      <Show when={isOpen()}>
+        <input
+          ref={inputRef}
+          type="text"
+          value={searchQuery()}
+          onInput={(e) => setSearchQuery(e.currentTarget.value)}
+          placeholder="Search..."
+          class="h-6 px-2 min-w-16 w-fit text-[10px] text-ink border border-edge hover:bg-hover focus:ring-1 focus:ring-accent font-mono placeholder:text-ink-muted"
+        />
         <div
           ref={dropdownRef}
-          class="absolute left-0 top-full mt-1 border border-edge bg-menu shadow-lg max-h-48 overflow-y-auto font-mono min-w-[120px]"
+          class="absolute left-0 top-full mt-1 border border-edge bg-menu shadow-lg font-mono min-w-[160px] max-h-48 overflow-y-auto"
           style={{ 'z-index': zSidePanelSearchAndFilter }}
         >
           <Show
-            when={options().length > 0}
+            when={filteredOptions().length > 0}
             fallback={
               <div class="px-3 py-2 text-[10px] text-ink-muted text-center">
-                {isLoading() ? 'Loading...' : 'No options available'}
+                {isLoading()
+                  ? 'Loading...'
+                  : options().length === 0
+                    ? 'No options available'
+                    : 'No matches'}
               </div>
             }
           >
-            <For each={options()}>
+            <For each={filteredOptions()}>
               {(option) => (
                 <button
                   type="button"
