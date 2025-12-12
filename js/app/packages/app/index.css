@@ -212,7 +212,7 @@
 
   --color-task: var(--theme-task);
   --color-task-bg: color-mix(in srgb, var(--color-task), var(--color-panel) 90%);
-  
+
   /* SCUFFED We probably want to let the theme determine 3 or 4 "extra" hue offsets. Rights now these are only being */
   /* used as debug colors and to improve the consistency of markdown block lightness/chroma with themed css */
   --color-accent-30:  oklch(var(--a0l) var(--a0c) calc(var(--a0h) +  30deg));
@@ -242,6 +242,13 @@
 .bg-panel, .bg-dialog {
   --color-focus: var(--color-accent);
 }
+
+/*
+*{
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-accent);
+}
+*/
 
 /* NOTE: We use this as a compile-time css util in this file to be able reuse the
  * declarations while still being able to override the color. */
@@ -318,6 +325,10 @@
       conic-gradient(from -90deg at bottom 2px right 2px, #0000 90deg, var(--color-focus) 0) 100% 100% / 20px 20px border-box no-repeat;
     z-index: 10;
     }
+}
+
+@utility hide-scrollbar {
+  scrollbar-width: none;
 }
 
 @utility bracket-* {
