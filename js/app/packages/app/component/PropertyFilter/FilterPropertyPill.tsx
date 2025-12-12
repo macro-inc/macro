@@ -12,6 +12,7 @@ import { FilterValueBoolean } from './FilterValueBoolean';
 import { FilterValueDate } from './FilterValueDate';
 import { FilterValueDateMulti } from './FilterValueDateMulti';
 import { FilterValueNumber } from './FilterValueNumber';
+import { FilterValueNumberMulti } from './FilterValueNumberMulti';
 import { FilterValueSelect } from './FilterValueSelect';
 
 type FilterPillProps = {
@@ -31,6 +32,7 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
   const [dateValue, setDateValue] = createSignal<string | null>(null);
   const [dateValues, setDateValues] = createSignal<string[]>([]); // Multi-date for equality actions
   const [numberValue, setNumberValue] = createSignal<number | null>(null);
+  const [numberValues, setNumberValues] = createSignal<number[]>([]); // Multi-number for equality actions
   const [selectValue, setSelectValue] = createSignal<string | null>(null); // option ID for SELECT types
 
   // Track if user is editing property (to show search instead of pill)
@@ -60,8 +62,11 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
       }
       return dateValues().length > 0; // Equality actions use multi-date
     }
-    if (property.data_type === 'NUMBER' && isComparisonAction(action())) {
-      return numberValue() !== null;
+    if (property.data_type === 'NUMBER') {
+      if (isComparisonAction(action())) {
+        return numberValue() !== null;
+      }
+      return numberValues().length > 0; // Equality actions use multi-number
     }
     if (
       (property.data_type === 'SELECT_STRING' ||
@@ -84,6 +89,7 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
       setDateValue(null);
       setDateValues([]);
       setNumberValue(null);
+      setNumberValues([]);
       setSelectValue(null);
       _setValues([]);
     }
@@ -151,6 +157,21 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
   // Handler for multi-date values
   const handleDateValuesChange = (newValues: string[]) => {
     setDateValues(newValues);
+
+    // Auto-save when values change
+    const property = selectedProperty();
+    const currentAction = action();
+    if (property && currentAction) {
+      const filter = buildPartialFilter(property, currentAction);
+      if (filter) {
+        props.onSave(filter);
+      }
+    }
+  };
+
+  // Handler for multi-number values
+  const handleNumberValuesChange = (newValues: number[]) => {
+    setNumberValues(newValues);
 
     // Auto-save when values change
     const property = selectedProperty();
@@ -231,7 +252,7 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
           ...baseFilter,
           dataType: 'NUMBER',
           action: filterAction as any,
-          values: filterValues.map(Number),
+          values: numberValues(), // Use numberValues signal for equality actions
         } as PropertyFilter;
       case 'SELECT_NUMBER':
       case 'SELECT_STRING':
@@ -355,6 +376,17 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
               <FilterValueNumber
                 value={numberValue()}
                 onChange={handleValueChange}
+              />
+            </Match>
+            <Match
+              when={
+                selectedProperty()?.data_type === 'NUMBER' &&
+                !isComparisonAction(action())
+              }
+            >
+              <FilterValueNumberMulti
+                values={numberValues()}
+                onChange={handleNumberValuesChange}
               />
             </Match>
             <Match

@@ -5,4 +5,5 @@ export { FilterValueBoolean } from './FilterValueBoolean';
 export { FilterValueDate } from './FilterValueDate';
 export { FilterValueDateMulti } from './FilterValueDateMulti';
 export { FilterValueNumber } from './FilterValueNumber';
+export { FilterValueNumberMulti } from './FilterValueNumberMulti';
 export { FilterValueSelect } from './FilterValueSelect';
