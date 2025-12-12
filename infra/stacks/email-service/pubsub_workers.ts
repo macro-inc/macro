@@ -5,9 +5,9 @@ import {
   DATADOG_API_KEY,
   datadogAgentContainer,
   fargateLogRouterSidecarContainer,
-} from '@resources';
-import { EcrImage } from '@service';
-import { CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '@shared';
+} from '../../packages/resources';
+import { EcrImage } from '../../packages/service';
+import { CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '../../packages/shared';
 
 const BASE_NAME = 'email-service-pubsub-workers';
 const BASE_PATH = '../../../rust/cloud-storage';

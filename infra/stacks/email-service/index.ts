@@ -11,7 +11,7 @@ import {
 } from '../../packages/shared';
 import { EmailRefreshHandler } from './refresh_lambda';
 import {cloudfrontPrivateKeySecret, getCloudfrontDistribution} from './s3-cloudfront-distribution';
-import { EmailScheduledHandler } from '@stacks/email-service/scheduled_lambda';
+import { EmailScheduledHandler } from './scheduled_lambda';
 import { get_coparse_api_vpc } from '../../packages/vpc';
 import { EmailService } from './service';
 import {EmailAttachmentsBucket} from "./attachments-bucket";
