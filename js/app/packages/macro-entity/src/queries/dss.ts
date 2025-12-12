@@ -74,10 +74,12 @@ const fetchPaginatedDocumentsPost = async ({
   apiToken,
   params,
   requestBody,
+  signal,
 }: {
   apiToken?: string;
   requestBody?: PostSoupRequest;
   params?: PostItemsSoupParams;
+  signal?: AbortSignal;
 }) => {
   if (!apiToken) throw new Error('No API token provided');
   const Authorization = `Bearer ${apiToken}`;
@@ -93,6 +95,7 @@ const fetchPaginatedDocumentsPost = async ({
     headers: { Authorization, 'Content-Type': 'application/json' },
     method: 'POST',
     body: requestBody ? JSON.stringify(requestBody) : undefined,
+    signal,
   });
   if (!response.ok)
     throw new Error('Failed to fetch documents', { cause: response });
@@ -166,11 +169,12 @@ export function createDssInfiniteQuery(
     return {
       queryKey,
       queryHash: hashKey(queryKey),
-      queryFn: ({ pageParam }) => {
+      queryFn: ({ pageParam, signal }) => {
         return fetchPaginatedDocumentsPost({
           apiToken: authQuery.data,
           requestBody,
           params: { cursor: pageParam.cursor },
+          signal,
         });
       },
       initialPageParam: params(),
