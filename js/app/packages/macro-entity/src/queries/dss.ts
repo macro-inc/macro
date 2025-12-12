@@ -168,7 +168,7 @@ export function createDssInfiniteQuery(
 
     return {
       queryKey,
-      queryHash: hashKey(queryKey),
+      queryKeyHashFn: hashKey,
       queryFn: ({ pageParam, signal }) => {
         return fetchPaginatedDocumentsPost({
           apiToken: authQuery.data,
