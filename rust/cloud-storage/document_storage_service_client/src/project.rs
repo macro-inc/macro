@@ -4,7 +4,7 @@ use model::project::response::GetProjectContentResponse;
 use super::DocumentStorageServiceClient;
 
 impl DocumentStorageServiceClient {
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self), err)]
     pub async fn get_project(
         &self,
         project_id: &str,
