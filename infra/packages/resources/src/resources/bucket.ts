@@ -46,12 +46,14 @@ export function createBucket({
         maxAgeSeconds: 3000,
       },
     ],
-    logging:
+    loggings:
       stack === 'prod'
-        ? {
+        ? [
+          {
             targetBucket: 'macro-logging-bucket',
             targetPrefix: `${bucketName}/`,
-          }
+          },
+        ]
         : undefined,
   });
 }

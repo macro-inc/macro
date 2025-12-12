@@ -1,7 +1,7 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import * as tls from '@pulumi/tls';
-import { Queue, Redis } from '@resources';
+import {createFrecencyTablePolicy, Queue, Redis} from '@resources';
 import {
   config,
   getMacroApiToken,
@@ -236,17 +236,82 @@ const queueArns = [
   contactsQueueArn,
 ];
 
+const emailServiceSecretsPolicy = new aws.iam.Policy(
+  'email-service-secrets-policy',
+  {
+    policy: {
+      Version: '2012-10-17',
+      Statement: [
+        {
+          Action: ['secretsmanager:GetSecretValue'],
+          Resource: [...secretKeyArns],
+          Effect: 'Allow',
+        },
+      ],
+    },
+    tags: tags,
+  }
+);
+
+const emailServiceSqsPolicy = new aws.iam.Policy(
+  'email-service-sqs-policy',
+  {
+    policy: pulumi.output({
+      Version: '2012-10-17',
+      Statement: [
+        {
+          Action: ['sqs:*'],
+          Resource: queueArns,
+          Effect: 'Allow',
+        },
+      ],
+    }),
+    tags: tags,
+  }
+);
+
+const emailServiceFrecencyPolicy = createFrecencyTablePolicy(
+  'email-service-frecency-policy'
+);
+
+// Create IAM role for email service
+const emailServiceRole = new aws.iam.Role(
+  'email-service-role',
+  {
+    name: `email-service-role-${stack}`,
+    assumeRolePolicy: {
+      Version: '2012-10-17',
+      Statement: [
+        {
+          Action: 'sts:AssumeRole',
+          Principal: {
+            Service: 'ecs-tasks.amazonaws.com',
+          },
+          Effect: 'Allow',
+          Sid: '',
+        },
+      ],
+    },
+    tags: tags,
+    managedPolicyArns: [
+      emailServiceSecretsPolicy.arn,
+      emailServiceSqsPolicy.arn,
+      emailServiceFrecencyPolicy.arn,
+    ],
+  }
+);
+
+
 const emailService = new EmailService('email-service', {
   vpc: coparse_api_vpc,
   tags,
   ecsClusterArn: cloudStorageClusterArn,
   clusterName: cloudStorageClusterName,
-  secretKeyArns,
+  role: emailServiceRole,
   serviceContainerPort: 8080,
   isPrivate: false,
   healthCheckPath: '/health',
   platform: { family: 'linux', architecture: 'amd64' },
-  queueArns,
   cfKeyPair: cfKeyPair,
   containerEnvVars: [
     {

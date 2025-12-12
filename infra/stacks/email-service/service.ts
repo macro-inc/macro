@@ -3,7 +3,6 @@ import * as awsx from '@pulumi/awsx';
 import * as pulumi from '@pulumi/pulumi';
 import type * as tls from '@pulumi/tls';
 import {
-  createFrecencyTablePolicy,
   DATADOG_API_KEY,
   datadogAgentContainer,
   fargateLogRouterSidecarContainer,
@@ -22,7 +21,7 @@ export const SERVICE_DOMAIN_NAME = `email-service${
 }.${BASE_DOMAIN}`;
 
 type Args = {
-  secretKeyArns: (pulumi.Output<string> | string)[];
+  role: aws.iam.Role;
   clusterName: pulumi.Output<string> | string;
   ecsClusterArn: pulumi.Output<string> | string;
   vpc: {
@@ -36,7 +35,6 @@ type Args = {
   containerEnvVars: { name: string; value: pulumi.Output<string> | string }[];
   healthCheckPath: string;
   tags: { [key: string]: string };
-  queueArns: pulumi.Output<string>[];
   cfKeyPair: tls.PrivateKey;
 };
 
@@ -56,6 +54,7 @@ export class EmailService extends pulumi.ComponentResource {
   constructor(
     name: string,
     {
+      role,
       ecsClusterArn,
       vpc,
       platform,
@@ -65,8 +64,6 @@ export class EmailService extends pulumi.ComponentResource {
       containerEnvVars,
       clusterName,
       tags,
-      secretKeyArns,
-      queueArns,
       cfKeyPair,
     }: Args,
     opts?: pulumi.ComponentResourceOptions
@@ -75,76 +72,7 @@ export class EmailService extends pulumi.ComponentResource {
     this.tags = tags;
 
     this.clusterName = clusterName;
-
-    // role
-    const secretsPolicy = new aws.iam.Policy(
-      `${BASE_NAME}-secrets-policy`,
-      {
-        policy: {
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Action: ['secretsmanager:GetSecretValue'],
-              Resource: [...secretKeyArns],
-              Effect: 'Allow',
-            },
-          ],
-        },
-        tags: this.tags,
-      },
-      { parent: this }
-    );
-
-    const gmailSqsPolicy = new aws.iam.Policy(
-      `${BASE_NAME}-gmail-sqs-policy`,
-      {
-        policy: pulumi.output({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Action: ['sqs:*'],
-              Resource: queueArns,
-              Effect: 'Allow',
-            },
-          ],
-        }),
-        tags: tags,
-      },
-      { parent: this }
-    );
-
-    // Create frecency table policy
-    const frecencyPolicy = createFrecencyTablePolicy(
-      `${BASE_NAME}-frecency-policy`,
-      { parent: this }
-    );
-
-    this.role = new aws.iam.Role(
-      `${BASE_NAME}-role`,
-      {
-        name: `${BASE_NAME}-role-${stack}`,
-        assumeRolePolicy: {
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Action: 'sts:AssumeRole',
-              Principal: {
-                Service: 'ecs-tasks.amazonaws.com',
-              },
-              Effect: 'Allow',
-              Sid: '',
-            },
-          ],
-        },
-        tags: this.tags,
-        managedPolicyArns: [
-          secretsPolicy.arn,
-          gmailSqsPolicy.arn,
-          frecencyPolicy.arn,
-        ],
-      },
-      { parent: this }
-    );
+    this.role = role;
 
     // ecr image
     const image = new EcrImage(
