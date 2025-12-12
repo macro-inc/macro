@@ -108,13 +108,10 @@ const fetchProjectData = async (
   }
 };
 
-export function createProjectQuery<T extends ProjectContainedEntity>(
-  entity: T
-) {
+export function createProjectQuery(projectId: string) {
   const authQuery = createApiTokenQuery();
 
   const projectQuery = useQuery(() => {
-    const projectId = entity.projectId;
     return {
       queryKey: queryKeys.project({
         projectId,
