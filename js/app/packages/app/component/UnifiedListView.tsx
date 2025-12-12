@@ -1937,6 +1937,7 @@ function SearchBar(props: {
             icon={LoadingSpinner}
             theme="clear"
             tooltip={{ label: 'Cancel' }}
+            class="animate-spin"
             onClick={() => {
               setSearchText('');
               inputRef?.focus();
