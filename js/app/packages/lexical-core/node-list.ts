@@ -4,7 +4,6 @@ import { ListItemNode, ListNode } from '@lexical/list';
 import { MarkNode } from '@lexical/mark';
 import { HeadingNode, QuoteNode } from '@lexical/rich-text';
 import { TableCellNode, TableNode, TableRowNode } from '@lexical/table';
-import { WatermarkNode } from '@lexical-core/nodes/WatermarkNode';
 import {
   type KlassConstructor,
   type LexicalNode,
@@ -34,6 +33,7 @@ import { SearchMatchNode } from './nodes/SearchMatchNode';
 import { UnlinkedTextNode } from './nodes/UnlinkedTextNode';
 import { UserMentionNode } from './nodes/UserMentionNode';
 import { VideoNode } from './nodes/VideoNode';
+import { WatermarkNode } from './nodes/WatermarkNode';
 
 /**
  * The pre-specified types of base editor we have configured.

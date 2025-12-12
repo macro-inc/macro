@@ -1,7 +1,7 @@
 import type {
   WatermarkDecoratorProps,
   WatermarkNode,
-} from '@lexical-core/nodes/WatermarkNode';
+} from './nodes/WatermarkNode';
 import type { Klass, LexicalNode } from 'lexical';
 import type {
   ContactMentionDecoratorProps,
