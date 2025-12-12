@@ -4,8 +4,6 @@
  * authentication_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ABGroup } from './aBGroup';
 
-/**
- * The user's group
- */
-export type GetLegacyUserPermissionsResponseGroup = string | null;
+export type GetLegacyUserPermissionsResponseGroup = null | ABGroup;

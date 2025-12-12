@@ -1,7 +1,7 @@
 import * as aws from '@pulumi/aws';
-import { createBucket } from '@resources';
-import { stack } from '@shared';
-import { get_coparse_api_vpc } from '@vpc';
+import { createBucket } from '../../packages/resources';
+import { stack } from '../../packages/shared';
+import { get_coparse_api_vpc } from '../../packages/vpc';
 import { getRedisInstance } from './cloud-storage-cache';
 import { setupReplicationBucket } from './replication-bucket';
 

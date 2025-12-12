@@ -161,9 +161,9 @@ impl EmailQueryBuilder {
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub(crate) struct EmailIndex {
     /// The id of the email thread
-    pub entity_id: String,
+    pub entity_id: uuid::Uuid,
     /// The id of the email message
-    pub message_id: String,
+    pub message_id: uuid::Uuid,
     /// The sender of the email message
     pub sender: String,
     /// The recipients of the email message

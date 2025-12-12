@@ -13,7 +13,7 @@ fn test_construct_search_result_empty_input() {
 #[test]
 fn test_construct_search_result_single_document() {
     let search_results = vec![opensearch_client::search::model::SearchHit {
-        entity_id: "doc1".to_string(),
+        entity_id: "11111111-1111-1111-1111-111111111111".parse().unwrap(),
         entity_type: SearchEntityType::Documents,
         goto: Some(
             opensearch_client::search::model::SearchGotoContent::Documents(
@@ -33,9 +33,9 @@ fn test_construct_search_result_single_document() {
     let mut document_histories = HashMap::new();
     let now = chrono::Utc::now();
     document_histories.insert(
-        "doc1".to_string(),
+        "11111111-1111-1111-1111-111111111111".to_string(),
         DocumentHistoryInfo {
-            item_id: "doc1".to_string(),
+            item_id: "11111111-1111-1111-1111-111111111111".to_string(),
             created_at: now,
             updated_at: now,
             viewed_at: None,
@@ -51,8 +51,14 @@ fn test_construct_search_result_single_document() {
     let result = construct_search_result(search_results, document_histories).unwrap();
 
     assert_eq!(result.len(), 1);
-    assert_eq!(result[0].extra.document_id, "doc1");
-    assert_eq!(result[0].extra.id, "doc1");
+    assert_eq!(
+        result[0].extra.document_id.to_string(),
+        "11111111-1111-1111-1111-111111111111"
+    );
+    assert_eq!(
+        result[0].extra.id.to_string(),
+        "11111111-1111-1111-1111-111111111111"
+    );
     assert_eq!(result[0].extra.document_name, "Test Document");
     assert_eq!(result[0].extra.name, "Test Document");
     assert_eq!(result[0].extra.owner_id, "user1");
@@ -75,7 +81,7 @@ fn test_construct_search_result_single_document() {
 fn test_construct_search_result_multiple_nodes_same_document() {
     let search_results = vec![
         opensearch_client::search::model::SearchHit {
-            entity_id: "doc1".to_string(),
+            entity_id: "11111111-1111-1111-1111-111111111111".parse().unwrap(),
             entity_type: SearchEntityType::Documents,
             goto: Some(
                 opensearch_client::search::model::SearchGotoContent::Documents(
@@ -92,7 +98,7 @@ fn test_construct_search_result_multiple_nodes_same_document() {
             },
         },
         opensearch_client::search::model::SearchHit {
-            entity_id: "doc1".to_string(),
+            entity_id: "11111111-1111-1111-1111-111111111111".parse().unwrap(),
             entity_type: SearchEntityType::Documents,
             goto: Some(
                 opensearch_client::search::model::SearchGotoContent::Documents(
@@ -113,9 +119,9 @@ fn test_construct_search_result_multiple_nodes_same_document() {
     let mut document_histories = HashMap::new();
     let now = chrono::Utc::now();
     document_histories.insert(
-        "doc1".to_string(),
+        "11111111-1111-1111-1111-111111111111".to_string(),
         DocumentHistoryInfo {
-            item_id: "doc1".to_string(),
+            item_id: "11111111-1111-1111-1111-111111111111".to_string(),
             created_at: now,
             updated_at: now,
             viewed_at: None,
@@ -131,8 +137,14 @@ fn test_construct_search_result_multiple_nodes_same_document() {
     let result = construct_search_result(search_results, document_histories).unwrap();
 
     assert_eq!(result.len(), 1);
-    assert_eq!(result[0].extra.document_id, "doc1");
-    assert_eq!(result[0].extra.id, "doc1");
+    assert_eq!(
+        result[0].extra.document_id.to_string(),
+        "11111111-1111-1111-1111-111111111111"
+    );
+    assert_eq!(
+        result[0].extra.id.to_string(),
+        "11111111-1111-1111-1111-111111111111"
+    );
     assert_eq!(result[0].extra.name, "Test Document");
     assert_eq!(result[0].extra.document_search_results.len(), 2);
 
@@ -153,7 +165,7 @@ fn create_test_document_response(
     content: Option<Vec<String>>,
 ) -> opensearch_client::search::model::SearchHit {
     opensearch_client::search::model::SearchHit {
-        entity_id: document_id.to_string(),
+        entity_id: document_id.parse().unwrap(),
         entity_type: SearchEntityType::Documents,
         goto: Some(
             opensearch_client::search::model::SearchGotoContent::Documents(
@@ -175,7 +187,7 @@ fn create_test_document_response(
 fn test_document_history_timestamps() {
     // Create a test response
     let input = vec![create_test_document_response(
-        "doc_1",
+        "11111111-1111-1111-1111-111111111111",
         "node_1",
         Some(vec!["hello world".to_string()]),
     )];
@@ -185,7 +197,7 @@ fn test_document_history_timestamps() {
     let now = chrono::Utc::now();
 
     let history = DocumentHistoryInfo {
-        item_id: "doc_1".to_string(),
+        item_id: "11111111-1111-1111-1111-111111111111".to_string(),
         created_at: now,
         updated_at: now,
         viewed_at: Some(now),
@@ -193,7 +205,7 @@ fn test_document_history_timestamps() {
         ..Default::default()
     };
 
-    document_histories.insert("doc_1".to_string(), history);
+    document_histories.insert("11111111-1111-1111-1111-111111111111".to_string(), history);
 
     // Call the function under test
     let result = construct_search_result(input, document_histories).unwrap();
@@ -218,7 +230,7 @@ fn test_document_history_timestamps() {
 fn test_document_history_missing_entry() {
     // Create a test response for a document that doesn't have history
     let input = vec![create_test_document_response(
-        "doc_missing",
+        "11111111-1111-1111-1111-111111111111",
         "node_1",
         Some(vec!["hello world".to_string()]),
     )];
@@ -228,7 +240,7 @@ fn test_document_history_missing_entry() {
     let now = chrono::Utc::now();
 
     let history = DocumentHistoryInfo {
-        item_id: "different_doc".to_string(),
+        item_id: "22222222-2222-2222-2222-222222222222".to_string(),
         created_at: now,
         updated_at: now,
         viewed_at: None,
@@ -236,7 +248,7 @@ fn test_document_history_missing_entry() {
         ..Default::default()
     };
 
-    document_histories.insert("different_doc".to_string(), history);
+    document_histories.insert("22222222-2222-2222-2222-222222222222".to_string(), history);
 
     // Call the function under test
     let result = construct_search_result(input, document_histories).unwrap();
@@ -249,7 +261,7 @@ fn test_document_history_missing_entry() {
 fn test_document_history_null_viewed_at() {
     // Create a test response
     let input = vec![create_test_document_response(
-        "doc_1",
+        "11111111-1111-1111-1111-111111111111",
         "node_1",
         Some(vec!["hello world".to_string()]),
     )];
@@ -259,7 +271,7 @@ fn test_document_history_null_viewed_at() {
     let now = chrono::Utc::now();
 
     let history = DocumentHistoryInfo {
-        item_id: "doc_1".to_string(),
+        item_id: "11111111-1111-1111-1111-111111111111".to_string(),
         created_at: now,
         updated_at: now,
         viewed_at: None, // This user has never viewed this document
@@ -267,7 +279,7 @@ fn test_document_history_null_viewed_at() {
         ..Default::default()
     };
 
-    document_histories.insert("doc_1".to_string(), history);
+    document_histories.insert("11111111-1111-1111-1111-111111111111".to_string(), history);
 
     // Call the function under test
     let result = construct_search_result(input, document_histories).unwrap();
@@ -289,8 +301,16 @@ fn test_document_history_null_viewed_at() {
 fn test_document_history_multiple_documents() {
     // Create test responses for multiple documents
     let input = vec![
-        create_test_document_response("doc_1", "node_1", Some(vec!["first document".to_string()])),
-        create_test_document_response("doc_2", "node_2", Some(vec!["second document".to_string()])),
+        create_test_document_response(
+            "11111111-1111-1111-1111-111111111111",
+            "node_1",
+            Some(vec!["first document".to_string()]),
+        ),
+        create_test_document_response(
+            "22222222-2222-2222-2222-222222222222",
+            "node_2",
+            Some(vec!["second document".to_string()]),
+        ),
     ];
 
     // Create mock document histories
@@ -299,7 +319,7 @@ fn test_document_history_multiple_documents() {
     let earlier = now - chrono::Duration::hours(1);
 
     let history1 = DocumentHistoryInfo {
-        item_id: "doc_1".to_string(),
+        item_id: "11111111-1111-1111-1111-111111111111".to_string(),
         created_at: now,
         updated_at: now,
         viewed_at: Some(now),
@@ -308,7 +328,7 @@ fn test_document_history_multiple_documents() {
     };
 
     let history2 = DocumentHistoryInfo {
-        item_id: "doc_2".to_string(),
+        item_id: "22222222-2222-2222-2222-222222222222".to_string(),
         created_at: earlier,
         updated_at: earlier,
         viewed_at: None,
@@ -316,8 +336,8 @@ fn test_document_history_multiple_documents() {
         ..Default::default()
     };
 
-    document_histories.insert("doc_1".to_string(), history1);
-    document_histories.insert("doc_2".to_string(), history2);
+    document_histories.insert("11111111-1111-1111-1111-111111111111".to_string(), history1);
+    document_histories.insert("22222222-2222-2222-2222-222222222222".to_string(), history2);
 
     // Call the function under test
     let result = construct_search_result(input, document_histories).unwrap();
@@ -328,11 +348,11 @@ fn test_document_history_multiple_documents() {
     // Find each document in results (order might not be preserved)
     let doc1_result = result
         .iter()
-        .find(|r| r.extra.document_id == "doc_1")
+        .find(|r| r.extra.document_id.to_string() == "11111111-1111-1111-1111-111111111111")
         .unwrap();
     let doc2_result = result
         .iter()
-        .find(|r| r.extra.document_id == "doc_2")
+        .find(|r| r.extra.document_id.to_string() == "22222222-2222-2222-2222-222222222222")
         .unwrap();
 
     let doc1_metadata = doc1_result.metadata.as_ref().unwrap();
@@ -351,12 +371,12 @@ fn test_document_history_partial_missing_entries() {
     // Create test responses for multiple documents
     let input = vec![
         create_test_document_response(
-            "doc_exists",
+            "11111111-1111-1111-1111-111111111111",
             "node_1",
             Some(vec!["existing document".to_string()]),
         ),
         create_test_document_response(
-            "doc_missing",
+            "22222222-2222-2222-2222-222222222222",
             "node_2",
             Some(vec!["missing document".to_string()]),
         ),
@@ -367,7 +387,7 @@ fn test_document_history_partial_missing_entries() {
     let now = chrono::Utc::now();
 
     let history = DocumentHistoryInfo {
-        item_id: "doc_exists".to_string(),
+        item_id: "11111111-1111-1111-1111-111111111111".to_string(),
         created_at: now,
         updated_at: now,
         viewed_at: Some(now),
@@ -375,7 +395,7 @@ fn test_document_history_partial_missing_entries() {
         ..Default::default()
     };
 
-    document_histories.insert("doc_exists".to_string(), history);
+    document_histories.insert("11111111-1111-1111-1111-111111111111".to_string(), history);
 
     // Call the function under test
     let result = construct_search_result(input, document_histories).unwrap();
@@ -386,7 +406,7 @@ fn test_document_history_partial_missing_entries() {
     // The existing document should have real timestamps in metadata
     let existing_doc = result
         .iter()
-        .find(|r| r.extra.document_id == "doc_exists")
+        .find(|r| r.extra.document_id.to_string() == "11111111-1111-1111-1111-111111111111")
         .unwrap();
     assert!(existing_doc.metadata.is_some());
     let metadata = existing_doc.metadata.as_ref().unwrap();
@@ -401,16 +421,16 @@ fn test_document_history_deleted() {
 
     // Test 1: Document that exists but is soft-deleted
     let input_deleted = vec![create_test_document_response(
-        "doc_deleted",
+        "11111111-1111-1111-1111-111111111111",
         "node_1",
         Some(vec!["hello world".to_string()]),
     )];
 
     let mut document_histories = HashMap::new();
     document_histories.insert(
-        "doc_deleted".to_string(),
+        "11111111-1111-1111-1111-111111111111".to_string(),
         macro_db_client::document::get_document_history::DocumentHistoryInfo {
-            item_id: "doc_deleted".to_string(),
+            item_id: "11111111-1111-1111-1111-111111111111".to_string(),
             created_at: now,
             updated_at: now,
             viewed_at: Some(now),
@@ -434,7 +454,7 @@ fn test_document_history_deleted() {
 
     // Test 2: Document that doesn't exist in DB (OpenSearch has stale data)
     let input_not_found = vec![create_test_document_response(
-        "doc_not_found",
+        "22222222-2222-2222-2222-222222222222",
         "node_2",
         Some(vec!["stale data".to_string()]),
     )];
@@ -452,7 +472,7 @@ fn test_document_history_deleted() {
 fn test_sort_stability() {
     let input = vec![
         opensearch_client::search::model::SearchHit {
-            entity_id: "doc_3".to_string(),
+            entity_id: "33333333-3333-3333-3333-333333333333".parse().unwrap(),
             entity_type: SearchEntityType::Documents,
             goto: Some(
                 opensearch_client::search::model::SearchGotoContent::Documents(
@@ -469,7 +489,7 @@ fn test_sort_stability() {
             },
         },
         opensearch_client::search::model::SearchHit {
-            entity_id: "doc_1".to_string(),
+            entity_id: "11111111-1111-1111-1111-111111111111".parse().unwrap(),
             entity_type: SearchEntityType::Documents,
             goto: Some(
                 opensearch_client::search::model::SearchGotoContent::Documents(
@@ -486,7 +506,7 @@ fn test_sort_stability() {
             },
         },
         opensearch_client::search::model::SearchHit {
-            entity_id: "doc_5".to_string(),
+            entity_id: "55555555-5555-5555-5555-555555555555".parse().unwrap(),
             entity_type: SearchEntityType::Documents,
             goto: Some(
                 opensearch_client::search::model::SearchGotoContent::Documents(
@@ -503,7 +523,7 @@ fn test_sort_stability() {
             },
         },
         opensearch_client::search::model::SearchHit {
-            entity_id: "doc_2".to_string(),
+            entity_id: "22222222-2222-2222-2222-222222222222".parse().unwrap(),
             entity_type: SearchEntityType::Documents,
             goto: Some(
                 opensearch_client::search::model::SearchGotoContent::Documents(
@@ -520,7 +540,7 @@ fn test_sort_stability() {
             },
         },
         opensearch_client::search::model::SearchHit {
-            entity_id: "doc_4".to_string(),
+            entity_id: "44444444-4444-4444-4444-444444444444".parse().unwrap(),
             entity_type: SearchEntityType::Documents,
             goto: Some(
                 opensearch_client::search::model::SearchGotoContent::Documents(
@@ -540,7 +560,13 @@ fn test_sort_stability() {
 
     let mut document_histories = HashMap::new();
     let now = chrono::Utc::now();
-    for doc_id in ["doc_1", "doc_2", "doc_3", "doc_4", "doc_5"] {
+    for doc_id in [
+        "11111111-1111-1111-1111-111111111111",
+        "22222222-2222-2222-2222-222222222222",
+        "33333333-3333-3333-3333-333333333333",
+        "44444444-4444-4444-4444-444444444444",
+        "55555555-5555-5555-5555-555555555555",
+    ] {
         document_histories.insert(
             doc_id.to_string(),
             DocumentHistoryInfo {
@@ -566,16 +592,22 @@ fn test_sort_stability() {
     assert_eq!(result2.len(), 5);
     assert_eq!(result3.len(), 5);
 
-    let ids1: Vec<String> = result1.iter().map(|r| r.extra.id.clone()).collect();
-    let ids2: Vec<String> = result2.iter().map(|r| r.extra.id.clone()).collect();
-    let ids3: Vec<String> = result3.iter().map(|r| r.extra.id.clone()).collect();
+    let ids1: Vec<String> = result1.iter().map(|r| r.extra.id.to_string()).collect();
+    let ids2: Vec<String> = result2.iter().map(|r| r.extra.id.to_string()).collect();
+    let ids3: Vec<String> = result3.iter().map(|r| r.extra.id.to_string()).collect();
 
     assert_eq!(ids1, ids2, "Results should be stable between runs");
     assert_eq!(ids2, ids3, "Results should be stable between runs");
 
     assert_eq!(
         ids1,
-        vec!["doc_3", "doc_1", "doc_5", "doc_2", "doc_4"],
+        vec![
+            "33333333-3333-3333-3333-333333333333",
+            "11111111-1111-1111-1111-111111111111",
+            "55555555-5555-5555-5555-555555555555",
+            "22222222-2222-2222-2222-222222222222",
+            "44444444-4444-4444-4444-444444444444"
+        ],
         "Results should preserve original search result order"
     );
 }

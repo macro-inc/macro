@@ -61,10 +61,13 @@ pub async fn upload_attachment(
 
     let mime_type = args.attachment_metadata.mime_type.clone();
 
-    if mime_type.starts_with("image/") || mime_type.starts_with("video/") {
-        upload_media_attachment(&ctx, args, attachment_data, mime_type).await
-    } else {
-        upload_document_attachment(&ctx, args, attachment_data).await
+    match args.upload_destination {
+        models_email::service::attachment::AttachmentUploadDestination::Sfs => {
+            upload_media_attachment(&ctx, args, attachment_data, mime_type).await
+        }
+        models_email::service::attachment::AttachmentUploadDestination::Dss => {
+            upload_document_attachment(&ctx, args, attachment_data).await
+        }
     }
 }
 
@@ -308,7 +311,7 @@ async fn set_email_attachment_properties(
                 source: Some(SourceEntity {
                     entity_type: models_properties::EntityType::Thread,
                     entity_id: p.attachment_metadata.thread_db_id.to_string(),
-                    specific_message_id: Some(p.attachment_metadata.message_db_id.to_string()),
+                    specific_message_id: Some(p.attachment_metadata.message_db_id),
                 }),
                 // TODO: companies support
                 companies: None,

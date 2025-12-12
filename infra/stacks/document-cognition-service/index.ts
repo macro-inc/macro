@@ -6,8 +6,8 @@ import {
   getMacroNotify,
   getSearchEventQueue,
   stack,
-} from '@shared';
-import { get_coparse_api_vpc } from '@vpc';
+} from '../../packages/shared';
+import { get_coparse_api_vpc } from '../../packages/vpc';
 import { DocumentCognitionService } from './document-cognition-service';
 
 const tags = {

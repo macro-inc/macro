@@ -320,15 +320,20 @@ pub async fn handle_send_chat_message(
             })?;
 
     let toolset = toolset::choose_toolset(&incoming_message);
-    let request =
-        build_chat_completion_request(ctx.clone(), &chat, &incoming_message, toolset.prompt)
-            .await
-            .map_err(|err| {
-                tracing::error!(error=?err, "failed to build chat completion request");
-                StreamError::InternalError {
-                    stream_id: incoming_message.stream_id.clone(),
-                }
-            })?;
+    let request = build_chat_completion_request(
+        ctx.clone(),
+        &chat,
+        &incoming_message,
+        toolset.prompt,
+        jwt_token,
+    )
+    .await
+    .map_err(|err| {
+        tracing::error!(error=?err, "failed to build chat completion request");
+        StreamError::InternalError {
+            stream_id: incoming_message.stream_id.clone(),
+        }
+    })?;
 
     log::log_timing(log::LatencyMetric::TimeToSendRequest, model, now.elapsed());
     let StreamChatResponse { new_messages } = stream_chat_response(

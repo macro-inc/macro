@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT ea.id, ea.message_id, ea.provider_attachment_id, ea.filename, ea.mime_type, ea.size_bytes, ea.content_id, eas.sfs_id, ea.created_at\n        FROM email_attachments ea\n        LEFT JOIN email_attachments_sfs eas ON ea.id = eas.attachment_id\n        WHERE ea.message_id = $1\n        ORDER BY ea.filename NULLS LAST\n        ",
+  "query": "\n        SELECT ea.id, ea.message_id, ea.provider_attachment_id, ea.filename, ea.mime_type, ea.size_bytes, ea.content_id, eas.sfs_id as \"sfs_id?\", ea.created_at\n        FROM email_attachments ea\n        LEFT JOIN email_attachments_sfs eas ON ea.id = eas.attachment_id\n        WHERE ea.message_id = $1\n        ORDER BY ea.filename NULLS LAST\n        ",
   "describe": {
     "columns": [
       {
@@ -40,7 +40,7 @@
       },
       {
         "ordinal": 7,
-        "name": "sfs_id",
+        "name": "sfs_id?",
         "type_info": "Uuid"
       },
       {
@@ -66,5 +66,5 @@
       false
     ]
   },
-  "hash": "3882543383ad2d4b7819015d1f849026c42f10cc167b1ef714f78dc283f04b25"
+  "hash": "9491067eb6bae0d2a08416f451d8535243c10f937e391557ba9123b565d49fcc"
 }

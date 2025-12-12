@@ -1,10 +1,10 @@
 use axum::{
     Extension, Router,
-    http::{Request, StatusCode},
+    http::{Method, Request, StatusCode},
 };
 use cool_asserts::assert_matches;
 use email::domain::{
-    models::{EmailErr, UserProvider},
+    models::{EmailErr, PreviewView, PreviewViewStandardLabel, UserProvider},
     ports::EmailService,
 };
 use http_body_util::BodyExt;
@@ -17,7 +17,7 @@ use uuid::Uuid;
 
 use crate::{
     domain::{
-        models::{SoupErr, SoupRequest},
+        models::{SoupErr, SoupRequest, SoupType},
         ports::{SoupOutput, SoupService},
     },
     inbound::axum_router::{SoupRouterState, soup_router},
@@ -206,4 +206,96 @@ async fn it_does_not_call_soup_with_db_err() {
     let guard = inner_counter.lock().unwrap();
 
     assert_eq!(guard.len(), 0);
+}
+
+#[tokio::test]
+async fn it_loads_email_all_view() {
+    let soup = MockSoup::new();
+    let inner_counter = soup.called.clone();
+    let router: Router = soup_router(SoupRouterState::new(
+        soup,
+        MockEmailLinkResult {
+            get_link_result: Arc::new(|| Ok(None)),
+        },
+    ))
+    .layer(Extension(UserContext {
+        user_id: "macro|test@example.com".to_string(),
+        fusion_user_id: "1234".to_string(),
+        permissions: None,
+        organization_id: None,
+    }));
+
+    let request = Request::builder()
+        .uri(format!("/soup?cursor={CURSOR}"))
+        .method(Method::POST)
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::to_vec(&serde_json::json!({
+                "emailView": "all"
+            }))
+            .unwrap(),
+        ))
+        .unwrap();
+
+    let _res = router.oneshot(request).await.unwrap();
+
+    let guard = inner_counter.lock().unwrap();
+    let arg = guard.first().unwrap();
+    assert_matches!(
+        arg,
+        SoupRequest {
+            soup_type: SoupType::Expanded,
+            limit: _,
+            cursor: _,
+            user: _,
+            email_preview_view: PreviewView::StandardLabel(PreviewViewStandardLabel::All),
+            link_id: _
+        }
+    )
+}
+
+#[tokio::test]
+async fn it_loads_email_sent_view() {
+    let soup = MockSoup::new();
+    let inner_counter = soup.called.clone();
+    let router: Router = soup_router(SoupRouterState::new(
+        soup,
+        MockEmailLinkResult {
+            get_link_result: Arc::new(|| Ok(None)),
+        },
+    ))
+    .layer(Extension(UserContext {
+        user_id: "macro|test@example.com".to_string(),
+        fusion_user_id: "1234".to_string(),
+        permissions: None,
+        organization_id: None,
+    }));
+
+    let request = Request::builder()
+        .uri(format!("/soup?cursor={CURSOR}"))
+        .method(Method::POST)
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::to_vec(&serde_json::json!({
+                "emailView": "sent"
+            }))
+            .unwrap(),
+        ))
+        .unwrap();
+
+    let _res = router.oneshot(request).await.unwrap();
+
+    let guard = inner_counter.lock().unwrap();
+    let arg = guard.first().unwrap();
+    assert_matches!(
+        arg,
+        SoupRequest {
+            soup_type: SoupType::Expanded,
+            limit: _,
+            cursor: _,
+            user: _,
+            email_preview_view: PreviewView::StandardLabel(PreviewViewStandardLabel::Sent),
+            link_id: _
+        }
+    )
 }

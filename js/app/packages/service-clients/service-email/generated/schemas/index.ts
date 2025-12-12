@@ -53,6 +53,7 @@ export * from './attachmentMacroDbId';
 export * from './attachmentMacroMessageId';
 export * from './attachmentMimeType';
 export * from './attachmentProviderId';
+export * from './attachmentSfsId';
 export * from './attachmentSizeBytes';
 export * from './backfillJob';
 export * from './backfillJobLinkId';

@@ -14,10 +14,23 @@ import ChannelIcon from '@icon/duotone/hash-duotone.svg';
 import User from '@icon/duotone/user-duotone.svg';
 import ThreeUsersIcon from '@icon/duotone/users-three-duotone.svg';
 import SearchIcon from '@icon/regular/magnifying-glass.svg';
+import {
+  createEmailsInfiniteQuery,
+  createUnifiedSearchInfiniteQuery,
+  type EmailEntity,
+} from '@macro-entity';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { Item } from '@service-storage/generated/schemas/item';
 import { useHistory } from '@service-storage/history';
-import { createMemo, createSignal, For, on, Show } from 'solid-js';
+import { debounce } from '@solid-primitives/scheduled';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  on,
+  Show,
+} from 'solid-js';
 import { PROPERTY_STYLES } from '../../../styles/styles';
 import type { Property } from '../../../types';
 import { useSearchInputFocus } from '../../../utils';
@@ -56,7 +69,7 @@ function getEntityTypePluralLabel(
     case 'COMPANY':
       return 'companies';
     case 'THREAD':
-      return 'threads';
+      return 'emails';
     case 'TASK':
       return 'tasks';
     default:
@@ -69,12 +82,16 @@ type CombinedEntity =
   | { kind: 'user'; id: string; data: IUser }
   | { kind: 'channel'; id: string; data: ChannelWithParticipants }
   | { kind: 'company'; id: string; data: null }
-  | { kind: 'thread'; id: string; data: null };
+  | { kind: 'thread'; id: string; data: EmailEntity };
 
 function entityMapper(kind: 'item' | 'user' | 'channel') {
   return (data: Item | IUser | ChannelWithParticipants): CombinedEntity => {
     return { kind, data, id: (data as { id: string }).id } as CombinedEntity;
   };
+}
+
+function threadMapper(email: EmailEntity): CombinedEntity {
+  return { kind: 'thread', id: email.id, data: email };
 }
 
 function getEntityName(entity: CombinedEntity): string {
@@ -91,7 +108,7 @@ function getEntityName(entity: CombinedEntity): string {
     case 'company':
       return entity.id;
     case 'thread':
-      return entity.id;
+      return entity.data.name ?? 'No Subject';
   }
 }
 
@@ -109,7 +126,7 @@ function getEntitySearchText(entity: CombinedEntity): string {
     case 'company':
       return entity.id;
     case 'thread':
-      return entity.id;
+      return entity.data.name ?? '';
   }
 }
 
@@ -134,7 +151,7 @@ function getEntityIcon(entity: CombinedEntity) {
       return (
         <UserIcon
           id={entity.data.id}
-          size="sm"
+          size="xs"
           isDeleted={false}
           suppressClick={true}
         />
@@ -173,8 +190,15 @@ function getEntityIcon(entity: CombinedEntity) {
 }
 
 export function PropertyEntitySelector(props: EntityInputProps) {
+  const [inputValue, setInputValue] = createSignal('');
   const [searchTerm, setSearchTerm] = createSignal('');
-  const [lastSearchTerm, setLastSearchTerm] = createSignal('');
+
+  // Debounce search term updates (60ms like MentionsMenu)
+  const debouncedSetSearchTerm = debounce(
+    (term: string) => setSearchTerm(term.toLowerCase()),
+    60
+  );
+  createEffect(() => debouncedSetSearchTerm(inputValue()));
 
   let searchInputRef!: HTMLInputElement;
 
@@ -183,6 +207,51 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   const channelsContext = useChannelsContext();
   const channels = () => channelsContext.channels();
 
+  // Fetch emails for browsing (only when THREAD type)
+  const emailsQuery = createEmailsInfiniteQuery(() => ({ view: 'all' }), {
+    disabled: () => props.property.specificEntityType !== 'THREAD',
+  });
+  const emails = () => emailsQuery.data ?? [];
+
+  // Server-side email search (query internally disables when < 3 chars)
+  const emailSearchQuery = createUnifiedSearchInfiniteQuery(
+    () => ({
+      params: { page: 0, page_size: 20 },
+      request: {
+        query: searchTerm(),
+        match_type: 'partial' as const,
+        include: ['emails' as const],
+        search_on: 'name' as const,
+      },
+    }),
+    {
+      disabled: () => props.property.specificEntityType !== 'THREAD',
+    }
+  );
+
+  // Server search results mapped to our format
+  const serverEmails = createMemo((): CombinedEntity[] => {
+    if (emailSearchQuery.status !== 'success' || !emailSearchQuery.data) {
+      return [];
+    }
+    return emailSearchQuery.data
+      .filter((entity) => entity.type === 'email')
+      .map((entity) => threadMapper(entity as EmailEntity));
+  });
+
+  const isLoadingEntities = createMemo(() => {
+    if (props.property.specificEntityType === 'THREAD') {
+      // Loading if initial emails query is loading OR search is fetching
+      return (
+        emailsQuery.isLoading ||
+        emailsQuery.isPending ||
+        emailSearchQuery.isFetching
+      );
+    }
+    return false;
+  });
+
+  // Local entities (always available, used for instant results)
   const entities = createMemo(() => {
     const { specificEntityType } = props.property;
 
@@ -208,8 +277,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     }
 
     if (specificEntityType === 'THREAD') {
-      // TODO: Implement thread data source
-      return [];
+      return emails().map(threadMapper);
     }
 
     if (specificEntityType === 'TASK') {
@@ -234,30 +302,34 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   );
 
   const filteredEntities = createMemo(() => {
-    const term = searchTerm().toLowerCase();
+    const term = searchTerm(); // Already lowercase from debounce
     const allEntities = entities();
 
     const MAX_VISIBLE_ENTITIES_NO_SEARCH = 50;
     const MAX_SEARCH_RESULTS = 20;
 
     // Get visible entities based on search
-    const visibleEntities = term
+    const localResults = term
       ? entitySearch(allEntities, term)
           .slice(0, MAX_SEARCH_RESULTS)
           .map((result) => result.item)
       : allEntities.slice(0, MAX_VISIBLE_ENTITIES_NO_SEARCH);
 
-    // When searching, return results as-is (stable order)
-    if (term) return visibleEntities;
+    // For THREAD: merge local + server results (local first, server appended, deduped)
+    if (props.property.specificEntityType === 'THREAD' && term) {
+      const localIds = new Set(localResults.map((e) => e.id));
+      const serverResults = serverEmails().filter((e) => !localIds.has(e.id));
+      return [...localResults, ...serverResults].slice(0, MAX_SEARCH_RESULTS);
+    }
 
-    // When browsing (no search), return visible entities without sorting
-    // Sorting will be handled separately in the render
-    return visibleEntities;
+    return localResults;
   });
 
+  // Track searchTerm and filteredEntities, but NOT selectedOptions
+  // This keeps list order stable during selection while still reacting to data changes
   const sortedEntities = createMemo(
-    on(searchTerm, () => {
-      const term = searchTerm().toLowerCase();
+    on([searchTerm, filteredEntities], () => {
+      const term = searchTerm(); // Already lowercase from debounce
       const filteredResults = filteredEntities();
 
       // When there's a search term, return results as-is
@@ -343,14 +415,8 @@ export function PropertyEntitySelector(props: EntityInputProps) {
           <input
             ref={searchInputRef}
             type="text"
-            value={searchTerm()}
-            onInput={(e) => {
-              const newTerm = e.currentTarget.value;
-              setSearchTerm(newTerm);
-              if (newTerm !== lastSearchTerm()) {
-                setLastSearchTerm(newTerm);
-              }
-            }}
+            value={inputValue()}
+            onInput={(e) => setInputValue(e.currentTarget.value)}
             placeholder={`Search ${props.property.valueType === 'ENTITY' ? 'entities' : props.property.valueType + 's'}...`}
             class={`${INPUT_CLASSES} relative z-0`}
           />
@@ -392,8 +458,13 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
         <Show when={sortedEntities().length === 0}>
           <div class="text-center py-4 text-ink-muted text-sm">
-            No {getEntityTypePluralLabel(props.property.specificEntityType)}{' '}
-            found
+            <Show
+              when={!isLoadingEntities()}
+              fallback={<span>Loading...</span>}
+            >
+              No {getEntityTypePluralLabel(props.property.specificEntityType)}{' '}
+              found
+            </Show>
           </div>
         </Show>
       </div>

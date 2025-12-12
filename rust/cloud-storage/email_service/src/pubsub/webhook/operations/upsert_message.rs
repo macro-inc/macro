@@ -25,7 +25,7 @@ use models_email::email::service::message::SimpleMessage;
 use models_email::email::service::thread::UserThreadIds;
 use models_email::gmail::operations::GmailApiOperation;
 use models_email::gmail::webhook::{UpsertMessagePayload, WebhookOperation};
-use models_email::service::attachment::AttachmentUploadArgs;
+use models_email::service::attachment::{AttachmentUploadArgs, AttachmentUploadDestination};
 use models_email::service::message::Message;
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use models_opensearch::SearchEntityType;
@@ -255,10 +255,20 @@ async fn handle_attachment_upload(
                 .filter_map(|(contact, _)| contact.email_address.clone())
                 .collect();
 
+            let upload_destination = if matches!(
+                attachment.mime_type.split('/').next(),
+                Some("image" | "video")
+            ) {
+                AttachmentUploadDestination::Sfs
+            } else {
+                AttachmentUploadDestination::Dss
+            };
+
             let attachment_upload_args = AttachmentUploadArgs {
                 recipient_emails,
                 attachment_metadata: attachment,
                 backfill: false,
+                upload_destination,
             };
 
             let ctx_upload = UploadAttachmentContext {

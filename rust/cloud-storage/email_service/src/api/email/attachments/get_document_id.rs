@@ -7,7 +7,7 @@ use axum::{Extension, Json};
 use model::response::ErrorResponse;
 use models_email::db::address::EmailRecipientType;
 use models_email::email::service::link::Link;
-use models_email::service::attachment::AttachmentUploadArgs;
+use models_email::service::attachment::{AttachmentUploadArgs, AttachmentUploadDestination};
 use strum_macros::AsRefStr;
 use thiserror::Error;
 use utoipa::ToSchema;
@@ -113,6 +113,9 @@ pub async fn handler(
         attachment_metadata,
         recipient_emails,
         backfill: false,
+        // Frontend will soon use SFS URLs for image/video attachments directly instead of DSS
+        // Until this transition is complete, we continue uploading all attachments to DSS
+        upload_destination: AttachmentUploadDestination::Dss,
     };
 
     let ctx_upload = UploadAttachmentContext {

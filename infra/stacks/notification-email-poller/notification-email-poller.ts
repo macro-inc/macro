@@ -2,14 +2,14 @@ import * as aws from '@pulumi/aws';
 import * as awsx from '@pulumi/awsx';
 import type { Output } from '@pulumi/pulumi';
 import * as pulumi from '@pulumi/pulumi';
-import { EcrImage } from '@service';
-import { awsRegion, stack } from '@shared';
+import { EcrImage } from '../../packages/service';
+import { awsRegion, stack } from '../../packages/shared';
 
 // import {
 //   DATADOG_API_KEY,
 //   datadogAgentContainer,
 //   fargateLogRouterSidecarContainer,
-// } from '@resources';
+// } from '../../packages/resources';
 
 const BASE_NAME = `notification-email-poller-worker`;
 const WORKER_NAME = `${BASE_NAME}-${stack}`;

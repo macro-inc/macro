@@ -5,6 +5,7 @@ import {
   renameItem,
 } from '@core/component/FileList/itemOperations';
 import { itemToSafeName } from '@core/constant/allBlocks';
+import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import type { ItemType } from '@service-storage/client';
 import type {
   PostItemsSoupParams,
@@ -111,6 +112,7 @@ export function createDssInfiniteQuery(
     const argParams = _params?.();
     let limit = 100;
     let sort_method;
+    let emailView;
     const requestBody = options?.requestBody;
 
     if (requestBody) {
@@ -121,12 +123,16 @@ export function createDssInfiniteQuery(
       if (body?.sort_method) {
         sort_method = body.sort_method;
       }
+      if (body?.emailView) {
+        emailView = body.emailView;
+      }
     }
 
     return {
       ...argParams,
       limit,
       sort_method,
+      emailView,
     };
   };
 
@@ -461,81 +467,96 @@ export function createBulkDeleteDssItemsMutation() {
   }));
 }
 
-export function createRenameDssEntityMutation() {
+type RenameDssEntityMutationVariables = {
+  entity: EntityData & { name: string };
+  newName: string;
+};
+
+type RenameDssEntityMutationData = {
+  success: boolean;
+};
+
+const isEntityRenameSupported = (entity: EntityData) => {
+  const type = entity.type;
+  if (entity.type === 'channel') {
+    return entity.channelType !== 'direct_message';
+  }
+  return type !== 'email';
+};
+
+/**
+ * Mutation to mark a thread as seen.
+ */
+export function createRenameDssEntityMutation(
+  callbacks?: MutationCallbacks<
+    RenameDssEntityMutationData,
+    Error,
+    RenameDssEntityMutationVariables
+  >
+) {
   return useMutation(() => ({
-    mutationFn: async ({
-      entity: { id, type },
-      newName,
-    }: {
-      entity: EntityData & { name: string };
-      newName: string;
-    }) => {
+    mutationFn: async (params: RenameDssEntityMutationVariables) => {
+      if (!isEntityRenameSupported(params.entity)) {
+        throw new Error('Unsupported entity type provided');
+      }
+
       const success = await renameItem({
-        itemType: type as ItemType,
-        id,
-        newName,
+        id: params.entity.id,
+        itemType: params.entity.type,
+        newName: params.newName,
       });
 
       return { success };
     },
-    onMutate: async ({
-      entity: { id },
-      newName,
-    }: {
-      entity: EntityData & { name: string };
-      newName: string;
-    }) => {
-      queryClient.cancelQueries({
-        queryKey: queryKeys.dss({ infinite: true }),
-      });
-      function updateEntityNameInQueryData(
-        prev: { pages: { items: EntityData[] }[] } | undefined,
-        id: string,
-        newName: string
-      ): { pages: { items: EntityData[] }[] } | undefined {
-        if (!prev) return prev;
-        const pages = prev.pages.map((page) => ({
-          ...page,
-          items: page.items.map((item) =>
-            item.id === id ? { ...item, name: newName } : item
-          ),
-        }));
-        return {
-          ...prev,
-          pages,
-        };
-      }
+    ...withCallbacks<
+      RenameDssEntityMutationData,
+      Error,
+      RenameDssEntityMutationVariables
+    >(
+      {
+        onMutate: async ({ entity: { id }, newName }) => {
+          queryClient.cancelQueries({
+            queryKey: queryKeys.dss({ infinite: true }),
+          });
+          function updateEntityNameInQueryData(
+            prev: { pages: { items: EntityData[] }[] } | undefined,
+            id: string,
+            newName: string
+          ) {
+            if (!prev) return prev;
+            const pages = prev.pages.map((page) => ({
+              ...page,
+              items: page.items.map((item) =>
+                item.id === id ? { ...item, name: newName } : item
+              ),
+            }));
+            return {
+              ...prev,
+              pages,
+            };
+          }
 
-      queryClient.setQueriesData(
-        { queryKey: queryKeys.dss({ infinite: true }) },
-        (prev) =>
-          updateEntityNameInQueryData(
-            prev as { pages: { items: EntityData[] }[] } | undefined,
-            id,
-            newName
-          )
-      );
-    },
-    onSettled: (data, error, { entity: { id } }) => {
-      if (data?.success === false || error)
-        console.error(`Failed to rename dss item ${id}`, data, error);
+          queryClient.setQueriesData(
+            { queryKey: queryKeys.dss({ infinite: true }) },
+            (prev: { pages: { items: EntityData[] }[] } | undefined) =>
+              updateEntityNameInQueryData(prev, id, newName)
+          );
+        },
+        onSettled: (data, error, { entity: { id } }) => {
+          if (data?.success === false || error)
+            console.error(`Failed to rename dss item ${id}`, data, error);
 
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.dss({ infinite: true }),
-      });
-    },
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.dss({ infinite: true }),
+          });
+        },
+      },
+      callbacks
+    ),
   }));
 }
 
 export function createBulkRenameDssEntityMutation() {
-  const isUnsupportedEntity = (entity: EntityData) => {
-    const type = entity.type;
-    if (entity.type === 'channel') {
-      return entity.channelType === 'direct_message';
-    }
-    return type === 'email';
-  };
-
   return useMutation(() => ({
     mutationFn: async ({
       entities,
@@ -544,7 +565,7 @@ export function createBulkRenameDssEntityMutation() {
       entities: (EntityData & { name: string })[];
       name: (oldName: string) => string | string;
     }) => {
-      if (entities.some(isUnsupportedEntity)) {
+      if (entities.every(isEntityRenameSupported)) {
         throw new Error(`Unsupported entity type provided`);
       }
       return await Promise.all(

@@ -84,10 +84,7 @@ pub async fn set_entity_property(
 ) -> Result<StatusCode, SetEntityPropertyErr> {
     tracing::info!("setting entity property");
 
-    let entity_ref = EntityReference {
-        entity_id: entity_id.clone(),
-        entity_type,
-    };
+    let entity_ref = EntityReference::new(entity_id.clone(), entity_type);
     crate::api::permissions::check_entity_edit_permission(
         &context,
         &user_context.user_id,
@@ -232,6 +229,7 @@ fn convert_property_value_to_jsonb(value: &SetPropertyValue) -> Option<PropertyV
             PropertyValue::EntityRef(vec![EntityReference {
                 entity_type: reference.entity_type,
                 entity_id: reference.entity_id.clone(),
+                specific_message_id: reference.specific_message_id,
             }])
         }
 
@@ -246,6 +244,7 @@ fn convert_property_value_to_jsonb(value: &SetPropertyValue) -> Option<PropertyV
                 .map(|ref_| EntityReference {
                     entity_type: ref_.entity_type,
                     entity_id: ref_.entity_id.clone(),
+                    specific_message_id: ref_.specific_message_id,
                 })
                 .collect();
 
@@ -435,18 +434,9 @@ mod tests {
     fn test_multi_entity_reference_deduplication() {
         use models_properties::EntityReference;
 
-        let entity_ref_1 = EntityReference {
-            entity_type: EntityType::Document,
-            entity_id: "doc-1".to_string(),
-        };
-        let entity_ref_2 = EntityReference {
-            entity_type: EntityType::User,
-            entity_id: "user-1".to_string(),
-        };
-        let entity_ref_1_dup = EntityReference {
-            entity_type: EntityType::Document,
-            entity_id: "doc-1".to_string(), // Same as entity_ref_1
-        };
+        let entity_ref_1 = EntityReference::new("doc-1", EntityType::Document);
+        let entity_ref_2 = EntityReference::new("user-1", EntityType::User);
+        let entity_ref_1_dup = EntityReference::new("doc-1", EntityType::Document); // Same as entity_ref_1
 
         // Test with duplicate entity references
         let multi_entity_ref_with_dupes = SetPropertyValue::MultiEntityReference {
@@ -483,14 +473,8 @@ mod tests {
 
         // Test that same ID with different entity types ARE considered duplicates
         // (deduplicating by entity_id only, keeping first occurrence)
-        let entity_ref_1 = EntityReference {
-            entity_type: EntityType::Document,
-            entity_id: "123".to_string(),
-        };
-        let entity_ref_2 = EntityReference {
-            entity_type: EntityType::User,
-            entity_id: "123".to_string(), // Same ID but different type
-        };
+        let entity_ref_1 = EntityReference::new("123", EntityType::Document);
+        let entity_ref_2 = EntityReference::new("123", EntityType::User); // Same ID but different type
 
         let multi_entity_ref = SetPropertyValue::MultiEntityReference {
             references: vec![entity_ref_1, entity_ref_2],

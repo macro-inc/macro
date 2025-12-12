@@ -23,8 +23,8 @@ members = [
   "document_cognition_service_client",
   "document_storage_service",
   "document_storage_service_client",
-  "document_text_extractor",
   "document_sub_type",
+  "document_text_extractor",
   "docx_unzip_handler",
   "dynamodb_client",
   "email_db_client",
@@ -207,7 +207,7 @@ utoipa = { version = "5.2.0", features = [
   "repr",
   "uuid",
 ] }
-utoipa-swagger-ui = { version = "8.0.3", features = ["axum"] }
+utoipa-swagger-ui = { version = "8.0.3", features = ["axum", "vendored"] }
 uuid = { version = "1.15.1", features = ["fast-rng", "serde", "v4", "v7"] }
 # this is pinned to match axum 0.7.9 dependency requirements
 async-stripe = { version = "0.41", default-features = false, features = [

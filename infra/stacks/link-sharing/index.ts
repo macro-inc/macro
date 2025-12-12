@@ -1,5 +1,5 @@
 import * as pulumi from '@pulumi/pulumi';
-import { stack } from '@shared';
+import { stack } from '../../packages/shared';
 import {
   attachPolicyToBucket,
   getStorageBucketFromName,

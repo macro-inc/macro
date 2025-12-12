@@ -11,6 +11,34 @@ use super::EntityType;
 pub struct EntityReference {
     pub entity_id: String,
     pub entity_type: EntityType,
+    /// For CHANNEL, CHAT, THREAD entity types - optional specific message ID.
+    /// This allows referencing a specific message within a thread/channel/chat.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub specific_message_id: Option<Uuid>,
+}
+
+impl EntityReference {
+    /// Create a new entity reference without a specific message ID
+    pub fn new(entity_id: impl Into<String>, entity_type: EntityType) -> Self {
+        Self {
+            entity_id: entity_id.into(),
+            entity_type,
+            specific_message_id: None,
+        }
+    }
+
+    /// Create a new entity reference with a specific message ID
+    pub fn with_message_id(
+        entity_id: impl Into<String>,
+        entity_type: EntityType,
+        message_id: Uuid,
+    ) -> Self {
+        Self {
+            entity_id: entity_id.into(),
+            entity_type,
+            specific_message_id: Some(message_id),
+        }
+    }
 }
 
 /// Reference to an entity property, including the property definition ID.

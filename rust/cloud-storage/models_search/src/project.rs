@@ -15,7 +15,7 @@ pub struct ProjectSearchResult {
 /// Metadata associated with Project Search, to be used with SearchResponseItem
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct ProjectSearchMetadata {
-    pub project_id: String,
+    pub project_id: uuid::Uuid,
     pub owner_id: String,
     pub updated_at: i64,
     pub created_at: i64,
@@ -28,7 +28,7 @@ pub struct ProjectSearchResponseItem {
     /// Standardized fields that all item types will share.
     /// These field names are being aligned across all item types
     /// for consistency in our data model.
-    pub id: String,
+    pub id: uuid::Uuid,
     pub name: String,
     pub owner_id: String,
 

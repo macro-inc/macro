@@ -1610,6 +1610,7 @@
           "filename": { "type": ["string", "null"] },
           "mime_type": { "type": ["string", "null"] },
           "provider_id": { "type": ["string", "null"] },
+          "sfs_id": { "type": ["string", "null"], "format": "uuid" },
           "size_bytes": { "type": ["integer", "null"], "format": "int64" }
         }
       },

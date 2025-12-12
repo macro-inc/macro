@@ -113,6 +113,10 @@
       "name": "experiment-service-stack",
       "version": "0.0.0",
     },
+    "stacks/fusion-auth": {
+      "name": "fusion-auth",
+      "version": "0.0.0",
+    },
     "stacks/insight-service": {
       "name": "insight-service-stack",
       "version": "0.0.0",
@@ -670,6 +674,8 @@
     "fs-minipass": ["fs-minipass@3.0.3", "", { "dependencies": { "minipass": "^7.0.3" } }, "sha512-XUBA9XClHbnJWSfBzjkm6RvPsyg3sryZt06BEQoXcF7EK/xpGaQYJgQKDJSUH5SGZ76Y7pFx1QBnXz09rU5Fbw=="],
 
     "function-bind": ["function-bind@1.1.2", "", {}, "sha512-7XHNxH7qX9xG5mIwxkhumTox/MIRNcOgDrxWsMt2pAr23WHp6MrRlN7FBSFpCpr+oVO0F744iUgR82nJMfG2SA=="],
+
+    "fusion-auth": ["fusion-auth@workspace:stacks/fusion-auth"],
 
     "get-caller-file": ["get-caller-file@2.0.5", "", {}, "sha512-DyFP3BM/3YHTQOCUL/w0OZHR0lpKeGrxotcHWcqNEdnltqFwXVfhEBQ94eIo34AfQpo0rGki4cyIiftY06h2Fg=="],
 
