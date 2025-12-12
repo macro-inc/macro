@@ -10,7 +10,6 @@ const BASE_ENTITY = {
   channel: [ENTITY, 'channel'],
   dss: [ENTITY, 'dss'],
   email: [ENTITY, 'email'],
-  notification: [ENTITY, 'notification'],
   search: [ENTITY, 'search'],
 };
 
@@ -27,10 +26,6 @@ type InfiniteKeyOptions =
     });
 type EmailKeyOptions = InfiniteKeyOptions & {
   view: PreviewViewStandardLabel;
-};
-type NotificationKeyOptions = InfiniteKeyOptions & {
-  eventItemId?: string;
-  eventItemIds?: string[];
 };
 type SearchKeyOptions = {
   infinite: true;
@@ -60,10 +55,6 @@ export const queryKeys = {
   ],
   dss: (args?: InfiniteKeyOptions) => [...BASE_ENTITY.dss, { ...args }],
   email: (args: EmailKeyOptions) => [...BASE_ENTITY.email, { ...args }],
-  notification: (args?: NotificationKeyOptions) => [
-    ...BASE_ENTITY.notification,
-    { ...args },
-  ],
   project: (args: { projectId: string }) => [
     'project',
     { projectId: args.projectId },

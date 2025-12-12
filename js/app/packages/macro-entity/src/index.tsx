@@ -25,9 +25,14 @@ export { queryKeys } from './queries/key';
 export {
   createEntityNotificationsInfiniteQuery,
   createNotificationsInfiniteQuery,
-  createUnseenNotificationIds,
-  createUnseenNotifications,
   enhanceWithNotifications,
+  invalidateAllNotifications,
+  invalidateEntityNotifications,
+  invalidateUserNotifications,
+  notificationKeys,
+  useEntitiesNotificationsQuery,
+  useEntityNotificationsQuery,
+  useUserNotificationsQuery,
 } from './queries/notification';
 export * from './queries/search';
 export { createEmailSource, type EmailSource, useEmails } from './source/email';

@@ -193,7 +193,7 @@ impl ChannelMessageEvent<'_> {
                     &recipients_without_sender_and_mentions,
                     NotificationEvent::ChannelMessageSend(ChannelMessageSendMetadata {
                         message_id: self.message.id.to_string(),
-                        sender: self.message.sender_id.to_string(),
+                        sender:  self.message.sender_id.to_string(),
                         message_content: self.message.content.to_string(),
                         common: self.channel_metadata.clone(),
                     }),

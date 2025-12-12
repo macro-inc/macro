@@ -285,9 +285,7 @@ export function Soup() {
         queryKey: queryKeys.all.channel,
       });
       entityQueryClient.invalidateQueries({
-        queryKey: queryKeys.notification({
-          eventItemId: notification.eventItemId,
-        }),
+        queryKey: ['notification', 'entity', notification.eventItemId],
       });
     }
   );
