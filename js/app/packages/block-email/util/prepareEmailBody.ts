@@ -336,7 +336,7 @@ export function prepareEmailBody(
     replyType: ReplyType | undefined;
     replyingTo: MessageWithBodyReplyless;
   },
-  withSignature?: string
+  signature?: string
 ): {
   bodyHtml: string;
   bodyText: string;
@@ -346,9 +346,9 @@ export function prepareEmailBody(
 
   let watermark: WatermarkNode;
 
-  if (withSignature) {
+  if (signature) {
     editor.update(() => {
-      watermark = $createWatermarkNode({ content: withSignature });
+      watermark = $createWatermarkNode({ content: signature });
 
       const root = $getRoot();
 
@@ -360,7 +360,8 @@ export function prepareEmailBody(
     return $generateHtmlFromNodes(editor);
   });
 
-  if (withSignature) {
+  if (signature) {
+    // We need to remove the watermark node so it doesn't remain in the input
     editor.update(() => {
       watermark.forceRemove();
     });
