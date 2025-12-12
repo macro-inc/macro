@@ -7,6 +7,8 @@ import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { DEFAULT_VIEWS, type DefaultView, type ViewId } from '@core/types/view';
+import { getActualTarget } from '@core/util/getActualTarget';
+import { isInteractiveElement } from '@core/util/isInteractiveElement';
 import { filterMap } from '@core/util/list';
 import { isErr } from '@core/util/maybeResult';
 import { getScrollParent } from '@core/util/scrollParent';
@@ -1619,8 +1621,8 @@ function registerEntityHotkey<T>(
             [role="dialog"],
             [role="alertdialog"],
             [data-modal="true"],
-            z-modal,
-            z-modal-overlay
+            .z-modal,
+            .z-modal-overlay
             `
           )
         ) {
@@ -1656,62 +1658,4 @@ function registerEntityHotkey<T>(
     registerHotkeyReturn,
     globalRegisterHotkeyReturn,
   } as any;
-}
-
-function isInteractiveElement(el: Element | null): boolean {
-  if (!el) return false;
-
-  // 1. Custom flags (your existing logic)
-  if ((el as any).$$click || (el as any).$$keydown) return true;
-
-  const tag = el.tagName.toLowerCase();
-
-  // 2. Native interactive HTML elements
-  const nativeInteractive = [
-    'button',
-    'input',
-    'select',
-    'textarea',
-    'option',
-    'summary',
-    'details',
-  ];
-  if (nativeInteractive.includes(tag)) return true;
-
-  // <a href="...">
-  if (tag === 'a' && (el as HTMLAnchorElement).href) return true;
-
-  // 3. contenteditable
-  if ((el as HTMLElement).isContentEditable) return true;
-
-  // 4. Tabindex-able elements (keyboard focusable)
-  const tabIndex = (el as HTMLElement).tabIndex;
-  if (tabIndex >= 0) return true;
-
-  // 5. ARIA interactive roles
-  const ariaRole = el.getAttribute('role');
-  const interactiveRoles = new Set([
-    'button',
-    'link',
-    'checkbox',
-    'menuitem',
-    'option',
-    'radio',
-    'slider',
-    'spinbutton',
-    'switch',
-    'textbox',
-    'combobox',
-    'tab',
-  ]);
-  if (ariaRole && interactiveRoles.has(ariaRole)) return true;
-
-  return false;
-}
-function getActualTarget(e: KeyboardEvent): HTMLElement | null {
-  const path = e.composedPath();
-  for (const node of path) {
-    if (node instanceof HTMLElement) return node;
-  }
-  return null;
 }
