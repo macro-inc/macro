@@ -1,9 +1,5 @@
 import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
-import {
-  createMemo,
-  onCleanup,
-  onMount,
-} from 'solid-js';
+import { createMemo, onCleanup, onMount } from 'solid-js';
 import {
   commandCategoryIndex,
   searchCategories,
@@ -13,9 +9,12 @@ import { konsoleOpen } from './state';
 
 export function KonsoleFilter() {
   const visibleCategories = createMemo(() => {
-    return searchCategories.listVisible()
+    return searchCategories
+      .listVisible()
       .map((category, index) => {
-        if(searchCategories.isCategoryActive(index)){return category.name}
+        if (searchCategories.isCategoryActive(index)) {
+          return category.name;
+        }
         return null;
       })
       .filter(Boolean) as string[];
@@ -24,13 +23,19 @@ export function KonsoleFilter() {
   const selectedCategoryName = createMemo(() => {
     const categories = searchCategories.listVisible();
     const index = commandCategoryIndex();
-    if(index >= 0 && index < categories.length){return categories[index].name}
+    if (index >= 0 && index < categories.length) {
+      return categories[index].name;
+    }
     return categories[0]?.name || '';
   });
 
   const handleCategoryChange = (categoryName: string) => {
-    const index = searchCategories.listVisible().findIndex(cat => cat.name === categoryName);
-    if(index !== -1){setCommandCategoryIndex(index)}
+    const index = searchCategories
+      .listVisible()
+      .findIndex((cat) => cat.name === categoryName);
+    if (index !== -1) {
+      setCommandCategoryIndex(index);
+    }
   };
 
   onMount(() => {

@@ -1,8 +1,11 @@
 import { useChannelsContext } from '@core/component/ChannelsProvider';
+import { ClippedPanel } from '@core/component/ClippedPanel';
+import { IconButton } from '@core/component/IconButton';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { ENABLE_SEARCH_PAGINATION } from '@core/constant/featureFlags';
 import type { CommandWithInfo } from '@core/hotkey/getCommands';
 import { createFreshSearch } from '@core/util/freshSort';
+import CloseIcon from '@icon/regular/x.svg';
 import { Popover } from '@kobalte/core';
 import { Command as CommandK, useCommandState } from 'cmdk-solid';
 import {
@@ -50,9 +53,6 @@ import {
 } from './state';
 import { useCommandItems } from './useCommandItems';
 import { usePaginatedSearchItems } from './useSearchItems';
-import { ClippedPanel } from '@core/component/ClippedPanel';
-import CloseIcon from '@icon/regular/x.svg';
-import { IconButton } from '@core/component/IconButton';
 
 // equivalent to h-96
 const MAX_CONTAINER_HEIGHT = 96 * 4;
@@ -334,12 +334,17 @@ export function KommandMenuInner(props: {
         <span class="absolute left-8 pointer-events-none">❯</span>
         <IconButton
           onClick={() => toggleKonsoleVisibility()}
-          tooltip={{ label: 'Close'}}
+          tooltip={{ label: 'Close' }}
           icon={CloseIcon}
           theme="current"
           iconSize={16}
           size="sm"
-          style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)' }}
+          style={{
+            position: 'absolute',
+            left: '8px',
+            top: '50%',
+            transform: 'translateY(-50%)',
+          }}
         />
       </div>
       <div class="bg-panel">
