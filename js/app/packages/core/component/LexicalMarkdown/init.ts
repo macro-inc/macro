@@ -24,7 +24,7 @@ import { HtmlRender } from './component/decorator/HtmlRender';
 import { MarkdownImage } from './component/decorator/MarkdownImage';
 import { MarkdownVideo } from './component/decorator/MarkdownVideo';
 import { UserMention } from './component/decorator/UserMention';
-import { Watermark } from './component/decorator/Watarmark';
+import { Watermark } from './component/decorator/Watermark';
 import { registerDiffNodeFactory } from './component/dom-factory/diff-factory';
 
 /**

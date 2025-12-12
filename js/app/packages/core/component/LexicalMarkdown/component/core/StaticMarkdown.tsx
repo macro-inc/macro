@@ -60,7 +60,7 @@ import { DateMention as DateMentionDecorator } from '../decorator/DateMention';
 import { DocumentMention as DocumentMentionDecorator } from '../decorator/DocumentMention';
 import { Equation as EquationDecorator } from '../decorator/Equation';
 import { UserMention as UserMentionDecorator } from '../decorator/UserMention';
-import { Watermark as WatermarkDecorator } from '../decorator/Watarmark';
+import { Watermark as WatermarkDecorator } from '../decorator/Watermark';
 import { LinkWithPreview } from './LinkWithPreview';
 
 type HeadingTag = 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6';
