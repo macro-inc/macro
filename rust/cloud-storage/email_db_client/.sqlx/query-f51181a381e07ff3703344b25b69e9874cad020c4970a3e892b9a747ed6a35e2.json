@@ -1,0 +1,71 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n    SELECT\n        m.thread_id,\n        COALESCE(\n            MIN(m.sent_at) FILTER (WHERE m.is_draft = false),\n            MIN(m.updated_at)\n        ) as \"first_message_ts!\",\n        COALESCE(\n            MAX(m.sent_at) FILTER (WHERE m.is_draft = false),\n            MAX(m.updated_at)\n        ) as \"last_message_ts!\",\n        uh.updated_at as \"viewed_at?\",\n        m.snippet,\n        m.subject as \"subject?\",\n        l.macro_id,\n        latest_msg.sender as sender,\n        latest_msg.pretty_sender as \"pretty_sender!\"\n    FROM email_messages m\n    LEFT JOIN email_user_history uh ON uh.thread_id = m.thread_id AND uh.link_id = $1\n    LEFT JOIN email_links l ON l.id = m.link_id\n    LEFT JOIN LATERAL (\n        SELECT\n            c.email_address as sender,\n            COALESCE(c.name, c.email_address) as pretty_sender\n        FROM email_messages m2\n        LEFT JOIN email_contacts c ON c.id = m2.from_contact_id\n        WHERE m2.thread_id = m.thread_id\n          AND m2.link_id = $1\n        ORDER BY m2.internal_date_ts DESC NULLS LAST\n        LIMIT 1\n    ) latest_msg ON true\n    WHERE m.thread_id = ANY($2)\n      AND m.link_id = $1\n    GROUP BY\n        m.thread_id,\n        uh.updated_at,\n        m.snippet,\n        m.subject,\n        l.macro_id,\n        latest_msg.sender,\n        latest_msg.pretty_sender\n    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "thread_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "first_message_ts!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "last_message_ts!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "viewed_at?",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "snippet",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "subject?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "macro_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "sender",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 8,
+        "name": "pretty_sender!",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null,
+      false,
+      true,
+      true,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "f51181a381e07ff3703344b25b69e9874cad020c4970a3e892b9a747ed6a35e2"
+}
