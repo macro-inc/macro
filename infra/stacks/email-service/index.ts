@@ -1,21 +1,21 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import * as tls from '@pulumi/tls';
-import {createFrecencyTablePolicy, Queue, Redis} from '@resources';
+import {createFrecencyTablePolicy, Queue, Redis} from '../../packages/resources';
 import {
   config,
   getMacroApiToken,
   getMacroNotify,
   getSearchEventQueue,
   stack,
-} from '@shared';
-import { EmailRefreshHandler } from '@stacks/email-service/refresh_lambda';
-import {cloudfrontPrivateKeySecret, getCloudfrontDistribution} from '@stacks/email-service/s3-cloudfront-distribution';
+} from '../../packages/shared';
+import { EmailRefreshHandler } from './refresh_lambda';
+import {cloudfrontPrivateKeySecret, getCloudfrontDistribution} from './s3-cloudfront-distribution';
 import { EmailScheduledHandler } from '@stacks/email-service/scheduled_lambda';
-import { get_coparse_api_vpc } from '@vpc';
+import { get_coparse_api_vpc } from '../../packages/vpc';
 import { EmailService } from './service';
-import {EmailAttachmentsBucket} from "@stacks/email-service/attachments-bucket";
-import {EmailPubSubWorkers} from "@stacks/email-service/pubsub_workers";
+import {EmailAttachmentsBucket} from "./attachments-bucket";
+import {EmailPubSubWorkers} from "./pubsub_workers";
 
 const tags = {
   environment: stack,
