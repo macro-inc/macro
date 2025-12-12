@@ -170,7 +170,9 @@ where
                                     name: call.name.clone(),
                                 },
                             });
+                            println!("tool call output {:#?}", response);
                             if let ToolResult::Ok(tool_output) = response {
+                                println!("parse tool ouput {:#?}", tool_output);
                                 let content_text = serde_json::to_string_pretty(&tool_output)
                                     .unwrap_or_else(|_| {
                                         "internal error formatting response".to_string()
