@@ -323,7 +323,15 @@ export function KommandMenuInner(props: {
         setCurrentValue(value);
       }}
     >
-      <div class="flex items-center gap-2 bg-panel px-2 h-[40px] border-b border-edge-muted">
+      <div class="relative flex items-center gap-2 bg-panel px-2 h-[40px] border-b border-edge-muted">
+        <CommandK.Input
+          class="flex-1 border-0 outline-none! focus:outline-none ring-0! focus:ring-0 font-mono pl-10"
+          placeholder="Search"
+          onValueChange={setRawQuery}
+          value={rawQuery()}
+          autofocus
+        />
+        <span class="absolute left-8 pointer-events-none">❯</span>
         <IconButton
           onClick={() => toggleKonsoleVisibility()}
           tooltip={{ label: 'Close'}}
@@ -331,13 +339,7 @@ export function KommandMenuInner(props: {
           theme="current"
           iconSize={16}
           size="sm"
-        />
-        ❯
-        <CommandK.Input
-          class="flex-1 border-0 outline-none! focus:outline-none ring-0! focus:ring-0 font-mono"
-          onValueChange={setRawQuery}
-          placeholder="Search..."
-          value={rawQuery()}
+          style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)' }}
         />
       </div>
       <div class="bg-panel">
