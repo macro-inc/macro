@@ -45,8 +45,8 @@ pub async fn get_thread_summary_info(
         r#"
         SELECT
             m.thread_id,
-            MIN(m.sent_at) as "first_message_sent!",
-            MAX(m.sent_at) as "last_message_sent!",
+            COALESCE(MIN(m.sent_at), MIN(m.updated_at)) as "first_message_ts!",
+            COALESCE(MAX(m.sent_at), MAX(m.updated_at)) as "last_message_ts!",
             uh.updated_at as "viewed_at?",
             m.snippet,
             m.subject as "subject?",
@@ -86,10 +86,10 @@ pub async fn get_thread_summary_info(
             user_id: row.macro_id,
             subject: row.subject,
             snippet: row.snippet,
-            created_at: row.first_message_sent,
-            updated_at: row.last_message_sent,
+            created_at: row.first_message_ts,
+            updated_at: row.last_message_ts,
             viewed_at: row.viewed_at.and_then(|viewed| {
-                if viewed >= row.last_message_sent {
+                if viewed >= row.last_message_ts {
                     Some(viewed)
                 } else {
                     None
