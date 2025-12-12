@@ -1,4 +1,5 @@
 import { FormatRibbon } from '@block-channel/component/FormatRibbon';
+import { MacroSignatureButton } from '@block-email/component/MacroSignatureButton';
 import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
 import { useHasPaidAccess } from '@core/auth';
 import { useBlockId } from '@core/block';
@@ -87,7 +88,6 @@ import { getReplyTypeFromDraft } from '../util/replyType';
 import { AttachMenu } from './AttachMenu';
 import { type EmailRecipient, useEmailContext } from './EmailContext';
 import { getOrInitEmailFormContext } from './EmailFormContext';
-import { MacroSignatureButton } from '@block-email/component/MacroSignatureButton';
 
 false && fileDrop;
 
