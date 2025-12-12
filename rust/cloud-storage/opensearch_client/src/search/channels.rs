@@ -21,11 +21,11 @@ use serde_json::Value;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub(crate) struct ChannelMessageIndex {
-    pub entity_id: String,
+    pub entity_id: uuid::Uuid,
     pub channel_type: String,
     pub org_id: Option<i64>,
-    pub message_id: String,
-    pub thread_id: Option<String>,
+    pub message_id: uuid::Uuid,
+    pub thread_id: Option<uuid::Uuid>,
     pub sender_id: String,
     pub mentions: Vec<String>,
     pub content: String,

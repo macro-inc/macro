@@ -1,4 +1,5 @@
 use super::fetcher::NewDocumentFetcher;
+use super::project::ProjectFetcher;
 use document_storage_service_client::DocumentStorageServiceClient;
 use lexical_client::LexicalClient;
 use std::sync::Arc;
@@ -52,6 +53,10 @@ impl DocumentClient {
             document_id.into(),
         )
         .with_jwt_token(jwt_token)
+    }
+
+    pub fn fetch_project(&self, id: String, jwt: String) -> ProjectFetcher<()> {
+        ProjectFetcher::new(self.dss_client.clone(), id, jwt)
     }
 }
 

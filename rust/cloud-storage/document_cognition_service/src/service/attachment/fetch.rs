@@ -2,7 +2,6 @@ use crate::api::context::DcsScribe;
 use crate::core::constants::CHANNEL_TRANSCRIPT_MAX_MESSAGES;
 use ai::types::{Attachment, PromptAttachment};
 use ai_tools::read::EmailMessage;
-use anyhow::Context;
 use model::{
     chat::{AttachmentType, ChatAttachmentWithName},
     document::FileTypeExt,
@@ -15,21 +14,37 @@ pub const EMAIL_THREAD_MESSAGE_LIMIT: i64 = 20;
 pub async fn fetchium(
     scribe: Arc<DcsScribe>,
     attachments: Vec<ChatAttachmentWithName>,
+    jwt: &str,
 ) -> Result<Vec<Attachment>, anyhow::Error> {
     // --- closure to fetch single attachment ---
     #[tracing::instrument(err, skip(scribe))]
     async fn fetchington(
         attachment: ChatAttachmentWithName,
         scribe: Arc<DcsScribe>,
+        jwt: &str,
     ) -> Result<Attachment, anyhow::Error> {
         match attachment.attachment_type {
+            AttachmentType::Project => {
+                // fetch id's of stuff in folder
+                let project_items = scribe
+                    .document
+                    .fetch_project(attachment.attachment_id.clone(), jwt.to_owned())
+                    .content()
+                    .await?
+                    .to_string();
+                Ok(Attachment::Text(PromptAttachment {
+                    id: attachment.attachment_id.clone(),
+                    file_type: "Project".into(),
+                    name: attachment.name().unwrap_or_default().into(),
+                    content: project_items,
+                }))
+            }
             AttachmentType::Image => {
                 let base64_image = scribe
                     .static_file
                     .fetch(attachment.attachment_id.clone())
                     .file_content()
-                    .await
-                    .context("failed to fetch image content")?
+                    .await?
                     .content
                     .base64_compressed_webp()?;
 
@@ -44,8 +59,7 @@ pub async fn fetchium(
                         None,
                         Some(CHANNEL_TRANSCRIPT_MAX_MESSAGES),
                     )
-                    .await
-                    .context("failed to fetch channel transcript")?;
+                    .await?;
 
                 Ok(Attachment::Text(PromptAttachment {
                     content: transcript,
@@ -59,8 +73,7 @@ pub async fn fetchium(
                     .document
                     .fetch(attachment.attachment_id.clone())
                     .document_content()
-                    .await
-                    .context("failed to fetch document content")?;
+                    .await?;
                 if document.file_type().is_image() {
                     Ok(Attachment::ImageUrl(
                         document.content.base64_compressed_webp()?,
@@ -83,8 +96,7 @@ pub async fn fetchium(
                         EMAIL_THREAD_MESSAGE_LIMIT,
                         None,
                     )
-                    .await
-                    .context("failed to fetch email message")?;
+                    .await?;
 
                 let subject = thread
                     .first()
@@ -103,8 +115,7 @@ pub async fn fetchium(
                     messages: thread,
                 };
 
-                let content = serde_json::to_string_pretty(&formatted_content)
-                    .context("error stringifying json")?;
+                let content = serde_json::to_string_pretty(&formatted_content)?;
 
                 Ok(Attachment::Text(PromptAttachment {
                     id: attachment.attachment_id,
@@ -115,25 +126,13 @@ pub async fn fetchium(
             }
         }
     }
-    //--- end closure --
 
-    let handles = attachments.into_iter().map(|attachment| {
-        let scribe = scribe.clone();
-        tokio::spawn(async move { fetchington(attachment, scribe).await })
-    });
+    let futures = attachments
+        .into_iter()
+        .map(|attachment| fetchington(attachment, scribe.clone(), jwt));
 
-    let results = futures::future::try_join_all(handles)
-        .await
-        .context("failed to join attachment fetch tasks")?;
-
-    if results.iter().any(Result::is_err) {
-        let errors: Vec<_> = results.iter().filter_map(|r| r.as_ref().err()).collect();
-        tracing::error!(
-            error_count = errors.len(),
-            "failed to fetch one or more attachments"
-        );
-        Err(anyhow::anyhow!("failed to get one or more attachments"))
-    } else {
-        Ok(results.into_iter().flatten().collect())
-    }
+    let results = futures::future::try_join_all(futures).await.inspect_err(
+        |err| tracing::error!(error=?err, "failed to fetch one or more attachments"),
+    )?;
+    Ok(results)
 }

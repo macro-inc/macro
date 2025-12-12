@@ -28,9 +28,9 @@ fn test_construct_search_result_empty_input() {
 
 #[test]
 fn test_construct_search_result_single_thread() {
-    let thread_uuid = "550e8400-e29b-41d4-a716-446655440000";
+    let thread_uuid: Uuid = "550e8400-e29b-41d4-a716-446655440000".parse().unwrap();
     let search_results = vec![opensearch_client::search::model::SearchHit {
-        entity_id: thread_uuid.to_string(),
+        entity_id: thread_uuid,
         entity_type: SearchEntityType::Emails,
         goto: Some(opensearch_client::search::model::SearchGotoContent::Emails(
             opensearch_client::search::model::SearchGotoEmail {
@@ -51,10 +51,7 @@ fn test_construct_search_result_single_thread() {
     }];
 
     let mut thread_histories = HashMap::new();
-    thread_histories.insert(
-        Uuid::parse_str(thread_uuid).unwrap(),
-        create_email_history(thread_uuid),
-    );
+    thread_histories.insert(thread_uuid, create_email_history(&thread_uuid.to_string()));
 
     let result = construct_search_result(search_results, thread_histories, HashMap::new()).unwrap();
 
@@ -75,17 +72,20 @@ fn test_construct_search_result_single_thread() {
 
 #[test]
 fn test_sort_stability() {
-    let thread_ids = [
+    let thread_ids: Vec<Uuid> = [
         "550e8400-e29b-41d4-a716-446655440003",
         "550e8400-e29b-41d4-a716-446655440001",
         "550e8400-e29b-41d4-a716-446655440005",
         "550e8400-e29b-41d4-a716-446655440002",
         "550e8400-e29b-41d4-a716-446655440004",
-    ];
+    ]
+    .into_iter()
+    .map(|a| a.parse().unwrap())
+    .collect();
 
     let input = vec![
         opensearch_client::search::model::SearchHit {
-            entity_id: thread_ids[0].to_string(),
+            entity_id: thread_ids[0],
             entity_type: SearchEntityType::Emails,
             goto: Some(opensearch_client::search::model::SearchGotoContent::Emails(
                 opensearch_client::search::model::SearchGotoEmail {
@@ -105,7 +105,7 @@ fn test_sort_stability() {
             },
         },
         opensearch_client::search::model::SearchHit {
-            entity_id: thread_ids[1].to_string(),
+            entity_id: thread_ids[1],
             entity_type: SearchEntityType::Emails,
             goto: Some(opensearch_client::search::model::SearchGotoContent::Emails(
                 opensearch_client::search::model::SearchGotoEmail {
@@ -125,7 +125,7 @@ fn test_sort_stability() {
             },
         },
         opensearch_client::search::model::SearchHit {
-            entity_id: thread_ids[2].to_string(),
+            entity_id: thread_ids[2],
             entity_type: SearchEntityType::Emails,
             goto: Some(opensearch_client::search::model::SearchGotoContent::Emails(
                 opensearch_client::search::model::SearchGotoEmail {
@@ -145,7 +145,7 @@ fn test_sort_stability() {
             },
         },
         opensearch_client::search::model::SearchHit {
-            entity_id: thread_ids[3].to_string(),
+            entity_id: thread_ids[3],
             entity_type: SearchEntityType::Emails,
             goto: Some(opensearch_client::search::model::SearchGotoContent::Emails(
                 opensearch_client::search::model::SearchGotoEmail {
@@ -165,7 +165,7 @@ fn test_sort_stability() {
             },
         },
         opensearch_client::search::model::SearchHit {
-            entity_id: thread_ids[4].to_string(),
+            entity_id: thread_ids[4],
             entity_type: SearchEntityType::Emails,
             goto: Some(opensearch_client::search::model::SearchGotoContent::Emails(
                 opensearch_client::search::model::SearchGotoEmail {
@@ -189,8 +189,8 @@ fn test_sort_stability() {
     let mut thread_histories = HashMap::new();
     for thread_id in &thread_ids {
         thread_histories.insert(
-            Uuid::parse_str(thread_id).unwrap(),
-            create_email_history(thread_id),
+            thread_id.clone(),
+            create_email_history(&thread_id.to_string()),
         );
     }
 
@@ -205,9 +205,9 @@ fn test_sort_stability() {
     assert_eq!(result2.len(), 5);
     assert_eq!(result3.len(), 5);
 
-    let ids1: Vec<String> = result1.iter().map(|r| r.extra.id.clone()).collect();
-    let ids2: Vec<String> = result2.iter().map(|r| r.extra.id.clone()).collect();
-    let ids3: Vec<String> = result3.iter().map(|r| r.extra.id.clone()).collect();
+    let ids1: Vec<Uuid> = result1.iter().map(|r| r.extra.id.clone()).collect();
+    let ids2: Vec<Uuid> = result2.iter().map(|r| r.extra.id.clone()).collect();
+    let ids3: Vec<Uuid> = result3.iter().map(|r| r.extra.id.clone()).collect();
 
     assert_eq!(ids1, ids2, "Results should be stable between runs");
     assert_eq!(ids2, ids3, "Results should be stable between runs");

@@ -36,10 +36,7 @@ pub(in crate::api::search) async fn enrich_channels(
     }
 
     // Extract channel IDs from results
-    let channel_ids: Vec<Uuid> = results
-        .iter()
-        .map(|r| r.entity_id.parse().unwrap())
-        .collect();
+    let channel_ids: Vec<Uuid> = results.iter().map(|r| r.entity_id).collect();
 
     // Fetch channel metadata from comms service
     let channel_histories = ctx
@@ -143,7 +140,7 @@ pub fn construct_search_result(
                     updated_at: None,
                 }
             };
-            (hit.entity_id.parse().unwrap(), result)
+            (hit.entity_id, result)
         })
         .fold(IndexMap::new(), |mut map, (entity_id, result)| {
             map.entry(entity_id).or_insert_with(Vec::new).push(result);
@@ -165,8 +162,8 @@ pub fn construct_search_result(
                 Some(ChannelSearchResponseItemWithMetadata {
                     metadata: Some(metadata),
                     extra: ChannelSearchResponseItem {
-                        id: entity_id.to_string(),
-                        channel_id: entity_id.to_string(),
+                        id: entity_id,
+                        channel_id: entity_id,
                         owner_id: Some(info.user_id),
                         channel_type: info.channel_type,
                         channel_message_search_results: hits,

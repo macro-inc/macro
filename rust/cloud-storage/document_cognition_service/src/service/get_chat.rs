@@ -37,6 +37,13 @@ pub async fn get_chat(
                     })
                     .ok()
             }
+            AttachmentType::Project => {
+                get_document_name_and_type(db.clone(), &attachment.attachment_id)
+                    .await
+                    .map(|(name, _)| AttachmentMetadata::Project { project_name: name })
+                    .ok()
+            }
+
             AttachmentType::Document => {
                 get_document_name_and_type(db.clone(), &attachment.attachment_id)
                     .await
