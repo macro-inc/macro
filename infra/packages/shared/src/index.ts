@@ -23,10 +23,6 @@ export const SERVICE_NAME = 'doc-storage';
 
 export const BASE_DOMAIN = 'macro.com';
 
-export const SERVICE_DOMAIN_NAME = `cloud-storage${
-  stack === 'dev' ? '-dev' : ''
-}.${BASE_DOMAIN}`;
-
 export const MACRO_SUBDOMAIN_CERT =
   'arn:aws:acm:us-east-1:569036502058:certificate/a75b1b07-534c-44e1-b59b-fa5f74fd8069';
 
@@ -42,3 +38,5 @@ export const CLOUDWATCH_KINESIS_STREAM_ROLE_ARN =
 export { getMacroApiToken } from './macro_api_token';
 export { getMacroNotify } from './macro_notify';
 export { getSearchEventQueue } from './search_event_queue';
+
+export { ServiceUrl, getServiceUrl, getDomainName } from './service_urls';
