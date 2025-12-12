@@ -1,7 +1,5 @@
 use crate::util::process_pre_insert::clean_message::{clean_message, clean_threads};
-use crate::util::process_pre_insert::sfs_map::{
-    store_message_images, store_threads_images,
-};
+use crate::util::process_pre_insert::sfs_map::{store_message_images, store_threads_images};
 use models_email::email::service;
 use static_file_service_client::StaticFileServiceClient;
 
