@@ -12,7 +12,7 @@ export const MacroSignatureButton = (props: MacroSignatureButtonProps) => {
   const paywall = usePaywallState();
   const hasPaidAccess = useHasPaidAccess();
   return (
-    <Show when={hasPaidAccess()}>
+    <Show when={!hasPaidAccess()}>
       <Tooltip tooltip="Subscribe to remove watermark" class="w-fit">
         <button
           type="button"
