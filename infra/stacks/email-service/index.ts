@@ -13,16 +13,16 @@ import {
   getSearchEventQueue,
   stack,
 } from '../../packages/shared';
+import { get_coparse_api_vpc } from '../../packages/vpc';
+import { EmailAttachmentsBucket } from './attachments-bucket';
+import { EmailPubSubWorkers } from './pubsub_workers';
 import { EmailRefreshHandler } from './refresh_lambda';
 import {
   cloudfrontPrivateKeySecret,
   getCloudfrontDistribution,
 } from './s3-cloudfront-distribution';
 import { EmailScheduledHandler } from './scheduled_lambda';
-import { get_coparse_api_vpc } from '../../packages/vpc';
 import { EmailService } from './service';
-import { EmailAttachmentsBucket } from './attachments-bucket';
-import { EmailPubSubWorkers } from './pubsub_workers';
 
 const tags = {
   environment: stack,
