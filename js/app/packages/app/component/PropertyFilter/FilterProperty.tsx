@@ -53,10 +53,12 @@ export const FilterPropertySelect: Component<FilterPropertySelectProps> = (
     }
   };
 
-  // Filter to only filterable properties
+  // Filter to only filterable properties (exclude COMPANY entity type)
   const filterableProperties = createMemo(() => {
-    return availableProperties().filter((property) =>
-      isFilterableDataType(property.data_type)
+    return availableProperties().filter(
+      (property) =>
+        isFilterableDataType(property.data_type) &&
+        property.specific_entity_type !== 'COMPANY'
     );
   });
 
