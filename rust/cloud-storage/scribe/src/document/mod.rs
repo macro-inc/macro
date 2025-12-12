@@ -1,6 +1,7 @@
 use crate::client::ScribeClient;
 mod client;
 mod fetcher;
+mod project;
 pub mod types;
 
 pub use client::DocumentClient;

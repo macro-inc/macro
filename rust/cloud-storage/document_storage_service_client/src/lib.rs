@@ -6,6 +6,7 @@ pub mod document;
 pub mod error;
 pub mod item_ids;
 pub mod notification;
+pub mod project;
 pub mod thread;
 pub mod update_channel_share_permission;
 pub mod update_user_channel_permissions;
