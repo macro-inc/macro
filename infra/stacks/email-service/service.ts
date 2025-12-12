@@ -8,7 +8,11 @@ import {
   serviceLoadBalancer,
 } from '../../packages/resources';
 import { EcrImage } from '../../packages/service';
-import { BASE_DOMAIN, CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '../../packages/shared';
+import {
+  BASE_DOMAIN,
+  CLOUD_TRAIL_SNS_TOPIC_ARN,
+  stack,
+} from '../../packages/shared';
 
 const BASE_NAME = 'email-service';
 const BASE_PATH = '../../../rust/cloud-storage';

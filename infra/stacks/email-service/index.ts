@@ -1,7 +1,11 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import * as tls from '@pulumi/tls';
-import {createFrecencyTablePolicy, Queue, Redis} from '../../packages/resources';
+import {
+  createFrecencyTablePolicy,
+  Queue,
+  Redis,
+} from '../../packages/resources';
 import {
   config,
   getMacroApiToken,
@@ -10,12 +14,15 @@ import {
   stack,
 } from '../../packages/shared';
 import { EmailRefreshHandler } from './refresh_lambda';
-import {cloudfrontPrivateKeySecret, getCloudfrontDistribution} from './s3-cloudfront-distribution';
+import {
+  cloudfrontPrivateKeySecret,
+  getCloudfrontDistribution,
+} from './s3-cloudfront-distribution';
 import { EmailScheduledHandler } from './scheduled_lambda';
 import { get_coparse_api_vpc } from '../../packages/vpc';
 import { EmailService } from './service';
-import {EmailAttachmentsBucket} from "./attachments-bucket";
-import {EmailPubSubWorkers} from "./pubsub_workers";
+import { EmailAttachmentsBucket } from './attachments-bucket';
+import { EmailPubSubWorkers } from './pubsub_workers';
 
 const tags = {
   environment: stack,
@@ -255,53 +262,47 @@ const emailServiceSecretsPolicy = new aws.iam.Policy(
   }
 );
 
-const emailServiceSqsPolicy = new aws.iam.Policy(
-  'email-service-sqs-policy-2',
-  {
-    policy: pulumi.output({
-      Version: '2012-10-17',
-      Statement: [
-        {
-          Action: ['sqs:*'],
-          Resource: queueArns,
-          Effect: 'Allow',
-        },
-      ],
-    }),
-    tags: tags,
-  }
-);
+const emailServiceSqsPolicy = new aws.iam.Policy('email-service-sqs-policy-2', {
+  policy: pulumi.output({
+    Version: '2012-10-17',
+    Statement: [
+      {
+        Action: ['sqs:*'],
+        Resource: queueArns,
+        Effect: 'Allow',
+      },
+    ],
+  }),
+  tags: tags,
+});
 
 const emailServiceFrecencyPolicy = createFrecencyTablePolicy(
   'email-service-frecency-policy-2'
 );
 
 // Create IAM role for email service
-const emailServiceRole = new aws.iam.Role(
-  'email-service-role-2',
-  {
-    name: `email-service-role-2-${stack}`,
-    assumeRolePolicy: {
-      Version: '2012-10-17',
-      Statement: [
-        {
-          Action: 'sts:AssumeRole',
-          Principal: {
-            Service: 'ecs-tasks.amazonaws.com',
-          },
-          Effect: 'Allow',
-          Sid: '',
+const emailServiceRole = new aws.iam.Role('email-service-role-2', {
+  name: `email-service-role-2-${stack}`,
+  assumeRolePolicy: {
+    Version: '2012-10-17',
+    Statement: [
+      {
+        Action: 'sts:AssumeRole',
+        Principal: {
+          Service: 'ecs-tasks.amazonaws.com',
         },
-      ],
-    },
-    tags: tags,
-    managedPolicyArns: [
-      emailServiceSecretsPolicy.arn,
-      emailServiceSqsPolicy.arn,
-      emailServiceFrecencyPolicy.arn,
+        Effect: 'Allow',
+        Sid: '',
+      },
     ],
-  }
-);
+  },
+  tags: tags,
+  managedPolicyArns: [
+    emailServiceSecretsPolicy.arn,
+    emailServiceSqsPolicy.arn,
+    emailServiceFrecencyPolicy.arn,
+  ],
+});
 
 let emailAttachmentBucket: EmailAttachmentsBucket;
 if (stack !== 'local') {
@@ -492,7 +493,7 @@ const containerEnvVars = [
   {
     name: 'CLOUDFRONT_SIGNER_PUBLIC_KEY_ID',
     value: pulumi.interpolate`${cloudfrontDistribution.publicKey.id}`,
-  }
+  },
 ];
 
 const emailService = new EmailService('email-service', {
