@@ -68,7 +68,7 @@ function selectLocalServers(): Servers {
 }
 
 const syncServiceSuffix =
-  import.meta.env.MODE === 'development' ? '-dev3' : '-prod';
+  import.meta.env.MODE === 'development' ? '-dev3' : '-prod2';
 
 export const SYNC_SERVICE_HOSTS = {
   worker: `https://sync-service${syncServiceSuffix}.macroverse.workers.dev`,
