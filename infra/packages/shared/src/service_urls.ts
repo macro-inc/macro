@@ -42,8 +42,10 @@ const DEV_SERVICE_URLS: ServiceUrlMap = {
   [ServiceUrl.AUTHENTICATION_SERVICE_URL]: 'auth-service-dev.macro.com',
   [ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL]: 'cloud-storage-dev.macro.com',
   [ServiceUrl.CONNECTION_GATEWAY_URL]: 'connection-gateway-dev.macro.com',
-  [ServiceUrl.DOCUMENT_COGNITION_SERVICE_URL]: 'document-cognition-dev.macro.com',
-  [ServiceUrl.LEXICAL_SERVICE_URL]: 'lexical-service-dev.macroverse.workers.dev',
+  [ServiceUrl.DOCUMENT_COGNITION_SERVICE_URL]:
+    'document-cognition-dev.macro.com',
+  [ServiceUrl.LEXICAL_SERVICE_URL]:
+    'lexical-service-dev.macroverse.workers.dev',
   [ServiceUrl.SEARCH_SERVICE_URL]: 'search-service-dev.macro.com',
 };
 
@@ -63,7 +65,8 @@ const PROD_SERVICE_URLS: ServiceUrlMap = {
   [ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL]: 'cloud-storage.macro.com',
   [ServiceUrl.CONNECTION_GATEWAY_URL]: 'connection-gateway.macro.com',
   [ServiceUrl.DOCUMENT_COGNITION_SERVICE_URL]: 'document-cognition.macro.com',
-  [ServiceUrl.LEXICAL_SERVICE_URL]: 'lexical-service-prod.macroverse.workers.dev',
+  [ServiceUrl.LEXICAL_SERVICE_URL]:
+    'lexical-service-prod.macroverse.workers.dev',
   [ServiceUrl.SEARCH_SERVICE_URL]: 'search-service.macro.com',
 };
 

@@ -1,6 +1,12 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { config, getSearchEventQueue, stack } from '../../packages/shared';
+import {
+  config,
+  getSearchEventQueue,
+  getServiceUrl,
+  ServiceUrl,
+  stack,
+} from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
 import { SearchProcessingService } from './service';
 
@@ -135,15 +141,11 @@ const searchProcessingService = new SearchProcessingService(
       },
       {
         name: 'EMAIL_SERVICE_URL',
-        value: `https://email-service${
-          stack === 'prod' ? '' : `-${stack}`
-        }.macro.com`,
+        value: getServiceUrl(ServiceUrl.EMAIL_SERVICE_URL),
       },
       {
         name: 'COMMS_SERVICE_URL',
-        value: `https://comms-service${
-          stack === 'prod' ? '' : `-${stack}`
-        }.macro.com`,
+        value: getServiceUrl(ServiceUrl.COMMS_SERVICE_URL),
       },
       {
         name: 'WORKER_COUNT',
@@ -151,7 +153,7 @@ const searchProcessingService = new SearchProcessingService(
       },
       {
         name: 'LEXICAL_SERVICE_URL',
-        value: `https://lexical-service-${stack}.macroverse.workers.dev`,
+        value: getServiceUrl(ServiceUrl.LEXICAL_SERVICE_URL),
       },
     ],
     tags,

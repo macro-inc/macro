@@ -1,6 +1,12 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { config, getMacroApiToken, stack } from '../../packages/shared';
+import {
+  config,
+  getMacroApiToken,
+  getServiceUrl,
+  ServiceUrl,
+  stack,
+} from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
 import { SearchService } from './service';
 
@@ -125,21 +131,15 @@ const searchService = new SearchService(`${BASE_NAME}-${stack}`, {
     },
     {
       name: 'COMMS_SERVICE_URL',
-      value: `https://comms-service${
-        stack === 'prod' ? '' : `-${stack}`
-      }.macro.com`,
+      value: getServiceUrl(ServiceUrl.COMMS_SERVICE_URL),
     },
     {
       name: 'EMAIL_SERVICE_URL',
-      value: `https://email-service${
-        stack === 'prod' ? '' : `-${stack}`
-      }.macro.com`,
+      value: getServiceUrl(ServiceUrl.EMAIL_SERVICE_URL),
     },
     {
       name: 'DOCUMENT_STORAGE_SERVICE_URL',
-      value: `https://cloud-storage${
-        stack === 'prod' ? '' : `-${stack}`
-      }.macro.com`,
+      value: getServiceUrl(ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL),
     },
     {
       name: 'MACRO_API_TOKEN_ISSUER',

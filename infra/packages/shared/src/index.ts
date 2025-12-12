@@ -39,4 +39,4 @@ export { getMacroApiToken } from './macro_api_token';
 export { getMacroNotify } from './macro_notify';
 export { getSearchEventQueue } from './search_event_queue';
 
-export { ServiceUrl, getServiceUrl, getDomainName } from './service_urls';
+export { getDomainName, getServiceUrl, ServiceUrl } from './service_urls';

@@ -5,6 +5,8 @@ import {
   getMacroApiToken,
   getMacroNotify,
   getSearchEventQueue,
+  getServiceUrl,
+  ServiceUrl,
   stack,
 } from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
@@ -105,7 +107,9 @@ export const documentStorageServiceUrl: pulumi.Output<string> =
     .getOutput('cloudStorageServiceUrl')
     .apply((cloudStorageServiceUrl) => cloudStorageServiceUrl as string);
 
-export const meteringServiceUrl = `https://metering${stack === 'prod' ? '' : `-${stack}`}.macro.com`;
+export const meteringServiceUrl = getServiceUrl(
+  ServiceUrl.METERING_SERVICE_URL
+);
 
 const documentTextExtractorStack = new pulumi.StackReference(
   'document-text-extractor',
@@ -270,9 +274,7 @@ const documentCognitionService = new DocumentCognitionService(
       },
       {
         name: 'STATIC_FILE_SERVICE_URL',
-        value: `https://static-file-service${
-          stack === 'prod' ? '' : `-${stack}`
-        }.macro.com`,
+        value: getServiceUrl(ServiceUrl.STATIC_FILE_SERVICE_URL),
       },
       {
         name: 'INSIGHT_CONTEXT_QUEUE',
@@ -280,15 +282,11 @@ const documentCognitionService = new DocumentCognitionService(
       },
       {
         name: 'COMMS_SERVICE_URL',
-        value: `https://comms-service${
-          stack === 'prod' ? '' : `-${stack}`
-        }.macro.com`,
+        value: getServiceUrl(ServiceUrl.COMMS_SERVICE_URL),
       },
       {
         name: 'CONNECTION_GATEWAY_URL',
-        value: `https://connection-gateway${
-          stack === 'prod' ? '' : `-${stack}`
-        }.macro.com`,
+        value: getServiceUrl(ServiceUrl.CONNECTION_GATEWAY_URL),
       },
       {
         name: 'SEARCH_EVENT_QUEUE',
@@ -304,7 +302,7 @@ const documentCognitionService = new DocumentCognitionService(
       },
       {
         name: 'SYNC_SERVICE_URL',
-        value: `https://sync-service-${stack === 'dev' ? 'dev3' : 'prod2'}.macroverse.workers.dev`,
+        value: getServiceUrl(ServiceUrl.SYNC_SERVICE_URL),
       },
       {
         name: 'MACRO_API_TOKEN_ISSUER',
@@ -324,17 +322,15 @@ const documentCognitionService = new DocumentCognitionService(
       },
       {
         name: 'LEXICAL_SERVICE_URL',
-        value: `https://lexical-service-${stack}.macroverse.workers.dev`,
+        value: getServiceUrl(ServiceUrl.LEXICAL_SERVICE_URL),
       },
       {
         name: 'EMAIL_SERVICE_URL',
-        value: `https://email-service${
-          stack === 'prod' ? '' : `-${stack}`
-        }.macro.com`,
+        value: getServiceUrl(ServiceUrl.EMAIL_SERVICE_URL),
       },
       {
         name: 'STATIC_FILE_SERVICE_URL',
-        value: `https://static-file-service${stack === 'prod' ? '' : `-${stack}`}.macro.com`,
+        value: getServiceUrl(ServiceUrl.STATIC_FILE_SERVICE_URL),
       },
     ],
     isPrivate: false,

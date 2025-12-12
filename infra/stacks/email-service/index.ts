@@ -7,6 +7,8 @@ import {
   getMacroApiToken,
   getMacroNotify,
   getSearchEventQueue,
+  getServiceUrl,
+  ServiceUrl,
   stack,
 } from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
@@ -319,7 +321,7 @@ const emailService = new EmailService('email-service', {
     },
     {
       name: 'AUTHENTICATION_SERVICE_URL',
-      value: pulumi.interpolate`https://auth-service${stack === 'prod' ? '' : `-${stack}`}.macro.com`,
+      value: getServiceUrl(ServiceUrl.AUTHENTICATION_SERVICE_URL),
     },
     {
       name: 'AUTHENTICATION_SERVICE_SECRET_KEY',
@@ -327,15 +329,15 @@ const emailService = new EmailService('email-service', {
     },
     {
       name: 'STATIC_FILE_SERVICE_URL',
-      value: `https://static-file-service${stack === 'prod' ? '' : `-${stack}`}.macro.com`,
+      value: getServiceUrl(ServiceUrl.STATIC_FILE_SERVICE_URL),
     },
     {
       name: 'DOCUMENT_STORAGE_SERVICE_URL',
-      value: `https://cloud-storage${stack === 'prod' ? '' : `-${stack}`}.macro.com`,
+      value: getServiceUrl(ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL),
     },
     {
       name: 'CONNECTION_GATEWAY_URL',
-      value: `https://connection-gateway${stack === 'prod' ? '' : `-${stack}`}.macro.com`,
+      value: getServiceUrl(ServiceUrl.CONNECTION_GATEWAY_URL),
     },
     {
       name: 'NOTIFICATIONS_ENABLED',

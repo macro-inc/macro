@@ -1,7 +1,13 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import { Queue } from '../../packages/resources';
-import { config, getMacroApiToken, stack } from '../../packages/shared';
+import {
+  config,
+  getMacroApiToken,
+  getServiceUrl,
+  ServiceUrl,
+  stack,
+} from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
 import { InsightService } from './service';
 
@@ -85,11 +91,15 @@ const syncServiceAuthKeyArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: SYNC_SERVICE_AUTH_KEY })
   .apply((secret) => secret.arn);
 
-const DOCUMENT_STORAGE_SERVICE_URL = `https://cloud-storage${stack === 'prod' ? '' : `-${stack}`}.macro.com`;
-const DOCUMENT_COGNITION_SERVICE_URL = `https://document-cognition${stack === 'prod' ? '' : `-${stack}`}.macro.com`;
+const DOCUMENT_STORAGE_SERVICE_URL = getServiceUrl(
+  ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL
+);
+const DOCUMENT_COGNITION_SERVICE_URL = getServiceUrl(
+  ServiceUrl.DOCUMENT_COGNITION_SERVICE_URL
+);
 
 // NOTE: from email-service-stack, hardcoded to avoid circular dependency
-const emailServiceUrl = `https://email-service${stack === 'prod' ? '' : `-${stack}`}.macro.com`;
+const emailServiceUrl = getServiceUrl(ServiceUrl.EMAIL_SERVICE_URL);
 
 const MACRO_API_TOKENS = getMacroApiToken();
 
@@ -106,11 +116,11 @@ const vars: InsightServiceEnvVars = {
   DOCUMENT_STORAGE_SERVICE_URL,
   DOCUMENT_COGNITION_SERVICE_URL,
   SYNC_SERVICE_AUTH_KEY: pulumi.interpolate`${SYNC_SERVICE_AUTH_KEY}`,
-  SYNC_SERVICE_URL: `https://sync-service-${stack === 'prod' ? 'prod2' : 'dev3'}.macroverse.workers.dev`,
+  SYNC_SERVICE_URL: getServiceUrl(ServiceUrl.SYNC_SERVICE_URL),
   EMAIL_SERVICE_URL: pulumi.interpolate`${emailServiceUrl}`,
   MACRO_API_TOKEN_ISSUER: pulumi.interpolate`${MACRO_API_TOKENS.macroApiTokenIssuer}`,
   MACRO_API_TOKEN_PUBLIC_KEY: pulumi.interpolate`${MACRO_API_TOKENS.macroApiTokenPublicKey}`,
-  LEXICAL_SERVICE_URL: `https://lexical-service-${stack}.macroverse.workers.dev`,
+  LEXICAL_SERVICE_URL: getServiceUrl(ServiceUrl.LEXICAL_SERVICE_URL),
 };
 
 const insightGenerationServiceEnvVars = Object.entries(vars).map(([k, v]) => ({

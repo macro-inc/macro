@@ -1,6 +1,12 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { config, getMacroApiToken, stack } from '../../packages/shared';
+import {
+  config,
+  getMacroApiToken,
+  getServiceUrl,
+  ServiceUrl,
+  stack,
+} from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
 import { PropertiesService } from './properties-service';
 
@@ -53,9 +59,11 @@ const internalAuthKeyArn: pulumi.Output<string> = aws.secretsmanager
 
 const MACRO_API_TOKENS = getMacroApiToken();
 
-const DOCUMENT_STORAGE_SERVICE_URL = `https://cloud-storage${stack === 'prod' ? '' : `-${stack}`}.macro.com`;
+const DOCUMENT_STORAGE_SERVICE_URL = getServiceUrl(
+  ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL
+);
 
-const COMMS_SERVICE_URL = `https://comms-service${stack === 'prod' ? '' : `-${stack}`}.macro.com`;
+const COMMS_SERVICE_URL = getServiceUrl(ServiceUrl.COMMS_SERVICE_URL);
 
 const cloudStorageStack = new pulumi.StackReference('cloud-storage-stack', {
   name: `macro-inc/document-storage/${stack}`,

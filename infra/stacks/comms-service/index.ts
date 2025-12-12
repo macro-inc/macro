@@ -5,6 +5,8 @@ import {
   getMacroApiToken,
   getMacroNotify,
   getSearchEventQueue,
+  getServiceUrl,
+  ServiceUrl,
   stack,
 } from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
@@ -181,7 +183,7 @@ const commsService = new CommsService(`comms-service-${stack}`, {
     },
     {
       name: 'DOCUMENT_STORAGE_SERVICE_URL',
-      value: `https://cloud-storage${stack === 'prod' ? '' : `-${stack}`}.macro.com`,
+      value: getServiceUrl(ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL),
     },
     {
       name: 'CONTACTS_QUEUE',
@@ -193,7 +195,7 @@ const commsService = new CommsService(`comms-service-${stack}`, {
     },
     {
       name: 'AUTHENTICATION_SERVICE_URL',
-      value: `https://auth-service${stack === 'prod' ? '' : `-${stack}`}.macro.com`,
+      value: getServiceUrl(ServiceUrl.AUTHENTICATION_SERVICE_URL),
     },
     {
       name: 'DOCUMENT_PERMISSION_JWT_SECRET_KEY',

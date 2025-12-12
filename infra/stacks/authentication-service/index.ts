@@ -5,6 +5,8 @@ import {
   getMacroApiToken,
   getMacroNotify,
   getSearchEventQueue,
+  getServiceUrl,
+  ServiceUrl,
   stack,
 } from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
@@ -226,27 +228,19 @@ const service = new AuthenticationService('authentication-service', {
     },
     {
       name: 'COMMS_SERVICE_URL',
-      value: `https://comms-service${
-        stack === 'prod' ? '' : `-${stack}`
-      }.macro.com`,
+      value: getServiceUrl(ServiceUrl.COMMS_SERVICE_URL),
     },
     {
       name: 'DOCUMENT_STORAGE_SERVICE_URL',
-      value: `https://cloud-storage${
-        stack === 'prod' ? '' : `-${stack}`
-      }.macro.com`,
+      value: getServiceUrl(ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL),
     },
     {
       name: 'NOTIFICATION_SERVICE_URL',
-      value: `https://notifications${
-        stack === 'prod' ? '' : `-${stack}`
-      }.macro.com`,
+      value: getServiceUrl(ServiceUrl.NOTIFICATION_SERVICE_URL),
     },
     {
       name: 'PROPERTIES_SERVICE_URL',
-      value: `https://properties-service${
-        stack === 'prod' ? '' : `-${stack}`
-      }.macro.com`,
+      value: getServiceUrl(ServiceUrl.PROPERTIES_SERVICE_URL),
     },
     {
       name: 'NOTIFICATION_QUEUE',
