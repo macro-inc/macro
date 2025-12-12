@@ -78,4 +78,11 @@ pub struct AttachmentUploadArgs {
     pub attachment_metadata: AttachmentUploadMetadata,
     pub recipient_emails: Vec<String>,
     pub backfill: bool,
+    pub upload_destination: AttachmentUploadDestination,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AttachmentUploadDestination {
+    Dss,
+    Sfs,
 }

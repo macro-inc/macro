@@ -179,16 +179,19 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
     })
   );
 
-  if (props.onFocusLeaveEnd && props.onFocusLeaveStart) {
-    plugins.use(
-      keyboardFocusPlugin({
-        onFocusLeaveStart: props.onFocusLeaveStart,
-        onFocusLeaveEnd: props.onFocusLeaveEnd,
-        ignoreKeys: () =>
-          mentionsMenuOperations.isOpen() || emojisMenuOperations.isOpen(),
-      })
-    );
-  }
+  plugins.useReactive(
+    [() => props.onFocusLeaveEnd, () => props.onFocusLeaveStart],
+    () => {
+      if (props.onFocusLeaveEnd && props.onFocusLeaveStart) {
+        return keyboardFocusPlugin({
+          onFocusLeaveStart: props.onFocusLeaveStart,
+          onFocusLeaveEnd: props.onFocusLeaveEnd,
+          ignoreKeys: () =>
+            mentionsMenuOperations.isOpen() || emojisMenuOperations.isOpen(),
+        });
+      }
+    }
+  );
 
   let cleanupEnterListener: () => void = () => {};
   createEffect(() => {
