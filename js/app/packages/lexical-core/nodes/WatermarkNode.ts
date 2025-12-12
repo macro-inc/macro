@@ -1,5 +1,6 @@
 import {
   $applyNodeReplacement,
+  $getRoot,
   DecoratorNode,
   type DOMConversionMap,
   type EditorConfig,
@@ -169,4 +170,31 @@ export function $isWatermarkNode(
   node: WatermarkNode | LexicalNode | null | undefined
 ): node is WatermarkNode {
   return node instanceof WatermarkNode;
+}
+
+export function $appendWatermarkNodeToLast(
+  editor: LexicalEditor | undefined,
+  content: string | undefined,
+  sync: boolean = true
+) {
+  let node: WatermarkNode | undefined;
+
+  editor?.update(
+    () => {
+      if (!content) return;
+
+      node = $createWatermarkNode({ content });
+
+      const root = $getRoot();
+
+      root.getLastChild()?.insertAfter(node);
+    },
+    { discrete: sync || undefined }
+  );
+
+  return () => {
+    if (!node) return;
+
+    editor?.update(() => node?.forceRemove());
+  };
 }

@@ -30,7 +30,10 @@ import Plus from '@icon/regular/plus.svg';
 import TextAa from '@icon/regular/text-aa.svg';
 import Trash from '@icon/regular/trash.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import type { DocumentMentionInfo } from '@lexical-core';
+import {
+  $appendWatermarkNodeToLast,
+  type DocumentMentionInfo,
+} from '@lexical-core';
 import { logger } from '@observability';
 import { useSendMessageMutation } from '@queries/email/thread';
 import { emailClient } from '@service-email/client';
@@ -425,14 +428,16 @@ export function BaseInput(props: {
       linkId = maybeFallbackLinks[1].links[0].id;
     }
 
-    const prepared = prepareEmailBody(
-      editor(),
-      {
-        replyType: effectiveReplyType(),
-        replyingTo: props.replyingTo(),
-      },
+    const _editor = editor();
+    const cleanupWatermark = $appendWatermarkNodeToLast(
+      _editor,
       !hasPaidAccess() ? MACRO_EMAIL_SIGNATURE : undefined
     );
+
+    const prepared = prepareEmailBody(_editor, {
+      replyType: effectiveReplyType(),
+      replyingTo: props.replyingTo(),
+    });
     if (!prepared) {
       return;
     }
@@ -456,6 +461,8 @@ export function BaseInput(props: {
         link_id: linkId!,
       },
     });
+
+    cleanupWatermark();
   };
 
   const resetState = () => {

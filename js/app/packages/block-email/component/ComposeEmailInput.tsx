@@ -8,7 +8,10 @@ import { IconButton } from '@core/component/IconButton';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import { fileDrop } from '@core/directive/fileDrop';
 import TextAa from '@icon/regular/text-aa.svg';
-import type { DocumentMentionInfo } from '@lexical-core';
+import {
+  $appendWatermarkNodeToLast,
+  type DocumentMentionInfo,
+} from '@lexical-core';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import ArrowFatLineUp from '@phosphor-icons/core/fill/arrow-fat-line-up-fill.svg?component-solid';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
@@ -120,11 +123,14 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
   let composeContainerRef: HTMLDivElement | undefined;
 
   async function handleSend() {
-    const prepared = prepareEmailBody(
-      editor(),
-      undefined,
+    const _editor = editor();
+
+    const cleanupWatermark = $appendWatermarkNodeToLast(
+      _editor,
       !hasPaidAccess() ? MACRO_EMAIL_SIGNATURE : undefined
     );
+
+    const prepared = prepareEmailBody(_editor, undefined);
     if (!prepared) return;
 
     const bodyMacro = content();
@@ -136,6 +142,8 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
         raw: bodyMacro,
       },
     });
+
+    cleanupWatermark();
   }
 
   onMount(() => {

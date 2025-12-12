@@ -5,11 +5,9 @@ import {
   $createClassedBlockNode,
   $createDocumentMentionNode,
   $createHtmlRenderNode,
-  $createWatermarkNode,
   $isClassedBlockNode,
   type ClassedBlockNode,
   type DocumentMentionInfo,
-  type WatermarkNode,
 } from '@lexical-core';
 import type { MessageWithBodyReplyless } from '@service-email/generated/schemas';
 import {
@@ -335,8 +333,7 @@ export function prepareEmailBody(
   appendReply?: {
     replyType: ReplyType | undefined;
     replyingTo: MessageWithBodyReplyless;
-  },
-  signature?: string
+  }
 ): {
   bodyHtml: string;
   bodyText: string;
@@ -344,28 +341,9 @@ export function prepareEmailBody(
 } | null {
   if (!editor) return null;
 
-  let watermark: WatermarkNode;
-
-  if (signature) {
-    editor.update(() => {
-      watermark = $createWatermarkNode({ content: signature });
-
-      const root = $getRoot();
-
-      root.getLastChild()?.insertAfter(watermark);
-    });
-  }
-
   const generatedHtml = editor.read(() => {
     return $generateHtmlFromNodes(editor);
   });
-
-  if (signature) {
-    // We need to remove the watermark node so it doesn't remain in the input
-    editor.update(() => {
-      watermark.forceRemove();
-    });
-  }
 
   const parsed = new DOMParser().parseFromString(generatedHtml, 'text/html');
 
