@@ -213,7 +213,6 @@ impl Read {
             .map(|s| ReadContent::ItemPreviews {
                 formatted_preview: s.to_string(),
             })
-            .inspect(|s| println!("read project {:#?}", s))
     }
 
     async fn read_document(
