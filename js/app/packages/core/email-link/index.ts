@@ -10,7 +10,7 @@ import { emailClient } from '@service-email/client';
 import { updateUserInfo } from '@service-gql/client';
 import { useQuery } from '@tanstack/solid-query';
 import { err, okAsync, ResultAsync } from 'neverthrow';
-import { createSignal } from 'solid-js';
+import { createMemo, createSignal } from 'solid-js';
 import { queryClient } from '../../macro-entity/src/queries/client';
 
 export const [emailRefetchInterval, setEmailRefetchInterval] = createSignal<
@@ -38,12 +38,12 @@ export function useEmailLinksQuery() {
 
 export function useEmailLinksStatus() {
   const links = useEmailLinksQuery();
-  return () => {
+  return createMemo(() => {
     if (!links.data || links.error) {
       return false;
     }
-    return links.data?.length > 0;
-  };
+    return links.data.length > 0;
+  });
 }
 
 function invalidateEmailLinks() {
