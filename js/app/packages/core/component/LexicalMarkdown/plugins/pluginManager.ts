@@ -9,8 +9,8 @@ import { ALL_TRANSFORMERS, type EditorType } from '@lexical-core';
 import { HR } from '@lexical-core/transformers/transformers';
 import type { EditorState, LexicalEditor, UpdateListener } from 'lexical';
 import {
-  Accessor,
-  AccessorArray,
+  type Accessor,
+  type AccessorArray,
   createEffect,
   createRoot,
   on,
