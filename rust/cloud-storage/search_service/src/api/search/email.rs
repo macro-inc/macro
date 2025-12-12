@@ -39,18 +39,7 @@ pub(in crate::api::search) async fn enrich_emails(
     }
 
     // Extract thread IDs from results
-    let thread_ids: Vec<Uuid> = results
-        .iter()
-        .filter_map(|r| {
-            match Uuid::parse_str(&r.entity_id) {
-                Ok(uuid) => Some(uuid),
-                Err(e) => {
-                    tracing::warn!(error=?e, thread_id=?r.entity_id, "Failed to parse thread ID as UUID");
-                    None
-                }
-            }
-        })
-        .collect();
+    let thread_ids: Vec<Uuid> = results.iter().map(|r| r.entity_id).collect();
 
     // Fetch email thread metadata from email service
     let thread_histories = ctx
@@ -174,7 +163,7 @@ pub fn construct_search_result(
                     score: hit.score,
                 })
             } else {
-                let thread_info = thread_histories.get(&hit.entity_id.parse().unwrap());
+                let thread_info = thread_histories.get(&hit.entity_id);
                 if let Some(thread_info) = thread_info {
                     let sender = thread_info.sender.clone();
                     let pretty_sender = thread_info.pretty_sender.clone();
@@ -197,7 +186,7 @@ pub fn construct_search_result(
                 }
             };
 
-            result.map(|a| (hit.entity_id.parse().unwrap(), a))
+            result.map(|a| (hit.entity_id, a))
         })
         .fold(IndexMap::new(), |mut map, (entity_id, result)| {
             map.entry(entity_id).or_insert_with(Vec::new).push(result);
@@ -216,8 +205,8 @@ pub fn construct_search_result(
                     viewed_at: info.viewed_at.map(|a| a.timestamp()),
                     snippet: info.snippet,
                     extra: EmailSearchResponseItem {
-                        id: entity_id.to_string(),
-                        thread_id: entity_id.to_string(),
+                        id: entity_id,
+                        thread_id: entity_id,
                         owner_id: info.user_id.clone(),
                         user_id: info.user_id,
                         name: info.subject.clone(),

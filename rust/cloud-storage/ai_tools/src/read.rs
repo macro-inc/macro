@@ -1,5 +1,6 @@
 use crate::tool_context::{RequestContext, ToolServiceContext};
 use ai::tool::{AsyncTool, ToolCallError, ToolResult};
+use anyhow::anyhow;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use model::chat::ChatHistory;
@@ -38,6 +39,9 @@ pub enum ReadContent {
         thread_id: String,
         subject: Option<String>,
         messages: Vec<EmailMessage>,
+    },
+    ItemPreviews {
+        formatted_preview: String,
     },
 }
 
@@ -126,6 +130,7 @@ pub enum ContentType {
     ChatMessage,
     EmailThread,
     EmailMessage,
+    Project,
 }
 
 #[async_trait]
@@ -160,6 +165,7 @@ impl AsyncTool<ToolServiceContext, RequestContext> for Read {
             ContentType::EmailMessage => {
                 self.read_email_message(&context, &request_context).await?
             }
+            ContentType::Project => self.read_project(&context, &request_context).await?,
         };
 
         let tool_response = ReadResponse { content };
@@ -182,6 +188,31 @@ impl Read {
             });
         }
         Ok(self.ids[0].clone())
+    }
+
+    async fn read_project(
+        &self,
+        context: &ToolServiceContext,
+        request_context: &RequestContext,
+    ) -> Result<ReadContent, ToolCallError> {
+        let id = self.ids.first().ok_or(ToolCallError {
+            description: "Expected a single id to read a project".into(),
+            internal_error: anyhow!("Bad tool args"),
+        })?;
+
+        context
+            .scribe
+            .document
+            .fetch_project(id.to_owned(), request_context.jwt_token.clone())
+            .content()
+            .await
+            .map_err(|err| ToolCallError {
+                description: "failed to fetch project".into(),
+                internal_error: err,
+            })
+            .map(|s| ReadContent::ItemPreviews {
+                formatted_preview: s.to_string(),
+            })
     }
 
     async fn read_document(

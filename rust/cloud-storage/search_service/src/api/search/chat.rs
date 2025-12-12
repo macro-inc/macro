@@ -14,6 +14,7 @@ use models_search::chat::{
     ChatSearchResponseItemWithMetadata,
 };
 use opensearch_client::search::model::SearchGotoContent;
+use sqlx::types::Uuid;
 use std::collections::HashMap;
 
 use super::SearchPaginationParams;
@@ -34,7 +35,7 @@ pub(in crate::api::search) async fn enrich_chats(
         return Ok(vec![]);
     }
     // Extract chat IDs from results
-    let chat_ids: Vec<String> = results.iter().map(|r| r.entity_id.clone()).collect();
+    let chat_ids: Vec<String> = results.iter().map(|r| r.entity_id.to_string()).collect();
 
     // Fetch chat metadata from database
     let chat_histories =
@@ -100,7 +101,7 @@ pub fn construct_search_result(
     chat_histories: HashMap<String, macro_db_client::chat::get::ChatHistoryInfo>,
 ) -> anyhow::Result<Vec<ChatSearchResponseItemWithMetadata>> {
     // construct entity hit map of id -> vec<hits> using IndexMap to preserve insertion order
-    let entity_id_hit_map: IndexMap<String, Vec<ChatMessageSearchResult>> = search_results
+    let entity_id_hit_map: IndexMap<Uuid, Vec<ChatMessageSearchResult>> = search_results
         .into_iter()
         .map(|hit| {
             let result = if let Some(SearchGotoContent::Chats(goto)) = hit.goto {
@@ -130,7 +131,7 @@ pub fn construct_search_result(
     let result: Vec<ChatSearchResponseItemWithMetadata> = entity_id_hit_map
         .into_iter()
         .filter_map(|(entity_id, hits)| {
-            if let Some(info) = chat_histories.get(&entity_id) {
+            if let Some(info) = chat_histories.get(&entity_id.to_string()) {
                 let info = info.clone();
                 let metadata = models_search::chat::ChatMetadata {
                     created_at: info.created_at.timestamp(),
@@ -142,7 +143,7 @@ pub fn construct_search_result(
                 Some(ChatSearchResponseItemWithMetadata {
                     metadata: Some(metadata),
                     extra: ChatSearchResponseItem {
-                        id: entity_id.clone(),
+                        id: entity_id,
                         chat_id: entity_id,
                         owner_id: info.user_id.clone(),
                         user_id: info.user_id,

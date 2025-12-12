@@ -70,8 +70,9 @@ export function UserMessage(props: {
   const itemPreviewAttachments = () =>
     props.message.attachments.filter(
       (a) =>
+        // jail
         !isImageAttachment(a) &&
-        ['channel', 'document', 'email'].includes(a.attachmentType)
+        ['channel', 'document', 'email', 'project'].includes(a.attachmentType)
     );
 
   return (
@@ -100,7 +101,12 @@ export function UserMessage(props: {
               <ItemPreview
                 itemId={attachment.attachmentId}
                 // TODO: improve typing for item preview attachments
-                itemType={attachment.attachmentType as 'channel' | 'document'}
+                itemType={
+                  attachment.attachmentType as
+                    | 'channel'
+                    | 'document'
+                    | 'project'
+                }
               />
             )}
           </For>

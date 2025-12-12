@@ -3,6 +3,7 @@ use crate::{
     core::{
         constants::{
             DEFAULT_CHANNEL_TOKENS, DEFAULT_CHAT_NAME, DEFAULT_EMAIL_TOKENS, DEFAULT_IMAGE_TOKENS,
+            DEFAULT_PROJECT_TOKENS,
         },
         model::FALLBACK_MODEL,
     },
@@ -117,9 +118,11 @@ pub async fn create_user_chat_v2(
                                 .await
                                 .context("failed to get document token count")
                         }
+
                         AttachmentType::Image => Ok(DEFAULT_IMAGE_TOKENS),
                         AttachmentType::Channel => Ok(DEFAULT_CHANNEL_TOKENS),
                         AttachmentType::Email => Ok(DEFAULT_EMAIL_TOKENS),
+                        AttachmentType::Project => Ok(DEFAULT_PROJECT_TOKENS),
                     }
                 }
             },

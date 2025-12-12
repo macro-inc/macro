@@ -523,10 +523,23 @@ const LauncherInner = (props: LauncherInnerProps) => {
     }, 0);
   });
 
+  // horrible but tailwind requires the full strings
+  const gridColsClass = () => {
+    const length = CREATABLE_BLOCKS.length;
+    if (length >= 8) return 'xl:grid-cols-8';
+    if (length >= 7) return 'xl:grid-cols-7';
+    if (length >= 6) return 'xl:grid-cols-6';
+    if (length >= 5) return 'xl:grid-cols-5';
+    return '';
+  };
+
   return (
     <div>
       <div
-        class="relative grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-3 p-6 isolate bg-menu border border-edge-muted suppress-css-brackets"
+        class="relative grid grid-cols-2 sm:grid-cols-4 gap-3 p-6 isolate bg-menu border border-edge-muted suppress-css-brackets"
+        classList={{
+          [gridColsClass()]: true,
+        }}
         ref={ref}
       >
         <div class="absolute pointer-events-none size-full inset-0"></div>

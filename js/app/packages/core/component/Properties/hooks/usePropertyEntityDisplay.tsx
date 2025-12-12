@@ -33,6 +33,8 @@ type PropertyEntityDisplayResult = {
   isLoading: Accessor<boolean>;
   /** Block or file type for linking (null if not linkable) */
   blockOrFileType: Accessor<string | null>;
+  /** URL params for navigation (e.g., message ID for threads) */
+  linkParams: Accessor<Record<string, string> | undefined>;
 };
 
 /**
@@ -50,6 +52,8 @@ export function usePropertyEntityDisplay(
   options?: {
     /** Custom fallback icon for unknown entity types (null to show nothing) */
     fallbackIcon?: JSX.Element | null;
+    /** Specific message ID for THREAD/CHANNEL/CHAT entities */
+    specificMessageId?: Accessor<string | null | undefined>;
   }
 ): PropertyEntityDisplayResult {
   const needsPreview = () =>
@@ -194,6 +198,11 @@ export function usePropertyEntityDisplay(
       return 'task';
     }
 
+    // Threads route to email block
+    if (type === 'THREAD') {
+      return 'email';
+    }
+
     // For documents, get the file type from preview
     if (type === 'DOCUMENT') {
       const previewItem = preview();
@@ -214,10 +223,28 @@ export function usePropertyEntityDisplay(
     return null;
   });
 
+  const linkParams = createMemo((): Record<string, string> | undefined => {
+    const messageId = options?.specificMessageId?.();
+    if (!messageId) return undefined;
+
+    const type = entityType().toUpperCase();
+    switch (type) {
+      case 'THREAD':
+        return { email_message_id: messageId };
+      case 'CHANNEL':
+        return { channel_message_id: messageId };
+      case 'CHAT':
+        return { message_id: messageId };
+      default:
+        return undefined;
+    }
+  });
+
   return {
     name,
     icon,
     isLoading,
     blockOrFileType,
+    linkParams,
   };
 }

@@ -133,7 +133,7 @@ const notificationApnsPlatform = new aws.sns.PlatformApplication(
   'notification-apns-platform',
   {
     name: `notification-apns-platform-${stack}`,
-    platform: 'APNS',
+    platform: stack === 'prod' ? 'APNS' : 'APNS_SANDBOX', // use sandbox for dev
     applePlatformTeamId: APPLE_TEAM_ID,
     applePlatformBundleId: APPLE_BUNDLE_ID,
     platformPrincipal: APNS_KEY_ID,
