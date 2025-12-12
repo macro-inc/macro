@@ -79,8 +79,8 @@ impl ProjectFetcher<NoData> {
     }
 }
 
-impl ProjectFetcher<ScribeProjectPreview> {
-    pub fn to_string(&self) -> String {
-        format!("Items in project {}\n{}", self.id, self.content)
+impl std::fmt::Display for ProjectFetcher<ScribeProjectPreview> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Items in project {}\n{}", self.id, self.content)
     }
 }
