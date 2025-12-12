@@ -11,6 +11,7 @@ import DropdownMenu from '@core/component/FormControls/DropdownMenu';
 import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { ToggleButton } from '@core/component/FormControls/ToggleButton';
 import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
+import { IconButton } from '@core/component/IconButton';
 import { ContextMenuContent, MenuSeparator } from '@core/component/Menu';
 import { getSuggestedProperties } from '@core/component/Properties/utils';
 import { RecipientSelector } from '@core/component/RecipientSelector';
@@ -1907,16 +1908,22 @@ function SearchBar(props: {
             <Show
               when={searchText()}
               fallback={
-                <SearchIcon
-                  class="w-4 h-4 text-ink-muted shrink-0"
+                <IconButton
+                  size="sm"
+                  icon={SearchIcon}
+                  theme="clear"
+                  tooltip={{ label: 'Search' }}
                   onClick={() => {
                     inputRef?.focus();
                   }}
                 />
               }
             >
-              <XIcon
-                class="w-4 h-4 text-ink-muted shrink-0"
+              <IconButton
+                size="sm"
+                icon={XIcon}
+                theme="clear"
+                tooltip={{ label: 'Clear' }}
                 onClick={() => {
                   setSearchText('');
                   inputRef?.focus();
@@ -1925,8 +1932,11 @@ function SearchBar(props: {
             </Show>
           }
         >
-          <LoadingSpinner
-            class="w-4 h-4 text-ink-muted animate-spin shrink-0"
+          <IconButton
+            size="sm"
+            icon={LoadingSpinner}
+            theme="clear"
+            tooltip={{ label: 'Cancel' }}
             onClick={() => {
               setSearchText('');
               inputRef?.focus();
