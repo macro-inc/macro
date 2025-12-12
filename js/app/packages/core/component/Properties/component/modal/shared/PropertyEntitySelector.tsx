@@ -184,8 +184,13 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   });
 
   // Fetch emails for browsing (only when THREAD type)
+  // Email queries for THREAD type or generic ENTITY (no specific type)
+  const needsEmailSearch = () =>
+    props.property.specificEntityType === 'THREAD' ||
+    !props.property.specificEntityType;
+
   const emailsQuery = createEmailsInfiniteQuery(() => ({ view: 'all' }), {
-    disabled: () => props.property.specificEntityType !== 'THREAD',
+    disabled: () => !needsEmailSearch(),
   });
   const emails = () => emailsQuery.data ?? [];
 
@@ -201,7 +206,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       },
     }),
     {
-      disabled: () => props.property.specificEntityType !== 'THREAD',
+      disabled: () => !needsEmailSearch(),
     }
   );
 
@@ -216,7 +221,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   });
 
   const isLoadingEntities = createMemo(() => {
-    if (props.property.specificEntityType === 'THREAD') {
+    if (needsEmailSearch()) {
       // Loading if initial emails query is loading OR search is fetching
       return (
         emailsQuery.isLoading ||
@@ -236,6 +241,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
         ...contactsWithCurrentUser().map(entityMapper('user')),
         ...history().map(entityMapper('item')),
         ...channels().map(entityMapper('channel')),
+        ...emails().map(threadMapper),
       ];
     }
 
@@ -306,8 +312,8 @@ export function PropertyEntitySelector(props: EntityInputProps) {
           .filter(excludeFilter)
           .slice(0, MAX_VISIBLE_ENTITIES_NO_SEARCH);
 
-    // For THREAD: merge local + server results (local first, server appended, deduped)
-    if (props.property.specificEntityType === 'THREAD' && term) {
+    // For THREAD or generic entity: merge local + server results (local first, server appended, deduped)
+    if (needsEmailSearch() && term) {
       const localIds = new Set(localResults.map((e) => e.id));
       const serverResults = serverEmails()
         .filter((e) => !localIds.has(e.id))
