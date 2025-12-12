@@ -87,6 +87,7 @@ import { getReplyTypeFromDraft } from '../util/replyType';
 import { AttachMenu } from './AttachMenu';
 import { type EmailRecipient, useEmailContext } from './EmailContext';
 import { getOrInitEmailFormContext } from './EmailFormContext';
+import { MacroSignatureButton } from '@block-email/component/MacroSignatureButton';
 
 false && fileDrop;
 
@@ -800,6 +801,7 @@ export function BaseInput(props: {
             initialValue={props.preloadedBody}
             initialHtml={props.preloadedHtml}
             placeholder="Reply — @mention to share or cc people"
+            watermark={!hasPaidAccess() ? <MacroSignatureButton /> : undefined}
             onChange={handleChange}
             onDocumentMention={(item) => {
               makeAttachmentPublic(item.id);

@@ -1,11 +1,11 @@
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { FormatRibbon } from '@block-channel/component/FormatRibbon';
+import { MacroSignatureButton } from '@block-email/component/MacroSignatureButton';
 import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
 import { useHasPaidAccess } from '@core/auth';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { IconButton } from '@core/component/IconButton';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
-import { usePaywallState } from '@core/constant/PaywallState';
 import { fileDrop } from '@core/directive/fileDrop';
 import TextAa from '@icon/regular/text-aa.svg';
 import type { DocumentMentionInfo } from '@lexical-core';
@@ -53,7 +53,6 @@ type ComposeEmailInputProps = {
 };
 
 export function ComposeEmailInput(props: ComposeEmailInputProps) {
-  const paywall = usePaywallState();
   const hasPaidAccess = useHasPaidAccess();
 
   const [editor, setEditor] = createSignal<LexicalEditor>();
@@ -206,24 +205,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
             class="text-sm break-words text-ink"
             editable={() => !props.disabled}
             placeholder="Use `@` to reference files"
-            watermark={
-              !hasPaidAccess() ? (
-                <button
-                  type="button"
-                  class="hover:bg-hover pointer-events-all"
-                  tabindex={-1}
-                  // The text area uses non delegated events to capture on click and restore focus
-                  // to the editor. We want to capture the click here so we can open the paywall.
-                  // That's why we use `on:click` instead of `onClick`
-                  on:click={(e) => {
-                    e.stopImmediatePropagation();
-                    paywall.showPaywall();
-                  }}
-                >
-                  {MACRO_EMAIL_SIGNATURE}
-                </button>
-              ) : undefined
-            }
+            watermark={!hasPaidAccess() ? <MacroSignatureButton /> : undefined}
             onChange={setContent}
             onFocusLeaveStart={(e) => {
               e.preventDefault();
