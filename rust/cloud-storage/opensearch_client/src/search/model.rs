@@ -94,7 +94,7 @@ pub(crate) struct SearchResponse<T> {
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct NameIndex {
     /// The entity id
-    pub entity_id: String,
+    pub entity_id: uuid::Uuid,
     /// The entity type
     pub entity_type: SearchEntityType,
     /// The name of the entity
@@ -117,7 +117,7 @@ pub struct SearchGotoDocument {
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct SearchGotoChat {
     /// The chat message id
-    pub chat_message_id: String,
+    pub chat_message_id: uuid::Uuid,
     /// The role of the chat message
     pub role: String,
 }
@@ -143,8 +143,8 @@ pub struct SearchGotoEmail {
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct SearchGotoChannel {
     /// The channel message id
-    pub channel_message_id: String,
-    pub thread_id: Option<String>,
+    pub channel_message_id: uuid::Uuid,
+    pub thread_id: Option<uuid::Uuid>,
     pub sender_id: String,
     pub created_at: i64,
     pub updated_at: i64,
@@ -165,7 +165,7 @@ pub enum SearchGotoContent {
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct SearchHit {
     /// The id of the entity
-    pub entity_id: String,
+    pub entity_id: uuid::Uuid,
     /// The entity type
     pub entity_type: SearchEntityType,
     /// The score of the match

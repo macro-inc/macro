@@ -22,8 +22,8 @@ use serde_json::Value;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub(crate) struct ChatIndex {
-    pub entity_id: String,
-    pub chat_message_id: String,
+    pub entity_id: uuid::Uuid,
+    pub chat_message_id: uuid::Uuid,
     pub user_id: String,
     pub role: String,
     pub updated_at_seconds: i64,

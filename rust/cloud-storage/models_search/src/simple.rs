@@ -25,7 +25,7 @@ pub struct SearchGotoDocument {
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, ToSchema)]
 pub struct SearchGotoChat {
     /// The chat message id
-    pub chat_message_id: String,
+    pub chat_message_id: uuid::Uuid,
     /// The role of the chat message
     pub role: String,
 }
@@ -45,7 +45,7 @@ pub struct SearchGotoEmail {
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, ToSchema)]
 pub struct SearchGotoChannel {
     /// The channel message id
-    pub channel_message_id: String,
+    pub channel_message_id: uuid::Uuid,
 }
 
 /// The search service version of a goto
@@ -96,7 +96,7 @@ impl From<opensearch_client::search::model::SearchGotoContent> for SearchGotoCon
 /// Simple response item to mimic what we get back from opensearch
 #[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema)]
 pub struct SimpleSearchResponseItem {
-    pub entity_id: String,
+    pub entity_id: uuid::Uuid,
     pub entity_type: String,
     pub score: Option<f64>,
     pub highlight: Highlight,

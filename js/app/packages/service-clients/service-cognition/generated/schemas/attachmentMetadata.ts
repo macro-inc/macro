@@ -8,5 +8,6 @@ import type { AttachmentMetadataOneOf } from './attachmentMetadataOneOf';
 import type { AttachmentMetadataOneOfThree } from './attachmentMetadataOneOfThree';
 import type { AttachmentMetadataOneOfFive } from './attachmentMetadataOneOfFive';
 import type { AttachmentMetadataOneOfSeven } from './attachmentMetadataOneOfSeven';
+import type { AttachmentMetadataOneOfNine } from './attachmentMetadataOneOfNine';
 
-export type AttachmentMetadata = AttachmentMetadataOneOf | AttachmentMetadataOneOfThree | AttachmentMetadataOneOfFive | AttachmentMetadataOneOfSeven;
+export type AttachmentMetadata = AttachmentMetadataOneOf | AttachmentMetadataOneOfThree | AttachmentMetadataOneOfFive | AttachmentMetadataOneOfSeven | AttachmentMetadataOneOfNine;

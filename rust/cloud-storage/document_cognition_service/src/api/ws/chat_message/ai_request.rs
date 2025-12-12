@@ -16,10 +16,12 @@ pub async fn build_chat_completion_request(
     chat: &ChatResponse,
     incoming_message: &SendChatMessagePayload,
     static_system_prompt: &str,
+    jwt: &str,
 ) -> Result<ChatCompletionRequest> {
     let attachments = fetch::fetchium(
         ctx.scribe.clone(),
         incoming_message.attachments.clone().unwrap_or_default(),
+        jwt,
     )
     .await
     .context("failed to fetch attachment content")?;

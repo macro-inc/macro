@@ -56,7 +56,7 @@ export const useChatAttachableHistory = () => {
 export const useGetChatAttachmentInfo = () => {
   const history = useChatAttachableHistory();
   const { channels } = useChannelsContext();
-  const emails = useEmails();
+  const _emails = useEmails();
 
   const getDocumentAttachment = (id: string): Attachment | undefined => {
     const item = history().find((item) => item.id === id);
@@ -81,6 +81,20 @@ export const useGetChatAttachmentInfo = () => {
         type: 'document',
         document_type: fileType,
         document_name: item.name,
+      },
+    };
+  };
+
+  const getProjectAttachment = (id: string): Attachment | undefined => {
+    const item = history().find((item) => item.id === id);
+    if (!item || item.type !== 'project') return;
+    return {
+      attachmentType: 'project',
+      attachmentId: item.id,
+      id: item.id,
+      metadata: {
+        type: 'project',
+        project_name: item.name,
       },
     };
   };
@@ -126,6 +140,8 @@ export const useGetChatAttachmentInfo = () => {
       return getChannelAttachment(mention);
     } else if (mention.itemType === 'email') {
       return getEmailAttachment(mention);
+    } else if (mention.itemType === 'project') {
+      return getProjectAttachment(mention.itemId);
     }
   };
 

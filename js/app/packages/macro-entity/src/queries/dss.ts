@@ -112,6 +112,7 @@ export function createDssInfiniteQuery(
     const argParams = _params?.();
     let limit = 100;
     let sort_method;
+    let emailView;
     const requestBody = options?.requestBody;
 
     if (requestBody) {
@@ -122,12 +123,16 @@ export function createDssInfiniteQuery(
       if (body?.sort_method) {
         sort_method = body.sort_method;
       }
+      if (body?.emailView) {
+        emailView = body.emailView;
+      }
     }
 
     return {
       ...argParams,
       limit,
       sort_method,
+      emailView,
     };
   };
 

@@ -21,6 +21,7 @@ import {
 import {
   ENABLE_PROPERTY_DISPLAY_CONTROL,
   ENABLE_SOUP_FROM_FILTER,
+  ENABLE_TASKS_TABS,
 } from '@core/constant/featureFlags';
 import { useEmailLinksStatus } from '@core/email-link';
 import { registerHotkey } from '@core/hotkey/hotkeys';
@@ -138,6 +139,7 @@ import {
   type SystemSortOption,
   VIEWCONFIG_BASE,
   VIEWCONFIG_DEFAULTS_IDS,
+  VIEWCONFIG_DEFAULTS_IDS_ENUM,
   type ViewConfigBase,
   type ViewData,
 } from './ViewConfig';
@@ -843,6 +845,12 @@ export function UnifiedListView(props: UnifiedListViewProps) {
               : [GARBAGE_UUID],
       },
       limit: props.defaultDisplayOptions?.limit ?? 100,
+      emailView: importantFilter()
+        ? 'important'
+        : view().id === VIEWCONFIG_DEFAULTS_IDS_ENUM.all
+          ? 'all'
+          : undefined,
+
       sort_method: sortType(),
     })
   );
@@ -1315,11 +1323,13 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                         setFilter={setEntityTypeFilter}
                         type="channel"
                       />
-                      <EntityTypeToggle
-                        filter={entityTypeFilter}
-                        setFilter={setEntityTypeFilter}
-                        type="task"
-                      />
+                      <Show when={ENABLE_TASKS_TABS}>
+                        <EntityTypeToggle
+                          filter={entityTypeFilter}
+                          setFilter={setEntityTypeFilter}
+                          type="task"
+                        />
+                      </Show>
                       <EntityTypeToggle
                         filter={entityTypeFilter}
                         setFilter={setEntityTypeFilter}

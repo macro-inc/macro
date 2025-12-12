@@ -29,11 +29,11 @@ pub struct DocumentSearchResponseItem {
     /// Standardized fields that all item types will share.
     /// These field names are being aligned across all item types
     /// for consistency in our data model.
-    pub id: String,
+    pub id: uuid::Uuid,
     pub name: String,
     pub owner_id: String,
     /// The id of the document
-    pub document_id: String,
+    pub document_id: uuid::Uuid,
     /// The name of the document
     pub document_name: String,
     /// The file type of the document

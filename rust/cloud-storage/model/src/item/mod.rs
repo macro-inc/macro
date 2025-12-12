@@ -77,6 +77,23 @@ impl PartialSchema for Item {
     }
 }
 
+impl Item {
+    pub fn name(&self) -> &str {
+        match self {
+            Self::Chat(chat) => &chat.name,
+            Self::Project(project) => &project.name,
+            Self::Document(document) => &document.document_name,
+        }
+    }
+
+    pub fn file_type(&self) -> Option<&str> {
+        match self {
+            Self::Document(document) => document.file_type.as_deref(),
+            _ => None,
+        }
+    }
+}
+
 impl PartialOrd for Item {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
