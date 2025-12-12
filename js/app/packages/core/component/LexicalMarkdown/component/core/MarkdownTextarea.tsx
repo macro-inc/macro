@@ -1,6 +1,4 @@
-import { IconButton } from '@core/component/IconButton';
 import type { PortalScope } from '@core/component/ScopedPortal';
-import DotsThree from '@icon/regular/dots-three.svg';
 import type { EditorType } from '@lexical-core';
 import type { Item } from '@service-storage/generated/schemas/item';
 import {
@@ -111,8 +109,6 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
       if (editor.getRootElement()) editor.focus();
     });
   }
-
-  const [showHiddenContent, setShowHiddenContent] = createSignal(false);
 
   const [markdownState, setMarkdownState] = createSignal<string>('');
 
@@ -284,25 +280,12 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
             </p>
           </div>
         </Show>
-        <Show when={showHiddenContent() && props.watermark}>
+        <Show when={props.watermark}>
           <div class="text-ink/50 mt-[1lh]" data-watermark>
             {props.watermark}
           </div>
         </Show>
 
-        <Show when={props.watermark && !showHiddenContent()}>
-          <div class="flex items-center gap-2">
-            <IconButton
-              theme="clear"
-              icon={DotsThree}
-              on:click={(e) => {
-                e.stopPropagation();
-                setShowHiddenContent(true);
-              }}
-              iconSize={12}
-            />
-          </div>
-        </Show>
         <MentionsMenu
           editor={editor}
           menu={mentionsMenuOperations}
