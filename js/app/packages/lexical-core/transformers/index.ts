@@ -1,4 +1,5 @@
 import type { Transformer } from '@lexical/markdown';
+import { I_MACRO_QUOTE } from './classedBlock';
 import { CUSTOM_TRANSFORMERS } from './customTransformers';
 import { IMAGE } from './image';
 import {
@@ -45,6 +46,7 @@ export const INTERNAL_TRANSFORMERS: Transformer[] = [
   I_CONTACT_MENTION,
   I_DATE_MENTION,
   I_TABLE_NODE,
+  I_MACRO_QUOTE,
   I_EQUATION_NODE,
   ...CUSTOM_TRANSFORMERS,
 ];
@@ -92,6 +94,7 @@ export const ALL_TRANSFORMERS: Transformer[] = [
   E_CONTACT_MENTION,
   I_DATE_MENTION,
   E_DATE_MENTION,
+  I_MACRO_QUOTE,
   I_EQUATION_NODE,
   // order matters
   E_MULTILINE_BLOCK_EQUATION_NODE,

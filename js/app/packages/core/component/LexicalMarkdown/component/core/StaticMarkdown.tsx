@@ -10,6 +10,8 @@ import { $getListDepth, type ListItemNode, type ListNode } from '@lexical/list';
 import type { HeadingNode, QuoteNode } from '@lexical/rich-text';
 import type { TableCellNode, TableNode, TableRowNode } from '@lexical/table';
 import {
+  $isClassedBlockNode,
+  type ClassedBlockNode,
   type ContactMentionNode,
   type DateMentionNode,
   DEFAULT_LANGUAGE,
@@ -572,6 +574,20 @@ const TableCell: RenderableElement<TableCellNode> = {
   },
 };
 
+const ClassedBlock: RenderableElement<ClassedBlockNode> = {
+  guard: (node: LexicalNode): node is ClassedBlockNode =>
+    $isClassedBlockNode(node),
+  render: (props) => {
+    const tag = props.node.__tag;
+    const classes = props.node.__classes.join(' ');
+    return (
+      <Dynamic component={tag} class={classes} data-classed-block="true">
+        {props.children}
+      </Dynamic>
+    );
+  },
+};
+
 // The entities that cannot have children.
 const InlineEntities: Array<RenderableEntity> = [
   Text,
@@ -597,6 +613,7 @@ const Elements: RenderableElement[] = [
   Table,
   TableRow,
   TableCell,
+  ClassedBlock,
 ] as const;
 
 function Render(props: NodeComponent | ElementNodeComponent) {
