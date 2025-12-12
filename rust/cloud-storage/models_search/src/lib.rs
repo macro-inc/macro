@@ -109,13 +109,13 @@ pub struct SearchHighlight {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sender: Option<String>,
     /// The highlight match on the recipients (email only)
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub recipients: Vec<String>,
     /// The highlight match on the cc (email only)
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub cc: Vec<String>,
     /// The highlight match on the bcc (email only)
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub bcc: Vec<String>,
 }
 
