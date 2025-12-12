@@ -986,6 +986,16 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       };
     };
 
+    // We want to be to be able to search over locally cached emails without actually
+    // fetching more data when we have a invalid search term (i.e. one or two chars).
+    // If we're using search service for a valid term, we can safely fetch more data
+    // from dss for fuzzy name search since we won't be searching over emails (too big).
+    const disableFetchMore = createMemo(() => {
+      const searchAllEmails =
+        (dssQueryRequestBody().email_filters?.recipients ?? []).length === 0;
+      return searchText().length > 0 && searchAllEmails;
+    });
+
     const { UnifiedListComponent, entities, isLoading } =
       createUnifiedInfiniteList<
         WithNotification<WithSearch<EntityData> | EntityData>
@@ -1009,6 +1019,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
         entitySort,
         searchFilter: nameFuzzySearchFilter,
         isSearchActive,
+        disableFetchMore,
       });
 
     createEffect(() => {
