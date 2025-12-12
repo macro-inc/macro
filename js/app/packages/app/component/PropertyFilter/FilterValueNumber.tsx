@@ -1,5 +1,5 @@
 import type { Component } from 'solid-js';
-import { createSignal } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 
 export type FilterValueNumberProps = {
   value: number | null;
@@ -7,10 +7,12 @@ export type FilterValueNumberProps = {
 };
 
 export const FilterValueNumber: Component<FilterValueNumberProps> = (props) => {
+  const [isEditing, setIsEditing] = createSignal(false);
   // Track local input value for controlled input
   const [inputValue, setInputValue] = createSignal(
     props.value !== null ? String(props.value) : ''
   );
+  let inputRef!: HTMLInputElement;
 
   const handleInput = (e: InputEvent) => {
     const target = e.currentTarget as HTMLInputElement;
@@ -26,11 +28,16 @@ export const FilterValueNumber: Component<FilterValueNumberProps> = (props) => {
     target.value = sanitized; // Update DOM to match filtered value
   };
 
+  const handleFocus = () => {
+    setIsEditing(true);
+  };
+
   const handleBlur = () => {
     const parsed = parseFloat(inputValue());
     if (!isNaN(parsed)) {
       props.onChange(parsed);
     }
+    setIsEditing(false);
   };
 
   const handleKeyDown = (e: KeyboardEvent) => {
@@ -42,16 +49,45 @@ export const FilterValueNumber: Component<FilterValueNumberProps> = (props) => {
     }
   };
 
+  const handleClick = () => {
+    setIsEditing(true);
+    setTimeout(() => inputRef?.focus(), 0);
+  };
+
+  const displayValue = () => {
+    if (props.value === null) return 'Value...';
+    return String(props.value);
+  };
+
   return (
-    <input
-      type="text"
-      inputMode="decimal"
-      value={inputValue()}
-      onInput={handleInput}
-      onBlur={handleBlur}
-      onKeyDown={handleKeyDown}
-      placeholder="Enter value..."
-      class="h-6 px-2 min-w-8 w-fit text-[10px] text-ink border border-edge hover:bg-hover focus:ring-1 focus:ring-accent font-mono placeholder:text-ink-muted"
-    />
+    <Show
+      when={isEditing()}
+      fallback={
+        <button
+          type="button"
+          onClick={handleClick}
+          class="h-6 px-2 w-fit text-[10px] border border-edge hover:bg-hover text-left font-mono cursor-pointer flex items-center"
+          classList={{
+            'text-ink': props.value !== null,
+            'text-ink-muted': props.value === null,
+          }}
+        >
+          {displayValue()}
+        </button>
+      }
+    >
+      <input
+        ref={inputRef}
+        type="text"
+        inputMode="decimal"
+        value={inputValue()}
+        onInput={handleInput}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
+        onKeyDown={handleKeyDown}
+        placeholder="Enter value..."
+        class="h-6 px-2 min-w-8 w-fit text-[10px] text-ink border border-edge hover:bg-hover focus:ring-1 focus:ring-accent font-mono placeholder:text-ink-muted"
+      />
+    </Show>
   );
 };
