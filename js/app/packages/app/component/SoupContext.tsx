@@ -64,7 +64,6 @@ import {
   toggleKonsoleVisibility,
 } from './command/state';
 import { useGlobalNotificationSource } from './GlobalAppState';
-import { ComponentMeta } from './split-layout/componentRegistry';
 import type { SplitHandle } from './split-layout/layoutManager';
 import { globalRemoveFromSplitHistory } from './split-layout/layoutUtils';
 import {
@@ -376,7 +375,6 @@ export function createNavigationEntityListShortcut({
     hotkeyToken: TOKENS.entity.action.markDone,
     scopeId: splitHotkeyScope,
     description: 'Mark done',
-    scopeData: [actionRegistry],
     keyDownHandler: () => {
       const entitiesForAction = getEntitiesForAction();
       if (entitiesForAction.entities.length === 0) {
@@ -390,12 +388,12 @@ export function createNavigationEntityListShortcut({
 
       return true;
     },
+    scopeData: [actionRegistry, isViewingList] as const,
     canExecuteKeyDownHandler: ({
-      isSplitUnifiedList,
-      scopeData: [actionRegistry],
+      scopeData: [actionRegistry, isViewingList],
     }) => {
       return (
-        isSplitUnifiedList &&
+        isViewingList() &&
         actionRegistry.isActionEnabled('mark_as_done', plainSelectedEntities())
       );
     },
@@ -453,7 +451,6 @@ export function createNavigationEntityListShortcut({
     scopeId: splitHotkeyScope,
     description: () =>
       viewData().selectedEntities.length > 1 ? 'Delete items' : 'Delete item',
-    scopeData: [actionRegistry],
     keyDownHandler: () => {
       const entitiesForAction = getEntitiesForAction();
       if (entitiesForAction.entities.length === 0) {
@@ -465,12 +462,12 @@ export function createNavigationEntityListShortcut({
       );
       return true;
     },
+    scopeData: [actionRegistry, isViewingList] as const,
     canExecuteKeyDownHandler: ({
-      isSplitUnifiedList,
-      scopeData: [actionRegistry],
+      scopeData: [actionRegistry, isViewingList],
     }) => {
       return (
-        isSplitUnifiedList &&
+        isViewingList() &&
         actionRegistry.isActionEnabled('delete', plainSelectedEntities())
       );
     },
@@ -1154,8 +1151,9 @@ export function createNavigationEntityListShortcut({
       const navigationInput: NavigationInput = { axis: 'end', mode: 'step' };
       return handleNavigationSelection(navigationInput);
     },
-    canExecuteKeyDownHandler: ({ isSplitUnifiedList }) => {
-      return isSplitUnifiedList;
+    scopeData: [isViewingList],
+    canExecuteKeyDownHandler: ({ scopeData: [isViewingList] }) => {
+      return isViewingList();
     },
     hide: true,
   });
@@ -1182,8 +1180,9 @@ export function createNavigationEntityListShortcut({
       const navigationInput: NavigationInput = { axis: 'start', mode: 'step' };
       return handleNavigationSelection(navigationInput);
     },
-    canExecuteKeyDownHandler: ({ isSplitUnifiedList }) => {
-      return isSplitUnifiedList;
+    scopeData: [isViewingList],
+    canExecuteKeyDownHandler: ({ scopeData: [isViewingList] }) => {
+      return isViewingList();
     },
     hide: true,
   });
@@ -1301,8 +1300,12 @@ export function createNavigationEntityListShortcut({
       openEntity(entity);
       return true;
     },
-    canExecuteKeyDownHandler: ({ keyboardEvent, isSplitUnifiedList }) => {
-      if (!isSplitUnifiedList) return false;
+    scopeData: [isViewingList],
+    canExecuteKeyDownHandler: ({
+      keyboardEvent,
+      scopeData: [isViewingList],
+    }) => {
+      if (!isViewingList()) return false;
 
       if (keyboardEvent) {
         const target = getActualTarget(keyboardEvent);
@@ -1363,8 +1366,9 @@ export function createNavigationEntityListShortcut({
       openEntity(entity);
       return true;
     },
-    canExecuteKeyDownHandler: ({ isSplitUnifiedList }) => {
-      return isSplitUnifiedList;
+    scopeData: [isViewingList],
+    canExecuteKeyDownHandler: ({ scopeData: [isViewingList] }) => {
+      return isViewingList();
     },
     displayPriority: 4,
   });
@@ -1378,8 +1382,9 @@ export function createNavigationEntityListShortcut({
       toggleEntity(entity.entity);
       return true;
     },
-    canExecuteKeyDownHandler: ({ isSplitUnifiedList }) => {
-      return isSplitUnifiedList;
+    scopeData: [isViewingList],
+    canExecuteKeyDownHandler: ({ scopeData: [isViewingList] }) => {
+      return isViewingList();
     },
     displayPriority: 10,
   });
@@ -1538,11 +1543,18 @@ const scopeDataMap = new Map<string, any>();
 
 type ExecuteKeyDownHandlerCallback<T> = (props: {
   keyboardEvent?: KeyboardEvent;
-  activeSplit: SplitHandle<ComponentMeta> | undefined;
-  isSplitUnifiedList: boolean;
   isFiredFromGlobalKeyDown: boolean;
   scopeData: T;
 }) => boolean;
+
+/**
+ *
+ * Registers entity hotkeys to global scope and split panel scope. When global hotkey is fired, runs hotkey command from active split panel scope.
+ *
+ * @scopeData - exists since registerHotkey overrides handlers, so previous registered conditions/handlers are lost. Once registerHotkey supports 'add'ing hotkey handlers instead of overriding this property should be removed
+ *
+ * @returns
+ */
 function registerEntityHotkey<T>(
   opts: Omit<Parameters<typeof registerHotkey>[0], 'condition'> & {
     scopeData?: T;
@@ -1572,15 +1584,10 @@ function registerEntityHotkey<T>(
   ) => {
     if (!cb) return true;
 
-    const currentActiveSplitId = globalSplitManager()?.activeSplitId();
-    const activeSplit = globalSplitManager()?.getSplit(currentActiveSplitId!)!;
-    const isSplitUnifiedList = activeSplit.content().id === 'unified-list';
     const scopeData = scopeDataMap.get(id);
 
     return cb({
       keyboardEvent: data.event,
-      activeSplit,
-      isSplitUnifiedList,
       isFiredFromGlobalKeyDown: !!data.isFiredFromGlobalKeyDown,
       scopeData,
     });
