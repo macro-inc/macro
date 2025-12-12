@@ -1923,7 +1923,7 @@ function SearchBar(props: {
                 size="sm"
                 icon={XIcon}
                 theme="clear"
-                tooltip={{ label: 'Clear' }}
+                tooltip={{ label: 'Clear search' }}
                 onClick={() => {
                   setSearchText('');
                   inputRef?.focus();
@@ -1936,7 +1936,7 @@ function SearchBar(props: {
             size="sm"
             icon={LoadingSpinner}
             theme="clear"
-            tooltip={{ label: 'Cancel' }}
+            tooltip={{ label: 'Cancel search' }}
             class="animate-spin"
             onClick={() => {
               setSearchText('');
