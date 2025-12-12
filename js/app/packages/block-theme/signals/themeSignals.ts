@@ -110,6 +110,7 @@ createEffect(() => {
     document.documentElement.style.setProperty('--theme-chat'   , 'var(--c0)');
     document.documentElement.style.setProperty('--theme-pdf'    , 'var(--c0)');
     document.documentElement.style.setProperty('--theme-rss'    , 'var(--c0)');
+    document.documentElement.style.setProperty('--theme-task'   , 'var(--c0)');
   }
   else{
     document.documentElement.style.setProperty( '--theme-folder', 'oklch(var(--a0l) var(--a0c) 240)');
@@ -117,11 +118,12 @@ createEffect(() => {
     document.documentElement.style.setProperty( '--theme-write' , 'oklch(var(--a0l) var(--a0c) 260)');
     document.documentElement.style.setProperty( '--theme-video' , 'oklch(var(--a0l) var(--a0c) 277)');
     document.documentElement.style.setProperty( '--theme-note'  , 'oklch(var(--a0l) var(--a0c) 293)');
-    document.documentElement.style.setProperty( '--theme-code'  , 'oklch(var(--a0l) var(--a0c) 162)');
+    document.documentElement.style.setProperty( '--theme-code'  , 'oklch(var(--a0l) var(--a0c) 180)');
     document.documentElement.style.setProperty( '--theme-chat'  , 'oklch(var(--a0l) var(--a0c) 220)');
     document.documentElement.style.setProperty( '--theme-image' , 'oklch(var(--a0l) var(--a0c)  95)');
     document.documentElement.style.setProperty( '--theme-html'  , 'oklch(var(--a0l) var(--a0c)  47)');
     document.documentElement.style.setProperty( '--theme-rss'   , 'oklch(var(--a0l) var(--a0c) 260)');
+    document.documentElement.style.setProperty( '--theme-task'  , 'oklch(var(--a0l) var(--a0c) 150)');
     document.documentElement.style.setProperty( '--theme-pdf'   , 'oklch(var(--a0l) var(--a0c)  25)');
   }
 });

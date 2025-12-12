@@ -79,7 +79,7 @@ pub async fn thread_document_atts_for_backfill(
     Ok(attachments)
 }
 
-/// fetch videos and non-inline images from a thread for insertion into sfs. we insert them into
+/// fetch videos and images from a thread for insertion into sfs. we insert them into
 /// sfs so we can display thumbnails for them in the FE.
 #[tracing::instrument(skip(db), err)]
 pub async fn thread_media_atts_for_backfill(
@@ -388,7 +388,7 @@ pub async fn new_email_document_atts(
     Ok(attachments)
 }
 
-/// fetch videos and non-inline images for a new email for insertion into sfs. we insert them into
+/// fetch videos and inline images for a new email for insertion into sfs. we insert them into
 /// sfs so we can display thumbnails for them in the FE.
 #[tracing::instrument(skip(db), err)]
 pub async fn new_email_media_atts(

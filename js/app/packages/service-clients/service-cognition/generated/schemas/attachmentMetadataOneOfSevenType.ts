@@ -10,5 +10,5 @@ export type AttachmentMetadataOneOfSevenType = typeof AttachmentMetadataOneOfSev
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const AttachmentMetadataOneOfSevenType = {
-  email: 'email',
+  channel: 'channel',
 } as const;

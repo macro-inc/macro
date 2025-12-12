@@ -26,11 +26,26 @@ fn test_build_search_request() -> anyhow::Result<()> {
         "query": {
             "bool": {
                 "must": [
-                    {
-                        "match_phrase": {
-                            "content": "test"
-                        }
-                    },
+                {
+                    "bool": {
+                        "minimum_should_match": 1,
+                        "should": [
+                            {
+                                "wildcard": {
+                                    "user_id": {
+                                        "value": "*test*",
+                                        "case_insensitive": true,
+                                    }
+                                }
+                            },
+                            {
+                                "match_phrase": {
+                                    "content": "test"
+                                }
+                            }
+                        ]
+                    }
+                },
                     {"term": {"_index": "chats"}},
                     {
                         "bool": {

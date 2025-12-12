@@ -186,37 +186,90 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
         let content_bool_query = match self.search_on {
             SearchOn::Name => None,
             SearchOn::NameContent | SearchOn::Content => {
-                let mut bool_query = BoolQueryBuilder::new();
+                let mut access_bool_query = BoolQueryBuilder::new();
 
                 // Currently, the minimum should match is always one.
                 // This should of the bool query contains the ids and potentially the user_id
-                bool_query.minimum_should_match(1);
+                access_bool_query.minimum_should_match(1);
 
                 // For name OR content queries, we can build a much more simple bool query
                 let term_must_array: Vec<QueryType<'a>> =
                     self.build_must_term_query(SearchOn::Content)?;
 
-                // For each item in term must array, add to bool must query
-                for must in term_must_array {
-                    bool_query.must(must);
+                let mut inner_bool_query = BoolQueryBuilder::new();
+
+                inner_bool_query.minimum_should_match(1);
+
+                // Create a vec of owner queries for each term
+                // We want to search over the content **and** the owner here
+                let mut owner_queries: Vec<QueryType> = Vec::new();
+
+                for term in &self.terms {
+                    let formatted_term = format!("*{}*", term);
+                    owner_queries.push(QueryType::wildcard(T::USER_ID_KEY, formatted_term, true));
                 }
+
+                // Add the owner queries to the bool query
+                for owner_query in owner_queries {
+                    inner_bool_query.should(owner_query);
+                }
+
+                // If the search is on email, we need to add in participants to the query as well
+                if T::ENTITY_INDEX == SearchEntityType::Emails {
+                    let mut participant_queries: Vec<QueryType> = Vec::new();
+                    for term in &self.terms {
+                        let formatted_term = format!("*{}*", term);
+                        participant_queries.push(QueryType::wildcard(
+                            "sender",
+                            formatted_term.clone(),
+                            true,
+                        ));
+                        participant_queries.push(QueryType::wildcard(
+                            "cc",
+                            formatted_term.clone(),
+                            true,
+                        ));
+                        participant_queries.push(QueryType::wildcard(
+                            "bcc",
+                            formatted_term.clone(),
+                            true,
+                        ));
+                        participant_queries.push(QueryType::wildcard(
+                            "recipients",
+                            formatted_term.clone(),
+                            true,
+                        ));
+                    }
+
+                    for participant_query in participant_queries {
+                        inner_bool_query.should(participant_query);
+                    }
+                }
+
+                for must in term_must_array {
+                    inner_bool_query.should(must);
+                }
+
+                // Add in the inner bool query on content + owner to must of access bool query
+                access_bool_query.must(inner_bool_query.build().into());
 
                 // Add any ids to the should array if provided
                 if !self.ids.is_empty() {
-                    bool_query.should(QueryType::terms(T::ID_KEY.to_string(), self.ids.to_vec()));
+                    access_bool_query
+                        .should(QueryType::terms(T::ID_KEY.to_string(), self.ids.to_vec()));
                 }
 
                 // If we are not searching over the ids, we need to add the user_id to the should array
                 if !self.ids_only {
-                    bool_query.should(QueryType::term(
+                    access_bool_query.should(QueryType::term(
                         T::USER_ID_KEY.to_string(),
                         self.user_id.clone(),
                     ));
                 }
 
-                bool_query.must(QueryType::term("_index", T::ENTITY_INDEX.as_ref()));
+                access_bool_query.must(QueryType::term("_index", T::ENTITY_INDEX.as_ref()));
 
-                Some(bool_query)
+                Some(access_bool_query)
             }
         };
 
@@ -445,9 +498,6 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
                 ));
             }
             SearchOn::NameContent => unreachable!(),
-            // SearchOn::NameContent => {
-            //     must_array.push(generate_name_content_query(&keys, &self.terms));
-            // }
         };
 
         Ok(must_array)

@@ -94,7 +94,7 @@ VALUES ('00000000-0000-0000-0000-0000003a3003',
         NOW());
 
 ------------------------------------------------------------
--- Thread 3: Email with inline images (should be filtered)
+-- Thread 3: Email with inline images 
 ------------------------------------------------------------
 
 INSERT INTO email_messages (id, thread_id, link_id, provider_id, is_sent, from_contact_id, internal_date_ts,
@@ -108,7 +108,7 @@ VALUES ('00000000-0000-0000-0000-0000000e3003',
         '2025-01-01 12:00:00 +00:00',
         true, false, false, false, NOW(), NOW());
 
--- Inline image (should NOT be included)
+-- Inline image (should be included)
 INSERT INTO email_attachments (id, message_id, provider_attachment_id, filename, mime_type, content_id, created_at)
 VALUES ('00000000-0000-0000-0000-0000003a3004',
         '00000000-0000-0000-0000-0000000e3003',
