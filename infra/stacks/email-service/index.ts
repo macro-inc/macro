@@ -15,6 +15,7 @@ import { EmailScheduledHandler } from '@stacks/email-service/scheduled_lambda';
 import { get_coparse_api_vpc } from '@vpc';
 import { EmailService } from './service';
 import {EmailAttachmentsBucket} from "@stacks/email-service/attachments-bucket";
+import {EmailPubSubWorkers} from "@stacks/email-service/pubsub_workers";
 
 const tags = {
   environment: stack,
@@ -327,6 +328,173 @@ emailAttachmentBucket.attachCloudfrontPolicy({
   emailServiceRoleArn: emailServiceRole.arn,
 });
 
+const containerEnvVars = [
+  {
+    name: 'RUST_LOG',
+    value: `email=${stack === 'prod' ? 'debug' : 'debug'},email_service=${stack === 'prod' ? 'debug' : 'debug'},pubsub_workers=${stack === 'prod' ? 'debug' : 'debug'},email_db_client=${stack === 'prod' ? 'info' : 'debug'},gmail_client=${stack === 'prod' ? 'info' : 'debug'},tower_http=info,insight_service_client=${stack === 'prod' ? 'info' : 'debug'}`,
+  },
+  {
+    name: 'ENVIRONMENT',
+    value: stack,
+  },
+  {
+    name: 'MACRO_DB_URL',
+    value: pulumi.interpolate`${MACRO_DB_URL}`,
+  },
+  {
+    name: 'REDIS_URI',
+    value: pulumi.interpolate`redis://${emailServiceRedis.endpoint}`,
+  },
+  {
+    name: 'EMAIL_REFRESH_QUEUE',
+    value: refreshQueueName,
+  },
+  {
+    name: 'EMAIL_SCHEDULED_QUEUE',
+    value: scheduledQueueName,
+  },
+  {
+    name: 'GMAIL_WEBHOOK_QUEUE',
+    value: webhookQueueName,
+  },
+  {
+    name: 'GMAIL_WEBHOOK_RETRY_QUEUE',
+    value: webhookRetryQueueName,
+  },
+  {
+    name: 'BACKFILL_QUEUE',
+    value: backfillQueueName,
+  },
+  {
+    name: 'SFS_UPLOADER_QUEUE',
+    value: sfsUploaderQueueName,
+  },
+  {
+    name: 'GMAIL_GCP_QUEUE',
+    value: pulumi.interpolate`${GMAIL_GCP_QUEUE}`,
+  },
+  {
+    name: 'NOTIFICATION_QUEUE',
+    value: pulumi.interpolate`${notificationQueueName}`,
+  },
+  {
+    name: 'INSIGHT_CONTEXT_QUEUE',
+    value: pulumi.interpolate`${insightContextQueueName}`,
+  },
+  {
+    name: 'JWT_SECRET_KEY',
+    value: pulumi.interpolate`${JWT_SECRET_KEY}`,
+  },
+  {
+    name: 'AUDIENCE',
+    value: pulumi.interpolate`${AUDIENCE}`,
+  },
+  {
+    name: 'ISSUER',
+    value: pulumi.interpolate`${ISSUER}`,
+  },
+  {
+    name: 'INTERNAL_API_SECRET_KEY',
+    value: pulumi.interpolate`${INTERNAL_AUTH_KEY}`,
+  },
+  {
+    name: 'AUTHENTICATION_SERVICE_URL',
+    value: pulumi.interpolate`https://auth-service${stack === 'prod' ? '' : `-${stack}`}.macro.com`,
+  },
+  {
+    name: 'AUTHENTICATION_SERVICE_SECRET_KEY',
+    value: pulumi.interpolate`${AUTHENTICATION_SERVICE_INTERNAL_API_KEY}`,
+  },
+  {
+    name: 'STATIC_FILE_SERVICE_URL',
+    value: `https://static-file-service${stack === 'prod' ? '' : `-${stack}`}.macro.com`,
+  },
+  {
+    name: 'DOCUMENT_STORAGE_SERVICE_URL',
+    value: `https://cloud-storage${stack === 'prod' ? '' : `-${stack}`}.macro.com`,
+  },
+  {
+    name: 'CONNECTION_GATEWAY_URL',
+    value: `https://connection-gateway${stack === 'prod' ? '' : `-${stack}`}.macro.com`,
+  },
+  {
+    name: 'NOTIFICATIONS_ENABLED',
+    value: pulumi.interpolate`${NOTIFICATIONS_ENABLED}`,
+  },
+  {
+    name: 'SEARCH_EVENT_QUEUE',
+    value: pulumi.interpolate`${searchEventQueueName}`,
+  },
+  {
+    name: 'REDIS_RATE_LIMIT_REQS',
+    value: pulumi.interpolate`${REDIS_RATE_LIMIT_REQS}`,
+  },
+  {
+    name: 'REDIS_RATE_LIMIT_WINDOW_SECS',
+    value: pulumi.interpolate`${REDIS_RATE_LIMIT_WINDOW_SECS}`,
+  },
+  {
+    name: 'BACKFILL_QUEUE_WORKERS',
+    value: pulumi.interpolate`${BACKFILL_QUEUE_WORKERS}`,
+  },
+  {
+    name: 'BACKFILL_QUEUE_MAX_MESSAGES',
+    value: pulumi.interpolate`${BACKFILL_QUEUE_MAX_MESSAGES}`,
+  },
+  {
+    name: 'WEBHOOK_QUEUE_WORKERS',
+    value: pulumi.interpolate`${WEBHOOK_QUEUE_WORKERS}`,
+  },
+  {
+    name: 'WEBHOOK_QUEUE_MAX_MESSAGES',
+    value: pulumi.interpolate`${WEBHOOK_QUEUE_MAX_MESSAGES}`,
+  },
+  {
+    name: 'WEBHOOK_RETRY_QUEUE_WORKERS',
+    value: pulumi.interpolate`${WEBHOOK_RETRY_QUEUE_WORKERS}`,
+  },
+  {
+    name: 'WEBHOOK_RETRY_QUEUE_MAX_MESSAGES',
+    value: pulumi.interpolate`${WEBHOOK_RETRY_QUEUE_MAX_MESSAGES}`,
+  },
+  {
+    name: 'SFS_UPLOADER_WORKERS',
+    value: pulumi.interpolate`${SFS_UPLOADER_WORKERS}`,
+  },
+  {
+    name: 'MACRO_API_TOKEN_ISSUER',
+    value: pulumi.interpolate`${MACRO_API_TOKENS.macroApiTokenIssuer}`,
+  },
+  {
+    name: 'MACRO_API_TOKEN_PUBLIC_KEY',
+    value: pulumi.interpolate`${MACRO_API_TOKENS.macroApiTokenPublicKey}`,
+  },
+  {
+    name: 'PRESIGNED_URL_TTL_SECS',
+    value: pulumi.interpolate`${PRESIGNED_URL_TTL_SECS}`,
+  },
+  {
+    name: 'CLOUDFRONT_SIGNER_PRIVATE_KEY',
+    value: pulumi.interpolate`${CLOUDFRONT_PRIVATE_KEY}`,
+  },
+  {
+    name: 'CONTACTS_QUEUE',
+    value: pulumi.interpolate`${contactsQueueName}`,
+  },
+  {
+    name: 'ATTACHMENT_BUCKET',
+    value: emailAttachmentBucket.bucket.id,
+  },
+  {
+    name: 'CLOUDFRONT_DISTRIBUTION_URL',
+    value: pulumi.interpolate`${cloudfrontDistribution.domain}`,
+  },
+  {
+    name: 'CLOUDFRONT_SIGNER_PUBLIC_KEY_ID',
+    value: pulumi.interpolate`${cloudfrontDistribution.publicKey.id}`,
+  }
+];
+
 const emailService = new EmailService('email-service', {
   vpc: coparse_api_vpc,
   tags,
@@ -337,175 +505,20 @@ const emailService = new EmailService('email-service', {
   isPrivate: false,
   healthCheckPath: '/health',
   platform: { family: 'linux', architecture: 'amd64' },
-  containerEnvVars: [
-    {
-      name: 'RUST_LOG',
-      value: `email=${stack === 'prod' ? 'debug' : 'debug'},email_service=${stack === 'prod' ? 'debug' : 'debug'},email_db_client=${stack === 'prod' ? 'info' : 'debug'},gmail_client=${stack === 'prod' ? 'info' : 'debug'},tower_http=info,insight_service_client=${stack === 'prod' ? 'info' : 'debug'}`,
-    },
-    {
-      name: 'ENVIRONMENT',
-      value: stack,
-    },
-    {
-      name: 'MACRO_DB_URL',
-      value: pulumi.interpolate`${MACRO_DB_URL}`,
-    },
-    {
-      name: 'REDIS_URI',
-      value: pulumi.interpolate`redis://${emailServiceRedis.endpoint}`,
-    },
-    {
-      name: 'EMAIL_REFRESH_QUEUE',
-      value: refreshQueueName,
-    },
-    {
-      name: 'EMAIL_SCHEDULED_QUEUE',
-      value: scheduledQueueName,
-    },
-    {
-      name: 'GMAIL_WEBHOOK_QUEUE',
-      value: webhookQueueName,
-    },
-    {
-      name: 'GMAIL_WEBHOOK_RETRY_QUEUE',
-      value: webhookRetryQueueName,
-    },
-    {
-      name: 'BACKFILL_QUEUE',
-      value: backfillQueueName,
-    },
-    {
-      name: 'SFS_UPLOADER_QUEUE',
-      value: sfsUploaderQueueName,
-    },
-    {
-      name: 'GMAIL_GCP_QUEUE',
-      value: pulumi.interpolate`${GMAIL_GCP_QUEUE}`,
-    },
-    {
-      name: 'NOTIFICATION_QUEUE',
-      value: pulumi.interpolate`${notificationQueueName}`,
-    },
-    {
-      name: 'INSIGHT_CONTEXT_QUEUE',
-      value: pulumi.interpolate`${insightContextQueueName}`,
-    },
-    {
-      name: 'JWT_SECRET_KEY',
-      value: pulumi.interpolate`${JWT_SECRET_KEY}`,
-    },
-    {
-      name: 'AUDIENCE',
-      value: pulumi.interpolate`${AUDIENCE}`,
-    },
-    {
-      name: 'ISSUER',
-      value: pulumi.interpolate`${ISSUER}`,
-    },
-    {
-      name: 'INTERNAL_API_SECRET_KEY',
-      value: pulumi.interpolate`${INTERNAL_AUTH_KEY}`,
-    },
-    {
-      name: 'AUTHENTICATION_SERVICE_URL',
-      value: pulumi.interpolate`https://auth-service${stack === 'prod' ? '' : `-${stack}`}.macro.com`,
-    },
-    {
-      name: 'AUTHENTICATION_SERVICE_SECRET_KEY',
-      value: pulumi.interpolate`${AUTHENTICATION_SERVICE_INTERNAL_API_KEY}`,
-    },
-    {
-      name: 'STATIC_FILE_SERVICE_URL',
-      value: `https://static-file-service${stack === 'prod' ? '' : `-${stack}`}.macro.com`,
-    },
-    {
-      name: 'DOCUMENT_STORAGE_SERVICE_URL',
-      value: `https://cloud-storage${stack === 'prod' ? '' : `-${stack}`}.macro.com`,
-    },
-    {
-      name: 'CONNECTION_GATEWAY_URL',
-      value: `https://connection-gateway${stack === 'prod' ? '' : `-${stack}`}.macro.com`,
-    },
-    {
-      name: 'NOTIFICATIONS_ENABLED',
-      value: pulumi.interpolate`${NOTIFICATIONS_ENABLED}`,
-    },
-    {
-      name: 'SEARCH_EVENT_QUEUE',
-      value: pulumi.interpolate`${searchEventQueueName}`,
-    },
-    {
-      name: 'REDIS_RATE_LIMIT_REQS',
-      value: pulumi.interpolate`${REDIS_RATE_LIMIT_REQS}`,
-    },
-    {
-      name: 'REDIS_RATE_LIMIT_WINDOW_SECS',
-      value: pulumi.interpolate`${REDIS_RATE_LIMIT_WINDOW_SECS}`,
-    },
-    {
-      name: 'BACKFILL_QUEUE_WORKERS',
-      value: pulumi.interpolate`${BACKFILL_QUEUE_WORKERS}`,
-    },
-    {
-      name: 'BACKFILL_QUEUE_MAX_MESSAGES',
-      value: pulumi.interpolate`${BACKFILL_QUEUE_MAX_MESSAGES}`,
-    },
-    {
-      name: 'WEBHOOK_QUEUE_WORKERS',
-      value: pulumi.interpolate`${WEBHOOK_QUEUE_WORKERS}`,
-    },
-    {
-      name: 'WEBHOOK_QUEUE_MAX_MESSAGES',
-      value: pulumi.interpolate`${WEBHOOK_QUEUE_MAX_MESSAGES}`,
-    },
-    {
-      name: 'WEBHOOK_RETRY_QUEUE_WORKERS',
-      value: pulumi.interpolate`${WEBHOOK_RETRY_QUEUE_WORKERS}`,
-    },
-    {
-      name: 'WEBHOOK_RETRY_QUEUE_MAX_MESSAGES',
-      value: pulumi.interpolate`${WEBHOOK_RETRY_QUEUE_MAX_MESSAGES}`,
-    },
-    {
-      name: 'SFS_UPLOADER_WORKERS',
-      value: pulumi.interpolate`${SFS_UPLOADER_WORKERS}`,
-    },
-    {
-      name: 'MACRO_API_TOKEN_ISSUER',
-      value: pulumi.interpolate`${MACRO_API_TOKENS.macroApiTokenIssuer}`,
-    },
-    {
-      name: 'MACRO_API_TOKEN_PUBLIC_KEY',
-      value: pulumi.interpolate`${MACRO_API_TOKENS.macroApiTokenPublicKey}`,
-    },
-    {
-      name: 'PRESIGNED_URL_TTL_SECS',
-      value: pulumi.interpolate`${PRESIGNED_URL_TTL_SECS}`,
-    },
-    {
-      name: 'CLOUDFRONT_SIGNER_PRIVATE_KEY',
-      value: pulumi.interpolate`${CLOUDFRONT_PRIVATE_KEY}`,
-    },
-    {
-      name: 'CONTACTS_QUEUE',
-      value: pulumi.interpolate`${contactsQueueName}`,
-    },
-    {
-      name: 'ATTACHMENT_BUCKET',
-      value: emailAttachmentBucket.bucket.id,
-    },
-    {
-      name: 'CLOUDFRONT_DISTRIBUTION_URL',
-      value: pulumi.interpolate`${cloudfrontDistribution.domain}`,
-    },
-    {
-      name: 'CLOUDFRONT_SIGNER_PUBLIC_KEY_ID',
-      value: pulumi.interpolate`${cloudfrontDistribution.publicKey.id}`,
-    }
-  ],
+  containerEnvVars,
 });
 
 export const emailServiceUrl = pulumi.interpolate`${emailService.domain}`;
+
+new EmailPubSubWorkers('email-pubsub-workers', {
+  vpc: coparse_api_vpc,
+  tags,
+  ecsClusterArn: cloudStorageClusterArn,
+  clusterName: cloudStorageClusterName,
+  role: emailServiceRole,
+  platform: { family: 'linux', architecture: 'amd64' },
+  containerEnvVars,
+});
 
 const emailRefreshHandler = new EmailRefreshHandler('email-refresh-handler', {
   queueArns: [refreshQueueArn],
