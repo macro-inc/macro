@@ -11,9 +11,9 @@ config:
   email-service:notifications_enabled: true
   email-service:redis_rate_limit_reqs: 14000
   email-service:redis_rate_limit_window_secs: 60
-  email-service:backfill_queue_workers: 25
+  email-service:backfill_queue_workers: 15
   email-service:backfill_queue_max_messages: 1
-  email-service:webhook_queue_workers: 25
+  email-service:webhook_queue_workers: 15
   email-service:webhook_queue_max_messages: 1
   email-service:webhook_retry_queue_workers: 15
   email-service:webhook_retry_queue_max_messages: 1
