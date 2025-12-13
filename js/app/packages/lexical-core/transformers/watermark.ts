@@ -1,33 +1,34 @@
-import type {
-  ElementTransformer,
-  TextMatchTransformer,
-} from '@lexical/markdown';
-import type { ElementNode, LexicalNode, TextNode } from 'lexical';
-import { WatermarkNode } from '../nodes/WatermarkNode';
+import type { ElementTransformer } from '@lexical/markdown';
+import type { ElementNode, LexicalNode } from 'lexical';
+import {
+  $createWatermarkNode,
+  $isWatermarkNode,
+  WatermarkNode,
+} from '../nodes/WatermarkNode';
 
 // Internal Watermark
-export const I_WATERMARK: TextMatchTransformer = {
+export const I_WATERMARK: ElementTransformer = {
   dependencies: [WatermarkNode],
-  type: 'text-match',
+  type: 'element',
   regExp: /<m-watermark>(.*?)<\/m-watermark>/,
-  importRegExp: /<m-watermark>(.*?)<\/m-watermark>/,
   export: (node) => {
-    if (!(node instanceof WatermarkNode)) return null;
+    if (!$isWatermarkNode(node)) return null;
+
     const data = JSON.stringify({
       content: node.getContent(),
     });
+
     return `<m-watermark>${data}</m-watermark>`;
   },
-  replace: (node: TextNode, match: RegExpMatchArray) => {
+  replace: (parent: ElementNode, _, match: RegExpMatchArray) => {
     try {
-      console.log('Replace', node, match);
       const data = JSON.parse(match[1]);
       for (const field of ['content']) {
         if (!(field in data)) throw new Error(`Missing field ${field}`);
       }
 
-      const watermarkNode = new WatermarkNode(data.content);
-      node.replace(watermarkNode);
+      const watermarkNode = $createWatermarkNode({ content: data.content });
+      parent.append(watermarkNode);
     } catch (e) {
       console.error(e);
     }
@@ -40,15 +41,15 @@ export const E_WATERMARK: ElementTransformer = {
   type: 'element',
   regExp: /$^/,
   export: (node) => {
-    console.log('External', node);
-    if (!(node instanceof WatermarkNode)) return null;
+    if (!$isWatermarkNode(node)) return null;
 
     const content = node.getContent();
+
     if (!content) {
       return null;
     }
 
-    // For external representation, just show the display format
+    // For external representation, just show the content
     return content;
   },
   replace: (
