@@ -198,15 +198,17 @@ export function $removeAllWatermarkNodes(editor: LexicalEditor | undefined) {
 export function $appendWatermarkNodeToLast(
   editor: LexicalEditor | undefined,
   content: string | undefined,
-  sync: boolean = true
+  sync = true
 ) {
-  let node: WatermarkNode | undefined;
+  let nodeKey: string | undefined;
 
   editor?.update(
     () => {
       if (!content) return;
 
-      node = $createWatermarkNode({ content });
+      const node = $createWatermarkNode({ content });
+
+      nodeKey = node.getKey();
 
       const root = $getRoot();
 
@@ -216,8 +218,17 @@ export function $appendWatermarkNodeToLast(
   );
 
   return () => {
-    if (!node) return;
+    editor?.update(
+      () => {
+        if (!nodeKey) return;
 
-    editor?.update(() => node?.forceRemove());
+        const node = $getNodeByKey(nodeKey);
+
+        if (node instanceof WatermarkNode) {
+          node.forceRemove();
+        }
+      },
+      { discrete: true }
+    );
   };
 }
