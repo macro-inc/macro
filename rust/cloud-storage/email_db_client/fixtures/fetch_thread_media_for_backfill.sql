@@ -1,7 +1,7 @@
 
 -- SQL fixture for thread_media_atts_for_backfill tests
 -- This fixture tests that media attachments (images, videos) are fetched
--- regardless of thread conditions, and that inline images are properly filtered out
+-- regardless of thread conditions
 
 -- User Link
 INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider, is_sync_active, created_at, updated_at)
@@ -21,7 +21,7 @@ VALUES ('00000000-0000-0000-0000-000000000201',
         '00000000-0000-0000-0000-00000000002a',
         false, false, NOW(), NOW());
 
--- Thread 2: Contains inline images (should be filtered out)
+-- Thread 2: Contains inline images (should not be filtered out)
 INSERT INTO email_threads (id, link_id, inbox_visible, is_read, created_at, updated_at)
 VALUES ('00000000-0000-0000-0000-000000000202',
         '00000000-0000-0000-0000-00000000002a',
@@ -85,7 +85,7 @@ VALUES ('00000000-0000-0000-0000-0000002a2003',
         NOW());
 
 ------------------------------------------------------------
--- Thread 2: Contains inline images (should be filtered out)
+-- Thread 2: Contains inline images (should not be filtered out)
 ------------------------------------------------------------
 
 INSERT INTO email_messages (id, thread_id, link_id, provider_id, is_sent, from_contact_id, internal_date_ts,
@@ -99,7 +99,7 @@ VALUES ('00000000-0000-0000-0000-0000000e2002',
         '2025-01-01 11:00:00 +00:00',
         true, false, false, false, NOW(), NOW());
 
--- Inline image (should NOT be included due to content_id)
+-- Inline image (should be included)
 INSERT INTO email_attachments (id, message_id, provider_attachment_id, filename, mime_type, content_id, created_at)
 VALUES ('00000000-0000-0000-0000-0000002a2004',
         '00000000-0000-0000-0000-0000000e2002',

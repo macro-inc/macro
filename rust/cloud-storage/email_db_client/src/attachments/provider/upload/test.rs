@@ -419,8 +419,8 @@ async fn thread_media_for_backfill_filters_inline_images(pool: Pool<Postgres>) -
     let thread_id = Uuid::parse_str("00000000-0000-0000-0000-000000000202")?;
     let res = thread_media_atts_for_backfill(&pool, thread_id).await?;
 
-    // Should return 0 attachments (inline image is filtered out)
-    assert_eq!(res.len(), 0);
+    // Should return 1 attachments (inline image is not filtered out)
+    assert_eq!(res.len(), 1);
 
     Ok(())
 }
@@ -519,11 +519,13 @@ async fn new_email_media_filters_inline_images(pool: Pool<Postgres>) -> Result<(
     let message_provider_id = "new-media-msg-303";
     let res = new_email_media_atts(&pool, message_provider_id).await?;
 
-    // Should return 1 attachment: attachment_image.png
-    // Should NOT include inline_image.png (has content_id)
-    assert_eq!(res.len(), 1);
-    assert_eq!(res[0].filename, "attachment_image.png");
+    // Should return 2 attachment: attachment_image.png
+    // Should include inline_image.png (has content_id)
+    assert_eq!(res.len(), 2);
+    assert_eq!(res[0].filename, "inline_image.png");
     assert_eq!(res[0].mime_type, "image/png");
+    assert_eq!(res[1].filename, "attachment_image.png");
+    assert_eq!(res[1].mime_type, "image/png");
 
     Ok(())
 }

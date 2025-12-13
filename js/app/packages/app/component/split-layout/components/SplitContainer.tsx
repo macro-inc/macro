@@ -88,6 +88,7 @@ export function SplitContainer(
           data-split-id={props.id}
           class="bracket-never"
           data-split-container
+          data-modal={panel.handle.isSpotLight()}
           tabindex={-1}
         >
           <ClippedPanel

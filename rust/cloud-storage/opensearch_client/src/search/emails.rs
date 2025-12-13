@@ -2,7 +2,7 @@ use crate::{
     Result, delegate_methods,
     error::{OpensearchClientError, ResponseExt},
     search::{
-        builder::{SearchQueryBuilder, SearchQueryConfig},
+        builder::{SearchQueryBuilder, SearchQueryConfig, create_highlight_field},
         model::{NameIndex, SearchGotoContent, SearchGotoEmail, SearchHit, parse_highlight_hit},
         query::Keys,
         utils::should_wildcard_field_query_builder,
@@ -31,6 +31,16 @@ impl SearchQueryConfig for EmailSearchConfig {
             SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
             SortType::Field(FieldSort::new(Self::ID_KEY, SortOrder::Asc)),
         ]
+    }
+
+    fn append_owner_highlights<'a>(
+        highlight: opensearch_query_builder::Highlight<'a>,
+    ) -> opensearch_query_builder::Highlight<'a> {
+        let highlight = highlight.field("sender", create_highlight_field("plain", 1));
+        let highlight = highlight.field("recipients", create_highlight_field("plain", 1));
+        let highlight = highlight.field("cc", create_highlight_field("plain", 1));
+
+        highlight.field("bcc", create_highlight_field("plain", 1))
     }
 }
 

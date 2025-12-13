@@ -1903,12 +1903,46 @@ function SearchBar(props: {
     <SplitToolbarLeft>
       <div class="flex ml-2 h-full items-center gap-1">
         <Show
-          when={!props.isLoading() || !searchText()}
+          when={props.isLoading() && searchText()}
           fallback={
-            <LoadingSpinner class="w-4 h-4 text-ink-muted animate-spin shrink-0" />
+            <Show
+              when={searchText()}
+              fallback={
+                <IconButton
+                  size="sm"
+                  icon={SearchIcon}
+                  theme="clear"
+                  tooltip={{ label: 'Search' }}
+                  onClick={() => {
+                    inputRef?.focus();
+                  }}
+                />
+              }
+            >
+              <IconButton
+                size="sm"
+                icon={XIcon}
+                theme="clear"
+                tooltip={{ label: 'Clear search' }}
+                onClick={() => {
+                  setSearchText('');
+                  inputRef?.focus();
+                }}
+              />
+            </Show>
           }
         >
-          <SearchIcon class="w-4 h-4 text-ink-muted shrink-0" />
+          <IconButton
+            size="sm"
+            icon={LoadingSpinner}
+            theme="clear"
+            tooltip={{ label: 'Cancel search' }}
+            class="animate-spin"
+            onClick={() => {
+              setSearchText('');
+              inputRef?.focus();
+            }}
+          />
         </Show>
         <input
           ref={inputRef}
@@ -1931,20 +1965,6 @@ function SearchBar(props: {
           }}
           class="p-1 pr-0 border-0 outline-none! focus:outline-none ring-0! focus:ring-0 flex-1 text-ink text-sm truncate"
         />
-        <Show when={searchText()}>
-          <IconButton
-            theme="clear"
-            size="sm"
-            tooltip={{ label: 'Clear search' }}
-            icon={XIcon}
-            onClick={() => {
-              setSearchText('');
-              setTimeout(() => {
-                inputRef?.focus();
-              }, 0);
-            }}
-          />
-        </Show>
       </div>
     </SplitToolbarLeft>
   );

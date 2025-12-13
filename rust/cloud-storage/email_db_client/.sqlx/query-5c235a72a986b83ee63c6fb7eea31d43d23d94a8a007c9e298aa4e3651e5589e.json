@@ -1,0 +1,71 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            t.id as thread_id,\n            COALESCE(\n                MIN(m.sent_at) FILTER (WHERE m.is_draft = false),\n                MIN(m.updated_at)\n            ) as \"first_message_ts!\",\n            COALESCE(\n                MAX(m.sent_at) FILTER (WHERE m.is_draft = false),\n                MAX(m.updated_at)\n            ) as \"last_message_ts!\",\n            -- Last time user viewed this thread\n            uh.updated_at as \"viewed_at?\",\n            latest_msg.snippet,\n            latest_msg.subject as \"subject?\",\n            l.macro_id,\n            latest_msg.sender as sender,\n            latest_msg.pretty_sender as \"pretty_sender!\"\n        FROM email_threads t\n        INNER JOIN email_messages m ON m.thread_id = t.id AND m.link_id = $1\n        LEFT JOIN email_user_history uh ON uh.thread_id = t.id AND uh.link_id = $1\n        LEFT JOIN email_links l ON l.id = t.link_id\n        -- LATERAL join to get snippet/subject/sender from the single latest message.\n        -- This subquery runs once per thread and returns exactly one message's data.\n        LEFT JOIN LATERAL (\n            SELECT\n                m2.snippet,\n                m2.subject,\n                c.email_address as sender,\n                COALESCE(c.name, c.email_address) as pretty_sender\n            FROM email_messages m2\n            LEFT JOIN email_contacts c ON c.id = m2.from_contact_id\n            WHERE m2.thread_id = t.id\n              AND m2.link_id = $1\n            ORDER BY\n                -- Primary sort: most recent timestamp (use sent_at if available, otherwise updated_at)\n                COALESCE(m2.sent_at, m2.updated_at) DESC NULLS LAST,\n                -- Secondary sort: prefer non-drafts over drafts when timestamps are equal\n                -- (0 for non-drafts comes before 1 for drafts in ASC order)\n                (CASE WHEN m2.is_draft THEN 1 ELSE 0 END) ASC\n            LIMIT 1\n        ) latest_msg ON true\n        WHERE t.id = ANY($2)\n          AND t.link_id = $1\n        GROUP BY\n            t.id,\n            uh.updated_at,\n            latest_msg.snippet,\n            latest_msg.subject,\n            l.macro_id,\n            latest_msg.sender,\n            latest_msg.pretty_sender\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "thread_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "first_message_ts!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "last_message_ts!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "viewed_at?",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "snippet",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "subject?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "macro_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "sender",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 8,
+        "name": "pretty_sender!",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null,
+      false,
+      true,
+      true,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "5c235a72a986b83ee63c6fb7eea31d43d23d94a8a007c9e298aa4e3651e5589e"
+}
