@@ -171,13 +171,13 @@ export function useEntitiesNotificationsQuery(args: {
 
 export function invalidateUserNotifications() {
   return queryClient.invalidateQueries({
-    queryKey: ['notification', 'user'],
+    queryKey: notificationKeys.user._def,
   });
 }
 
 export function invalidateEntityNotifications(eventItemId: string) {
   return queryClient.invalidateQueries({
-    queryKey: ['notification', 'entity', eventItemId],
+    queryKey: [...notificationKeys.entity._def, eventItemId],
   });
 }
 
@@ -191,20 +191,18 @@ type NotificationsMutationParams = {
   notificationIds: string[];
 };
 
-type NotificationData<T> = InfiniteData<
-  GetAllUserNotificationsResponse,
-  T
->;
+type NotificationData<T> = InfiniteData<GetAllUserNotificationsResponse, T>;
 
 type NotificationsMutationContext = {
-  previousData: Maybe<
-    InfiniteData<GetAllUserNotificationsResponse, UserNotificationsPageParam>
-  >;
+  previousData: Maybe<NotificationData<UserNotificationsPageParam>>;
 };
 
 type UpdaterWithParams<T, P> = (input: Maybe<T>, params: P) => Maybe<T>;
 
-type NotificationsUpdater = UpdaterWithParams<NotificationData<UserNotificationsPageParam>, NotificationsMutationParams>;
+type NotificationsUpdater = UpdaterWithParams<
+  NotificationData<UserNotificationsPageParam>,
+  NotificationsMutationParams
+>;
 
 type NotificationsMutationCallbacks<T> = MutationCallbacks<
   T,
@@ -218,7 +216,9 @@ type NotificationsMutationFn<T> = MutationFunction<
   NotificationsMutationParams
 >;
 
-type NotificationsOnMutateFn = (variables: NotificationsMutationParams) => Promise<NotificationsMutationContext>;
+type NotificationsOnMutateFn = (
+  variables: NotificationsMutationParams
+) => Promise<NotificationsMutationContext>;
 
 function notificationsMutationSuccessCallback<T>(
   _: T,
@@ -242,28 +242,23 @@ function createNotificationsMutateFn(
     });
 
     const previousData = queryClient.getQueryData<
-      InfiniteData<GetAllUserNotificationsResponse, UserNotificationsPageParam>
+      NotificationData<UserNotificationsPageParam>
     >(notificationKeys.user({ limit: params.notificationIds.length }).queryKey);
 
-    queryClient.setQueryData<
-      InfiniteData<GetAllUserNotificationsResponse, UserNotificationsPageParam>
-    >(
+    queryClient.setQueryData<NotificationData<UserNotificationsPageParam>>(
       notificationKeys.user({ limit: params.notificationIds.length }).queryKey,
       (input) => updaterFn(input, params)
     );
 
     return { previousData };
-  }
+  };
 }
-
 
 function createNotificationsMutation<T>(
   mutationFn: NotificationsMutationFn<T>,
   parentCallbacks?: NotificationsMutationCallbacks<T>
 ) {
-  return (
-    callbacks?: NotificationsMutationCallbacks<T>
-  ) => {
+  return (callbacks?: NotificationsMutationCallbacks<T>) => {
     return useMutation(() => ({
       mutationFn: async (params, ctx) =>
         await throwOnErr(async () => await mutationFn(params, ctx)),
@@ -282,34 +277,40 @@ function createNotificationsMutation<T>(
   };
 }
 
-const notificationsMutationErrorFn = (_: Error, params: NotificationsMutationParams, context: NotificationsMutationContext) => {
+function notificationsMutationErrorFn(
+  _: Error,
+  params: NotificationsMutationParams,
+  context: NotificationsMutationContext
+) {
   if (context?.previousData) {
     queryClient.setQueryData(
-      notificationKeys.user({ limit: params.notificationIds.length })
-        .queryKey,
+      notificationKeys.user({ limit: params.notificationIds.length }).queryKey,
       context.previousData
     );
   }
 }
 
-const mapNotificationsAsSeen = (input: Maybe<NotificationData<UserNotificationsPageParam>>, params: NotificationsMutationParams) => {
-  return input && {
-    ...input,
-    pages: input.pages.map((page) => ({
-      ...page,
-      notifications: page.items.map((n) => {
-        if (params.notificationIds.includes(n.id)) {
-          return {
-            ...n,
-            viewedAt: Date.now()
+const mapNotificationsAsSeen = (
+  input: Maybe<NotificationData<UserNotificationsPageParam>>,
+  params: NotificationsMutationParams
+) => {
+  return (
+    input && {
+      ...input,
+      pages: input.pages.map((page) => ({
+        ...page,
+        notifications: page.items.map((n) => {
+          if (params.notificationIds.includes(n.id)) {
+            return {
+              ...n,
+              viewedAt: Date.now(),
+            };
           }
-        }
-      }),
-    })),
-  }
-}
-
-const notificationsSeenMutateFn = createNotificationsMutateFn(mapNotificationsAsSeen);
+        }),
+      })),
+    }
+  );
+};
 
 export const useMarkNotificationsAsSeenMutation = createNotificationsMutation(
   async (params: NotificationsMutationParams) =>
@@ -317,24 +318,27 @@ export const useMarkNotificationsAsSeenMutation = createNotificationsMutation(
       notificationIds: params.notificationIds,
     }),
   {
-    onMutate: notificationsSeenMutateFn,
+    onMutate: createNotificationsMutateFn(mapNotificationsAsSeen),
     onError: notificationsMutationErrorFn,
   }
 );
 
-const filterOutDoneNotifications = (input: Maybe<NotificationData<UserNotificationsPageParam>>, params: NotificationsMutationParams) => {
-  return input && {
-    ...input,
-    pages: input.pages.map((page) => ({
-      ...page,
-      notifications: page.items.filter(
-        (n) => !params.notificationIds.includes(n.id)
-      ),
-    })),
-  }
+const filterOutDoneNotifications = (
+  input: Maybe<NotificationData<UserNotificationsPageParam>>,
+  params: NotificationsMutationParams
+) => {
+  return (
+    input && {
+      ...input,
+      pages: input.pages.map((page) => ({
+        ...page,
+        notifications: page.items.filter(
+          (n) => !params.notificationIds.includes(n.id)
+        ),
+      })),
+    }
+  );
 };
-
-const notificationsDoneMutateFn = createNotificationsMutateFn(filterOutDoneNotifications);
 
 export const useMarkNotificationsAsDoneMutation = createNotificationsMutation(
   async (params: NotificationsMutationParams) =>
@@ -342,7 +346,7 @@ export const useMarkNotificationsAsDoneMutation = createNotificationsMutation(
       notificationIds: params.notificationIds,
     }),
   {
-    onMutate: notificationsDoneMutateFn,
+    onMutate: createNotificationsMutateFn(filterOutDoneNotifications),
     onError: notificationsMutationErrorFn,
   }
 );
