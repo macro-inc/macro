@@ -1,6 +1,8 @@
 import {
   $applyNodeReplacement,
+  $getNodeByKey,
   $getRoot,
+  $hasUpdateTag,
   DecoratorNode,
   type DOMConversionMap,
   type EditorConfig,
@@ -170,6 +172,27 @@ export function $isWatermarkNode(
   node: WatermarkNode | LexicalNode | null | undefined
 ): node is WatermarkNode {
   return node instanceof WatermarkNode;
+}
+
+export function $removeAllWatermarkNodes(editor: LexicalEditor | undefined) {
+  editor?.registerMutationListener(
+    WatermarkNode,
+    (mutations) => {
+      editor?.update(
+        () => {
+          if (!$hasUpdateTag('registerMutationListener')) return;
+          for (const [key, mutation] of mutations) {
+            if (mutation !== 'created') continue;
+            const node = $getNodeByKey(key);
+
+            if (node instanceof WatermarkNode) node.forceRemove();
+          }
+        },
+        { discrete: true, skipTransforms: true }
+      );
+    },
+    { skipInitialization: true }
+  );
 }
 
 export function $appendWatermarkNodeToLast(
