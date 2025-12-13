@@ -132,7 +132,9 @@ async fn get_task_parent(tx: &mut PgConnection, task_id: Uuid) -> anyhow::Result
     .await
     .context("failed to get task's parent")?;
 
-    Ok(parent_str.flatten().and_then(|s| Uuid::parse_str(&s).ok()))
+    Ok(parent_str
+        .flatten()
+        .and_then(|s: String| Uuid::parse_str(&s).ok()))
 }
 
 /// Get a task's current subtask IDs.
@@ -159,7 +161,7 @@ async fn get_task_subtasks(tx: &mut PgConnection, task_id: Uuid) -> anyhow::Resu
 
     Ok(subtask_strs
         .into_iter()
-        .filter_map(|s| Uuid::parse_str(&s).ok())
+        .filter_map(|s: String| Uuid::parse_str(&s).ok())
         .collect())
 }
 
