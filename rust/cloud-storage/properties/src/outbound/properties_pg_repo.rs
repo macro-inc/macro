@@ -5,7 +5,7 @@ use models_properties::service::property_value::PropertyValue;
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
-use super::{entity_property_queries};
+use super::{entity_property_queries, task_property_queries};
 use crate::domain::ports::PropertiesRepo;
 
 /// PostgreSQL implementation of PropertiesRepo.
@@ -40,5 +40,19 @@ impl PropertiesRepo for PropertiesPgRepo {
             value,
         )
         .await
+    }
+
+    #[tracing::instrument(skip(self))]
+    async fn link_parent_task(
+        &self,
+        task_id: Uuid,
+        parent_task_id: Option<Uuid>,
+    ) -> Result<(), Self::Err> {
+        task_property_queries::link_parent_task(&self.pool, task_id, parent_task_id).await
+    }
+
+    #[tracing::instrument(skip(self))]
+    async fn link_subtasks(&self, task_id: Uuid, subtask_ids: Vec<Uuid>) -> Result<(), Self::Err> {
+        task_property_queries::link_subtasks(&self.pool, task_id, subtask_ids).await
     }
 }
