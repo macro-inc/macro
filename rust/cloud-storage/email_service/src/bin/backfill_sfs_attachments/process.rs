@@ -41,7 +41,6 @@ pub async fn process_macro_id(
         sfs_client.clone(),
         gmail_client.clone(),
         gmail_access_token,
-        macro_id.to_string(),
     ));
 
     let success_count = Arc::new(AtomicUsize::new(0));
@@ -59,12 +58,12 @@ pub async fn process_macro_id(
                 match processor.upload(&attachment).await {
                     Ok(_) => {
                         success_count.fetch_add(1, Ordering::Relaxed);
-                        println!("Successfully uploaded '{}' (index: {}) for {}", attachment.filename, index, macro_id);
+                        println!("Successfully uploaded '{}' (index: {}) for {}", attachment.filename.unwrap_or("N/A".to_string()), index, macro_id);
                     }
                     Err(e) => {
                         panic!(
                             "Failed to upload attachment - filename: {}, provider_attachment_id: {}, provider_message_id: {}, index: {}, macro_id: {}, error: {:?}",
-                            attachment.filename,
+                            attachment.filename.unwrap_or("N/A".to_string()),
                             attachment.provider_attachment_id,
                             attachment.email_provider_id,
                             index,

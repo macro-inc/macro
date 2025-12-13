@@ -1,5 +1,4 @@
 use anyhow::Context;
-use email_db_client::attachments::provider::upload::map_row_to_attachment_metadata;
 use email_db_client::attachments::provider::upload_filters::{
     ATTACHMENT_MIME_TYPE_FILTERS, ATTACHMENT_MIME_TYPE_FILTERS_WITH_MEDIA,
     ATTACHMENT_WHITELISTED_DOMAINS,
@@ -7,6 +6,7 @@ use email_db_client::attachments::provider::upload_filters::{
 use models_email::service::attachment::AttachmentUploadMetadata;
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
+use sqlx_core::row::Row;
 use uuid::Uuid;
 
 /// Creates and returns a new PostgreSQL connection pool.
@@ -36,7 +36,7 @@ pub async fn fetch_sfs_attachments(
             a.id AS attachment_db_id,
             m.provider_id as email_provider_id,
             a.provider_attachment_id as provider_attachment_id,
-            COALESCE(a.filename, "n/a") as filename,
+            a.filename as filename,
             a.mime_type as mime_type,
             m.internal_date_ts as internal_date_ts,
             m.id as message_db_id,
@@ -61,7 +61,18 @@ pub async fn fetch_sfs_attachments(
 
     let attachments = rows
         .into_iter()
-        .map(map_row_to_attachment_metadata)
+        .map(|row| AttachmentUploadMetadata {
+            attachment_db_id: row.get("attachment_db_id"),
+            email_provider_id: row.get("email_provider_id"),
+            provider_attachment_id: row.get("provider_attachment_id"),
+            filename: row.get("filename"),
+            mime_type: row.get("mime_type"),
+            internal_date_ts: row.get("internal_date_ts"),
+            message_db_id: row.get("message_db_id"),
+            thread_db_id: row.get("thread_db_id"),
+            sender_email: row.get("sender_email"),
+            subject: row.get("subject"),
+        })
         .collect();
 
     Ok(attachments)
