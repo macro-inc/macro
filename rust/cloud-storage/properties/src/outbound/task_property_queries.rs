@@ -1,5 +1,7 @@
 //! Helper functions for bidirectional task parent/subtask linking.
 
+use std::collections::HashSet;
+
 use anyhow::Context;
 use models_properties::EntityReference;
 use models_properties::EntityType;
@@ -18,7 +20,20 @@ pub async fn link_parent_task(
     task_id: Uuid,
     parent_task_id: Option<Uuid>,
 ) -> anyhow::Result<()> {
+    // Validate: can't set self as parent
+    if parent_task_id == Some(task_id) {
+        anyhow::bail!("a task cannot be its own parent");
+    }
+
     let mut tx = pool.begin().await.context("failed to begin transaction")?;
+
+    // Validate: can't set a subtask as parent (would create mutual reference)
+    if let Some(parent_id) = parent_task_id {
+        let current_subtasks = get_task_subtasks(&mut tx, task_id).await?;
+        if current_subtasks.contains(&parent_id) {
+            anyhow::bail!("cannot set a subtask as parent (would create circular reference)");
+        }
+    }
 
     // 1. Get old parent
     let old_parent = get_task_parent(&mut tx, task_id).await?;
@@ -32,13 +47,17 @@ pub async fn link_parent_task(
         }
     }
 
-    // 3. Set new parent
-    set_task_parent(&mut tx, task_id, parent_task_id).await?;
+    // 3. Set new parent (returns true if task exists)
+    let task_exists = set_task_parent(&mut tx, task_id, parent_task_id).await?;
 
-    // 4. Add to new parent's subtasks
-    if let Some(parent_id) = parent_task_id {
-        add_to_parent_subtasks(&mut tx, parent_id, task_id).await?;
-        tracing::debug!("added task to parent's Subtasks");
+    // 4. Add to new parent's subtasks (only if task exists)
+    if task_exists {
+        if let Some(parent_id) = parent_task_id {
+            add_to_parent_subtasks(&mut tx, parent_id, task_id).await?;
+            tracing::debug!("added task to parent's Subtasks");
+        }
+    } else {
+        tracing::debug!("task does not exist, skipping subtasks update");
     }
 
     tx.commit().await.context("failed to commit transaction")?;
@@ -52,7 +71,26 @@ pub async fn link_subtasks(
     task_id: Uuid,
     subtask_ids: Vec<Uuid>,
 ) -> anyhow::Result<()> {
+    // Validate: can't include self as subtask
+    if subtask_ids.contains(&task_id) {
+        anyhow::bail!("a task cannot be its own subtask");
+    }
+
+    // Dedupe subtask IDs
+    let subtask_ids: Vec<Uuid> = subtask_ids
+        .into_iter()
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect();
+
     let mut tx = pool.begin().await.context("failed to begin transaction")?;
+
+    // Validate: can't include parent as subtask (would create mutual reference)
+    if let Some(current_parent) = get_task_parent(&mut tx, task_id).await? {
+        if subtask_ids.contains(&current_parent) {
+            anyhow::bail!("cannot set parent as subtask (would create circular reference)");
+        }
+    }
 
     // 1. Get current subtasks & compute diff
     let current_subtasks = get_task_subtasks(&mut tx, task_id).await?;
@@ -90,12 +128,12 @@ pub async fn link_subtasks(
                 );
             }
         }
-        set_task_parent(&mut tx, *subtask_id, Some(task_id)).await?;
+        let _ = set_task_parent(&mut tx, *subtask_id, Some(task_id)).await?;
     }
 
     // 4. For removed subtasks: clear their parent
     for subtask_id in &removed {
-        set_task_parent(&mut tx, *subtask_id, None).await?;
+        let _ = set_task_parent(&mut tx, *subtask_id, None).await?;
     }
 
     tx.commit().await.context("failed to commit transaction")?;
@@ -176,12 +214,12 @@ async fn remove_from_parent_subtasks(
     set_task_subtasks(&mut *tx, parent_id, updated).await
 }
 
-/// Set a task's parent task property.
+/// Set a task's parent task property. Returns true if the task exists (row was updated).
 async fn set_task_parent(
     tx: &mut PgConnection,
     task_id: Uuid,
     parent_task_id: Option<Uuid>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<bool> {
     let parent_task_prop_id = SystemPropertyKey::PARENT_TASK_UUID;
     let task_id_str = task_id.to_string();
 
@@ -194,7 +232,7 @@ async fn set_task_parent(
         None => serde_json::Value::Null,
     };
 
-    sqlx::query!(
+    let result = sqlx::query!(
         r#"
         UPDATE entity_properties
         SET values = $4, updated_at = NOW()
@@ -211,7 +249,7 @@ async fn set_task_parent(
     .await
     .context("failed to set task's parent")?;
 
-    Ok(())
+    Ok(result.rows_affected() > 0)
 }
 
 /// Add a task to a parent's subtasks array (if not already present).
