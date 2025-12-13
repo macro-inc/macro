@@ -32,6 +32,7 @@ import Trash from '@icon/regular/trash.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import {
   $appendWatermarkNodeToLast,
+  $removeAllWatermarkNodes,
   type DocumentMentionInfo,
 } from '@lexical-core';
 import { logger } from '@observability';
@@ -242,6 +243,7 @@ export function BaseInput(props: {
   const DRAFT_DEBOUNCE_MS = 1000;
 
   function collectDraft(): Omit<MessageToSend, 'link_id'> | null {
+    $removeAllWatermarkNodes(editor());
     const prepared = prepareEmailBody(editor());
     if (!prepared) {
       logger.error(
