@@ -2,7 +2,6 @@ import { SplitDrawer } from '@app/component/split-layout/components/SplitDrawer'
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import { IconButton } from '@core/component/IconButton';
 import { PropertiesView } from '@core/component/Properties/PropertiesView';
-import { useCanEdit } from '@core/signal/permissions';
 import TagIcon from '@icon/regular/tag.svg';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { Suspense } from 'solid-js';
@@ -14,7 +13,6 @@ export function EmailPropertiesModal(props: {
   subject?: string;
 }) {
   const drawerControl = useDrawerControl(DRAWER_ID);
-  const canEdit = useCanEdit();
 
   return (
     <>
@@ -27,7 +25,11 @@ export function EmailPropertiesModal(props: {
       />
       <SplitDrawer id={DRAWER_ID} side="right" size={550} title="Properties">
         <Suspense fallback={<LoadingFallback />}>
-          <EmailPropertiesContent canEdit={canEdit()} subject={props.subject} />
+          {/* canEdit is always true for email:
+              - Email threads have no sharing mechanism (unlike documents)
+              - If user can view the thread, it's from their connected account
+              - This component only renders after email loads (Show guards in Block.tsx) */}
+          <EmailPropertiesContent canEdit={true} subject={props.subject} />
         </Suspense>
       </SplitDrawer>
     </>
