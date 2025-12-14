@@ -118,6 +118,13 @@ pub async fn get_entity_properties(
                         )
                         .await
                     }
+                    EntityType::Project => {
+                        super::super::metadata::get_project_metadata_properties(
+                            &context.db,
+                            &entity_id,
+                        )
+                        .await
+                    }
                     _ => {
                         tracing::debug!(
                             entity_type = ?entity_type,
