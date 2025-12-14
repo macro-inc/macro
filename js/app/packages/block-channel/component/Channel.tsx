@@ -50,12 +50,15 @@ import {
   on,
   onCleanup,
   onMount,
+  Suspense,
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { type FocusableElement, tabbable } from 'tabbable';
 import { ChannelInput } from './ChannelInput';
 import { MessageList } from './MessageList/MessageList';
 import { Top } from './Top';
+import { useChannelQuery } from '@queries/channel/channel';
+import { queryClient } from '@queries/client';
 
 false && fileFolderDrop;
 
@@ -81,7 +84,8 @@ export function createChannelRefetchEffect(channelId: string) {
 }
 
 export function Channel(props: { data: Required<ChannelData> }) {
-  const channel = channelStore.get; // this is our source of truth because data can be updated outside
+  const channel = useChannelQuery(() => props.data.channel.id);
+
   const [_activeThreadId, setActiveThreadId] = activeThreadIdSignal;
   const latestActivity = latestActivitySignal.get;
   const updateActivityOnOpen = createCallback(updateActivityOnChannelOpen);
@@ -143,7 +147,6 @@ export function Channel(props: { data: Required<ChannelData> }) {
   >(undefined);
 
   onMount(() => {
-    initializeChannelData(props.data);
     updateActivityOnOpen();
 
     track(TrackingEvents.BLOCKCHANNEL.CHANNEL.OPEN);
@@ -322,7 +325,9 @@ export function Channel(props: { data: Required<ChannelData> }) {
         channelId={channelId}
       />
       <StaticMarkdownContext>
-        <Top />
+        <Suspense>
+          <Top channelID={channelId} />
+        </Suspense>
         <div
           class="h-full flex flex-col min-h-0 flex-1 relative w-full"
           use:fileFolderDrop={{
@@ -351,7 +356,7 @@ export function Channel(props: { data: Required<ChannelData> }) {
           />
           <MessageList
             channelId={channelId}
-            messages={channel.messages}
+            messages={channel.data?.messages ?? []}
             focusedMessageId={focusedMessageId}
             setFocusedMessageId={setFocusedMessageId}
             targetMessage={targetMessage}
@@ -364,7 +369,7 @@ export function Channel(props: { data: Required<ChannelData> }) {
             {/* seamus: note this element is below the scroll so we translate it back to account for the scroll above */}
             <div class="mx-auto -translate-x-1 w-full macro-message-width">
               <ChannelInput
-                channelName={channel?.channel?.name ?? ''}
+                channelName={channel.data?.channel?.name ?? ''}
                 inputAttachmentsStore={channelInputAttachmentsStore}
                 setInputAttachmentsStore={setChannelInputAttachmentsStore}
                 inputAttachmentsKey={channelId}
