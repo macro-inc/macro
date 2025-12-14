@@ -2,6 +2,9 @@ import { useUpsertSavedViewMutation } from '@app/component/Soup';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ViewConfigBase } from '@app/component/ViewConfig';
 import { unwrapSignals } from '@core/util/unwrapSignals';
+import { channelKeys } from '@queries/channel/keys';
+import { queryClient } from '@queries/client';
+import type { GetChannelResponse } from '@service-comms/generated/models';
 import { createMemo, createSignal, onMount } from 'solid-js';
 import { createRenameDssEntityMutation } from '../../../macro-entity/src/queries/dss';
 import type { EntityData } from '../../../macro-entity/src/types/entity';
@@ -13,7 +16,53 @@ export const RenameView = (props: {
   onFinish: () => void;
   onCancel: () => void;
 }) => {
-  const renameMutation = createRenameDssEntityMutation();
+  const renameMutation = createRenameDssEntityMutation({
+    onMutate(variables) {
+      if (variables.entity.type !== 'channel') return;
+
+      const queryKey = channelKeys.channel(variables.entity.id).queryKey;
+      queryClient.cancelQueries({ queryKey });
+
+      const previousData: GetChannelResponse | undefined =
+        queryClient.getQueryData(queryKey);
+
+      queryClient.setQueriesData(
+        { queryKey },
+        (prev: GetChannelResponse | undefined) => {
+          if (!prev) return;
+
+          const next = {
+            ...prev,
+            channel: {
+              ...prev.channel,
+              name: variables.newName,
+              updatedAt: new Date().toISOString(),
+            },
+          };
+
+          return { ...next };
+        }
+      );
+
+      return { previousData };
+    },
+    onError(
+      _,
+      variables,
+      onMutateResult: { previousData: GetChannelResponse | undefined }
+    ) {
+      const queryKey = channelKeys.channel(variables.entity.id).queryKey;
+      queryClient.setQueriesData(
+        { queryKey },
+        () => onMutateResult.previousData
+      );
+    },
+    onSettled(_, __, variables) {
+      queryClient.invalidateQueries({
+        queryKey: channelKeys.channel(variables.entity.id).queryKey,
+      });
+    },
+  });
   let inputRef: HTMLInputElement | undefined;
   const saveViewMutation = useUpsertSavedViewMutation();
   const {
