@@ -15,6 +15,10 @@ pub mod metadata {
     pub const THREAD_LAST_RECEIVED: &str = "Last Received";
     pub const THREAD_LAST_SENT: &str = "Last Sent";
     pub const THREAD_MESSAGES: &str = "Messages";
+
+    // Project metadata
+    pub const NAME: &str = "Project Name";
+    pub const PARENT: &str = "Parent Project";
 }
 
 /// Special UUID used for system-generated metadata properties.
