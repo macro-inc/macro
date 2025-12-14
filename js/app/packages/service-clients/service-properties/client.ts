@@ -87,6 +87,9 @@ export const propertiesServiceClient = {
     if (args.include_options !== undefined) {
       queryParams.set('include_options', String(args.include_options));
     }
+    if (args.for_entity_type !== undefined && args.for_entity_type !== null) {
+      queryParams.set('for_entity_type', args.for_entity_type);
+    }
 
     return await propertiesFetch<PropertyDefinitionResponse[]>(
       `/properties/definitions?${queryParams}`,
