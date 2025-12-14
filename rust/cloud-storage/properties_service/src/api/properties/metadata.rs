@@ -6,6 +6,7 @@ use models_properties::{EntityReference, EntityType};
 use properties_db_client::error::PropertiesDatabaseError;
 use sqlx::{Pool, Postgres};
 use thiserror::Error;
+use uuid::Uuid;
 
 use crate::constants::{METADATA_PROPERTY_ID, metadata};
 
@@ -111,6 +112,94 @@ pub async fn get_document_metadata_properties(
         document_id = %document_id,
         metadata_properties_count = metadata_properties.len(),
         "created document metadata properties"
+    );
+
+    Ok(metadata_properties)
+}
+
+/// Get thread metadata properties from macrodb
+pub async fn get_thread_metadata_properties(
+    db: &Pool<Postgres>,
+    thread_id: Uuid,
+) -> Result<Vec<EntityPropertyWithDefinition>, MetadataError> {
+    tracing::info!("getting thread metadata properties from macrodb");
+
+    let entity_type = EntityType::Thread;
+
+    // Fetch thread metadata from macrodb
+    let thread_metadata =
+        properties_db_client::thread_metadata::get::get_thread_metadata(db, thread_id)
+            .await
+            .inspect_err(|e| {
+                tracing::error!(
+                    error = ?e,
+                    thread_id = %thread_id,
+                    "failed to get thread metadata from database"
+                );
+            })?
+            .ok_or(MetadataError::NotFound)?;
+
+    tracing::debug!(
+        thread_id = %thread_id,
+        has_subject = thread_metadata.subject.is_some(),
+        message_count = thread_metadata.message_count,
+        "parsed thread metadata"
+    );
+
+    let mut metadata_properties = Vec::new();
+
+    // 1. Subject property
+    if let Some(subject) = thread_metadata.subject {
+        metadata_properties.push(create_metadata_property_str(
+            metadata::SUBJECT,
+            models_properties::DataType::String,
+            subject,
+            entity_type,
+        ));
+    }
+
+    // 2. Thread Started property
+    if let Some(thread_started) = thread_metadata.thread_started {
+        metadata_properties.push(create_metadata_property_date(
+            metadata::THREAD_STARTED,
+            models_properties::DataType::Date,
+            thread_started,
+            entity_type,
+        ));
+    }
+
+    // 3. Last Received property
+    if let Some(last_received) = thread_metadata.last_received {
+        metadata_properties.push(create_metadata_property_date(
+            metadata::LAST_RECEIVED,
+            models_properties::DataType::Date,
+            last_received,
+            entity_type,
+        ));
+    }
+
+    // 4. Last Sent property
+    if let Some(last_sent) = thread_metadata.last_sent {
+        metadata_properties.push(create_metadata_property_date(
+            metadata::LAST_SENT,
+            models_properties::DataType::Date,
+            last_sent,
+            entity_type,
+        ));
+    }
+
+    // 5. Messages property (count)
+    metadata_properties.push(create_metadata_property_number(
+        metadata::MESSAGES,
+        models_properties::DataType::Number,
+        thread_metadata.message_count,
+        entity_type,
+    ));
+
+    tracing::debug!(
+        thread_id = %thread_id,
+        metadata_properties_count = metadata_properties.len(),
+        "created thread metadata properties"
     );
 
     Ok(metadata_properties)
