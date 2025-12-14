@@ -51,32 +51,40 @@ pub async fn get_document_metadata_properties(
     let mut metadata_properties = Vec::new();
 
     // 1. Document name property
-    if !document_metadata.name.is_empty() {
-        metadata_properties.push(create_metadata_property_str(
-            metadata::DOCUMENT_NAME,
-            models_properties::DataType::String,
-            document_metadata.name,
-            entity_type,
-        ));
-    }
+    let name = if document_metadata.name.is_empty() {
+        None
+    } else {
+        Some(document_metadata.name)
+    };
+    metadata_properties.push(create_metadata_property_str(
+        metadata::DOCUMENT_NAME,
+        models_properties::DataType::String,
+        name,
+        entity_type,
+    ));
 
     // 2. Owner property
-    if !document_metadata.owner.is_empty() {
-        let owner_entity_ref = EntityReference::new(document_metadata.owner, EntityType::User);
-        metadata_properties.push(create_metadata_property_entity_ref(
-            metadata::OWNER,
-            models_properties::DataType::Entity,
-            owner_entity_ref,
-            entity_type,
-            Some(EntityType::User),
-        ));
-    }
+    let owner = if document_metadata.owner.is_empty() {
+        None
+    } else {
+        Some(EntityReference::new(
+            document_metadata.owner,
+            EntityType::User,
+        ))
+    };
+    metadata_properties.push(create_metadata_property_entity_ref(
+        metadata::OWNER,
+        models_properties::DataType::Entity,
+        owner,
+        entity_type,
+        Some(EntityType::User),
+    ));
 
     // 3. Created time property
     metadata_properties.push(create_metadata_property_date(
         metadata::CREATED_AT,
         models_properties::DataType::Date,
-        document_metadata.created_at,
+        Some(document_metadata.created_at),
         entity_type,
     ));
 
@@ -84,29 +92,21 @@ pub async fn get_document_metadata_properties(
     metadata_properties.push(create_metadata_property_date(
         metadata::LAST_UPDATED,
         models_properties::DataType::Date,
-        document_metadata.updated_at,
+        Some(document_metadata.updated_at),
         entity_type,
     ));
 
     // 5. Project property
-    if let Some(project_id) = document_metadata.project_id {
-        let project_entity_ref = EntityReference::new(project_id, EntityType::Project);
-        metadata_properties.push(create_metadata_property_entity_ref(
-            metadata::PROJECT,
-            models_properties::DataType::Entity,
-            project_entity_ref,
-            entity_type,
-            Some(EntityType::Project),
-        ));
-    } else {
-        // Add project property with null value
-        metadata_properties.push(create_metadata_property_null(
-            metadata::PROJECT,
-            models_properties::DataType::Entity,
-            entity_type,
-            Some(EntityType::Project),
-        ));
-    }
+    let project = document_metadata
+        .project_id
+        .map(|id| EntityReference::new(id, EntityType::Project));
+    metadata_properties.push(create_metadata_property_entity_ref(
+        metadata::PROJECT,
+        models_properties::DataType::Entity,
+        project,
+        entity_type,
+        Some(EntityType::Project),
+    ));
 
     tracing::debug!(
         document_id = %document_id,
@@ -148,28 +148,28 @@ pub async fn get_thread_metadata_properties(
 
     let metadata_properties = vec![
         // 1. Subject property
-        create_metadata_property_str_optional(
+        create_metadata_property_str(
             metadata::SUBJECT,
             models_properties::DataType::String,
             thread_metadata.subject.clone(),
             entity_type,
         ),
         // 2. Thread Started property
-        create_metadata_property_date_optional(
+        create_metadata_property_date(
             metadata::THREAD_STARTED,
             models_properties::DataType::Date,
             thread_metadata.thread_started,
             entity_type,
         ),
         // 3. Last Received property
-        create_metadata_property_date_optional(
+        create_metadata_property_date(
             metadata::LAST_RECEIVED,
             models_properties::DataType::Date,
             thread_metadata.last_received,
             entity_type,
         ),
         // 4. Last Sent property
-        create_metadata_property_date_optional(
+        create_metadata_property_date(
             metadata::LAST_SENT,
             models_properties::DataType::Date,
             thread_metadata.last_sent,
@@ -203,34 +203,22 @@ pub async fn get_thread_metadata_properties(
 pub fn create_metadata_property_str(
     display_name: &str,
     data_type: models_properties::DataType,
-    value: String,
+    value: Option<String>,
     entity_type: EntityType,
 ) -> EntityPropertyWithDefinition {
-    let property_value = PropertyValue::Str(value);
-    create_metadata_property_inner(
-        display_name,
-        data_type,
-        Some(property_value),
-        entity_type,
-        None,
-    )
+    let property_value = value.map(PropertyValue::Str);
+    create_metadata_property_inner(display_name, data_type, property_value, entity_type, None)
 }
 
 /// Create a metadata property with a date/timestamp value (e.g., created_at, last_updated)
 pub fn create_metadata_property_date(
     display_name: &str,
     data_type: models_properties::DataType,
-    value: chrono::DateTime<chrono::Utc>,
+    value: Option<chrono::DateTime<chrono::Utc>>,
     entity_type: EntityType,
 ) -> EntityPropertyWithDefinition {
-    let property_value = PropertyValue::Date(value);
-    create_metadata_property_inner(
-        display_name,
-        data_type,
-        Some(property_value),
-        entity_type,
-        None,
-    )
+    let property_value = value.map(PropertyValue::Date);
+    create_metadata_property_inner(display_name, data_type, property_value, entity_type, None)
 }
 
 /// Create a metadata property with a numeric value (e.g., message count)
@@ -254,53 +242,15 @@ pub fn create_metadata_property_number(
 pub fn create_metadata_property_entity_ref(
     display_name: &str,
     data_type: models_properties::DataType,
-    value: EntityReference,
+    value: Option<EntityReference>,
     entity_type: EntityType,
     specific_entity_type: Option<EntityType>,
 ) -> EntityPropertyWithDefinition {
-    let property_value = PropertyValue::EntityRef(vec![value]);
+    let property_value = value.map(|v| PropertyValue::EntityRef(vec![v]));
     create_metadata_property_inner(
         display_name,
         data_type,
-        Some(property_value),
-        entity_type,
-        specific_entity_type,
-    )
-}
-
-/// Create a metadata property with an optional string value (returns null if None)
-pub fn create_metadata_property_str_optional(
-    display_name: &str,
-    data_type: models_properties::DataType,
-    value: Option<String>,
-    entity_type: EntityType,
-) -> EntityPropertyWithDefinition {
-    let property_value = value.map(PropertyValue::Str);
-    create_metadata_property_inner(display_name, data_type, property_value, entity_type, None)
-}
-
-/// Create a metadata property with an optional date value (returns null if None)
-pub fn create_metadata_property_date_optional(
-    display_name: &str,
-    data_type: models_properties::DataType,
-    value: Option<chrono::DateTime<chrono::Utc>>,
-    entity_type: EntityType,
-) -> EntityPropertyWithDefinition {
-    let property_value = value.map(PropertyValue::Date);
-    create_metadata_property_inner(display_name, data_type, property_value, entity_type, None)
-}
-
-/// Create a metadata property with null/empty value (e.g., optional fields like project)
-pub fn create_metadata_property_null(
-    property_name: &str,
-    data_type: models_properties::DataType,
-    entity_type: EntityType,
-    specific_entity_type: Option<EntityType>,
-) -> EntityPropertyWithDefinition {
-    create_metadata_property_inner(
-        property_name,
-        data_type,
-        None,
+        property_value,
         entity_type,
         specific_entity_type,
     )
