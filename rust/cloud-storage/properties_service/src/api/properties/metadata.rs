@@ -146,47 +146,43 @@ pub async fn get_thread_metadata_properties(
         "parsed thread metadata"
     );
 
-    let mut metadata_properties = Vec::new();
-
-    // 1. Subject property
-    metadata_properties.push(create_metadata_property_str_optional(
-        metadata::SUBJECT,
-        models_properties::DataType::String,
-        thread_metadata.subject.clone(),
-        entity_type,
-    ));
-
-    // 2. Thread Started property
-    metadata_properties.push(create_metadata_property_date_optional(
-        metadata::THREAD_STARTED,
-        models_properties::DataType::Date,
-        thread_metadata.thread_started,
-        entity_type,
-    ));
-
-    // 3. Last Received property
-    metadata_properties.push(create_metadata_property_date_optional(
-        metadata::LAST_RECEIVED,
-        models_properties::DataType::Date,
-        thread_metadata.last_received,
-        entity_type,
-    ));
-
-    // 4. Last Sent property
-    metadata_properties.push(create_metadata_property_date_optional(
-        metadata::LAST_SENT,
-        models_properties::DataType::Date,
-        thread_metadata.last_sent,
-        entity_type,
-    ));
-
-    // 5. Messages property (count)
-    metadata_properties.push(create_metadata_property_number(
-        metadata::MESSAGES,
-        models_properties::DataType::Number,
-        thread_metadata.message_count,
-        entity_type,
-    ));
+    let metadata_properties = vec![
+        // 1. Subject property
+        create_metadata_property_str_optional(
+            metadata::SUBJECT,
+            models_properties::DataType::String,
+            thread_metadata.subject.clone(),
+            entity_type,
+        ),
+        // 2. Thread Started property
+        create_metadata_property_date_optional(
+            metadata::THREAD_STARTED,
+            models_properties::DataType::Date,
+            thread_metadata.thread_started,
+            entity_type,
+        ),
+        // 3. Last Received property
+        create_metadata_property_date_optional(
+            metadata::LAST_RECEIVED,
+            models_properties::DataType::Date,
+            thread_metadata.last_received,
+            entity_type,
+        ),
+        // 4. Last Sent property
+        create_metadata_property_date_optional(
+            metadata::LAST_SENT,
+            models_properties::DataType::Date,
+            thread_metadata.last_sent,
+            entity_type,
+        ),
+        // 5. Messages property (count)
+        create_metadata_property_number(
+            metadata::MESSAGES,
+            models_properties::DataType::Number,
+            thread_metadata.message_count,
+            entity_type,
+        ),
+    ];
 
     tracing::debug!(
         thread_id = %thread_id,
