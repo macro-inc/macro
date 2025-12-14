@@ -2633,7 +2633,6 @@ dependencies = [
  "models_opensearch",
  "models_pagination",
  "models_permissions",
- "models_properties",
  "models_soup",
  "ordered-float",
  "properties",

@@ -40,11 +40,11 @@ pub async fn link_parent_task(
     tracing::debug!(old_parent = ?old_parent, "fetched current parent");
 
     // 2. Remove from old parent if changed
-    if let Some(old_parent_id) = old_parent {
-        if Some(old_parent_id) != parent_task_id {
-            remove_from_parent_subtasks(&mut tx, old_parent_id, task_id).await?;
-            tracing::debug!(old_parent = %old_parent_id, "removed task from old parent's Subtasks");
-        }
+    if let Some(old_parent_id) = old_parent
+        && Some(old_parent_id) != parent_task_id
+    {
+        remove_from_parent_subtasks(&mut tx, old_parent_id, task_id).await?;
+        tracing::debug!(old_parent = %old_parent_id, "removed task from old parent's Subtasks");
     }
 
     // 3. Set new parent (returns true if task exists)
@@ -86,10 +86,10 @@ pub async fn link_subtasks(
     let mut tx = pool.begin().await.context("failed to begin transaction")?;
 
     // Validate: can't include parent as subtask (would create mutual reference)
-    if let Some(current_parent) = get_task_parent(&mut tx, task_id).await? {
-        if subtask_ids.contains(&current_parent) {
-            anyhow::bail!("cannot set parent as subtask (would create circular reference)");
-        }
+    if let Some(current_parent) = get_task_parent(&mut tx, task_id).await?
+        && subtask_ids.contains(&current_parent)
+    {
+        anyhow::bail!("cannot set parent as subtask (would create circular reference)");
     }
 
     // 1. Get current subtasks & compute diff
@@ -118,15 +118,15 @@ pub async fn link_subtasks(
 
     // 3. For added subtasks: remove from old parent, set new parent
     for subtask_id in &added {
-        if let Some(old_parent_id) = get_task_parent(&mut tx, *subtask_id).await? {
-            if old_parent_id != task_id {
-                remove_from_parent_subtasks(&mut tx, old_parent_id, *subtask_id).await?;
-                tracing::debug!(
-                    subtask = %subtask_id,
-                    old_parent = %old_parent_id,
-                    "removed subtask from old parent's Subtasks"
-                );
-            }
+        if let Some(old_parent_id) = get_task_parent(&mut tx, *subtask_id).await?
+            && old_parent_id != task_id
+        {
+            remove_from_parent_subtasks(&mut tx, old_parent_id, *subtask_id).await?;
+            tracing::debug!(
+                subtask = %subtask_id,
+                old_parent = %old_parent_id,
+                "removed subtask from old parent's Subtasks"
+            );
         }
         let _ = set_task_parent(&mut tx, *subtask_id, Some(task_id)).await?;
     }
