@@ -162,11 +162,18 @@ pub async fn set_entity_property(
 
     tracing::debug!(has_value = has_value, "setting property in database");
 
+    // Parent Task and Subtasks properties can only be attached to Task entities
+    let is_parent_or_subtask_property = property_uuid == SystemPropertyKey::PARENT_TASK_UUID
+        || property_uuid == SystemPropertyKey::SUBTASKS_UUID;
+
+    if is_parent_or_subtask_property && entity_type != EntityType::Task {
+        return Err(SetEntityPropertyErr::InvalidRequest(
+            "Parent Task and Subtasks properties can only be attached to Task entities".to_string(),
+        ));
+    }
+
     // Handle bidirectional linking for task Parent Task / Subtasks properties
-    if entity_type == EntityType::Task
-        && (property_uuid == SystemPropertyKey::PARENT_TASK_UUID
-            || property_uuid == SystemPropertyKey::SUBTASKS_UUID)
-    {
+    if entity_type == EntityType::Task && is_parent_or_subtask_property {
         let task_id = Uuid::parse_str(&entity_id)
             .map_err(|_| SetEntityPropertyErr::InvalidRequest("Invalid task ID".to_string()))?;
 
