@@ -149,44 +149,36 @@ pub async fn get_thread_metadata_properties(
     let mut metadata_properties = Vec::new();
 
     // 1. Subject property
-    if let Some(subject) = thread_metadata.subject {
-        metadata_properties.push(create_metadata_property_str(
-            metadata::SUBJECT,
-            models_properties::DataType::String,
-            subject,
-            entity_type,
-        ));
-    }
+    metadata_properties.push(create_metadata_property_str_optional(
+        metadata::SUBJECT,
+        models_properties::DataType::String,
+        thread_metadata.subject.clone(),
+        entity_type,
+    ));
 
     // 2. Thread Started property
-    if let Some(thread_started) = thread_metadata.thread_started {
-        metadata_properties.push(create_metadata_property_date(
-            metadata::THREAD_STARTED,
-            models_properties::DataType::Date,
-            thread_started,
-            entity_type,
-        ));
-    }
+    metadata_properties.push(create_metadata_property_date_optional(
+        metadata::THREAD_STARTED,
+        models_properties::DataType::Date,
+        thread_metadata.thread_started,
+        entity_type,
+    ));
 
     // 3. Last Received property
-    if let Some(last_received) = thread_metadata.last_received {
-        metadata_properties.push(create_metadata_property_date(
-            metadata::LAST_RECEIVED,
-            models_properties::DataType::Date,
-            last_received,
-            entity_type,
-        ));
-    }
+    metadata_properties.push(create_metadata_property_date_optional(
+        metadata::LAST_RECEIVED,
+        models_properties::DataType::Date,
+        thread_metadata.last_received,
+        entity_type,
+    ));
 
     // 4. Last Sent property
-    if let Some(last_sent) = thread_metadata.last_sent {
-        metadata_properties.push(create_metadata_property_date(
-            metadata::LAST_SENT,
-            models_properties::DataType::Date,
-            last_sent,
-            entity_type,
-        ));
-    }
+    metadata_properties.push(create_metadata_property_date_optional(
+        metadata::LAST_SENT,
+        models_properties::DataType::Date,
+        thread_metadata.last_sent,
+        entity_type,
+    ));
 
     // 5. Messages property (count)
     metadata_properties.push(create_metadata_property_number(
@@ -278,6 +270,28 @@ pub fn create_metadata_property_entity_ref(
         entity_type,
         specific_entity_type,
     )
+}
+
+/// Create a metadata property with an optional string value (returns null if None)
+pub fn create_metadata_property_str_optional(
+    display_name: &str,
+    data_type: models_properties::DataType,
+    value: Option<String>,
+    entity_type: EntityType,
+) -> EntityPropertyWithDefinition {
+    let property_value = value.map(PropertyValue::Str);
+    create_metadata_property_inner(display_name, data_type, property_value, entity_type, None)
+}
+
+/// Create a metadata property with an optional date value (returns null if None)
+pub fn create_metadata_property_date_optional(
+    display_name: &str,
+    data_type: models_properties::DataType,
+    value: Option<chrono::DateTime<chrono::Utc>>,
+    entity_type: EntityType,
+) -> EntityPropertyWithDefinition {
+    let property_value = value.map(PropertyValue::Date);
+    create_metadata_property_inner(display_name, data_type, property_value, entity_type, None)
 }
 
 /// Create a metadata property with null/empty value (e.g., optional fields like project)
