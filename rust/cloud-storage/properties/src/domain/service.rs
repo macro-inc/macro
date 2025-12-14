@@ -41,4 +41,12 @@ pub trait PropertiesService: Send + Sync + 'static {
         task_id: Uuid,
         subtask_ids: Vec<Uuid>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Check if an entity's status system property is "Completed".
+    /// Returns `false` if the entity doesn't have a status property attached.
+    fn is_system_property_status_complete(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 }

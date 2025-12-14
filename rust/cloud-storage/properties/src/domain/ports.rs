@@ -51,4 +51,13 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         task_id: Uuid,
         subtask_ids: Vec<Uuid>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Get a property value for a specific entity and property definition.
+    /// Returns `None` if the property is not attached to the entity.
+    fn get_entity_property_value(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        property_definition_id: Uuid,
+    ) -> impl Future<Output = Result<Option<PropertyValue>, Self::Err>> + Send;
 }

@@ -73,4 +73,25 @@ where
     async fn link_subtasks(&self, task_id: Uuid, subtask_ids: Vec<Uuid>) -> Result<(), Self::Err> {
         self.repository.link_subtasks(task_id, subtask_ids).await
     }
+
+    #[tracing::instrument(skip(self), fields(entity_id = %entity_id, entity_type = ?entity_type))]
+    async fn is_system_property_status_complete(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> Result<bool, Self::Err> {
+        let status_property_id = SystemPropertyKey::STATUS_UUID;
+
+        let value = self
+            .repository
+            .get_entity_property_value(entity_id, entity_type, status_property_id)
+            .await?;
+
+        let is_completed = matches!(
+            value,
+            Some(PropertyValue::SelectOption(ids)) if ids.contains(&StatusOption::COMPLETED_UUID)
+        );
+
+        Ok(is_completed)
+    }
 }
