@@ -9,6 +9,7 @@ import { createMemo, createSignal, onMount } from 'solid-js';
 import { createRenameDssEntityMutation } from '../../../macro-entity/src/queries/dss';
 import type { EntityData } from '../../../macro-entity/src/types/entity';
 import { EntityModalActionFooter, EntityModalTitle } from './EntityModal';
+import { optimisticUpdateChannelName } from '@queries/channel/channel';
 
 export const RenameView = (props: {
   entity?: EntityData;
@@ -21,29 +22,11 @@ export const RenameView = (props: {
       if (variables.entity.type !== 'channel') return;
 
       const queryKey = channelKeys.channel(variables.entity.id).queryKey;
-      queryClient.cancelQueries({ queryKey });
 
       const previousData: GetChannelResponse | undefined =
         queryClient.getQueryData(queryKey);
 
-      queryClient.setQueriesData(
-        { queryKey },
-        (prev: GetChannelResponse | undefined) => {
-          if (!prev) return;
-
-          const next = {
-            ...prev,
-            channel: {
-              ...prev.channel,
-              name: variables.newName,
-              updatedAt: new Date().toISOString(),
-            },
-          };
-
-          return { ...next };
-        }
-      );
-
+      optimisticUpdateChannelName(variables.entity.id, variables.newName);
       return { previousData };
     },
     onError(

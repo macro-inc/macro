@@ -79,3 +79,29 @@ export function useChannelQuery(
     };
   }, queryClient);
 }
+
+export function optimisticUpdateChannelName(
+  channelID: string,
+  newName: string
+) {
+  const queryKey = channelKeys.channel(channelID).queryKey;
+  queryClient.cancelQueries({ queryKey });
+
+  queryClient.setQueriesData(
+    { queryKey },
+    (prev: GetChannelResponse | undefined) => {
+      if (!prev) return;
+
+      const next = {
+        ...prev,
+        channel: {
+          ...prev.channel,
+          name: newName,
+          updatedAt: new Date().toISOString(),
+        },
+      };
+
+      return { ...next };
+    }
+  );
+}
