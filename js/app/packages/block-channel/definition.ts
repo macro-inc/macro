@@ -1,7 +1,7 @@
 import { defineBlock, type ExtractLoadType, LoadErrors } from '@core/block';
 import { isErr, ok } from '@core/util/maybeResult';
-import { commsServiceClient } from '@service-comms/client';
 import ChannelBlock from './component/Block';
+import { fetchAndCacheChannel } from '@queries/channel/channel';
 
 export const definition = defineBlock({
   name: 'channel',
@@ -10,9 +10,7 @@ export const definition = defineBlock({
   liveTrackingEnabled: true,
   async load(source, _intent) {
     if (source.type === 'dss') {
-      let channel = await commsServiceClient.getChannel({
-        channel_id: source.id,
-      });
+      const channel = await fetchAndCacheChannel(source.id);
 
       if (isErr(channel)) {
         if (isErr(channel, 'MISSING')) {
@@ -29,7 +27,7 @@ export const definition = defineBlock({
       const [, channelData] = channel;
 
       return ok({
-        ...channelData,
+        ...channelData.channel,
       });
     }
 
