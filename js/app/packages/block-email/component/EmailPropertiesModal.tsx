@@ -3,16 +3,15 @@ import { useDrawerControl } from '@app/component/split-layout/components/SplitDr
 import { IconButton } from '@core/component/IconButton';
 import { PropertiesView } from '@core/component/Properties/PropertiesView';
 import { useCanEdit } from '@core/signal/permissions';
-import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import TagIcon from '@icon/regular/tag.svg';
-import type { EntityType } from '@service-properties/generated/schemas/entityType';
+import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { Suspense } from 'solid-js';
 
 const DRAWER_ID = 'properties';
 
 export function EmailPropertiesModal(props: {
-  documentId: string;
   buttonSize?: 'sm' | 'base';
+  subject?: string;
 }) {
   const drawerControl = useDrawerControl(DRAWER_ID);
   const canEdit = useCanEdit();
@@ -28,22 +27,20 @@ export function EmailPropertiesModal(props: {
       />
       <SplitDrawer id={DRAWER_ID} side="right" size={550} title="Properties">
         <Suspense fallback={<LoadingFallback />}>
-          <EmailPropertiesContent canEdit={canEdit()} />
+          <EmailPropertiesContent canEdit={canEdit()} subject={props.subject} />
         </Suspense>
       </SplitDrawer>
     </>
   );
 }
 
-function EmailPropertiesContent(props: { canEdit: boolean }) {
-  const documentName = useBlockDocumentName();
-
+function EmailPropertiesContent(props: { canEdit: boolean; subject?: string }) {
   return (
     <PropertiesView
       blockType={'email'}
       canEdit={props.canEdit}
-      entityType={'THREAD' as EntityType}
-      documentName={documentName()}
+      entityType={EntityType.THREAD}
+      documentName={props.subject}
     />
   );
 }
