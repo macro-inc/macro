@@ -162,7 +162,6 @@ async fn test_link_subtasks_error_propagates() {
 
     repo.expect_link_subtasks()
         .returning(|_, _| Box::pin(async { Err(anyhow!("subtask link failed")) }));
-
     let service = PropertiesServiceImpl::new(repo);
 
     let err = service
@@ -171,4 +170,106 @@ async fn test_link_subtasks_error_propagates() {
         .unwrap_err();
 
     assert_eq!(err.to_string(), "subtask link failed");
+}
+
+#[tokio::test]
+async fn test_is_system_property_status_complete_returns_true_when_completed() {
+    let mut repo = MockPropertiesRepo::new();
+
+    repo.expect_get_entity_property_value()
+        .withf(|entity_id, entity_type, prop_id| {
+            entity_id == "e1"
+                && *entity_type == EntityType::Document
+                && *prop_id == SystemPropertyKey::STATUS_UUID
+        })
+        .returning(|_, _, _| {
+            Box::pin(async {
+                Ok(Some(PropertyValue::SelectOption(vec![
+                    StatusOption::COMPLETED_UUID,
+                ])))
+            })
+        });
+
+    let service = PropertiesServiceImpl::new(repo);
+
+    let result = service
+        .is_system_property_status_complete("e1", EntityType::Document)
+        .await
+        .unwrap();
+
+    assert!(result);
+}
+
+#[tokio::test]
+async fn test_is_system_property_status_complete_returns_false_when_in_progress() {
+    let mut repo = MockPropertiesRepo::new();
+
+    repo.expect_get_entity_property_value()
+        .returning(|_, _, _| {
+            Box::pin(async {
+                Ok(Some(PropertyValue::SelectOption(vec![
+                    StatusOption::IN_PROGRESS_UUID,
+                ])))
+            })
+        });
+
+    let service = PropertiesServiceImpl::new(repo);
+
+    let result = service
+        .is_system_property_status_complete("e1", EntityType::Document)
+        .await
+        .unwrap();
+
+    assert!(!result);
+}
+
+#[tokio::test]
+async fn test_is_system_property_status_complete_returns_false_when_not_attached() {
+    let mut repo = MockPropertiesRepo::new();
+
+    repo.expect_get_entity_property_value()
+        .returning(|_, _, _| Box::pin(async { Ok(None) }));
+
+    let service = PropertiesServiceImpl::new(repo);
+
+    let result = service
+        .is_system_property_status_complete("e1", EntityType::Document)
+        .await
+        .unwrap();
+
+    assert!(!result);
+}
+
+#[tokio::test]
+async fn test_is_system_property_status_complete_returns_false_when_empty_select() {
+    let mut repo = MockPropertiesRepo::new();
+
+    repo.expect_get_entity_property_value()
+        .returning(|_, _, _| Box::pin(async { Ok(Some(PropertyValue::SelectOption(vec![]))) }));
+
+    let service = PropertiesServiceImpl::new(repo);
+
+    let result = service
+        .is_system_property_status_complete("e1", EntityType::Document)
+        .await
+        .unwrap();
+
+    assert!(!result);
+}
+
+#[tokio::test]
+async fn test_is_system_property_status_complete_error_path() {
+    let mut repo = MockPropertiesRepo::new();
+
+    repo.expect_get_entity_property_value()
+        .returning(|_, _, _| Box::pin(async { Err(anyhow!("db error")) }));
+
+    let service = PropertiesServiceImpl::new(repo);
+
+    let err = service
+        .is_system_property_status_complete("e1", EntityType::Document)
+        .await
+        .unwrap_err();
+
+    assert_eq!(err.to_string(), "db error");
 }
