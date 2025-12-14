@@ -6574,6 +6574,7 @@ dependencies = [
  "axum",
  "chrono",
  "comms_service_client",
+ "email_db_client",
  "http-body-util",
  "macro_auth",
  "macro_cors",
