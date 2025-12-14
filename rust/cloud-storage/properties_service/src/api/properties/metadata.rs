@@ -116,7 +116,13 @@ pub async fn get_document_metadata_properties(
     Ok(metadata_properties)
 }
 
-/// Create a metadata property with a string value
+// ===== Metadata Property Helpers =====
+//
+// These helpers create read-only metadata properties that are computed on-the-fly
+// from entity data (not stored in the properties tables). They share a special
+// METADATA_PROPERTY_ID and are marked with is_metadata=true.
+
+/// Create a metadata property with a string value (e.g., document name, subject)
 pub fn create_metadata_property_str(
     display_name: &str,
     data_type: models_properties::DataType,
@@ -133,6 +139,7 @@ pub fn create_metadata_property_str(
     )
 }
 
+/// Create a metadata property with a date/timestamp value (e.g., created_at, last_updated)
 pub fn create_metadata_property_date(
     display_name: &str,
     data_type: models_properties::DataType,
@@ -149,6 +156,24 @@ pub fn create_metadata_property_date(
     )
 }
 
+/// Create a metadata property with a numeric value (e.g., message count)
+pub fn create_metadata_property_number(
+    display_name: &str,
+    data_type: models_properties::DataType,
+    value: i64,
+    entity_type: EntityType,
+) -> EntityPropertyWithDefinition {
+    let property_value = PropertyValue::Num(value as f64);
+    create_metadata_property_inner(
+        display_name,
+        data_type,
+        Some(property_value),
+        entity_type,
+        None,
+    )
+}
+
+/// Create a metadata property with an entity reference value (e.g., owner, project)
 pub fn create_metadata_property_entity_ref(
     display_name: &str,
     data_type: models_properties::DataType,
@@ -166,6 +191,24 @@ pub fn create_metadata_property_entity_ref(
     )
 }
 
+/// Create a metadata property with null/empty value (e.g., optional fields like project)
+pub fn create_metadata_property_null(
+    property_name: &str,
+    data_type: models_properties::DataType,
+    entity_type: EntityType,
+    specific_entity_type: Option<EntityType>,
+) -> EntityPropertyWithDefinition {
+    create_metadata_property_inner(
+        property_name,
+        data_type,
+        None,
+        entity_type,
+        specific_entity_type,
+    )
+}
+
+/// Internal helper that constructs the EntityPropertyWithDefinition struct.
+/// Sets up the property definition with METADATA_PROPERTY_ID and is_metadata=true.
 fn create_metadata_property_inner(
     display_name: &str,
     data_type: models_properties::DataType,
@@ -205,20 +248,4 @@ fn create_metadata_property_inner(
         value,
         options: None,
     }
-}
-
-/// Create a metadata property with null/empty value
-pub fn create_metadata_property_null(
-    property_name: &str,
-    data_type: models_properties::DataType,
-    entity_type: EntityType,
-    specific_entity_type: Option<EntityType>,
-) -> EntityPropertyWithDefinition {
-    create_metadata_property_inner(
-        property_name,
-        data_type,
-        None,
-        entity_type,
-        specific_entity_type,
-    )
 }
