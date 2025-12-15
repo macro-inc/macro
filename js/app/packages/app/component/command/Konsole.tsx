@@ -323,7 +323,6 @@ export function KommandMenuInner(props: {
         setCurrentValue(value);
       }}
     >
-      <div style='width: 100%; height: 200px; background-color: #600'/>
       <div class="flex items-center gap-2 bg-panel px-2 h-[40px] border-b border-edge-muted">
         <span class="pl-2 pointer-events-none">❯</span>
         <CommandK.Input
