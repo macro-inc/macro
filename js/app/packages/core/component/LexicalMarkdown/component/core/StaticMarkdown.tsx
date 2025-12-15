@@ -22,6 +22,7 @@ import {
   normalizedLanguage,
   SupportedNodeTypes,
   type UserMentionNode,
+  type WatermarkNode,
 } from '@lexical-core';
 import {
   $getRoot,
@@ -61,6 +62,7 @@ import { DateMention as DateMentionDecorator } from '../decorator/DateMention';
 import { DocumentMention as DocumentMentionDecorator } from '../decorator/DocumentMention';
 import { Equation as EquationDecorator } from '../decorator/Equation';
 import { UserMention as UserMentionDecorator } from '../decorator/UserMention';
+import { Watermark as WatermarkDecorator } from '../decorator/Watermark';
 import { LinkWithPreview } from './LinkWithPreview';
 
 type HeadingTag = 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6';
@@ -217,7 +219,8 @@ function getTextClassName(
     | UserMentionNode
     | DocumentMentionNode
     | ContactMentionNode
-    | DateMentionNode,
+    | DateMentionNode
+    | WatermarkNode,
   theme: EditorThemeClasses
 ): string {
   const base = theme.text?.base ?? '';
@@ -289,6 +292,20 @@ const DocumentMention: RenderableEntity<DocumentMentionNode> = {
   render: (props) => (
     <span class={getTextClassName(props.node, props.theme)}>
       {DocumentMentionDecorator({
+        ...props.node.exportComponentProps(),
+        key: props.node.getKey(),
+        theme: props.theme,
+      })}
+    </span>
+  ),
+};
+
+const Watermark: RenderableEntity<WatermarkNode> = {
+  guard: (node: LexicalNode): node is WatermarkNode =>
+    node.__type === 'watermark',
+  render: (props) => (
+    <span class={getTextClassName(props.node, props.theme)}>
+      {WatermarkDecorator({
         ...props.node.exportComponentProps(),
         key: props.node.getKey(),
         theme: props.theme,
@@ -598,6 +615,7 @@ const InlineEntities: Array<RenderableEntity> = [
   DateMention,
   HorizontalRule,
   Equation,
+  Watermark,
 ] as const;
 
 const Elements: RenderableElement[] = [

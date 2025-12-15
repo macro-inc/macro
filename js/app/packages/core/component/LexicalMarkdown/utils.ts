@@ -20,6 +20,7 @@ import {
   mergeRegister,
 } from '@lexical/utils';
 import {
+  $isWatermarkNode,
   ALL_TRANSFORMERS,
   EXTERNAL_TRANSFORMERS,
   INITIALIZE_LOCAL_STATUS,
@@ -369,8 +370,7 @@ export function setEditorStateFromHtml(
       const nodes = $generateNodesFromDOM(editor, dom);
       const root = $getRoot();
       root.clear();
-      root.select();
-      $insertNodes(nodes);
+      root.append(...nodes);
     });
     editor.read(() => {});
     return editor.getEditorState();
@@ -380,8 +380,7 @@ export function setEditorStateFromHtml(
     const nodes = $generateNodesFromDOM(editor, dom);
     const root = $getRoot();
     root.clear();
-    root.select();
-    $insertNodes(nodes);
+    root.append(...nodes);
   }
 }
 
@@ -392,12 +391,18 @@ export function $isEmpty() {
   for (const child of children) {
     if (!$isParagraphNode(child)) return false;
     if (child.getIndent() !== 0) return false;
+
+    const selfChildren = child.getChildren();
+
+    if (selfChildren.length > 0) {
+      const firstChild = selfChildren[0];
+      if ($isWatermarkNode(firstChild)) continue;
+      if (!$isParagraphNode(firstChild)) {
+        return false;
+      }
+    }
+
     if (child.getTextContent() !== '') return false;
-    if (
-      child.getChildren().length > 0 &&
-      !$isParagraphNode(child.getChildren()[0])
-    )
-      return false;
   }
   return true;
 }

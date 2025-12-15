@@ -5,7 +5,7 @@ import { useEmailLinks, useEmailLinksStatus } from '@core/email-link';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
-import type { ViewId } from '@core/types/view';
+import type { DefaultView, ViewId } from '@core/types/view';
 import CloseIcon from '@icon/regular/x.svg';
 import { authServiceClient } from '@service-auth/client';
 import { useTutorialCompleted } from '@service-gql/client';
@@ -236,7 +236,7 @@ export function HelpDrawerInner(props: HelpDrawerInnerProps) {
   } = splitPanelContext;
   const tuturialComplete = useTutorialCompleted();
   const hideAllHelpDrawers = () => {
-    setShowHelpDrawer(new Set<string>());
+    setShowHelpDrawer(new Set<DefaultView>());
     toast.success('Press ? to re-open the help drawer.');
     if (!tuturialComplete()) {
       authServiceClient

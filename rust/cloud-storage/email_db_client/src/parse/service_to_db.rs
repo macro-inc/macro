@@ -124,18 +124,30 @@ pub fn map_service_attachments_to_db(
     service_attachments: &mut [service::attachment::Attachment],
     message_db_id: Uuid,
 ) -> Vec<attachment::Attachment> {
+    // store extension in filename as lowercase
     service_attachments
         .iter_mut()
-        .map(|service_attachment| attachment::Attachment {
-            id: macro_uuid::generate_uuid_v7(),
-            message_id: message_db_id,
-            provider_attachment_id: service_attachment.provider_id.clone(),
-            filename: service_attachment.filename.clone(),
-            mime_type: service_attachment.mime_type.clone(),
-            size_bytes: service_attachment.size_bytes,
-            content_id: service_attachment.content_id.clone(),
-            sfs_id: service_attachment.sfs_id,
-            created_at: Utc::now(),
+        .map(|service_attachment| {
+            let filename = service_attachment.filename.clone().map(|f| {
+                if let Some((base, ext)) = f.rsplit_once('.')
+                    && !ext.is_empty()
+                {
+                    return format!("{}.{}", base, ext.to_lowercase());
+                }
+                f
+            });
+
+            attachment::Attachment {
+                id: macro_uuid::generate_uuid_v7(),
+                message_id: message_db_id,
+                provider_attachment_id: service_attachment.provider_id.clone(),
+                filename,
+                mime_type: service_attachment.mime_type.clone(),
+                size_bytes: service_attachment.size_bytes,
+                content_id: service_attachment.content_id.clone(),
+                sfs_id: service_attachment.sfs_id,
+                created_at: Utc::now(),
+            }
         })
         .collect()
 }

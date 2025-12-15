@@ -77,6 +77,7 @@ models_bulk_upload = { path = "../models_bulk_upload" }
 models_opensearch = { path = "../models_opensearch" }
 models_pagination = { path = "../models_pagination", features = ["axum"] }
 models_permissions = { path = "../models_permissions" }
+properties = { path = "../properties" }
 models_soup = { path = "../models_soup", features = ["schema"] }
 rayon = "1.10.0"
 redis = { workspace = true, features = [
