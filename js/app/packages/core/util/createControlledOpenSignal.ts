@@ -21,7 +21,7 @@ export const createControlledOpenSignal = (value?: boolean) => {
       setTimeout(() => {
         if (previouslyFocusedElement instanceof HTMLElement) {
           if (previouslyFocusedElement.isConnected) {
-            previouslyFocusedElement.focus();
+            // previouslyFocusedElement.focus();
           } else {
             // This only works for restoring previously focused entity in UnifiedList, this a workaround previous focused Entity nodes being removed from the dom and focusing to body
 
@@ -31,7 +31,7 @@ export const createControlledOpenSignal = (value?: boolean) => {
               attributesToSelector(previouslyFocusedElement)
             ) as HTMLElement;
             if (previouslyFocusedElement instanceof HTMLElement) {
-              previouslyFocusedElement.focus();
+              // previouslyFocusedElement.focus();
               if (DEV_MODE_ENV)
                 console.info('returning focus to', previouslyFocusedElement);
             }
