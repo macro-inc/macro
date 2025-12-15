@@ -61,15 +61,39 @@ pub async fn process_macro_id(
                         println!("Successfully uploaded '{}' (index: {}) for {}", attachment.filename.unwrap_or("N/A".to_string()), index, macro_id);
                     }
                     Err(e) => {
-                        panic!(
-                            "Failed to upload attachment - filename: {}, provider_attachment_id: {}, provider_message_id: {}, index: {}, macro_id: {}, error: {:?}",
-                            attachment.filename.unwrap_or("N/A".to_string()),
-                            attachment.provider_attachment_id,
-                            attachment.email_provider_id,
-                            index,
-                            macro_id,
-                            e
-                        );
+                        let err_str = format!("{e:?}");
+
+                        if err_str.contains("404") {
+                            println!(
+                                "Attachment upload got 404; skipping and continuing. filename: {}, provider_attachment_id: {}, provider_message_id: {}, index: {}, macro_id: {}, error: {:?}",
+                                attachment.filename.clone().unwrap_or("N/A".to_string()),
+                                attachment.provider_attachment_id,
+                                attachment.email_provider_id,
+                                index,
+                                macro_id,
+                                e
+                            );
+                        } else if err_str.contains("500") {
+                            println!(
+                                "Attachment upload got 500; skipping and continuing. filename: {}, provider_attachment_id: {}, provider_message_id: {}, index: {}, macro_id: {}, error: {:?}",
+                                attachment.filename.clone().unwrap_or("N/A".to_string()),
+                                attachment.provider_attachment_id,
+                                attachment.email_provider_id,
+                                index,
+                                macro_id,
+                                e
+                            );
+                        } else {
+                            panic!(
+                                "Failed to upload attachment - filename: {}, provider_attachment_id: {}, provider_message_id: {}, index: {}, macro_id: {}, error: {:?}",
+                                attachment.filename.unwrap_or("N/A".to_string()),
+                                attachment.provider_attachment_id,
+                                attachment.email_provider_id,
+                                index,
+                                macro_id,
+                                e
+                            );
+                        }
                     }
                 }
             }
