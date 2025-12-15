@@ -149,17 +149,6 @@ pub async fn upsert_message(
         })?;
     }
 
-    // trigger FE inbox refresh
-    cg_refresh_email(
-        &ctx.connection_gateway_client,
-        link.macro_id.as_ref(),
-        "upsert_message",
-    )
-    .await;
-
-    // notify downstream services of new messages
-    notify_for_new_messages(ctx, link, new_message_provider_ids).await?;
-
     handle_attachment_upload(
         ctx,
         &gmail_access_token,
@@ -177,6 +166,17 @@ pub async fn upsert_message(
         &payload.provider_message_id,
     )
     .await?;
+
+    // trigger FE inbox refresh
+    cg_refresh_email(
+        &ctx.connection_gateway_client,
+        link.macro_id.as_ref(),
+        "upsert_message",
+    )
+    .await;
+
+    // notify downstream services of new messages
+    notify_for_new_messages(ctx, link, new_message_provider_ids).await?;
 
     Ok(())
 }

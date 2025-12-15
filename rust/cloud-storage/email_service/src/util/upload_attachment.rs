@@ -175,12 +175,13 @@ fn calculate_hashes(data: &[u8]) -> (String, String) {
 
 /// Determines the file name (without extension) and file type (extension) from the payload.
 fn determine_file_metadata(p: &AttachmentUploadMetadata) -> anyhow::Result<(String, String)> {
+    // documents must have a file name to be inserted into Document table.
     let file_name = p
         .filename
-        .split('.')
-        .next()
-        .unwrap_or(&p.filename)
-        .to_string();
+        .as_deref()
+        .context("attachment filename is missing")?;
+
+    let file_name = file_name.split('.').next().unwrap_or(file_name).to_string();
 
     let file_type = mime_guess::get_mime_extensions_str(&p.mime_type)
         .and_then(|exts| exts.first().map(|s| s.to_string()))

@@ -65,7 +65,7 @@ pub struct AttachmentUploadMetadata {
     pub email_provider_id: String,
     pub provider_attachment_id: String,
     pub mime_type: String,
-    pub filename: String,
+    pub filename: Option<String>,
     pub internal_date_ts: DateTime<Utc>,
     pub message_db_id: Uuid,
     pub thread_db_id: Uuid,

@@ -7,6 +7,8 @@ import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { DEFAULT_VIEWS, type DefaultView, type ViewId } from '@core/types/view';
+import { getActualTarget } from '@core/util/getActualTarget';
+import { isInteractiveElement } from '@core/util/isInteractiveElement';
 import { filterMap } from '@core/util/list';
 import { isErr } from '@core/util/maybeResult';
 import { getScrollParent } from '@core/util/scrollParent';
@@ -34,6 +36,7 @@ import {
   createMemo,
   createSignal,
   on,
+  onCleanup,
   type Setter,
   type Signal,
 } from 'solid-js';
@@ -367,14 +370,11 @@ export function createNavigationEntityListShortcut({
     }
   );
 
-  registerHotkey({
+  registerEntityHotkey({
     hotkey: ['e'],
     hotkeyToken: TOKENS.entity.action.markDone,
-    scopeId: entityHotkeyScope,
+    scopeId: splitHotkeyScope,
     description: 'Mark done',
-    condition: () =>
-      isViewingList() &&
-      actionRegistry.isActionEnabled('mark_as_done', plainSelectedEntities()),
     keyDownHandler: () => {
       const entitiesForAction = getEntitiesForAction();
       if (entitiesForAction.entities.length === 0) {
@@ -388,6 +388,9 @@ export function createNavigationEntityListShortcut({
 
       return true;
     },
+    canExecuteKeyDownHandler: () =>
+      isViewingList() &&
+      actionRegistry.isActionEnabled('mark_as_done', plainSelectedEntities()),
     displayPriority: 10,
     tags: [HotkeyTags.SelectionModification],
   });
@@ -436,15 +439,12 @@ export function createNavigationEntityListShortcut({
     }
   );
 
-  registerHotkey({
+  registerEntityHotkey({
     hotkey: ['delete', 'backspace'],
     hotkeyToken: TOKENS.entity.action.delete,
     scopeId: splitHotkeyScope,
     description: () =>
       viewData().selectedEntities.length > 1 ? 'Delete items' : 'Delete item',
-    condition: () =>
-      isViewingList() &&
-      actionRegistry.isActionEnabled('delete', plainSelectedEntities()),
     keyDownHandler: () => {
       const entitiesForAction = getEntitiesForAction();
       if (entitiesForAction.entities.length === 0) {
@@ -456,6 +456,10 @@ export function createNavigationEntityListShortcut({
       );
       return true;
     },
+    canExecuteKeyDownHandler: () =>
+      isViewingList() &&
+      actionRegistry.isActionEnabled('delete', plainSelectedEntities()),
+
     tags: [HotkeyTags.SelectionModification],
     displayPriority: 10,
   });
@@ -1114,7 +1118,7 @@ export function createNavigationEntityListShortcut({
     },
   });
 
-  registerHotkey({
+  registerEntityHotkey({
     hotkey: ['j', 'arrowdown'],
     scopeId: splitHotkeyScope,
     description: 'Down',
@@ -1126,7 +1130,8 @@ export function createNavigationEntityListShortcut({
     },
     hide: true,
   });
-  registerHotkey({
+
+  registerEntityHotkey({
     hotkey: ['shift+arrowdown', 'shift+j'],
     scopeId: splitHotkeyScope,
     description: 'Select down',
@@ -1135,9 +1140,11 @@ export function createNavigationEntityListShortcut({
       const navigationInput: NavigationInput = { axis: 'end', mode: 'step' };
       return handleNavigationSelection(navigationInput);
     },
+    canExecuteKeyDownHandler: () => isViewingList(),
     hide: true,
   });
-  registerHotkey({
+
+  registerEntityHotkey({
     hotkey: ['k', 'arrowup'],
     scopeId: splitHotkeyScope,
     hotkeyToken: TOKENS.entity.step.start,
@@ -1150,7 +1157,7 @@ export function createNavigationEntityListShortcut({
     hide: true,
   });
 
-  registerHotkey({
+  registerEntityHotkey({
     hotkey: ['shift+arrowup', 'shift+k'],
     scopeId: splitHotkeyScope,
     hotkeyToken: TOKENS.entity.step.start,
@@ -1159,9 +1166,10 @@ export function createNavigationEntityListShortcut({
       const navigationInput: NavigationInput = { axis: 'start', mode: 'step' };
       return handleNavigationSelection(navigationInput);
     },
+    canExecuteKeyDownHandler: () => isViewingList(),
     hide: true,
   });
-  registerHotkey({
+  registerEntityHotkey({
     hotkey: ['home'],
     scopeId: splitHotkeyScope,
     hotkeyToken: TOKENS.entity.jump.home,
@@ -1172,7 +1180,7 @@ export function createNavigationEntityListShortcut({
     },
     hide: true,
   });
-  registerHotkey({
+  registerEntityHotkey({
     hotkey: ['shift+g', 'end'],
     scopeId: splitHotkeyScope,
     hotkeyToken: TOKENS.entity.jump.end,
@@ -1183,7 +1191,11 @@ export function createNavigationEntityListShortcut({
     },
     hide: true,
   });
-  const topGScope = registerHotkey({
+
+  const {
+    registerHotkeyReturn: topGScope,
+    globalRegisterHotkeyReturn: topGScopeGlobal,
+  } = registerEntityHotkey({
     hotkey: ['g'],
     scopeId: splitHotkeyScope,
     description: 'Top',
@@ -1191,9 +1203,10 @@ export function createNavigationEntityListShortcut({
     activateCommandScope: true,
     hide: true,
   });
-  registerHotkey({
+  registerEntityHotkey({
     hotkey: ['g'],
     scopeId: topGScope.commandScopeId,
+    globalCommandScope: topGScopeGlobal.commandScopeId,
     description: 'Top',
     keyDownHandler: () => {
       navigateThroughList({ axis: 'start', mode: 'jump' });
@@ -1259,9 +1272,9 @@ export function createNavigationEntityListShortcut({
     hide: true,
   });
 
-  registerHotkey({
+  registerEntityHotkey({
     hotkey: ['enter'],
-    scopeId: entityHotkeyScope,
+    scopeId: splitHotkeyScope,
     description: 'Open',
     keyDownHandler: () => {
       const entity = getHighlightedEntity()?.entity;
@@ -1270,11 +1283,23 @@ export function createNavigationEntityListShortcut({
       openEntity(entity);
       return true;
     },
+    canExecuteKeyDownHandler: ({ keyboardEvent }) => {
+      if (!isViewingList()) return false;
+
+      if (keyboardEvent) {
+        const target = getActualTarget(keyboardEvent);
+
+        if (isInteractiveElement(target)) {
+          return false;
+        }
+      }
+      return true;
+    },
     displayPriority: 4,
   });
-  registerHotkey({
+  registerEntityHotkey({
     hotkey: ['cmd+enter'],
-    scopeId: entityHotkeyScope,
+    scopeId: splitHotkeyScope,
     description: 'Focus Preview',
     keyDownHandler: () => {
       const [preview] = previewState;
@@ -1309,7 +1334,6 @@ export function createNavigationEntityListShortcut({
             if (!splitNode) return undefined;
             return splitNode.hotkeyCommands.get('enter');
           };
-          // runCommandByToken(TOKENS.block.focus);
           const command = getEnterCommand();
           if (command) {
             runCommand(command);
@@ -1321,31 +1345,33 @@ export function createNavigationEntityListShortcut({
       openEntity(entity);
       return true;
     },
+    canExecuteKeyDownHandler: () => isViewingList(),
     displayPriority: 4,
   });
-  registerHotkey({
+  registerEntityHotkey({
     hotkey: ['x'],
     scopeId: splitHotkeyScope,
     description: 'Toggle select item',
-    condition: isViewingList,
     keyDownHandler: () => {
       const entity = getHighlightedEntity();
       if (!entity) return false;
       toggleEntity(entity.entity);
       return true;
     },
+    canExecuteKeyDownHandler: () => isViewingList(),
     displayPriority: 10,
   });
-  registerHotkey({
+  registerEntityHotkey({
     hotkey: ['escape'],
     scopeId: splitHotkeyScope,
     description: 'Clear multi selection',
-    condition: () => isViewingList() && viewData().selectedEntities.length > 0,
     keyDownHandler: () => {
       const length = viewData().selectedEntities.length;
       setViewDataStore(selectedView(), 'selectedEntities', []);
       return length > 1;
     },
+    canExecuteKeyDownHandler: () =>
+      isViewingList() && viewData().selectedEntities.length > 0,
   });
 }
 
@@ -1481,4 +1507,112 @@ export function scrollToKeepGap({
       container.scrollTo({ top: newScrollTop, behavior: 'auto' });
     }
   }
+}
+
+let globalKeyboardEvent!: KeyboardEvent | undefined;
+
+type ExecuteKeyDownHandlerCallback = (props: {
+  keyboardEvent?: KeyboardEvent;
+}) => boolean;
+
+/**
+ *
+ * Registers entity hotkeys to global scope and split panel scope. When global hotkey is fired, runs hotkey command from active split panel scope.
+ *
+ */
+function registerEntityHotkey(
+  opts: Omit<Parameters<typeof registerHotkey>[0], 'condition'> & {
+    canExecuteKeyDownHandler?: ExecuteKeyDownHandlerCallback;
+    globalCommandScope?: string;
+  }
+): {
+  registerHotkeyReturn: {
+    commandScopeId: string;
+  };
+  globalRegisterHotkeyReturn: {
+    commandScopeId: string;
+  };
+} {
+  const id = opts.scopeId + JSON.stringify(opts.hotkey);
+  onCleanup(() => {
+    globalKeyboardEvent = undefined;
+  });
+
+  // scoped hotkey
+  const registerHotkeyReturn = registerHotkey({
+    ...opts,
+    keyDownHandler: (e) => {
+      const canExecuteKeyDownHandler = () => {
+        if (!opts.canExecuteKeyDownHandler) return true;
+        return opts.canExecuteKeyDownHandler({
+          keyboardEvent: e ?? globalKeyboardEvent,
+        });
+      };
+
+      if (canExecuteKeyDownHandler()) {
+        return opts.keyDownHandler(e);
+      }
+
+      return false;
+    },
+    condition: undefined,
+  });
+  // global hotkey to run active split scope command
+  const globalRegisterHotkeyReturn = registerHotkey({
+    ...opts,
+    scopeId: opts.globalCommandScope ? opts.globalCommandScope : 'global',
+    hotkeyToken: undefined,
+    tags: undefined,
+    condition: undefined,
+    keyDownHandler: (event) => {
+      globalKeyboardEvent = event;
+      queueMicrotask(() => {
+        globalKeyboardEvent = undefined;
+      });
+
+      if (event) {
+        const target = event.target as HTMLElement;
+        if (
+          target.closest(
+            `
+            [role="dialog"],
+            [role="alertdialog"],
+            [data-modal="true"],
+            .z-modal,
+            .z-modal-overlay
+            `
+          )
+        ) {
+          return false;
+        }
+      }
+
+      const currentActiveSplitId = globalSplitManager()?.activeSplitId();
+
+      const getCommand = () => {
+        const splitScope = document.querySelector(
+          `[data-split-id="${currentActiveSplitId}"]`
+        );
+        if (!splitScope || !(splitScope instanceof HTMLElement)) return;
+        const scopeId = splitScope.dataset.hotkeyScope;
+        if (!scopeId) return undefined;
+        const splitNode = hotkeyScopeTree.get(scopeId);
+        if (!splitNode) return undefined;
+        return splitNode.hotkeyCommands.get(
+          // @ts-expect-error
+          opts.hotkey[0]
+        );
+      };
+      const command = getCommand();
+      if (!command) return false;
+
+      runCommand(command);
+      return false;
+    },
+  });
+
+  return {
+    registerHotkeyReturn,
+    globalRegisterHotkeyReturn,
+  } as any;
 }

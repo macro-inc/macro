@@ -39,6 +39,7 @@ pub async fn thread_document_atts_for_backfill(
         JOIN email_messages m ON a.message_id = m.id
         JOIN email_contacts from_contact ON m.from_contact_id = from_contact.id
         WHERE m.thread_id = $1
+            AND a.filename IS NOT NULL
             -- attachment mime type filters injected below
             {}
             AND EXISTS ( -- only fetch if at least one message in the thread meets any of the criteria
@@ -79,7 +80,7 @@ pub async fn thread_document_atts_for_backfill(
     Ok(attachments)
 }
 
-/// fetch videos and non-inline images from a thread for insertion into sfs. we insert them into
+/// fetch videos and images from a thread for insertion into sfs. we insert them into
 /// sfs so we can display thumbnails for them in the FE.
 #[tracing::instrument(skip(db), err)]
 pub async fn thread_media_atts_for_backfill(
@@ -253,6 +254,7 @@ pub async fn new_email_document_atts(
         JOIN email_contacts from_contact ON m.from_contact_id = from_contact.id
         LEFT JOIN document_email de ON de.email_attachment_id = a.id
         WHERE m.provider_id = $1
+            AND a.filename IS NOT NULL
             -- attachment mime type filters injected below
             {}
             AND de.email_attachment_id IS NULL
@@ -388,7 +390,7 @@ pub async fn new_email_document_atts(
     Ok(attachments)
 }
 
-/// fetch videos and non-inline images for a new email for insertion into sfs. we insert them into
+/// fetch videos and inline images for a new email for insertion into sfs. we insert them into
 /// sfs so we can display thumbnails for them in the FE.
 #[tracing::instrument(skip(db), err)]
 pub async fn new_email_media_atts(
@@ -446,7 +448,7 @@ pub async fn fetch_attachment_upload_metadata_by_id(
             a.id AS attachment_db_id,
             m.provider_id as "email_provider_id!",
             a.provider_attachment_id as "provider_attachment_id!",
-            a.filename as "filename!",
+            a.filename as "filename?",
             a.mime_type as "mime_type!",
             m.internal_date_ts as "internal_date_ts!",
             m.id as message_db_id,

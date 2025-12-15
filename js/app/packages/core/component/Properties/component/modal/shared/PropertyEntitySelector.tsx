@@ -137,6 +137,9 @@ function getEntityType(entity: CombinedEntity): string {
     case 'channel':
       return 'CHANNEL';
     case 'item':
+      if (entity.data.type === 'document' && entity.data.subType === 'task') {
+        return 'TASK';
+      }
       return entity.data.type.toUpperCase();
     case 'company':
       return 'COMPANY';
@@ -289,7 +292,11 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     const itemTypes: EntityType[] = ['DOCUMENT', 'PROJECT', 'CHAT'];
     if (itemTypes.includes(specificEntityType)) {
       return history()
-        .filter((item) => item.type.toUpperCase() === specificEntityType)
+        .filter(
+          (item) =>
+            item.type.toUpperCase() === specificEntityType &&
+            !(item.type === 'document' && item.subType === 'task')
+        )
         .map(entityMapper('item'));
     }
 
