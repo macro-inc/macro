@@ -1,3 +1,4 @@
+import { SplitLayoutContext } from '@app/component/split-layout/context';
 import {
   COLLAPSED_THREAD_INDEX_CUTOFF,
   TARGET_MESSAGE_ACTIVE_TIME,
@@ -41,6 +42,7 @@ import {
   Show,
   Switch,
   untrack,
+  useContext,
 } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
@@ -98,10 +100,6 @@ export function MessageList(props: MessageListProps) {
   const [virtualHandle, setVirtualHandle] = createSignal<VirtualizerHandle>();
   let listContainerRef!: HTMLDivElement;
   const [scrollContainerRef, setScrollContainerRef] = createSignal<
-    HTMLDivElement | undefined
-  >();
-  const [targetIndex, setTargetIndex] = createSignal<number | undefined>();
-  const [targetElement, setTargetElement] = createSignal<
     HTMLDivElement | undefined
   >();
   const [scrollHintLabel, setScrollHintLabel] = createSignal<string>();
@@ -214,7 +212,6 @@ export function MessageList(props: MessageListProps) {
         virtualHandle()?.scrollToIndex(lastIndex, {
           align: 'end',
         });
-        setTargetIndex(lastIndex);
         return;
       }
 
@@ -243,33 +240,13 @@ export function MessageList(props: MessageListProps) {
 
       if (scrollTimeoutId) clearTimeout(scrollTimeoutId);
 
+      setTargetMessageActive(true);
       virtualHandle()?.scrollToIndex(index, {
         align: 'center',
       });
-      setTargetIndex(index);
     },
     5
   );
-
-  // NOTE: this is a hack to make sure the target message/bottom of the list is correctly scrolled into view
-  // we need to ideally fix how the virtualizer handles image preview loading as its internal scroll position is not correct
-  createEffect(() => {
-    const el = targetElement();
-    if (!el) return;
-
-    setTargetMessageActive(true);
-    setTargetIndex(undefined);
-
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        el.scrollIntoView();
-
-        setTimeout(() => {
-          setTargetMessageActive(false);
-        }, TARGET_MESSAGE_ACTIVE_TIME);
-      });
-    });
-  });
 
   /**
    * Track context for messages as they are rendered in the list
@@ -559,6 +536,25 @@ export function MessageList(props: MessageListProps) {
     })
   );
 
+  const splitLayoutContext = useContext(SplitLayoutContext);
+  const manager = splitLayoutContext?.manager;
+  const splitCount = createMemo(() => manager?.splits().length ?? 0);
+
+  // Due to channel data reconciliation, adding a new split will cause the virtualizer scroll state
+  // to unset. This effect will attempt to restore the scroll position. It is a reasonable approximation
+  // but will clamp to the end of the message so there can be a small shift.
+  createEffect((prev: number) => {
+    const newCount = splitCount();
+    const handle = untrack(virtualHandle);
+    if (handle && prev !== 0 && newCount > prev) {
+      const endIndex = handle.findEndIndex();
+      handle.scrollToIndex(endIndex, {
+        align: 'end',
+      });
+    }
+    return newCount;
+  }, 0);
+
   // Handle vlistscroll events
   const handleScroll = () => {
     if (!initialScrollComplete()) return;
@@ -618,6 +614,8 @@ export function MessageList(props: MessageListProps) {
     }
   };
 
+  const listHeight = createMemo(() => size()?.height ?? 0);
+
   return (
     <div
       class="flex-1 overflow-y-hidden suppress-css-brackets"
@@ -638,11 +636,11 @@ export function MessageList(props: MessageListProps) {
             <VList
               ref={setVirtualHandle}
               style={{
-                height: `${size()?.height ?? 0}px`,
-                'padding-top': '10px',
+                height: `${listHeight()}px`,
                 contain: 'none',
                 'overflow-x': 'hidden',
                 'overflow-y': 'scroll',
+                'overflow-anchor': 'none',
               }}
               class="scrollbar-hidden"
               itemSize={BASE_ITEM_SIZE}
@@ -652,14 +650,16 @@ export function MessageList(props: MessageListProps) {
               keepMounted={keepMountedIndices()}
               onScroll={handleScroll}
               onScrollEnd={() => {
+                setTimeout(() => {
+                  setTargetMessageActive(false);
+                }, TARGET_MESSAGE_ACTIVE_TIME);
+
                 if (!initialScrollComplete()) {
                   setInitialScrollComplete(true);
                 }
               }}
             >
               {(row: { id: string; message: Message }, i) => {
-                const [messageContainerRef, setMessageContainerRef] =
-                  createSignal<HTMLDivElement | undefined>();
                 const isParentless = () => !row.message.thread_id;
                 const isThreadExpanded = createMemo(
                   () =>
@@ -671,11 +671,6 @@ export function MessageList(props: MessageListProps) {
                     messageListContext[row.id].threadIndex <=
                       COLLAPSED_THREAD_INDEX_CUTOFF
                 );
-                createEffect(() => {
-                  if (i() === targetIndex()) {
-                    setTargetElement(messageContainerRef());
-                  }
-                });
                 return (
                   <Show
                     when={
@@ -710,7 +705,6 @@ export function MessageList(props: MessageListProps) {
                       container={containerRef()}
                       listContext={messageListContext[row.id]}
                       setLastMessageRef={props.setLastMessageRef}
-                      setMessageContainerRef={setMessageContainerRef}
                       isTarget={isActiveTargetMessage(row.message.id)}
                     />
                   </Show>
