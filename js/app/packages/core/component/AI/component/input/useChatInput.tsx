@@ -93,6 +93,21 @@ export function useChatInput(
     },
   });
 
+  const tabAttachments = useTabAttachments();
+  createEffect(
+    on(tabAttachments, (tabs, p) => {
+      for (const prev of p ?? []) {
+        // remove stuff from closed tabs
+        if (!tabs.find((t) => t.id === prev.id)) {
+          attachments.removeAttachment(prev.id);
+        }
+      }
+      for (const tab of tabs) {
+        attachments.addAttachment(tab);
+      }
+    })
+  );
+
   const ChatInputComponent = (innerProps: ChatInputProps) => (
     <ChatInput
       {...innerProps}
@@ -188,20 +203,6 @@ function ChatInput(props: ChatInputInternalProps) {
   }
 
   const availableAttachments = useChatAttachableHistory();
-  const tabAttachments = useTabAttachments();
-  createEffect(
-    on(tabAttachments, (tabs, p) => {
-      for (const prev of p ?? []) {
-        // remove stuff from closed tabs
-        if (!tabs.find((t) => t.attachmentId === prev.attachmentId)) {
-          props.attachments.removeAttachment(prev.attachmentId);
-        }
-      }
-      for (const tab of tabs) {
-        props.attachments.addAttachment(tab);
-      }
-    })
-  );
 
   return (
     <>

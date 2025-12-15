@@ -178,7 +178,7 @@ export function useTabAttachments(): Accessor<ChatAttachmentWithName[]> {
             thread_id: email.content.id,
             limit: 1,
           })
-          .then((r) => ({ id: email.id, result: r }))
+          .then((r) => ({ id: email.content.id, result: r }))
       )
     ).then((threads) =>
       threads.flatMap((r) => {
