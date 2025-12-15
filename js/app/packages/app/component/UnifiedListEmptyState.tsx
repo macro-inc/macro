@@ -13,7 +13,7 @@ import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 false && fileSelector;
 false && folderSelector;
 
-export function EmptyState(props: { viewId?: ViewId }) {
+export function EmptyState(props: { viewId?: ViewId; search?: boolean }) {
   const emailActive = useEmailLinksStatus();
   const splitPanelContext = useSplitPanelOrThrow();
   const {
@@ -21,6 +21,9 @@ export function EmptyState(props: { viewId?: ViewId }) {
   } = splitPanelContext;
   return (
     <Switch>
+      <Match when={props.search}>
+        <EmptyStateInner emptyMessage={'No results.'} />
+      </Match>
       <Match when={props.viewId === 'noise' && !emailActive()}>
         {(_) => {
           onMount(() =>

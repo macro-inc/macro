@@ -1476,7 +1476,12 @@ export function UnifiedListView(props: UnifiedListViewProps) {
           <UnifiedListComponent
             entityListRef={setLocalEntityListRef}
             virtualizerHandle={setVirtualizerHandle}
-            emptyState={<EmptyState viewId={view()?.id} />}
+            emptyState={
+              <EmptyState
+                viewId={view()?.id}
+                search={searchText().length > 0}
+              />
+            }
             hasRefinementsFromBase={isViewConfigChanged}
           >
             {(innerProps) => {
