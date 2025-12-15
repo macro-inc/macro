@@ -343,14 +343,13 @@ export function KommandMenuInner(props: {
           // switchRootClass='subtle'
           label='Full Text Search'
           size='SM'
-
         />
       </div>
       <div class="bg-panel">
         <KonsoleFilter />
         <CommandK.List class="scrollbar-hidden">
           <CommandK.Empty>
-            <div class="px-2 pb-2 text-ink-muted">
+            <div class="px-2 text-ink-muted min-h-[40px]">
               {currentKonsoleMode() === 'FULL_TEXT_SEARCH' &&
               cleanQuery().length < 3
                 ? 'Enter 3 or more characters to search all documents.'
