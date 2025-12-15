@@ -52,7 +52,7 @@ import { ENABLE_SVG_PREVIEW } from '@core/constant/featureFlags';
 import type { MarkNode } from '@lexical/mark';
 import type { SearchMatchNode } from '@lexical-core/nodes/SearchMatchNode';
 import { theme as baseTheme, createTheme } from '../../theme';
-import { setEditorStateFromMarkdown } from '../../utils';
+import { forceSingleLine, setEditorStateFromMarkdown } from '../../utils';
 import { StaticCodeBoxAccessory } from '../accessory/CodeBoxAccessory';
 import { ContactMention as ContactMentionDecorator } from '../decorator/ContactMention';
 import { DateMention as DateMentionDecorator } from '../decorator/DateMention';
@@ -141,42 +141,6 @@ const CodeHighlightShim = {
     return lineNumbers;
   },
 };
-
-/**
- * Take the first "line" of a markdown string. Handle the codeblock edge case.
- */
-export function firstLineMarkdown(md: string) {
-  if (typeof md !== 'string') return '';
-
-  // fix line endings and trim start
-  md = md.replace(/\r\n?/g, '\n').replace(/^\s*\n/, '');
-
-  const lines = md.split('\n');
-  const collapse = (s: string) => s.replace(/\s+/g, ' ').trim();
-
-  const fenceMatch = lines[0]?.match(/^\s*(```+|~~~+)\s*([a-zA-Z0-9_-]+)?\s*$/);
-  if (fenceMatch) {
-    const fence = fenceMatch[1]; // ``` or ~~~ (with count)
-    const lang = fenceMatch[2] || ''; // optional
-    let firstCode = '';
-    for (let i = 1; i < lines.length; i++) {
-      // closing fence?
-      if (new RegExp(`^\\s*${fence}\\s*$`).test(lines[i])) break;
-      if (!firstCode && lines[i].trim().length)
-        firstCode = lines[i].replace(/\s+$/, '');
-    }
-    const out =
-      (lang ? '```' + lang : '```') + '\n' + (firstCode || '') + '\n```';
-    return out;
-  }
-
-  const buf = [];
-  for (let i = 0; i < lines.length; i++) {
-    if (/^\s*$/.test(lines[i])) break;
-    buf.push(lines[i]);
-  }
-  return collapse(buf.join(' '));
-}
 
 function newStaticRenderingEditor(props: {
   parentEditor?: LexicalEditor;
@@ -648,6 +612,7 @@ function Document(props: {
   theme: EditorThemeClasses;
   rootRef?: (ref: HTMLDivElement) => void;
   isGenerating: Accessor<boolean>;
+  singleLine?: boolean;
 }): JSX.Element {
   return (
     <div
@@ -705,9 +670,6 @@ export function StaticMarkdown(props: {
   });
 
   const content = createMemo(() => {
-    if (props.singleLine) {
-      return firstLineMarkdown(props.markdown);
-    }
     return props.markdown;
   });
 
@@ -719,6 +681,9 @@ export function StaticMarkdown(props: {
     }
 
     setEditorStateFromMarkdown(editor, content(), props.target);
+    if (props.singleLine) {
+      forceSingleLine(editor);
+    }
     setEditorState(editor.getEditorState());
   });
 
@@ -731,6 +696,9 @@ export function StaticMarkdown(props: {
       // Handle citations without affecting mentions
       replaceCitations(content()).then((content: string) => {
         setEditorStateFromMarkdown(editor, content, props.target);
+        if (props.singleLine) {
+          forceSingleLine(editor);
+        }
         setEditorState(editor.getEditorState());
       });
     }

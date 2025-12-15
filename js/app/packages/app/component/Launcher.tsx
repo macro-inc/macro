@@ -310,7 +310,9 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
         buttonRef?.focus();
       }}
     >
-      <div
+      {/** TODO (seamus): we need to pool/cache these canvases. they brick the color picker/or any other gl context
+                because they do not get garbage collected fast enough */}
+      {/*<div
         class="inset-0 absolute bg-panel opacity-2 mask-b-from-0% mask-b-to-100%"
         classList={{
           'text-ink-extra-muted opacity-2': !props.focused,
@@ -328,7 +330,7 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
           stroke={0}
           speed={[props.focused ? 0.3 : 0, 0]}
         />
-      </div>
+      </div>*/}
 
       <div
         class="absolute size-full inset-0 transition-transform origin-top opacity-20 ease duration-200 mix-blend-color"
