@@ -3,15 +3,15 @@ import {
   initializeChannelData,
   isValidChannelData,
 } from '@block-channel/signal/channel';
+import { useBlockId } from '@core/block';
 import { useChannelName } from '@core/component/ChannelsProvider';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
+import { useChannelQuery } from '@queries/channel/channel';
 import { commsServiceClient } from '@service-comms/client';
 import { useUserId } from '@service-gql/client';
 import { createSignal, type JSXElement, Match, Switch } from 'solid-js';
 import { Channel } from './Channel';
 import { JoinChannelDialog } from './JoinChannelDialog';
-import { useChannelQuery } from '@queries/channel/channel';
-import { useBlockId } from '@core/block';
 
 export function WithTopBar(props: { children: JSXElement }) {
   return <div>{props.children}</div>;

@@ -1,7 +1,7 @@
 import { defineBlock, type ExtractLoadType, LoadErrors } from '@core/block';
 import { isErr, ok } from '@core/util/maybeResult';
-import ChannelBlock from './component/Block';
 import { fetchAndCacheChannel } from '@queries/channel/channel';
+import ChannelBlock from './component/Block';
 
 export const definition = defineBlock({
   name: 'channel',

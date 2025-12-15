@@ -11,11 +11,7 @@ import {
   isDraggingOverChannelSignal,
   isValidChannelDragSignal,
 } from '@block-channel/signal/attachment';
-import {
-  channelStore,
-  initializeChannelData,
-  refetchChannelData,
-} from '@block-channel/signal/channel';
+import { refetchChannelData } from '@block-channel/signal/channel';
 import { activeThreadIdSignal } from '@block-channel/signal/threads';
 import { handleFileUpload } from '@block-channel/utils/inputAttachments';
 import { withAnalytics } from '@coparse/analytics';
@@ -35,6 +31,7 @@ import { createTabFocusEffect } from '@core/signal/tabFocus';
 import type { InputAttachment } from '@core/store/cacheChannelInput';
 import { handleFileFolderDrop } from '@core/util/upload';
 import { ChannelDebouncedNotificationReadMarker } from '@notifications';
+import { useChannelQuery } from '@queries/channel/channel';
 import type { Message } from '@service-comms/generated/models';
 import { connectionGatewayClient } from '@service-connection/client';
 import { createCallback } from '@solid-primitives/rootless';
@@ -57,8 +54,6 @@ import { type FocusableElement, tabbable } from 'tabbable';
 import { ChannelInput } from './ChannelInput';
 import { MessageList } from './MessageList/MessageList';
 import { Top } from './Top';
-import { useChannelQuery } from '@queries/channel/channel';
-import { queryClient } from '@queries/client';
 
 false && fileFolderDrop;
 

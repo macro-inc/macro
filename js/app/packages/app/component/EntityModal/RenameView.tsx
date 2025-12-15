@@ -2,6 +2,7 @@ import { useUpsertSavedViewMutation } from '@app/component/Soup';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ViewConfigBase } from '@app/component/ViewConfig';
 import { unwrapSignals } from '@core/util/unwrapSignals';
+import { optimisticUpdateChannelName } from '@queries/channel/channel';
 import { channelKeys } from '@queries/channel/keys';
 import { queryClient } from '@queries/client';
 import type { GetChannelResponse } from '@service-comms/generated/models';
@@ -9,7 +10,6 @@ import { createMemo, createSignal, onMount } from 'solid-js';
 import { createRenameDssEntityMutation } from '../../../macro-entity/src/queries/dss';
 import type { EntityData } from '../../../macro-entity/src/types/entity';
 import { EntityModalActionFooter, EntityModalTitle } from './EntityModal';
-import { optimisticUpdateChannelName } from '@queries/channel/channel';
 
 export const RenameView = (props: {
   entity?: EntityData;
