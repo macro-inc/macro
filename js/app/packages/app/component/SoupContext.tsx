@@ -1509,7 +1509,7 @@ export function scrollToKeepGap({
   }
 }
 
-let globalKeyboardEvent!: KeyboardEvent | undefined;
+let globalKeyboardEvent: KeyboardEvent | undefined;
 
 type ExecuteKeyDownHandlerCallback = (props: {
   keyboardEvent?: KeyboardEvent;
