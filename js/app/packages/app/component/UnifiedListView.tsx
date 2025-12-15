@@ -1288,10 +1288,10 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                 <div class="grid divide-y divide-edge">
                   <section class="gap-1 grid p-2">
                     <ToggleSwitch
-                      size="SM"
-                      label="Important"
-                      checked={importantFilter()}
                       onChange={setImportantFilter}
+                      checked={importantFilter()}
+                      label="Important"
+                      size="SM"
                     />
                     <SegmentedControl
                       size="SM"

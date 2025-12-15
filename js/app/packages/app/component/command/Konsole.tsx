@@ -1,11 +1,10 @@
 import { useChannelsContext } from '@core/component/ChannelsProvider';
 import { ClippedPanel } from '@core/component/ClippedPanel';
-import { IconButton } from '@core/component/IconButton';
+import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { ENABLE_SEARCH_PAGINATION } from '@core/constant/featureFlags';
 import type { CommandWithInfo } from '@core/hotkey/getCommands';
 import { createFreshSearch } from '@core/util/freshSort';
-import CloseIcon from '@icon/regular/x.svg';
 import { Popover } from '@kobalte/core';
 import { Command as CommandK, useCommandState } from 'cmdk-solid';
 import {
@@ -54,7 +53,6 @@ import {
 } from './state';
 import { useCommandItems } from './useCommandItems';
 import { usePaginatedSearchItems } from './useSearchItems';
-import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
 
 // equivalent to h-96
 const MAX_CONTAINER_HEIGHT = 96 * 4;
@@ -336,13 +334,16 @@ export function KommandMenuInner(props: {
         />
         <ToggleSwitch
           onChange={(val) => {
-            if(val){setKonsoleMode('FULL_TEXT_SEARCH')}
-            else{setKonsoleMode('ENTITY_SEARCH')}
+            if (val) {
+              setKonsoleMode('FULL_TEXT_SEARCH');
+            } else {
+              setKonsoleMode('ENTITY_SEARCH');
+            }
           }}
           checked={isFullTextSearch()}
           // switchRootClass='subtle'
-          label='Full Text Search'
-          size='SM'
+          label="Full Text Search"
+          size="SM"
         />
       </div>
       <div class="bg-panel">
