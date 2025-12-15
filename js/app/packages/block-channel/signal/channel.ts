@@ -29,6 +29,8 @@ import {
   threadsStore,
   upsertInThread,
 } from './threads';
+import type { NewAttachment } from '@service-comms/generated/models';
+import { getImageDimensions, getVideoDimensions } from '@core/util/media';
 
 const { track } = withAnalytics();
 
@@ -246,22 +248,48 @@ export async function sendMessage({
   const channelId = channelStore.get.id;
   if (!channelId) return;
 
-  let attachmentsToSend = attachments
-    .map((a) => ({
-      entity_id: a.id,
-      entity_type: isStaticAttachmentType(a.blockName)
+  const attachmentsToSend = await Promise.allSettled(
+    attachments.map(async (a) => {
+      const attachmentType = isStaticAttachmentType(a.blockName)
         ? a.blockName
-        : blockNameToItemType(a.blockName as BlockName),
-    }))
-    .filter((a) => a.entity_type !== undefined) as {
-    entity_id: string;
-    entity_type: string;
-  }[];
+        : blockNameToItemType(a.blockName);
+
+      if (!attachmentType) return;
+
+      let attachment: NewAttachment = {
+        entity_id: a.id,
+        entity_type: attachmentType,
+      };
+
+      if (!a.file) return attachment;
+
+      if (
+        attachmentType !== 'static/image' &&
+        attachmentType !== 'static/video'
+      ) {
+        return attachment;
+      }
+
+      const dimensions =
+        attachmentType === 'static/image'
+          ? await getImageDimensions(a.file)
+          : await getVideoDimensions(a.file);
+
+      attachment.width = dimensions.width;
+      attachment.height = dimensions.height;
+
+      return attachment;
+    })
+  );
+
+  const filteredAttachements = attachmentsToSend
+    .map((r) => (r.status === 'fulfilled' ? r.value : undefined))
+    .filter((r) => r !== undefined);
 
   let result = await commsServiceClient.postMessage({
     channel_id: channelId,
     message: {
-      attachments: attachmentsToSend,
+      attachments: filteredAttachements,
       content: content ?? '',
       thread_id: threadId,
       mentions: mentions ?? [],
