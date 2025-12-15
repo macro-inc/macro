@@ -1,7 +1,7 @@
 import { createQueryKeys } from '@lukemorales/query-key-factory';
 
 export const channelKeys = createQueryKeys('channel', {
-  channel: (channelID: string) => ({
+  withID: (channelID: string) => ({
     queryKey: [channelID],
   }),
 });

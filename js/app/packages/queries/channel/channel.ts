@@ -27,7 +27,7 @@ type ChannelQueryOptions = UseBaseQueryOptions<
  */
 function channelQueryOptions(channelId: string): ChannelQueryOptions {
   return {
-    queryKey: channelKeys.channel(channelId).queryKey,
+    queryKey: channelKeys.withID(channelId).queryKey,
     queryFn: async () => {
       const result = await throwOnErr(
         async () =>
@@ -84,7 +84,7 @@ export function optimisticUpdateChannelName(
   channelID: string,
   newName: string
 ) {
-  const queryKey = channelKeys.channel(channelID).queryKey;
+  const queryKey = channelKeys.withID(channelID).queryKey;
   queryClient.cancelQueries({ queryKey });
 
   queryClient.setQueriesData(

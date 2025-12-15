@@ -21,7 +21,7 @@ export const RenameView = (props: {
     onMutate(variables) {
       if (variables.entity.type !== 'channel') return;
 
-      const queryKey = channelKeys.channel(variables.entity.id).queryKey;
+      const queryKey = channelKeys.withID(variables.entity.id).queryKey;
 
       const previousData: GetChannelResponse | undefined =
         queryClient.getQueryData(queryKey);
@@ -34,7 +34,7 @@ export const RenameView = (props: {
       variables,
       onMutateResult: { previousData: GetChannelResponse | undefined }
     ) {
-      const queryKey = channelKeys.channel(variables.entity.id).queryKey;
+      const queryKey = channelKeys.withID(variables.entity.id).queryKey;
       queryClient.setQueriesData(
         { queryKey },
         () => onMutateResult.previousData
@@ -42,7 +42,7 @@ export const RenameView = (props: {
     },
     onSettled(_, __, variables) {
       queryClient.invalidateQueries({
-        queryKey: channelKeys.channel(variables.entity.id).queryKey,
+        queryKey: channelKeys.withID(variables.entity.id).queryKey,
       });
     },
   });
