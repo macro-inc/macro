@@ -696,10 +696,6 @@ export function MessageList(props: MessageListProps) {
                       )}
                       threadViewStore={threadViewStore}
                       setThreadViewStore={setThreadViewStore}
-                      threadInputAttachmentsStore={threadInputAttachmentsStore}
-                      setThreadInputAttachmentsStore={
-                        setThreadInputAttachmentsStore
-                      }
                       newIndicatorShown={newIndicatorShown}
                       setNewIndicatorShown={setNewIndicatorShown}
                       virtualHandle={virtualHandle()!}

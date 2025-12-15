@@ -110,10 +110,6 @@ type MessageProps = {
   threadSiblings?: MessageType[];
   threadViewStore: ThreadViewData;
   setThreadViewStore: SetStoreFunction<ThreadViewData>;
-  threadInputAttachmentsStore: Record<string, InputAttachment[]>;
-  setThreadInputAttachmentsStore: SetStoreFunction<
-    Record<string, InputAttachment[]>
-  >;
   newIndicatorShown: Accessor<number | undefined>;
   setNewIndicatorShown: Setter<number | undefined>;
   virtualHandle: VirtualizerHandle;
