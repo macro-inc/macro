@@ -1,13 +1,14 @@
+use std::str::FromStr;
+
+use model_entity::{Entity, EntityType};
 use model_notifications::NotificationEventType;
 use sqlx::types::Uuid;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct UnsentNotification {
     pub user_id: String,
-    #[serde(alias = "entity_id", alias = "entityId")]
-    pub event_item_id: String,
-    #[serde(alias = "entity_type", alias = "entityType")]
-    pub event_item_type: String,
+    #[serde(flatten)]
+    pub entity: Entity<'static>,
     pub notification_id: Uuid,
     pub created_at: chrono::NaiveDateTime,
 }
@@ -47,14 +48,13 @@ pub async fn get_unsent_notifications_for_users(
         offset,
         hours_ago
     )
-    .map(|row| {
-        UnsentNotification {
+    .try_map(|row| {
+        Ok(UnsentNotification {
             user_id: row.user_id,
-            event_item_id: row.event_item_id,
-            event_item_type: row.event_item_type,
+            entity: EntityType::from_str(&row.event_item_type).map_err(|e| sqlx::Error::Decode(Box::new(e)))?.with_entity_string(row.event_item_id),
             notification_id: row.id,
             created_at: row.created_at,
-        }
+        })
     })
     .fetch_all(db)
     .await?;

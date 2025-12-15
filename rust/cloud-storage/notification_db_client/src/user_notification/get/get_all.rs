@@ -1,3 +1,6 @@
+use std::str::FromStr;
+
+use model_entity::EntityType;
 use model_notifications::RawUserNotification;
 use models_pagination::{CreatedAt, Query};
 use sqlx::types::Uuid;
@@ -13,8 +16,7 @@ pub async fn get_all_user_notifications(
     let query_limit = limit as i64;
     let (cursor_id, cursor_timestamp) = cursor.vals();
 
-    let notifications = sqlx::query_as!(
-        RawUserNotification,
+    let notifications = sqlx::query!(
         r#"
     SELECT
         un.user_id as owner_id,
@@ -45,6 +47,24 @@ pub async fn get_all_user_notifications(
         cursor_timestamp,
         cursor_id as _, // have to cast to Option<Uuid> since notification id is a uuid
     )
+    .try_map(|row| {
+        Ok(RawUserNotification {
+            owner_id: row.owner_id,
+            notification_id: row.notification_id,
+            notification_event_type: row.notification_event_type,
+            entity: EntityType::from_str(&row.event_item_type)
+                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
+                .with_entity_string(row.event_item_id),
+            sent: row.sent,
+            done: row.done,
+            created_at: row.created_at,
+            viewed_at: row.viewed_at,
+            deleted_at: row.deleted_at,
+            notification_metadata: row.notification_metadata,
+            sender_id: row.sender_id,
+            updated_at: row.updated_at,
+        })
+    })
     .fetch_all(db)
     .await?;
 
@@ -66,8 +86,7 @@ pub async fn get_all_user_notifications_by_event_item_ids(
 
     let event_item_id: Vec<String> = event_item_id.iter().map(|e| e.to_string()).collect();
 
-    let notifications = sqlx::query_as!(
-        RawUserNotification,
+    let notifications = sqlx::query!(
         r#"
     SELECT
         un.user_id as owner_id,
@@ -100,6 +119,24 @@ pub async fn get_all_user_notifications_by_event_item_ids(
         cursor_timestamp,
         cursor_id as _, // have to cast to Option<Uuid> since notification id is a uuid
     )
+    .try_map(|row| {
+        Ok(RawUserNotification {
+            owner_id: row.owner_id,
+            notification_id: row.notification_id,
+            notification_event_type: row.notification_event_type,
+            entity: EntityType::from_str(&row.event_item_type)
+                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
+                .with_entity_string(row.event_item_id),
+            sent: row.sent,
+            done: row.done,
+            created_at: row.created_at,
+            viewed_at: row.viewed_at,
+            deleted_at: row.deleted_at,
+            notification_metadata: row.notification_metadata,
+            sender_id: row.sender_id,
+            updated_at: row.updated_at,
+        })
+    })
     .fetch_all(db)
     .await?;
 

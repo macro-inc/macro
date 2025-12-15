@@ -5791,6 +5791,7 @@ dependencies = [
  "macro_user_id",
  "macro_uuid",
  "model",
+ "model-entity",
  "model_notifications",
  "models_pagination",
  "serde",

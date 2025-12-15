@@ -8,6 +8,7 @@ pub async fn create_notification(
     pool: sqlx::Pool<sqlx::Postgres>,
     notification: RawNotification,
 ) -> anyhow::Result<RawNotification> {
+    let entity_type: &'static str = notification.entity.entity_type.into();
     let created_at: Option<chrono::DateTime<chrono::Utc>> = sqlx::query_scalar!(
         r#"
         INSERT INTO notification (id, notification_event_type, event_item_id, event_item_type, service_sender, metadata, sender_id)
@@ -16,8 +17,8 @@ pub async fn create_notification(
         "#,
         &notification.id,
         notification.notification_event_type.to_string(),
-        notification.event_item_id,
-        notification.event_item_type,
+        &notification.entity.entity_id,
+        entity_type,
         notification.service_sender,
         notification.metadata,
         notification.sender_id,
@@ -28,8 +29,7 @@ pub async fn create_notification(
     Ok(RawNotification {
         id: notification.id,
         notification_event_type: notification.notification_event_type,
-        event_item_id: notification.event_item_id,
-        event_item_type: notification.event_item_type,
+        entity: notification.entity,
         service_sender: notification.service_sender,
         created_at,
         metadata: notification.metadata,
@@ -45,6 +45,7 @@ pub async fn create_notification_transaction(
     transaction: &mut Transaction<'_, Postgres>,
     notification: RawNotification,
 ) -> anyhow::Result<RawNotification> {
+    let entity_type: &'static str = notification.entity.entity_type.into();
     let created_at: Option<chrono::DateTime<chrono::Utc>> = sqlx::query_scalar!(
         r#"
         INSERT INTO notification (id, notification_event_type, event_item_id, event_item_type, service_sender, metadata, sender_id)
@@ -53,8 +54,8 @@ pub async fn create_notification_transaction(
         "#,
         &notification.id,
         notification.notification_event_type.to_string(),
-        notification.event_item_id,
-        notification.event_item_type,
+        &notification.entity.entity_id,
+        entity_type,
         notification.service_sender,
         notification.metadata,
         notification.sender_id,
@@ -65,8 +66,7 @@ pub async fn create_notification_transaction(
     Ok(RawNotification {
         id: notification.id,
         notification_event_type: notification.notification_event_type,
-        event_item_id: notification.event_item_id,
-        event_item_type: notification.event_item_type,
+        entity: notification.entity,
         service_sender: notification.service_sender,
         created_at,
         metadata: notification.metadata,
@@ -77,6 +77,7 @@ pub async fn create_notification_transaction(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use model_entity::EntityType;
     use model_notifications::NotificationEventType;
     use sqlx::{Pool, Postgres};
 
@@ -86,8 +87,7 @@ mod tests {
         let notification = RawNotification {
             id: uuid,
             notification_event_type: NotificationEventType::ChannelInvite.to_string(),
-            event_item_id: "test".to_string(),
-            event_item_type: "test".to_string(),
+            entity: EntityType::Document.with_entity_str("test"),
             service_sender: "test".to_string(),
             created_at: None,
             metadata: None,
@@ -107,8 +107,7 @@ mod tests {
         let notification = RawNotification {
             id: uuid,
             notification_event_type: NotificationEventType::ChannelInvite.to_string(),
-            event_item_id: "test".to_string(),
-            event_item_type: "test".to_string(),
+            entity: EntityType::Document.with_entity_str("test"),
             service_sender: "test".to_string(),
             created_at: None,
             metadata: None,
