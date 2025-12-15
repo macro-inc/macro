@@ -1951,7 +1951,7 @@ function SearchBar(props: {
             icon={LoadingSpinner}
             theme="clear"
             tooltip={{ label: 'Cancel search' }}
-            class="animate-spin"
+            class="[&_svg]:animate-spin"
             onClick={() => {
               setSearchText('');
               inputRef?.focus();

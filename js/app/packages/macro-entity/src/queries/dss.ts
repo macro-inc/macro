@@ -231,7 +231,7 @@ const selectData: (
               ownerId: item.data.ownerId,
               frecencyScore: item.frecency_score,
               viewedAt: item.data.viewedAt ?? undefined,
-              parentId: item.data.parentId ?? undefined,
+              projectId: item.data.parentId ?? undefined,
               type: item.tag,
               name: item.data.name || 'New Project',
             };
