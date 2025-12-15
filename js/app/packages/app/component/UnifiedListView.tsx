@@ -944,7 +944,10 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
     notificationSource.markAsRead(notification);
 
-    return blockHandle?.goToLocationFromParams({ message_id, thread_id });
+    return blockHandle?.goToLocationFromParams({
+      [CHANNEL_PARAMS.message]: message_id,
+      [CHANNEL_PARAMS.thread]: thread_id,
+    });
   };
 
   const { SortComponent, sortFn: entitySort } = createSort({
