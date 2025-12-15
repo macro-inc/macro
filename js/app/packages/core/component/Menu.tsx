@@ -231,7 +231,7 @@ export function MenuItem(props: MenuItemProps) {
       <Show when={props.hotkeyToken} keyed>
         {(hotkeyToken) => (
           <div class="ml-auto text-page text-xs">
-            <Hotkey token={hotkeyToken} class="text-ink-muted" showPlus/>
+            <Hotkey token={hotkeyToken} class="text-ink-muted" showPlus />
           </div>
         )}
       </Show>
