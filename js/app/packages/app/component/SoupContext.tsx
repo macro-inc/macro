@@ -89,8 +89,8 @@ export type UnifiedListContext = {
   entityListRefSignal: Signal<HTMLDivElement | undefined>;
   entitiesSignal: Signal<EntityData[] | undefined>;
   emailViewSignal: Signal<PreviewViewStandardLabel>;
-  showHelpDrawer: Accessor<Set<string>>;
-  setShowHelpDrawer: Setter<Set<string>>;
+  showHelpDrawer: Accessor<Set<DefaultView>>;
+  setShowHelpDrawer: Setter<Set<DefaultView>>;
   actionRegistry: EntityActionRegistry;
 };
 
@@ -108,7 +108,7 @@ export function createSoupContext(): UnifiedListContext {
   const entitiesSignal = createSignal<EntityData[]>();
   const emailViewSignal = createSignal<PreviewViewStandardLabel>('inbox');
   const tutorialCompleted = useTutorialCompleted();
-  const [showHelpDrawer, setShowHelpDrawer] = createSignal<Set<string>>(
+  const [showHelpDrawer, setShowHelpDrawer] = createSignal<Set<DefaultView>>(
     !tutorialCompleted() ? new Set(DEFAULT_VIEWS) : new Set()
   );
   const setViewDataStore: SetStoreFunction<ViewDataMap> = (...args: any[]) => {

@@ -234,11 +234,11 @@ export function Soup() {
     hotkey: ['shift+/'],
     scopeId: splitHotkeyScope,
     description: () =>
-      `${showHelpDrawer().has(selectedView()) ? 'Hide' : 'Show'} help drawer`,
+      `${showHelpDrawer().has(selectedView() as DefaultView) ? 'Hide' : 'Show'} help drawer`,
     hotkeyToken: TOKENS.split.showHelpDrawer,
     keyDownHandler: () => {
-      if (showHelpDrawer().has(selectedView())) {
-        setShowHelpDrawer(new Set<string>());
+      if (showHelpDrawer().has(selectedView() as DefaultView)) {
+        setShowHelpDrawer(new Set<DefaultView>());
       } else {
         setShowHelpDrawer(new Set(DEFAULT_VIEWS));
       }
