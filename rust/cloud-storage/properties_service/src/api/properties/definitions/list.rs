@@ -212,7 +212,7 @@ pub async fn list_properties(
 }
 
 /// Check if a property can be attached to the given entity type.
-fn is_property_applicable_to(property_id: uuid::Uuid, entity_type: EntityType) -> bool {
+pub fn is_property_applicable_to(property_id: uuid::Uuid, entity_type: EntityType) -> bool {
     // Task-only properties: Parent Task and Subtasks
     if property_id == SystemPropertyKey::PARENT_TASK_UUID
         || property_id == SystemPropertyKey::SUBTASKS_UUID
