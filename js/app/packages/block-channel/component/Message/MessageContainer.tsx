@@ -18,7 +18,6 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import {
-  type InputAttachment,
   isStaticAttachmentType,
   STATIC_IMAGE,
   STATIC_VIDEO,

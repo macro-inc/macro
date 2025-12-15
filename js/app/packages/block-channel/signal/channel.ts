@@ -1,14 +1,16 @@
 import type { ChannelData } from '@block-channel/definition';
 import { withAnalytics } from '@coparse/analytics';
 import { TrackingEvents } from '@coparse/analytics/src/types/TrackingEvents';
-import { type BlockName, createBlockMemo, createBlockStore } from '@core/block';
+import { createBlockMemo, createBlockStore } from '@core/block';
 import { useChannelsContext } from '@core/component/ChannelsProvider';
 import {
   type InputAttachment,
   isStaticAttachmentType,
 } from '@core/store/cacheChannelInput';
 import { isErr } from '@core/util/maybeResult';
+import { getImageDimensions, getVideoDimensions } from '@core/util/media';
 import { commsServiceClient } from '@service-comms/client';
+import type { NewAttachment } from '@service-comms/generated/models';
 import type { Attachment } from '@service-comms/generated/models/attachment';
 import type { Channel } from '@service-comms/generated/models/channel';
 import type { ChannelParticipant } from '@service-comms/generated/models/channelParticipant';
@@ -29,8 +31,6 @@ import {
   threadsStore,
   upsertInThread,
 } from './threads';
-import type { NewAttachment } from '@service-comms/generated/models';
-import { getImageDimensions, getVideoDimensions } from '@core/util/media';
 
 const { track } = withAnalytics();
 
