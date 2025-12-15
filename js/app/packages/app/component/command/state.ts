@@ -44,7 +44,7 @@ export function cleanQuery(query?: string) {
 }
 
 export const COMMAND_MODES = [
-  // { id: 'FULL_TEXT_SEARCH', sigil: '%', label: 'Full Text Search' },
+  { id: 'FULL_TEXT_SEARCH', sigil: '%', label: 'Full Text Search' },
   // { id: "REGEX_SEARCH", sigil: "/", label: "Regex Search" },
   // { id: "RUN_COMMAND", sigil: ">", label: "Run" },
   // { id: "TEMP_CHAT", sigil: " ", label: "Temporary Chat" },

@@ -1,6 +1,8 @@
 //! Service trait for properties.
 
 use models_properties::EntityType;
+use models_properties::service::property_value::PropertyValue;
+use system_properties::SystemPropertyKey;
 use uuid::Uuid;
 
 /// Service trait for property operations.
@@ -41,4 +43,22 @@ pub trait PropertiesService: Send + Sync + 'static {
         task_id: Uuid,
         subtask_ids: Vec<Uuid>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Get a property value for an entity by property definition ID.
+    /// Returns `None` if the property is not attached to the entity.
+    fn get_property_value(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        property_definition_id: Uuid,
+    ) -> impl Future<Output = Result<Option<PropertyValue>, Self::Err>> + Send;
+
+    /// Get a system property value for an entity.
+    /// Returns `None` if the property is not attached to the entity.
+    fn get_system_property_value(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        property_key: SystemPropertyKey,
+    ) -> impl Future<Output = Result<Option<PropertyValue>, Self::Err>> + Send;
 }

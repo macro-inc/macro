@@ -1,4 +1,7 @@
 import { FormatRibbon } from '@block-channel/component/FormatRibbon';
+import { MacroSignatureButton } from '@block-email/component/MacroSignatureButton';
+import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
+import { useHasPaidAccess } from '@core/auth';
 import { useBlockId } from '@core/block';
 import { BrightJoins } from '@core/component/BrightJoins';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
@@ -27,7 +30,11 @@ import Plus from '@icon/regular/plus.svg';
 import TextAa from '@icon/regular/text-aa.svg';
 import Trash from '@icon/regular/trash.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import type { DocumentMentionInfo } from '@lexical-core';
+import {
+  $appendWatermarkNodeToLast,
+  $removeAllWatermarkNodes,
+  type DocumentMentionInfo,
+} from '@lexical-core';
 import { logger } from '@observability';
 import { useSendMessageMutation } from '@queries/email/thread';
 import { emailClient } from '@service-email/client';
@@ -236,6 +243,7 @@ export function BaseInput(props: {
   const DRAFT_DEBOUNCE_MS = 1000;
 
   function collectDraft(): Omit<MessageToSend, 'link_id'> | null {
+    $removeAllWatermarkNodes(editor());
     const prepared = prepareEmailBody(editor());
     if (!prepared) {
       logger.error(
@@ -377,6 +385,8 @@ export function BaseInput(props: {
     });
   });
 
+  const hasPaidAccess = useHasPaidAccess();
+
   // Set up hotkey scope for the compose message component
   const [attachComposeHotkeys, composeHotkeyScope] =
     useHotkeyDOMScope('compose-message');
@@ -420,7 +430,17 @@ export function BaseInput(props: {
       linkId = maybeFallbackLinks[1].links[0].id;
     }
 
-    const prepared = prepareEmailBody(editor(), {
+    const _editor = editor();
+
+    // We handle cleaning up the signature after we've sent the request because
+    // otherwise the `bodyMacro` signal would update after the clean up call and
+    // not contain the signature in the request data
+    const cleanupWatermark = $appendWatermarkNodeToLast(
+      _editor,
+      !hasPaidAccess() ? MACRO_EMAIL_SIGNATURE : undefined
+    );
+
+    const prepared = prepareEmailBody(_editor, {
       replyType: effectiveReplyType(),
       replyingTo: props.replyingTo(),
     });
@@ -447,6 +467,8 @@ export function BaseInput(props: {
         link_id: linkId!,
       },
     });
+
+    cleanupWatermark();
   };
 
   const resetState = () => {
@@ -577,7 +599,9 @@ export function BaseInput(props: {
       {/* Top Bar */}
       <div class="flex items-start gap-2 p-2">
         <DropdownMenu>
-          <DropdownMenu.Trigger>{ReplyIcon()}</DropdownMenu.Trigger>
+          <DropdownMenu.Trigger>
+            <div class="px-1">{ReplyIcon()}</div>
+          </DropdownMenu.Trigger>
           <DropdownMenu.Portal>
             <DropdownMenuContent>
               <MenuItem
@@ -610,7 +634,7 @@ export function BaseInput(props: {
           when={showExpandedRecipients()}
           fallback={
             <div
-              class="flex items-center text-sm font-mono truncate overflow-hidden mt-1"
+              class="flex flex-wrap items-center text-sm font-mono truncate overflow-hidden mt-1"
               onclick={() => setShowExpandedRecipients(true)}
             >
               <Show
@@ -734,7 +758,7 @@ export function BaseInput(props: {
         <div class="text-xs min-w-16">Subject</div>
         <input
           type="text"
-          class="flex-1 text-sm bg-transparent outline-none border-0 px-2 py-1"
+          class="flex-1 text-sm bg-transparent outline-none border-0 px-3 py-1"
           value={form().subject()}
           onInput={(e) => {
             form().setSubject(e.currentTarget.value);
@@ -755,7 +779,7 @@ export function BaseInput(props: {
           />
         </Show>
         <div
-          class="min-h-20 max-h-80 overflow-y-scroll w-full flex flex-col cursor-text placeholder:text-ink-placeholder placeholder:opacity-50 px-3 pt-2 sm:pb-4"
+          class="max-h-80 overflow-y-scroll w-full flex flex-col cursor-text placeholder:text-ink-placeholder placeholder:opacity-50 px-3"
           ref={bodyDiv}
           onclick={() => {
             editor()?.focus();
@@ -790,6 +814,7 @@ export function BaseInput(props: {
             initialValue={props.preloadedBody}
             initialHtml={props.preloadedHtml}
             placeholder="Reply — @mention to share or cc people"
+            watermark={!hasPaidAccess() ? <MacroSignatureButton /> : undefined}
             onChange={handleChange}
             onDocumentMention={(item) => {
               makeAttachmentPublic(item.id);
@@ -802,7 +827,7 @@ export function BaseInput(props: {
           />
         </div>
         <Show when={!form().replyAppended()}>
-          <div class="p-2 flex flex-row items-center space-x-2">
+          <div class="px-2 flex flex-row items-center space-x-2">
             <IconButton
               theme="clear"
               icon={DotsThree}
@@ -819,7 +844,7 @@ export function BaseInput(props: {
             />
           </div>
         </Show>
-        <div class="flex flex-row w-full h-8 justify-between items-center p-2 mb-2 space-x-2 allow-css-brackets">
+        <div class="flex flex-row w-full h-8 justify-between items-center py-2 px-2 mb-2 space-x-2 allow-css-brackets">
           <div class="flex flex-row items-center gap-2">
             <div class="relative" ref={attachButtonRef}>
               <IconButton
@@ -872,16 +897,16 @@ export function BaseInput(props: {
                   <Spinner class="w-5 h-5 animate-spin cursor-disabled" />
                 }
               >
-                <div class="flex flex-row items-center gap-0.5">
-                  <span>Send + </span>
-                  <CheckIcon class="size-[1lh]" />
+                <div class="flex justify-center items-center gap-1">
+                  <span>Send & done</span>
+                  <CheckIcon class="size-4" />
                 </div>
               </Show>
             </TextButton>
             <DropdownMenu>
               <DropdownMenu.Trigger>
-                <div class="w-8 min-h-8 flex justify-center items-center h-full border-r border-t border-b border-edge">
-                  <CaretDown class="size-4 text-edge" />
+                <div class="w-8 min-h-8 flex justify-center items-center h-full border-r border-t border-b border-ink hover:bg-hover">
+                  <CaretDown class="size-4 text-ink" />
                 </div>
               </DropdownMenu.Trigger>
               <DropdownMenuContent>

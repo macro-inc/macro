@@ -73,4 +73,27 @@ where
     async fn link_subtasks(&self, task_id: Uuid, subtask_ids: Vec<Uuid>) -> Result<(), Self::Err> {
         self.repository.link_subtasks(task_id, subtask_ids).await
     }
+
+    #[tracing::instrument(skip(self), fields(entity_id = %entity_id, entity_type = ?entity_type, property_definition_id = %property_definition_id))]
+    async fn get_property_value(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        property_definition_id: Uuid,
+    ) -> Result<Option<PropertyValue>, Self::Err> {
+        self.repository
+            .get_entity_property_value(entity_id, entity_type, property_definition_id)
+            .await
+    }
+
+    #[tracing::instrument(skip(self), fields(entity_id = %entity_id, entity_type = ?entity_type, property_key = ?property_key))]
+    async fn get_system_property_value(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        property_key: SystemPropertyKey,
+    ) -> Result<Option<PropertyValue>, Self::Err> {
+        self.get_property_value(entity_id, entity_type, property_key.uuid())
+            .await
+    }
 }
