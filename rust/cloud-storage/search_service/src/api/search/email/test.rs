@@ -47,6 +47,7 @@ fn test_construct_search_result_single_thread() {
         highlight: Highlight {
             name: None,
             content: vec!["Test content".to_string()],
+            ..Default::default()
         },
     }];
 
@@ -102,6 +103,7 @@ fn test_sort_stability() {
             highlight: Highlight {
                 name: None,
                 content: vec!["third".to_string()],
+                ..Default::default()
             },
         },
         opensearch_client::search::model::SearchHit {
@@ -122,6 +124,7 @@ fn test_sort_stability() {
             highlight: Highlight {
                 name: None,
                 content: vec!["first".to_string()],
+                ..Default::default()
             },
         },
         opensearch_client::search::model::SearchHit {
@@ -142,6 +145,7 @@ fn test_sort_stability() {
             highlight: Highlight {
                 name: None,
                 content: vec!["fifth".to_string()],
+                ..Default::default()
             },
         },
         opensearch_client::search::model::SearchHit {
@@ -162,6 +166,7 @@ fn test_sort_stability() {
             highlight: Highlight {
                 name: None,
                 content: vec!["second".to_string()],
+                ..Default::default()
             },
         },
         opensearch_client::search::model::SearchHit {
@@ -182,6 +187,7 @@ fn test_sort_stability() {
             highlight: Highlight {
                 name: None,
                 content: vec!["fourth".to_string()],
+                ..Default::default()
             },
         },
     ];

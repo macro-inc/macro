@@ -14,6 +14,7 @@ export enum PaywallKey {
   O1_LIMIT = 'O1_LIMIT',
   CANVAS_CLIKED = 'CANVAS_CLIKED',
   SAVED_PROMPT = 'SAVED_PROMPT',
+  REMOVE_SIGNATURE = 'REMOVE_SIGNATURE',
 }
 
 export const PaywallMessages: Record<PaywallKey, string> = {
@@ -30,6 +31,8 @@ export const PaywallMessages: Record<PaywallKey, string> = {
     'Upgrade your plan to have AI generate canvases (diagrams, whiteboards, drawings).',
   [PaywallKey.SAVED_PROMPT]:
     'Saved prompts are a paid feature. Please upgrade to continue.',
+  [PaywallKey.REMOVE_SIGNATURE]:
+    'Upgrade your plan to remove the Macro signature.',
 };
 
 export const [paywallOpen, setPaywallOpen] = createSignal(false);

@@ -238,7 +238,7 @@ export const signalFilter: ClientFilter = {
 export const noiseFilter: ClientFilter = {
   id: 'noise',
   predicate: (entity, ctx) => {
-    if (entity.type !== 'email') return true;
+    if (entity.type !== 'email') return false;
     return !signalFilter.predicate(entity, ctx);
   },
 };

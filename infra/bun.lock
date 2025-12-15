@@ -129,10 +129,6 @@
       "name": "metering-service-stack",
       "version": "0.0.0",
     },
-    "stacks/notification-email-poller": {
-      "name": "notification-email-poller-stack",
-      "version": "0.0.0",
-    },
     "stacks/notification-service": {
       "name": "notification-service-stack",
       "version": "0.0.0",
@@ -812,8 +808,6 @@
     "normalize-package-data": ["normalize-package-data@6.0.2", "", { "dependencies": { "hosted-git-info": "^7.0.0", "semver": "^7.3.5", "validate-npm-package-license": "^3.0.4" } }, "sha512-V6gygoYb/5EmNI+MEGrWkC+e6+Rr7mTmfHrxDbLzxQogBkgzo76rkok0Am6thgSF7Mv2nLOajAJj5vDJZEFn7g=="],
 
     "normalize-url": ["normalize-url@6.1.0", "", {}, "sha512-DlL+XwOy3NxAQ8xuC0okPgK46iuVNAK01YN7RueYBqqFeGsBjV9XmCAzAdgt+667bCl5kPh9EqKKDwnaPG1I7A=="],
-
-    "notification-email-poller-stack": ["notification-email-poller-stack@workspace:stacks/notification-email-poller"],
 
     "notification-service-stack": ["notification-service-stack@workspace:stacks/notification-service"],
 

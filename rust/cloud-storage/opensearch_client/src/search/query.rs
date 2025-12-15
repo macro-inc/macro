@@ -117,6 +117,7 @@ pub(crate) fn create_query<'a>(params: CreateQueryParams<'a>) -> QueryType<'a> {
                 field.to_string(),
                 wildcard_pattern,
                 true,
+                None,
             ));
 
             let mut bool_query = QueryType::bool_query();

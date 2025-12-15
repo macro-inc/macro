@@ -27,6 +27,7 @@ fn test_construct_search_result_single_document() {
         highlight: Highlight {
             name: None,
             content: vec!["Test content".to_string()],
+            ..Default::default()
         },
     }];
 
@@ -95,6 +96,7 @@ fn test_construct_search_result_multiple_nodes_same_document() {
             highlight: Highlight {
                 name: None,
                 content: vec!["First content".to_string()],
+                ..Default::default()
             },
         },
         opensearch_client::search::model::SearchHit {
@@ -112,6 +114,7 @@ fn test_construct_search_result_multiple_nodes_same_document() {
             highlight: Highlight {
                 name: None,
                 content: vec!["Second content".to_string()],
+                ..Default::default()
             },
         },
     ];
@@ -179,6 +182,7 @@ fn create_test_document_response(
         highlight: Highlight {
             name: None,
             content: content.unwrap_or_default(),
+            ..Default::default()
         },
     }
 }
@@ -486,6 +490,7 @@ fn test_sort_stability() {
             highlight: Highlight {
                 name: None,
                 content: vec!["third".to_string()],
+                ..Default::default()
             },
         },
         opensearch_client::search::model::SearchHit {
@@ -503,6 +508,7 @@ fn test_sort_stability() {
             highlight: Highlight {
                 name: None,
                 content: vec!["first".to_string()],
+                ..Default::default()
             },
         },
         opensearch_client::search::model::SearchHit {
@@ -520,6 +526,7 @@ fn test_sort_stability() {
             highlight: Highlight {
                 name: None,
                 content: vec!["fifth".to_string()],
+                ..Default::default()
             },
         },
         opensearch_client::search::model::SearchHit {
@@ -537,6 +544,7 @@ fn test_sort_stability() {
             highlight: Highlight {
                 name: None,
                 content: vec!["second".to_string()],
+                ..Default::default()
             },
         },
         opensearch_client::search::model::SearchHit {
@@ -554,6 +562,7 @@ fn test_sort_stability() {
             highlight: Highlight {
                 name: None,
                 content: vec!["fourth".to_string()],
+                ..Default::default()
             },
         },
     ];

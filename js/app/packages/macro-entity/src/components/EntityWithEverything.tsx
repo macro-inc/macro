@@ -969,7 +969,7 @@ function EntityProject(props: {
   entity: ProjectContainedEntity;
   onClick?: EntityClickHandler<ProjectEntity>;
 }) {
-  const projectQuery = createProjectQuery(props.entity);
+  const projectQuery = createProjectQuery(props.entity.projectId);
   let projectIconRef!: HTMLDivElement;
 
   createEffect(() => {

@@ -23,7 +23,13 @@ pub async fn process_upsert_message(
         return Ok(());
     };
 
-    let updated_at = EpochSeconds::new(Utc::now().timestamp())?;
+    let now = EpochSeconds::new(Utc::now().timestamp())?;
+
+    let updated_at = message_info
+        .internal_date_ts
+        .map(|date| EpochSeconds::new(date.timestamp()))
+        .transpose()?
+        .unwrap_or(now);
 
     let upsert_email_message_args: UpsertEmailArgs = UpsertEmailArgs {
         message_id: upsert_email_message.message_id.clone(),
@@ -80,7 +86,8 @@ pub async fn process_upsert_thread_message(
     // Max is 100
     let message_limit = 100;
 
-    let updated_at = EpochSeconds::new(Utc::now().timestamp())?;
+    let now = EpochSeconds::new(Utc::now().timestamp())?;
+
     loop {
         let messages = email_client
             .get_search_messages_by_thread_id_internal(
@@ -104,6 +111,12 @@ pub async fn process_upsert_thread_message(
                     .internal_date_ts
                     .map(|date| EpochSeconds::new(date.timestamp()))
                     .transpose()?;
+
+                let updated_at = message
+                    .internal_date_ts
+                    .map(|date| EpochSeconds::new(date.timestamp()))
+                    .transpose()?
+                    .unwrap_or(now);
 
                 upsert_email_message_args.push(UpsertEmailArgs {
                     message_id: message.db_id.to_string(),

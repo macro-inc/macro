@@ -22,17 +22,7 @@ fn test_build_search_request() -> anyhow::Result<()> {
         "field": "entity_id"
       },
       "from": 20,
-      "highlight": {
-        "fields": {
-          "content": {
-            "number_of_fragments": 500,
-            "post_tags": ["</macro_em>"],
-            "pre_tags": ["<macro_em>"],
-            "type": "plain"
-          }
-        },
-        "require_field_match": true
-      },
+      "highlight": ChannelMessageSearchConfig::append_owner_highlights(ChannelMessageSearchConfig::default_highlight()).to_json(),
       "query": {
         "bool": {
           "minimum_should_match": 1,
@@ -45,7 +35,8 @@ fn test_build_search_request() -> anyhow::Result<()> {
                     "wildcard": {
                       "sender_id": {
                         "case_insensitive": true,
-                        "value": "*test*"
+                        "value": "macro|test*",
+                        "boost": 5000.0
                       }
                     }
                   },

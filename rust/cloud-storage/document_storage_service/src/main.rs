@@ -16,6 +16,7 @@ use macro_entrypoint::MacroEntrypoint;
 use macro_env_var::env_var;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use macro_redis_cluster_client::Redis;
+use properties::{PropertiesPgRepo, PropertiesServiceImpl};
 use secretsmanager_client::SecretManager;
 use soup::{
     domain::service::SoupImpl, inbound::axum_router::SoupRouterState,
@@ -187,6 +188,7 @@ async fn main() -> anyhow::Result<()> {
         EmailServiceImpl::new(EmailPgRepo::new(db.clone()), frecency_service.clone());
     let system_properties_service =
         SystemPropertiesServiceImpl::new(PgSystemPropertiesRepository::new(db.clone()));
+    let properties_service = PropertiesServiceImpl::new(PropertiesPgRepo::new(db.clone()));
     let api_context = ApiContext {
         soup_router_state: SoupRouterState::new(
             SoupImpl::new(
@@ -213,6 +215,7 @@ async fn main() -> anyhow::Result<()> {
         conn_gateway_client: Arc::new(conn_gateway_client),
         sync_service_client: Arc::new(sync_service_client),
         system_properties_service: Arc::new(system_properties_service),
+        properties_service: Arc::new(properties_service),
         config: Arc::new(config),
         jwt_validation_args,
         dss_auth_key,

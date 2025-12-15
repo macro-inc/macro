@@ -1,3 +1,4 @@
+import { useBlockId } from '@core/block';
 import { useChannelsContext } from '@core/component/ChannelsProvider';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
@@ -31,6 +32,7 @@ import {
   on,
   Show,
 } from 'solid-js';
+import { usePropertiesContext } from '../../../context/PropertiesContext';
 import { PROPERTY_STYLES } from '../../../styles/styles';
 import type { Property } from '../../../types';
 import { useSearchInputFocus } from '../../../utils';
@@ -137,6 +139,9 @@ function getEntityType(entity: CombinedEntity): string {
     case 'channel':
       return 'CHANNEL';
     case 'item':
+      if (entity.data.type === 'document' && entity.data.subType === 'task') {
+        return 'TASK';
+      }
       return entity.data.type.toUpperCase();
     case 'company':
       return 'COMPANY';
@@ -201,6 +206,10 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   createEffect(() => debouncedSetSearchTerm(inputValue()));
 
   let searchInputRef!: HTMLInputElement;
+
+  // Get current entity context for self-filtering
+  const blockId = useBlockId();
+  const { entityType: currentEntityType } = usePropertiesContext();
 
   const history = useHistory();
   const contacts = useContacts();
@@ -289,7 +298,11 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     const itemTypes: EntityType[] = ['DOCUMENT', 'PROJECT', 'CHAT'];
     if (itemTypes.includes(specificEntityType)) {
       return history()
-        .filter((item) => item.type.toUpperCase() === specificEntityType)
+        .filter(
+          (item) =>
+            item.type.toUpperCase() === specificEntityType &&
+            !(item.type === 'document' && item.subType === 'task')
+        )
         .map(entityMapper('item'));
     }
 
@@ -308,17 +321,26 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     const MAX_VISIBLE_ENTITIES_NO_SEARCH = 50;
     const MAX_SEARCH_RESULTS = 20;
 
+    // Filter out the current entity when selecting same entity type (e.g., parent task on a task)
+    const excludeFilter = (e: CombinedEntity) =>
+      !(getEntityType(e) === currentEntityType && e.id === blockId);
+
     // Get visible entities based on search
     const localResults = term
       ? entitySearch(allEntities, term)
           .slice(0, MAX_SEARCH_RESULTS)
           .map((result) => result.item)
-      : allEntities.slice(0, MAX_VISIBLE_ENTITIES_NO_SEARCH);
+          .filter(excludeFilter)
+      : allEntities
+          .filter(excludeFilter)
+          .slice(0, MAX_VISIBLE_ENTITIES_NO_SEARCH);
 
     // For THREAD: merge local + server results (local first, server appended, deduped)
     if (props.property.specificEntityType === 'THREAD' && term) {
       const localIds = new Set(localResults.map((e) => e.id));
-      const serverResults = serverEmails().filter((e) => !localIds.has(e.id));
+      const serverResults = serverEmails()
+        .filter((e) => !localIds.has(e.id))
+        .filter(excludeFilter);
       return [...localResults, ...serverResults].slice(0, MAX_SEARCH_RESULTS);
     }
 

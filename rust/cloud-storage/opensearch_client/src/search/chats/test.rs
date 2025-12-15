@@ -22,7 +22,7 @@ fn test_build_search_request() -> anyhow::Result<()> {
             "field": "entity_id"
         },
         "sort": ChatSearchConfig::default_sort_types().iter().map(|s| s.to_json()).collect::<Vec<_>>(),
-        "highlight": ChatSearchConfig::default_highlight().to_json(),
+        "highlight": ChatSearchConfig::append_owner_highlights(ChatSearchConfig::default_highlight()).to_json(),
         "query": {
             "bool": {
                 "must": [
@@ -33,8 +33,9 @@ fn test_build_search_request() -> anyhow::Result<()> {
                             {
                                 "wildcard": {
                                     "user_id": {
-                                        "value": "*test*",
+                                        "value": "macro|test*",
                                         "case_insensitive": true,
+                                        "boost": 5000.0
                                     }
                                 }
                             },

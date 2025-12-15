@@ -2,7 +2,7 @@ use crate::{
     Result, delegate_methods,
     error::{OpensearchClientError, ResponseExt},
     search::{
-        builder::{SearchQueryBuilder, SearchQueryConfig},
+        builder::{SearchQueryBuilder, SearchQueryConfig, create_highlight_field},
         model::{
             DefaultSearchResponse, NameIndex, SearchGotoChannel, SearchGotoContent, SearchHit,
             parse_highlight_hit,
@@ -54,6 +54,12 @@ impl SearchQueryConfig for ChannelMessageSearchConfig {
             SortType::Field(FieldSort::new(Self::ID_KEY, SortOrder::Asc)),
             SortType::Field(FieldSort::new("message_id", SortOrder::Asc)),
         ]
+    }
+
+    fn append_owner_highlights<'a>(
+        highlight: opensearch_query_builder::Highlight<'a>,
+    ) -> opensearch_query_builder::Highlight<'a> {
+        highlight.field("sender_id", create_highlight_field("plain", 1))
     }
 }
 

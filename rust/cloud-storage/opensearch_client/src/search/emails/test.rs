@@ -26,8 +26,8 @@ fn test_build_search_request() -> anyhow::Result<()> {
               "field": "entity_id"
           },
           "sort": EmailSearchConfig::default_sort_types().iter().map(|s| s.to_json()).collect::<Vec<_>>(),
-          "highlight": EmailSearchConfig::default_highlight().to_json(),
-            "query": {
+          "highlight": EmailSearchConfig::append_owner_highlights(EmailSearchConfig::default_highlight()).to_json(),
+        "query": {
       "bool": {
         "minimum_should_match": 1,
         "must": [
@@ -37,17 +37,11 @@ fn test_build_search_request() -> anyhow::Result<()> {
               "should": [
                 {
                   "wildcard": {
-                    "user_id": {
-                      "case_insensitive": true,
-                      "value": "*test*"
-                    }
-                  }
-                },
-                {
-                  "wildcard": {
                     "sender": {
                       "case_insensitive": true,
-                      "value": "*test*"
+                      "value": "test*",
+                      "boost": 5000.0
+
                     }
                   }
                 },
@@ -55,7 +49,8 @@ fn test_build_search_request() -> anyhow::Result<()> {
                   "wildcard": {
                     "cc": {
                       "case_insensitive": true,
-                      "value": "*test*"
+                      "value": "test*",
+                      "boost": 5000.0
                     }
                   }
                 },
@@ -63,7 +58,8 @@ fn test_build_search_request() -> anyhow::Result<()> {
                   "wildcard": {
                     "bcc": {
                       "case_insensitive": true,
-                      "value": "*test*"
+                      "value": "test*",
+                      "boost": 5000.0
                     }
                   }
                 },
@@ -71,7 +67,8 @@ fn test_build_search_request() -> anyhow::Result<()> {
                   "wildcard": {
                     "recipients": {
                       "case_insensitive": true,
-                      "value": "*test*"
+                      "value": "test*",
+                      "boost": 5000.0
                     }
                   }
                 },
