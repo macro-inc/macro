@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE entity_properties\n            SET values = $4, updated_at = NOW()\n            WHERE entity_id = $1\n              AND entity_type = $2\n              AND property_definition_id = $3\n            ",
+  "query": "\n        UPDATE entity_properties\n        SET values = $4, updated_at = NOW()\n        WHERE entity_id = $1\n          AND entity_type = $2\n          AND property_definition_id = $3\n        ",
   "describe": {
     "columns": [],
     "parameters": {
@@ -29,5 +29,5 @@
     },
     "nullable": []
   },
-  "hash": "7d52ef19ac1655037ce18444b549c7394c851e67f211888194b09fc234731e2a"
+  "hash": "bf308be1e802f2f6552a6bd0282ae985dfb1a3fc738532eca74c6b098c6772c0"
 }

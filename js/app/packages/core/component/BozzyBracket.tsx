@@ -1,11 +1,11 @@
 import { createSignal, type JSX, onMount, type ParentProps } from 'solid-js';
 
 type BozzyBracketProps = {
-  active: boolean;
-  class?: string;
   style?: JSX.CSSProperties;
-  hover?: boolean;
   unfocusable?: boolean;
+  active: boolean;
+  hover?: boolean;
+  class?: string;
 };
 
 /**
@@ -29,7 +29,7 @@ export function BozzyBracket(props: ParentProps<BozzyBracketProps>) {
       style={props.style}
     >
       <div
-        class="absolute pointer-events-none left-[-1px] top-[-1px] w-[calc(100%+2px)] h-[calc(100%+2px)] z-modal"
+        class="absolute pointer-events-none left-0 top-0 w-full h-full z-modal"
         classList={{
           bracket: (props.active || props.hover) && !props.unfocusable,
           'group-focus-within/bozzy:absolute group-focus-within/bozzy:bracket':
@@ -51,6 +51,7 @@ export function BozzyBracketInnerSibling(props: {
       setTimeout(() => setBig(false));
     });
   }
+  /* TEST BEFORE REMOVING left-[-1px] top-[-1px] w-[calc(100%+2px)] h-[calc(100%+2px)] */
   return (
     <div
       class="pointer-events-none absolute left-[-1px] top-[-1px] w-[calc(100%+2px)] h-[calc(100%+2px)] bracket-offset-2"

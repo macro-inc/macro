@@ -1,11 +1,17 @@
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { FormatRibbon } from '@block-channel/component/FormatRibbon';
+import { MacroSignatureButton } from '@block-email/component/MacroSignatureButton';
+import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
+import { useHasPaidAccess } from '@core/auth';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { IconButton } from '@core/component/IconButton';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import { fileDrop } from '@core/directive/fileDrop';
 import TextAa from '@icon/regular/text-aa.svg';
-import type { DocumentMentionInfo } from '@lexical-core';
+import {
+  $appendWatermarkNodeToLast,
+  type DocumentMentionInfo,
+} from '@lexical-core';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import ArrowFatLineUp from '@phosphor-icons/core/fill/arrow-fat-line-up-fill.svg?component-solid';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
@@ -50,6 +56,8 @@ type ComposeEmailInputProps = {
 };
 
 export function ComposeEmailInput(props: ComposeEmailInputProps) {
+  const hasPaidAccess = useHasPaidAccess();
+
   const [editor, setEditor] = createSignal<LexicalEditor>();
 
   const [isDragging, setIsDragging] = createSignal<boolean>();
@@ -115,7 +123,17 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
   let composeContainerRef: HTMLDivElement | undefined;
 
   async function handleSend() {
-    const prepared = prepareEmailBody(editor());
+    const _editor = editor();
+
+    // We handle cleaning up the signature after we've sent the request because
+    // otherwise the `bodyMacro` signal would update after the clean up call and
+    // not contain the signature in the request data
+    const cleanupWatermark = $appendWatermarkNodeToLast(
+      _editor,
+      !hasPaidAccess() ? MACRO_EMAIL_SIGNATURE : undefined
+    );
+
+    const prepared = prepareEmailBody(_editor, undefined);
     if (!prepared) return;
 
     const bodyMacro = content();
@@ -127,6 +145,8 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
         raw: bodyMacro,
       },
     });
+
+    cleanupWatermark();
   }
 
   onMount(() => {
@@ -155,9 +175,10 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
       }}
       class="relative flex flex-col flex-1 items-center justify-between min-h-0"
     >
-      <div class="w-full h-full flex flex-col overflow-hidden min-h-0">
+      <div class="w-full h-full flex flex-col min-h-0">
         <Show when={showFormatRibbon()}>
           <FormatRibbon
+            class="-ml-3"
             state={structuredClone(defaultSelectionData)}
             inlineFormat={(format: TextFormatType) => {
               editor()?.dispatchCommand(FORMAT_TEXT_COMMAND, format);
@@ -196,6 +217,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
             class="text-sm break-words text-ink"
             editable={() => !props.disabled}
             placeholder="Use `@` to reference files"
+            watermark={!hasPaidAccess() ? <MacroSignatureButton /> : undefined}
             onChange={setContent}
             onFocusLeaveStart={(e) => {
               e.preventDefault();

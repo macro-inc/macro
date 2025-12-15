@@ -292,7 +292,7 @@ const useMapSearchResponseItem = () => {
           ownerId: result.owner_id,
           createdAt: result.created_at,
           updatedAt: result.updated_at,
-          parentId: result.metadata?.parent_project_id ?? undefined,
+          projectId: result.metadata?.parent_project_id ?? undefined,
           search,
         };
       }

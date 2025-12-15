@@ -234,11 +234,11 @@ export function Soup() {
     hotkey: ['shift+/'],
     scopeId: splitHotkeyScope,
     description: () =>
-      `${showHelpDrawer().has(selectedView()) ? 'Hide' : 'Show'} help drawer`,
+      `${showHelpDrawer().has(selectedView() as DefaultView) ? 'Hide' : 'Show'} help drawer`,
     hotkeyToken: TOKENS.split.showHelpDrawer,
     keyDownHandler: () => {
-      if (showHelpDrawer().has(selectedView())) {
-        setShowHelpDrawer(new Set<string>());
+      if (showHelpDrawer().has(selectedView() as DefaultView)) {
+        setShowHelpDrawer(new Set<DefaultView>());
       } else {
         setShowHelpDrawer(new Set(DEFAULT_VIEWS));
       }
@@ -387,7 +387,7 @@ export function Soup() {
             class="@container/soup [container-type:inline-size] flex flex-col gap-1 size-full overflow-x-clip"
             classList={{
               'border-r border-edge-muted': preview(),
-              'pt-2 pb-0': showHelpDrawer().has(selectedView()),
+              'pt-2 pb-0': showHelpDrawer().has(selectedView() as DefaultView),
             }}
             value={selectedView()}
             onChange={setSelectedView}
@@ -435,7 +435,7 @@ export function Soup() {
           />
         </Show>
       </div>
-      <Show when={showHelpDrawer().has(selectedView())}>
+      <Show when={showHelpDrawer().has(selectedView() as DefaultView)}>
         <HelpDrawer viewId={view().id} />
       </Show>
     </div>
