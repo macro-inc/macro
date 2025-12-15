@@ -53,6 +53,7 @@ import {
 } from './state';
 import { useCommandItems } from './useCommandItems';
 import { usePaginatedSearchItems } from './useSearchItems';
+import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
 
 // equivalent to h-96
 const MAX_CONTAINER_HEIGHT = 96 * 4;
@@ -100,7 +101,7 @@ export function KommandMenu() {
           <CommandWindow>
             <Popover.Content>
               <div class="bg-dialog mt-[25vh] w-6xl max-w-[90vw] max-h-[75vh] overflow-hidden">
-                <ClippedPanel tl>
+                <ClippedPanel tl active>
                   <KommandMenuInner commandKRef={commandKRef} />
                 </ClippedPanel>
               </div>
@@ -323,28 +324,20 @@ export function KommandMenuInner(props: {
         setCurrentValue(value);
       }}
     >
-      <div class="relative flex items-center gap-2 bg-panel px-2 h-[40px] border-b border-edge-muted">
+      <div class="flex items-center gap-2 bg-panel px-2 h-[40px] border-b border-edge-muted">
+        <span class="pl-2 pointer-events-none">❯</span>
         <CommandK.Input
-          class="flex-1 border-0 outline-none! focus:outline-none ring-0! focus:ring-0 font-mono pl-10"
-          placeholder="Search"
+          class="flex-1 border-0 outline-none! focus:outline-none ring-0! focus:ring-0 font-mono"
           onValueChange={setRawQuery}
+          placeholder="Search"
           value={rawQuery()}
           autofocus
         />
-        <span class="absolute left-8 pointer-events-none">❯</span>
-        <IconButton
-          onClick={() => toggleKonsoleVisibility()}
-          tooltip={{ label: 'Close' }}
-          icon={CloseIcon}
-          theme="current"
-          iconSize={16}
-          size="sm"
-          style={{
-            position: 'absolute',
-            left: '8px',
-            top: '50%',
-            transform: 'translateY(-50%)',
-          }}
+        <ToggleSwitch
+          // onChange={setIsFullTextSearch()}
+          checked={isFullTextSearch()}
+          label="Full Text Search"
+          size="SM"
         />
       </div>
       <div class="bg-panel">
