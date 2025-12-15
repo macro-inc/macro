@@ -1,6 +1,5 @@
 //! PostgreSQL implementation for properties repository.
 
-use anyhow::Context;
 use models_properties::EntityType;
 use models_properties::service::property_value::PropertyValue;
 use sqlx::{Pool, Postgres};
@@ -77,8 +76,7 @@ impl PropertiesRepo for PropertiesPgRepo {
             property_definition_id
         )
         .fetch_optional(&self.pool)
-        .await
-        .context("failed to fetch entity property value")?;
+        .await?;
 
         match row {
             None => Ok(None),
@@ -86,8 +84,7 @@ impl PropertiesRepo for PropertiesPgRepo {
                 None => Ok(None),
                 Some(json_value) if json_value.is_null() => Ok(None),
                 Some(json_value) => {
-                    let value: PropertyValue = serde_json::from_value(json_value)
-                        .context("failed to deserialize property value")?;
+                    let value: PropertyValue = serde_json::from_value(json_value)?;
                     Ok(Some(value))
                 }
             },
