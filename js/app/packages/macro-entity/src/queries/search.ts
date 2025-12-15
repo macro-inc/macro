@@ -205,9 +205,11 @@ const useMapSearchResponseItem = () => {
           threadHits.at(0)?.pretty_sender;
 
         // TODO: we probably want to get the actual latest message info on the full thread
-        const latestMessageSentAt = Math.max(
-          ...messageHits.map((m) => m.sent_at).filter((m) => m != null)
-        );
+        const messagesSentAt = messageHits
+          .map((m) => m.sent_at)
+          .filter((m) => m != null);
+        const latestMessageSentAt =
+          messagesSentAt.length > 0 ? Math.max(...messagesSentAt) : null;
 
         return {
           type: 'email',
