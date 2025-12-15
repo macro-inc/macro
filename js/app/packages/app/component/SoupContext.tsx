@@ -229,7 +229,7 @@ export function createNavigationEntityListShortcut({
   const viewData = createMemo(() => viewsData[selectedView()]);
   const viewIds = createMemo<ViewId[]>(() => Object.keys(viewsData));
 
-  const [attachEntityHotkeys, entityHotkeyScope] = useHotkeyDOMScope('entity');
+  const [attachEntityHotkeys, _entityHotkeyScope] = useHotkeyDOMScope('entity');
   const selectedEntity = () => viewData().selectedEntity;
 
   const notificationSource = useGlobalNotificationSource();
@@ -1533,7 +1533,6 @@ function registerEntityHotkey(
     commandScopeId: string;
   };
 } {
-  const id = opts.scopeId + JSON.stringify(opts.hotkey);
   onCleanup(() => {
     globalKeyboardEvent = undefined;
   });
