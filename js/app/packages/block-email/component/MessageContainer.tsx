@@ -31,6 +31,7 @@ interface MessageContainerProps {
   isLastMessage: boolean;
   isFocused: boolean;
   isTarget: boolean;
+  threadMessageIndex: number;
 }
 
 export function MessageContainer(props: MessageContainerProps) {
@@ -183,6 +184,7 @@ export function MessageContainer(props: MessageContainerProps) {
                 props.setExpandedMessageBodyIds(id, true)
               }
               setFocusedMessageId={context.setFocusedMessageId}
+              threadMessageIndex={props.threadMessageIndex}
             />
           </Message.Body>
           <Show when={visibleAttachments().length > 0}>

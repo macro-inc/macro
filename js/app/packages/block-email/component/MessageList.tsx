@@ -58,6 +58,7 @@ export function MessageList(props: MessageListProps) {
               message={message}
               expandedMessageBodyIds={expandedMessageBodyIds}
               setExpandedMessageBodyIds={setExpandedMessageBodyIds}
+              threadMessageIndex={index()}
             />
           );
         }}

@@ -268,6 +268,11 @@ function getAppendedReplyElement(
       replyingToBodyHTML,
       'text/html'
     );
+    // Extract style tags from head to preserve email styling for weirdo emails with initial style tags.
+    const styleTags = innerDom.head?.querySelectorAll('style');
+    styleTags?.forEach((style) => {
+      quote.appendChild(style);
+    });
     quote.appendChild(innerDom.body);
   }
 
