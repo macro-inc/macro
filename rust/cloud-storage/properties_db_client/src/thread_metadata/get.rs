@@ -8,12 +8,13 @@ use uuid::Uuid;
 type Result<T> = std::result::Result<T, PropertiesDatabaseError>;
 
 /// Get thread metadata by thread ID from macrodb
-#[tracing::instrument(skip(db))]
+#[tracing::instrument(skip(db), err)]
 pub async fn get_thread_metadata(
     db: &Pool<Postgres>,
     thread_id: Uuid,
 ) -> Result<Option<ThreadMetadata>> {
-    let result = sqlx::query!(
+    sqlx::query_as!(
+        ThreadMetadata,
         r#"
         SELECT
             t.id,
@@ -39,21 +40,5 @@ pub async fn get_thread_metadata(
     )
     .fetch_optional(db)
     .await
-    .map_err(|e| {
-        tracing::error!(
-            error = ?e,
-            thread_id = %thread_id,
-            "failed to fetch thread metadata"
-        );
-        PropertiesDatabaseError::Query(e)
-    })?;
-
-    Ok(result.map(|row| ThreadMetadata {
-        id: row.id,
-        subject: row.subject,
-        thread_started: row.thread_started,
-        last_received: row.last_received,
-        last_sent: row.last_sent,
-        message_count: row.message_count,
-    }))
+    .map_err(PropertiesDatabaseError::Query)
 }

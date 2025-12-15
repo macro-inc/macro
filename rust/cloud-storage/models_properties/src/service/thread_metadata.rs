@@ -1,9 +1,10 @@
 //! Thread metadata model for properties service
 
+use sqlx::FromRow;
 use uuid::Uuid;
 
 /// Thread metadata aggregated from email_threads and email_messages tables
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, FromRow)]
 pub struct ThreadMetadata {
     pub id: Uuid,
     pub subject: Option<String>,

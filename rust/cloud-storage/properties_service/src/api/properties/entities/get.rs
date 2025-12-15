@@ -100,7 +100,7 @@ pub async fn get_entity_properties(
             async {
                 match entity_type {
                     EntityType::Document | EntityType::Task => {
-                        super::super::metadata::get_document_metadata_properties(
+                        crate::api::properties::metadata::get_document_metadata_properties(
                             &context.db,
                             &entity_id,
                             entity_type,
@@ -110,9 +110,9 @@ pub async fn get_entity_properties(
                     EntityType::Thread => {
                         let thread_id = uuid::Uuid::parse_str(&entity_id).map_err(|e| {
                             tracing::error!(error = ?e, entity_id = %entity_id, "invalid thread UUID");
-                            super::super::metadata::MetadataError::NotFound
+                            crate::api::properties::metadata::MetadataError::NotFound
                         })?;
-                        super::super::metadata::get_thread_metadata_properties(
+                        crate::api::properties::metadata::get_thread_metadata_properties(
                             &context.db,
                             thread_id,
                         )

@@ -20,42 +20,21 @@ pub enum MetadataError {
 }
 
 /// Get document metadata properties from macrodb
+#[tracing::instrument(skip(db), err)]
 pub async fn get_document_metadata_properties(
     db: &Pool<Postgres>,
     document_id: &str,
     entity_type: EntityType,
 ) -> Result<Vec<EntityPropertyWithDefinition>, MetadataError> {
-    tracing::info!("getting document metadata properties from macrodb");
-
-    // Fetch document metadata from macrodb
     let document_metadata =
         properties_db_client::document_metadata::get::get_document_metadata(db, document_id)
-            .await
-            .inspect_err(|e| {
-                tracing::error!(
-                    error = ?e,
-                    document_id = %document_id,
-                    "failed to get document metadata from database"
-                );
-            })?
+            .await?
             .ok_or(MetadataError::NotFound)?;
-
-    tracing::debug!(
-        document_id = %document_id,
-        has_document_name = !document_metadata.name.is_empty(),
-        has_owner = !document_metadata.owner.is_empty(),
-        has_project_id = document_metadata.project_id.is_some(),
-        "parsed document metadata"
-    );
 
     let mut metadata_properties = Vec::new();
 
     // 1. Document name property
-    let name = if document_metadata.name.is_empty() {
-        None
-    } else {
-        Some(document_metadata.name)
-    };
+    let name = (!document_metadata.name.is_empty()).then_some(document_metadata.name);
     metadata_properties.push(create_metadata_property_str(
         metadata::DOCUMENT_NAME,
         models_properties::DataType::String,
@@ -64,14 +43,8 @@ pub async fn get_document_metadata_properties(
     ));
 
     // 2. Owner property
-    let owner = if document_metadata.owner.is_empty() {
-        None
-    } else {
-        Some(EntityReference::new(
-            document_metadata.owner,
-            EntityType::User,
-        ))
-    };
+    let owner = (!document_metadata.owner.is_empty())
+        .then(|| EntityReference::new(document_metadata.owner, EntityType::User));
     metadata_properties.push(create_metadata_property_entity_ref(
         metadata::OWNER,
         models_properties::DataType::Entity,
@@ -108,43 +81,21 @@ pub async fn get_document_metadata_properties(
         Some(EntityType::Project),
     ));
 
-    tracing::debug!(
-        document_id = %document_id,
-        metadata_properties_count = metadata_properties.len(),
-        "created document metadata properties"
-    );
-
     Ok(metadata_properties)
 }
 
 /// Get thread metadata properties from macrodb
+#[tracing::instrument(skip(db), err)]
 pub async fn get_thread_metadata_properties(
     db: &Pool<Postgres>,
     thread_id: Uuid,
 ) -> Result<Vec<EntityPropertyWithDefinition>, MetadataError> {
-    tracing::info!("getting thread metadata properties from macrodb");
-
-    let entity_type = EntityType::Thread;
-
-    // Fetch thread metadata from macrodb
     let thread_metadata =
         properties_db_client::thread_metadata::get::get_thread_metadata(db, thread_id)
-            .await
-            .inspect_err(|e| {
-                tracing::error!(
-                    error = ?e,
-                    thread_id = %thread_id,
-                    "failed to get thread metadata from database"
-                );
-            })?
+            .await?
             .ok_or(MetadataError::NotFound)?;
 
-    tracing::debug!(
-        thread_id = %thread_id,
-        has_subject = thread_metadata.subject.is_some(),
-        message_count = thread_metadata.message_count,
-        "parsed thread metadata"
-    );
+    let entity_type = EntityType::Thread;
 
     let metadata_properties = vec![
         // 1. Subject property
@@ -183,12 +134,6 @@ pub async fn get_thread_metadata_properties(
             entity_type,
         ),
     ];
-
-    tracing::debug!(
-        thread_id = %thread_id,
-        metadata_properties_count = metadata_properties.len(),
-        "created thread metadata properties"
-    );
 
     Ok(metadata_properties)
 }
