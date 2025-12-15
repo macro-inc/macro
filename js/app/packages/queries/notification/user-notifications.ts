@@ -50,6 +50,7 @@ function userNotificationsQueryOptions(limit: number) {
   };
 }
 
+/** Paginated query for all notifications for the current user. */
 export function useUserNotificationsQuery(args?: { limit?: number }) {
   const limit = normalizeLimit(args?.limit);
 
@@ -98,6 +99,7 @@ function entityNotificationsQueryOptions(eventItemId: string, limit: number) {
   };
 }
 
+/** Paginated query for notifications for a single entity. */
 export function useEntityNotificationsQuery(args: {
   eventItemId: () => string;
   limit?: number;
@@ -151,6 +153,7 @@ function entitiesNotificationsQueryOptions(
   };
 }
 
+/** Paginated query for notifications across multiple entities. */
 export function useEntitiesNotificationsQuery(args: {
   eventItemIds: () => string[];
   limit?: number;
@@ -231,6 +234,7 @@ function notificationsMutationSuccessCallback<T>(
   });
 }
 
+/** Creates an optimistic update handler that snapshots previous data for rollback. */
 function createNotificationsMutateFn(
   updaterFn: NotificationsUpdater
 ): NotificationsOnMutateFn {
@@ -312,6 +316,7 @@ const mapNotificationsAsSeen = (
   );
 };
 
+/** Marks notifications as seen with optimistic update. */
 export const useMarkNotificationsAsSeenMutation = createNotificationsMutation(
   async (params: NotificationsMutationParams) =>
     await notificationServiceClient.bulkMarkNotificationAsSeen({
@@ -340,6 +345,7 @@ const filterOutDoneNotifications = (
   );
 };
 
+/** Marks notifications as done (removes from list) with optimistic update. */
 export const useMarkNotificationsAsDoneMutation = createNotificationsMutation(
   async (params: NotificationsMutationParams) =>
     await notificationServiceClient.bulkMarkNotificationAsDone({
