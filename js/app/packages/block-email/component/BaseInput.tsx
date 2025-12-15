@@ -610,7 +610,7 @@ export function BaseInput(props: {
           when={showExpandedRecipients()}
           fallback={
             <div
-              class="flex items-center text-sm font-mono truncate overflow-hidden mt-1"
+              class="flex flex-wrap items-center text-sm font-mono truncate overflow-hidden mt-1"
               onclick={() => setShowExpandedRecipients(true)}
             >
               <Show
