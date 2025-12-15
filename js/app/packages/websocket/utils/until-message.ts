@@ -15,7 +15,7 @@ export function untilMessage<Send, Receive>(
   ws: Websocket<Send, Receive>,
   predicate: (data: Receive) => boolean
 ): Promise<Receive> {
-  return new Promise(async (resolve) => {
+  return new Promise((resolve) => {
     const handler = (
       _ws: Websocket<Send, Receive>,
       e: WebsocketEventMap<Receive>[WebsocketEvent.Message]
@@ -26,7 +26,6 @@ export function untilMessage<Send, Receive>(
         resolve(data);
       }
     };
-
 
     ws.addEventListener(WebsocketEvent.Message, handler);
   });
