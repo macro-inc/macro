@@ -1,11 +1,11 @@
 //! PostgreSQL implementation for properties repository.
 
-use anyhow::Context;
 use models_properties::EntityType;
 use models_properties::service::property_value::PropertyValue;
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
+use super::{entity_property_queries, task_property_queries};
 use crate::domain::ports::PropertiesRepo;
 
 /// PostgreSQL implementation of PropertiesRepo.
@@ -32,38 +32,27 @@ impl PropertiesRepo for PropertiesPgRepo {
         property_definition_id: Uuid,
         value: Option<PropertyValue>,
     ) -> Result<(), Self::Err> {
-        // Serialize PropertyValue to JSONB (or NULL if None)
-        let value_json = match value {
-            Some(v) => serde_json::to_value(&v).context("failed to serialize property value")?,
-            None => serde_json::Value::Null,
-        };
-
-        tracing::debug!(value_json = ?value_json, "updating entity property if exists");
-
-        // Atomic update - only updates if the property is already attached
-        let result = sqlx::query!(
-            r#"
-            UPDATE entity_properties
-            SET values = $4, updated_at = NOW()
-            WHERE entity_id = $1
-              AND entity_type = $2
-              AND property_definition_id = $3
-            "#,
+        entity_property_queries::update_entity_property_value_if_exists(
+            &self.pool,
             entity_id,
-            entity_type as EntityType,
+            entity_type,
             property_definition_id,
-            value_json
+            value,
         )
-        .execute(&self.pool)
         .await
-        .context("failed to update entity property")?;
+    }
 
-        if result.rows_affected() > 0 {
-            tracing::info!("successfully updated entity property");
-        } else {
-            tracing::debug!("entity property not attached, no-op");
-        }
+    #[tracing::instrument(skip(self))]
+    async fn link_parent_task(
+        &self,
+        task_id: Uuid,
+        parent_task_id: Option<Uuid>,
+    ) -> Result<(), Self::Err> {
+        task_property_queries::link_parent_task(&self.pool, task_id, parent_task_id).await
+    }
 
-        Ok(())
+    #[tracing::instrument(skip(self))]
+    async fn link_subtasks(&self, task_id: Uuid, subtask_ids: Vec<Uuid>) -> Result<(), Self::Err> {
+        task_property_queries::link_subtasks(&self.pool, task_id, subtask_ids).await
     }
 }

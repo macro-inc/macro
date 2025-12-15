@@ -2635,6 +2635,7 @@ dependencies = [
  "models_permissions",
  "models_soup",
  "ordered-float",
+ "properties",
  "rayon",
  "redis",
  "regex",
