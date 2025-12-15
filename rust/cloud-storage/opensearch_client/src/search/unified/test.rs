@@ -398,14 +398,6 @@ fn test_deserialization() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn expected_sort<'a>() -> Vec<SortType<'a>> {
-    vec![
-        SortType::Field(FieldSort::new("sent_at_seconds", SortOrder::Desc)),
-        SortType::Field(FieldSort::new("updated_at_seconds", SortOrder::Desc)),
-        SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
-    ]
-}
-
 #[test]
 fn test_build_unified_search_request_content() -> anyhow::Result<()> {
     let unified_search_args = UnifiedSearchArgs {
@@ -855,7 +847,14 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
         }
       },
       "size": 20,
-      "sort": expected_sort().iter().map(|s| s.to_json()).collect::<Vec<_>>(),
+      "sort": [
+        {
+          "_score": "desc"
+        },
+        {
+          "entity_id": "desc"
+        }
+      ]
     });
 
     assert_eq!(result.to_json(), expected);
@@ -1096,7 +1095,14 @@ fn test_build_unified_search_request_name() -> anyhow::Result<()> {
         }
       },
       "size": 20,
-      "sort": expected_sort().iter().map(|s| s.to_json()).collect::<Vec<_>>(),
+      "sort": [
+        {
+          "_score": "desc"
+        },
+        {
+          "entity_id": "desc"
+        }
+      ]
     });
 
     assert_eq!(result.to_json(), expected);
@@ -1804,7 +1810,14 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
         }
       },
       "size": 20,
-      "sort": expected_sort().iter().map(|s| s.to_json()).collect::<Vec<_>>(),
+      "sort": [
+        {
+          "_score": "desc"
+        },
+        {
+          "entity_id": "desc"
+        }
+      ]
     });
 
     assert_eq!(result.to_json(), expected);
@@ -1891,7 +1904,14 @@ fn test_build_unified_search_request_single_index() -> anyhow::Result<()> {
       },
       "from": 20,
       "size": 20,
-      "sort": expected_sort().iter().map(|s| s.to_json()).collect::<Vec<_>>(),
+      "sort": [
+        {
+          "_score": "desc"
+        },
+        {
+          "entity_id": "desc"
+        }
+      ],
       "highlight": {
         "require_field_match": true,
         "fields": {
