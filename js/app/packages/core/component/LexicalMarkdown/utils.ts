@@ -1182,6 +1182,7 @@ const $singleLineNode = (node: ElementNode): ElementNode | null => {
     return node;
   }
 
+  // text first text-ful list item and flatten to parent list
   if ($isListNode(node)) {
     const items = node.getChildren();
 
@@ -1191,11 +1192,9 @@ const $singleLineNode = (node: ElementNode): ElementNode | null => {
       const text = item.getTextContent().trim();
       if (!text) continue;
 
-      // Flatten list item to text only
       item.clear();
       item.append($createTextNode(text));
 
-      // Reduce list to exactly one item
       node.clear();
       node.append(item);
 
@@ -1205,8 +1204,8 @@ const $singleLineNode = (node: ElementNode): ElementNode | null => {
     return null;
   }
 
+  // take first line with text
   if ($isCodeNode(node)) {
-    console.log('GOT CODE');
     const text = node.getTextContent().trim().split('\n')[0];
     if (!text) return null;
     node.clear();
@@ -1227,13 +1226,11 @@ export function forceSingleLine(editor: LexicalEditor) {
     () => {
       const root = $getRoot();
       const rootChildren = root.getChildren();
-      console.log(rootChildren);
 
       let firstChild: ElementNode | null = null;
 
       for (const child of rootChildren) {
         if (!$isElementNode(child)) continue;
-
         const normalized = $singleLineNode(child);
         if (normalized) {
           firstChild = normalized;
@@ -1242,8 +1239,6 @@ export function forceSingleLine(editor: LexicalEditor) {
       }
 
       root.clear();
-
-      console.log({ firstChild });
       if (firstChild) {
         root.append(firstChild);
       } else {
