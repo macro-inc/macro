@@ -3,6 +3,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use system_properties::SystemPropertyKey;
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -77,7 +78,7 @@ pub async fn delete_property_definition(
         .await?
         .ok_or(DeletePropertyDefinitionError::NotFound)?;
 
-    if property.is_system {
+    if property.is_system || SystemPropertyKey::is_system_uuid(property_uuid) {
         return Err(DeletePropertyDefinitionError::SystemPropertyNotModifiable);
     }
 
