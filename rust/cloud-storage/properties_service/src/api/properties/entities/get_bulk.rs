@@ -45,7 +45,7 @@ impl IntoResponse for GetBulkEntityPropertiesErr {
     }
 }
 
-/// Get properties for multiple entities in bulk
+/// Get properties for multiple entities in bulk (internal endpoint - service-to-service)
 #[utoipa::path(
     post,
     path = "/internal/properties/entities/bulk",
@@ -58,7 +58,7 @@ impl IntoResponse for GetBulkEntityPropertiesErr {
     tag = "Internal"
 )]
 #[tracing::instrument(skip(context, request), fields(entity_count = request.entities.len()), err)]
-pub async fn get_bulk_entity_properties(
+pub async fn get_bulk_entity_properties_internal(
     State(context): State<ApiContext>,
     Json(request): Json<BulkEntityPropertiesRequest>,
 ) -> Result<Json<HashMap<String, EntityPropertiesResponse>>, GetBulkEntityPropertiesErr> {
