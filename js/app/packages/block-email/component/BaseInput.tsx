@@ -900,8 +900,8 @@ export function BaseInput(props: {
                   <Spinner class="w-5 h-5 animate-spin cursor-disabled" />
                 }
               >
-                <div class="flex justify-center items-center gap-1">
-                  <span>Send & done</span>
+                <div class="flex fles-row items-center gap-0.5">
+                  <span>Send +</span>
                   <CheckIcon class="size-4" />
                 </div>
               </Show>
@@ -909,7 +909,7 @@ export function BaseInput(props: {
             <DropdownMenu>
               <DropdownMenu.Trigger>
                 <div class="w-8 min-h-8 flex justify-center items-center h-full border-r border-t border-b border-ink hover:bg-hover">
-                  <CaretDown class="size-4 text-ink" />
+                  <CaretDown class="size-4 text-ink transition-transform [[data-expanded]_&]:scale-y-[-1]" />
                 </div>
               </DropdownMenu.Trigger>
               <DropdownMenuContent>
@@ -918,6 +918,7 @@ export function BaseInput(props: {
                   onClick={() => {
                     sendEmail();
                   }}
+                  hotkeyToken={TOKENS.email.send}
                 />
               </DropdownMenuContent>
             </DropdownMenu>
