@@ -24,7 +24,12 @@ export function MessageAttachments(props: MessageAttachmentsProps) {
         <For each={props.videoAttachments()}>
           {(item) => (
             <div class="flex size-full max-w-50 max-h-100 object-contain">
-              <video controls src={staticFileIdEndpoint(item.entity_id)} />
+              <video
+                controls
+                src={staticFileIdEndpoint(item.entity_id)}
+                width={item.width ?? undefined}
+                height={item.height ?? undefined}
+              />
             </div>
           )}
         </For>
@@ -33,7 +38,11 @@ export function MessageAttachments(props: MessageAttachmentsProps) {
       <Show when={props.imageAttachments()?.length > 0 && !props.isDeleted()}>
         <div class="flex">
           <DynamicImageList
-            ids={props.imageAttachments()?.map((a) => a.entity_id)}
+            images={props.imageAttachments()?.map((a) => ({
+              id: a.entity_id,
+              width: a.width ?? undefined,
+              height: a.height ?? undefined,
+            }))}
             attachmentIds={props.imageAttachments()?.map((a) => a.id)}
             isCurrentUser={props.isCurrentUser()}
             channelId={props.channelId}

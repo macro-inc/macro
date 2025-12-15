@@ -72,7 +72,9 @@ export function Attachment(props: AttachmentProps) {
         </Match>
         <Match when={props.attachment.blockName === STATIC_IMAGE}>
           <ImagePreview
-            id={props.attachment.id}
+            image={{
+              id: props.attachment.id,
+            }}
             variant="small"
             isCurrentUser={true}
           />
