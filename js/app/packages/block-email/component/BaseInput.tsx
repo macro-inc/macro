@@ -577,7 +577,7 @@ export function BaseInput(props: {
       {/* Top Bar */}
       <div class="flex items-start gap-2 p-2">
         <DropdownMenu>
-          <DropdownMenu.Trigger>{ReplyIcon()}</DropdownMenu.Trigger>
+          <DropdownMenu.Trigger><div class="px-1">{ReplyIcon()}</div></DropdownMenu.Trigger>
           <DropdownMenu.Portal>
             <DropdownMenuContent>
               <MenuItem
@@ -734,7 +734,7 @@ export function BaseInput(props: {
         <div class="text-xs min-w-16">Subject</div>
         <input
           type="text"
-          class="flex-1 text-sm bg-transparent outline-none border-0 px-2 py-1"
+          class="flex-1 text-sm bg-transparent outline-none border-0 px-3 py-1"
           value={form().subject()}
           onInput={(e) => {
             form().setSubject(e.currentTarget.value);
@@ -755,7 +755,7 @@ export function BaseInput(props: {
           />
         </Show>
         <div
-          class="min-h-20 max-h-80 overflow-y-scroll w-full flex flex-col cursor-text placeholder:text-ink-placeholder placeholder:opacity-50 px-3 pt-2 sm:pb-4"
+          class="max-h-80 overflow-y-scroll w-full flex flex-col cursor-text placeholder:text-ink-placeholder placeholder:opacity-50 px-3"
           ref={bodyDiv}
           onclick={() => {
             editor()?.focus();
@@ -802,7 +802,7 @@ export function BaseInput(props: {
           />
         </div>
         <Show when={!form().replyAppended()}>
-          <div class="p-2 flex flex-row items-center space-x-2">
+          <div class="px-2 flex flex-row items-center space-x-2">
             <IconButton
               theme="clear"
               icon={DotsThree}
@@ -819,7 +819,7 @@ export function BaseInput(props: {
             />
           </div>
         </Show>
-        <div class="flex flex-row w-full h-8 justify-between items-center p-2 mb-2 space-x-2 allow-css-brackets">
+        <div class="flex flex-row w-full h-8 justify-between items-center py-2 px-2 mb-2 space-x-2 allow-css-brackets">
           <div class="flex flex-row items-center gap-2">
             <div class="relative" ref={attachButtonRef}>
               <IconButton
