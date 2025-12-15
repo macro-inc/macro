@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::contacts;
 use crate::labels::get;
 use crate::parse::db_to_service;
-use anyhow::{Context, anyhow};
+use anyhow::Context;
 use models_email::email::db;
 use models_email::email::service::message::Message;
 use models_email::service::address::ContactInfo;
@@ -60,6 +60,7 @@ pub async fn get_message_sender_and_pretty_sender(
 
 /// Returns the (message_id, thread_id) for a message with the given (link_id, provider_id).
 /// Errors if no row is found.
+#[tracing::instrument(skip(pool), err)]
 pub async fn get_message_and_thread_id_by_provider_id(
     pool: &PgPool,
     link_id: Uuid,
@@ -76,20 +77,20 @@ pub async fn get_message_and_thread_id_by_provider_id(
     .bind(link_id)
     .bind(provider_id)
     .fetch_optional(pool)
-    .await
-    .context("Failed to query message/thread id by provider id")?;
+    .await?;
 
     match row {
         Some((message_id, thread_id)) => Ok((message_id, thread_id)),
-        None => Err(anyhow!(
+        None => anyhow::bail!(
             "Message not found for link_id={} provider_id={}",
             link_id,
             provider_id
-        )),
+        ),
     }
 }
 
 /// Returns `true` if a message already exists for this (provider_id, link_id), else `false`.
+#[tracing::instrument(skip(pool), err)]
 pub async fn message_exists_by_provider_id(
     pool: &PgPool,
     provider_id: &str,
@@ -107,8 +108,7 @@ pub async fn message_exists_by_provider_id(
     .bind(provider_id)
     .bind(link_id)
     .fetch_one(pool)
-    .await
-    .with_context(|| format!("Failed to check existing message for link_id {}", link_id))?;
+    .await?;
 
     Ok(exists)
 }
