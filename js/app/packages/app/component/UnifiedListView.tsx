@@ -14,6 +14,9 @@ import { ToggleButton } from '@core/component/FormControls/ToggleButton';
 import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
 import { IconButton } from '@core/component/IconButton';
 import { ContextMenuContent, MenuSeparator } from '@core/component/Menu';
+import { fetchBulkEntityProperties } from '@core/component/Properties/api/fetchProperties';
+import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
+import type { Property } from '@core/component/Properties/types';
 import { getSuggestedProperties } from '@core/component/Properties/utils';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import {
@@ -228,6 +231,12 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     entitiesSignal: [entities_, setEntities],
     emailViewSignal: [emailView],
   } = unifiedListContext;
+
+  // Properties for task entities
+  const [taskPropertiesMap, setTaskPropertiesMap] = createSignal<
+    Map<string, Property[]>
+  >(new Map());
+
   const view = createMemo(() => viewsData[selectedView()]);
   const selectedEntity = createMemo(() => view()?.selectedEntity);
 
@@ -1044,6 +1053,44 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       setEntities(entities());
     });
 
+    // Fetch properties for task entities
+    createEffect(() => {
+      const allEntities = entities();
+      if (!allEntities?.length) return;
+
+      const taskEntities = allEntities.filter(isTaskEntity);
+      if (taskEntities.length === 0) return;
+
+      // Only fetch properties for entities we don't already have
+      const currentMap = taskPropertiesMap();
+      const newTaskEntities = taskEntities.filter((e) => !currentMap.has(e.id));
+      if (newTaskEntities.length === 0) return;
+
+      const entityRefs = newTaskEntities.map((e) => ({
+        entity_id: e.id,
+        entity_type: 'TASK' as const,
+      }));
+
+      const propertyIds = [
+        SYSTEM_PROPERTY_IDS.ASSIGNEES,
+        SYSTEM_PROPERTY_IDS.STATUS,
+        SYSTEM_PROPERTY_IDS.PRIORITY,
+      ];
+
+      fetchBulkEntityProperties(entityRefs, propertyIds).then((result) => {
+        if (result.ok) {
+          // Merge new properties with existing
+          setTaskPropertiesMap((prev) => {
+            const merged = new Map(prev);
+            for (const [id, props] of result.value) {
+              merged.set(id, props);
+            }
+            return merged;
+          });
+        }
+      });
+    });
+
     return { dispose, isLoading, UnifiedListComponent };
   });
 
@@ -1557,6 +1604,11 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                     });
                   }}
                   entity={innerProps.entity}
+                  properties={
+                    isTaskEntity(innerProps.entity)
+                      ? taskPropertiesMap().get(innerProps.entity.id)
+                      : undefined
+                  }
                   timestamp={timestamp()}
                   onClick={entityClickHandler}
                   onClickRowAction={
