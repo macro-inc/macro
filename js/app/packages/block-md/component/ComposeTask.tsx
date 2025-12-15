@@ -1,14 +1,9 @@
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
-import { saveEntityProperty } from '@core/component/Properties/api';
+import { PropertiesProvider } from '@core/component/Properties/context/PropertiesContext';
 import { TextButton } from '@core/component/TextButton';
 import { toast } from '@core/component/Toast/Toast';
-import { UserIcon } from '@core/component/UserIcon';
-import type { IUser } from '@core/user';
-import { useContacts } from '@core/user';
 import { createMarkdownFile } from '@core/util/create';
-import { createFreshSearch } from '@core/util/freshSort';
-import XIcon from '@icon/regular/x.svg';
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import { createSignal } from 'solid-js';
 
 export interface ComposeTaskProps {
   onCreateTask?: (title: string, content: string) => void;
@@ -45,6 +40,8 @@ export function ComposeTask(props: ComposeTaskProps) {
     }
   };
 
+  const properties = () => [];
+
   return (
     <div class="flex flex-col gap-4 h-96 p-4">
       {/* Title Input */}
@@ -54,12 +51,12 @@ export function ComposeTask(props: ComposeTaskProps) {
           placeholder="Task title..."
           value={title()}
           onInput={(e) => setTitle(e.currentTarget.value)}
-          class="w-full py-2 text-lg font-medium placeholder-ink-placeholder"
+          class="w-full py-2 text-xl font-regular placeholder-ink-placeholder"
         />
       </div>
 
       {/* Content Editor */}
-      <div class="flex-1 min-h-0">
+      <div class="flex-1 min-h-0 text-base">
         <MarkdownTextarea
           editable={() => true}
           onChange={(value) => setContent(value)}
@@ -68,6 +65,16 @@ export function ComposeTask(props: ComposeTaskProps) {
           class="h-full"
         />
       </div>
+      <PropertiesProvider
+        entityType="TASK"
+        canEdit={true}
+        properties={properties}
+        onRefresh={() => {}}
+        onPropertyAdded={() => {}}
+        onPropertyDeleted={() => {}}
+      >
+        <div class="w-full bg-yellow-200"></div>
+      </PropertiesProvider>
 
       {/* Action Button */}
       <div class="flex-shrink-0 flex justify-end">
