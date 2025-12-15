@@ -23,8 +23,8 @@ import {
   type MaybeResult,
 } from '@core/util/maybeResult';
 import { buildSimpleEntityUrl } from '@core/util/url';
-import IconGlobe from '@icon/regular/globe.svg';
 import IconEyeSlash from '@icon/regular/eye-slash.svg';
+import IconGlobe from '@icon/regular/globe.svg';
 import IconLink from '@icon/regular/link.svg';
 import User from '@icon/regular/user.svg';
 import IconUsers from '@icon/regular/users.svg';
