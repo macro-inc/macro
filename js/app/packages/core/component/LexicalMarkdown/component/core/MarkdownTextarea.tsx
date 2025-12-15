@@ -13,6 +13,7 @@ import {
   type Accessor,
   createEffect,
   createSignal,
+  type JSX,
   onCleanup,
   onMount,
   Show,
@@ -68,6 +69,7 @@ export interface MarkdownTextareaProps {
   initialValue?: string;
   initialHtml?: string;
   placeholder?: string;
+  watermark?: JSX.Element;
   type?: EditorType;
   onEnter?: (e: KeyboardEvent, value: string) => boolean;
   focusOnMount?: boolean;
@@ -281,6 +283,12 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
             </p>
           </div>
         </Show>
+        <Show when={props.watermark}>
+          <div class="text-ink/50 mt-[1lh]" data-watermark>
+            {props.watermark}
+          </div>
+        </Show>
+
         <MentionsMenu
           editor={editor}
           menu={mentionsMenuOperations}

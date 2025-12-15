@@ -176,21 +176,42 @@ fn calculate_hashes(data: &[u8]) -> (String, String) {
 /// Determines the file name (without extension) and file type (extension) from the payload.
 fn determine_file_metadata(p: &AttachmentUploadMetadata) -> anyhow::Result<(String, String)> {
     // documents must have a file name to be inserted into Document table.
-    let file_name = p
+    let original_file_name = p
         .filename
         .as_deref()
         .context("attachment filename is missing")?;
 
-    let file_name = file_name.split('.').next().unwrap_or(file_name).to_string();
+    let file_name = original_file_name
+        .split('.')
+        .next()
+        .unwrap_or(original_file_name)
+        .to_string();
 
-    let file_type = mime_guess::get_mime_extensions_str(&p.mime_type)
-        .and_then(|exts| exts.first().map(|s| s.to_string()))
-        .ok_or_else(|| {
-            anyhow!(
-                "Failed to determine file extension from mime type: {}",
-                p.mime_type
-            )
-        })?;
+    let file_type = match original_file_name
+        .rsplit_once('.')
+        .map(|(_, ext)| ext.trim())
+        .filter(|ext| !ext.is_empty())
+    {
+        // if it's a heic, the mime_type can sometimes be heif. hardcode file_type to match file name
+        Some(ext) if ext.eq_ignore_ascii_case("heic") => "heic".to_string(),
+        _ => mime_guess::get_mime_extensions_str(&p.mime_type)
+            .and_then(|exts| exts.first().map(|s| s.to_string()))
+            .or_else(|| {
+                // if mime_guess fails, use everything after the last '.' in the original filename
+                original_file_name
+                    .rsplit_once('.')
+                    .map(|(_, ext)| ext.trim())
+                    .filter(|ext| !ext.is_empty())
+                    .map(|ext| ext.to_string())
+            })
+            .ok_or_else(|| {
+                anyhow!(
+                    "Failed to determine file extension from mime type ({}) or filename ({})",
+                    p.mime_type,
+                    original_file_name
+                )
+            })?,
+    };
 
     Ok((file_name, file_type))
 }

@@ -162,7 +162,6 @@ async fn test_link_subtasks_error_propagates() {
 
     repo.expect_link_subtasks()
         .returning(|_, _| Box::pin(async { Err(anyhow!("subtask link failed")) }));
-
     let service = PropertiesServiceImpl::new(repo);
 
     let err = service
@@ -171,4 +170,135 @@ async fn test_link_subtasks_error_propagates() {
         .unwrap_err();
 
     assert_eq!(err.to_string(), "subtask link failed");
+}
+
+// ============================================================================
+// get_property_value unit tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_get_property_value_returns_value_when_exists() {
+    let mut repo = MockPropertiesRepo::new();
+
+    let prop_id = Uuid::from_u128(0xdeadbeef_dead_beef_dead_beefdeadbeef);
+
+    repo.expect_get_entity_property_value()
+        .withf(move |entity_id, entity_type, p| {
+            entity_id == "e1" && *entity_type == EntityType::Document && *p == prop_id
+        })
+        .returning(|_, _, _| Box::pin(async { Ok(Some(PropertyValue::Str("hello".to_string()))) }));
+
+    let service = PropertiesServiceImpl::new(repo);
+
+    let result = service
+        .get_property_value("e1", EntityType::Document, prop_id)
+        .await
+        .unwrap();
+
+    assert_eq!(result, Some(PropertyValue::Str("hello".to_string())));
+}
+
+#[tokio::test]
+async fn test_get_property_value_returns_none_when_not_attached() {
+    let mut repo = MockPropertiesRepo::new();
+
+    repo.expect_get_entity_property_value()
+        .returning(|_, _, _| Box::pin(async { Ok(None) }));
+
+    let service = PropertiesServiceImpl::new(repo);
+
+    let result = service
+        .get_property_value("e1", EntityType::Document, Uuid::nil())
+        .await
+        .unwrap();
+
+    assert_eq!(result, None);
+}
+
+#[tokio::test]
+async fn test_get_property_value_error_path() {
+    let mut repo = MockPropertiesRepo::new();
+
+    repo.expect_get_entity_property_value()
+        .returning(|_, _, _| Box::pin(async { Err(anyhow!("db error")) }));
+
+    let service = PropertiesServiceImpl::new(repo);
+
+    let err = service
+        .get_property_value("e1", EntityType::Document, Uuid::nil())
+        .await
+        .unwrap_err();
+
+    assert_eq!(err.to_string(), "db error");
+}
+
+// ============================================================================
+// get_system_property_value unit tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_get_system_property_value_returns_value_when_exists() {
+    let mut repo = MockPropertiesRepo::new();
+
+    repo.expect_get_entity_property_value()
+        .withf(|entity_id, entity_type, prop_id| {
+            entity_id == "e1"
+                && *entity_type == EntityType::Document
+                && *prop_id == SystemPropertyKey::STATUS_UUID
+        })
+        .returning(|_, _, _| {
+            Box::pin(async {
+                Ok(Some(PropertyValue::SelectOption(vec![
+                    StatusOption::COMPLETED_UUID,
+                ])))
+            })
+        });
+
+    let service = PropertiesServiceImpl::new(repo);
+
+    let result = service
+        .get_system_property_value("e1", EntityType::Document, SystemPropertyKey::Status)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        result,
+        Some(PropertyValue::SelectOption(vec![
+            StatusOption::COMPLETED_UUID
+        ]))
+    );
+}
+
+#[tokio::test]
+async fn test_get_system_property_value_returns_none_when_not_attached() {
+    let mut repo = MockPropertiesRepo::new();
+
+    repo.expect_get_entity_property_value()
+        .returning(|_, _, _| Box::pin(async { Ok(None) }));
+
+    let service = PropertiesServiceImpl::new(repo);
+
+    let result = service
+        .get_system_property_value("e1", EntityType::Document, SystemPropertyKey::Status)
+        .await
+        .unwrap();
+
+    assert_eq!(result, None);
+}
+
+#[tokio::test]
+async fn test_get_system_property_value_error_path() {
+    let mut repo = MockPropertiesRepo::new();
+
+    repo.expect_get_entity_property_value()
+        .returning(|_, _, _| Box::pin(async { Err(anyhow!("db error")) }));
+
+    let service = PropertiesServiceImpl::new(repo);
+
+    let err = service
+        .get_system_property_value("e1", EntityType::Document, SystemPropertyKey::Status)
+        .await
+        .unwrap_err();
+
+    assert_eq!(err.to_string(), "db error");
 }

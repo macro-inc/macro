@@ -55,4 +55,39 @@ impl PropertiesRepo for PropertiesPgRepo {
     async fn link_subtasks(&self, task_id: Uuid, subtask_ids: Vec<Uuid>) -> Result<(), Self::Err> {
         task_property_queries::link_subtasks(&self.pool, task_id, subtask_ids).await
     }
+
+    #[tracing::instrument(skip(self))]
+    async fn get_entity_property_value(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        property_definition_id: Uuid,
+    ) -> Result<Option<PropertyValue>, Self::Err> {
+        let row = sqlx::query!(
+            r#"
+            SELECT values as "values: serde_json::Value"
+            FROM entity_properties
+            WHERE entity_id = $1
+              AND entity_type = $2
+              AND property_definition_id = $3
+            "#,
+            entity_id,
+            entity_type as EntityType,
+            property_definition_id
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        match row {
+            None => Ok(None),
+            Some(r) => match r.values {
+                None => Ok(None),
+                Some(json_value) if json_value.is_null() => Ok(None),
+                Some(json_value) => {
+                    let value: PropertyValue = serde_json::from_value(json_value)?;
+                    Ok(Some(value))
+                }
+            },
+        }
+    }
 }

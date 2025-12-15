@@ -1,4 +1,3 @@
-import { javascript } from '@codemirror/lang-javascript';
 import { IconButton } from '@core/component/IconButton';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
@@ -34,7 +33,6 @@ interface EmailMessageBodyProps {
 export function EmailMessageBody(props: EmailMessageBodyProps) {
   const [showFullHTML, setShowFullHTML] = createSignal<boolean>(false);
   const userEmail = useEmail();
-  javascript;
 
   if (DEV_MODE_ENV) {
     console.log(
@@ -200,6 +198,7 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
         }}
       >
         <Switch>
+          {/* If available, we use body_macro to render "Macro-fied" email content in static markdown with, e.g. correctly styled document mentions. */}
           <Match when={!showFullHTML() && props.message.body_macro}>
             {(bodyMacro) => {
               return (

@@ -100,5 +100,18 @@ async fn get_access_level(
         PermissionError::InternalError(message)
     })?;
 
+    // Fallback for threads: check ownership via link_id if no permission records exist.
+    // This handles owned threads where EmailThreadPermission/UserItemAccess were never created.
+    if access_level.is_none()
+        && entity_ref.entity_type == EntityType::Thread
+        && let Ok(thread_id) = uuid::Uuid::parse_str(&entity_ref.entity_id)
+        && let Ok(Some(owner_id)) =
+            email_db_client::threads::get::get_macro_id_from_thread_id(&context.db, thread_id).await
+        && owner_id == user_id
+    {
+        tracing::debug!("user owns thread via link_id, granting owner access");
+        return Ok(Some(AccessLevel::Owner));
+    }
+
     Ok(access_level)
 }

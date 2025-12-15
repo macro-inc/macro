@@ -20,7 +20,7 @@ import {
 import { Dynamic } from 'solid-js/web';
 import clickOutside from '../directive/clickOutside';
 import { EditingContext } from './Editable';
-import { BasicHotkey } from './Hotkey';
+import { Hotkey } from './Hotkey';
 
 false && clickOutside;
 
@@ -231,7 +231,7 @@ export function MenuItem(props: MenuItemProps) {
       <Show when={props.hotkeyToken} keyed>
         {(hotkeyToken) => (
           <div class="ml-auto text-page text-xs">
-            <BasicHotkey token={hotkeyToken} />
+            <Hotkey token={hotkeyToken} class="text-ink-muted" showPlus />
           </div>
         )}
       </Show>

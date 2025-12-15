@@ -23,11 +23,11 @@ import {
   type MaybeResult,
 } from '@core/util/maybeResult';
 import { buildSimpleEntityUrl } from '@core/util/url';
-import EyeSlash from '@icon/bold/eye-slash-bold.svg';
-import GlobeIcon from '@icon/bold/globe-simple-bold.svg';
-import LinkIconBold from '@icon/bold/link-bold.svg';
-import Users from '@icon/bold/users-bold.svg';
+import IconEyeSlash from '@icon/regular/eye-slash.svg';
+import IconGlobe from '@icon/regular/globe.svg';
+import IconLink from '@icon/regular/link.svg';
 import User from '@icon/regular/user.svg';
+import IconUsers from '@icon/regular/users.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { Switch as KobalteSwitch } from '@kobalte/core/switch';
@@ -54,14 +54,12 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import { Button } from '../FormControls/Button';
 import { ForwardToChannel } from '../ForwardToChannel';
 import { IconButton } from '../IconButton';
 import { DropdownMenuContent, MENU_ITEM_CLASS, MenuItem } from '../Menu';
 import { Permissions } from '../SharePermissions';
 import { TextButton } from '../TextButton';
 import { toast } from '../Toast/Toast';
-import { Tooltip } from '../Tooltip';
 import { openLoginModal } from './LoginButton';
 
 false && clickOutside;
@@ -533,7 +531,7 @@ export function ShareModal(props: ShareModalProps) {
                                           <User class="flex-shrink-0 w-4 h-4" />
                                         </Match>
                                         <Match when={true}>
-                                          <Users class="flex-shrink-0 w-4 h-4" />
+                                          <IconUsers class="flex-shrink-0 w-4 h-4" />
                                         </Match>
                                       </Switch>
                                       <div class="font-medium truncate">
@@ -685,7 +683,7 @@ export function ShareButton(props: ShareButtonProps) {
         e.stopPropagation();
         copyLink();
       },
-      icon: LinkIconBold,
+      icon: IconLink,
     };
   });
 
@@ -700,76 +698,62 @@ export function ShareButton(props: ShareButtonProps) {
     return 'Just me';
   });
 
+  const shareIcon = createMemo(() => {
+    const accessLevel = shareAccessLevelText();
+    if (accessLevel === 'Public') {
+      return IconGlobe;
+    }
+    if (accessLevel === 'Shared') {
+      return IconUsers;
+    }
+    if (accessLevel === 'Just me') {
+      return IconEyeSlash;
+    }
+    return IconGlobe;
+  });
+
   return (
     <>
-      <div class="ml-1 border-ink border">
-        <IconButton
-          size="xs"
-          theme="reverse"
-          icon={ShareLinkAction().icon}
-          onClick={ShareLinkAction().action}
-          tooltip={{ label: 'Copy Share Link' }}
-        />
-      </div>
-      <div class="bg-ink w-1 h-[4px]"></div>
-      <Button
-        size="XS"
-        hotkeyToken={'block.share'}
-        onClick={(e) => {
+      <IconButton
+        tooltip={{
+          label:
+            shareAccessLevelText() === 'Public'
+              ? 'Share • Anyone with the link can access'
+              : shareAccessLevelText() === 'Shared'
+                ? 'Share • Shared with specific people'
+                : shareAccessLevelText() === 'Just me'
+                  ? 'Share • Only you can access'
+                  : 'Share',
+        }}
+        onClick={(_e) => {
           if (!isAuthenticated()) {
             openLoginModal();
           } else {
             track(TrackingEvents.SHARE.OPEN);
-            ShareLinkAction().action(e);
             setIsSharePermOpen(true);
           }
         }}
-      >
-        <div class="flex flex-row items-center">
-          <Show
-            when={shareAccessLevelText() !== ''}
-            // use this fallback to force the button to correct height without icons
-            fallback={<div class="w-0 h-3" />}
-          >
-            <div class="mr-1 font-medium text-panel/80 text-sm text-nowrap">
-              <Switch>
-                <Match when={shareAccessLevelText() === 'Public'}>
-                  <Tooltip
-                    tooltip={
-                      <div>Anyone with the link can access this document</div>
-                    }
-                  >
-                    <GlobeIcon class="size-3" />
-                  </Tooltip>
-                </Match>
-                <Match when={shareAccessLevelText() === 'Shared'}>
-                  <Tooltip
-                    tooltip={<div>Shared with specific people or channels</div>}
-                  >
-                    <Users class="size-3" />
-                  </Tooltip>
-                </Match>
-                <Match when={shareAccessLevelText() === 'Just me'}>
-                  <Tooltip
-                    tooltip={<div>Only you can access this document</div>}
-                  >
-                    <EyeSlash class="size-3" />
-                  </Tooltip>
-                </Match>
-              </Switch>
-            </div>
-          </Show>
-          Share
-        </div>
-      </Button>
+        icon={shareIcon()}
+        theme="clear"
+        size="sm"
+      />
+
+      <IconButton
+        size="sm"
+        theme="clear"
+        icon={ShareLinkAction().icon}
+        onClick={ShareLinkAction().action}
+        tooltip={{ label: 'Copy Share Link' }}
+      />
+
       <ShareModal
-        id={props.id}
-        name={props.name}
-        userPermissions={props.userPermissions}
-        itemType={props.itemType}
-        isSharePermOpen={isSharePermOpen()}
         setIsSharePermOpen={setIsSharePermOpen}
+        userPermissions={props.userPermissions}
+        isSharePermOpen={isSharePermOpen()}
+        itemType={props.itemType}
         owner={props.owner}
+        name={props.name}
+        id={props.id}
       />
     </>
   );

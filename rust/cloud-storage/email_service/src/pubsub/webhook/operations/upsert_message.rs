@@ -1,13 +1,13 @@
 use crate::pubsub::context::PubSubContext;
 use crate::pubsub::util::cg_refresh_email;
+use crate::pubsub::webhook::operations::shared::notify_search;
 use crate::pubsub::webhook::process;
 use crate::pubsub::webhook::process::check_gmail_rate_limit_webhook;
 use crate::util::process_pre_insert::{process_message_pre_insert, process_threads_pre_insert};
 use crate::util::upload_attachment::{UploadAttachmentContext, upload_attachment};
+use anyhow::Context;
 use email_db_client::threads;
-use email_db_client::threads::get::get_outbound_threads_by_thread_ids;
 use email_utils::dedupe_emails;
-use futures::future::join_all;
 use insight_service_client::InsightContextProvider;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::contacts::ConnectionsMessage;
@@ -22,7 +22,6 @@ use models_email::db::address::EmailRecipientType;
 use models_email::email::service;
 use models_email::email::service::link;
 use models_email::email::service::message::SimpleMessage;
-use models_email::email::service::thread::UserThreadIds;
 use models_email::gmail::operations::GmailApiOperation;
 use models_email::gmail::webhook::{UpsertMessagePayload, WebhookOperation};
 use models_email::service::attachment::{AttachmentUploadArgs, AttachmentUploadDestination};
@@ -30,9 +29,8 @@ use models_email::service::message::Message;
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use models_opensearch::SearchEntityType;
 use sqs_client::search::SearchQueueMessage;
-use sqs_client::search::email::EmailMessage;
 use sqs_client::search::name::EntityName;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::result;
 use uuid::Uuid;
 
@@ -108,16 +106,17 @@ pub async fn upsert_message(
     })?;
 
     // before upserting, figure out if the message is new so we can send a notification for it if so
-    let new_message_provider_ids = email_db_client::messages::get::find_missing_provider_ids(
+    let message_already_exists = email_db_client::messages::get::message_exists_by_provider_id(
         &ctx.db,
-        HashSet::from([payload.provider_message_id.clone()]),
+        &payload.provider_message_id,
         link.id,
     )
     .await
     .map_err(|e| {
         ProcessingError::NonRetryable(DetailedError {
             reason: FailureReason::DatabaseQueryFailed,
-            source: e.context("Failed to find missing provider_ids".to_string()),
+            source: e
+                .context("Failed to check whether provider_message_id already exists".to_string()),
         })
     })?;
 
@@ -149,6 +148,20 @@ pub async fn upsert_message(
         })?;
     }
 
+    let (message_db_id, thread_db_id) =
+        email_db_client::messages::get::get_message_and_thread_id_by_provider_id(
+            &ctx.db,
+            link.id,
+            &payload.provider_message_id,
+        )
+        .await
+        .map_err(|e| {
+            ProcessingError::NonRetryable(DetailedError {
+                reason: FailureReason::DatabaseQueryFailed,
+                source: e.context("Failed to get new message db id".to_string()),
+            })
+        })?;
+
     handle_attachment_upload(
         ctx,
         &gmail_access_token,
@@ -167,6 +180,8 @@ pub async fn upsert_message(
     )
     .await?;
 
+    notify_search(ctx, link, message_db_id).await?;
+
     // trigger FE inbox refresh
     cg_refresh_email(
         &ctx.connection_gateway_client,
@@ -176,7 +191,16 @@ pub async fn upsert_message(
     .await;
 
     // notify downstream services of new messages
-    notify_for_new_messages(ctx, link, new_message_provider_ids).await?;
+    if !message_already_exists {
+        notify_for_new_message(
+            ctx,
+            link,
+            &payload.provider_message_id,
+            message_db_id,
+            thread_db_id,
+        )
+        .await?;
+    }
 
     Ok(())
 }
@@ -347,98 +371,51 @@ async fn handle_contacts_sync(
 }
 
 /// Sends new message context to the insight service
-async fn generate_email_insights_for_new_messages(
+async fn generate_email_insights_for_new_message(
     ctx: &PubSubContext,
     link: &service::link::Link,
-    message_thread_ids: Vec<(Uuid, Uuid)>,
+    message_id: Uuid,
+    thread_id: Uuid,
 ) -> anyhow::Result<()> {
-    // maps macro user id to list of (thread_id, message_id)
-    let mut user_messages: HashMap<String, Vec<NewMessagePayload>> = HashMap::new();
-    for (message_id, thread_id) in message_thread_ids {
-        // Use the correct macro_user_id for each message
-        let macro_user_id = link.macro_id.clone();
-        user_messages
-            .entry(macro_user_id.to_string())
-            .or_default()
-            .push(NewMessagePayload {
+    // Fetch the thread and ensure it's an outbound thread (has latest_outbound)
+    let thread =
+        email_db_client::threads::get::get_thread_by_id_and_link_id(&ctx.db, thread_id, link.id)
+            .await
+            .context("Failed to fetch thread for new message")?;
+
+    let Some(thread) = thread else {
+        tracing::warn!(%thread_id, link_id = %link.id, "Thread not found; skipping insight generation");
+        return Ok(());
+    };
+
+    if thread.latest_outbound_message_ts.is_none() {
+        tracing::debug!(
+            %thread_id,
+            link_id = %link.id,
+            "Thread has no latest_outbound_message_ts; skipping insight generation"
+        );
+        return Ok(());
+    }
+
+    let macro_user_id = link.macro_id.to_string();
+
+    let context = GenerateEmailInsightContext {
+        macro_user_id: macro_user_id.clone(),
+        info: EmailInfo::NewMessages(NewMessagesPayload {
+            messages: vec![NewMessagePayload {
                 thread_id,
                 message_id,
                 user_email: link.email_address.0.as_ref().to_string(),
-            });
-    }
+            }],
+            batch_id: Uuid::new_v4().to_string(),
+        }),
+    };
 
-    let users_thread_ids: Vec<UserThreadIds> = user_messages
-        .iter()
-        .map(|(macro_user_id, messages)| UserThreadIds {
-            macro_user_id: macro_user_id.clone(),
-            thread_ids: messages.iter().map(|m| m.thread_id).collect(),
-        })
-        .collect();
+    let provider =
+        InsightContextProvider::create(ctx.sqs_client.clone(), EMAIL_INSIGHT_PROVIDER_SOURCE_NAME);
 
-    match get_outbound_threads_by_thread_ids(&ctx.db, users_thread_ids).await {
-        Ok(users_outbound_threads) => {
-            // for each user, filter out messages that are not part of an outbound thread
-            let email_insight_new_message_payloads = user_messages
-                .into_iter()
-                .filter_map(|(macro_user_id, messages)| {
-                    let user_outbound_thread_ids: HashSet<Uuid> = users_outbound_threads
-                        .iter()
-                        .filter_map(|t| {
-                            if t.macro_user_id == macro_user_id {
-                                Some(t.thread_ids.clone())
-                            } else {
-                                None
-                            }
-                        })
-                        .flatten()
-                        .collect();
-                    let outbound_messages = messages
-                        .iter()
-                        .filter_map(|m| {
-                            if user_outbound_thread_ids.contains(&m.thread_id) {
-                                Some(m.clone())
-                            } else {
-                                None
-                            }
-                        })
-                        .collect::<Vec<_>>();
-                    if outbound_messages.is_empty() {
-                        return None;
-                    }
-                    Some(GenerateEmailInsightContext {
-                        macro_user_id,
-                        info: EmailInfo::NewMessages(NewMessagesPayload {
-                            messages: outbound_messages,
-                            batch_id: Uuid::new_v4().to_string(),
-                        }),
-                    })
-                })
-                .collect::<Vec<_>>();
-
-            let contexts: Vec<_> = email_insight_new_message_payloads.into_iter().collect();
-
-            let provider = InsightContextProvider::create(
-                ctx.sqs_client.clone(),
-                EMAIL_INSIGHT_PROVIDER_SOURCE_NAME,
-            );
-
-            // send per-user messages to insight service
-            let results = join_all(
-                contexts
-                    .iter()
-                    .map(|context| provider.provide_email_context(context.clone())),
-            )
-            .await;
-
-            for (context, result) in contexts.into_iter().zip(results) {
-                if let Err(err) = result {
-                    tracing::error!(?context, error = %err, "Failed to provide email context to insight service");
-                }
-            }
-        }
-        Err(e) => {
-            tracing::error!(error = ?e, "failed to get outbound threads");
-        }
+    if let Err(err) = provider.provide_email_context(context.clone()).await {
+        tracing::error!(?context, error = %err, "Failed to provide email context to insight service");
     }
 
     Ok(())
@@ -492,7 +469,7 @@ async fn fetch_and_insert_thread(
                 })
             })?;
 
-        // notify search about new entity
+        // when a thread is created, add an entry into the names index for it
         ctx.sqs_client
             .send_message_to_search_event_queue(SearchQueueMessage::UpdateEntityName(EntityName {
                 entity_id: thread_id,
@@ -538,84 +515,44 @@ async fn process_and_insert_message(
     Ok(())
 }
 
-/// Notify downstream services about new messages in a user's inbox
-#[tracing::instrument(skip(ctx, link, new_message_provider_ids))]
-async fn notify_for_new_messages(
+/// Notify downstream services about new message in a user's inbox
+#[tracing::instrument(skip(ctx, link, new_message_provider_id))]
+async fn notify_for_new_message(
     ctx: &PubSubContext,
     link: &link::Link,
-    new_message_provider_ids: Vec<String>,
+    new_message_provider_id: &str,
+    message_db_id: Uuid,
+    thread_id: Uuid,
 ) -> result::Result<(), ProcessingError> {
-    if new_message_provider_ids.is_empty() {
-        return Ok(());
-    }
-
-    let new_message_db_ids =
-        email_db_client::messages::get::get_message_thread_ids_by_provider_ids(
-            &ctx.db,
-            link.id,
-            &new_message_provider_ids,
-        )
-        .await
-        .map_err(|e| {
-            ProcessingError::NonRetryable(DetailedError {
-                reason: FailureReason::DatabaseQueryFailed,
-                source: e.context("Failed to get new message db ids".to_string()),
-            })
-        })?;
-
     // notify user of new messages
-    send_notifications(ctx, link, new_message_provider_ids).await?;
+    send_notifications(ctx, link, new_message_provider_id).await?;
 
-    if !new_message_db_ids.is_empty() {
-        // send message to search text extractor queue
-        ctx.sqs_client
-            .bulk_send_message_to_search_event_queue(
-                new_message_db_ids
-                    .iter()
-                    .map(|(message_id, _thread_id)| {
-                        SearchQueueMessage::ExtractEmailMessage(EmailMessage {
-                            message_id: message_id.to_string(),
-                            macro_user_id: link.macro_id.to_string(),
-                        })
-                    })
-                    .collect(),
-            )
-            .await
-            .inspect_err(
-                |e| tracing::error!(error = ?e, "failed to send message to search extractor queue"),
-            )
-            .ok();
-
-        generate_email_insights_for_new_messages(ctx, link, new_message_db_ids)
-            .await
-            .ok();
-    }
+    generate_email_insights_for_new_message(ctx, link, message_db_id, thread_id)
+        .await
+        .ok();
 
     Ok(())
 }
 
 /// Send notifications for new inbound email messages
-#[tracing::instrument(skip(ctx, link, new_message_provider_ids))]
+
+#[tracing::instrument(skip(ctx, link))]
 async fn send_notifications(
     ctx: &PubSubContext,
     link: &link::Link,
-    new_message_provider_ids: Vec<String>,
+    new_message_provider_id: &str,
 ) -> result::Result<(), ProcessingError> {
-    if !ctx.notifications_enabled || new_message_provider_ids.is_empty() {
+    if !ctx.notifications_enabled {
         return Ok(());
     }
 
-    let notifiable_messages =
-        filter_notifiable_messages(ctx, link, new_message_provider_ids).await?;
+    let notifiable_message = filter_notifiable_message(ctx, link, new_message_provider_id).await?;
 
-    if notifiable_messages.is_empty() {
+    let Some(message) = notifiable_message else {
         return Ok(());
-    }
+    };
 
-    let message_ids: Vec<Uuid> = notifiable_messages
-        .iter()
-        .map(|message| message.db_id)
-        .collect();
+    let message_ids: Vec<Uuid> = vec![message.db_id];
 
     let sender_contacts =
         email_db_client::contacts::get::fetch_sender_contact_info(&ctx.db, &message_ids)
@@ -627,109 +564,95 @@ async fn send_notifications(
                 })
             })?;
 
-    for message in notifiable_messages {
-        let sender_contact = message
-            .from_contact_id
-            .and_then(|from_id| sender_contacts.get(&from_id));
+    let sender_contact = message
+        .from_contact_id
+        .and_then(|from_id| sender_contacts.get(&from_id));
 
-        let sender = sender_contact.map(|contact| {
-            contact
-                .name
-                .clone()
-                .unwrap_or_else(|| contact.email.clone())
-        });
+    let sender = sender_contact.map(|contact| {
+        contact
+            .name
+            .clone()
+            .unwrap_or_else(|| contact.email.clone())
+    });
 
-        let sender_id = sender_contact
-            .and_then(|contact| MacroUserIdStr::try_from_email(&contact.email).ok())
-            .map(|id| id.to_string());
+    let sender_id = sender_contact
+        .and_then(|contact| MacroUserIdStr::try_from_email(&contact.email).ok())
+        .map(|id| id.to_string());
 
-        let notification_metadata = NewEmailMetadata {
-            sender,
-            to_email: link.email_address.0.as_ref().to_string(),
-            thread_id: message.thread_db_id.to_string(),
-            subject: message.subject.unwrap_or_default(),
-            snippet: message.snippet.unwrap_or_default(),
-        };
+    let notification_metadata = NewEmailMetadata {
+        sender,
+        to_email: link.email_address.0.as_ref().to_string(),
+        thread_id: message.thread_db_id.to_string(),
+        subject: message.subject.unwrap_or_default(),
+        snippet: message.snippet.unwrap_or_default(),
+    };
 
-        let notification_queue_message = NotificationQueueMessage {
-            notification_entity: NotificationEntity::new_email(message.db_id.to_string()),
-            notification_event: NotificationEvent::NewEmail(notification_metadata),
-            sender_id,
-            recipient_ids: Some(vec![link.macro_id.to_string()]),
-            is_important_v0: Some(false),
-        };
+    let notification_queue_message = NotificationQueueMessage {
+        notification_entity: NotificationEntity::new_email(message.db_id.to_string()),
+        notification_event: NotificationEvent::NewEmail(notification_metadata),
+        sender_id,
+        recipient_ids: Some(vec![link.macro_id.to_string()]),
+        is_important_v0: Some(false),
+    };
 
-        if let Err(e) = ctx
-            .macro_notify_client
-            .send_notification(notification_queue_message)
-            .await
-        {
-            tracing::error!(error=?e, "unable to send notification");
-        }
+    if let Err(e) = ctx
+        .macro_notify_client
+        .send_notification(notification_queue_message)
+        .await
+    {
+        tracing::error!(error=?e, "unable to send notification");
     }
 
     Ok(())
 }
 
 // filter out messages we don't want to send notifications for
-#[tracing::instrument(skip(ctx, link, new_message_provider_ids))]
-async fn filter_notifiable_messages(
+#[tracing::instrument(skip(ctx, link))]
+async fn filter_notifiable_message(
     ctx: &PubSubContext,
     link: &link::Link,
-    new_message_provider_ids: Vec<String>,
-) -> result::Result<Vec<SimpleMessage>, ProcessingError> {
-    let new_messages = email_db_client::messages::get_simple_messages::get_simple_messages(
-        &ctx.db,
-        new_message_provider_ids,
-        link.id,
-    )
-    .await
-    .map_err(|e| {
-        ProcessingError::Retryable(DetailedError {
-            reason: FailureReason::DatabaseQueryFailed,
-            source: e.context("Failed to fetch simple messages".to_string()),
-        })
-    })?;
+    new_message_provider_id: &str,
+) -> result::Result<Option<SimpleMessage>, ProcessingError> {
+    let new_message =
+        email_db_client::messages::get_simple_messages::get_simple_message_by_provider_and_link(
+            &ctx.db,
+            new_message_provider_id,
+            &link.id,
+        )
+        .await
+        .map_err(|e| {
+            ProcessingError::Retryable(DetailedError {
+                reason: FailureReason::DatabaseQueryFailed,
+                source: e.context("Failed to fetch simple message".to_string()),
+            })
+        })?;
+
+    let Some(new_message) = new_message else {
+        return Ok(None);
+    };
 
     // 1. filter out sent and draft messages
-    let inbound_messages: Vec<SimpleMessage> = new_messages
-        .into_iter()
-        .filter(|message| !(message.is_sent || message.is_draft))
-        .collect();
-
-    if inbound_messages.is_empty() {
-        return Ok(Vec::new());
+    if new_message.is_sent || new_message.is_draft {
+        return Ok(None);
     }
 
     // 2. filter out messages that don't make it to the user's inbox (spam, etc)
-    let messages_labels_map = email_db_client::labels::get::fetch_message_labels_in_bulk(
-        &ctx.db,
-        &inbound_messages
-            .iter()
-            .map(|m| m.db_id)
-            .collect::<Vec<Uuid>>(),
-    )
-    .await
-    .map_err(|e| {
-        ProcessingError::Retryable(DetailedError {
-            reason: FailureReason::DatabaseQueryFailed,
-            source: e.context("Failed to fetch message labels".to_string()),
-        })
-    })?;
+    let labels = email_db_client::labels::get::fetch_message_labels(&ctx.db, new_message.db_id)
+        .await
+        .map_err(|e| {
+            ProcessingError::Retryable(DetailedError {
+                reason: FailureReason::DatabaseQueryFailed,
+                source: e.context("Failed to fetch message labels".to_string()),
+            })
+        })?;
 
-    let inbox_messages = inbound_messages
-        .into_iter()
-        .filter(|message| {
-            let labels = messages_labels_map
-                .get(&message.db_id)
-                .unwrap_or(&Vec::new())
-                .to_owned();
+    let is_inbox = labels
+        .iter()
+        .any(|label| label.name == service::label::system_labels::INBOX);
 
-            labels
-                .iter()
-                .any(|label| label.name == service::label::system_labels::INBOX)
-        })
-        .collect();
+    if !is_inbox {
+        return Ok(None);
+    }
 
-    Ok(inbox_messages)
+    Ok(Some(new_message))
 }
