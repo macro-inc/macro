@@ -1,5 +1,5 @@
 use aws_sdk_sns::{operation::publish::PublishOutput, types::MessageAttributeValue};
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Serialize, Serializer};
 use std::{borrow::Cow, collections::HashMap};
 
 #[derive(Clone, Debug)]
@@ -160,6 +160,7 @@ impl<T> FCMMessage<T> {
 #[derive(Debug, Serialize)]
 enum AndroidNotifPrio {
     Normal,
+    #[expect(dead_code)]
     High,
 }
 
@@ -236,7 +237,7 @@ impl<'a, T> SnsPayload<'a, T>
 where
     T: Serialize,
 {
-    fn into_json(&self) -> Result<String, serde_json::Error> {
+    fn as_json(&self) -> Result<String, serde_json::Error> {
         serde_json::to_string(self)
     }
 }
@@ -419,7 +420,7 @@ impl SNS {
             .publish()
             .target_arn(endpoint_arn)
             .message_structure("json")
-            .message(message_json.as_payload().into_json().unwrap())
+            .message(message_json.as_payload().as_json().unwrap())
             .set_message_attributes(Some(message_attributes.into_json()))
             .send()
             .await?;
