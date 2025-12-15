@@ -126,17 +126,21 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
           altHotkeyToken: TOKENS.create.taskNewSplit,
           hotkey: 't' as const,
           keyDownHandler: () => {
-            createBlock({
-              blockName: 'task',
-              loading: true,
-              createFn: () =>
-                createTask({
-                  title: '',
-                  content: '',
-                  projectId: undefined,
-                }),
-              shouldInsert: pressedKeys().has('opt'),
+            createComponent({
+              componentId: 'task-compose',
+              asPopover: true,
             });
+            // createBlock({
+            //   blockName: 'task',
+            //   loading: true,
+            //   createFn: () =>
+            //     createTask({
+            //       title: '',
+            //       content: '',
+            //       projectId: undefined,
+            //     }),
+            //   shouldInsert: pressedKeys().has('opt'),
+            // });
             return true;
           },
         },

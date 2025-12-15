@@ -129,7 +129,7 @@ function PopoverSplitModal(props: {
       case 'right':
         return 'items-center justify-end pr-16';
       default:
-        return 'items-center justify-center';
+        return 'justify-center items-start pt-48';
     }
   };
 
@@ -152,10 +152,10 @@ function PopoverSplitModal(props: {
           class={`fixed inset-0 z-modal flex ${getPositionClass()} pointer-events-none`}
         >
           <Dialog.Content
-            class="w-2xl h-xl"
+            class="w-4xl h-xl"
             use:clickOutside={() => props.onClose()}
           >
-            <ClippedPanel tl ref={setPanelRef} active>
+            <ClippedPanel tl ref={setPanelRef}>
               <SplitPanelContext.Provider value={stubPanelContext}>
                 <Show when={popover.mount}>{popover.mount.element()}</Show>
               </SplitPanelContext.Provider>
