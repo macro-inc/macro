@@ -43,7 +43,7 @@ const createBlock = async (spec: {
   const { replaceSplit, insertSplit } = useSplitLayout();
   const { blockName, createFn, loading } = spec;
 
-  setCreateMenuOpen(false);
+  setCreateMenuOpen(false, false);
 
   if (!loading) {
     const id = await createFn();
@@ -71,7 +71,7 @@ const createComponent = async (spec: {
   componentId: string;
   shouldInsert?: boolean;
 }) => {
-  setCreateMenuOpen(false);
+  setCreateMenuOpen(false, false);
   const { replaceSplit, insertSplit } = useSplitLayout();
   if (spec.shouldInsert) {
     insertSplit({ type: 'component', id: spec.componentId });
@@ -376,7 +376,7 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
 };
 
 type LauncherInnerProps = {
-  onClose: () => void;
+  onClose: (shouldReturnFocus?: boolean) => void;
 };
 
 const LauncherInner = (props: LauncherInnerProps) => {
@@ -429,7 +429,7 @@ const LauncherInner = (props: LauncherInnerProps) => {
       description: item.description,
       keyDownHandler: () => {
         item.keyDownHandler();
-        props.onClose();
+        props.onClose(false);
         return true;
       },
     });
@@ -564,7 +564,7 @@ const LauncherInner = (props: LauncherInnerProps) => {
 
 type LauncherProps = {
   open: boolean;
-  onOpenChange: (open: boolean) => void;
+  onOpenChange: (open: boolean, shouldReturnFocus?: boolean) => void;
 };
 
 export const Launcher = (props: LauncherProps) => {
@@ -596,7 +596,11 @@ export const Launcher = (props: LauncherProps) => {
 
         <Dialog.Content>
           <div class="fixed inset-0 z-modal w-screen h-screen flex items-center justify-center">
-            <LauncherInner onClose={() => props.onOpenChange(false)} />
+            <LauncherInner
+              onClose={(shouldReturnFocus) =>
+                props.onOpenChange(false, shouldReturnFocus)
+              }
+            />
           </div>
         </Dialog.Content>
       </Dialog.Portal>
