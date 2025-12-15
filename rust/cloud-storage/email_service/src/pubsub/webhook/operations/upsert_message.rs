@@ -7,9 +7,7 @@ use crate::util::process_pre_insert::{process_message_pre_insert, process_thread
 use crate::util::upload_attachment::{UploadAttachmentContext, upload_attachment};
 use anyhow::Context;
 use email_db_client::threads;
-use email_db_client::threads::get::get_outbound_threads_by_thread_ids;
 use email_utils::dedupe_emails;
-use futures::future::{join_all, ok};
 use insight_service_client::InsightContextProvider;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::contacts::ConnectionsMessage;
@@ -24,7 +22,6 @@ use models_email::db::address::EmailRecipientType;
 use models_email::email::service;
 use models_email::email::service::link;
 use models_email::email::service::message::SimpleMessage;
-use models_email::email::service::thread::UserThreadIds;
 use models_email::gmail::operations::GmailApiOperation;
 use models_email::gmail::webhook::{UpsertMessagePayload, WebhookOperation};
 use models_email::service::attachment::{AttachmentUploadArgs, AttachmentUploadDestination};
@@ -32,9 +29,8 @@ use models_email::service::message::Message;
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use models_opensearch::SearchEntityType;
 use sqs_client::search::SearchQueueMessage;
-use sqs_client::search::email::EmailMessage;
 use sqs_client::search::name::EntityName;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::result;
 use uuid::Uuid;
 
