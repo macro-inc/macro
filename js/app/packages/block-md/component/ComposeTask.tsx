@@ -1,5 +1,6 @@
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import { PropertiesProvider } from '@core/component/Properties/context/PropertiesContext';
+import type { Property } from '@core/component/Properties/types';
 import { TextButton } from '@core/component/TextButton';
 import { toast } from '@core/component/Toast/Toast';
 import { createMarkdownFile } from '@core/util/create';
@@ -40,7 +41,7 @@ export function ComposeTask(props: ComposeTaskProps) {
     }
   };
 
-  const properties = () => [];
+  const properties: Property[] = [{}];
 
   return (
     <div class="flex flex-col gap-4 h-96 p-4">
