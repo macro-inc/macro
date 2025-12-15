@@ -880,8 +880,8 @@ export function BaseInput(props: {
             </TextButton>
             <DropdownMenu>
               <DropdownMenu.Trigger>
-                <div class="w-8 min-h-8 flex justify-center items-center h-full border-r border-t border-b border-edge">
-                  <CaretDown class="size-4 text-edge" />
+                <div class="w-8 min-h-8 flex justify-center items-center h-full border-r border-t border-b border-ink hover:bg-hover">
+                  <CaretDown class="size-4 text-ink" />
                 </div>
               </DropdownMenu.Trigger>
               <DropdownMenuContent>
