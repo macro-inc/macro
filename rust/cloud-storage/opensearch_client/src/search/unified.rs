@@ -459,8 +459,12 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
 
     // Build sort
     let sort = vec![
+        SortType::Field(
+            FieldSort::new("updated_at_seconds", SortOrder::Desc)
+                .missing("_last")
+                .unmapped_type("long"),
+        ),
         SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
-        SortType::Field(FieldSort::new("entity_id", SortOrder::Desc)),
     ];
 
     for sort in sort {
