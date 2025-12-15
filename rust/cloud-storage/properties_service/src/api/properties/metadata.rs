@@ -46,7 +46,7 @@ pub async fn get_document_metadata_properties(
     let owner = (!document_metadata.owner.is_empty())
         .then(|| EntityReference::new(document_metadata.owner, EntityType::User));
     metadata_properties.push(create_metadata_property_entity_ref(
-        metadata::DOCUMENT_OWNER,
+        metadata::OWNER,
         models_properties::DataType::Entity,
         owner,
         entity_type,
@@ -55,7 +55,7 @@ pub async fn get_document_metadata_properties(
 
     // 3. Created time property
     metadata_properties.push(create_metadata_property_date(
-        metadata::DOCUMENT_CREATED_AT,
+        metadata::CREATED_AT,
         models_properties::DataType::Date,
         Some(document_metadata.created_at),
         entity_type,
@@ -63,7 +63,7 @@ pub async fn get_document_metadata_properties(
 
     // 4. Last updated time property
     metadata_properties.push(create_metadata_property_date(
-        metadata::DOCUMENT_LAST_UPDATED,
+        metadata::LAST_UPDATED,
         models_properties::DataType::Date,
         Some(document_metadata.updated_at),
         entity_type,
@@ -171,7 +171,7 @@ pub async fn get_project_metadata_properties(
             entity_type,
         ),
         create_metadata_property_entity_ref(
-            metadata::PROJECT_OWNER,
+            metadata::OWNER,
             models_properties::DataType::Entity,
             owner,
             entity_type,
@@ -179,14 +179,14 @@ pub async fn get_project_metadata_properties(
         ),
         // 3. Created time property
         create_metadata_property_date(
-            metadata::PROJECT_CREATED_AT,
+            metadata::CREATED_AT,
             models_properties::DataType::Date,
             Some(project_metadata.created_at),
             entity_type,
         ),
         // 4. Last updated time property
         create_metadata_property_date(
-            metadata::PROJECT_LAST_UPDATED,
+            metadata::LAST_UPDATED,
             models_properties::DataType::Date,
             Some(project_metadata.updated_at),
             entity_type,

@@ -2,11 +2,13 @@ use uuid::Uuid;
 
 /// Metadata property display names
 pub mod metadata {
+    // Common (shared across entity types)
+    pub const OWNER: &str = "Owner";
+    pub const CREATED_AT: &str = "Created At";
+    pub const LAST_UPDATED: &str = "Last Updated";
+
     // Document metadata
     pub const DOCUMENT_NAME: &str = "Document Name";
-    pub const DOCUMENT_OWNER: &str = "Owner";
-    pub const DOCUMENT_CREATED_AT: &str = "Created At";
-    pub const DOCUMENT_LAST_UPDATED: &str = "Last Updated";
     pub const DOCUMENT_PROJECT: &str = "Project";
 
     // Thread metadata
@@ -18,9 +20,6 @@ pub mod metadata {
 
     // Project metadata
     pub const PROJECT_NAME: &str = "Project Name";
-    pub const PROJECT_OWNER: &str = "Owner";
-    pub const PROJECT_CREATED_AT: &str = "Created At";
-    pub const PROJECT_LAST_UPDATED: &str = "Last Updated";
     pub const PROJECT_PARENT: &str = "Parent Project";
 }
 
