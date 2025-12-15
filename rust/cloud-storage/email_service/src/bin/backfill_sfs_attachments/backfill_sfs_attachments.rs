@@ -1,12 +1,11 @@
 //! # Attachment Backfill Utility
 //!
-//! This binary is used to find and upload relevant email attachments for a given user account.
-//! It fetches attachment metadata from the local database based on several heuristics,
-//! downloads the actual attachment data from Gmail, and uploads it to a document storage service.
+//! This binary is used to find and upload image/video email attachments for a given user account.
+//! It fetches attachment metadata from the local database, downloads the actual attachment data
+//! from Gmail, and uploads it to SFS.
 //!
 //! ## Required Environment Variables:
 //! - `DATABASE_URL`: The connection string for the PostgreSQL database.
-//! - `DSS_URL`: The URL for the Document Storage Service.
 //! - `SFS_URL`: The URL for the Static File Service.
 //! - `INTERNAL_AUTH_KEY`: An access token for authenticating with internal Macro services.
 //! - `MACRO_IDS`: The Macro IDs of the user accounts to backfill attachments for
