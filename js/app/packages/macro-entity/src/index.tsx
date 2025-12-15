@@ -23,8 +23,6 @@ export { createEmailsInfiniteQuery } from './queries/email';
 export type { EntityInfiniteQuery, EntityQuery } from './queries/entity';
 export { queryKeys } from './queries/key';
 export {
-  createEntityNotificationsInfiniteQuery,
-  createNotificationsInfiniteQuery,
   enhanceWithNotifications,
   invalidateAllNotifications,
   invalidateEntityNotifications,

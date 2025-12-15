@@ -1,6 +1,4 @@
-import {
-  useEntityNotificationsQuery,
-} from '@queries/notification/user-notifications';
+import { useEntityNotificationsQuery } from '@queries/notification/user-notifications';
 import { createEffect } from 'solid-js';
 import { unwrap } from 'solid-js/store';
 import type { EntityData } from '../types/entity';
@@ -43,18 +41,18 @@ export function enhanceWithNotifications<T extends EntityData>(
       return () =>
         notificationsQuery.isSuccess
           ? notificationsQuery.data
-            .filter(({ viewedAt }) => !viewedAt)
-            .toSorted((a, b) => {
-              if (a.isImportantV0 && b.isImportantV0) {
-                return b.createdAt - a.createdAt;
-              } else if (a.isImportantV0) {
-                return -1;
-              } else if (b.isImportantV0) {
-                return 1;
-              }
+              .filter(({ viewedAt }) => !viewedAt)
+              .toSorted((a, b) => {
+                if (a.isImportantV0 && b.isImportantV0) {
+                  return b.createdAt - a.createdAt;
+                } else if (a.isImportantV0) {
+                  return -1;
+                } else if (b.isImportantV0) {
+                  return 1;
+                }
 
-              return b.createdAt - a.createdAt;
-            })
+                return b.createdAt - a.createdAt;
+              })
           : [];
     },
   });
