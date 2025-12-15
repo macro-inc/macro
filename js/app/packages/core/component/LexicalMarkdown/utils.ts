@@ -369,8 +369,7 @@ export function setEditorStateFromHtml(
       const nodes = $generateNodesFromDOM(editor, dom);
       const root = $getRoot();
       root.clear();
-      root.select();
-      $insertNodes(nodes);
+      root.append(...nodes);
     });
     editor.read(() => {});
     return editor.getEditorState();
@@ -380,8 +379,7 @@ export function setEditorStateFromHtml(
     const nodes = $generateNodesFromDOM(editor, dom);
     const root = $getRoot();
     root.clear();
-    root.select();
-    $insertNodes(nodes);
+    root.append(...nodes);
   }
 }
 
