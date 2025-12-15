@@ -55,7 +55,7 @@ pub async fn get_document_metadata_properties(
 
     // 3. Created time property
     metadata_properties.push(create_metadata_property_date(
-        metadata::DOCUMENT_CREATED_AT,
+        metadata::CREATED_AT,
         models_properties::DataType::Date,
         Some(document_metadata.created_at),
         entity_type,
@@ -63,7 +63,7 @@ pub async fn get_document_metadata_properties(
 
     // 4. Last updated time property
     metadata_properties.push(create_metadata_property_date(
-        metadata::DOCUMENT_LAST_UPDATED,
+        metadata::LAST_UPDATED,
         models_properties::DataType::Date,
         Some(document_metadata.updated_at),
         entity_type,
