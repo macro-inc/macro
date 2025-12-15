@@ -47,6 +47,7 @@ import {
   konsoleOpen,
   lastCommandTime,
   rawQuery,
+  setKonsoleMode,
   setLastCommandTime,
   setRawQuery,
   toggleKonsoleVisibility,
@@ -334,10 +335,15 @@ export function KommandMenuInner(props: {
           autofocus
         />
         <ToggleSwitch
-          // onChange={setIsFullTextSearch()}
+          onChange={(val) => {
+            if(val){setKonsoleMode('FULL_TEXT_SEARCH')}
+            else{setKonsoleMode('ENTITY_SEARCH')}
+          }}
           checked={isFullTextSearch()}
-          label="Full Text Search"
-          size="SM"
+          // switchRootClass='subtle'
+          label='Full Text Search'
+          size='SM'
+
         />
       </div>
       <div class="bg-panel">
