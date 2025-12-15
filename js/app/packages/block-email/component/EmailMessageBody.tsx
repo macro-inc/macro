@@ -28,10 +28,13 @@ interface EmailMessageBodyProps {
   isBodyExpanded: Accessor<boolean>;
   setExpandedMessageBody: (id: string) => void;
   setFocusedMessageId: Setter<string | undefined>;
+  threadMessageIndex: number;
 }
 
 export function EmailMessageBody(props: EmailMessageBodyProps) {
-  const [showFullHTML, setShowFullHTML] = createSignal<boolean>(false);
+  const [showFullHTML, setShowFullHTML] = createSignal<boolean>(
+    props.threadMessageIndex === 0
+  );
   const userEmail = useEmail();
 
   if (DEV_MODE_ENV) {
@@ -60,31 +63,36 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
 
   const isPlaintext = !props.message.body_html_sanitized;
 
-  const parsedHTML = createMemo(() => {
-    const source = showFullHTML()
-      ? props.message.body_html_sanitized
-      : (bodyReplyless ?? props.message.body_html_sanitized);
-    if (!source) return { mainContent: '', signature: null, hasTable: false };
-    return parseEmailContent(source, !showFullHTML(), !showFullHTML());
-  });
+  // TODO the only reason to parse the body html is to find out if it contains a table. Instead the backend should return this and we should remove this parsing.
+  const parsedBodyHtml = props.message.body_html_sanitized
+    ? parseEmailContent(props.message.body_html_sanitized, false, false)
+    : undefined;
 
-  const hasHiddenReplyStructure = createMemo(() => {
+  const parsedBodyReplyless = bodyReplyless
+    ? parseEmailContent(bodyReplyless)
+    : undefined;
+
+  const source = () => {
+    return showFullHTML() ? parsedBodyHtml : parsedBodyReplyless;
+  };
+
+  const hasHiddenReplyStructure = () => {
     return (
       !isPlaintext &&
       ((bodyReplyless &&
         bodyReplyless?.toString().replace(/\s+/g, '').length !==
           props.message.body_html_sanitized?.toString().replace(/\s+/g, '')
             .length) ||
-        parsedHTML().signature)
+        parsedBodyReplyless?.signature)
     );
-  });
+  };
 
-  // TODO it would be nice to do some additional checks here, e.g. check if this message was sent from a user that the user has sent a message to before.
+  // TODO it might be nice to do some additional checks here, e.g. check if this message was sent from a user that the user has sent a message to before.
   const isPersonal = createMemo(() => {
     return (
       (props.message.from?.email === userEmail() ||
         props.message.labels.some((l) => l.name === 'CATEGORY_PERSONAL')) &&
-      !parsedHTML().hasTable
+      !parsedBodyHtml?.hasTable
     );
   });
 
@@ -97,7 +105,9 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
     styleEl.textContent = `img{display: var(--macro-email-img-display, initial);}`;
     shadow.appendChild(styleEl);
     const messageDiv = document.createElement('div');
-    messageDiv.innerHTML = parsedHTML().mainContent;
+    messageDiv.innerHTML = showFullHTML()
+      ? (parsedBodyHtml?.mainContent ?? '')
+      : (parsedBodyReplyless?.mainContent ?? '');
     messageDiv.style.userSelect = 'text';
     messageDiv.style.cursor = 'var(--cursor-auto)';
     messageDiv.style.overflow = 'auto';
@@ -144,16 +154,17 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
     }
   });
 
-  // Process the email colors when theme changes
+  // Process the email colors when: the theme changes, or the source HTML changes.
   createEffect(() => {
     themeUpdate();
+    showFullHTML();
     const root = host().shadowRoot;
     if (root) {
       if (isPersonal()) {
         queueMicrotask(() => {
           untrack(() => processEmailColors(root));
         });
-      } else if (parsedHTML().hasTable) {
+      } else if (source()?.hasTable) {
         const contentWrapper = root.querySelector('div');
         if (contentWrapper instanceof HTMLElement) {
           contentWrapper.style.setProperty(
