@@ -548,8 +548,10 @@ export function MessageList(props: MessageListProps) {
     const handle = untrack(virtualHandle);
     if (handle && prev !== 0 && newCount > prev) {
       const endIndex = handle.findEndIndex();
-      handle.scrollToIndex(endIndex, {
-        align: 'end',
+      queueMicrotask(() => {
+        handle.scrollToIndex(endIndex, {
+          align: 'end',
+        });
       });
     }
     return newCount;
