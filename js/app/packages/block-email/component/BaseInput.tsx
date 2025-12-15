@@ -433,7 +433,7 @@ export function BaseInput(props: {
     setShouldMarkDoneOnSuccess(markDone);
 
     const processedMacroBody = prepareMacroBody(bodyMacro());
-        
+
     sendMutation.mutate({
       message: {
         bcc,

@@ -340,7 +340,7 @@ export function prepareEmailBody(
   mentions: DocumentMentionInfo[];
 } | null {
   if (!editor) return null;
-   const generatedHtml = editor.read(() => {
+  const generatedHtml = editor.read(() => {
     return $generateHtmlFromNodes(editor);
   });
 
