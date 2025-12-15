@@ -22,8 +22,14 @@ import { IconButton } from './IconButton';
 import { DropdownMenuContent, MenuItem, MenuSeparator } from './Menu';
 import { toast } from './Toast/Toast';
 
-export type ImagePreviewProps = {
+type ImageData = {
   id: string;
+  width?: string | number | undefined;
+  height?: string | number | undefined;
+};
+
+export type ImagePreviewProps = {
+  image: ImageData;
   variant: 'small' | 'dynamic';
   square?: boolean;
   channelId?: string;
@@ -71,7 +77,7 @@ export function ImagePreview(props: ImagePreviewProps) {
       console.error('do not access sfs image url for dss images');
       return '';
     }
-    return `${SERVER_HOSTS['static-file']}/file/${props.id}`;
+    return `${SERVER_HOSTS['static-file']}/file/${props.image.id}`;
   };
 
   const imageSrc = () => {
@@ -85,7 +91,7 @@ export function ImagePreview(props: ImagePreviewProps) {
   createEffect(() => {
     if (!props.isDss) return;
 
-    getDssImageBlob(props.id)
+    getDssImageBlob(props.image.id)
       .then((blob) => {
         if (!blob) {
           throw new Error('Failed to download DSS image');
@@ -121,7 +127,7 @@ export function ImagePreview(props: ImagePreviewProps) {
       if (!url) throw new Error('No blob url');
       const a = document.createElement('a');
       a.href = url;
-      a.download = `image-${props.id}.png`;
+      a.download = `image-${props.image.id}.png`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -322,6 +328,8 @@ export function ImagePreview(props: ImagePreviewProps) {
               class={`${THEMES[props.variant]} select-none`}
               src={imageSrc()}
               alt="preview"
+              width={props.image.width}
+              height={props.image.height}
               // Prevent long press on image ios behavior
               style={{
                 '-webkit-touch-callout': 'none',
@@ -390,6 +398,8 @@ export function ImagePreview(props: ImagePreviewProps) {
                   class={THEMES['expanded']}
                   src={imageSrc()}
                   alt="preview"
+                  width={props.image.width}
+                  height={props.image.height}
                 />
               </Show>
             </div>
