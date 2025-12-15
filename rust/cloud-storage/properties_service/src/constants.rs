@@ -17,8 +17,11 @@ pub mod metadata {
     pub const THREAD_MESSAGES: &str = "Messages";
 
     // Project metadata
-    pub const NAME: &str = "Project Name";
-    pub const PARENT: &str = "Parent Project";
+    pub const PROJECT_NAME: &str = "Project Name";
+    pub const PROJECT_OWNER: &str = "Owner";
+    pub const PROJECT_CREATED_AT: &str = "Created At";
+    pub const PROJECT_LAST_UPDATED: &str = "Last Updated";
+    pub const PROJECT_PARENT: &str = "Parent Project";
 }
 
 /// Special UUID used for system-generated metadata properties.

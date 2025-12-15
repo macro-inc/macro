@@ -7,12 +7,13 @@ use sqlx::{Pool, Postgres};
 type Result<T> = std::result::Result<T, PropertiesDatabaseError>;
 
 /// Get project metadata by project ID from macrodb
-#[tracing::instrument(skip(db))]
+#[tracing::instrument(skip(db), err)]
 pub async fn get_project_metadata(
     db: &Pool<Postgres>,
     project_id: &str,
 ) -> Result<Option<ProjectMetadata>> {
-    let result = sqlx::query!(
+    sqlx::query_as!(
+        ProjectMetadata,
         r#"
         SELECT
             p.id,
@@ -30,21 +31,5 @@ pub async fn get_project_metadata(
     )
     .fetch_optional(db)
     .await
-    .map_err(|e| {
-        tracing::error!(
-            error = ?e,
-            project_id = %project_id,
-            "failed to fetch project metadata"
-        );
-        PropertiesDatabaseError::Query(e)
-    })?;
-
-    Ok(result.map(|row| ProjectMetadata {
-        id: row.id,
-        name: row.name,
-        owner: row.owner,
-        parent_id: row.parent_id,
-        created_at: row.created_at,
-        updated_at: row.updated_at,
-    }))
+    .map_err(PropertiesDatabaseError::Query)
 }

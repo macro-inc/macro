@@ -139,51 +139,24 @@ pub async fn get_thread_metadata_properties(
 }
 
 /// Get project metadata properties from macrodb
+#[tracing::instrument(skip(db), err)]
 pub async fn get_project_metadata_properties(
     db: &Pool<Postgres>,
     project_id: &str,
 ) -> Result<Vec<EntityPropertyWithDefinition>, MetadataError> {
-    tracing::info!("getting project metadata properties from macrodb");
+    let project_metadata =
+        properties_db_client::project_metadata::get::get_project_metadata(db, project_id)
+            .await?
+            .ok_or(MetadataError::NotFound)?;
 
     let entity_type = EntityType::Project;
 
-    // Fetch project metadata from macrodb
-    let project_metadata =
-        properties_db_client::project_metadata::get::get_project_metadata(db, project_id)
-            .await
-            .inspect_err(|e| {
-                tracing::error!(
-                    error = ?e,
-                    project_id = %project_id,
-                    "failed to get project metadata from database"
-                );
-            })?
-            .ok_or(MetadataError::NotFound)?;
-
-    tracing::debug!(
-        project_id = %project_id,
-        has_name = !project_metadata.name.is_empty(),
-        has_owner = !project_metadata.owner.is_empty(),
-        has_parent_id = project_metadata.parent_id.is_some(),
-        "parsed project metadata"
-    );
-
     // 1. Project name property
-    let name = if project_metadata.name.is_empty() {
-        None
-    } else {
-        Some(project_metadata.name)
-    };
+    let name = (!project_metadata.name.is_empty()).then_some(project_metadata.name);
 
     // 2. Owner property
-    let owner = if project_metadata.owner.is_empty() {
-        None
-    } else {
-        Some(EntityReference::new(
-            project_metadata.owner,
-            EntityType::User,
-        ))
-    };
+    let owner = (!project_metadata.owner.is_empty())
+        .then(|| EntityReference::new(project_metadata.owner, EntityType::User));
 
     // 5. Parent project property
     let parent = project_metadata
@@ -192,13 +165,13 @@ pub async fn get_project_metadata_properties(
 
     let metadata_properties = vec![
         create_metadata_property_str(
-            metadata::NAME,
+            metadata::PROJECT_NAME,
             models_properties::DataType::String,
             name,
             entity_type,
         ),
         create_metadata_property_entity_ref(
-            metadata::OWNER,
+            metadata::PROJECT_OWNER,
             models_properties::DataType::Entity,
             owner,
             entity_type,
@@ -206,32 +179,26 @@ pub async fn get_project_metadata_properties(
         ),
         // 3. Created time property
         create_metadata_property_date(
-            metadata::CREATED_AT,
+            metadata::PROJECT_CREATED_AT,
             models_properties::DataType::Date,
             Some(project_metadata.created_at),
             entity_type,
         ),
         // 4. Last updated time property
         create_metadata_property_date(
-            metadata::LAST_UPDATED,
+            metadata::PROJECT_LAST_UPDATED,
             models_properties::DataType::Date,
             Some(project_metadata.updated_at),
             entity_type,
         ),
         create_metadata_property_entity_ref(
-            metadata::PARENT,
+            metadata::PROJECT_PARENT,
             models_properties::DataType::Entity,
             parent,
             entity_type,
             Some(EntityType::Project),
         ),
     ];
-
-    tracing::debug!(
-        project_id = %project_id,
-        metadata_properties_count = metadata_properties.len(),
-        "created project metadata properties"
-    );
 
     Ok(metadata_properties)
 }
