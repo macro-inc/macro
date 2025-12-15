@@ -872,9 +872,9 @@ export function BaseInput(props: {
                   <Spinner class="w-5 h-5 animate-spin cursor-disabled" />
                 }
               >
-                <div class="flex flex-row items-center gap-0.5">
-                  <span>Send + </span>
-                  <CheckIcon class="size-[1lh]" />
+                <div class="flex justify-center items-center gap-1">
+                  <span>Send & done</span>
+                  <CheckIcon class="size-4" />
                 </div>
               </Show>
             </TextButton>
