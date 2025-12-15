@@ -11,7 +11,6 @@ use model_notifications::{
     ChannelMessageSendMetadata, ChannelReplyMetadata, CommonChannelMetadata,
     DocumentMentionMetadata, NotificationEvent, NotificationQueueMessage,
 };
-use models_comms::ChannelType;
 use std::{collections::HashSet, iter::once};
 use uuid::Uuid;
 
@@ -45,16 +44,11 @@ fn recipients_excluding<'a>(
         .collect()
 }
 
-pub fn is_channel_type_important(channel_type: &ChannelType) -> bool {
-    matches!(channel_type, ChannelType::DirectMessage)
-}
-
 fn create_notification_queue_message(
     channel_id: &Uuid,
     sender_id: &str,
     recipients: &[String],
     notification_event: NotificationEvent,
-    important: bool,
 ) -> NotificationQueueMessage {
     NotificationQueueMessage {
         notification_entity: EntityType::Channel.with_entity_string(channel_id.to_string()),
@@ -80,7 +74,6 @@ impl<'a> ChannelInviteEvent<'a> {
                     invited_by: self.invited_by_user_id.to_string(),
                     common: self.common.clone(),
                 }),
-                true,
             ));
         }
 
@@ -106,7 +99,6 @@ impl ChannelMessageEvent<'_> {
                     thread_id: self.message.thread_id.map(|t| t.to_string()),
                     common: self.channel_metadata.clone(),
                 }),
-                true,
             ));
         }
 
@@ -129,7 +121,6 @@ impl ChannelMessageEvent<'_> {
                             metadata: None,
                         },
                     )),
-                    true,
                 ));
             }
         }
@@ -164,7 +155,6 @@ impl ChannelMessageEvent<'_> {
                             message_content: self.message.content.clone(),
                             common: self.channel_metadata.clone(),
                         }),
-                        true,
                     ));
                 } else {
                     tracing::warn!("thread participants is empty, but message has thread id");
@@ -180,7 +170,6 @@ impl ChannelMessageEvent<'_> {
                         invited_by: self.message.sender_id.clone(),
                         common: self.channel_metadata.clone(),
                     }),
-                    true,
                 ));
             }
             // Channel has messages, send message send notification
@@ -195,7 +184,6 @@ impl ChannelMessageEvent<'_> {
                         message_content: self.message.content.to_string(),
                         common: self.channel_metadata.clone(),
                     }),
-                    is_channel_type_important(&self.channel_metadata.channel_type),
                 ));
             }
         }
@@ -296,11 +284,11 @@ pub async fn dispatch_notifications_for_message(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
     use super::*;
     use model::comms::ParticipantRole;
     use model_notifications::NotificationEventType;
+    use models_comms::ChannelType;
+    use std::collections::HashMap;
     use uuid::Uuid;
 
     fn participant(user_id: &str, channel_id: Uuid) -> ChannelParticipant {
@@ -340,13 +328,6 @@ mod tests {
         CommonChannelMetadata {
             channel_type: ChannelType::Private,
             channel_name: "group".to_string(),
-        }
-    }
-
-    fn dm_metadata() -> CommonChannelMetadata {
-        CommonChannelMetadata {
-            channel_type: ChannelType::DirectMessage,
-            channel_name: "dm".to_string(),
         }
     }
 

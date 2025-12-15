@@ -1,19 +1,10 @@
-use std::{
-    borrow::Cow,
-    collections::HashMap,
-    hash::{DefaultHasher, Hash, Hasher},
-};
-
+use crate::{api::context::ApiContext, config::APPLE_BUNDLE_ID};
 use anyhow::Context;
-use aws_sdk_sns::types::MessageAttributeValue;
 use futures::StreamExt;
 use notification_db_client::notification::get::BasicNotification;
 use serde::Serialize;
-use sns_client::{
-    APNSPushNotification, FCMMessage, MessageAttributes, NotifCollapseKey, PushType, SnsTarget,
-};
-
-use crate::{api::context::ApiContext, config::APPLE_BUNDLE_ID};
+use sns_client::{APNSPushNotification, MessageAttributes, NotifCollapseKey, PushType, SnsTarget};
+use std::hash::{DefaultHasher, Hash, Hasher};
 
 /// Clears out push notifications for a user in bulk
 #[tracing::instrument(skip(ctx))]
@@ -115,13 +106,6 @@ pub async fn clear_push_notification(
     let hash = hasher.finish();
     let collapse_key = format!("{:x}", hash);
 
-    let apns = serde_json::json!({
-        "aps": {
-            "content-available": 1,
-        },
-        "identifier": collapse_key, // The collapse key is needed to identify what notification needs to be cleared
-    });
-
     #[derive(Debug, Serialize, Clone)]
     struct CustomData {
         identifier: String,
@@ -138,7 +122,7 @@ pub async fn clear_push_notification(
     }));
     let attributes = MessageAttributes {
         push_type: PushType::Background,
-        apns_bundle_id: &*APPLE_BUNDLE_ID,
+        apns_bundle_id: &APPLE_BUNDLE_ID,
         collapse_key: NotifCollapseKey::new_str(&collapse_key),
     };
 
