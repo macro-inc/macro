@@ -1,6 +1,5 @@
 //! General entity property query helpers.
 
-use anyhow::Context;
 use models_properties::EntityType;
 use models_properties::service::property_value::PropertyValue;
 use sqlx::{Pool, Postgres};
@@ -17,7 +16,7 @@ pub async fn update_entity_property_value_if_exists(
 ) -> anyhow::Result<()> {
     // Serialize PropertyValue to JSONB (or NULL if None)
     let value_json = match value {
-        Some(v) => serde_json::to_value(&v).context("failed to serialize property value")?,
+        Some(v) => serde_json::to_value(&v)?,
         None => serde_json::Value::Null,
     };
 
@@ -38,11 +37,10 @@ pub async fn update_entity_property_value_if_exists(
         value_json
     )
     .execute(pool)
-    .await
-    .context("failed to update entity property")?;
+    .await?;
 
     if result.rows_affected() > 0 {
-        tracing::info!("successfully updated entity property");
+        tracing::debug!("successfully updated entity property");
     } else {
         tracing::debug!("entity property not attached, no-op");
     }

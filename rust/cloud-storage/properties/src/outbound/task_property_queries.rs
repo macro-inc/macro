@@ -2,7 +2,6 @@
 
 use std::collections::HashSet;
 
-use anyhow::Context;
 use models_properties::EntityReference;
 use models_properties::EntityType;
 use models_properties::service::property_value::PropertyValue;
@@ -25,7 +24,7 @@ pub async fn link_parent_task(
         anyhow::bail!("a task cannot be its own parent");
     }
 
-    let mut tx = pool.begin().await.context("failed to begin transaction")?;
+    let mut tx = pool.begin().await?;
 
     // Validate: can't set a subtask as parent (would create mutual reference)
     if let Some(parent_id) = parent_task_id {
@@ -60,7 +59,7 @@ pub async fn link_parent_task(
         tracing::debug!("task does not exist, skipping subtasks update");
     }
 
-    tx.commit().await.context("failed to commit transaction")?;
+    tx.commit().await?;
     tracing::info!("successfully linked parent task");
     Ok(())
 }
@@ -83,7 +82,7 @@ pub async fn link_subtasks(
         .into_iter()
         .collect();
 
-    let mut tx = pool.begin().await.context("failed to begin transaction")?;
+    let mut tx = pool.begin().await?;
 
     // Validate: can't include parent as subtask (would create mutual reference)
     if let Some(current_parent) = get_task_parent(&mut tx, task_id).await?
@@ -136,7 +135,7 @@ pub async fn link_subtasks(
         let _ = set_task_parent(&mut tx, *subtask_id, None).await?;
     }
 
-    tx.commit().await.context("failed to commit transaction")?;
+    tx.commit().await?;
     tracing::info!(
         added_count = added.len(),
         removed_count = removed.len(),
@@ -167,8 +166,7 @@ async fn get_task_parent(tx: &mut PgConnection, task_id: Uuid) -> anyhow::Result
         parent_task_prop_id
     )
     .fetch_optional(&mut *tx)
-    .await
-    .context("failed to get task's parent")?;
+    .await?;
 
     Ok(parent_str
         .flatten()
@@ -194,8 +192,7 @@ async fn get_task_subtasks(tx: &mut PgConnection, task_id: Uuid) -> anyhow::Resu
         subtasks_prop_id
     )
     .fetch_all(&mut *tx)
-    .await
-    .context("failed to get task's subtasks")?;
+    .await?;
 
     Ok(subtask_strs
         .into_iter()
@@ -226,8 +223,7 @@ async fn set_task_parent(
     let parent_value = match parent_task_id {
         Some(parent_id) => {
             let entity_ref = EntityReference::new(parent_id.to_string(), EntityType::Task);
-            serde_json::to_value(PropertyValue::EntityRef(vec![entity_ref]))
-                .context("failed to serialize parent task value")?
+            serde_json::to_value(PropertyValue::EntityRef(vec![entity_ref]))?
         }
         None => serde_json::Value::Null,
     };
@@ -246,8 +242,7 @@ async fn set_task_parent(
         parent_value
     )
     .execute(&mut *tx)
-    .await
-    .context("failed to set task's parent")?;
+    .await?;
 
     Ok(result.rows_affected() > 0)
 }
@@ -285,8 +280,7 @@ async fn set_task_subtasks(
             .iter()
             .map(|id| EntityReference::new(id.to_string(), EntityType::Task))
             .collect();
-        serde_json::to_value(PropertyValue::EntityRef(refs))
-            .context("failed to serialize subtasks value")?
+        serde_json::to_value(PropertyValue::EntityRef(refs))?
     };
 
     sqlx::query!(
@@ -303,8 +297,7 @@ async fn set_task_subtasks(
         subtasks_value
     )
     .execute(&mut *tx)
-    .await
-    .context("failed to set task's subtasks")?;
+    .await?;
 
     Ok(())
 }
