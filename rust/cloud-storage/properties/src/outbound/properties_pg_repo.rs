@@ -1,5 +1,6 @@
 //! PostgreSQL implementation for properties repository.
 
+use anyhow::Context;
 use models_properties::EntityType;
 use models_properties::service::property_value::PropertyValue;
 use sqlx::{Pool, Postgres};

@@ -74,24 +74,26 @@ where
         self.repository.link_subtasks(task_id, subtask_ids).await
     }
 
-    #[tracing::instrument(skip(self), fields(entity_id = %entity_id, entity_type = ?entity_type))]
-    async fn is_system_property_status_complete(
+    #[tracing::instrument(skip(self), fields(entity_id = %entity_id, entity_type = ?entity_type, property_definition_id = %property_definition_id))]
+    async fn get_property_value(
         &self,
         entity_id: &str,
         entity_type: EntityType,
-    ) -> Result<bool, Self::Err> {
-        let status_property_id = SystemPropertyKey::STATUS_UUID;
+        property_definition_id: Uuid,
+    ) -> Result<Option<PropertyValue>, Self::Err> {
+        self.repository
+            .get_entity_property_value(entity_id, entity_type, property_definition_id)
+            .await
+    }
 
-        let value = self
-            .repository
-            .get_entity_property_value(entity_id, entity_type, status_property_id)
-            .await?;
-
-        let is_completed = matches!(
-            value,
-            Some(PropertyValue::SelectOption(ids)) if ids.contains(&StatusOption::COMPLETED_UUID)
-        );
-
-        Ok(is_completed)
+    #[tracing::instrument(skip(self), fields(entity_id = %entity_id, entity_type = ?entity_type, property_key = ?property_key))]
+    async fn get_system_property_value(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        property_key: SystemPropertyKey,
+    ) -> Result<Option<PropertyValue>, Self::Err> {
+        self.get_property_value(entity_id, entity_type, property_key.uuid())
+            .await
     }
 }
