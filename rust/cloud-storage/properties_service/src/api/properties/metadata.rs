@@ -46,7 +46,7 @@ pub async fn get_document_metadata_properties(
     let owner = (!document_metadata.owner.is_empty())
         .then(|| EntityReference::new(document_metadata.owner, EntityType::User));
     metadata_properties.push(create_metadata_property_entity_ref(
-        metadata::OWNER,
+        metadata::DOCUMENT_OWNER,
         models_properties::DataType::Entity,
         owner,
         entity_type,
@@ -55,7 +55,7 @@ pub async fn get_document_metadata_properties(
 
     // 3. Created time property
     metadata_properties.push(create_metadata_property_date(
-        metadata::CREATED_AT,
+        metadata::DOCUMENT_CREATED_AT,
         models_properties::DataType::Date,
         Some(document_metadata.created_at),
         entity_type,
@@ -63,7 +63,7 @@ pub async fn get_document_metadata_properties(
 
     // 4. Last updated time property
     metadata_properties.push(create_metadata_property_date(
-        metadata::LAST_UPDATED,
+        metadata::DOCUMENT_LAST_UPDATED,
         models_properties::DataType::Date,
         Some(document_metadata.updated_at),
         entity_type,
@@ -74,7 +74,7 @@ pub async fn get_document_metadata_properties(
         .project_id
         .map(|id| EntityReference::new(id, EntityType::Project));
     metadata_properties.push(create_metadata_property_entity_ref(
-        metadata::PROJECT,
+        metadata::DOCUMENT_PROJECT,
         models_properties::DataType::Entity,
         project,
         entity_type,
@@ -100,7 +100,7 @@ pub async fn get_thread_metadata_properties(
     let metadata_properties = vec![
         // 1. Subject property
         create_metadata_property_str(
-            metadata::SUBJECT,
+            metadata::THREAD_SUBJECT,
             models_properties::DataType::String,
             thread_metadata.subject.clone(),
             entity_type,
@@ -114,21 +114,21 @@ pub async fn get_thread_metadata_properties(
         ),
         // 3. Last Received property
         create_metadata_property_date(
-            metadata::LAST_RECEIVED,
+            metadata::THREAD_LAST_RECEIVED,
             models_properties::DataType::Date,
             thread_metadata.last_received,
             entity_type,
         ),
         // 4. Last Sent property
         create_metadata_property_date(
-            metadata::LAST_SENT,
+            metadata::THREAD_LAST_SENT,
             models_properties::DataType::Date,
             thread_metadata.last_sent,
             entity_type,
         ),
         // 5. Messages property (count)
         create_metadata_property_number(
-            metadata::MESSAGES,
+            metadata::THREAD_MESSAGES,
             models_properties::DataType::Number,
             thread_metadata.message_count,
             entity_type,
