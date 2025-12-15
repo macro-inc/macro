@@ -1067,26 +1067,36 @@ const trackKeydownDuringTask = () => {
   return { keydownDataDuringTask };
 };
 
+const startOfDay = (d: Date) =>
+  new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+
 const createFormattedDate = (timestamp: number) =>
   createMemo(() => {
-    if (timestamp < 1e12) {
-      timestamp *= 1000;
-    }
-    const date = new Date(timestamp);
-    const currentDate = new Date();
-    if (date.getDate() === currentDate.getDate()) {
+    const ts = timestamp < 1e12 ? timestamp * 1000 : timestamp;
+
+    const date = new Date(ts);
+    const now = new Date();
+
+    const dateDay = startOfDay(date);
+    const todayDay = startOfDay(now);
+
+    // Today → show time
+    if (dateDay === todayDay) {
       return date.toLocaleTimeString('en-US', {
         hour: '2-digit',
         minute: '2-digit',
       });
     }
-    if (date.getFullYear() === currentDate.getFullYear()) {
+
+    // Same year → show Month Day
+    if (date.getFullYear() === now.getFullYear()) {
       return date.toLocaleDateString('en-US', {
         month: 'short',
         day: 'numeric',
       });
     }
 
+    // Older → show numeric date
     return date.toLocaleDateString('en-US', {
       month: 'numeric',
       day: 'numeric',
