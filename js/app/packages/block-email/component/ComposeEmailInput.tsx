@@ -155,9 +155,10 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
       }}
       class="relative flex flex-col flex-1 items-center justify-between min-h-0"
     >
-      <div class="w-full h-full flex flex-col overflow-hidden min-h-0">
+      <div class="w-full h-full flex flex-col min-h-0">
         <Show when={showFormatRibbon()}>
           <FormatRibbon
+            class="-ml-3"
             state={structuredClone(defaultSelectionData)}
             inlineFormat={(format: TextFormatType) => {
               editor()?.dispatchCommand(FORMAT_TEXT_COMMAND, format);

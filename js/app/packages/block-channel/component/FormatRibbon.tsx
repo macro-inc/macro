@@ -13,6 +13,7 @@ import type { TextFormatType } from 'lexical';
 import { ActionButton } from './ActionButton';
 
 export type FormatRibbonProps = {
+  class?: string;
   state: SelectionData;
   inlineFormat: (format: TextFormatType) => void;
   nodeFormat: (transform: NodeTransformType) => void;
@@ -20,7 +21,12 @@ export type FormatRibbonProps = {
 
 export function FormatRibbon(props: FormatRibbonProps) {
   return (
-    <div class="flex flex-row w-full gap-2 items-center p-2 -ml-3">
+    <div
+      class="flex flex-row w-full gap-2 items-center p-2"
+      classList={{
+        [props.class!]: !!props.class,
+      }}
+    >
       <ActionButton
         tooltip="Bold"
         shortcut="meta+b"
