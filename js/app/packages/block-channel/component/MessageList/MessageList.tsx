@@ -244,6 +244,9 @@ export function MessageList(props: MessageListProps) {
       virtualHandle()?.scrollToIndex(index, {
         align: 'center',
       });
+      setTimeout(() => {
+        setTargetMessageActive(false);
+      }, TARGET_MESSAGE_ACTIVE_TIME);
     },
     5
   );
@@ -652,10 +655,6 @@ export function MessageList(props: MessageListProps) {
               keepMounted={keepMountedIndices()}
               onScroll={handleScroll}
               onScrollEnd={() => {
-                setTimeout(() => {
-                  setTargetMessageActive(false);
-                }, TARGET_MESSAGE_ACTIVE_TIME);
-
                 if (!initialScrollComplete()) {
                   setInitialScrollComplete(true);
                 }
