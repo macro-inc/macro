@@ -99,7 +99,7 @@ export function KommandMenu() {
         <Popover.Portal>
           <CommandWindow>
             <Popover.Content>
-              <div class="bg-dialog mt-[25vh] w-6xl max-w-[90vw] max-h-[75vh] overflow-hidden">
+              <div class="mt-[25vh] w-6xl max-w-[90vw] max-h-[75vh] overflow-hidden">
                 <ClippedPanel tl active>
                   <KommandMenuInner commandKRef={commandKRef} />
                 </ClippedPanel>
@@ -323,6 +323,7 @@ export function KommandMenuInner(props: {
         setCurrentValue(value);
       }}
     >
+      <div style='width: 100%; height: 200px; background-color: #600'/>
       <div class="flex items-center gap-2 bg-panel px-2 h-[40px] border-b border-edge-muted">
         <span class="pl-2 pointer-events-none">❯</span>
         <CommandK.Input
