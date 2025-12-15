@@ -395,11 +395,11 @@ pub fn generate_apns_notification<T: XmlFormatter>(
                         channel_mention_metadata.message_id,
                         format_args!(
                             "{}{}",
-                            channel_mention_metadata
-                                .thread_id
-                                .is_some()
-                                .then_some("&thread_id=")
-                                .unwrap_or(""),
+                            if channel_mention_metadata.thread_id.is_some() {
+                                "&thread_id="
+                            } else {
+                                ""
+                            },
                             channel_mention_metadata.thread_id.as_deref().unwrap_or("")
                         )
                     )))
@@ -410,7 +410,7 @@ pub fn generate_apns_notification<T: XmlFormatter>(
                 .file_type
                 .as_ref()
                 .ok_or(NotificationErr::FileTypeDoesntExist)?;
-            let file_type = FileType::from_str(&file_type_str)?;
+            let file_type = FileType::from_str(file_type_str)?;
 
             let block_route = match file_type {
                 x if x.is_image() => "image",

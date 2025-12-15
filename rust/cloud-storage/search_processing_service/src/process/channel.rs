@@ -1,5 +1,6 @@
 use anyhow::Context;
 use comms_service_client::CommsServiceClient;
+use mention_utils::parse::{NullXmlFormatter, ParsedXmlText, XmlFormatter};
 use opensearch_client::{
     OpensearchClient, date_format::EpochSeconds, upsert::channel_message::UpsertChannelMessageArgs,
 };
@@ -20,10 +21,9 @@ pub async fn process_channel_message_update(
         return Ok(());
     }
 
-    let transformed_content =
-        mention_utils::remove_mentions_from_content(&channel_message_info.channel_message.content);
+    let parsed = ParsedXmlText::parse(&channel_message_info.channel_message.content)?;
 
-    let transformed_content = transformed_content.trim();
+    let transformed_content = NullXmlFormatter::format_xml_text(parsed);
 
     let upsert_channel_message_args = UpsertChannelMessageArgs {
         channel_id: channel_message_info.channel_id.to_string(),
@@ -36,7 +36,7 @@ pub async fn process_channel_message_update(
             .map(|id| id.to_string()),
         sender_id: channel_message_info.channel_message.sender_id,
         mentions: channel_message_info.channel_message.mentions,
-        content: transformed_content.to_string(),
+        content: transformed_content.0.trim().to_string(),
         created_at_seconds: EpochSeconds::new(
             channel_message_info.channel_message.created_at.timestamp(),
         )?,

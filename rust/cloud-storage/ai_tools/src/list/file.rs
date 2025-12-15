@@ -341,6 +341,6 @@ mod tests {
         assert_eq!(list_docs.min_access_level, None);
         assert_eq!(list_docs.page_offset, 0);
         assert_eq!(list_docs.page_size, DEFAULT_PAGE_SIZE);
-        assert_eq!(list_docs.exhaustive_search, false);
+        assert!(!list_docs.exhaustive_search);
     }
 }

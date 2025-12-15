@@ -1,4 +1,4 @@
-use macro_user_id::user_id::{BorrowedUserIdStr, MacroUserIdStr};
+use macro_user_id::user_id::BorrowedUserIdStr;
 use nom::{
     Finish, IResult, Parser,
     branch::alt,
@@ -234,5 +234,37 @@ pub trait XmlFormatter: Sized {
             acc
         });
         ReformattedXmlText(s, PhantomData)
+    }
+}
+
+/// xml formatter which completely removes the inner text of all xml tags
+pub struct NullXmlFormatter;
+
+impl XmlFormatter for NullXmlFormatter {
+    fn format_plain_text(s: &str, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{s}")
+    }
+
+    fn format_link(_link: &ParsedLink<'_>, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "")
+    }
+
+    fn format_doc(_doc: &ParsedDocumentMention<'_>, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "")
+    }
+
+    fn format_user(_user: &ParsedUserMention<'_>, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "")
+    }
+
+    fn format_contact(
+        _contact: &ParsedContactMention<'_>,
+        f: &mut Formatter<'_>,
+    ) -> std::fmt::Result {
+        write!(f, "")
+    }
+
+    fn format_date(_date: &ParsedDateMention<'_>, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "")
     }
 }
