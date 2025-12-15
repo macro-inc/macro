@@ -60,6 +60,7 @@ import { DropdownMenuContent, MENU_ITEM_CLASS, MenuItem } from '../Menu';
 import { Permissions } from '../SharePermissions';
 import { TextButton } from '../TextButton';
 import { toast } from '../Toast/Toast';
+import { Tooltip } from '../Tooltip';
 import { openLoginModal } from './LoginButton';
 
 false && clickOutside;
@@ -698,53 +699,83 @@ export function ShareButton(props: ShareButtonProps) {
     return 'Just me';
   });
 
-  const shareIcon = createMemo(() => {
-    const accessLevel = shareAccessLevelText();
-    if (accessLevel === 'Public') {
-      return IconGlobe;
-    }
-    if (accessLevel === 'Shared') {
-      return IconUsers;
-    }
-    if (accessLevel === 'Just me') {
-      return IconEyeSlash;
-    }
-    return IconGlobe;
-  });
-
   return (
     <>
-      <IconButton
-        tooltip={{
-          label:
-            shareAccessLevelText() === 'Public'
-              ? 'Share • Anyone with the link can access'
-              : shareAccessLevelText() === 'Shared'
-                ? 'Share • Shared with specific people'
-                : shareAccessLevelText() === 'Just me'
-                  ? 'Share • Only you can access'
-                  : 'Share',
-        }}
-        onClick={(_e) => {
-          if (!isAuthenticated()) {
-            openLoginModal();
-          } else {
-            track(TrackingEvents.SHARE.OPEN);
-            setIsSharePermOpen(true);
-          }
-        }}
-        icon={shareIcon()}
-        theme="clear"
-        size="sm"
-      />
+      <div class="border-1 border-edge-muted flex">
+        <Switch>
+          <Match when={shareAccessLevelText() === 'Public'}>
+            <Tooltip
+              tooltip={<div>Anyone with the link can access this document</div>}
+            >
+              <button
+                class="text-xs hover:bg-hover text-ink p-1 flex items-center gap-1"
+                onClick={(e) => {
+                  if (!isAuthenticated()) {
+                    openLoginModal();
+                  } else {
+                    track(TrackingEvents.SHARE.OPEN);
+                    ShareLinkAction().action(e);
+                    setIsSharePermOpen(true);
+                  }
+                }}
+              >
+                &nbsp;Share
+                <IconGlobe class="size-4" />
+              </button>
+            </Tooltip>
+          </Match>
+          <Match when={shareAccessLevelText() === 'Shared'}>
+            <Tooltip
+              tooltip={<div>Shared with specific people or channels</div>}
+            >
+              <button
+                class="text-xs hover:bg-hover text-ink p-1 flex items-center gap-1"
+                onClick={(e) => {
+                  if (!isAuthenticated()) {
+                    openLoginModal();
+                  } else {
+                    track(TrackingEvents.SHARE.OPEN);
+                    ShareLinkAction().action(e);
+                    setIsSharePermOpen(true);
+                  }
+                }}
+              >
+                &nbsp;Share
+                <IconUsers class="size-4" />
+              </button>
+            </Tooltip>
+          </Match>
+          <Match when={shareAccessLevelText() === 'Just me'}>
+            <Tooltip tooltip={<div>Only you can access this document</div>}>
+              <button
+                class="text-xs hover:bg-hover text-ink p-1 flex items-center gap-1"
+                onClick={(e) => {
+                  if (!isAuthenticated()) {
+                    openLoginModal();
+                  } else {
+                    track(TrackingEvents.SHARE.OPEN);
+                    ShareLinkAction().action(e);
+                    setIsSharePermOpen(true);
+                  }
+                }}
+              >
+                &nbsp;Share
+                <IconEyeSlash class="size-4" />
+              </button>
+            </Tooltip>
+          </Match>
+        </Switch>
 
-      <IconButton
-        size="sm"
-        theme="clear"
-        icon={ShareLinkAction().icon}
-        onClick={ShareLinkAction().action}
-        tooltip={{ label: 'Copy Share Link' }}
-      />
+        <div class="h-[24px] w-[1px] bg-edge-muted" />
+
+        <IconButton
+          size="sm"
+          theme="clear"
+          icon={ShareLinkAction().icon}
+          onClick={ShareLinkAction().action}
+          tooltip={{ label: 'Copy Share Link' }}
+        />
+      </div>
 
       <ShareModal
         setIsSharePermOpen={setIsSharePermOpen}

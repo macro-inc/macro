@@ -37,6 +37,7 @@ import {
   $getSelection,
   $insertNodes,
   $isElementNode,
+  $isLineBreakNode,
   $isParagraphNode,
   $isRangeSelection,
   $isRootOrShadowRoot,
@@ -1177,32 +1178,42 @@ export const $isAtEndOfTextNode = (selection: RangeSelection) => {
   return false;
 };
 
+function takeInlineUntilLineBreak(parent: ElementNode): LexicalNode[] {
+  const out: LexicalNode[] = [];
+  for (const child of parent.getChildren()) {
+    if ($isLineBreakNode(child)) {
+      break;
+    }
+    if ($isTextNode(child) && child.getTextContent().trim() === '') {
+      continue;
+    }
+    out.push(child);
+  }
+  return out;
+}
 const $singleLineNode = (node: ElementNode): ElementNode | null => {
   if ($isParagraphNode(node)) {
-    const text = node.getTextContent().trim();
-    if (text === '') return null;
-
+    const inline = takeInlineUntilLineBreak(node);
+    if (!inline.length) return null;
     node.clear();
-    node.append($createTextNode(text.replace(/\s+/g, ' ')));
+    node.append(...inline);
     return node;
   }
 
-  // text first text-ful list item and flatten to parent list
+  // take first text-ful list item and flatten to parent list
   if ($isListNode(node)) {
     const items = node.getChildren();
 
     for (const item of items) {
       if (!$isListItemNode(item)) continue;
 
-      const text = item.getTextContent().trim();
-      if (!text) continue;
+      const inline = takeInlineUntilLineBreak(node);
+      if (!inline.length) continue;
 
       item.clear();
-      item.append($createTextNode(text));
-
+      item.append(...inline);
       node.clear();
       node.append(item);
-
       return node;
     }
 

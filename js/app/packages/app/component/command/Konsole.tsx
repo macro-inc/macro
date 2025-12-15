@@ -1,6 +1,5 @@
 import { useChannelsContext } from '@core/component/ChannelsProvider';
 import { ClippedPanel } from '@core/component/ClippedPanel';
-import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { ENABLE_SEARCH_PAGINATION } from '@core/constant/featureFlags';
 import type { CommandWithInfo } from '@core/hotkey/getCommands';
@@ -46,7 +45,6 @@ import {
   konsoleOpen,
   lastCommandTime,
   rawQuery,
-  setKonsoleMode,
   setLastCommandTime,
   setRawQuery,
   toggleKonsoleVisibility,
@@ -331,19 +329,6 @@ export function KommandMenuInner(props: {
           placeholder="Search"
           value={rawQuery()}
           autofocus
-        />
-        <ToggleSwitch
-          onChange={(val) => {
-            if (val) {
-              setKonsoleMode('FULL_TEXT_SEARCH');
-            } else {
-              setKonsoleMode('ENTITY_SEARCH');
-            }
-          }}
-          checked={isFullTextSearch()}
-          // switchRootClass='subtle'
-          label="Full Text Search"
-          size="SM"
         />
       </div>
       <div class="bg-panel">

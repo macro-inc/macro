@@ -7,8 +7,9 @@ import { openEmailAuthPopup } from '@core/auth/email';
 import { isErr } from '@core/util/maybeResult';
 import { queryKeys } from '@macro-entity';
 import { emailClient } from '@service-email/client';
+import type { Link } from '@service-email/generated/schemas';
 import { updateUserInfo } from '@service-gql/client';
-import { useQuery } from '@tanstack/solid-query';
+import { type UseQueryResult, useQuery } from '@tanstack/solid-query';
 import { err, okAsync, ResultAsync } from 'neverthrow';
 import { createMemo, createSignal } from 'solid-js';
 import { queryClient } from '../../macro-entity/src/queries/client';
@@ -36,13 +37,17 @@ export function useEmailLinksQuery() {
   }));
 }
 
+function hasEmailLinks(query: UseQueryResult<Link[], Error>) {
+  if (!query.data || query.error) {
+    return false;
+  }
+  return query.data.length > 0;
+}
+
 export function useEmailLinksStatus() {
   const links = useEmailLinksQuery();
   return createMemo(() => {
-    if (!links.data || links.error) {
-      return false;
-    }
-    return links.data.length > 0;
+    return hasEmailLinks(links);
   });
 }
 
@@ -161,7 +166,7 @@ export function useEmailLinks() {
 
   return {
     query: query,
-    status: useEmailLinksStatus(),
+    isConnected: () => hasEmailLinks(query),
     initEmailLink: () =>
       initEmailLink().map(startEmailPolling).map(invalidations),
     connect: () =>
