@@ -1,4 +1,7 @@
 import { FormatRibbon } from '@block-channel/component/FormatRibbon';
+import { MacroSignatureButton } from '@block-email/component/MacroSignatureButton';
+import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
+import { useHasPaidAccess } from '@core/auth';
 import { useBlockId } from '@core/block';
 import { BrightJoins } from '@core/component/BrightJoins';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
@@ -27,7 +30,11 @@ import Plus from '@icon/regular/plus.svg';
 import TextAa from '@icon/regular/text-aa.svg';
 import Trash from '@icon/regular/trash.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import type { DocumentMentionInfo } from '@lexical-core';
+import {
+  $appendWatermarkNodeToLast,
+  $removeAllWatermarkNodes,
+  type DocumentMentionInfo,
+} from '@lexical-core';
 import { logger } from '@observability';
 import { useSendMessageMutation } from '@queries/email/thread';
 import { emailClient } from '@service-email/client';
@@ -236,6 +243,7 @@ export function BaseInput(props: {
   const DRAFT_DEBOUNCE_MS = 1000;
 
   function collectDraft(): Omit<MessageToSend, 'link_id'> | null {
+    $removeAllWatermarkNodes(editor());
     const prepared = prepareEmailBody(editor());
     if (!prepared) {
       logger.error(
@@ -377,6 +385,8 @@ export function BaseInput(props: {
     });
   });
 
+  const hasPaidAccess = useHasPaidAccess();
+
   // Set up hotkey scope for the compose message component
   const [attachComposeHotkeys, composeHotkeyScope] =
     useHotkeyDOMScope('compose-message');
@@ -420,7 +430,17 @@ export function BaseInput(props: {
       linkId = maybeFallbackLinks[1].links[0].id;
     }
 
-    const prepared = prepareEmailBody(editor(), {
+    const _editor = editor();
+
+    // We handle cleaning up the signature after we've sent the request because
+    // otherwise the `bodyMacro` signal would update after the clean up call and
+    // not contain the signature in the request data
+    const cleanupWatermark = $appendWatermarkNodeToLast(
+      _editor,
+      !hasPaidAccess() ? MACRO_EMAIL_SIGNATURE : undefined
+    );
+
+    const prepared = prepareEmailBody(_editor, {
       replyType: effectiveReplyType(),
       replyingTo: props.replyingTo(),
     });
@@ -447,6 +467,8 @@ export function BaseInput(props: {
         link_id: linkId!,
       },
     });
+
+    cleanupWatermark();
   };
 
   const resetState = () => {
@@ -792,6 +814,7 @@ export function BaseInput(props: {
             initialValue={props.preloadedBody}
             initialHtml={props.preloadedHtml}
             placeholder="Reply — @mention to share or cc people"
+            watermark={!hasPaidAccess() ? <MacroSignatureButton /> : undefined}
             onChange={handleChange}
             onDocumentMention={(item) => {
               makeAttachmentPublic(item.id);
@@ -874,16 +897,16 @@ export function BaseInput(props: {
                   <Spinner class="w-5 h-5 animate-spin cursor-disabled" />
                 }
               >
-                <div class="flex flex-row items-center gap-0.5">
-                  <span>Send + </span>
-                  <CheckIcon class="size-[1lh]" />
+                <div class="flex justify-center items-center gap-1">
+                  <span>Send & done</span>
+                  <CheckIcon class="size-4" />
                 </div>
               </Show>
             </TextButton>
             <DropdownMenu>
               <DropdownMenu.Trigger>
-                <div class="w-8 min-h-8 flex justify-center items-center h-full border-r border-t border-b border-edge">
-                  <CaretDown class="size-4 text-edge" />
+                <div class="w-8 min-h-8 flex justify-center items-center h-full border-r border-t border-b border-ink hover:bg-hover">
+                  <CaretDown class="size-4 text-ink" />
                 </div>
               </DropdownMenu.Trigger>
               <DropdownMenuContent>

@@ -5,6 +5,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use std::collections::HashSet;
+use system_properties::SystemPropertyKey;
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -12,6 +13,7 @@ use crate::api::{context::ApiContext, properties::entities::types::SetEntityProp
 use model::user::UserContext;
 use models_properties::service::property_value::PropertyValue;
 use models_properties::{EntityReference, EntityType, api::SetPropertyValue};
+use properties::PropertiesService;
 use properties_db_client::{
     entity_properties::upsert as entity_properties_upsert, error::PropertiesDatabaseError,
     property_definitions::get as property_definitions_get,
@@ -159,6 +161,89 @@ pub async fn set_entity_property(
     let has_value = property_value.is_some();
 
     tracing::debug!(has_value = has_value, "setting property in database");
+
+    // Handle bidirectional linking for task Parent Task / Subtasks properties
+    if entity_type == EntityType::Task
+        && (property_uuid == SystemPropertyKey::PARENT_TASK_UUID
+            || property_uuid == SystemPropertyKey::SUBTASKS_UUID)
+    {
+        let task_id = Uuid::parse_str(&entity_id)
+            .map_err(|_| SetEntityPropertyErr::InvalidRequest("Invalid task ID".to_string()))?;
+
+        if property_uuid == SystemPropertyKey::PARENT_TASK_UUID {
+            // Extract parent task ID (None to clear)
+            let parent_task_id = match &request.value {
+                None => None,
+                Some(SetPropertyValue::EntityReference { reference }) => {
+                    if reference.entity_type != EntityType::Task {
+                        return Err(SetEntityPropertyErr::InvalidRequest(
+                            "Parent Task must reference a Task entity".to_string(),
+                        ));
+                    }
+                    Some(Uuid::parse_str(&reference.entity_id).map_err(|_| {
+                        SetEntityPropertyErr::InvalidRequest("Invalid task ID".to_string())
+                    })?)
+                }
+                _ => {
+                    return Err(SetEntityPropertyErr::InvalidRequest(
+                        "Parent Task requires a single entity reference".to_string(),
+                    ));
+                }
+            };
+
+            context
+                .properties_service
+                .link_parent_task(task_id, parent_task_id)
+                .await
+                .map_err(|e| {
+                    tracing::error!(error = ?e, "failed to link parent task");
+                    SetEntityPropertyErr::InternalError(anyhow::anyhow!(
+                        "Failed to link parent task: {}",
+                        e
+                    ))
+                })?;
+            tracing::info!("successfully linked parent task");
+        } else {
+            // Extract subtask IDs (empty to clear)
+            let subtask_ids = match &request.value {
+                None => vec![],
+                Some(SetPropertyValue::MultiEntityReference { references }) => {
+                    let mut ids = Vec::with_capacity(references.len());
+                    for reference in references {
+                        if reference.entity_type != EntityType::Task {
+                            return Err(SetEntityPropertyErr::InvalidRequest(
+                                "Subtasks must reference Task entities".to_string(),
+                            ));
+                        }
+                        ids.push(Uuid::parse_str(&reference.entity_id).map_err(|_| {
+                            SetEntityPropertyErr::InvalidRequest("Invalid task ID".to_string())
+                        })?);
+                    }
+                    ids
+                }
+                _ => {
+                    return Err(SetEntityPropertyErr::InvalidRequest(
+                        "Subtasks requires multiple entity references".to_string(),
+                    ));
+                }
+            };
+
+            context
+                .properties_service
+                .link_subtasks(task_id, subtask_ids)
+                .await
+                .map_err(|e| {
+                    tracing::error!(error = ?e, "failed to link subtasks");
+                    SetEntityPropertyErr::InternalError(anyhow::anyhow!(
+                        "Failed to link subtasks: {}",
+                        e
+                    ))
+                })?;
+            tracing::info!("successfully linked subtasks");
+        }
+
+        return Ok(StatusCode::NO_CONTENT);
+    }
 
     entity_properties_upsert::upsert_entity_property_values(
         &context.db,

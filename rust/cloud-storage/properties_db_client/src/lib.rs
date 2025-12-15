@@ -8,3 +8,4 @@ pub mod entity_properties;
 pub mod error;
 pub mod property_definitions;
 pub mod property_options;
+pub mod thread_metadata;

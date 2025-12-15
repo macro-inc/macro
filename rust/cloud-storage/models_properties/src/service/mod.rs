@@ -10,3 +10,4 @@ pub mod property_definition;
 pub mod property_definition_with_options;
 pub mod property_option;
 pub mod property_value;
+pub mod thread_metadata;

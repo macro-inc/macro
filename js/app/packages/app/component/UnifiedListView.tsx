@@ -799,6 +799,13 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
   const emailActive = useEmailLinksStatus();
 
+  const validSearchTerms = createMemo(() => {
+    return debouncedSearchForService().length >= 3;
+  });
+  const isSearchActive = createMemo(() => {
+    return validSearchTerms();
+  });
+
   const dssQueryParams = createMemo(
     (): GetItemsSoupParams => ({
       limit: props.defaultDisplayOptions?.limit ?? 100,
@@ -830,6 +837,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       email_filters: {
         recipients:
           emailActive() &&
+          !isSearchActive() &&
           view().viewType !== 'project' &&
           (entityTypeFilter().includes('email') ||
             entityTypeFilter().length === 0)
@@ -873,19 +881,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       },
     })
   );
-
-  const validSearchTerms = createMemo(() => {
-    return debouncedSearchForService().length >= 3;
-  });
-  const validSearchFilters = createMemo(() => {
-    const senders = unifiedSearchFilters()?.email?.senders;
-    if (senders && senders.length > 0) return true;
-    return false;
-  });
-
-  const isSearchActive = createMemo(() => {
-    return validSearchTerms() || validSearchFilters();
-  });
 
   const disableSearchService = createMemo(() => {
     return !isSearchActive();
@@ -971,10 +966,13 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     const channelsQuery = createChannelsQuery({
       disabled: disableChannelsQuery,
     });
-    const dssInfiniteQuery = createDssInfiniteQuery(dssQueryParams, {
-      disabled: disableDssInfiniteQuery,
-      requestBody: dssQueryRequestBody,
-    });
+    const dssInfiniteQuery = createDssInfiniteQuery(
+      dssQueryParams,
+      dssQueryRequestBody,
+      {
+        disabled: disableDssInfiniteQuery,
+      }
+    );
     const searchNameContentInfiniteQuery = createUnifiedSearchInfiniteQuery(
       searchUnifiedNameContentQueryParams,
       { disabled: disableSearchService }
@@ -987,6 +985,16 @@ export function UnifiedListView(props: UnifiedListViewProps) {
         notifications: useNotificationsForEntity(notificationSource, entity),
       };
     };
+
+    // We want to be to be able to search over locally cached emails without actually
+    // fetching more data when we have a invalid search term (i.e. one or two chars).
+    // If we're using search service for a valid term, we can safely fetch more data
+    // from dss for fuzzy name search since we won't be searching over emails (too big).
+    const disableFetchMore = createMemo(() => {
+      const searchAllEmails =
+        (dssQueryRequestBody().email_filters?.recipients ?? []).length === 0;
+      return searchText().length > 0 && searchAllEmails;
+    });
 
     const { UnifiedListComponent, entities, isLoading } =
       createUnifiedInfiniteList<
@@ -1011,6 +1019,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
         entitySort,
         searchFilter: nameFuzzySearchFilter,
         isSearchActive,
+        disableFetchMore,
       });
 
     createEffect(() => {
@@ -1476,7 +1485,12 @@ export function UnifiedListView(props: UnifiedListViewProps) {
           <UnifiedListComponent
             entityListRef={setLocalEntityListRef}
             virtualizerHandle={setVirtualizerHandle}
-            emptyState={<EmptyState viewId={view()?.id} />}
+            emptyState={
+              <EmptyState
+                viewId={view()?.id}
+                search={searchText().length > 0}
+              />
+            }
             hasRefinementsFromBase={isViewConfigChanged}
           >
             {(innerProps) => {
@@ -1937,7 +1951,7 @@ function SearchBar(props: {
             icon={LoadingSpinner}
             theme="clear"
             tooltip={{ label: 'Cancel search' }}
-            class="animate-spin"
+            class="[&_svg]:animate-spin"
             onClick={() => {
               setSearchText('');
               inputRef?.focus();

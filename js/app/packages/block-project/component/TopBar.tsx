@@ -15,7 +15,10 @@ import { getIsSpecialProject } from '@block-project/isSpecial';
 import { projectBlockDataSignal } from '@block-project/signal/projectBlockData';
 import { useBlockId } from '@core/block';
 import { ShareButton } from '@core/component/TopBar/ShareButton';
-import { ENABLE_PROJECT_SHARING } from '@core/constant/featureFlags';
+import {
+  ENABLE_PROJECT_SHARING,
+  ENABLE_PROPERTIES_METADATA,
+} from '@core/constant/featureFlags';
 import {
   useCanEdit,
   useGetPermissions,
@@ -25,6 +28,7 @@ import { buildSimpleEntityUrl } from '@core/util/url';
 import { toast } from 'core/component/Toast/Toast';
 import { createMemo, Show } from 'solid-js';
 import { ProjectCreateMenu } from './ProjectCreateMenu';
+import { ProjectPropertiesModal } from './ProjectPropertiesModal';
 
 // TODO (SEAMUS) : Revisit this file when we figure out what we wanna do
 //     with folder block.
@@ -84,6 +88,9 @@ export function TopBar() {
       <SplitToolbarRight>
         <div class="flex items-center p-1">
           <div class="flex items-center">
+            <Show when={ENABLE_PROPERTIES_METADATA && !isSpecialProject}>
+              <ProjectPropertiesModal buttonSize="sm" name={name()} />
+            </Show>
             <SplitPermissionsBadge />
             <Show when={ENABLE_PROJECT_SHARING && !isSpecialProject}>
               <ShareButton

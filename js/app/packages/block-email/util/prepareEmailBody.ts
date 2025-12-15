@@ -340,11 +340,9 @@ export function prepareEmailBody(
   mentions: DocumentMentionInfo[];
 } | null {
   if (!editor) return null;
-  let generatedHtml = '';
-  let bodyHtml = '';
-  let bodyText = '';
-  editor.read(() => {
-    generatedHtml = $generateHtmlFromNodes(editor);
+
+  const generatedHtml = editor.read(() => {
+    return $generateHtmlFromNodes(editor);
   });
 
   const parsed = new DOMParser().parseFromString(generatedHtml, 'text/html');
@@ -364,8 +362,8 @@ export function prepareEmailBody(
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
     .replace(/={1,}$/, '');
-  bodyHtml = html;
-  bodyText = parsed.body.firstChild?.textContent ?? '';
+  const bodyHtml = html;
+  const bodyText = parsed.body.firstChild?.textContent ?? '';
 
   return { bodyHtml, bodyText, mentions };
 }

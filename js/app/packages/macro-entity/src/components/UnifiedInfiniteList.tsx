@@ -206,6 +206,7 @@ interface UnifiedInfiniteListContext<T extends EntityData> {
   entitySort?: Accessor<EntityComparator<T>>;
   searchFilter?: Accessor<EntitiesFilter<T> | undefined>;
   isSearchActive?: Accessor<boolean>;
+  disableFetchMore?: Accessor<boolean>;
 }
 
 export function createUnifiedInfiniteList<T extends EntityData>({
@@ -217,6 +218,7 @@ export function createUnifiedInfiniteList<T extends EntityData>({
   entitySort,
   searchFilter,
   isSearchActive,
+  disableFetchMore,
 }: UnifiedInfiniteListContext<T>) {
   const [sortedEntitiesStore, setSortedEntitiesStore] = createStore<T[]>([]);
   const allEntities = createMemo(() => {
@@ -311,7 +313,7 @@ export function createUnifiedInfiniteList<T extends EntityData>({
     const searching = isSearchActive?.();
 
     if (searching) {
-      // NOTE: the default sort will be channels, then local fuzzy name, then serach service
+      // NOTE: the default sort will be channels, then local fuzzy name, then search service
       // avoiding doing an extra sort as a speed optimization
       return entities.toSorted(sortEntitiesForSearch);
     }
@@ -388,7 +390,7 @@ export function createUnifiedInfiniteList<T extends EntityData>({
 
   let isFetchingMore = false;
   const fetchMoreData = async () => {
-    if (isFetchingMore) return;
+    if (disableFetchMore?.() || isFetchingMore) return;
 
     isFetchingMore = true;
     const results = entityInfiniteQueries.map((query) => {
