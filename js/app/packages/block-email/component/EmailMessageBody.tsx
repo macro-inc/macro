@@ -43,7 +43,7 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
   }
 
   // If we don't have body replyless, it may be because it hasn't been generated yet. For instance, this is the case immediately after a message is sent. We can use the HTML to parse the message correctly.
-  const bodyReplylessProcessed = createMemo(() => {
+  const bodyReplyless = createMemo(() => {
     let replyless = props.message.body_replyless ?? '';
     if (!replyless) {
       if (props.message.body_html_sanitized) {
@@ -80,7 +80,7 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
   });
 
   const parsedBodyReplyless = createMemo(() => {
-    const processed = bodyReplylessProcessed();
+    const processed = bodyReplyless();
     return processed ? parseEmailContent(processed) : undefined;
   });
 
@@ -93,8 +93,8 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
   const hasHiddenReplyStructure = () => {
     return (
       !isPlaintext() &&
-      ((bodyReplylessProcessed() &&
-        bodyReplylessProcessed().toString().replace(/\s+/g, '').length !==
+      ((bodyReplyless() &&
+        bodyReplyless().toString().replace(/\s+/g, '').length !==
           props.message.body_html_sanitized?.toString().replace(/\s+/g, '')
             .length) ||
         source()?.signature)
