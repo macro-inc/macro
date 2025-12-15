@@ -125,6 +125,9 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
   async function handleSend() {
     const _editor = editor();
 
+    // We handle cleaning up the signature after we've sent the request because
+    // otherwise the `bodyMacro` signal would update after the clean up call and
+    // not contain the signature in the request data
     const cleanupWatermark = $appendWatermarkNodeToLast(
       _editor,
       !hasPaidAccess() ? MACRO_EMAIL_SIGNATURE : undefined
