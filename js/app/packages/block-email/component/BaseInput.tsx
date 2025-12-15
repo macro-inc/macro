@@ -577,7 +577,9 @@ export function BaseInput(props: {
       {/* Top Bar */}
       <div class="flex items-start gap-2 p-2">
         <DropdownMenu>
-          <DropdownMenu.Trigger><div class="px-1">{ReplyIcon()}</div></DropdownMenu.Trigger>
+          <DropdownMenu.Trigger>
+            <div class="px-1">{ReplyIcon()}</div>
+          </DropdownMenu.Trigger>
           <DropdownMenu.Portal>
             <DropdownMenuContent>
               <MenuItem
