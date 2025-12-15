@@ -19,7 +19,7 @@ import {
 } from './mentions';
 import { xmlMatcher } from './transformers';
 
-const TAG_MACRO_QUOTE = 'macro-quote';
+const TAG_MACRO_QUOTE = 'm-email-thread-embed';
 const REG_EXP_XML_MACRO_QUOTE = xmlMatcher(TAG_MACRO_QUOTE, '');
 
 // Transformers used inside macro_quote blocks

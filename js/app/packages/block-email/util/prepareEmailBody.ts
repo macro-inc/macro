@@ -370,5 +370,6 @@ export function prepareEmailBody(
 export function prepareMacroBody(bodyMacro: string): string {
   // Remove macro-quote blocks from the markdown string
   // We want these in the HTML, but not in body_macro
+  // TODO (seamus + peter) Add logic for binding a markdown signal that skips certain transforms
   return bodyMacro.replace(/<macro-quote>.*?<\/macro-quote>/gs, '').trim();
 }
