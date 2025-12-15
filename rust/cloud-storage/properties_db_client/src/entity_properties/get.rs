@@ -426,6 +426,108 @@ pub async fn get_bulk_entity_properties_values(
     Ok(entity_properties_map)
 }
 
+/// Gets entity properties with their definitions and values for multiple entities, filtered by property definition IDs.
+/// Returns a HashMap where the key is the entity_id and the value is Vec<EntityPropertyWithDefinition>.
+/// Only returns properties matching the specified property_ids.
+#[tracing::instrument(skip(db))]
+pub async fn get_bulk_entity_properties_values_filtered(
+    db: &Pool<Postgres>,
+    entity_refs: &[EntityReference],
+    property_ids: Vec<Uuid>,
+) -> Result<HashMap<String, Vec<EntityPropertyWithDefinition>>> {
+    if entity_refs.is_empty() || property_ids.is_empty() {
+        // If no property_ids specified, return empty map for each entity
+        let mut result = HashMap::new();
+        for entity_ref in entity_refs {
+            result.insert(entity_ref.entity_id.clone(), Vec::new());
+        }
+        return Ok(result);
+    }
+
+    let entity_ids: Vec<String> = entity_refs.iter().map(|r| r.entity_id.clone()).collect();
+    let entity_types: Vec<EntityType> = entity_refs.iter().map(|r| r.entity_type).collect();
+
+    let rows = sqlx::query!(
+        r#"
+        SELECT 
+            ep.id as entity_property_id,
+            ep.entity_id,
+            ep.entity_type as "entity_type: EntityType",
+            ep.property_definition_id,
+            ep.values as "values: sqlx::types::JsonValue",
+            ep.created_at as entity_property_created_at,
+            ep.updated_at as entity_property_updated_at,
+            pd.organization_id as definition_organization_id,
+            pd.user_id as definition_user_id,
+            pd.display_name,
+            pd.data_type as "data_type: DataType",
+            pd.is_multi_select,
+            pd.specific_entity_type as "specific_entity_type: Option<EntityType>",
+            pd.created_at as definition_created_at,
+            pd.updated_at as definition_updated_at,
+            pd.is_system as definition_is_system
+        FROM entity_properties ep
+        INNER JOIN property_definitions pd ON ep.property_definition_id = pd.id
+        WHERE (ep.entity_id, ep.entity_type) IN (
+            SELECT * FROM UNNEST($1::TEXT[], $2::property_entity_type[])
+        )
+        AND pd.id = ANY($3::UUID[])
+        "#,
+        &entity_ids,
+        &entity_types as &[EntityType],
+        &property_ids
+    )
+    .fetch_all(db)
+    .await?;
+
+    let mut entity_properties_map: HashMap<String, Vec<EntityPropertyWithDefinition>> =
+        HashMap::new();
+
+    for row in rows {
+        let entity_id = row.entity_id.clone();
+        let property_with_definition = row_to_entity_property_with_definition(EntityPropertyRow {
+            entity_property_id: row.entity_property_id,
+            entity_id: row.entity_id,
+            entity_type: row.entity_type,
+            property_definition_id: row.property_definition_id,
+            entity_property_created_at: row.entity_property_created_at,
+            entity_property_updated_at: row.entity_property_updated_at,
+            definition_organization_id: row.definition_organization_id,
+            definition_user_id: row.definition_user_id,
+            display_name: row.display_name,
+            data_type: row.data_type,
+            is_multi_select: row.is_multi_select,
+            specific_entity_type: row.specific_entity_type,
+            definition_created_at: row.definition_created_at,
+            definition_updated_at: row.definition_updated_at,
+            definition_is_system: row.definition_is_system,
+            values: row.values,
+        })?;
+
+        entity_properties_map
+            .entry(entity_id)
+            .or_default()
+            .push(property_with_definition);
+    }
+
+    for properties in entity_properties_map.values_mut() {
+        sort_properties_by_display_name(properties);
+    }
+
+    for properties in entity_properties_map.values_mut() {
+        attach_property_options(db, properties).await?;
+    }
+
+    // Ensure all requested entity_ids are present in the result
+    for entity_ref in entity_refs {
+        entity_properties_map
+            .entry(entity_ref.entity_id.clone())
+            .or_default();
+    }
+
+    Ok(entity_properties_map)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
