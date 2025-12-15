@@ -338,7 +338,7 @@ impl XmlFormatter for PlainTextFormatter {
         doc: &mention_utils::parse::ParsedDocumentMention<'_>,
         f: &mut std::fmt::Formatter<'_>,
     ) -> std::fmt::Result {
-        write!(f, "[{}]", doc.document_name)
+        write!(f, "{}", doc.document_name)
     }
 
     fn format_user(
@@ -352,7 +352,7 @@ impl XmlFormatter for PlainTextFormatter {
         contact: &mention_utils::parse::ParsedContactMention<'_>,
         f: &mut std::fmt::Formatter<'_>,
     ) -> std::fmt::Result {
-        write!(f, "@{}", contact.name)
+        write!(f, "{}", contact.name)
     }
 
     fn format_date(

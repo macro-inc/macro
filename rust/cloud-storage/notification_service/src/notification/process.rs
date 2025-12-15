@@ -13,7 +13,7 @@ use model_notifications::{Notification, NotificationEventType, NotificationQueue
 
 /// Processes a message from the notification queue.
 /// If the processing  is successful, the message is deleted.
-#[tracing::instrument(skip(ctx, message), fields(message_id=message.message_id))]
+#[tracing::instrument(err, skip(ctx, message), fields(message_id=message.message_id))]
 pub(crate) async fn process_message(
     ctx: QueueWorkerContext,
     message: &aws_sdk_sqs::types::Message,

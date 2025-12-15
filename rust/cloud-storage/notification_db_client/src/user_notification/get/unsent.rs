@@ -4,7 +4,9 @@ use sqlx::types::Uuid;
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct UnsentNotification {
     pub user_id: String,
+    #[serde(alias = "entity_id", alias = "entityId")]
     pub event_item_id: String,
+    #[serde(alias = "entity_type", alias = "entityType")]
     pub event_item_type: String,
     pub notification_id: Uuid,
     pub created_at: chrono::NaiveDateTime,
