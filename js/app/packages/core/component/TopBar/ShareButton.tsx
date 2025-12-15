@@ -23,7 +23,7 @@ import {
   type MaybeResult,
 } from '@core/util/maybeResult';
 import { buildSimpleEntityUrl } from '@core/util/url';
-import IconShare from '@icon/regular/export.svg';
+import IconGlobe from '@icon/regular/globe.svg';
 import IconEyeSlash from '@icon/regular/eye-slash.svg';
 import IconLink from '@icon/regular/link.svg';
 import User from '@icon/regular/user.svg';
@@ -701,7 +701,7 @@ export function ShareButton(props: ShareButtonProps) {
   const shareIcon = createMemo(() => {
     const accessLevel = shareAccessLevelText();
     if (accessLevel === 'Public') {
-      return IconShare;
+      return IconGlobe;
     }
     if (accessLevel === 'Shared') {
       return IconUsers;
@@ -709,19 +709,11 @@ export function ShareButton(props: ShareButtonProps) {
     if (accessLevel === 'Just me') {
       return IconEyeSlash;
     }
-    return IconShare;
+    return IconGlobe;
   });
 
   return (
     <>
-      <IconButton
-        size="sm"
-        theme="clear"
-        icon={ShareLinkAction().icon}
-        onClick={ShareLinkAction().action}
-        tooltip={{ label: 'Copy Share Link' }}
-      />
-
       <IconButton
         tooltip={{
           label:
@@ -744,6 +736,14 @@ export function ShareButton(props: ShareButtonProps) {
         icon={shareIcon()}
         theme="clear"
         size="sm"
+      />
+
+      <IconButton
+        size="sm"
+        theme="clear"
+        icon={ShareLinkAction().icon}
+        onClick={ShareLinkAction().action}
+        tooltip={{ label: 'Copy Share Link' }}
       />
 
       <ShareModal
