@@ -669,12 +669,13 @@ export function MessageList(props: MessageListProps) {
                 'overflow-x': 'hidden',
                 'overflow-y': 'scroll',
                 'overflow-anchor': 'none',
+                display: 'flex',
+                'flex-direction': 'column-reverse',
               }}
               class="scrollbar-hidden"
-              itemSize={BASE_ITEM_SIZE}
               data-channel-message-list
-              data={rows() ?? []}
-              overscan={10}
+              data={(rows() ?? []).toReversed()}
+              bufferSize={10 * BASE_ITEM_SIZE}
               keepMounted={keepMountedIndices()}
               onScroll={handleScroll}
               onScrollEnd={() => {
