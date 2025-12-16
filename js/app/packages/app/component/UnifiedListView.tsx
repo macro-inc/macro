@@ -1953,7 +1953,8 @@ function SearchBar(props: {
             setSearchText(e.target.value);
           }}
           onKeyDown={(e) => {
-            if (e.key === 'Escape') {
+            if (e.key === 'ArrowDown' || e.key === 'Escape') {
+              e.preventDefault();
               e.currentTarget.blur();
             } else if (e.key === 'Enter') {
               e.preventDefault();
