@@ -3,7 +3,10 @@ type ExtractedEntries = {
   directoryEntries: FileSystemDirectoryEntry[];
 };
 
-const EMPTY_RESULT: ExtractedEntries = { fileEntries: [], directoryEntries: [] };
+const EMPTY_RESULT: ExtractedEntries = {
+  fileEntries: [],
+  directoryEntries: [],
+};
 
 /**
  * Extracts file and directory entries from a DataTransfer object.
