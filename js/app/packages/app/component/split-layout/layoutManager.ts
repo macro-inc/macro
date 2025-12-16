@@ -270,6 +270,7 @@ function createPinnedMount(
   const blockType = resolveBlockAlias(content.type);
   const handle = orchestrator.createBlockInstance(blockType, content.id, {
     aliasContext: content.aliasContext,
+    params: content.params,
   });
 
   return {

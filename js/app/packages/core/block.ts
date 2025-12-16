@@ -115,7 +115,6 @@ export type NestedState<Name extends BlockName> = {
   parentId?: string;
   parentName?: Name;
   parentContext?: PreviewState;
-  initArgs?: BlockComponentProps[Name];
 };
 
 const allBlockNames = new Set([...BlockRegistry]);
@@ -273,7 +272,7 @@ type ExtractSuccessType<T> = T extends [null, infer S]
 export type ExtractLoadType<T extends LoadFunction<any, any>> =
   ExtractSuccessType<Awaited<ReturnType<T>>>;
 
-interface BlockComponentProps extends Record<BlockName, ObjectLike> {
+export interface BlockComponentProps extends Record<BlockName, ObjectLike> {
   canvas: BlockCanvasProps;
 }
 
