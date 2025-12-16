@@ -20,7 +20,4 @@ export function invalidateEmailLinks() {
   queryClient.invalidateQueries({
     queryKey: emailKeys.links.queryKey,
   });
-  queryClient.setQueriesData({ queryKey: emailKeys.links.queryKey }, () => ({
-    links: [],
-  }));
 }
