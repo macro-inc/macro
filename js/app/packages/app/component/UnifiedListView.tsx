@@ -1125,6 +1125,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
         // NOTE: this is handled by the channel block params
         // const blockHandle = await blockOrchestrator.getBlockHandle(entity.id);
         // await blockHandle?.goToLocationFromParams({
+        //   [CHANNEL_PARAMS.thread]: location.threadId,
         //   [CHANNEL_PARAMS.message]: location.messageId,
         // });
         break;
