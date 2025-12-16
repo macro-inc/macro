@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createResource, createSignal, For, Match, onCleanup, onMount, Show, Switch } from 'solid-js';
+import { createMemo, createResource, createSignal, For, Match, onCleanup, onMount, Show, Switch } from 'solid-js';
 import { blockNameToItemType, type ItemType, storageServiceClient } from '@service-storage/client';
 import { createBlockEffect, createBlockResource, useBlockId, useBlockName} from '@core/block';
 import { isErr, isOk, type MaybeError, type MaybeResult } from '@core/util/maybeResult';
@@ -414,7 +414,7 @@ export function ShareModal(props: ShareModalProps) {
     }
   );
 
-  const [lastModalOpen, setLastModalOpen] = createSignal(false);
+
 
   const formattedOwner = createMemo(() => {
     const ownerValue = props.owner;
@@ -428,8 +428,9 @@ export function ShareModal(props: ShareModalProps) {
       open={props.isSharePermOpen}
     >
       <Dialog.Portal>
-        <Dialog.Overlay class="z-modal-overlay fixed inset-0 flex justify-center items-center bg-modal-overlay portal-scope">
-          <Dialog.Content class="z-modal-content my-auto w-[440px] max-h-[100%] overflow-y-auto text-ink">
+        <Dialog.Overlay class="z-modal-overlay fixed inset-0 flex justify-center pt-40 bg-modal-overlay portal-scope pattern-edge-muted pattern-diagonal-4">
+          <Dialog.Content class="z-modal-content w-[440px] max-h-[100%] overflow-y-auto text-ink">
+            <div style="height: min-content">
             <ClippedPanel tl={!beveledCorners()}>
                 <ForwardToChannel
                   submitPermissionInfo={{
@@ -536,17 +537,16 @@ export function ShareModal(props: ShareModalProps) {
                 </div>
 
                 <Show when={props.itemType !== 'chat'}>
-                  {/* @daniel: TODO - Proper fix for z indexes */}
                   <ShareOptions
                     permissions={publicAccessLevel() ?? null}
                     setPermissions={setPublicPermissions}
-                    setLastModalOpen={setLastModalOpen}
                   />
                 </Show>
               </Show>
 
             {/*</div>*/}
             </ClippedPanel>
+            </div>
           </Dialog.Content>
         </Dialog.Overlay>
       </Dialog.Portal>
@@ -632,62 +632,31 @@ export function ShareButton(props: ShareButtonProps) {
   return (
     <>
       <div class="border-1 border-edge-muted flex">
-        <Switch>
-          <Match when={shareAccessLevelText() === 'Public'}>
-            <Tooltip tooltip={<div>Anyone with the link can access this document</div>}>
-              <button
-                class="text-xs hover:bg-hover text-ink p-1 flex items-center gap-1"
-                onClick={(e) => {
-                  if(!isAuthenticated()){openLoginModal()}
-                  else{
-                    track(TrackingEvents.SHARE.OPEN);
-                    ShareLinkAction().action(e);
-                    setIsSharePermOpen(true);
-                  }
-                }}
-              >
-                &nbsp;Share
-                <IconGlobe class="size-4" />
-              </button>
-            </Tooltip>
-          </Match>
-          <Match when={shareAccessLevelText() === 'Shared'}>
-            <Tooltip tooltip={<div>Shared with specific people or channels</div>}>
-              <button
-                class="text-xs hover:bg-hover text-ink p-1 flex items-center gap-1"
-                onClick={(e) => {
-                  if(!isAuthenticated()){openLoginModal()}
-                  else{
-                    track(TrackingEvents.SHARE.OPEN);
-                    ShareLinkAction().action(e);
-                    setIsSharePermOpen(true);
-                  }
-                }}
-              >
-                &nbsp;Share
-                <IconUsers class="size-4" />
-              </button>
-            </Tooltip>
-          </Match>
-          <Match when={shareAccessLevelText() === 'Just me'}>
-            <Tooltip tooltip={<div>Only you can access this document</div>}>
-              <button
-                class="text-xs hover:bg-hover text-ink p-1 flex items-center gap-1"
-                onClick={(e) => {
-                  if(!isAuthenticated()){openLoginModal()}
-                  else{
-                    track(TrackingEvents.SHARE.OPEN);
-                    ShareLinkAction().action(e);
-                    setIsSharePermOpen(true);
-                  }
-                }}
-              >
-                &nbsp;Share
-                <IconEyeSlash class="size-4" />
-              </button>
-            </Tooltip>
-          </Match>
-        </Switch>
+        <Tooltip tooltip={
+          <div>
+            {shareAccessLevelText() === 'Public' && 'Anyone with the link can access this document'}
+            {shareAccessLevelText() === 'Shared' && 'Shared with specific people or channels'}
+            {shareAccessLevelText() === 'Just me' && 'Only you can access this document'}
+          </div>
+        }>
+          <button
+            class="text-xs hover:bg-hover text-ink p-1 flex items-center gap-1"
+            onClick={(e) => {
+              if(!isAuthenticated()){openLoginModal();
+              }
+              else{
+                track(TrackingEvents.SHARE.OPEN);
+                ShareLinkAction().action(e);
+                setIsSharePermOpen(true);
+              }
+            }}
+          >
+            &nbsp;Share
+            {shareAccessLevelText() === 'Public' && <IconGlobe class="size-4" />}
+            {shareAccessLevelText() === 'Shared' && <IconUsers class="size-4" />}
+            {shareAccessLevelText() === 'Just me' && <IconEyeSlash class="size-4" />}
+          </button>
+        </Tooltip>
 
         <div class="h-[24px] w-[1px] bg-edge-muted" />
 
@@ -714,15 +683,12 @@ export function ShareButton(props: ShareButtonProps) {
 }
 
 export function ShareOptions(props: {
-  setLastModalOpen?: (value: boolean) => void; // @daniel: TODO - Proper fix for z indexes
   setPermissions: (accessLevel: AccessLevel | null) => void;
   permissions?: AccessLevel | null;
   hideNoAccess?: boolean;
   disabled?: boolean;
 }){
   const [open, setOpen] = createSignal(false);
-  const setLastModalOpen = props.setLastModalOpen;
-  if(setLastModalOpen){createEffect(() => {setLastModalOpen(open())})}
   const editPermissionEnabled = blockEditPermissionEnabledSignal();
   const blockName = useBlockName();
 

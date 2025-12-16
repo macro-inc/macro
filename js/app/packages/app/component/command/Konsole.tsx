@@ -80,7 +80,7 @@ export function KommandMenu() {
   const CommandWindow = (props: { children?: JSXElement }) => {
     return (
       <div
-        class="z-50 fixed inset-0 flex flex-row justify-center items-center bg-modal-overlay pattern-edge-muted pattern-diagonal-4"
+        class="z-50 fixed inset-0 flex flex-row justify-center bg-modal-overlay pattern-edge-muted pattern-diagonal-4"
         ref={setCommandKRef}
       >
         {props.children}
@@ -98,7 +98,7 @@ export function KommandMenu() {
         <Popover.Portal>
           <CommandWindow>
             <Popover.Content>
-              <div class="mt-[25vh] w-6xl max-w-[90vw] max-h-[75vh] overflow-hidden">
+              <div class="mt-40 w-6xl max-w-[90vw] max-h-[75vh] overflow-hidden">
                 <ClippedPanel tl={!beveledCorners()} active>
                   <KommandMenuInner commandKRef={commandKRef} />
                 </ClippedPanel>
