@@ -49,9 +49,6 @@ pub enum OpensearchClientError {
     #[error("bool query not built")]
     BoolQueryNotBuilt,
 
-    #[error("bool query should is empty")]
-    BoolShouldEmpty,
-
     #[error("empty ids with ids only for {0}")]
     EmptyIdsWithIdsOnly(SearchEntityType),
 }
