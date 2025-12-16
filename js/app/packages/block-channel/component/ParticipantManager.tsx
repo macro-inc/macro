@@ -29,6 +29,7 @@ import { useUserId } from '@service-gql/client';
 import { createMemo, createSignal, Show } from 'solid-js';
 import { VList } from 'virtua/solid';
 import { UserItem } from './UserItem';
+import { beveledCorners } from '../../block-theme/signals/themeSignals';
 
 export function ParticipantManager(props: { participantCount: number }) {
   const channel = channelStore.get;
@@ -87,7 +88,7 @@ export function ParticipantManager(props: { participantCount: number }) {
         <Dialog.Overlay class="fixed flex inset-0 z-modal bg-modal-overlay pattern-edge-muted pattern-diagonal-4 items-center justify-content" />
         <div class="fixed inset-0 z-modal w-screen h-screen flex items-center justify-center bg-transparent">
           <Dialog.Content class="w-[512px]">
-            <ClippedPanel tl>
+            <ClippedPanel tl={!beveledCorners()}>
               <div class="flex flex-row items-center px-2 h-[40px] gap-2 border-b-1 border-b-edge-muted">
                 <Dialog.CloseButton>
                   <IconButton

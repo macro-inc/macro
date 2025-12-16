@@ -32,6 +32,7 @@ import {
   Switch,
 } from 'solid-js';
 import { ComposeEmailInput, type ComposeInputData } from './ComposeEmailInput';
+import { beveledCorners } from '../../block-theme/signals/themeSignals';
 
 type EmailComposeErrors =
   | 'no_recipient'
@@ -251,7 +252,7 @@ export function EmailCompose() {
             'pointer-events-none opacity-50': hasLinkError(),
           }}
         >
-          <ClippedPanel tl tr>
+          <ClippedPanel tl={!beveledCorners()}>
             <div
               class="w-full p-4 bg-input max-h-full overflow-hidden flex flex-col min-h-0"
               classList={{

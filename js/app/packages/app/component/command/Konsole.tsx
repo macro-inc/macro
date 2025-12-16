@@ -51,6 +51,7 @@ import {
 } from './state';
 import { useCommandItems } from './useCommandItems';
 import { usePaginatedSearchItems } from './useSearchItems';
+import { beveledCorners } from '../../../block-theme/signals/themeSignals';
 
 // equivalent to h-96
 const MAX_CONTAINER_HEIGHT = 96 * 4;
@@ -98,7 +99,7 @@ export function KommandMenu() {
           <CommandWindow>
             <Popover.Content>
               <div class="mt-[25vh] w-6xl max-w-[90vw] max-h-[75vh] overflow-hidden">
-                <ClippedPanel tl active>
+                <ClippedPanel tl={!beveledCorners()} active>
                   <KommandMenuInner commandKRef={commandKRef} />
                 </ClippedPanel>
               </div>
