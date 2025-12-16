@@ -16,10 +16,10 @@ export function useEmailLinksQuery() {
 }
 
 export function invalidateEmailLinks() {
+  queryClient.cancelQueries({ queryKey: emailKeys.links.queryKey });
   queryClient.invalidateQueries({
     queryKey: emailKeys.links.queryKey,
   });
-  queryClient.cancelQueries({ queryKey: emailKeys.links.queryKey });
   queryClient.setQueriesData({ queryKey: emailKeys.links.queryKey }, () => ({
     links: [],
   }));
