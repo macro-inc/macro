@@ -1,5 +1,6 @@
 import { useChannelsContext } from '@core/component/ChannelsProvider';
 import { ClippedPanel } from '@core/component/ClippedPanel';
+import { DialogWrapper } from '@core/component/DialogWrapper';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { ENABLE_SEARCH_PAGINATION } from '@core/constant/featureFlags';
 import type { CommandWithInfo } from '@core/hotkey/getCommands';
@@ -77,17 +78,6 @@ export function KommandMenu() {
     }
   });
 
-  const CommandWindow = (props: { children?: JSXElement }) => {
-    return (
-      <div
-        class="z-50 fixed inset-0 flex flex-row justify-center bg-modal-overlay pattern-edge-muted pattern-diagonal-4"
-        ref={setCommandKRef}
-      >
-        {props.children}
-      </div>
-    );
-  };
-
   return (
     <StaticMarkdownContext>
       <Popover.Root
@@ -96,15 +86,15 @@ export function KommandMenu() {
       >
         <Popover.Anchor />
         <Popover.Portal>
-          <CommandWindow>
-            <Popover.Content>
-              <div style="overflow: hidden; margin-top: 160px; width: 800px; max-width: calc(100vw - (var(--gutter-size) * 2)); max-height: 75vh; overflow: hidden;">
+          <DialogWrapper>
+            <div ref={setCommandKRef}>
+              <Popover.Content>
                 <ClippedPanel tl={!beveledCorners()} active>
                   <KommandMenuInner commandKRef={commandKRef} />
                 </ClippedPanel>
-              </div>
-            </Popover.Content>
-          </CommandWindow>
+              </Popover.Content>
+            </div>
+          </DialogWrapper>
         </Popover.Portal>
       </Popover.Root>
     </StaticMarkdownContext>

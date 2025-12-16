@@ -28,6 +28,7 @@ import IconGlobe from '@icon/regular/globe.svg';
 import IconUsers from '@icon/regular/users.svg';
 import { useUserId } from '@service-gql/client';
 import { openLoginModal } from './LoginButton';
+import { DialogWrapper } from '../DialogWrapper';
 import { ClippedPanel } from '../ClippedPanel';
 import { useNavigate } from '@solidjs/router';
 import IconLink from '@icon/regular/link.svg';
@@ -428,9 +429,9 @@ export function ShareModal(props: ShareModalProps) {
       open={props.isSharePermOpen}
     >
       <Dialog.Portal>
-        <Dialog.Overlay class="z-modal-overlay fixed inset-0 flex justify-center pt-40 bg-modal-overlay portal-scope pattern-edge-muted pattern-diagonal-4">
-          <Dialog.Content class="z-modal-content w-[440px] max-h-[100%] overflow-y-auto text-ink">
-            <div style="height: min-content">
+        <Dialog.Overlay class="fixed inset-0 z-modal-overlay bg-transparent" />
+        <DialogWrapper width="440px">
+          <Dialog.Content class="text-ink max-h-[100%] overflow-y-auto">
             <ClippedPanel tl={!beveledCorners()} active>
                 <ForwardToChannel
                   submitPermissionInfo={{
@@ -544,11 +545,9 @@ export function ShareModal(props: ShareModalProps) {
                 </Show>
               </Show>
 
-            {/*</div>*/}
             </ClippedPanel>
-            </div>
           </Dialog.Content>
-        </Dialog.Overlay>
+        </DialogWrapper>
       </Dialog.Portal>
     </Dialog>
   );

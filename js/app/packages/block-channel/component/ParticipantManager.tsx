@@ -7,6 +7,7 @@ import {
   useRemoveParticipantsFromChannel,
 } from '@block-channel/signal/participants';
 import { ClippedPanel } from '@core/component/ClippedPanel';
+import { DialogWrapper } from '@core/component/DialogWrapper';
 import { IconButton } from '@core/component/IconButton';
 import { getDestinationFromOptions } from '@core/component/NewMessage';
 import { RecipientSelector } from '@core/component/RecipientSelector';
@@ -85,11 +86,10 @@ export function ParticipantManager(props: { participantCount: number }) {
       </Dialog.Trigger>
 
       <Dialog.Portal>
-        <Dialog.Overlay class="fixed flex inset-0 z-modal bg-modal-overlay pattern-edge-muted pattern-diagonal-4 items-center justify-content" />
-        <div class="">
-          <Dialog.Content class="fixed inset-0 z-modal w-screen h-screen flex pt-40 justify-center bg-transparent">
-            <div class="w-[800px] h-min">
-              <ClippedPanel tl={!beveledCorners()} active>
+        <Dialog.Overlay class="fixed inset-0 z-modal bg-transparent" />
+        <DialogWrapper>
+          <Dialog.Content>
+            <ClippedPanel tl={!beveledCorners()} active>
                 <div class="flex flex-row items-center px-2 h-[40px] gap-2 border-b-1 border-b-edge-muted">
                   <Dialog.CloseButton>
                     <IconButton
@@ -135,10 +135,9 @@ export function ParticipantManager(props: { participantCount: number }) {
                     userId={userId()!}
                   />
                 </div>
-              </ClippedPanel>
-            </div>
+            </ClippedPanel>
           </Dialog.Content>
-        </div>
+        </DialogWrapper>
       </Dialog.Portal>
     </Dialog>
   );
