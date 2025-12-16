@@ -5,8 +5,9 @@ import { isErr, isOk, type MaybeError, type MaybeResult } from '@core/util/maybe
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import { TrackingEvents } from '@coparse/analytics/src/types/TrackingEvents';
 import { beveledCorners } from '../../../block-theme/signals/themeSignals';
-import { DropdownMenuContent, MENU_ITEM_CLASS, MenuItem } from '../Menu';
+import { MENU_ITEM_CLASS } from '../Menu';
 import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
+import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { blockEditPermissionEnabledSignal } from '@core/signal/load';
@@ -14,7 +15,6 @@ import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import { useIsDocumentOwner } from '@core/signal/permissions';
 import { createCallback } from '@solid-primitives/rootless';
 import { commsServiceClient } from '@service-comms/client';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import clickOutside from '@core/directive/clickOutside';
 import IconEyeSlash from '@icon/regular/eye-slash.svg';
 import { ForwardToChannel } from '../ForwardToChannel';
@@ -35,7 +35,7 @@ import IconLink from '@icon/regular/link.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { TOKENS } from '@core/hotkey/tokens';
 import CloseIcon from '@icon/regular/x.svg';
-import { TextButton } from '../TextButton';
+
 import { IconButton } from '../IconButton';
 import User from '@icon/regular/user.svg';
 import { idToEmail } from '@core/user';
@@ -109,19 +109,14 @@ export function ShareModal(props: ShareModalProps) {
   const [channelNamesResource] = createResource(
     () => {
       const result = permissionsResource.latest;
-      if (!result || isErr(result)) return;
-
+      if(!result || isErr(result)){return};
       const [, sharePermission] = result;
-      if (!sharePermission?.channelSharePermissions?.length) return;
-
-      const channel_ids = sharePermission.channelSharePermissions.map(
-        ({ channel_id }) => channel_id
-      );
-
-      return { channel_ids };
+      if(!sharePermission?.channelSharePermissions?.length){return};
+      const channel_ids = sharePermission.channelSharePermissions.map(({channel_id}) => channel_id);
+      return {channel_ids};
     },
     commsServiceClient.getBatchChannelPreviews,
-    { initialValue: undefined}
+    {initialValue: undefined}
   );
 
   // Create a map of channel IDs to channel names
@@ -416,8 +411,6 @@ export function ShareModal(props: ShareModalProps) {
     }
   );
 
-
-
   const formattedOwner = createMemo(() => {
     const ownerValue = props.owner;
     if(!ownerValue){return ''};
@@ -438,7 +431,7 @@ export function ShareModal(props: ShareModalProps) {
               <div class="flex flex-row items-center px-2 h-[40px] gap-2 border-b-1 border-b-edge-muted">
                 <Dialog.CloseButton>
                   <IconButton
-                    tooltip={{ label: 'Close' }}
+                    tooltip={{label: 'Close'}}
                     icon={CloseIcon}
                     iconSize={16}
                     theme="clear"
@@ -699,46 +692,53 @@ export function ShareOptions(props: {
   hideNoAccess?: boolean;
   disabled?: boolean;
 }){
-  const [open, setOpen] = createSignal(false);
   const editPermissionEnabled = blockEditPermissionEnabledSignal();
   const blockName = useBlockName();
 
+  const options = createMemo(() => {
+    const optionsList: { value: string; label: string }[] = [];
+    
+    // Add comment option if applicable
+    if (blockName !== 'md' || ENABLE_MARKDOWN_COMMENTS) {
+      optionsList.push({ value: 'comment', label: accessLevelText('comment') });
+    }
+    
+    // Always add view option
+    optionsList.push({ value: 'view', label: accessLevelText('view') });
+    
+    // Add edit option if enabled
+    if (editPermissionEnabled) {
+      optionsList.push({ value: 'edit', label: accessLevelText('edit') });
+    }
+    
+    // Add no access option if not hidden
+    if (!props.hideNoAccess) {
+      optionsList.push({ value: 'none', label: accessLevelText(null) });
+    }
+    
+    return optionsList;
+  });
+
+  const currentValue = createMemo(() => {
+    if (props.permissions === null) return 'none';
+    return props.permissions || 'none';
+  });
+
+  const handleChange = (value: string) => {
+    if (value === 'none') {
+      props.setPermissions(null);
+    } else {
+      props.setPermissions(value as AccessLevel);
+    }
+  };
+
   return (
-    <DropdownMenu open={open()} onOpenChange={setOpen} sameWidth>
-      <DropdownMenu.Trigger>
-        <TextButton
-          disabled={props.disabled}
-          tabIndex={-1}
-          theme="clear"
-          showChevron
-        >
-          {accessLevelText(props.permissions)}
-        </TextButton>
-      </DropdownMenu.Trigger>
-      <DropdownMenuContent>
-        <Show when={blockName !== 'md' || ENABLE_MARKDOWN_COMMENTS}>
-          <MenuItem
-            onClick={() => {props.setPermissions('comment')}}
-            text={accessLevelText('comment')}
-          />
-        </Show>
-        <MenuItem
-          onClick={() => {props.setPermissions('view')}}
-          text={accessLevelText('view')}
-        />
-        <Show when={editPermissionEnabled}>
-          <MenuItem
-            onClick={() => {props.setPermissions('edit')}}
-            text={accessLevelText('edit')}
-          />
-        </Show>
-        <Show when={!props.hideNoAccess}>
-          <MenuItem
-            onClick={() => {props.setPermissions(null)}}
-            text={accessLevelText(null)}
-          />
-        </Show>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <SegmentedControl
+      list={options()}
+      value={currentValue()}
+      onChange={handleChange}
+      disabled={props.disabled}
+      size="SM"
+    />
   );
 }
