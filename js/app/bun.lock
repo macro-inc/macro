@@ -43,6 +43,7 @@
         "@solid-primitives/deep": "^0.3.3",
         "@solid-primitives/event-bus": "^1.1.2",
         "@solid-primitives/event-listener": "^2.4.3",
+        "@solid-primitives/keyed": "^1.5.2",
         "@solid-primitives/lifecycle": "^0.1.2",
         "@solid-primitives/mutation-observer": "^1.2.2",
         "@solid-primitives/platform": "^0.2.1",
@@ -1192,7 +1193,7 @@
 
     "@solid-primitives/keyboard": ["@solid-primitives/keyboard@1.3.1", "", { "dependencies": { "@solid-primitives/event-listener": "^2.4.1", "@solid-primitives/rootless": "^1.5.1", "@solid-primitives/utils": "^6.3.1" }, "peerDependencies": { "solid-js": "^1.6.12" } }, "sha512-ib4xPC5ioOGj2A/5PqFTJvWbgGVx/5okFEoU0qXhCrehVB84gPBhKFNRqTlpiYzCbVHPIUZCTO2ZMkqzJdIA2w=="],
 
-    "@solid-primitives/keyed": ["@solid-primitives/keyed@1.2.2", "", { "peerDependencies": { "solid-js": "^1.6.12" } }, "sha512-oBziY40JK4XmJ57XGkFl8j0GtEarSu0hhjdkUQgqL/U0QQE3TZrRo9uhgH7I6VGJKBKG7SAraTPE6S5lVLM1ow=="],
+    "@solid-primitives/keyed": ["@solid-primitives/keyed@1.5.2", "", { "peerDependencies": { "solid-js": "^1.6.12" } }, "sha512-BgoEdqPw48URnI+L5sZIHdF4ua4Las1eWEBBPaoSFs42kkhnHue+rwCBPL2Z9ebOyQ75sUhUfOETdJfmv0D6Kg=="],
 
     "@solid-primitives/lifecycle": ["@solid-primitives/lifecycle@0.1.2", "", { "peerDependencies": { "solid-js": "^1.6.12" } }, "sha512-+K0T10kZXqorocFj0coIqt8NYm2UqoZfpF3nm2RwrDMZMV+C+SC0Oi3N6Dnq2i7W/n1cHAnfpoV4CBLsW21lJw=="],
 
@@ -4117,6 +4118,8 @@
     "@kobalte/core/solid-presence": ["solid-presence@0.1.8", "", { "dependencies": { "@corvu/utils": "~0.4.0" }, "peerDependencies": { "solid-js": "^1.8" } }, "sha512-pWGtXUFWYYUZNbg5YpG5vkQJyOtzn2KXhxYaMx/4I+lylTLYkITOLevaCwMRN+liCVk0pqB6EayLWojNqBFECA=="],
 
     "@kobalte/utils/@solid-primitives/event-listener": ["@solid-primitives/event-listener@2.3.3", "", { "dependencies": { "@solid-primitives/utils": "^6.2.3" }, "peerDependencies": { "solid-js": "^1.6.12" } }, "sha512-DAJbl+F0wrFW2xmcV8dKMBhk9QLVLuBSW+TR4JmIfTaObxd13PuL7nqaXnaYKDWOYa6otB00qcCUIGbuIhSUgQ=="],
+
+    "@kobalte/utils/@solid-primitives/keyed": ["@solid-primitives/keyed@1.2.2", "", { "peerDependencies": { "solid-js": "^1.6.12" } }, "sha512-oBziY40JK4XmJ57XGkFl8j0GtEarSu0hhjdkUQgqL/U0QQE3TZrRo9uhgH7I6VGJKBKG7SAraTPE6S5lVLM1ow=="],
 
     "@kobalte/utils/@solid-primitives/media": ["@solid-primitives/media@2.2.9", "", { "dependencies": { "@solid-primitives/event-listener": "^2.3.3", "@solid-primitives/rootless": "^1.4.5", "@solid-primitives/static-store": "^0.0.8", "@solid-primitives/utils": "^6.2.3" }, "peerDependencies": { "solid-js": "^1.6.12" } }, "sha512-QUmU62D4/d9YWx/4Dvr/UZasIkIpqNXz7wosA5GLmesRW9XlPa3G5M6uOmTw73SByHNTCw0D6x8bSdtvvLgzvQ=="],
 

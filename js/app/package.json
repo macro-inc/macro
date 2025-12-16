@@ -79,6 +79,7 @@
     "@solid-primitives/deep": "^0.3.3",
     "@solid-primitives/event-bus": "^1.1.2",
     "@solid-primitives/event-listener": "^2.4.3",
+    "@solid-primitives/keyed": "^1.5.2",
     "@solid-primitives/lifecycle": "^0.1.2",
     "@solid-primitives/mutation-observer": "^1.2.2",
     "@solid-primitives/platform": "^0.2.1",
