@@ -14,7 +14,7 @@ export function DialogWrapper(props: DialogWrapperProps){
       <div
         style={{
           'max-width': 'calc(100vw - (var(--gutter-size) * 2))',
-          'margin': '160 auto 0 auto',
+          'margin': '160px auto 0 auto',
           'max-height': '75vh',
           'overflow': 'hidden',
           'width': width
