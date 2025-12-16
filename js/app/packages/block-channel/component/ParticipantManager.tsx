@@ -86,55 +86,57 @@ export function ParticipantManager(props: { participantCount: number }) {
 
       <Dialog.Portal>
         <Dialog.Overlay class="fixed flex inset-0 z-modal bg-modal-overlay pattern-edge-muted pattern-diagonal-4 items-center justify-content" />
-        <div class="fixed inset-0 z-modal w-screen h-screen flex items-center justify-center bg-transparent">
-          <Dialog.Content class="w-[512px]">
-            <ClippedPanel tl={!beveledCorners()}>
-              <div class="flex flex-row items-center px-2 h-[40px] gap-2 border-b-1 border-b-edge-muted">
-                <Dialog.CloseButton>
-                  <IconButton
-                    tooltip={{ label: 'Close' }}
-                    icon={CloseIcon}
-                    iconSize={16}
-                    theme="clear"
-                    size="sm"
-                  />
-                </Dialog.CloseButton>
-                <Dialog.Title class="text-sm">{title()}</Dialog.Title>
-              </div>
-              <Show
-                when={
-                  channelType() &&
-                  ['private'].includes(channelType()!) &&
-                  isChannelAdminOrOwnerMemo()
-                }
-              >
-                <div class="flex flex-row justify-between gap-2 h-[40px] text-ink-muted border-b border-edge-muted/50 px-2 items-center">
-                  <RecipientSelector<'user'>
-                    setSelectedOptions={setUsersToInvite}
-                    selectedOptions={usersToInvite}
-                    placeholder={'Search'}
-                    options={options}
-                    hideBorder
-                    noPadding
-                  />
-                  <TextButton
-                    disabled={usersToInvite().length === 0}
-                    onClick={handleAddParticipants}
-                    icon={InvitedIcon}
-                    text="Add Participant"
-                    theme="accent"
+        <div class="">
+          <Dialog.Content class="fixed inset-0 z-modal w-screen h-screen flex pt-40 justify-center bg-transparent">
+            <div class="w-[800px] h-min">
+              <ClippedPanel tl={!beveledCorners()} active>
+                <div class="flex flex-row items-center px-2 h-[40px] gap-2 border-b-1 border-b-edge-muted">
+                  <Dialog.CloseButton>
+                    <IconButton
+                      tooltip={{ label: 'Close' }}
+                      icon={CloseIcon}
+                      iconSize={16}
+                      theme="clear"
+                      size="sm"
+                    />
+                  </Dialog.CloseButton>
+                  <Dialog.Title class="text-sm">{title()}</Dialog.Title>
+                </div>
+                <Show
+                  when={
+                    channelType() &&
+                    ['private'].includes(channelType()!) &&
+                    isChannelAdminOrOwnerMemo()
+                  }
+                >
+                  <div class="flex flex-row justify-between gap-2 h-[40px] text-ink-muted border-b border-edge-muted/50 px-2 items-center">
+                    <RecipientSelector<'user'>
+                      setSelectedOptions={setUsersToInvite}
+                      selectedOptions={usersToInvite}
+                      placeholder={'Search'}
+                      options={options}
+                      hideBorder
+                      noPadding
+                    />
+                    <TextButton
+                      disabled={usersToInvite().length === 0}
+                      onClick={handleAddParticipants}
+                      icon={InvitedIcon}
+                      text="Add Participant"
+                      theme="accent"
+                    />
+                  </div>
+                </Show>
+
+                <div class="flex flex-col">
+                  <ParticipantList
+                    editable={editable()}
+                    participants={channel.participants}
+                    userId={userId()!}
                   />
                 </div>
-              </Show>
-
-              <div class="flex flex-col">
-                <ParticipantList
-                  editable={editable()}
-                  participants={channel.participants}
-                  userId={userId()!}
-                />
-              </div>
-            </ClippedPanel>
+              </ClippedPanel>
+            </div>
           </Dialog.Content>
         </div>
       </Dialog.Portal>

@@ -431,7 +431,7 @@ export function ShareModal(props: ShareModalProps) {
         <Dialog.Overlay class="z-modal-overlay fixed inset-0 flex justify-center pt-40 bg-modal-overlay portal-scope pattern-edge-muted pattern-diagonal-4">
           <Dialog.Content class="z-modal-content w-[440px] max-h-[100%] overflow-y-auto text-ink">
             <div style="height: min-content">
-            <ClippedPanel tl={!beveledCorners()}>
+            <ClippedPanel tl={!beveledCorners()} active>
                 <ForwardToChannel
                   submitPermissionInfo={{
                     setChannelPermissions: (id, accessLevel) => setChannelPermissions(id, accessLevel, true),

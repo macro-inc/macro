@@ -98,7 +98,7 @@ export function KommandMenu() {
         <Popover.Portal>
           <CommandWindow>
             <Popover.Content>
-              <div class="mt-40 w-6xl max-w-[90vw] max-h-[75vh] overflow-hidden">
+              <div style="overflow: hidden; margin-top: 160px; width: 800px; max-width: calc(100vw - (var(--gutter-size) * 2)); max-height: 75vh; overflow: hidden;">
                 <ClippedPanel tl={!beveledCorners()} active>
                   <KommandMenuInner commandKRef={commandKRef} />
                 </ClippedPanel>
