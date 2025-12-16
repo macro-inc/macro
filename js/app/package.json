@@ -141,7 +141,7 @@
     "tslog": "^4.9.3",
     "unicode-emoji-json": "^0.8.0",
     "uuid": "^10.0.0",
-    "virtua": "^0.41.5",
+    "virtua": "^0.48.1",
     "vite-plugin-wasm": "^3.5.0",
     "vitest": "^3.2.4",
     "zod": "^3.23.8"
