@@ -86,8 +86,6 @@ pub struct ProjectIndex {
     pub user_id: String,
     pub parent_project_id: Option<uuid::Uuid>,
     pub project_name: String,
-    pub created_at_seconds: i64,
-    pub updated_at_seconds: i64,
 }
 
 #[derive(Debug, Default)]
