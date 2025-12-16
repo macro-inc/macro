@@ -1104,7 +1104,12 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
     const params =
       entity.type === 'channel' && location?.type === 'channel'
-        ? ({ target: { messageId: location.messageId } } as BlockChannelProps)
+        ? ({
+            target: {
+              threadId: location.threadId,
+              messageId: location.messageId,
+            },
+          } as BlockChannelProps)
         : undefined;
 
     const handle = event.altKey

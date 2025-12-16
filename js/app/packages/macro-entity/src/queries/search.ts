@@ -61,6 +61,7 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
           sentAt: r.created_at!,
           location: {
             type: 'channel' as const,
+            threadId: r.thread_id ?? undefined,
             messageId: r.message_id!,
           },
         }));
