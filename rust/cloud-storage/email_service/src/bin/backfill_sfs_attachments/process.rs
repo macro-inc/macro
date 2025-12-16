@@ -13,10 +13,6 @@ pub async fn process_macro_id(
     gmail_client: &gmail_client::GmailClient,
     macro_id: &str,
 ) -> anyhow::Result<(usize, usize)> {
-    // Get fresh Gmail access token for this macro ID
-    let gmail_access_token = auth::get_gmail_access_token(config, macro_id).await?;
-    println!("Successfully obtained Gmail access token for {}", macro_id);
-
     // Fetch all relevant attachment metadata from the database.
     println!(
         "Fetching unique attachment metadata from database for {}...",
@@ -34,6 +30,10 @@ pub async fn process_macro_id(
     if attachments.is_empty() {
         return Ok((0, 0));
     }
+
+    // Get fresh Gmail access token for this macro ID
+    let gmail_access_token = auth::get_gmail_access_token(config, macro_id).await?;
+    println!("Successfully obtained Gmail access token for {}", macro_id);
 
     // Process and upload each attachment.
     let processor = Arc::new(upload::AttachmentProcessor::new(
