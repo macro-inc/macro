@@ -37,7 +37,7 @@ import {
 } from '@lexical-core';
 import { logger } from '@observability';
 import { useSendMessageMutation } from '@queries/email/thread';
-import { emailClient } from '@service-email/client';
+import { useEmailLinksQuery } from '@queries/email/link';
 import type {
   AttachmentMacro,
   MessageToSend,
@@ -151,6 +151,7 @@ export function BaseInput(props: {
     getOrInitEmailFormContext(props.replyingTo().db_id!)()
   );
   const blockId = useBlockId();
+  const emailLinksQuery = useEmailLinksQuery();
 
   const [bodyMacro, setBodyMacro] = createSignal<string>('');
   const [expandedRecipientsRef, setExpandedRecipientsRef] =
@@ -301,15 +302,12 @@ export function BaseInput(props: {
 
     let linkId: string | undefined = currentThread?.link_id;
     if (newMessage || !linkId) {
-      const maybeFallbackLinks = await emailClient.getLinks();
-      if (
-        isErr(maybeFallbackLinks) ||
-        maybeFallbackLinks[1].links.length === 0
-      ) {
+      const linksData = emailLinksQuery.data;
+      if (!linksData || linksData.links.length === 0) {
         logger.error(new Error('Failed to save email draft: no links found'));
         return false;
       }
-      linkId = maybeFallbackLinks[1].links[0].id;
+      linkId = linksData.links[0].id;
     }
 
     const draftResponse = await saveEmailDraft({
@@ -422,13 +420,13 @@ export function BaseInput(props: {
 
     let linkId: string | undefined = currentThread?.link_id;
     if (newMessage || !linkId) {
-      const maybeFallbackLinks = await emailClient.getLinks();
-      if (isErr(maybeFallbackLinks) || maybeFallbackLinks[1].links.length < 1) {
+      const linksData = emailLinksQuery.data;
+      if (!linksData || linksData.links.length < 1) {
         toast.failure('Email failed to send');
         logger.error('No links found');
         return;
       }
-      linkId = maybeFallbackLinks[1].links[0].id;
+      linkId = linksData.links[0].id;
     }
 
     const _editor = editor();
