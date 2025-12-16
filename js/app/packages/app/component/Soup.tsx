@@ -183,7 +183,7 @@ const PreviewPanel: Component<{
   splitPanelContext: SplitPanelContextType;
 }> = (props) => {
   return (
-    <div class="flex flex-row size-full w-[70%] shrink-0">
+    <div class="flex flex-row size-full sm:w-[70%] max-sm:h-[50%] max-sm:border-t border-edge-muted shrink-0 sm:shadow-inner">
       <Show
         when={props.selectedEntity?.type !== 'project' && props.selectedEntity}
       >
@@ -374,7 +374,7 @@ export function Soup() {
         </FileDropOverlay>
       </Show>
 
-      <div class="relative flex-grow min-h-0 flex flex-row size-full">
+      <div class="relative flex-grow min-h-0 flex max-sm:flex-col flex-row size-full">
         <SplitPanelContext.Provider
           value={{
             ...splitPanelContext,

@@ -4,7 +4,7 @@ import { EntityIcon } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import type { ChannelWithParticipants, IUser } from '@core/user';
-import { useContacts } from '@core/user';
+import { idToEmail, useContacts, useDisplayName } from '@core/user';
 import { createFreshSearch } from '@core/util/freshSort';
 import CheckIcon from '@icon/bold/check-bold.svg';
 import CompanyIcon from '@icon/duotone/building-duotone.svg';
@@ -20,6 +20,7 @@ import {
   createUnifiedSearchInfiniteQuery,
   type EmailEntity,
 } from '@macro-entity';
+import { useUserId } from '@service-gql/client';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { Item } from '@service-storage/generated/schemas/item';
 import { useHistory } from '@service-storage/history';
@@ -216,6 +217,32 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   const channelsContext = useChannelsContext();
   const channels = () => channelsContext.channels();
 
+  // Get current user info for injection into contacts
+  const currentUserId = useUserId();
+  const [currentUserDisplayName] = useDisplayName(currentUserId());
+
+  // Contacts with current user injected at the beginning
+  const contactsWithCurrentUser = createMemo((): IUser[] => {
+    const userId = currentUserId();
+    if (!userId) return contacts();
+
+    const existingContacts = contacts();
+
+    // Check if current user is already in contacts
+    const isCurrentUserInContacts = existingContacts.some(
+      (contact) => contact.id === userId
+    );
+    if (isCurrentUserInContacts) return existingContacts;
+
+    // Inject current user at the beginning
+    const currentUser: IUser = {
+      id: userId,
+      email: idToEmail(userId),
+      name: currentUserDisplayName(),
+    };
+    return [currentUser, ...existingContacts];
+  });
+
   // Fetch emails for browsing (only when THREAD type)
   const emailsQuery = createEmailsInfiniteQuery(() => ({ view: 'all' }), {
     disabled: () => props.property.specificEntityType !== 'THREAD',
@@ -266,14 +293,14 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
     if (!specificEntityType) {
       return [
-        ...contacts().map(entityMapper('user')),
+        ...contactsWithCurrentUser().map(entityMapper('user')),
         ...history().map(entityMapper('item')),
         ...channels().map(entityMapper('channel')),
       ];
     }
 
     if (specificEntityType === 'USER') {
-      return contacts().map(entityMapper('user'));
+      return contactsWithCurrentUser().map(entityMapper('user'));
     }
 
     if (specificEntityType === 'CHANNEL') {

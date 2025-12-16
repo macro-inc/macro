@@ -228,8 +228,10 @@
   --color-accent-330: oklch(var(--a0l) var(--a0c) calc(var(--a0h) + 330deg));
 }
 
-@source inline("{data-highlighted:}text-{comment,note,canvas,html,folder,email,code,pdf,image,write,chat,video,rss,contact,default}");
+@source inline("{data-highlighted:}text-{comment,note,canvas,html,folder,email,code,pdf,image,write,chat,video,rss,contact,default},{tauri-ios:}{hidden}");
 
+@custom-variant tauri (&:where(.tauri *));
+@custom-variant ios (&:where(.tauri-ios *));
 
 :root {
   --color-focus: var(--color-accent);

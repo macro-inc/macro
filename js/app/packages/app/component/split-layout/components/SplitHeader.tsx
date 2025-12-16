@@ -109,16 +109,18 @@ function SplitPreviewToggle() {
 
   return (
     <Show when={isUnifiedList()}>
-      <IconButton
-        size="sm"
-        icon={SplitIcon}
-        theme={preview() ? 'accent' : 'current'}
-        tooltip={{
-          label: !preview() ? 'Split View (Preview)' : 'Full View (List)',
-          hotkeyToken: TOKENS.unifiedList.togglePreview,
-        }}
-        onClick={() => setPreview((prev) => !prev)}
-      />
+      <div class="max-sm:rotate-90">
+        <IconButton
+          size="sm"
+          icon={SplitIcon}
+          theme={preview() ? 'accent' : 'current'}
+          tooltip={{
+            label: !preview() ? 'Split View (Preview)' : 'Full View (List)',
+            hotkeyToken: TOKENS.unifiedList.togglePreview,
+          }}
+          onClick={() => setPreview((prev) => !prev)}
+        />
+      </div>
     </Show>
   );
 }
