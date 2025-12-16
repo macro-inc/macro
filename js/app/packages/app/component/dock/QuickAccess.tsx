@@ -35,7 +35,7 @@ function isHighPriorityNotification(
   notification: UnifiedNotification
 ): boolean {
   return (
-    notification.eventItemType === 'channel' &&
+    notification.entity_type === 'channel' &&
     !notificationIsRead(notification) &&
     (notification.notificationEventType ===
       NotificationEventType.channel_mention ||
@@ -92,7 +92,7 @@ function QuickAccessItem(props: QuickAccessItemProps) {
     const notifications = unreadNotifications();
     const index = currentNotificationIndex();
     const notification = notifications[index] || notifications[0];
-    const channelId = notification.eventItemId;
+    const channelId = notification.entity_id;
 
     if (isChannelMention(notification) || isChannelMessageReply(notification)) {
       const metadata = notification.notificationMetadata;
@@ -191,7 +191,7 @@ export function QuickAccess() {
       .map((channel) => {
         const channelNotifications = notifications
           .filter((notification) => {
-            if (notification.eventItemId !== channel.id) return false;
+            if (notification.entity_id !== channel.id) return false;
             if (!isHighPriorityNotification(notification)) return false;
 
             // For DM channels, include all message notifications

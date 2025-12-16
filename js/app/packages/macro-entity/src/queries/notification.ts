@@ -152,7 +152,7 @@ export function createUnseenNotificationIds(
     const unseen = unseenNotifications().flatMap((notification) => {
       if (notification.viewedAt) return [];
 
-      return [notification.eventItemId];
+      return [notification.entity_id];
     });
 
     return [...new Set(unseen)];

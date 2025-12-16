@@ -286,7 +286,7 @@ export function Soup() {
       });
       entityQueryClient.invalidateQueries({
         queryKey: queryKeys.notification({
-          eventItemId: notification.eventItemId,
+          entity_id: notification.entity_id,
         }),
       });
     }
