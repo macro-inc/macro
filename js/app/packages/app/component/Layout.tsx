@@ -111,7 +111,8 @@ export function Layout(props: RouteSectionProps) {
   attachGlobalDOMScope(document.body);
 
   return (
-    <div class="relative flex flex-col justify-between w-dvw h-dvh"
+    <div
+      class="relative flex flex-col justify-between w-dvw h-dvh"
       style={{
         'padding-top':
           'max(env(safe-area-inset-top, 0px), var(--tauri-inset-top, 0px))',

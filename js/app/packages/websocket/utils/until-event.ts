@@ -1,7 +1,7 @@
-import {
-  type Websocket,
+import type {
+  Websocket,
   WebsocketEvent,
-  type WebsocketEventMap,
+  WebsocketEventMap,
 } from '@websocket';
 
 /**
