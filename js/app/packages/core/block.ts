@@ -1,5 +1,5 @@
 import type { BlockCanvasProps } from '@block-canvas/component/Block';
-
+import type { BlockChannelProps } from '@block-channel/component/Block';
 import type { IDocumentStorageServiceFile } from '@filesystem/file';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
@@ -274,6 +274,7 @@ export type ExtractLoadType<T extends LoadFunction<any, any>> =
 
 export interface BlockComponentProps extends Record<BlockName, ObjectLike> {
   canvas: BlockCanvasProps;
+  channel: BlockChannelProps;
 }
 
 interface BlockComponentLoadData extends Record<BlockName, ObjectLike> {

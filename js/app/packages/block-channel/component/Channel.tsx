@@ -52,7 +52,7 @@ import {
 import { createStore } from 'solid-js/store';
 import { type FocusableElement, tabbable } from 'tabbable';
 import { ChannelInput } from './ChannelInput';
-import { MessageList } from './MessageList/MessageList';
+import { MessageList, type TargetMessageInfo } from './MessageList/MessageList';
 import { Top } from './Top';
 
 false && fileFolderDrop;
@@ -78,7 +78,10 @@ export function createChannelRefetchEffect(channelId: string) {
   });
 }
 
-export function Channel(props: { data: Required<ChannelData> }) {
+export function Channel(props: {
+  data: Required<ChannelData>;
+  target?: TargetMessageInfo;
+}) {
   const channel = useChannelQuery(() => props.data.channel.id);
 
   const [_activeThreadId, setActiveThreadId] = activeThreadIdSignal;
@@ -101,24 +104,24 @@ export function Channel(props: { data: Required<ChannelData> }) {
 
   const blockHandle = blockHandleSignal.get;
 
-  const initialTargetMessage = () => {
-    const messageID = searchParams[URL_PARAMS.message];
-    const threadID = searchParams[URL_PARAMS.thread];
+  // use props if available, fallback to search params
+  const initialTargetMessage = (): TargetMessageInfo | undefined => {
+    const target = props.target;
+    if (target) return target;
 
-    if (!messageID) return;
+    const messageId = searchParams[URL_PARAMS.message];
+    const threadId = searchParams[URL_PARAMS.thread];
+
+    if (!messageId) return;
 
     return {
-      messageId: Array.isArray(messageID) ? messageID[0] : messageID,
-      threadId: Array.isArray(threadID) ? threadID[0] : threadID,
+      messageId: Array.isArray(messageId) ? messageId[0] : messageId,
+      threadId: Array.isArray(threadId) ? threadId[0] : threadId,
     };
   };
 
   const [targetMessage, setTargetMessage] = createSignal<
-    | {
-        messageId: string;
-        threadId?: string;
-      }
-    | undefined
+    TargetMessageInfo | undefined
   >(initialTargetMessage());
 
   createMethodRegistration(blockHandle, {

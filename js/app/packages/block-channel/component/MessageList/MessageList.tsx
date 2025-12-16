@@ -68,7 +68,7 @@ const BASE_ITEM_SIZE = 50;
 const clampIndex = (value: number, minValue: number, maxValue: number) =>
   Math.min(Math.max(value, minValue), maxValue);
 
-type TargetMessageInfo = { messageId: string; threadId?: string };
+export type TargetMessageInfo = { messageId: string; threadId?: string };
 
 export type MessageListProps = {
   channelId: string;

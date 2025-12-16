@@ -12,6 +12,7 @@ import { useUserId } from '@service-gql/client';
 import { createSignal, type JSXElement, Match, Switch } from 'solid-js';
 import { Channel } from './Channel';
 import { JoinChannelDialog } from './JoinChannelDialog';
+import type { TargetMessageInfo } from './MessageList/MessageList';
 
 export function WithTopBar(props: { children: JSXElement }) {
   return <div>{props.children}</div>;
@@ -19,7 +20,11 @@ export function WithTopBar(props: { children: JSXElement }) {
 
 export type JoinState = 'REQUIRED' | 'NOT_REQUIRED';
 
-export default function BlockChannel() {
+export type BlockChannelProps = {
+  target?: TargetMessageInfo;
+};
+
+export default function BlockChannel(props: BlockChannelProps) {
   const channelId = useBlockId();
 
   const channel = useChannelQuery(() => channelId);
@@ -106,7 +111,9 @@ export default function BlockChannel() {
           )}
         </Match>
         <Match when={validChannelData()}>
-          {(channelData) => <Channel data={channelData()} />}
+          {(channelData) => (
+            <Channel data={channelData()} target={props.target} />
+          )}
         </Match>
       </Switch>
     </DocumentBlockContainer>
