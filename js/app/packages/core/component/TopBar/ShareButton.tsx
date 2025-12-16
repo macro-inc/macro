@@ -1,69 +1,44 @@
-import { withAnalytics } from '@coparse/analytics';
-import { TrackingEvents } from '@coparse/analytics/src/types/TrackingEvents';
-import { useIsAuthenticated } from '@core/auth';
-import {
-  createBlockEffect,
-  createBlockResource,
-  useBlockId,
-  useBlockName,
-} from '@core/block';
-import { UserIcon } from '@core/component/UserIcon';
-import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
-import clickOutside from '@core/directive/clickOutside';
-import { registerHotkey } from '@core/hotkey/hotkeys';
-import { TOKENS } from '@core/hotkey/tokens';
-import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
-import { blockEditPermissionEnabledSignal } from '@core/signal/load';
-import { useIsDocumentOwner } from '@core/signal/permissions';
-import { idToEmail } from '@core/user';
-import {
-  isErr,
-  isOk,
-  type MaybeError,
-  type MaybeResult,
-} from '@core/util/maybeResult';
-import { buildSimpleEntityUrl } from '@core/util/url';
-import IconEyeSlash from '@icon/regular/eye-slash.svg';
-import IconGlobe from '@icon/regular/globe.svg';
-import IconLink from '@icon/regular/link.svg';
-import User from '@icon/regular/user.svg';
-import IconUsers from '@icon/regular/users.svg';
-import { Dialog } from '@kobalte/core/dialog';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import { Switch as KobalteSwitch } from '@kobalte/core/switch';
-import { cognitionApiServiceClient } from '@service-cognition/client';
-import { commsServiceClient } from '@service-comms/client';
-import { useUserId } from '@service-gql/client';
-import {
-  blockNameToItemType,
-  type ItemType,
-  storageServiceClient,
-} from '@service-storage/client';
+import { createEffect, createMemo, createResource, createSignal, For, Match, onCleanup, onMount, Show, Switch } from 'solid-js';
+import { blockNameToItemType, type ItemType, storageServiceClient } from '@service-storage/client';
+import { createBlockEffect, createBlockResource, useBlockId, useBlockName} from '@core/block';
+import { isErr, isOk, type MaybeError, type MaybeResult } from '@core/util/maybeResult';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
-import { createCallback } from '@solid-primitives/rootless';
-import { useNavigate } from '@solidjs/router';
-import {
-  createEffect,
-  createMemo,
-  createResource,
-  createSignal,
-  For,
-  Match,
-  onCleanup,
-  onMount,
-  Show,
-  Switch,
-} from 'solid-js';
-import { ForwardToChannel } from '../ForwardToChannel';
-import { IconButton } from '../IconButton';
+import { TrackingEvents } from '@coparse/analytics/src/types/TrackingEvents';
+import { beveledCorners } from '../../../block-theme/signals/themeSignals';
 import { DropdownMenuContent, MENU_ITEM_CLASS, MenuItem } from '../Menu';
+import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
+import { cognitionApiServiceClient } from '@service-cognition/client';
+import { blockEditPermissionEnabledSignal } from '@core/signal/load';
+import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
+import { Switch as KobalteSwitch } from '@kobalte/core/switch';
+import { useIsDocumentOwner } from '@core/signal/permissions';
+import { createCallback } from '@solid-primitives/rootless';
+import { commsServiceClient } from '@service-comms/client';
+import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import clickOutside from '@core/directive/clickOutside';
+import IconEyeSlash from '@icon/regular/eye-slash.svg';
+import { ForwardToChannel } from '../ForwardToChannel';
+import { buildSimpleEntityUrl } from '@core/util/url';
+import { registerHotkey } from '@core/hotkey/hotkeys';
+import { UserIcon } from '@core/component/UserIcon';
+import { withAnalytics } from '@coparse/analytics';
 import { Permissions } from '../SharePermissions';
-import { TextButton } from '../TextButton';
-import { toast } from '../Toast/Toast';
-import { Tooltip } from '../Tooltip';
+import { useIsAuthenticated } from '@core/auth';
+import IconGlobe from '@icon/regular/globe.svg';
+import IconUsers from '@icon/regular/users.svg';
+import { useUserId } from '@service-gql/client';
 import { openLoginModal } from './LoginButton';
 import { ClippedPanel } from '../ClippedPanel';
-import { beveledCorners } from '../../../block-theme/signals/themeSignals';
+import { useNavigate } from '@solidjs/router';
+import IconLink from '@icon/regular/link.svg';
+import { Dialog } from '@kobalte/core/dialog';
+import { TOKENS } from '@core/hotkey/tokens';
+import { TextButton } from '../TextButton';
+import { IconButton } from '../IconButton';
+import User from '@icon/regular/user.svg';
+import { idToEmail } from '@core/user';
+import { toast } from '../Toast/Toast';
+import { Tooltip } from '../Tooltip';
 
 false && clickOutside;
 
@@ -76,44 +51,30 @@ const permissionsBlockResource = createBlockResource(
     const id = useBlockId();
     const blockName = useBlockName();
     const itemType = blockNameToItemType(blockName);
-    if (itemType === 'chat') {
-      return cognitionApiServiceClient.getChatPermissions({ id });
-    } else if (itemType === 'document') {
-      return storageServiceClient.getDocumentPermissions({ document_id: id });
-    } else if (itemType === 'project') {
-      if (id === 'trash') return;
+    if(itemType === 'chat'){return cognitionApiServiceClient.getChatPermissions({ id })}
+    else if(itemType === 'document'){return storageServiceClient.getDocumentPermissions({ document_id: id })}
+    else if(itemType === 'project'){
+      if(id === 'trash'){return};
       return storageServiceClient.projects.getPermissions({ id });
     }
   },
-  {
-    initialValue: undefined,
-  }
+  {initialValue: undefined}
 );
 
 createBlockEffect(() => {
   const [, { refetch }] = permissionsBlockResource;
   setRefetchArray((prev) => [...prev, refetch]);
-  onCleanup(() => {
-    setRefetchArray((prev) => prev.filter((r) => r !== refetch));
-  });
+  onCleanup(() => {setRefetchArray((prev) => prev.filter((r) => r !== refetch))});
 });
 
 const accessLevelText = (accessLevel?: AccessLevel | null) => {
   const blockName = useBlockName();
-  switch (accessLevel) {
-    case 'comment':
-      if (blockName === 'md' && !ENABLE_MARKDOWN_COMMENTS) {
-        return 'View';
-      }
-      return 'Comment';
-    case 'view':
-      return 'View';
-    case 'edit':
-      return 'Edit';
-    case 'owner':
-      return 'Owner';
-    default:
-      return 'No Access';
+  switch(accessLevel){
+    case 'comment': if(blockName === 'md' && !ENABLE_MARKDOWN_COMMENTS){return 'View'}; return 'Comment';
+    case 'view': return 'View';
+    case 'edit': return 'Edit';
+    case 'owner': return 'Owner';
+    default: return 'No Access';
   }
 };
 
@@ -124,18 +85,17 @@ export const refetchDocumentShareButtonResource = () => {
     console.warn('no document share permission refetch functions initialized');
     return;
   }
-
   refetchArray_.forEach((refetch) => refetch());
 };
 
 interface ShareModalProps {
-  id: string;
-  name: string;
-  userPermissions: Permissions;
-  itemType: ItemType;
-  isSharePermOpen: boolean;
   setIsSharePermOpen: (value: boolean) => void;
+  userPermissions: Permissions;
+  isSharePermOpen: boolean;
+  itemType: ItemType;
   owner?: string;
+  name: string;
+  id: string;
 }
 
 export function ShareModal(props: ShareModalProps) {
@@ -159,15 +119,13 @@ export function ShareModal(props: ShareModalProps) {
       return { channel_ids };
     },
     commsServiceClient.getBatchChannelPreviews,
-    {
-      initialValue: undefined,
-    }
+    { initialValue: undefined}
   );
 
   // Create a map of channel IDs to channel names
   const channelNameMap = createMemo(() => {
     const result = channelNamesResource.latest;
-    if (!result || isErr(result)) return new Map();
+    if(!result || isErr(result)){return new Map()};
 
     const [, data] = result;
     const map = new Map();
@@ -212,17 +170,19 @@ export function ShareModal(props: ShareModalProps) {
           ],
         },
       });
-      if (!isErr(result)) {
+      if(!isErr(result)){
         refetch();
         toast.success(
           'Removed channel access',
           'Channel no longer has access to this chat'
         );
-      } else {
+      }
+      else{
         toast.alert('Failed to remove channel access', 'Please try again');
         console.error(result);
       }
-    } else if (props.itemType === 'document') {
+    }
+    else if(props.itemType === 'document'){
       const result = await storageServiceClient.editDocument({
         documentId: props.id,
         sharePermission: {
@@ -234,17 +194,19 @@ export function ShareModal(props: ShareModalProps) {
           ],
         },
       });
-      if (!isErr(result)) {
+      if(!isErr(result)){
         refetch();
         toast.success(
           'Removed channel access',
           'Channel no longer has access to this document'
         );
-      } else {
+      }
+      else{
         toast.alert('Failed to remove channel access', 'Please try again');
         console.error(result);
       }
-    } else if (props.itemType === 'project') {
+    }
+    else if(props.itemType === 'project'){
       const result = await storageServiceClient.projects.edit({
         id: props.id,
         sharePermission: {
@@ -256,10 +218,11 @@ export function ShareModal(props: ShareModalProps) {
           ],
         },
       });
-      if (!isErr(result)) {
+      if(!isErr(result)){
         refetch();
         toast.success('Removed folder access');
-      } else {
+      }
+      else{
         toast.alert('Failed to remove folder access', 'Please try again');
         console.error(result);
       }
@@ -267,43 +230,38 @@ export function ShareModal(props: ShareModalProps) {
   });
 
   const setChannelPermissions = createCallback(
-    async (
-      channelId: string,
-      accessLevel: AccessLevel,
-      hideSuccessToast?: boolean
-    ) => {
+    async (channelId: string, accessLevel: AccessLevel, hideSuccessToast?: boolean) => {
       if (props.userPermissions !== Permissions.OWNER) return;
 
       let result: MaybeResult<any, any> | MaybeError<any> | null = null;
-      if (props.itemType === 'chat') {
+      if(props.itemType === 'chat'){
         result = await cognitionApiServiceClient.updateChatPermissions({
-          chat_id: props.id,
           sharePermission: {
             channelSharePermissions: [
               {
                 operation: 'replace',
-                channelId,
                 accessLevel,
+                channelId,
               },
             ],
           },
+          chat_id: props.id,
         });
       } else if (props.itemType === 'document') {
         result = await storageServiceClient.editDocument({
-          documentId: props.id,
           sharePermission: {
             channelSharePermissions: [
               {
                 operation: 'replace',
-                channelId,
                 accessLevel,
+                channelId,
               },
             ],
           },
+          documentId: props.id,
         });
       } else if (props.itemType === 'project') {
         result = await storageServiceClient.projects.edit({
-          id: props.id,
           sharePermission: {
             channelSharePermissions: [
               {
@@ -313,14 +271,13 @@ export function ShareModal(props: ShareModalProps) {
               },
             ],
           },
+          id: props.id,
         });
       }
 
-      if (result && isOk(result)) {
+      if(result && isOk(result)){
         refetch();
-        if(!hideSuccessToast){
-          toast.success( 'Changed channel access level', accessLevelText(accessLevel));
-        }
+        if(!hideSuccessToast){toast.success( 'Changed channel access level', accessLevelText(accessLevel))}
       }
       else{
         toast.alert('Failed to change channel access', 'Please try again');
@@ -354,11 +311,11 @@ export function ShareModal(props: ShareModalProps) {
 
     if(props.itemType === 'chat'){
       const result = await cognitionApiServiceClient.updateChatPermissions({
-        chat_id: props.id,
         sharePermission: {
           publicAccessLevel: newIsPublic ? 'view' : null,
           isPublic: newIsPublic
         },
+        chat_id: props.id
       });
       if(!isErr(result)){
         refetch();
@@ -374,11 +331,11 @@ export function ShareModal(props: ShareModalProps) {
     }
     else if(props.itemType === 'document'){
       const result = await storageServiceClient.editDocument({
-        documentId: props.id,
         sharePermission: {
-          isPublic: newIsPublic,
           publicAccessLevel: newIsPublic ? 'view' : null,
+          isPublic: newIsPublic,
         },
+        documentId: props.id
       });
       if(!isErr(result)){
         refetch();
@@ -394,11 +351,11 @@ export function ShareModal(props: ShareModalProps) {
     }
     else if(props.itemType === 'project') {
       const result = await storageServiceClient.projects.edit({
-        id: props.id,
         sharePermission: {
-          isPublic: newIsPublic,
           publicAccessLevel: newIsPublic ? 'view' : null,
+          isPublic: newIsPublic,
         },
+        id: props.id
       });
       if(!isErr(result)){
         refetch();
@@ -426,7 +383,7 @@ export function ShareModal(props: ShareModalProps) {
             publicAccessLevel: accessLevel,
             isPublic: accessLevel != null,
           },
-          documentId: props.id,
+          documentId: props.id
         });
         if(!isErr(result)){
           refetch();
@@ -440,8 +397,8 @@ export function ShareModal(props: ShareModalProps) {
       else if(props.itemType === 'project'){
         const result = await storageServiceClient.projects.edit({
           sharePermission: {
-            isPublic: accessLevel != null,
             publicAccessLevel: accessLevel,
+            isPublic: accessLevel != null,
           },
           id: props.id
         });
@@ -597,22 +554,21 @@ export function ShareModal(props: ShareModalProps) {
   );
 }
 interface ShareButtonProps {
-  id: string; // document id or chat id
-  name: string; // document name or chat name
   userPermissions: Permissions; // user permissions are in service-storage/cognition V2 are unified @sharePermissionV2.ts
   copyLink?: () => void; // some blocks have their own copy link function e.g. canvas copies current (x,y) position
+  name: string; // document name or chat name
+  id: string; // document id or chat id
   itemType: ItemType;
   owner?: string;
 }
 
 export function ShareButton(props: ShareButtonProps) {
-  const [permissionsResource] = permissionsBlockResource;
   const [isSharePermOpen, setIsSharePermOpen] = createSignal(false);
-  const isAuthenticated = useIsAuthenticated();
+  const [permissionsResource] = permissionsBlockResource;
   const blockScopeId = blockHotkeyScopeSignal.get;
-
-  const blockId = useBlockId();
+  const isAuthenticated = useIsAuthenticated();
   const blockType = useBlockName();
+  const blockId = useBlockId();
 
   onMount(() => {
     registerHotkey({
@@ -758,20 +714,15 @@ export function ShareButton(props: ShareButtonProps) {
 }
 
 export function ShareOptions(props: {
-  permissions?: AccessLevel | null;
-  setPermissions: (accessLevel: AccessLevel | null) => void;
-  disabled?: boolean;
-  hideNoAccess?: boolean;
   setLastModalOpen?: (value: boolean) => void; // @daniel: TODO - Proper fix for z indexes
+  setPermissions: (accessLevel: AccessLevel | null) => void;
+  permissions?: AccessLevel | null;
+  hideNoAccess?: boolean;
+  disabled?: boolean;
 }){
   const [open, setOpen] = createSignal(false);
   const setLastModalOpen = props.setLastModalOpen;
-  if(setLastModalOpen){
-    createEffect(() => {
-      setLastModalOpen(open());
-    });
-  }
-
+  if(setLastModalOpen){createEffect(() => {setLastModalOpen(open())})}
   const editPermissionEnabled = blockEditPermissionEnabledSignal();
   const blockName = useBlockName();
 
@@ -780,8 +731,8 @@ export function ShareOptions(props: {
       <DropdownMenu.Trigger>
         <TextButton
           disabled={props.disabled}
-          theme="clear"
           tabIndex={-1}
+          theme="clear"
           showChevron
         >
           {accessLevelText(props.permissions)}
