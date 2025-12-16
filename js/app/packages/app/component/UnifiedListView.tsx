@@ -1828,7 +1828,6 @@ function SearchBar(props: {
     viewsDataStore,
     selectedView,
     setViewDataStore,
-    entitiesSignal: [entities],
     virtualizerHandleSignal: [virtualizerHandle],
     entityListRefSignal: [entityListRef],
   } = splitContext.unifiedListContext;
@@ -1842,51 +1841,12 @@ function SearchBar(props: {
     setViewDataStore(selectedView(), 'searchText', text);
   };
 
-  const isElementInViewport = (element: Element): Promise<boolean> => {
-    return new Promise((resolve) => {
-      const observer = new IntersectionObserver(
-        (entries) => {
-          resolve(entries[0].isIntersecting);
-          observer.disconnect();
-        },
-        { threshold: 0.1 }
-      );
-      observer.observe(element);
-    });
-  };
-
-  const focusFirstEntity = async () => {
-    const highlightedId = viewData()?.highlightedId;
-    const id = highlightedId;
-
-    if (id) {
-      const highlightedEntityEl = entityListRef()?.querySelector(
-        `[data-entity-id="${id}"]`
-      );
-
-      if (
-        highlightedEntityEl instanceof HTMLElement &&
-        (await isElementInViewport(highlightedEntityEl))
-      ) {
-        highlightedEntityEl.focus();
-        const entity = entities()?.find(({ id: entityId }) => entityId === id);
-        if (entity) {
-          setViewDataStore(
-            selectedView(),
-            produce((state) => {
-              if (!state) return;
-              state.selectedEntity = entity;
-            })
-          );
-
-          return;
-        }
-      }
-    }
-
-    // Fallback to first entity
-    const firstEntity = entityListRef()?.querySelector('[data-entity]');
-    if (firstEntity instanceof HTMLElement) firstEntity.focus();
+  const selectionClick = () => {
+    const id = viewsDataStore[selectedView()].highlightedId;
+    if (!id) return;
+    const el = entityListRef()?.querySelector(`[data-entity-id="${id}"]`);
+    if (!(el instanceof HTMLElement)) return;
+    el.click();
   };
 
   const [waitForLoadingEnd, setWaitForLoadingEnd] = createSignal(false);
@@ -1993,14 +1953,12 @@ function SearchBar(props: {
             setSearchText(e.target.value);
           }}
           onKeyDown={(e) => {
-            if (
-              e.key === 'Escape' ||
-              e.key === 'ArrowDown' ||
-              e.key === 'Enter'
-            ) {
+            if (e.key === 'Escape') {
+              e.currentTarget.blur();
+            } else if (e.key === 'Enter') {
               e.preventDefault();
               e.currentTarget.blur();
-              focusFirstEntity();
+              selectionClick();
             }
           }}
           class="p-1 pr-0 border-0 outline-none! focus:outline-none ring-0! focus:ring-0 flex-1 text-ink text-sm truncate"
