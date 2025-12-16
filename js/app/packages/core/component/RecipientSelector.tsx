@@ -523,6 +523,18 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                   }
                 }
               }}
+              // use a non-delegated event here so that we can process it before Kobalte
+              on:keydown={(e: KeyboardEvent) => {
+                if (e.key === 'Tab') {
+                  e.preventDefault();
+                  e.stopPropagation();
+                    inputRef()?.dispatchEvent(
+                      // We need to send `bubbles: true` because otherwise Kobalte ignores the event
+                      new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' })
+                    );
+           
+                }
+              }}
             />
           </div>
         )}
