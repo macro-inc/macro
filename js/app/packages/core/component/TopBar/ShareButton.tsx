@@ -62,6 +62,8 @@ import { TextButton } from '../TextButton';
 import { toast } from '../Toast/Toast';
 import { Tooltip } from '../Tooltip';
 import { openLoginModal } from './LoginButton';
+import { ClippedPanel } from '../ClippedPanel';
+import { beveledCorners } from '../../../block-theme/signals/themeSignals';
 
 false && clickOutside;
 
@@ -306,8 +308,8 @@ export function ShareModal(props: ShareModalProps) {
             channelSharePermissions: [
               {
                 operation: 'replace',
-                channelId,
                 accessLevel,
+                channelId,
               },
             ],
           },
@@ -316,13 +318,11 @@ export function ShareModal(props: ShareModalProps) {
 
       if (result && isOk(result)) {
         refetch();
-        if (!hideSuccessToast) {
-          toast.success(
-            'Changed channel access level',
-            accessLevelText(accessLevel)
-          );
+        if(!hideSuccessToast){
+          toast.success( 'Changed channel access level', accessLevelText(accessLevel));
         }
-      } else {
+      }
+      else{
         toast.alert('Failed to change channel access', 'Please try again');
         console.error(result);
       }
@@ -331,7 +331,7 @@ export function ShareModal(props: ShareModalProps) {
 
   const publicAccessLevel = createMemo(() => {
     const currentPermissions = permissionsResource.latest;
-    if (!currentPermissions || isErr(currentPermissions)) return;
+    if(!currentPermissions || isErr(currentPermissions)){return}
 
     const [, sharePermission] = currentPermissions;
     return sharePermission.publicAccessLevel;
@@ -339,7 +339,7 @@ export function ShareModal(props: ShareModalProps) {
 
   const isPublic = createMemo(() => {
     const currentPermissions = permissionsResource.latest;
-    if (!currentPermissions || isErr(currentPermissions)) return;
+    if(!currentPermissions || isErr(currentPermissions)){return};
 
     const [, sharePermission] = currentPermissions;
     return sharePermission.isPublic;
@@ -347,32 +347,32 @@ export function ShareModal(props: ShareModalProps) {
 
   const togglePublicAccess = createCallback(async () => {
     const currentPermissions = permissionsResource.latest;
-    if (!currentPermissions || isErr(currentPermissions)) return;
+    if(!currentPermissions || isErr(currentPermissions)){return};
 
     const [, sharePermission] = currentPermissions;
     const newIsPublic = !sharePermission.isPublic;
 
-    if (props.itemType === 'chat') {
+    if(props.itemType === 'chat'){
       const result = await cognitionApiServiceClient.updateChatPermissions({
         chat_id: props.id,
         sharePermission: {
-          isPublic: newIsPublic,
           publicAccessLevel: newIsPublic ? 'view' : null,
+          isPublic: newIsPublic
         },
       });
-      if (!isErr(result)) {
+      if(!isErr(result)){
         refetch();
         toast.success(
           newIsPublic ? 'Made chat public' : 'Made chat private',
-          newIsPublic
-            ? 'Anyone with the link can now view this chat'
-            : 'Only shared users can access this chat'
+          newIsPublic ? 'Anyone with the link can now view this chat' : 'Only shared users can access this chat'
         );
-      } else {
+      }
+      else{
         toast.alert('Failed to change chat access', 'Please try again');
         console.error(result);
       }
-    } else if (props.itemType === 'document') {
+    }
+    else if(props.itemType === 'document'){
       const result = await storageServiceClient.editDocument({
         documentId: props.id,
         sharePermission: {
@@ -380,19 +380,19 @@ export function ShareModal(props: ShareModalProps) {
           publicAccessLevel: newIsPublic ? 'view' : null,
         },
       });
-      if (!isErr(result)) {
+      if(!isErr(result)){
         refetch();
         toast.success(
           newIsPublic ? 'Made document public' : 'Made document private',
-          newIsPublic
-            ? 'Anyone with the link can now view this document'
-            : 'Only shared users can access this document'
+          newIsPublic ? 'Anyone with the link can now view this document' : 'Only shared users can access this document'
         );
-      } else {
+      }
+      else{
         toast.alert('Failed to change document access', 'Please try again');
         console.error(result);
       }
-    } else if (props.itemType === 'project') {
+    }
+    else if(props.itemType === 'project') {
       const result = await storageServiceClient.projects.edit({
         id: props.id,
         sharePermission: {
@@ -400,15 +400,14 @@ export function ShareModal(props: ShareModalProps) {
           publicAccessLevel: newIsPublic ? 'view' : null,
         },
       });
-      if (!isErr(result)) {
+      if(!isErr(result)){
         refetch();
         toast.success(
           newIsPublic ? 'Made folder public' : 'Made folder private',
-          newIsPublic
-            ? 'Anyone with the link can now view this folder'
-            : 'Only shared users can access this folder'
+          newIsPublic ? 'Anyone with the link can now view this folder' : 'Only shared users can access this folder'
         );
-      } else {
+      }
+      else{
         toast.alert('Failed to change folder access', 'Please try again');
         console.error(result);
       }
@@ -416,37 +415,41 @@ export function ShareModal(props: ShareModalProps) {
   });
 
   const setPublicPermissions = createCallback(
-    async (accessLevel: AccessLevel | null) => {
-      if (props.itemType === 'chat') {
+    async(accessLevel: AccessLevel | null) => {
+      if(props.itemType === 'chat'){
         console.error('Cannot set document permissions on chat');
         return;
-      } else if (props.itemType === 'document') {
+      }
+      else if(props.itemType === 'document'){
         const result = await storageServiceClient.editDocument({
-          documentId: props.id,
           sharePermission: {
-            isPublic: accessLevel != null,
             publicAccessLevel: accessLevel,
+            isPublic: accessLevel != null,
           },
+          documentId: props.id,
         });
-        if (!isErr(result)) {
+        if(!isErr(result)){
           refetch();
           toast.success('Updated public link sharing access level');
-        } else {
+        }
+        else{
           toast.alert('Failed to change document access', 'Please try again');
           console.error(result);
         }
-      } else if (props.itemType === 'project') {
+      }
+      else if(props.itemType === 'project'){
         const result = await storageServiceClient.projects.edit({
-          id: props.id,
           sharePermission: {
             isPublic: accessLevel != null,
             publicAccessLevel: accessLevel,
           },
+          id: props.id
         });
-        if (!isErr(result)) {
+        if(!isErr(result)){
           refetch();
           toast.success('Updated public link sharing access level');
-        } else {
+        }
+        else{
           toast.alert('Failed to change folder access', 'Please try again');
           console.error(result);
         }
@@ -458,159 +461,135 @@ export function ShareModal(props: ShareModalProps) {
 
   const formattedOwner = createMemo(() => {
     const ownerValue = props.owner;
-    if (!ownerValue) return '';
+    if(!ownerValue){return ''};
     return ownerValue === userId() ? 'Me' : idToEmail(ownerValue).split('@')[0];
   });
 
   return (
     <Dialog
-      open={props.isSharePermOpen}
       onOpenChange={props.setIsSharePermOpen}
+      open={props.isSharePermOpen}
     >
       <Dialog.Portal>
         <Dialog.Overlay class="z-modal-overlay fixed inset-0 flex justify-center items-center bg-modal-overlay portal-scope">
           <Dialog.Content class="z-modal-content my-auto w-[440px] max-h-[100%] overflow-y-auto text-ink">
-            <div class="z-0 relative">
-              <div class="z-3 relative bg-dialog shadow-xl p-2.5 border-1 border-edge rounded-xl w-full">
+            <ClippedPanel tl={!beveledCorners()}>
                 <ForwardToChannel
-                  name={props.name}
-                  onSubmit={() => props.setIsSharePermOpen(false)}
-                  refetch={refetch}
                   submitPermissionInfo={{
+                    setChannelPermissions: (id, accessLevel) => setChannelPermissions(id, accessLevel, true),
                     userPermissions: props.userPermissions,
                     channelSharePermissions: recipients(),
-                    setChannelPermissions: (id, accessLevel) =>
-                      setChannelPermissions(id, accessLevel, true),
                   }}
+                  onSubmit={() => props.setIsSharePermOpen(false)}
+                  refetch={refetch}
+                  name={props.name}
                 />
-              </div>
+
               <Show when={recipients() || props.owner}>
-                <div class="z-2 relative">
-                  <div class="bg-input shadow-xl mt-4 p-2 pl-4 border-1 border-edge rounded-xl w-full">
-                    <div class="pt-0.5 pb-2 pl-0.5 font-medium text-ink text-md select-none">
-                      Share Recipients
-                    </div>
-                    <div class="flex w-full h-fit max-h-[120px] overflow-y-auto">
-                      <table class="w-full text-ink text-sm border-collapse">
-                        <tbody class="select-none">
-                          <Show when={props.owner}>
-                            <tr class="rounded-md">
-                              <td class="py-1 w-full min-w-0">
+                <div class="pt-0.5 pb-2 pl-0.5 font-medium text-ink text-md select-none">
+                  Share Recipients
+                </div>
+                <div class="flex w-full h-fit max-h-[120px] overflow-y-auto">
+                  <table class="w-full text-ink text-sm border-collapse">
+                    <tbody class="select-none">
+
+                      <Show when={props.owner}>
+                        <tr class="rounded-md">
+                          <td class="py-1 w-full min-w-0">
+                            <div class="flex items-center gap-2 overflow-hidden">
+                              <UserIcon
+                                isDeleted={false}
+                                id={props.owner!}
+                                size="xs"
+                              />
+                              <div class="font-medium truncate">
+                                {formattedOwner()}
+                              </div>
+                            </div>
+                          </td>
+                          <td class="align-middle">
+                            <div class={MENU_ITEM_CLASS}>Owner</div>
+                          </td>
+                        </tr>
+                      </Show>
+
+                      <Show when={recipients()}>
+                        <For each={recipients()!}>
+                          {(recipient) => (
+                            <tr class="hover:bg-hover rounded-md hover-transition-bg">
+                              <td
+                                onClick={() => navigateToChannel(recipient.channel_id)}
+                                class="py-1 w-full min-w-0 cursor-pointer"
+                              >
                                 <div class="flex items-center gap-2 overflow-hidden">
-                                  <UserIcon
-                                    id={props.owner!}
-                                    size="xs"
-                                    isDeleted={false}
-                                  />
+                                  <Switch>
+                                    <Match when={channelNameMap().get(recipient.channel_id)}>
+                                      <User class="flex-shrink-0 w-4 h-4" />
+                                    </Match>
+                                    <Match when={true}>
+                                      <IconUsers class="flex-shrink-0 w-4 h-4" />
+                                    </Match>
+                                  </Switch>
                                   <div class="font-medium truncate">
-                                    {formattedOwner()}
+                                    {channelNameMap().get(recipient.channel_id)?.name || recipient.channel_id}
                                   </div>
                                 </div>
                               </td>
                               <td class="align-middle">
-                                <div class={MENU_ITEM_CLASS}>Owner</div>
+                                <div class="font-medium text-ink-muted text-xs">
+                                  <ShareOptions
+                                    permissions={recipient.access_level}
+                                    setPermissions={(accessLevel) => {
+                                      if(accessLevel === null){removeChannelAccess(recipient.channel_id)}
+                                      else if(accessLevel !== recipient.access_level){setChannelPermissions(recipient.channel_id, accessLevel)}
+                                    }}
+                                  />
+                                </div>
                               </td>
                             </tr>
-                          </Show>
-                          <Show when={recipients()}>
-                            <For each={recipients()!}>
-                              {(recipient) => (
-                                <tr class="hover:bg-hover rounded-md hover-transition-bg">
-                                  <td
-                                    class="py-1 w-full min-w-0 cursor-pointer"
-                                    onClick={() =>
-                                      navigateToChannel(recipient.channel_id)
-                                    }
-                                  >
-                                    <div class="flex items-center gap-2 overflow-hidden">
-                                      <Switch>
-                                        <Match
-                                          when={channelNameMap().get(
-                                            recipient.channel_id
-                                          )}
-                                        >
-                                          <User class="flex-shrink-0 w-4 h-4" />
-                                        </Match>
-                                        <Match when={true}>
-                                          <IconUsers class="flex-shrink-0 w-4 h-4" />
-                                        </Match>
-                                      </Switch>
-                                      <div class="font-medium truncate">
-                                        {channelNameMap().get(
-                                          recipient.channel_id
-                                        )?.name || recipient.channel_id}
-                                      </div>
-                                    </div>
-                                  </td>
-                                  <td class="align-middle">
-                                    <div class="font-medium text-ink-muted text-xs">
-                                      <ShareOptions
-                                        permissions={recipient.access_level}
-                                        setPermissions={(accessLevel) => {
-                                          if (accessLevel === null) {
-                                            removeChannelAccess(
-                                              recipient.channel_id
-                                            );
-                                          } else if (
-                                            accessLevel !==
-                                            recipient.access_level
-                                          ) {
-                                            setChannelPermissions(
-                                              recipient.channel_id,
-                                              accessLevel
-                                            );
-                                          }
-                                        }}
-                                      />
-                                    </div>
-                                  </td>
-                                </tr>
-                              )}
-                            </For>
-                          </Show>
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
-              </Show>
-              <Show when={props.userPermissions === Permissions.OWNER}>
-                <div class={`relative ${lastModalOpen() ? `z-3` : `z-1`}`}>
-                  <div class="bg-dialog shadow-xl mt-4 p-3 border-1 border-edge rounded-xl w-full">
-                    <div class="flex flex-row justify-between items-center mb-1 align-middle">
-                      <div class="flex flex-col gap-0.5">
-                        <div class="font-medium text-ink text-base select-none">
-                          Public link sharing is {isPublic() ? 'on' : 'off'}
-                        </div>
-                        <div class="font-medium text-ink-muted text-sm">
-                          {isPublic()
-                            ? 'Anyone with the link can access'
-                            : 'Share recipients still have access'}
-                        </div>
-                      </div>
+                          )}
+                        </For>
+                      </Show>
 
-                      <KobalteSwitch
-                        checked={isPublic()}
-                        onChange={togglePublicAccess}
-                      >
-                        <KobalteSwitch.Input class="sr-only" />
-                        <KobalteSwitch.Control class="inline-flex bg-edge/30 data-[checked]:bg-accent mt-1 border-2 border-transparent rounded-full focus-visible:outline-none hover:ring-1 hover:ring-edge focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 w-11 h-6 transition-colors">
-                          <KobalteSwitch.Thumb class="block bg-dialog rounded-full w-5 h-5 transition-transform data-[checked]:translate-x-5" />
-                        </KobalteSwitch.Control>
-                      </KobalteSwitch>
-                    </div>
-                    <Show when={props.itemType !== 'chat'}>
-                      {/* @daniel: TODO - Proper fix for z indexes */}
-                      <ShareOptions
-                        permissions={publicAccessLevel() ?? null}
-                        setPermissions={setPublicPermissions}
-                        setLastModalOpen={setLastModalOpen}
-                      />
-                    </Show>
-                  </div>
+                    </tbody>
+                  </table>
                 </div>
               </Show>
-            </div>
+
+              <Show when={props.userPermissions === Permissions.OWNER}>
+                <div class="flex flex-row justify-between items-center mb-1 align-middle">
+                  <div class="flex flex-col gap-0.5">
+                    <div class="font-medium text-ink text-base select-none">
+                      Public link sharing is {isPublic() ? 'on' : 'off'}
+                    </div>
+                    <div class="font-medium text-ink-muted text-sm">
+                      {isPublic() ? 'Anyone with the link can access' : 'Share recipients still have access'}
+                    </div>
+                  </div>
+
+                  <KobalteSwitch
+                    onChange={togglePublicAccess}
+                    checked={isPublic()}
+                  >
+                    <KobalteSwitch.Input class="sr-only" />
+                    <KobalteSwitch.Control class="inline-flex bg-edge/30 data-[checked]:bg-accent mt-1 border-2 border-transparent rounded-full focus-visible:outline-none hover:ring-1 hover:ring-edge focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 w-11 h-6 transition-colors">
+                      <KobalteSwitch.Thumb class="block bg-dialog rounded-full w-5 h-5 transition-transform data-[checked]:translate-x-5" />
+                    </KobalteSwitch.Control>
+                  </KobalteSwitch>
+                </div>
+
+                <Show when={props.itemType !== 'chat'}>
+                  {/* @daniel: TODO - Proper fix for z indexes */}
+                  <ShareOptions
+                    permissions={publicAccessLevel() ?? null}
+                    setPermissions={setPublicPermissions}
+                    setLastModalOpen={setLastModalOpen}
+                  />
+                </Show>
+              </Show>
+
+            {/*</div>*/}
+            </ClippedPanel>
           </Dialog.Content>
         </Dialog.Overlay>
       </Dialog.Portal>
@@ -637,13 +616,9 @@ export function ShareButton(props: ShareButtonProps) {
 
   onMount(() => {
     registerHotkey({
-      hotkey: 'cmd+s',
-      scopeId: blockScopeId(),
-      description: 'Share',
       keyDownHandler: () => {
-        if (!isAuthenticated()) {
-          openLoginModal();
-        } else {
+        if(!isAuthenticated()){openLoginModal()}
+        else{
           track(TrackingEvents.SHARE.OPEN);
           setIsSharePermOpen(true);
         }
@@ -651,14 +626,17 @@ export function ShareButton(props: ShareButtonProps) {
       },
       hotkeyToken: TOKENS.block.share,
       runWithInputFocused: true,
+      scopeId: blockScopeId(),
+      description: 'Share',
+      hotkey: 'cmd+s'
     });
   });
 
   const defaultUrl = () => {
     return buildSimpleEntityUrl(
       {
-        type: blockType,
         id: blockId ?? '',
+        type: blockType,
       },
       {}
     );
@@ -667,9 +645,7 @@ export function ShareButton(props: ShareButtonProps) {
   const { track } = withAnalytics();
 
   const copyLink = createCallback(() => {
-    if (props.copyLink) {
-      return props.copyLink();
-    }
+    if(props.copyLink){return props.copyLink()}
 
     navigator.clipboard.writeText(defaultUrl());
     toast.success(
@@ -690,12 +666,10 @@ export function ShareButton(props: ShareButtonProps) {
 
   const shareAccessLevelText = createMemo(() => {
     const maybeResult = permissionsResource.latest;
-    if (!maybeResult || isErr(maybeResult)) return '';
-
+    if(!maybeResult || isErr(maybeResult)){return ''}
     const [, sharePermission] = maybeResult;
-    if (sharePermission.isPublic) return 'Public';
-    if (sharePermission.channelSharePermissions?.length) return 'Shared';
-
+    if(sharePermission.isPublic){return 'Public'}
+    if(sharePermission.channelSharePermissions?.length){return 'Shared'}
     return 'Just me';
   });
 
@@ -704,15 +678,12 @@ export function ShareButton(props: ShareButtonProps) {
       <div class="border-1 border-edge-muted flex">
         <Switch>
           <Match when={shareAccessLevelText() === 'Public'}>
-            <Tooltip
-              tooltip={<div>Anyone with the link can access this document</div>}
-            >
+            <Tooltip tooltip={<div>Anyone with the link can access this document</div>}>
               <button
                 class="text-xs hover:bg-hover text-ink p-1 flex items-center gap-1"
                 onClick={(e) => {
-                  if (!isAuthenticated()) {
-                    openLoginModal();
-                  } else {
+                  if(!isAuthenticated()){openLoginModal()}
+                  else{
                     track(TrackingEvents.SHARE.OPEN);
                     ShareLinkAction().action(e);
                     setIsSharePermOpen(true);
@@ -725,15 +696,12 @@ export function ShareButton(props: ShareButtonProps) {
             </Tooltip>
           </Match>
           <Match when={shareAccessLevelText() === 'Shared'}>
-            <Tooltip
-              tooltip={<div>Shared with specific people or channels</div>}
-            >
+            <Tooltip tooltip={<div>Shared with specific people or channels</div>}>
               <button
                 class="text-xs hover:bg-hover text-ink p-1 flex items-center gap-1"
                 onClick={(e) => {
-                  if (!isAuthenticated()) {
-                    openLoginModal();
-                  } else {
+                  if(!isAuthenticated()){openLoginModal()}
+                  else{
                     track(TrackingEvents.SHARE.OPEN);
                     ShareLinkAction().action(e);
                     setIsSharePermOpen(true);
@@ -750,9 +718,8 @@ export function ShareButton(props: ShareButtonProps) {
               <button
                 class="text-xs hover:bg-hover text-ink p-1 flex items-center gap-1"
                 onClick={(e) => {
-                  if (!isAuthenticated()) {
-                    openLoginModal();
-                  } else {
+                  if(!isAuthenticated()){openLoginModal()}
+                  else{
                     track(TrackingEvents.SHARE.OPEN);
                     ShareLinkAction().action(e);
                     setIsSharePermOpen(true);
@@ -769,11 +736,11 @@ export function ShareButton(props: ShareButtonProps) {
         <div class="h-[24px] w-[1px] bg-edge-muted" />
 
         <IconButton
-          size="sm"
-          theme="clear"
-          icon={ShareLinkAction().icon}
-          onClick={ShareLinkAction().action}
           tooltip={{ label: 'Copy Share Link' }}
+          onClick={ShareLinkAction().action}
+          icon={ShareLinkAction().icon}
+          theme="clear"
+          size="sm"
         />
       </div>
 
@@ -796,10 +763,10 @@ export function ShareOptions(props: {
   disabled?: boolean;
   hideNoAccess?: boolean;
   setLastModalOpen?: (value: boolean) => void; // @daniel: TODO - Proper fix for z indexes
-}) {
+}){
   const [open, setOpen] = createSignal(false);
   const setLastModalOpen = props.setLastModalOpen;
-  if (setLastModalOpen) {
+  if(setLastModalOpen){
     createEffect(() => {
       setLastModalOpen(open());
     });
@@ -812,10 +779,10 @@ export function ShareOptions(props: {
     <DropdownMenu open={open()} onOpenChange={setOpen} sameWidth>
       <DropdownMenu.Trigger>
         <TextButton
-          theme="clear"
-          showChevron
           disabled={props.disabled}
+          theme="clear"
           tabIndex={-1}
+          showChevron
         >
           {accessLevelText(props.permissions)}
         </TextButton>
@@ -823,32 +790,24 @@ export function ShareOptions(props: {
       <DropdownMenuContent>
         <Show when={blockName !== 'md' || ENABLE_MARKDOWN_COMMENTS}>
           <MenuItem
+            onClick={() => {props.setPermissions('comment')}}
             text={accessLevelText('comment')}
-            onClick={() => {
-              props.setPermissions('comment');
-            }}
           />
         </Show>
         <MenuItem
+          onClick={() => {props.setPermissions('view')}}
           text={accessLevelText('view')}
-          onClick={() => {
-            props.setPermissions('view');
-          }}
         />
         <Show when={editPermissionEnabled}>
           <MenuItem
+            onClick={() => {props.setPermissions('edit')}}
             text={accessLevelText('edit')}
-            onClick={() => {
-              props.setPermissions('edit');
-            }}
           />
         </Show>
         <Show when={!props.hideNoAccess}>
           <MenuItem
+            onClick={() => {props.setPermissions(null)}}
             text={accessLevelText(null)}
-            onClick={() => {
-              props.setPermissions(null);
-            }}
           />
         </Show>
       </DropdownMenuContent>
