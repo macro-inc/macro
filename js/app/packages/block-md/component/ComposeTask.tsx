@@ -111,7 +111,7 @@ export function ComposeTask(props: ComposeTaskProps) {
   };
 
   return (
-    <div class="flex flex-col gap-4 h-96 p-4 relative portal-scope">
+    <div class="flex flex-col gap-4 h-96 p-4 relative">
       {/* Title Input */}
       <div class="flex-shrink-0">
         <input

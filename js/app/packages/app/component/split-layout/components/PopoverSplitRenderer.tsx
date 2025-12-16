@@ -155,7 +155,7 @@ function PopoverSplitModal(props: {
           class={`fixed inset-0 z-modal flex ${getPositionClass()} pointer-events-none isolate`}
         >
           <Dialog.Content
-            class="w-4xl h-xl"
+            class="w-4xl h-xl portal-scope"
             use:clickOutside={() => props.onClose()}
             ref={(r) => {
               bindHotKeyDom(r);
