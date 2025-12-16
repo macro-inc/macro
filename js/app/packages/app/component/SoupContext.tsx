@@ -96,7 +96,8 @@ export type UnifiedListContext = {
   setShowHelpDrawer: Setter<Set<DefaultView>>;
   actionRegistry: EntityActionRegistry;
   navigateThroughList: NavigateListFn;
-  setNavigateThroughList: (fn: NavigateListFn) => void;
+  // this is a private method that should be registered once by createNavigationEntityListShortcut
+  _setNavigateThroughList: (fn: NavigateListFn) => void;
 };
 
 const DEFAULT_VIEW_ID: DefaultView = 'signal';
@@ -136,7 +137,10 @@ export function createSoupContext(): UnifiedListContext {
       }
       return navigateThroughListFn(input);
     },
-    setNavigateThroughList: (fn) => {
+    _setNavigateThroughList: (fn) => {
+      if (navigateThroughListFn) {
+        console.warn('navigateThroughList already initialized');
+      }
       navigateThroughListFn = fn;
     },
   };
@@ -943,7 +947,7 @@ export function createNavigationEntityListShortcut({
     };
   };
 
-  unifiedListContext.setNavigateThroughList(navigateThroughList);
+  unifiedListContext._setNavigateThroughList(navigateThroughList);
 
   const scrollToEntityFromId = async () => {
     const index = getHighlightedEntity()?.index;
