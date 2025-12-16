@@ -126,9 +126,21 @@ pub fn parse_gmail_payload(
                 has_attachments_flag = true;
                 let content_id = find_header(&part.headers, "Content-ID").map(String::from);
 
+                // extension in filename as lowercase
+                let filename = Some(part.filename.clone())
+                    .filter(|s| !s.is_empty())
+                    .map(|f| {
+                        if let Some((base, ext)) = f.rsplit_once('.')
+                            && !ext.is_empty()
+                        {
+                            return format!("{}.{}", base, ext.to_lowercase());
+                        }
+                        f
+                    });
+
                 attachments.push(AttachmentMetadataIntermediate {
                     provider_attachment_id: body.attachment_id.clone(),
-                    filename: Some(part.filename.clone()).filter(|s| !s.is_empty()),
+                    filename,
                     mime_type: Some(part.mime_type.clone()),
                     size_bytes: Some(body.size),
                     content_id,

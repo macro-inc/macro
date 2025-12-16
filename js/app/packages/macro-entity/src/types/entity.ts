@@ -62,9 +62,6 @@ export type DocumentEntity = BaseDocumentEntity | MarkdownEntity;
 export type NamedSubType = 'task';
 
 export const getEntityProjectId = (e: EntityData): string | false => {
-  if (e.type === 'project') {
-    return 'parentId' in e ? (e.parentId ?? false) : false;
-  }
   return 'projectId' in e ? (e.projectId ?? false) : false;
 };
 
@@ -84,7 +81,7 @@ export type EmailEntity = EntityBase & {
 
 export type ProjectEntity = EntityBase & {
   type: 'project';
-  parentId?: string;
+  projectId?: string;
 };
 
 // Create new entity types above this comment

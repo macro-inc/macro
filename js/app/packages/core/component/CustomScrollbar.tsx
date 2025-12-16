@@ -171,20 +171,14 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
   return (
     <Show when={isVisible()}>
       <div
-        class={`absolute right-0 top-0 bottom-0 w-[2px] pointer-events-auto overflow-visible ${props.class || ''}`}
-        style={{
-          'background-color': 'transparent',
-        }}
+        class={`absolute right-0 top-0 bottom-0 w-[1px] pointer-events-auto overflow-visible bg-transparent ${props.class || ''}`}
         onMouseEnter={() => setIsHovering(true)}
         onMouseLeave={() => setIsHovering(false)}
       >
         {/* Track */}
         <div
-          class="absolute inset-0 cursor-pointer"
+          class="absolute inset-0 cursor-pointer bg-transparent"
           onClick={handleTrackClick}
-          style={{
-            'background-color': 'transparent',
-          }}
         />
         {/* Thumb */}
         <div
@@ -192,7 +186,7 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
           style={{
             top: `${thumbTop()}px`,
             height: `${thumbHeight()}px`,
-            width: '2px',
+            width: '1px',
             'background-color': 'var(--color-accent)',
             'transform-origin': 'right center',
             opacity: (() => {
@@ -204,17 +198,6 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
               const normalizedVel = Math.min(vel / 5, 1);
               return normalizedVel;
             })(),
-            'box-shadow': (() => {
-              if (isDragging()) {
-                return '0 0 8px oklch(from var(--color-accent) l c h / 0.6), 0 0 4px oklch(from var(--color-accent) l c h / 0.4)';
-              }
-              const vel = scrollVelocity();
-              if (vel === 0) return 'none';
-              const normalizedVel = Math.min(vel / 5, 1);
-              const glowOpacity = normalizedVel * 0.6;
-              const glowOpacity2 = normalizedVel * 0.4;
-              return `0 0 ${8 * normalizedVel}px oklch(from var(--color-accent) l c h / ${glowOpacity}), 0 0 ${4 * normalizedVel}px oklch(from var(--color-accent) l c h / ${glowOpacity2})`;
-            })(),
             transform: (() => {
               if (isDragging()) return 'scaleX(1.6)';
               const vel = scrollVelocity();
@@ -223,7 +206,7 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
               const normalizedVel = Math.min(vel / 5, 1);
               return `scaleX(${1 + normalizedVel * 1.0})`;
             })(),
-            'transition-property': 'opacity, box-shadow, transform',
+            'transition-property': 'opacity, transform',
           }}
           onMouseDown={handleMouseDown}
         />

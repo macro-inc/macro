@@ -106,7 +106,7 @@ const vars: InsightServiceEnvVars = {
   DOCUMENT_STORAGE_SERVICE_URL,
   DOCUMENT_COGNITION_SERVICE_URL,
   SYNC_SERVICE_AUTH_KEY: pulumi.interpolate`${SYNC_SERVICE_AUTH_KEY}`,
-  SYNC_SERVICE_URL: `https://sync-service${stack === 'prod' ? '' : `-${stack === 'dev' ? 'dev3' : stack}`}.macroverse.workers.dev`,
+  SYNC_SERVICE_URL: `https://sync-service-${stack === 'prod' ? 'prod2' : 'dev3'}.macroverse.workers.dev`,
   EMAIL_SERVICE_URL: pulumi.interpolate`${emailServiceUrl}`,
   MACRO_API_TOKEN_ISSUER: pulumi.interpolate`${MACRO_API_TOKENS.macroApiTokenIssuer}`,
   MACRO_API_TOKEN_PUBLIC_KEY: pulumi.interpolate`${MACRO_API_TOKENS.macroApiTokenPublicKey}`,

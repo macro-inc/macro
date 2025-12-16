@@ -29,7 +29,6 @@ on:
           - link-sharing
           - metering-service
           - notification-service
-          - notification-email-poller
           - organization-service
           - organization-retention
           - properties-service

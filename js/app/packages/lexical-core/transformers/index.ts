@@ -1,4 +1,5 @@
 import type { Transformer } from '@lexical/markdown';
+import { I_MACRO_QUOTE } from './classedBlock';
 import { CUSTOM_TRANSFORMERS } from './customTransformers';
 import { IMAGE } from './image';
 import {
@@ -27,6 +28,7 @@ import {
   PRESERVE_LINES,
   SEARCH_MATCH,
 } from './transformers';
+import { E_WATERMARK, I_WATERMARK } from './watermark';
 
 /**
  * Internal transformers for converting markdown between Lexical state and markdown.
@@ -45,7 +47,9 @@ export const INTERNAL_TRANSFORMERS: Transformer[] = [
   I_CONTACT_MENTION,
   I_DATE_MENTION,
   I_TABLE_NODE,
+  I_MACRO_QUOTE,
   I_EQUATION_NODE,
+  I_WATERMARK,
   ...CUSTOM_TRANSFORMERS,
 ];
 
@@ -67,6 +71,7 @@ export const EXTERNAL_TRANSFORMERS: Transformer[] = [
   E_MULTILINE_BLOCK_EQUATION_NODE,
   E_BLOCK_EQUATION_NODE,
   E_INLINE_EQUATION_NODE,
+  E_WATERMARK,
   ...HTML_ENTITY_TRANSFORMERS,
   ...CUSTOM_TRANSFORMERS,
 ];
@@ -92,7 +97,10 @@ export const ALL_TRANSFORMERS: Transformer[] = [
   E_CONTACT_MENTION,
   I_DATE_MENTION,
   E_DATE_MENTION,
+  I_MACRO_QUOTE,
   I_EQUATION_NODE,
+  I_WATERMARK,
+  E_WATERMARK,
   // order matters
   E_MULTILINE_BLOCK_EQUATION_NODE,
   E_BLOCK_EQUATION_NODE,

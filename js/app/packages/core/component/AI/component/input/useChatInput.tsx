@@ -24,8 +24,8 @@ import XIcon from '@icon/regular/x.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import type { LexicalEditor } from 'lexical';
 import type { Accessor, Component, Setter } from 'solid-js';
-import { createEffect, createSignal, Match, Show, Switch } from 'solid-js';
-import { ActiveTabAttachment } from './ActiveTabAttachment';
+import { createEffect, createSignal, Match, on, Show, Switch } from 'solid-js';
+import { useTabAttachments } from '../../signal/tabAttachments';
 import { AttachmentList } from './Attachment';
 import { ChatAttachMenu } from './ChatAttachMenu';
 import { SendMessageButton, StopButton } from './SendMessageButton';
@@ -92,6 +92,21 @@ export function useChatInput(
       attachments.addAttachment(a);
     },
   });
+
+  const tabAttachments = useTabAttachments();
+  createEffect(
+    on(tabAttachments, (tabs, p) => {
+      for (const prev of p ?? []) {
+        // remove stuff from closed tabs
+        if (!tabs.find((t) => t.id === prev.id)) {
+          attachments.removeAttachment(prev.id);
+        }
+      }
+      for (const tab of tabs) {
+        attachments.addAttachment(tab);
+      }
+    })
+  );
 
   const ChatInputComponent = (innerProps: ChatInputProps) => (
     <ChatInput
@@ -256,22 +271,6 @@ function ChatInput(props: ChatInputInternalProps) {
                 ref={setAttachMenuAnchorRef}
                 onClick={() => setShowAttachMenu((prev) => !prev)}
               />
-              <Show when={props.showActiveTabs}>
-                <ActiveTabAttachment
-                  onAddAttachment={(attachment) => {
-                    track(TrackingEvents.CHAT.ATTACHMENT.ADD);
-                    props.attachments.addAttachment(attachment);
-                  }}
-                  onAddAll={(attachments_) => {
-                    attachments_.forEach((attachment) => {
-                      track(TrackingEvents.CHAT.ATTACHMENT.ADD);
-                      props.attachments.addAttachment(attachment);
-                    });
-                  }}
-                  attachedAttachments={props.attachments.attached}
-                  attachAllOnMount={!props.chatId()}
-                />
-              </Show>
             </div>
             <Switch>
               <Match when={props.uploadQueue.uploading().length !== 0}>
