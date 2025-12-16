@@ -6,7 +6,6 @@ import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import type { ChannelWithParticipants, IUser } from '@core/user';
 import { idToEmail, useContacts, useDisplayName } from '@core/user';
 import { createFreshSearch } from '@core/util/freshSort';
-import { useUserId } from '@service-gql/client';
 import CheckIcon from '@icon/bold/check-bold.svg';
 import CompanyIcon from '@icon/duotone/building-duotone.svg';
 import ChannelBuildingIcon from '@icon/duotone/building-office-duotone.svg';
@@ -21,6 +20,7 @@ import {
   createUnifiedSearchInfiniteQuery,
   type EmailEntity,
 } from '@macro-entity';
+import { useUserId } from '@service-gql/client';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { Item } from '@service-storage/generated/schemas/item';
 import { useHistory } from '@service-storage/history';
