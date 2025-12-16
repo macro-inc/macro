@@ -32,20 +32,6 @@ export function AiChatEmptyState() {
         </span>
         to feed AI some basic context on what you do, who you work with, etc
       </div>
-      <div>
-        Check your AI
-        <span
-          class="font-medium text-accent underline mx-1"
-          onClick={() => {
-            setActiveTabId('AI Memory');
-            openSettings();
-          }}
-        >
-          {' '}
-          Memories
-        </span>
-        that are auto-generated for accuracy and relevance
-      </div>
     </div>
   );
 }

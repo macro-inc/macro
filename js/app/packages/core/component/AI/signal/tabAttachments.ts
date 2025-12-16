@@ -11,16 +11,17 @@ import type {
   FileType,
 } from '@service-cognition/generated/schemas';
 import { emailClient } from '@service-email/client';
-import type { BasicDocument } from '@service-storage/generated/schemas/basicDocument';
 import { useHistory } from '@service-storage/history';
 import type { SplitContent } from 'app/component/split-layout/layoutManager';
 import { globalSplitManager } from 'app/signal/splitLayout';
 import type { Accessor } from 'solid-js';
 import { createMemo, createResource } from 'solid-js';
 
+type Item = ReturnType<ReturnType<typeof useHistory>>[number] | null;
+
 function convertSplitToAttachment(
   split: SplitContent,
-  item: BasicDocument | null,
+  item: Item,
   channel: ChannelWithParticipants | null = null,
   email: EmailEntity | null = null
 ): Attachment | null {
@@ -29,15 +30,16 @@ function convertSplitToAttachment(
 
   switch (split.type) {
     case 'image':
-      if (!item) return null;
+      if (!item || item.type !== 'document') return null;
       const imageName = item.name || 'Image';
       const imageExtension = (item.fileType || 'png') as FileType;
+      // this is correct
       metadata = {
-        type: 'image',
-        image_name: imageName,
-        image_extension: imageExtension,
+        type: 'document',
+        document_name: imageName,
+        document_type: imageExtension,
       };
-      attachmentType = 'image';
+      attachmentType = 'document';
       break;
     case 'channel':
       if (!channel) return null;
@@ -59,8 +61,16 @@ function convertSplitToAttachment(
       };
       attachmentType = 'email';
       break;
+    case 'project':
+      if (!item || item.type !== 'project') return null;
+      metadata = {
+        type: 'project',
+        project_name: item.name,
+      };
+      attachmentType = 'project';
+      break;
     default:
-      if (!item) return null;
+      if (!item || item.type !== 'document') return null;
       const documentName = item.name || 'Document';
       const documentType = (item.fileType || 'txt') as FileType;
       metadata = {
@@ -101,7 +111,7 @@ export function useTabAttachments(): Accessor<ChatAttachmentWithName[]> {
       string,
       {
         split: SplitContent;
-        item: BasicDocument | null;
+        item: Item;
         channel: ChannelWithParticipants | null;
         email: EmailEntity | null;
       }
@@ -117,39 +127,42 @@ export function useTabAttachments(): Accessor<ChatAttachmentWithName[]> {
       }
 
       const key = `${split.content.type}:${split.content.id}`;
-      if (!uniqueSplits.has(key)) {
-        // For email splits, find in email list
-        if (split.content.type === 'email') {
-          const emailItem = emailList.find(
-            (email) => email.id === split.content.id
-          );
-          if (!emailItem) {
-            continue;
-          }
-
-          uniqueSplits.set(key, {
-            split: split.content,
-            item: null,
-            channel: null,
-            email: emailItem,
-          });
+      // For email splits, find in email list
+      if (split.content.type === 'email') {
+        const emailItem = emailList.find(
+          (email) => email.id === split.content.id
+        );
+        if (!emailItem) {
           continue;
         }
 
-        // Find matching item in history
-        const historyItem =
-          historyItems.find((item) => item.id === split.content.id) || null;
-        if (!historyItem || historyItem.type !== 'document') {
-          continue;
-        }
+        uniqueSplits.set(key, {
+          split: split.content,
+          item: null,
+          channel: null,
+          email: emailItem,
+        });
+        continue;
+      }
 
-        // Find matching channel if this is a channel split
-        const channelItem =
-          split.content.type === 'channel'
-            ? channelList.find((channel) => channel.id === split.content.id) ||
-              null
-            : null;
+      const channelItem =
+        split.content.type === 'channel'
+          ? channelList.find((channel) => channel.id === split.content.id) ||
+            null
+          : null;
+      if (split.content.type === 'channel') {
+        uniqueSplits.set(key, {
+          split: split.content,
+          item: null,
+          channel: channelItem,
+          email: null,
+        });
+        continue;
+      }
 
+      const historyItem =
+        historyItems.find((item) => item.id === split.content.id) || null;
+      if (historyItem) {
         uniqueSplits.set(key, {
           split: split.content,
           item: historyItem,
