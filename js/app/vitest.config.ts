@@ -15,14 +15,14 @@ export default defineConfig({
           name: 'websocket',
         },
       },
-      // {
-      //   // Default app tests with browser environment
-      //   test: {
-      //     include: ['packages/app/**/*.test.{ts,tsx}'],
-      //     name: 'app',
-      //     environment: 'jsdom',
-      //   },
-      // },
+      {
+        // Core package tests
+        extends: './packages/core/vitest.config.ts',
+        test: {
+          include: ['packages/core/**/*.{test,spec}.{ts,tsx}'],
+          name: 'core',
+        },
+      },
     ],
   },
 });
