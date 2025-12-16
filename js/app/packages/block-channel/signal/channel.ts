@@ -29,6 +29,9 @@ import {
   threadsStore,
   upsertInThread,
 } from './threads';
+import { queryClient } from '@queries/client';
+import { channelKeys } from '@queries/channel/keys';
+import { invalidateChannelWithID } from '@queries/channel/channel';
 
 const { track } = withAnalytics();
 
@@ -269,6 +272,7 @@ export async function sendMessage({
   });
 
   channelsContext.refetchChannels();
+  invalidateChannelWithID(channelId);
 
   if (isErr(result)) {
     console.error('failed to send message', result[0]);
