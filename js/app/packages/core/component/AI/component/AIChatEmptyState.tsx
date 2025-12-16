@@ -1,9 +1,7 @@
 import { BrightJoins } from '@core/component/BrightJoins';
-import { useSettingsState } from '@core/constant/SettingsState';
 import { useOpenInstructionsMd } from '../util/instructions';
 
 export function AiChatEmptyState() {
-  const { setActiveTabId, openSettings } = useSettingsState();
   const openInstructions = useOpenInstructionsMd();
   return (
     <div class="relative p-2 border border-edge-muted bg-dialog text-sm flex flex-col gap-2 text-ink">

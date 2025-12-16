@@ -10,7 +10,7 @@ import { ENABLE_CHAT_CHANNEL_ATTACHMENT } from '@core/constant/featureFlags';
 import { getItemBlockName } from '@core/util/getItemBlockName';
 import { useEmails } from '@macro-entity';
 import { useHistory } from '@service-storage/history';
-import { createEffect, createMemo, createSignal } from 'solid-js';
+import { createMemo, createSignal } from 'solid-js';
 
 export function useAttachments(initial?: Attachment[]): Attachments {
   const [attachments, setAttachments] = createSignal<Attachment[]>(
