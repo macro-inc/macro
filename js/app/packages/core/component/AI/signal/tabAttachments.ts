@@ -183,7 +183,7 @@ export function useTabAttachments(): Accessor<ChatAttachmentWithName[]> {
       .filter((split) => split.content.type === 'email');
   });
 
-  const [emailAttachments] = createResource(emailTabs, async (eTabs) => {
+  const [emailResource] = createResource(emailTabs, async (eTabs) => {
     const threads = await Promise.allSettled(
       eTabs.map((email) =>
         emailClient
@@ -242,7 +242,10 @@ export function useTabAttachments(): Accessor<ChatAttachmentWithName[]> {
   const combinedAttachments = createMemo(() => {
     const tabs = tabAttachments();
     const existingAttachments = new Set(tabs.map((a) => a.attachmentId));
-    const queriedEmails = emailAttachments() ?? [];
+    const queriedEmails =
+      emailResource.loading || emailResource.error
+        ? []
+        : (emailResource() ?? []);
     const newEmails = queriedEmails.filter(
       (e) => !existingAttachments.has(e.attachmentId)
     );
