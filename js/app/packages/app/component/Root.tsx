@@ -240,9 +240,7 @@ const ROUTES: RouteDefinition[] = [
   {
     path: '/onboarding',
     component: () => (
-      <div
-        class="flex *:flex-1 w-full h-dvh overflow-y-hidden"
-      >
+      <div class="flex *:flex-1 w-full h-dvh overflow-y-hidden">
         <Onboarding />
       </div>
     ),

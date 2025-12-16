@@ -1,8 +1,4 @@
-import type {
-  Websocket,
-  WebsocketEvent,
-  WebsocketEventMap,
-} from '@websocket';
+import type { Websocket, WebsocketEvent, WebsocketEventMap } from '@websocket';
 
 /**
  * Waits for a specific websocket event to be emitted.
