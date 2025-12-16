@@ -1823,6 +1823,7 @@ function SearchBar(props: {
   const {
     viewsDataStore,
     selectedView,
+    setSelectedView,
     setViewDataStore,
     entitiesSignal: [entities],
     virtualizerHandleSignal: [virtualizerHandle],
@@ -1907,25 +1908,43 @@ function SearchBar(props: {
     return loading;
   }, props.isLoading());
 
+  const focusSearch = () => {
+    setTimeout(() => {
+      const searchInput = document.getElementById(
+        `search-input-${splitContext.handle.id}-${selectedView()}`
+      ) as HTMLInputElement;
+      searchInput?.focus();
+    }, 0);
+  };
+
   onMount(() => {
-    const { dispose } = registerHotkey({
+    const { dispose: disposeSlash } = registerHotkey({
       hotkey: ['/'],
       scopeId: splitContext.splitHotkeyScope,
-      description: 'Search in current view',
+      description: 'Search all',
       hotkeyToken: TOKENS.soup.openSearch,
       keyDownHandler: () => {
-        setTimeout(() => {
-          const searchInput = document.getElementById(
-            `search-input-${splitContext.handle.id}-${selectedView()}`
-          ) as HTMLInputElement;
-          searchInput?.focus();
-        }, 0);
+        setSelectedView(VIEWCONFIG_DEFAULTS_IDS_ENUM.all);
+        focusSearch();
         return true;
       },
       displayPriority: 5,
     });
+
+    const { dispose: disposeCmd } = registerHotkey({
+      hotkey: ['cmd+f'],
+      scopeId: splitContext.splitHotkeyScope,
+      description: 'Search in current view',
+      keyDownHandler: () => {
+        focusSearch();
+        return true;
+      },
+      displayPriority: 5,
+    });
+
     onCleanup(() => {
-      dispose();
+      disposeSlash();
+      disposeCmd();
     });
   });
 
