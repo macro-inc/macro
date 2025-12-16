@@ -24,6 +24,7 @@ mod upload;
 
 use anyhow::Context;
 use macro_entrypoint::MacroEntrypoint;
+use sqlx_core::types::chrono;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     println!("Loading configuration...");
@@ -52,10 +53,11 @@ async fn main() -> anyhow::Result<()> {
 
     for (index, macro_id) in macro_ids.iter().enumerate() {
         println!(
-            "\n=== Processing macro ID {} ({}/{}) ===",
+            "\n=== Processing macro ID {} ({}/{}) at {} ===",
             macro_id,
             index + 1,
-            macro_ids.len()
+            macro_ids.len(),
+            chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
         );
 
         match process::process_macro_id(&config, &db_pool, &sfs_client, &gmail_client, macro_id)
