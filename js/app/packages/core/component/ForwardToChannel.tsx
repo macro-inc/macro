@@ -209,22 +209,14 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
   return (
     <Show when={isAuthenticated()}>
       <div class="flex flex-col gap-1.5 p-0.5 w-full">
-        <div class="pl-px font-semibold text-ink text-lg truncate">
-          {`Share "${props.name}"`}
-        </div>
-        <div class="-mt-1.5 mb-1 pr-6 pl-px font-medium text-[8pt] text-ink sm:text-sm select-none">
-          {`Recipients will receive an email if they don't have an account`}
-        </div>
-        <div class="flex justify-between items-baseline">
-          <RecipientSelector<'user' | 'contact' | 'channel'>
-            options={destinationOptions}
-            selectedOptions={selectedOptions}
-            setSelectedOptions={setSelectedOptions}
-            placeholder="To: enter emails or group name"
-            triedToSubmit={triedToSubmit}
-            triggerMode="input"
-          />
-        </div>
+        <RecipientSelector<'user' | 'contact' | 'channel'>
+          options={destinationOptions}
+          selectedOptions={selectedOptions}
+          setSelectedOptions={setSelectedOptions}
+          placeholder="To: enter emails or group name"
+          triedToSubmit={triedToSubmit}
+          triggerMode="input"
+        />
         <div class="flex flex-col bg-input shadow-[inset_0_2px_20px_rgba(0,0,0,0.015)] border border-edge w-full min-h-[60px] sm:min-h-[80px] max-h-[150px] overflow-y-auto">
           <div
             class="flex-1 px-2.5 py-1 w-full text-sm"

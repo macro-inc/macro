@@ -34,6 +34,7 @@ import { useNavigate } from '@solidjs/router';
 import IconLink from '@icon/regular/link.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { TOKENS } from '@core/hotkey/tokens';
+import CloseIcon from '@icon/regular/x.svg';
 import { TextButton } from '../TextButton';
 import { IconButton } from '../IconButton';
 import User from '@icon/regular/user.svg';
@@ -433,6 +434,20 @@ export function ShareModal(props: ShareModalProps) {
         <DialogWrapper>
           <Dialog.Content class="text-ink max-h-[100%] overflow-y-auto">
             <ClippedPanel tl={!beveledCorners()} active>
+
+              <div class="flex flex-row items-center px-2 h-[40px] gap-2 border-b-1 border-b-edge-muted">
+                <Dialog.CloseButton>
+                  <IconButton
+                    tooltip={{ label: 'Close' }}
+                    icon={CloseIcon}
+                    iconSize={16}
+                    theme="clear"
+                    size="sm"
+                  />
+                </Dialog.CloseButton>
+                <Dialog.Title class="text-sm">{`Share: ${props.name}`}</Dialog.Title>
+              </div>
+
                 <ForwardToChannel
                   submitPermissionInfo={{
                     setChannelPermissions: (id, accessLevel) => setChannelPermissions(id, accessLevel, true),
