@@ -1,89 +1,73 @@
-import { useChannelMarkdownArea } from '@block-channel/component/MarkdownArea';
-import { withAnalytics } from '@coparse/analytics';
-import { TrackingEvents } from '@coparse/analytics/src/types/TrackingEvents';
-import { useIsAuthenticated } from '@core/auth';
-import { useBlockAliasedName, useBlockId, useBlockName } from '@core/block';
-import { RecipientSelector } from '@core/component/RecipientSelector';
-import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
-import type { WithCustomUserInput } from '@core/user';
-import { useSendMessageToPeople } from '@core/util/channels';
-import { Switch as KobalteSwitch } from '@kobalte/core/switch';
-import PaperPlaneRight from '@phosphor-icons/core/fill/paper-plane-right-fill.svg?component-solid';
-import { blockNameToItemType } from '@service-storage/client';
-import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { SharePermissionV2ChannelSharePermissions } from '@service-storage/generated/schemas/sharePermissionV2ChannelSharePermissions';
+import PaperPlaneRight from '@phosphor-icons/core/fill/paper-plane-right-fill.svg?component-solid';
+import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
+import { useChannelMarkdownArea } from '@block-channel/component/MarkdownArea';
+import { TrackingEvents } from '@coparse/analytics/src/types/TrackingEvents';
+import { useBlockAliasedName, useBlockId, useBlockName } from '@core/block';
+import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import { createEffect, createMemo, createSignal, Show } from 'solid-js';
+import { RecipientSelector } from '@core/component/RecipientSelector';
+import { Switch as KobalteSwitch } from '@kobalte/core/switch';
+import { blockNameToItemType } from '@service-storage/client';
+import { useSendMessageToPeople } from '@core/util/channels';
 import { getDestinationFromOptions } from './NewMessage';
-import { Permissions } from './SharePermissions';
-import { toast } from './Toast/Toast';
+import type { WithCustomUserInput } from '@core/user';
 import { ShareOptions } from './TopBar/ShareButton';
+import { withAnalytics } from '@coparse/analytics';
+import { Permissions } from './SharePermissions';
+import { useIsAuthenticated } from '@core/auth';
+import { toast } from './Toast/Toast';
 
 interface ForwardToChannelProps {
-  name: string;
-  projectId?: string;
+  submitPermissionInfo?: {
+    setChannelPermissions: (channelId: string, accessLevel: AccessLevel) => void;
+    channelSharePermissions?: SharePermissionV2ChannelSharePermissions;
+    userPermissions: Permissions;
+  };
   onSubmit?: () => void;
   refetch?: () => void;
-  submitPermissionInfo?: {
-    userPermissions: Permissions;
-    channelSharePermissions?: SharePermissionV2ChannelSharePermissions;
-    setChannelPermissions: (
-      channelId: string,
-      accessLevel: AccessLevel
-    ) => void;
-  };
+  projectId?: string;
+  name: string;
+
 }
 
 export function ForwardToChannel(props: ForwardToChannelProps) {
   const isAuthenticated = useIsAuthenticated();
   const { track } = withAnalytics();
 
+  const [selectedOptions, setSelectedOptions] = createSignal<WithCustomUserInput<'user' | 'contact' | 'channel'>[]>([]);
+  const {focus: focusMarkdownArea, state: markdownState, MarkdownArea} = useChannelMarkdownArea();
   const [triedToSubmit, setTriedToSubmit] = createSignal(false);
-  const [selectedOptions, setSelectedOptions] = createSignal<
-    WithCustomUserInput<'user' | 'contact' | 'channel'>[]
-  >([]);
-  const {
-    focus: focusMarkdownArea,
-    state: markdownState,
-    MarkdownArea,
-  } = useChannelMarkdownArea();
-
   const { all: destinationOptions } = useCombinedRecipients();
 
   const destination = createMemo(() => {
     let options = selectedOptions();
-    if (!options || options.length === 0) return;
+    if(!options || options.length === 0){return};
     return getDestinationFromOptions(options);
   });
 
   const channelPermissions = createMemo(() => {
-    if (!props.submitPermissionInfo) return;
+    if(!props.submitPermissionInfo){return};
     const destination_ = destination();
-    if (!destination_ || destination_.type !== 'channel') return;
-    const perms = props.submitPermissionInfo.channelSharePermissions?.find(
-      (p) => p.channel_id === destination_.id
-    );
+    if(!destination_ || destination_.type !== 'channel'){return};
+    const perms = props.submitPermissionInfo.channelSharePermissions?.find((p) => p.channel_id === destination_.id);
     return perms;
   });
 
   const { sendToUsers, sendToChannel } = useSendMessageToPeople();
-
-  const [submitAccessLevel, setSubmitAccessLevel] =
-    createSignal<AccessLevel | null>(null);
+  const [submitAccessLevel, setSubmitAccessLevel] = createSignal<AccessLevel | null>(null);
 
   createEffect(() => {
     const channelPermissions_ = channelPermissions();
-    if (channelPermissions_) {
-      setSubmitAccessLevel(channelPermissions_?.access_level);
-    } else {
-      setSubmitAccessLevel(['md'].includes(useBlockName()) ? 'edit' : 'view');
-    }
+    if(channelPermissions_){setSubmitAccessLevel(channelPermissions_?.access_level)}
+    else{setSubmitAccessLevel(['md'].includes(useBlockName()) ? 'edit' : 'view')}
   });
 
   const submitChannelPermissions = (channelId: string) => {
-    if (!props.submitPermissionInfo) return;
+    if(!props.submitPermissionInfo){return};
 
     const accessLevel = submitAccessLevel();
-    if (!accessLevel) {
+    if(!accessLevel){
       toast.failure('Failed to set channel permissions');
       return;
     }
@@ -91,16 +75,13 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
     props.submitPermissionInfo.setChannelPermissions(channelId, accessLevel);
   };
 
-  const [sendAsGroupMessage, setSendAsGroupMessage] =
-    createSignal<boolean>(true);
+  const [sendAsGroupMessage, setSendAsGroupMessage] = createSignal<boolean>(true);
 
   const canSendAsGroup = createMemo(() => {
     const _selectedOptions = selectedOptions();
-    if (!_selectedOptions || _selectedOptions.length <= 1) return false;
-    for (const selectedOption of _selectedOptions) {
-      if (selectedOption.kind === 'channel') {
-        return false;
-      }
+    if(!_selectedOptions || _selectedOptions.length <= 1){return false};
+    for(const selectedOption of _selectedOptions){
+      if(selectedOption.kind === 'channel'){return false};
     }
     return true;
   });
@@ -112,68 +93,72 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
 
   function handleSubmit() {
     let options = selectedOptions();
-    if (!options || options.length === 0) return setTriedToSubmit(true);
+    if(!options || options.length === 0){return setTriedToSubmit(true)};
 
-    if (canSendAsGroup() && sendAsGroupMessage()) {
+    if(canSendAsGroup() && sendAsGroupMessage()) {
       const destination_ = destination();
-      if (destination_ && destination_.type === 'users') {
+      if(destination_ && destination_.type === 'users'){
         sendToUsers({
+          attachments: [asAttachment],
           users: destination_.users,
           content: markdownState(),
-          attachments: [asAttachment],
           mentions: [],
-        }).then((res) => {
-          if (!res) return;
-          const { channelId, navigateToChannel } = res;
+        })
+        .then((res) => {
+          if(!res){return};
+          const{channelId, navigateToChannel} = res;
           submitChannelPermissions(channelId);
 
           props.refetch?.();
           toast.success('Message sent successfully', undefined, {
-            text: 'View in channel',
             onClick: navigateToChannel,
+            text: 'View in channel'
           });
           track(TrackingEvents.SHARE.FORWARD);
         });
-      } else {
-        toast.failure('Message failed to send');
       }
-    } else {
+      else{toast.failure('Message failed to send')}
+    }
+    else{
       const multipleMessages = options.length > 1;
       let successfullySentAllMessages = true;
-      for (const option of options) {
-        if (option.kind === 'channel') {
+      for(const option of options){
+        if(option.kind === 'channel'){
           Promise.all([
             submitChannelPermissions(option.id),
             sendToChannel({
-              channelId: option.id,
-              content: markdownState(),
               attachments: [asAttachment],
+              content: markdownState(),
+              channelId: option.id,
               mentions: [],
-            }).then((res) => {
-              if (!res) {
+            })
+            .then((res) => {
+              if(!res){
                 successfullySentAllMessages = false;
                 return;
               }
               props.refetch?.();
-              if (!multipleMessages) {
+              if(!multipleMessages){
                 const { navigateToChannel } = res;
                 toast.success('Message sent successfully', undefined, {
-                  text: 'View in channel',
                   onClick: () => navigateToChannel(),
+                  text: 'View in channel',
                 });
               }
               track(TrackingEvents.SHARE.FORWARD);
             }),
           ]);
-        } else {
+        }
+        else {
           // handles option.kind of user, custom, and contact (gmail)
           sendToUsers({
-            users: [option.id],
-            content: markdownState(),
             attachments: [asAttachment],
+            content: markdownState(),
+            users: [option.id],
             mentions: [],
-          }).then((res) => {
-            if (!res) {
+          })
+          .then((res) => {
+            if(!res){
               successfullySentAllMessages = false;
               return;
             }
@@ -181,27 +166,24 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
             submitChannelPermissions(channelId);
 
             props.refetch?.();
-            if (!multipleMessages) {
+            if(!multipleMessages){
               toast.success('Message sent successfully', undefined, {
-                text: 'View in channel',
                 onClick: () => navigateToChannel(),
+                text: 'View in channel',
               });
             }
             track(TrackingEvents.SHARE.FORWARD);
           });
         }
       }
-      if (multipleMessages) {
-        if (successfullySentAllMessages) {
-          toast.success('Messages sent successfully');
-        } else {
-          toast.failure('Some messages failed to send');
-        }
+      if(multipleMessages){
+        if(successfullySentAllMessages){toast.success('Messages sent successfully')}
+        else{toast.failure('Some messages failed to send')}
       }
     }
 
     const destination_ = destination();
-    if (!destination_) return;
+    if(!destination_){return};
 
     props.onSubmit?.();
   }
@@ -210,11 +192,11 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
     <Show when={isAuthenticated()}>
       <div class="flex flex-col gap-1.5 p-0.5 w-full">
         <RecipientSelector<'user' | 'contact' | 'channel'>
-          options={destinationOptions}
-          selectedOptions={selectedOptions}
-          setSelectedOptions={setSelectedOptions}
           placeholder="To: enter emails or group name"
+          setSelectedOptions={setSelectedOptions}
+          selectedOptions={selectedOptions}
           triedToSubmit={triedToSubmit}
+          options={destinationOptions}
           triggerMode="input"
         />
         <div class="flex flex-col bg-input shadow-[inset_0_2px_20px_rgba(0,0,0,0.015)] border border-edge w-full min-h-[60px] sm:min-h-[80px] max-h-[150px] overflow-y-auto">
@@ -224,25 +206,21 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
           >
             <MarkdownArea
               placeholder="Add a message (optional)..."
-              initialValue={markdownState()}
-              dontFocusOnMount
               onEnter={(e: KeyboardEvent) => {
                 handleSubmit();
                 e.preventDefault();
                 return true;
               }}
+              initialValue={markdownState()}
+              onTab={() => {return true}}
               useBlockBoundary={false}
-              onTab={() => {
-                return true;
-              }}
               portalScope="local"
+              dontFocusOnMount
             />
           </div>
         </div>
         <div class="flex flex-col">
-          <div
-            class={`mx-1.5 flex flex-row justify-between items-center align-middle h-fit ${canSendAsGroup() ? '' : 'opacity-50'}`}
-          >
+          <div class={`mx-1.5 flex flex-row justify-between items-center align-middle h-fit ${canSendAsGroup() ? '' : 'opacity-50'}`}>
             <div class="flex flex-col gap-0.5">
               <div class="font-sm text-ink-muted text-xs select-none">
                 {'Send as group message'}
@@ -256,8 +234,8 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
               class={canSendAsGroup() ? '' : 'cursor-not-allowed'}
             >
               <KobalteSwitch.Input
-                class="sr-only"
                 disabled={!canSendAsGroup()}
+                class="sr-only"
               />
               <KobalteSwitch.Control
                 class={`mt-1.5 inline-flex h-5 w-9 rounded-full border-2 border-transparent transition-colors bg-edge data-[checked]:bg-accent
@@ -270,28 +248,18 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
           <div class="flex justify-between items-center gap-1 mt-1">
             <div class="flex flex-row justify-start items-center gap-0 w-full h-8 cursor-default">
               <button
-                class="flex flex-row justify-center items-center bg-accent/80 hover:bg-accent active:bg-accent px-2 rounded-lg w-full h-full font-semibold text-dialog text-sm leading-5 whitespace-nowrap"
+                class="flex flex-row justify-center items-center bg-accent/80 hover:bg-accent active:bg-accent px-2 rounded-lg w-full h-full font-semibold text-dialog text-sm leading-5 whitespace-nowrap gap-2"
                 onClick={handleSubmit}
-                style={{
-                  gap: '8px',
-                }}
               >
                 <PaperPlaneRight class="flex w-4 h-4" />
                 {'Share and send message'}
               </button>
             </div>
-            <Show
-              when={
-                props.submitPermissionInfo?.userPermissions ===
-                Permissions.OWNER
-              }
-            >
+            <Show when={props.submitPermissionInfo?.userPermissions === Permissions.OWNER}>
               <div class="w-32">
                 <ShareOptions
+                  setPermissions={(accessLevel) => {setSubmitAccessLevel(accessLevel)}}
                   permissions={submitAccessLevel()}
-                  setPermissions={(accessLevel) => {
-                    setSubmitAccessLevel(accessLevel);
-                  }}
                   hideNoAccess
                 />
               </div>
