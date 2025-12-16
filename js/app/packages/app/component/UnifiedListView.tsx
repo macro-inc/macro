@@ -238,12 +238,13 @@ export function UnifiedListView(props: UnifiedListViewProps) {
         setEntityListRef(localEntityListRef);
 
         if (view()?.hasUserInteractedEntity) {
-          if (selectedEntity()) {
+          const selectedEntityId = selectedEntity()?.id;
+          if (selectedEntityId) {
             if (localEntityListRef && localEntityListRef.isConnected) {
               // focusing non-first entity causes issue where 100ms later, that focused entity loses focus and document.body is focused
               // forcing refocus on that entity works for now
               // read TODO inside function for more info
-              tryFocusEntity(selectedEntity()!.id, {
+              tryFocusEntity(selectedEntityId, {
                 forceRefocusOnce: true,
               });
             }
