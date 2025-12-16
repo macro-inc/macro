@@ -8,6 +8,7 @@ import {
   isStaticAttachmentType,
 } from '@core/store/cacheChannelInput';
 import { isErr } from '@core/util/maybeResult';
+import { invalidateChannelWithID } from '@queries/channel/channel';
 import { commsServiceClient } from '@service-comms/client';
 import type { Attachment } from '@service-comms/generated/models/attachment';
 import type { Channel } from '@service-comms/generated/models/channel';
@@ -29,9 +30,6 @@ import {
   threadsStore,
   upsertInThread,
 } from './threads';
-import { queryClient } from '@queries/client';
-import { channelKeys } from '@queries/channel/keys';
-import { invalidateChannelWithID } from '@queries/channel/channel';
 
 const { track } = withAnalytics();
 
