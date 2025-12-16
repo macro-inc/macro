@@ -246,10 +246,19 @@ export function QuickCreateMenuInner(props: QuickCreateMenuProps) {
       };
     });
 
-    // Get email links for new emails
+    if (emailLinksQuery.isPending) {
+      toast.alert('Loading email accounts...');
+      return false;
+    }
+
+    if (emailLinksQuery.isError) {
+      toast.failure('Failed to send email: Could not load email accounts');
+      return false;
+    }
+
     const linksData = emailLinksQuery.data;
     if (!linksData || linksData.links.length < 1) {
-      toast.failure('Failed to send email');
+      toast.failure('Failed to send email: No email account connected');
       return false;
     }
 

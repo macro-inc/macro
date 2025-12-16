@@ -19,8 +19,8 @@ import {
   type WithCustomUserInput,
 } from '@core/user';
 import Caution from '@icon/regular/warning.svg';
-import { useSendMessageMutation } from '@queries/email/thread';
 import { useEmailLinksQuery } from '@queries/email/link';
+import { useSendMessageMutation } from '@queries/email/thread';
 import {
   createMemo,
   createSignal,
@@ -61,7 +61,11 @@ export function EmailCompose() {
   });
 
   const hasLinkError = createMemo(() => {
-    return emailLinksQuery.error !== null || (emailLinksQuery.data && emailLinksQuery.data.links.length === 0);
+    if (emailLinksQuery.isPending) return false;
+    return (
+      emailLinksQuery.isError ||
+      (emailLinksQuery.data && emailLinksQuery.data.links.length === 0)
+    );
   });
 
   const { users: destinationOptions } = useCombinedRecipients();

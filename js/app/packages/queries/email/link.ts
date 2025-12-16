@@ -11,6 +11,7 @@ export function useEmailLinksQuery() {
     queryKey: emailKeys.links.queryKey,
     queryFn: async () => throwOnErr(async () => await emailClient.getLinks()),
     staleTime: LINK_STALE_TIME,
+    refetchOnWindowFocus: 'always',
   }));
 }
 
