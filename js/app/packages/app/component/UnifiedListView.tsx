@@ -254,11 +254,11 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
         if (!firstEntity) return;
 
+        setViewDataStore(selectedView(), 'highlightedId', firstEntity.id);
         setViewDataStore(
           selectedView(),
           produce((state) => {
             if (!state) return;
-            state.highlightedId = firstEntity.id;
             state.selectedEntity = firstEntity;
           })
         );
