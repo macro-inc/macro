@@ -174,7 +174,9 @@ export function MessageList(props: MessageListProps) {
     const list = props.orderedMessages();
     if (!handle || !list || list.length === 0) return;
 
-    const endIndex = handle.findEndIndex?.();
+    const endIndex = handle.findItemIndex?.(
+      handle.scrollSize - handle.scrollOffset
+    );
     if (endIndex === undefined) return;
 
     const index = clampIndex(endIndex, 0, list.length - 1);
@@ -210,7 +212,7 @@ export function MessageList(props: MessageListProps) {
       ((!target || delta > TARGET_MESSAGE_ACTIVE_TIME) && isNearBottom())
     ) {
       if (scrollTimeoutId) clearTimeout(scrollTimeoutId);
-      const lastIndex = props.orderedMessages().length - 1;
+      const lastIndex = 0;
       virtualHandle()?.scrollToIndex(lastIndex, {
         align: 'end',
       });
@@ -243,7 +245,7 @@ export function MessageList(props: MessageListProps) {
     if (scrollTimeoutId) clearTimeout(scrollTimeoutId);
 
     setTargetMessageActive(true);
-    virtualHandle()?.scrollToIndex(index, {
+    virtualHandle()?.scrollToIndex(props.orderedMessages().length - 1 - index, {
       align: 'center',
     });
     setTimeout(() => {
@@ -420,8 +422,7 @@ export function MessageList(props: MessageListProps) {
     if (!initialScrollComplete()) return true;
 
     const THRESHOLD = 100;
-    const distanceFromBottom =
-      handle.scrollSize - handle.scrollOffset - handle.viewportSize;
+    const distanceFromBottom = handle.scrollOffset;
     return distanceFromBottom <= THRESHOLD;
   };
 
@@ -466,7 +467,7 @@ export function MessageList(props: MessageListProps) {
     on(filteredTopLevelMessages, (newFilteredMessages, oldFilteredMessages) => {
       const handle = virtualHandle();
       if (!handle) return;
-      const lastIndexInView = handle.findEndIndex();
+      const lastIndexInView = handle.findItemIndex(handle.scrollOffset);
       const lastItemOffset = handle.getItemOffset(
         (oldFilteredMessages?.length ?? 0) - 1
       );
@@ -573,7 +574,7 @@ export function MessageList(props: MessageListProps) {
     const newCount = splitCount();
     const handle = untrack(virtualHandle);
     if (handle && prev !== 0 && newCount > prev) {
-      const endIndex = handle.findEndIndex();
+      const endIndex = handle.findItemIndex(0);
       queueMicrotask(() => {
         handle.scrollToIndex(endIndex, {
           align: 'end',
@@ -605,7 +606,8 @@ export function MessageList(props: MessageListProps) {
       if (
         firstUnviewedIndex !== undefined &&
         firstUnviewedIndex >= 0 &&
-        (virtualHandle()?.findEndIndex() ?? 0) >= firstUnviewedIndex
+        (virtualHandle()?.findItemIndex(virtualHandle()?.scrollOffset ?? 0) ??
+          0) >= firstUnviewedIndex
       ) {
         setUnviewedMessages(undefined);
       }

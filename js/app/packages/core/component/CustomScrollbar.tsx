@@ -33,18 +33,21 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
     const container = props.scrollContainer();
     if (!container) return;
 
-    setScrollTop(container.scrollTop);
-    setScrollHeight(container.scrollHeight);
-    setClientHeight(container.clientHeight);
+    const { scrollTop, scrollHeight, clientHeight } = container;
+
+    // console.log(container.scrollTop);
+    setScrollTop(scrollTop + (scrollHeight - thumbHeight()));
+    setScrollHeight(scrollHeight);
+    setClientHeight(clientHeight);
   };
 
   // Calculate scrollbar metrics
-  const thumbHeight = () => {
+  function thumbHeight() {
     const containerHeight = clientHeight();
     const contentHeight = scrollHeight();
     if (contentHeight <= containerHeight) return 0;
     return Math.max(20, (containerHeight / contentHeight) * containerHeight);
-  };
+  }
   const thumbTop = () => {
     const containerHeight = clientHeight();
     const contentHeight = scrollHeight();
