@@ -6,7 +6,6 @@ import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel
 import { TrackingEvents } from '@coparse/analytics/src/types/TrackingEvents';
 import { beveledCorners } from '../../../block-theme/signals/themeSignals';
 import { MENU_ITEM_CLASS } from '../Menu';
-import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
 import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
 import { cognitionApiServiceClient } from '@service-cognition/client';
@@ -291,88 +290,28 @@ export function ShareModal(props: ShareModalProps) {
     return sharePermission.publicAccessLevel;
   });
 
-  const isPublic = createMemo(() => {
-    const currentPermissions = permissionsResource.latest;
-    if(!currentPermissions || isErr(currentPermissions)){return};
-
-    const [, sharePermission] = currentPermissions;
-    return sharePermission.isPublic;
-  });
-
-  const togglePublicAccess = createCallback(async () => {
-    const currentPermissions = permissionsResource.latest;
-    if(!currentPermissions || isErr(currentPermissions)){return};
-
-    const [, sharePermission] = currentPermissions;
-    const newIsPublic = !sharePermission.isPublic;
-
-    if(props.itemType === 'chat'){
-      const result = await cognitionApiServiceClient.updateChatPermissions({
-        sharePermission: {
-          publicAccessLevel: newIsPublic ? 'view' : null,
-          isPublic: newIsPublic
-        },
-        chat_id: props.id
-      });
-      if(!isErr(result)){
-        refetch();
-        toast.success(
-          newIsPublic ? 'Made chat public' : 'Made chat private',
-          newIsPublic ? 'Anyone with the link can now view this chat' : 'Only shared users can access this chat'
-        );
-      }
-      else{
-        toast.alert('Failed to change chat access', 'Please try again');
-        console.error(result);
-      }
-    }
-    else if(props.itemType === 'document'){
-      const result = await storageServiceClient.editDocument({
-        sharePermission: {
-          publicAccessLevel: newIsPublic ? 'view' : null,
-          isPublic: newIsPublic,
-        },
-        documentId: props.id
-      });
-      if(!isErr(result)){
-        refetch();
-        toast.success(
-          newIsPublic ? 'Made document public' : 'Made document private',
-          newIsPublic ? 'Anyone with the link can now view this document' : 'Only shared users can access this document'
-        );
-      }
-      else{
-        toast.alert('Failed to change document access', 'Please try again');
-        console.error(result);
-      }
-    }
-    else if(props.itemType === 'project') {
-      const result = await storageServiceClient.projects.edit({
-        sharePermission: {
-          publicAccessLevel: newIsPublic ? 'view' : null,
-          isPublic: newIsPublic,
-        },
-        id: props.id
-      });
-      if(!isErr(result)){
-        refetch();
-        toast.success(
-          newIsPublic ? 'Made folder public' : 'Made folder private',
-          newIsPublic ? 'Anyone with the link can now view this folder' : 'Only shared users can access this folder'
-        );
-      }
-      else{
-        toast.alert('Failed to change folder access', 'Please try again');
-        console.error(result);
-      }
-    }
-  });
-
   const setPublicPermissions = createCallback(
     async(accessLevel: AccessLevel | null) => {
       if(props.itemType === 'chat'){
-        console.error('Cannot set document permissions on chat');
-        return;
+        const result = await cognitionApiServiceClient.updateChatPermissions({
+          sharePermission: {
+            publicAccessLevel: accessLevel,
+            isPublic: accessLevel != null
+          },
+          chat_id: props.id
+        });
+        if(!isErr(result)){
+          refetch();
+          if(accessLevel === null) {
+            toast.success('Made chat private', 'Only shared users can access this chat');
+          } else {
+            toast.success('Updated public link sharing', `Anyone with the link can ${accessLevel} this chat`);
+          }
+        }
+        else{
+          toast.alert('Failed to change chat access', 'Please try again');
+          console.error(result);
+        }
       }
       else if(props.itemType === 'document'){
         const result = await storageServiceClient.editDocument({
@@ -384,7 +323,11 @@ export function ShareModal(props: ShareModalProps) {
         });
         if(!isErr(result)){
           refetch();
-          toast.success('Updated public link sharing access level');
+          if(accessLevel === null) {
+            toast.success('Made document private', 'Only shared users can access this document');
+          } else {
+            toast.success('Updated public link sharing', `Anyone with the link can ${accessLevel} this document`);
+          }
         }
         else{
           toast.alert('Failed to change document access', 'Please try again');
@@ -401,7 +344,11 @@ export function ShareModal(props: ShareModalProps) {
         });
         if(!isErr(result)){
           refetch();
-          toast.success('Updated public link sharing access level');
+          if(accessLevel === null) {
+            toast.success('Made folder private', 'Only shared users can access this folder');
+          } else {
+            toast.success('Updated public link sharing', `Anyone with the link can ${accessLevel} this folder`);
+          }
         }
         else{
           toast.alert('Failed to change folder access', 'Please try again');
@@ -524,31 +471,20 @@ export function ShareModal(props: ShareModalProps) {
               </Show>
 
               <Show when={props.userPermissions === Permissions.OWNER}>
-                <div class="flex flex-row justify-between items-center mb-1 align-middle">
-                  <div class="flex flex-col gap-0.5">
-                    <div class="font-medium text-ink text-base select-none">
-                      Public link sharing is {isPublic() ? 'on' : 'off'}
-                    </div>
-                    <div class="font-medium text-ink-muted text-sm">
-                      {isPublic() ? 'Anyone with the link can access' : 'Share recipients still have access'}
-                    </div>
+                <div class="flex flex-col gap-2 mb-1">
+                  <div class="font-medium text-ink text-base select-none">
+                    Public link sharing
+                  </div>
+                  <div class="font-medium text-ink-muted text-sm mb-2">
+                    {publicAccessLevel() ? 'Anyone with the link can access' : 'Only shared users have access'}
                   </div>
 
-                  <ToggleSwitch
-                    onChange={togglePublicAccess}
-                    checked={isPublic()}
-                    trueLabel="ON"
-                    falseLabel="OFF"
-                    size="SM"
-                  />
-                </div>
-
-                <Show when={props.itemType !== 'chat'}>
                   <ShareOptions
                     permissions={publicAccessLevel() ?? null}
                     setPermissions={setPublicPermissions}
+                    hideNoAccess={props.itemType === 'chat'}
                   />
-                </Show>
+                </div>
               </Show>
 
             </ClippedPanel>
@@ -646,7 +582,7 @@ export function ShareButton(props: ShareButtonProps) {
         }>
           <button
             class="text-xs hover:bg-hover text-ink p-1 flex items-center gap-1"
-            onClick={(e) => {
+            onClick={() => {
               if(!isAuthenticated()){openLoginModal();
               }
               else{
@@ -697,25 +633,25 @@ export function ShareOptions(props: {
 
   const options = createMemo(() => {
     const optionsList: { value: string; label: string }[] = [];
-    
+
     // Add comment option if applicable
     if (blockName !== 'md' || ENABLE_MARKDOWN_COMMENTS) {
       optionsList.push({ value: 'comment', label: accessLevelText('comment') });
     }
-    
+
     // Always add view option
     optionsList.push({ value: 'view', label: accessLevelText('view') });
-    
+
     // Add edit option if enabled
     if (editPermissionEnabled) {
       optionsList.push({ value: 'edit', label: accessLevelText('edit') });
     }
-    
+
     // Add no access option if not hidden
     if (!props.hideNoAccess) {
       optionsList.push({ value: 'none', label: accessLevelText(null) });
     }
-    
+
     return optionsList;
   });
 
