@@ -10,19 +10,21 @@ use utoipa::ToSchema;
 
 use crate::api::context::ApiContext;
 use model::user::UserContext;
+use models_properties::EntityType;
 use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use properties_db_client::{
     error::PropertiesDatabaseError, property_definitions::get as property_definitions_get,
 };
+use system_properties::SystemPropertyKey;
 
 #[derive(Debug, Error)]
 pub enum ListPropertiesErr {
-    #[error("An unknown error has occurred")]
+    #[error("An internal error occurred")]
     InternalError(#[from] anyhow::Error),
-    #[error("Database error: {0}")]
+    #[error("An internal error occurred")]
     DatabaseError(#[from] PropertiesDatabaseError),
-    #[error("organization_id is required for org scope")]
+    #[error("Organization ID is required for org scope")]
     MissingOrganizationId,
 }
 
@@ -55,7 +57,9 @@ pub enum PropertyScope {
     User,
     /// Organization-scoped properties only
     Org,
-    /// Both user and organization properties
+    /// System properties only
+    System,
+    /// User, organization, and system properties
     All,
 }
 
@@ -67,6 +71,10 @@ pub struct ListPropertiesQuery {
     /// Whether to include property options in the response
     #[serde(default)]
     pub include_options: bool,
+    /// Filter properties applicable to a specific entity type.
+    /// When provided, excludes properties that cannot be attached to this entity type
+    /// (e.g., Parent Task and Subtasks are excluded for non-task entities).
+    pub for_entity_type: Option<EntityType>,
 }
 
 /// Response for property definition with optional property options
@@ -82,8 +90,9 @@ pub enum PropertyDefinitionResponse {
     get,
     path = "/properties/definitions",
     params(
-        ("scope" = PropertyScope, Query, description = "Filter by scope: 'user' for user-scoped only, 'org' for organization-scoped only, 'all' for both scopes"),
-        ("include_options" = Option<bool>, Query, description = "Whether to include property options in the response")
+        ("scope" = PropertyScope, Query, description = "Filter by scope: 'user', 'org', 'system', or 'all'"),
+        ("include_options" = Option<bool>, Query, description = "Whether to include property options in the response"),
+        ("for_entity_type" = Option<EntityType>, Query, description = "Filter properties applicable to a specific entity type")
     ),
     responses(
         (status = 200, description = "Properties retrieved successfully", body = Vec<PropertyDefinitionResponse>),
@@ -92,48 +101,64 @@ pub enum PropertyDefinitionResponse {
     ),
     tag = "Properties"
 )]
-#[tracing::instrument(skip(context, user_context))]
+#[tracing::instrument(skip(context, user_context), err)]
 pub async fn list_properties(
     Query(query): Query<ListPropertiesQuery>,
     State(context): State<ApiContext>,
     Extension(user_context): Extension<UserContext>,
 ) -> Result<Json<Vec<PropertyDefinitionResponse>>, ListPropertiesErr> {
-    let (org_id, user_id_opt) = match query.scope {
-        PropertyScope::Org => (user_context.organization_id, None),
-        PropertyScope::User => (None, Some(user_context.user_id.as_str())),
+    // Determine query parameters based on scope
+    let (org_id, user_id_opt, include_system) = match query.scope {
+        PropertyScope::User => (None, Some(user_context.user_id.as_str()), false),
+        PropertyScope::Org => (user_context.organization_id, None, false),
+        PropertyScope::System => (None, None, true),
         PropertyScope::All => (
             user_context.organization_id,
             Some(user_context.user_id.as_str()),
+            true,
         ),
     };
 
     tracing::info!(
         organization_id = ?org_id,
         scope = ?query.scope,
+        include_system = include_system,
+        for_entity_type = ?query.for_entity_type,
         user_id = %user_context.user_id,
         "listing properties"
     );
+
+    let filter_entity_type = query.for_entity_type;
 
     if query.scope == PropertyScope::Org && org_id.is_none() {
         return Err(ListPropertiesErr::MissingOrganizationId);
     }
 
     let response = if query.include_options {
-        let properties_with_options =
-            property_definitions_get::get_properties_with_options(&context.db, org_id, user_id_opt)
-                .await
-                .inspect_err(|e| {
-                    tracing::error!(
-                        error = ?e,
-                        organization_id = ?org_id,
-                        scope = ?query.scope,
-                        user_id = %user_context.user_id,
-                        "failed to retrieve properties with options"
-                    );
-                })?;
+        let properties_with_options = property_definitions_get::get_properties_with_options(
+            &context.db,
+            org_id,
+            user_id_opt,
+            include_system,
+        )
+        .await
+        .inspect_err(|e| {
+            tracing::error!(
+                error = ?e,
+                organization_id = ?org_id,
+                scope = ?query.scope,
+                user_id = %user_context.user_id,
+                "failed to retrieve properties with options"
+            );
+        })?;
 
         let response: Vec<PropertyDefinitionResponse> = properties_with_options
             .into_iter()
+            .filter(|p| {
+                filter_entity_type
+                    .map(|et| is_property_applicable_to(p.definition.id, et))
+                    .unwrap_or(true)
+            })
             .map(PropertyDefinitionResponse::WithOptions)
             .collect();
 
@@ -146,20 +171,30 @@ pub async fn list_properties(
         );
         response
     } else {
-        let properties = property_definitions_get::get_properties(&context.db, org_id, user_id_opt)
-            .await
-            .inspect_err(|e| {
-                tracing::error!(
-                    error = ?e,
-                    organization_id = ?org_id,
-                    scope = ?query.scope,
-                    user_id = %user_context.user_id,
-                    "failed to retrieve properties"
-                );
-            })?;
+        let properties = property_definitions_get::get_properties(
+            &context.db,
+            org_id,
+            user_id_opt,
+            include_system,
+        )
+        .await
+        .inspect_err(|e| {
+            tracing::error!(
+                error = ?e,
+                organization_id = ?org_id,
+                scope = ?query.scope,
+                user_id = %user_context.user_id,
+                "failed to retrieve properties"
+            );
+        })?;
 
         let response: Vec<PropertyDefinitionResponse> = properties
             .into_iter()
+            .filter(|p| {
+                filter_entity_type
+                    .map(|et| is_property_applicable_to(p.id, et))
+                    .unwrap_or(true)
+            })
             .map(PropertyDefinitionResponse::Simple)
             .collect();
 
@@ -174,4 +209,16 @@ pub async fn list_properties(
     };
 
     Ok(Json(response))
+}
+
+/// Check if a property can be attached to the given entity type.
+pub fn is_property_applicable_to(property_id: uuid::Uuid, entity_type: EntityType) -> bool {
+    // Task-only properties: Parent Task and Subtasks
+    if property_id == SystemPropertyKey::PARENT_TASK_UUID
+        || property_id == SystemPropertyKey::SUBTASKS_UUID
+    {
+        return entity_type == EntityType::Task;
+    }
+
+    true
 }

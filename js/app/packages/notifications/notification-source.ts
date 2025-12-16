@@ -38,6 +38,9 @@ type AssertKey<T, K extends keyof T & string> = K;
 
 const NOTIFICATION_KEY: AssertKey<UnifiedNotification, 'id'> = 'id';
 
+type UnsubscribeFn = () => void;
+type SubscribeFn = (newNotification: UnifiedNotification) => void;
+
 export type NotificationSource = {
   readonly store: Store<NotificationStoreInner>;
   readonly notifications: Accessor<UnifiedNotification[]>;
@@ -67,6 +70,9 @@ export type NotificationSource = {
 
   /** subscribe to entity notifications */
   unmuteEntity: (entity: Entity) => Promise<void>;
+
+  /** subscribe to new notifications */
+  subscribe: (subscribe: SubscribeFn) => UnsubscribeFn;
 };
 
 const NOTIFICATION_EVENT_TYPE = 'notification';
@@ -81,6 +87,8 @@ export function createNotificationSource(
   const notifications = createMemo(() =>
     Object.values(trackStore(store)).flat()
   );
+
+  let subscriptions: Set<SubscribeFn> = new Set();
 
   const [mutedEntities, setMutedEntities] = createSignal<UserUnsubscribe[]>([]);
 
@@ -169,6 +177,8 @@ export function createNotificationSource(
     }
     onNotification?.(parsedNotification);
 
+    subscriptions.forEach((subscribe) => subscribe(parsedNotification));
+
     refetchAndReconcileNotifications([parsedNotification]);
   });
 
@@ -229,6 +239,13 @@ export function createNotificationSource(
     await mutedEntitiesQuery.refetch();
   };
 
+  const subscribe = (subscribeFn: SubscribeFn) => {
+    subscriptions.add(subscribeFn);
+    return () => {
+      subscriptions.delete(subscribeFn);
+    };
+  };
+
   return {
     store,
     notifications,
@@ -242,5 +259,6 @@ export function createNotificationSource(
     bulkMarkAsDone,
     muteEntity,
     unmuteEntity,
+    subscribe,
   };
 }

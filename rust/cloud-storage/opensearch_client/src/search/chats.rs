@@ -22,8 +22,8 @@ use serde_json::Value;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub(crate) struct ChatIndex {
-    pub entity_id: String,
-    pub chat_message_id: String,
+    pub entity_id: uuid::Uuid,
+    pub chat_message_id: uuid::Uuid,
     pub user_id: String,
     pub role: String,
     pub updated_at_seconds: i64,
@@ -167,12 +167,15 @@ pub(crate) async fn search_chats(
     client: &opensearch::OpenSearch,
     args: ChatSearchArgs,
 ) -> Result<Vec<SearchHit>> {
+    let indices = match args.search_on {
+        SearchOn::Content => vec![SearchIndex::Chats.as_ref()],
+        SearchOn::NameContent => vec![SearchIndex::Chats.as_ref(), SearchIndex::Names.as_ref()],
+        SearchOn::Name => vec![SearchIndex::Names.as_ref()],
+    };
     let query_body = args.build()?;
 
     let response = client
-        .search(opensearch::SearchParts::Index(&[
-            SearchIndex::Chats.as_ref()
-        ]))
+        .search(opensearch::SearchParts::Index(&indices))
         .body(query_body)
         .send()
         .await

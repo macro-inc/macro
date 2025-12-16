@@ -36,6 +36,9 @@ pub struct Attachment {
     pub message_id: Uuid,
     pub entity_type: String,
     pub entity_id: String,
+    /// dimensions of image/video
+    pub width: Option<i32>,
+    pub height: Option<i32>,
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
@@ -43,6 +46,9 @@ pub struct Attachment {
 pub struct NewAttachment {
     pub entity_type: String,
     pub entity_id: String,
+    /// dimensions of image/video
+    pub height: Option<i32>,
+    pub width: Option<i32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq)]

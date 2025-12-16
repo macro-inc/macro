@@ -1,6 +1,6 @@
 import type { Entity, EntityType } from '@core/types';
 import type { UnifiedNotification } from '@service-notification/client';
-import { type Accessor, createEffect, createMemo, on } from 'solid-js';
+import { type Accessor, createEffect, createMemo, onCleanup } from 'solid-js';
 import type { NotificationSource } from './notification-source';
 import { compositeEntity } from './types';
 
@@ -191,22 +191,17 @@ export function useNotificationsMutedForEntity(
 export function createEffectOnEntityTypeNotification(
   notificationSource: NotificationSource,
   type: EntityType,
-  callback: (notifications: UnifiedNotification[]) => void
+  callback: (n: UnifiedNotification) => void
 ) {
-  createEffect(
-    on(
-      notificationSource.notifications,
-      (currentNotifications, oldNotifications) => {
-        oldNotifications = oldNotifications || [];
-        const newNotifications = currentNotifications.filter(
-          (n) =>
-            !oldNotifications.includes(n) && notificationIsOfEntityType(n, type)
-        );
-
-        if (newNotifications.length > 0) {
-          callback(newNotifications);
-        }
+  createEffect(() => {
+    let cleanup = notificationSource.subscribe((notification) => {
+      if (notificationIsOfEntityType(notification, type)) {
+        callback(notification);
       }
-    )
-  );
+    });
+
+    onCleanup(() => {
+      if (cleanup) cleanup();
+    });
+  });
 }

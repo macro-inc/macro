@@ -8,11 +8,15 @@ import {
   datadogAgentContainer,
   fargateLogRouterSidecarContainer,
   serviceLoadBalancer,
-} from '@resources';
-import { EcrImage } from '@service';
-import { BASE_DOMAIN, CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '@shared';
-import { EmailAttachmentsBucket } from '@stacks/email-service/attachments-bucket';
-import { getCloudfrontDistribution } from '@stacks/email-service/s3-cloudfront-distribution';
+} from '../../packages/resources';
+import { EcrImage } from '../../packages/service';
+import {
+  BASE_DOMAIN,
+  CLOUD_TRAIL_SNS_TOPIC_ARN,
+  stack,
+} from '../../packages/shared';
+import { EmailAttachmentsBucket } from './attachments-bucket';
+import { getCloudfrontDistribution } from './s3-cloudfront-distribution';
 
 const BASE_NAME = 'email-service';
 const BASE_PATH = '../../../rust/cloud-storage';
@@ -247,6 +251,7 @@ export class EmailService extends pulumi.ComponentResource {
             service: {
               name: BASE_NAME,
               image: image.image.imageUri,
+              stopTimeout: 10, // 10 seconds to force kill the task
               cpu: stack === 'prod' ? 2048 : 1024,
               memory: stack === 'prod' ? 3742 : 1742, // 2048 minimum - 256 for datadog - 50 for log_router
               environment: [...containerEnvVars],

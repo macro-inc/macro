@@ -1,5 +1,5 @@
 import * as pulumi from '@pulumi/pulumi';
-import { stack } from '@shared';
+import { stack } from '../../shared';
 
 export const cloudStorageStack = new pulumi.StackReference(
   'cloud-storage-stack',

@@ -14,10 +14,10 @@ import type { MarkdownRewriteOutput } from '@service-cognition/generated/tools/t
 import { storageServiceClient } from '@service-storage/client';
 import { fetchBinary } from '@service-storage/util/fetchBinary';
 import { makeFileFromBlob } from '@service-storage/util/makeFileFromBlob';
+import { syncServiceClient } from '@service-sync/client';
+import { createSyncServiceSource } from '@service-sync/source';
 import { untrack } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import { syncServiceClient } from '../service-sync/client';
-import { createSyncServiceSource } from '../service-sync/source';
 import MarkdownBlock from './component/Block';
 
 const nodeSchema = schema.LoroMap({
@@ -142,6 +142,7 @@ export const definition = defineBlock({
   name: 'md',
   description: 'write markdown notes',
   defaultFilename: 'New Note',
+  aliases: [{ name: 'task', defaultFileName: 'New Task' }],
   component: MarkdownBlock,
   accepted: {
     md: 'text/markdown',

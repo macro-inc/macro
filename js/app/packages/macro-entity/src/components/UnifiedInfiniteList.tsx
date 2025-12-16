@@ -44,6 +44,7 @@ import { Entity } from './Entity';
  * - Uses service entity as base
  * - Falls back to local nameHighlight if service doesn't have one
  * - Falls back to local contentHighlights if service doesn't have any
+ * - Preserves 'local' source if either entity is local (for stable ordering)
  */
 const mergeSearchEntities = <T extends EntityData>(
   first: WithSearch<T>,
@@ -51,11 +52,14 @@ const mergeSearchEntities = <T extends EntityData>(
 ): WithSearch<T> => {
   const serviceEntity = first.search.source === 'service' ? first : second;
   const localEntity = first.search.source === 'local' ? first : second;
+  const hasLocal =
+    first.search.source === 'local' || second.search.source === 'local';
 
   return {
     ...serviceEntity,
     search: {
       ...serviceEntity.search,
+      source: hasLocal ? 'local' : 'service',
       nameHighlight:
         serviceEntity.search.nameHighlight || localEntity.search.nameHighlight,
       contentHitData: serviceEntity.search.contentHitData?.length
@@ -202,6 +206,7 @@ interface UnifiedInfiniteListContext<T extends EntityData> {
   entitySort?: Accessor<EntityComparator<T>>;
   searchFilter?: Accessor<EntitiesFilter<T> | undefined>;
   isSearchActive?: Accessor<boolean>;
+  disableFetchMore?: Accessor<boolean>;
 }
 
 export function createUnifiedInfiniteList<T extends EntityData>({
@@ -213,6 +218,7 @@ export function createUnifiedInfiniteList<T extends EntityData>({
   entitySort,
   searchFilter,
   isSearchActive,
+  disableFetchMore,
 }: UnifiedInfiniteListContext<T>) {
   const [sortedEntitiesStore, setSortedEntitiesStore] = createStore<T[]>([]);
   const allEntities = createMemo(() => {
@@ -307,7 +313,7 @@ export function createUnifiedInfiniteList<T extends EntityData>({
     const searching = isSearchActive?.();
 
     if (searching) {
-      // NOTE: the default sort will be channels, then local fuzzy name, then serach service
+      // NOTE: the default sort will be channels, then local fuzzy name, then search service
       // avoiding doing an extra sort as a speed optimization
       return entities.toSorted(sortEntitiesForSearch);
     }
@@ -384,7 +390,7 @@ export function createUnifiedInfiniteList<T extends EntityData>({
 
   let isFetchingMore = false;
   const fetchMoreData = async () => {
-    if (isFetchingMore) return;
+    if (disableFetchMore?.() || isFetchingMore) return;
 
     isFetchingMore = true;
     const results = entityInfiniteQueries.map((query) => {
@@ -504,10 +510,11 @@ export function createUnifiedInfiniteList<T extends EntityData>({
                 >
                   {(entity, index) => {
                     if (
-                      untrack(index) ===
+                      untrack(index) >=
                       Math.floor(untrack(sortedEntities).length * 0.9)
-                    )
+                    ) {
                       debouncedFetchMore();
+                    }
                     return <EntityRenderer entity={entity} index={index()} />;
                   }}
                 </VList>

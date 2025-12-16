@@ -20,7 +20,7 @@ import {
 import { Dynamic } from 'solid-js/web';
 import clickOutside from '../directive/clickOutside';
 import { EditingContext } from './Editable';
-import { BasicHotkey } from './Hotkey';
+import { Hotkey } from './Hotkey';
 
 false && clickOutside;
 
@@ -231,7 +231,7 @@ export function MenuItem(props: MenuItemProps) {
       <Show when={props.hotkeyToken} keyed>
         {(hotkeyToken) => (
           <div class="ml-auto text-page text-xs">
-            <BasicHotkey token={hotkeyToken} />
+            <Hotkey token={hotkeyToken} class="text-ink-muted" showPlus />
           </div>
         )}
       </Show>
@@ -335,7 +335,7 @@ const menuWidths: Record<MenuWidth, string> = {
   screen: 'w-screen',
 };
 
-export const MENU_CONTENT_CLASS = `flex flex-col py-1 justify-start items-start bg-menu shadow-lg rounded-md ring-1 ring-edge cursor-default select-none px-1 max-w-full max-h-[calc(100dvh-10rem)] overflow-y-auto z-modal`;
+export const MENU_CONTENT_CLASS = `flex flex-col justify-start items-start bg-menu shadow-lg ring-1 ring-edge cursor-default select-none max-w-full max-h-[calc(100dvh-10rem)] overflow-y-auto z-modal`;
 
 type MenuContentProps = ParentProps<{
   class?: string;

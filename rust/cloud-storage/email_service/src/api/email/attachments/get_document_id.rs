@@ -1,11 +1,13 @@
 use crate::api::context::ApiContext;
-use crate::util::upload_attachment::upload_attachment;
+use crate::util::upload_attachment::{UploadAttachmentContext, upload_attachment};
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
 use model::response::ErrorResponse;
+use models_email::db::address::EmailRecipientType;
 use models_email::email::service::link::Link;
+use models_email::service::attachment::{AttachmentUploadArgs, AttachmentUploadDestination};
 use strum_macros::AsRefStr;
 use thiserror::Error;
 use utoipa::ToSchema;
@@ -94,16 +96,42 @@ pub async fn handler(
         .map_err(GetAttachmentDocumentIdError::DatabaseError)?
         .ok_or(GetAttachmentDocumentIdError::AttachmentNotFound)?;
 
-    let document_id = upload_attachment(
-        &ctx.redis_client,
-        &ctx.gmail_client,
-        &ctx.dss_client,
-        &gmail_token,
-        &link,
-        &attachment_metadata,
+    let recipients = email_db_client::contacts::get::fetch_db_recipients(
+        &ctx.db,
+        attachment_metadata.message_db_id,
     )
     .await
-    .map_err(GetAttachmentDocumentIdError::UploadError)?;
+    .map_err(GetAttachmentDocumentIdError::DatabaseError)?;
+
+    let recipient_emails: Vec<String> = recipients
+        .iter()
+        .filter(|(_, recipient_type)| *recipient_type == EmailRecipientType::To)
+        .filter_map(|(contact, _)| contact.email_address.clone())
+        .collect();
+
+    let attachment_upload_args = AttachmentUploadArgs {
+        attachment_metadata,
+        recipient_emails,
+        backfill: false,
+        // Frontend will soon use SFS URLs for image/video attachments directly instead of DSS
+        // Until this transition is complete, we continue uploading all attachments to DSS
+        upload_destination: AttachmentUploadDestination::Dss,
+    };
+
+    let ctx_upload = UploadAttachmentContext {
+        db: &ctx.db,
+        redis_client: &ctx.redis_client,
+        gmail_client: &ctx.gmail_client,
+        dss_client: &ctx.dss_client,
+        sfs_client: &ctx.sfs_client,
+        system_properties_service: &ctx.system_properties_service,
+        access_token: &gmail_token,
+        link: &link,
+    };
+
+    let document_id = upload_attachment(ctx_upload, &attachment_upload_args)
+        .await
+        .map_err(GetAttachmentDocumentIdError::UploadError)?;
 
     Ok(Json(GetAttachmentDocumentIDResponse {
         attachment_id,

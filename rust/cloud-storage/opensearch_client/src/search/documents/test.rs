@@ -1,5 +1,3 @@
-use crate::search::model::SearchResponse;
-
 use super::*;
 use opensearch_query_builder::ToOpenSearchJson;
 
@@ -23,13 +21,29 @@ fn test_build_search_request() -> anyhow::Result<()> {
             "field": "entity_id"
         },
         "sort": DocumentSearchConfig::default_sort_types().iter().map(|s| s.to_json()).collect::<Vec<_>>(),
-        "highlight": DocumentSearchConfig::default_highlight().to_json(),
+        "highlight": DocumentSearchConfig::append_owner_highlights(DocumentSearchConfig::default_highlight()).to_json(),
         "query": {
             "bool": {
                 "must": [
                     {
-                        "match_phrase": {
-                            "content": "test"
+                        "bool": {
+                            "minimum_should_match": 1,
+                            "should": [
+                                {
+                                    "wildcard": {
+                                        "owner_id": {
+                                        "value": "macro|test*",
+                                        "case_insensitive": true,
+                                        "boost": 5000.0
+                                        }
+                                    }
+                                },
+                                {
+                                    "match_phrase": {
+                                        "content": "test"
+                                    }
+                                }
+                            ]
                         }
                     },
                     {"term": {"_index": "documents"}},

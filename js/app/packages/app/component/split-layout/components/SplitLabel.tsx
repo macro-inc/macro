@@ -1,4 +1,9 @@
-import { isInBlock, useBlockId, useBlockName } from '@core/block';
+import {
+  isInBlock,
+  useBlockAliasedName,
+  useBlockId,
+  useBlockName,
+} from '@core/block';
 import {
   EntityIcon,
   type EntityIconSelector,
@@ -29,7 +34,7 @@ export function StaticSplitLabel(props: {
     panel.handle.setDisplayName(props.label);
   });
   return (
-    <div class="z-3 relative flex items-center gap-2 w-screen max-w-full h-full shrink">
+    <div class="z-3 relative flex items-center gap-2 max-w-full h-full shrink">
       <Show when={props.iconType}>
         <EntityIcon
           class="shrink-0"
@@ -47,7 +52,7 @@ export function StaticSplitLabel(props: {
   );
 }
 
-function SplitLabel(props: {
+export function SplitLabel(props: {
   label: string;
   onNameChanged?: (newName: string) => void;
   lockRename?: boolean;
@@ -135,7 +140,7 @@ export function BlockItemSplitLabel(props: {
     throw new Error('<BlockItemSplitLabel> must be used within a Block');
 
   const fileName = useBlockDocumentName(props.fallbackName);
-  const blockName = useBlockName();
+  const blockName = useBlockAliasedName();
   const isOwner = useIsDocumentOwner();
 
   const targetType = () => {

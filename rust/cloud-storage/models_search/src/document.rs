@@ -1,3 +1,4 @@
+use document_sub_type::DocumentSubType;
 use item_filters::DocumentFilters;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -28,17 +29,17 @@ pub struct DocumentSearchResponseItem {
     /// Standardized fields that all item types will share.
     /// These field names are being aligned across all item types
     /// for consistency in our data model.
-    pub id: String,
+    pub id: uuid::Uuid,
     pub name: String,
     pub owner_id: String,
     /// The id of the document
-    pub document_id: String,
+    pub document_id: uuid::Uuid,
     /// The name of the document
     pub document_name: String,
     /// The file type of the document
     pub file_type: Option<String>,
-    /// Whether the document is a task
-    pub is_task: bool,
+    /// The sub type of the document if present.
+    pub sub_type: Option<DocumentSubType>,
     /// The search results for the document
     /// This may be empty if the search result match was on the document name only
     pub document_search_results: Vec<DocumentSearchResult>,

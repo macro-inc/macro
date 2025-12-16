@@ -2,7 +2,7 @@ use crate::{
     Result, delegate_methods,
     error::{OpensearchClientError, ResponseExt},
     search::{
-        builder::{SearchQueryBuilder, SearchQueryConfig},
+        builder::{SearchQueryBuilder, SearchQueryConfig, create_highlight_field},
         model::{
             DefaultSearchResponse, NameIndex, SearchGotoContent, SearchGotoDocument, SearchHit,
             parse_highlight_hit,
@@ -33,6 +33,12 @@ impl SearchQueryConfig for DocumentSearchConfig {
             SortType::Field(FieldSort::new(Self::ID_KEY, SortOrder::Asc)),
             SortType::Field(FieldSort::new("node_id", SortOrder::Asc)),
         ]
+    }
+
+    fn append_owner_highlights<'a>(
+        highlight: opensearch_query_builder::Highlight<'a>,
+    ) -> opensearch_query_builder::Highlight<'a> {
+        highlight.field("owner_id", create_highlight_field("plain", 1))
     }
 }
 
@@ -79,7 +85,7 @@ impl DocumentQueryBuilder {
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub(crate) struct DocumentIndex {
-    pub entity_id: String,
+    pub entity_id: uuid::Uuid,
     pub document_name: String,
     pub node_id: String,
     pub raw_content: Option<String>,
@@ -137,14 +143,18 @@ pub(crate) async fn search_documents(
     client: &opensearch::OpenSearch,
     args: DocumentSearchArgs,
 ) -> Result<Vec<SearchHit>> {
+    let indices = match args.search_on {
+        SearchOn::Content => vec![SearchIndex::Documents.as_ref()],
+        SearchOn::NameContent => vec![SearchIndex::Documents.as_ref(), SearchIndex::Names.as_ref()],
+        SearchOn::Name => vec![SearchIndex::Names.as_ref()],
+    };
+
     let query_body = args.build()?;
 
     tracing::trace!("query: {}", query_body);
 
     let response = client
-        .search(opensearch::SearchParts::Index(&[
-            SearchIndex::Documents.as_ref()
-        ]))
+        .search(opensearch::SearchParts::Index(&indices))
         .body(query_body)
         .send()
         .await

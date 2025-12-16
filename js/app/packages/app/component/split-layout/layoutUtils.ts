@@ -1,3 +1,6 @@
+import type { BlockAlias, BlockName } from '@core/block';
+import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
+import type { ViewId } from '@core/types/view';
 import { createCallback } from '@solid-primitives/rootless';
 import { useContext } from 'solid-js';
 import { SplitLayoutContext, SplitPanelContext } from './context';
@@ -9,17 +12,36 @@ export function decodePairs(segments: string[]): SplitContent[] {
     const type = segments[i];
     const id = segments[i + 1];
     if (!type || !id) break;
-    pairs.push(
-      type === 'component'
-        ? { type: 'component', id }
-        : ({ type, id } as SplitContent)
-    );
+
+    if (type === 'component') {
+      pairs.push({ type: 'component', id });
+    } else {
+      const resolvedType = resolveBlockAlias(type as BlockName | BlockAlias);
+      if (isBlockAlias(type)) {
+        const content: SplitContent = {
+          type,
+          id,
+          aliasContext: {
+            alias: type,
+            baseType: resolvedType,
+          },
+        };
+        pairs.push(content);
+      } else {
+        const content: SplitContent = { type: resolvedType, id };
+        pairs.push(content);
+      }
+    }
   }
   return pairs.length ? pairs : [{ type: 'component', id: 'unified-list' }];
 }
 
 export function encodePairs(splits: ReadonlyArray<SplitContent>): string[] {
-  return splits.flatMap((s) => [s.type, s.id]);
+  return splits.flatMap((s) => [
+    // Use the alias type if available, otherwise use the base type
+    s.type === 'component' ? s.type : s.aliasContext?.alias || s.type,
+    s.id,
+  ]);
 }
 
 export const isInSplit = createCallback(() => {
@@ -79,9 +101,9 @@ export function globalRemoveFromSplitHistory(
 }
 
 /**
- * Check if there's a unified-list split with the inbox view active.
+ * Check if there's a unified-list split with a particular view open.
  */
-export function isInboxOpen(manager: SplitManager): boolean {
+export function isViewOpen(manager: SplitManager, viewId: ViewId): boolean {
   const split = manager.getSplitByContent('component', 'unified-list');
-  return split?.meta()?.viewId === 'inbox';
+  return split?.meta()?.viewId === viewId;
 }

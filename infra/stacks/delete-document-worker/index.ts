@@ -1,7 +1,7 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { config, stack } from '@shared';
-import { get_coparse_api_vpc } from '@vpc';
+import { config, stack } from '../../packages/shared';
+import { get_coparse_api_vpc } from '../../packages/vpc';
 import { Worker } from './worker';
 
 const tags = {
@@ -120,7 +120,7 @@ const deleteDocumentWorker = new Worker(`delete-document-worker-${stack}`, {
     {
       name: 'SYNC_SERVICE_URL',
       value: `https://sync-service${
-        stack === 'prod' ? '' : `-${stack}`
+        stack === 'prod' ? '' : `-${stack === 'dev' ? 'dev3' : stack}`
       }.macroverse.workers.dev`,
     },
     {

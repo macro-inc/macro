@@ -2,7 +2,7 @@ import {
   createBlockMemo,
   isInBlock,
   NonDocumentBlockTypes,
-  useBlockName,
+  useBlockAliasedName,
 } from '@core/block';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { blockMetadataSignal } from '@core/signal/load';
@@ -22,7 +22,7 @@ export const useBlockDocumentName = (defaultName?: string) => {
   if (!isInBlock()) {
     throw new Error('hook must be used within a block');
   }
-  const blockName = useBlockName();
+  const blockName = useBlockAliasedName();
   const isFileBlock = !NonDocumentBlockTypes.includes(blockName);
 
   return createMemo(() => {

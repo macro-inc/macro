@@ -1,7 +1,6 @@
 import { defineBlock, type ExtractLoadType, LoadErrors } from '@core/block';
-import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
 import { isErr, ok } from '@core/util/maybeResult';
-import { emailClient } from '@service-email/client';
+import { fetchAndCacheThread } from '@queries/email/thread';
 import EmailBlock from './component/Block';
 
 export const definition = defineBlock({
@@ -13,11 +12,11 @@ export const definition = defineBlock({
 
   async load(source) {
     if (source.type === 'dss') {
-      let email = await emailClient.getThread({
-        thread_id: source.id,
-        offset: 0,
-        limit: DEFAULT_THREAD_MESSAGES_LIMIT,
-      });
+      let email = await fetchAndCacheThread(source.id);
+
+      if (!email) {
+        return LoadErrors.MISSING;
+      }
 
       if (isErr(email)) {
         if (isErr(email, 'MISSING')) {

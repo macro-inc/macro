@@ -1,10 +1,9 @@
-import { setSettingsOpen, useSettingsState } from '@core/constant/SettingsState';
 import { GlobalNotificationBell } from '@core/component/GlobalNotificationBell';
 import { createMemo, createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { isRightPanelOpen, useToggleRightPanel } from '@core/signal/layout';
 import { ENABLE_DOCK_NOTITIFCATIONS, ENABLE_JACK_IN } from '@core/constant/featureFlags';
 import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
-import SplitIcon from '@macro-icons/new-split.svg';
+import { useSettingsState } from '@core/constant/SettingsState';
 import { useGlobalNotificationSource } from '../GlobalAppState';
 import IconPower from '@phosphor-icons/core/regular/power.svg';
 import MacroCreateIcon from '@macro-icons/macro-create-b.svg';
@@ -15,6 +14,7 @@ import { PresentModeGlitch } from './PresentModeGlitch';
 import { IconButton } from '@core/component/IconButton';
 import IconQuestion from '@icon/regular/question.svg';
 import { withAnalytics } from '@coparse/analytics';
+import SplitIcon from '@macro-icons/new-split.svg';
 import IconAtom from '@macro-icons/macro-atom.svg';
 import IconGear from '@macro-icons/macro-gear.svg';
 import IconLogo from '@macro-icons/macro-logo.svg';
@@ -41,7 +41,7 @@ export function Dock() {
   // const [debugOpen, setDebugOpen] = createSignal(false);
   const { track, TrackingEvents } = withAnalytics();
   const toggleRightPanel = useToggleRightPanel();
-  const { settingsOpen } = useSettingsState();
+  const { settingsOpen, toggleSettings } = useSettingsState();
   const hasPaid = useHasPaidAccess();
 
   const isSoupActive = createMemo(() => {
@@ -342,14 +342,15 @@ export function Dock() {
                           id: 'unified-list',
                           type: 'component',
                         });
-                      }
                     }
-                  }}
-                  icon={SplitIcon}
-                  theme="clear"
-                  size="sm"
-                />
+                  }
+                }}
+                icon={SplitIcon}
+                theme="clear"
+                size="sm"
+              />
               </div>
+
               <Show when={ENABLE_JACK_IN && !isTauri()}>
                 <IconButton
                   tooltip={{
@@ -368,7 +369,7 @@ export function Dock() {
                   hotkeyToken: TOKENS.global.toggleSettings,
                 }}
                 theme={settingsOpen() ? 'accent' : 'clear'}
-                onDeepClick={() => { setSettingsOpen(true) }}
+                onClick={() => { toggleSettings() }}
                 icon={IconGear}
                 size="sm"
               />

@@ -2,7 +2,7 @@ use crate::{
     Result, delegate_methods,
     error::{OpensearchClientError, ResponseExt},
     search::{
-        builder::{SearchQueryBuilder, SearchQueryConfig},
+        builder::{SearchQueryBuilder, SearchQueryConfig, create_highlight_field},
         model::{
             DefaultSearchResponse, NameIndex, SearchGotoChannel, SearchGotoContent, SearchHit,
             parse_highlight_hit,
@@ -21,11 +21,11 @@ use serde_json::Value;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub(crate) struct ChannelMessageIndex {
-    pub entity_id: String,
+    pub entity_id: uuid::Uuid,
     pub channel_type: String,
     pub org_id: Option<i64>,
-    pub message_id: String,
-    pub thread_id: Option<String>,
+    pub message_id: uuid::Uuid,
+    pub thread_id: Option<uuid::Uuid>,
     pub sender_id: String,
     pub mentions: Vec<String>,
     pub content: String,
@@ -54,6 +54,12 @@ impl SearchQueryConfig for ChannelMessageSearchConfig {
             SortType::Field(FieldSort::new(Self::ID_KEY, SortOrder::Asc)),
             SortType::Field(FieldSort::new("message_id", SortOrder::Asc)),
         ]
+    }
+
+    fn append_owner_highlights<'a>(
+        highlight: opensearch_query_builder::Highlight<'a>,
+    ) -> opensearch_query_builder::Highlight<'a> {
+        highlight.field("sender_id", create_highlight_field("plain", 1))
     }
 }
 
@@ -197,12 +203,16 @@ pub(crate) async fn search_channel_messages(
     client: &opensearch::OpenSearch,
     args: ChannelMessageSearchArgs,
 ) -> Result<Vec<SearchHit>> {
+    let indices = match args.search_on {
+        SearchOn::Content => vec![SearchIndex::Channels.as_ref()],
+        SearchOn::NameContent => vec![SearchIndex::Channels.as_ref(), SearchIndex::Names.as_ref()],
+        SearchOn::Name => vec![SearchIndex::Names.as_ref()],
+    };
+
     let query_body = args.build()?;
 
     let response = client
-        .search(opensearch::SearchParts::Index(&[
-            SearchIndex::Channels.as_ref()
-        ]))
+        .search(opensearch::SearchParts::Index(&indices))
         .body(query_body)
         .send()
         .await

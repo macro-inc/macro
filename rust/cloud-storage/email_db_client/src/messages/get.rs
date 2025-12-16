@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::contacts;
 use crate::labels::get;
 use crate::parse::db_to_service;
@@ -5,70 +7,110 @@ use anyhow::Context;
 use models_email::email::db;
 use models_email::email::service::message::Message;
 use models_email::service::address::ContactInfo;
-use models_email::service::message::MessageToSend;
+use models_email::service::message::{MessageSenderInfo, MessageToSend};
 use sqlx::PgPool;
 use sqlx::types::Uuid;
 
-/// Returns a vector of (message_id, thread_id) tuples for all found messages
-pub async fn get_message_thread_ids_by_provider_ids(
+/// Returns a map of message IDs to sender info for all found messages
+#[tracing::instrument(skip(pool), err)]
+pub async fn get_message_sender_and_pretty_sender(
     pool: &PgPool,
     link_id: Uuid,
-    provider_ids: &[String],
-) -> anyhow::Result<Vec<(Uuid, Uuid)>> {
-    let db_ids = sqlx::query!(
-        r#"
-        SELECT id, thread_id
-        FROM email_messages
-        WHERE link_id = $1 AND provider_id = ANY($2)
-        "#,
-        link_id,
-        provider_ids
-    )
-    .map(|record| (record.id, record.thread_id))
-    .fetch_all(pool)
-    .await
-    .context("Failed to query messages for db_id")?;
-
-    Ok(db_ids)
-}
-
-/// Takes a HashSet of provider IDs and a link_id, and returns only those provider IDs
-/// that don't have corresponding messages in the database.
-pub async fn find_missing_provider_ids(
-    pool: &PgPool,
-    provider_ids: std::collections::HashSet<String>,
-    link_id: Uuid,
-) -> anyhow::Result<Vec<String>> {
-    if provider_ids.is_empty() {
-        return Ok(Vec::new());
+    message_ids: &[Uuid],
+) -> anyhow::Result<HashMap<Uuid, MessageSenderInfo>> {
+    // TODO: use NonEmpty
+    if message_ids.is_empty() {
+        return Ok(HashMap::new());
     }
 
-    let provider_ids_vec: Vec<String> = provider_ids.into_iter().collect();
-
-    let existing_provider_ids = sqlx::query!(
+    let rows = sqlx::query!(
         r#"
-        SELECT provider_id as "provider_id!"
-        FROM email_messages
-        WHERE provider_id = ANY($1) AND link_id = $2
+        SELECT
+            m.id as message_id,
+            c.email_address as "sender!",
+            COALESCE(c.name, c.email_address) as "pretty_sender!"
+        FROM email_messages m
+        LEFT JOIN email_contacts c ON c.id = m.from_contact_id
+        WHERE m.id = ANY($1)
+        AND m.link_id = $2
         "#,
-        &provider_ids_vec,
+        message_ids,
         link_id
     )
     .fetch_all(pool)
     .await
-    .with_context(|| format!("Failed to check existing messages for link_id {}", link_id))?;
+    .context("Failed to fetch message senders")?;
 
-    let existing_set: std::collections::HashSet<String> = existing_provider_ids
-        .into_iter()
-        .map(|record| record.provider_id)
-        .collect();
+    let mut result = HashMap::new();
+    for row in rows {
+        let message_id = row.message_id;
+        let sender = row.sender;
+        let pretty_sender = row.pretty_sender;
+        result.insert(
+            message_id,
+            MessageSenderInfo {
+                sender,
+                pretty_sender,
+            },
+        );
+    }
 
-    let missing_provider_ids = provider_ids_vec
-        .into_iter()
-        .filter(|id| !existing_set.contains(id))
-        .collect();
+    Ok(result)
+}
 
-    Ok(missing_provider_ids)
+/// Returns the (message_id, thread_id) for a message with the given (link_id, provider_id).
+/// Errors if no row is found.
+#[tracing::instrument(skip(pool), err)]
+pub async fn get_message_and_thread_id_by_provider_id(
+    pool: &PgPool,
+    link_id: Uuid,
+    provider_id: &str,
+) -> anyhow::Result<(Uuid, Uuid)> {
+    let row = sqlx::query_as(
+        r#"
+        SELECT id, thread_id
+        FROM email_messages
+        WHERE link_id = $1 AND provider_id = $2
+        LIMIT 1
+        "#,
+    )
+    .bind(link_id)
+    .bind(provider_id)
+    .fetch_optional(pool)
+    .await?;
+
+    match row {
+        Some((message_id, thread_id)) => Ok((message_id, thread_id)),
+        None => anyhow::bail!(
+            "Message not found for link_id={} provider_id={}",
+            link_id,
+            provider_id
+        ),
+    }
+}
+
+/// Returns `true` if a message already exists for this (provider_id, link_id), else `false`.
+#[tracing::instrument(skip(pool), err)]
+pub async fn message_exists_by_provider_id(
+    pool: &PgPool,
+    provider_id: &str,
+    link_id: Uuid,
+) -> anyhow::Result<bool> {
+    let exists: bool = sqlx::query_scalar(
+        r#"
+        SELECT EXISTS(
+            SELECT 1
+            FROM email_messages
+            WHERE provider_id = $1 AND link_id = $2
+        )
+        "#,
+    )
+    .bind(provider_id)
+    .bind(link_id)
+    .fetch_one(pool)
+    .await?;
+
+    Ok(exists)
 }
 
 /// Fetches the thread's messages without attachments and body attributes.

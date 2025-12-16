@@ -92,13 +92,14 @@
   --theme-write:     oklch(from var(--a0) l c 260deg);
   --theme-video:     oklch(from var(--a0) l c 277deg);
   --theme-note:      oklch(from var(--a0) l c 293deg);
-  --theme-code:      oklch(from var(--a0) l c 162deg);
+  --theme-code:      oklch(from var(--a0) l c 180deg);
   --theme-chat:      oklch(from var(--a0) l c 220deg);
   --theme-image:     oklch(from var(--a0) l c  95deg);
   --theme-html:      oklch(from var(--a0) l c  47deg);
   --theme-rss:       oklch(from var(--a0) l c 260deg);
   --theme-pdf:       oklch(from var(--a0) l c  25deg);
   --theme-comment:   oklch(from var(--a0) l c  90deg);
+  --theme-task:      oklch(from var(--a0) l c 150deg);
 
   --gutter-size: 8px;
   --transition: 0.2s;
@@ -117,7 +118,6 @@
   --color-accent: var(--a0);
   --color-accent-bg: oklch(from (var(--a0)) / .15);
   --color-accent-ink: var(--a0);
-  --color-accent-edge: var(--a0);
 
   --color-accent-1 : var(--a1);
   --color-accent-2 : var(--a2);
@@ -210,6 +210,9 @@
   --color-default: var(--color-ink-muted);
   --color-default-bg: color-mix(in srgb, var(--color-default), var(--color-panel) 90%);
 
+  --color-task: var(--theme-task);
+  --color-task-bg: color-mix(in srgb, var(--color-task), var(--color-panel) 90%);
+
   /* SCUFFED We probably want to let the theme determine 3 or 4 "extra" hue offsets. Rights now these are only being */
   /* used as debug colors and to improve the consistency of markdown block lightness/chroma with themed css */
   --color-accent-30:  oklch(var(--a0l) var(--a0c) calc(var(--a0h) +  30deg));
@@ -241,6 +244,13 @@
 .bg-panel, .bg-dialog {
   --color-focus: var(--color-accent);
 }
+
+/*
+*{
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-accent);
+}
+*/
 
 /* NOTE: We use this as a compile-time css util in this file to be able reuse the
  * declarations while still being able to override the color. */
@@ -317,6 +327,10 @@
       conic-gradient(from -90deg at bottom 2px right 2px, #0000 90deg, var(--color-focus) 0) 100% 100% / 20px 20px border-box no-repeat;
     z-index: 10;
     }
+}
+
+@utility hide-scrollbar {
+  scrollbar-width: none;
 }
 
 @utility bracket-* {

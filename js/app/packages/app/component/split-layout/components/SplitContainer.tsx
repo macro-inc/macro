@@ -1,7 +1,7 @@
 import MacroJump from '@app/component/MacroJump';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { ClippedPanel } from '@core/component/ClippedPanel';
-import { isRightPanelOpen } from '@core/signal/layout';
+import { isRightPanelOpen, isSettingsPanelOpen } from '@core/signal/layout';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import {
   type Accessor,
@@ -88,6 +88,7 @@ export function SplitContainer(
           data-split-id={props.id}
           class="bracket-never"
           data-split-container
+          data-modal={panel.handle.isSpotLight()}
           tabindex={-1}
         >
           <ClippedPanel
@@ -99,6 +100,7 @@ export function SplitContainer(
             tr={
               panel.handle.isLast() &&
               !isRightPanelOpen() &&
+              !isSettingsPanelOpen() &&
               !panel.handle.isSpotLight()
             }
             tl={panel.handle.isFirst() && !panel.handle.isSpotLight()}

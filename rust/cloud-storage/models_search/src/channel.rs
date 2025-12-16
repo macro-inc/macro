@@ -9,9 +9,9 @@ use utoipa::ToSchema;
 pub struct ChannelSearchResult {
     /// The channel message id
     /// This is only prsent if the search result is on the message content
-    pub message_id: Option<String>,
+    pub message_id: Option<uuid::Uuid>,
     /// The channel message thread id
-    pub thread_id: Option<String>,
+    pub thread_id: Option<uuid::Uuid>,
     /// The sender id
     /// This is only prsent if the search result is on the message content
     pub sender_id: Option<String>,
@@ -34,14 +34,14 @@ pub struct ChannelSearchResponseItem {
     /// Standardized fields that all item types will share.
     /// These field names are being aligned across all item types
     /// for consistency in our data model.
-    pub id: String,
+    pub id: uuid::Uuid,
     /// we don't store this for channels atm but keeping it here for consistency
     pub owner_id: Option<String>,
 
     /// The type of channel
     pub channel_type: String,
     /// The id of the channel
-    pub channel_id: String,
+    pub channel_id: uuid::Uuid,
     /// The search results for the channel
     /// This may be empty if the search result match was not on content
     pub channel_message_search_results: Vec<ChannelSearchResult>,
@@ -71,7 +71,7 @@ pub struct ChannelSearchResponseItemWithMetadata {
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct ChannelSearchMetadata {
     /// The id of the channel
-    pub channel_id: String,
+    pub channel_id: uuid::Uuid,
     /// The type of channel
     pub channel_type: String,
 }
@@ -81,11 +81,11 @@ impl From<SearchResponseItem<ChannelSearchResult, ChannelSearchMetadata>>
 {
     fn from(response: SearchResponseItem<ChannelSearchResult, ChannelSearchMetadata>) -> Self {
         ChannelSearchResponseItem {
-            id: response.metadata.channel_id.clone(),
+            id: response.metadata.channel_id,
             // we don't store this for channels atm but keeping it here for consistency
             owner_id: None,
             channel_type: response.metadata.channel_type.clone(),
-            channel_id: response.metadata.channel_id.clone(),
+            channel_id: response.metadata.channel_id,
             channel_message_search_results: response.results,
         }
     }

@@ -114,8 +114,6 @@ export const ENABLE_PROPERTIES_METADATA = DEV_MODE_ENV;
 export const ENABLE_PROPERTY_DISPLAY_CONTROL =
   ENABLE_PROPERTIES_METADATA && DEV_MODE_ENV;
 
-export const ENABLE_EMAIL_VIEW = true;
-
 // TODO: re-enable when supported in backend
 export const ENABLE_SOUP_FROM_FILTER = false;
 
@@ -131,3 +129,6 @@ export const ENABLE_JACK_IN = false;
 export const ENABLE_CUSTOM_CURSOR = false;
 // uses javascript to detect selectable text to switch to "text" cursor type (ibeam)
 export const ENABLE_CUSTOM_CURSOR_TEXT_GLYPH_DETECTION = true;
+
+export const ENABLE_CREATE_TASK = DEV_MODE_ENV;
+export const ENABLE_TASKS_TABS = DEV_MODE_ENV;

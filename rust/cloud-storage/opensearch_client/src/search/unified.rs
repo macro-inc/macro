@@ -4,7 +4,7 @@ use crate::{
     Result,
     error::{OpensearchClientError, ResponseExt},
     search::{
-        builder::SearchQueryConfig,
+        builder::{SearchQueryConfig, create_highlight_field},
         channels::{
             ChannelMessageIndex, ChannelMessageQueryBuilder, ChannelMessageSearchArgs,
             ChannelMessageSearchConfig,
@@ -24,7 +24,7 @@ use crate::{
 };
 
 use crate::SearchOn;
-use models_opensearch::SearchEntityType;
+use models_opensearch::{SearchEntityType, SearchIndex};
 use opensearch_query_builder::*;
 
 #[derive(Debug, Default, Clone)]
@@ -468,7 +468,7 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
     }
 
     // Build highlight
-    let highlight = match args.search_on {
+    let mut highlight = match args.search_on {
         SearchOn::Content => Highlight::new().require_field_match(true).field(
             "content",
             HighlightField::new()
@@ -523,6 +523,20 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         }
     };
 
+    // For content and name content search, we need to add in highlights for the owner
+    // fields
+    match args.search_on {
+        SearchOn::Content | SearchOn::NameContent => {
+            highlight = highlight.field("user_id", create_highlight_field("plain", 1));
+            highlight = highlight.field("owner_id", create_highlight_field("plain", 1));
+            highlight = highlight.field("sender", create_highlight_field("plain", 1));
+            highlight = highlight.field("recipients", create_highlight_field("plain", 1));
+            highlight = highlight.field("cc", create_highlight_field("plain", 1));
+            highlight = highlight.field("bcc", create_highlight_field("plain", 1));
+        }
+        SearchOn::Name => {}
+    }
+
     search_request_builder.highlight(highlight);
 
     let query_object = bool_query.build();
@@ -541,7 +555,14 @@ pub(crate) async fn search_unified(
 ) -> Result<Vec<SearchHit>> {
     let search_request = build_unified_search_request(&args)?.to_json();
 
-    let search_indices: Vec<&str> = args.search_indices.iter().map(|i| i.as_ref()).collect();
+    let mut search_indices: Vec<&str> = args.search_indices.iter().map(|i| i.as_ref()).collect();
+
+    match args.search_on {
+        SearchOn::NameContent | SearchOn::Name => {
+            search_indices.push(SearchIndex::Names.as_ref());
+        }
+        SearchOn::Content => {}
+    }
 
     let response = client
         .search(opensearch::SearchParts::Index(&search_indices))

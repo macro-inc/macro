@@ -1,7 +1,6 @@
 import type { Entity } from '@core/types';
-import { emailClient } from '@service-email/client';
+import { useMarkThreadAsSeenMutation } from '@queries/email/thread';
 import { onCleanup, onMount } from 'solid-js';
-import { optimisticMarkEmailAsRead } from '../../macro-entity/src/queries/email';
 import {
   markNotificationForEntityIdAsRead,
   markNotificationsForEntityAsRead,
@@ -111,15 +110,12 @@ export function EmailDebouncedReadMarker(props: {
   debounceTime?: number;
   threadId: string;
 }) {
+  const markSeenMutation = useMarkThreadAsSeenMutation();
+
   return (
     <DebouncedMarker
       debounceTime={props.debounceTime}
-      debouncedFn={() => {
-        optimisticMarkEmailAsRead(props.threadId);
-        emailClient.markThreadAsSeen({
-          thread_id: props.threadId,
-        });
-      }}
+      debouncedFn={() => markSeenMutation.mutate({ threadId: props.threadId })}
     />
   );
 }

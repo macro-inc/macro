@@ -155,7 +155,7 @@ pub async fn create_onboarding_documents(
                 created_at: None,
                 updated_at: None,
                 deleted_at: None,
-                is_task: false,
+                sub_type: None,
             });
         });
 
@@ -219,6 +219,6 @@ pub async fn create_onboarding_docx(
         created_at: None,
         updated_at: None,
         deleted_at: None,
-        is_task: false,
+        sub_type: None,
     })
 }

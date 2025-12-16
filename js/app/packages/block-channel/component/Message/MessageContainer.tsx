@@ -119,8 +119,9 @@ type MessageProps = {
   virtualHandle: VirtualizerHandle;
   container?: HTMLDivElement;
   listContext: MessageListContext;
-  targetMessageId: string | undefined;
+  setMessageContainerRef?: Setter<HTMLDivElement | undefined>;
   setLastMessageRef?: Setter<HTMLDivElement | undefined>;
+  isTarget: boolean;
 };
 
 export function MessageContainer(props: MessageProps) {
@@ -137,8 +138,8 @@ export function MessageContainer(props: MessageProps) {
       | ((prev?: HTMLDivElement) => HTMLDivElement | undefined)
   ): undefined => {
     setMessageBodyRefInner(value);
-    if (props.setLastMessageRef && isLastMessage()) {
-      props.setLastMessageRef(value);
+    if (isLastMessage()) {
+      props.setLastMessageRef?.(value);
     }
     return undefined;
   }) satisfies typeof setMessageBodyRefInner;
@@ -151,7 +152,7 @@ export function MessageContainer(props: MessageProps) {
 
   const [displayName] = useDisplayName(message.sender_id);
 
-  let messageContainerRef: HTMLDivElement | undefined;
+  let messageContainerRef!: HTMLDivElement;
 
   // Scroll message to have editing input visible
   createEffect(() => {
@@ -159,8 +160,6 @@ export function MessageContainer(props: MessageProps) {
       const handle = props.virtualHandle!;
 
       requestAnimationFrame(() => {
-        if (!messageContainerRef) return;
-
         const messageBounds = messageContainerRef.getBoundingClientRect();
         const containerBounds = props.container?.getBoundingClientRect();
         if (!containerBounds) return;
@@ -349,9 +348,7 @@ export function MessageContainer(props: MessageProps) {
   const [attachFn, scopeId] = useHotkeyDOMScope('channel.messageContainer');
 
   onMount(() => {
-    if (messageContainerRef) {
-      attachFn(messageContainerRef);
-    }
+    attachFn(messageContainerRef);
   });
 
   registerHotkey({
@@ -521,7 +518,10 @@ export function MessageContainer(props: MessageProps) {
     <div
       class={`shrink-0 flex justify-center w-full ${isTouchDevice ? 'no-select-children' : ''}
       [--thread-shift:23px] @sm:[--thread-shift:46px] [--user-icon-width:30px] @sm:[--user-icon-width:40px] [--left-of-connector:20px] @sm:[--left-of-connector:28px] [--left-of-user-icon:calc(var(--left-of-connector)-var(--user-icon-width)/2)]`}
-      ref={messageContainerRef}
+      ref={(el) => {
+        props.setMessageContainerRef?.(el);
+        messageContainerRef = el;
+      }}
       data-message-id={message.id}
     >
       <div class="macro-message-width w-full">
@@ -618,7 +618,7 @@ export function MessageContainer(props: MessageProps) {
                 isParentNewMessage={isParentNewMessage()}
                 onThreadAppend={onThreadAppend}
                 shouldShowThreadAppendInput={shouldShowThreadAppendInput}
-                isTarget={props.targetMessageId === message.id}
+                isTarget={props.isTarget}
                 setThreadAppendMountTarget={(el) =>
                   props.setThreadViewStore(message.thread_id ?? '', (prev) => ({
                     ...prev,

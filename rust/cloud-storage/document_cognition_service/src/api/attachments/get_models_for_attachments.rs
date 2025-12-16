@@ -1,7 +1,12 @@
 use crate::{
     api::context::ApiContext,
-    core::constants::{DEFAULT_CHANNEL_TOKENS, DEFAULT_EMAIL_TOKENS, DEFAULT_IMAGE_TOKENS},
-    core::model::CHAT_MODELS,
+    core::{
+        constants::{
+            DEFAULT_CHANNEL_TOKENS, DEFAULT_EMAIL_TOKENS, DEFAULT_IMAGE_TOKENS,
+            DEFAULT_PROJECT_TOKENS,
+        },
+        model::CHAT_MODELS,
+    },
     model::request::chats::NewAttachment,
     service::attachment::document::get_document_token_count,
 };
@@ -76,9 +81,13 @@ pub async fn get_models_for_attachments_handler(
         }
     }
 
+    // computer virus
     for attachment in &req.attachments {
         let token_count =
         match attachment.attachment_type {
+            AttachmentType::Project => {
+                DEFAULT_PROJECT_TOKENS
+            }
             AttachmentType::Document => {
                 get_document_token_count(&state, attachment.attachment_id.as_str())
                     .await

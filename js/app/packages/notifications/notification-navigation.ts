@@ -1,5 +1,5 @@
 import type { SplitManager } from '@app/component/split-layout/layoutManager';
-import type { BlockName } from '@core/block';
+import type { BlockAlias, BlockName } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { NotificationType } from '@core/types';
 import type { TypedNotification } from '@notifications';
@@ -34,7 +34,7 @@ const CHANNEL_EVENT_TYPES = Object.values(ChannelNotificationType) as [
  */
 function openSplitIfNotOpen(
   layoutManager: SplitManager,
-  type: BlockName | 'component',
+  type: BlockName | BlockAlias | 'component',
   id: string
 ) {
   const isSplitOpen = layoutManager.hasSplit(type, id);

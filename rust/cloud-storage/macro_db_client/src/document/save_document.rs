@@ -1,3 +1,4 @@
+use document_sub_type::DocumentSubType;
 use sqlx::{PgPool, Postgres, Transaction, types::Uuid};
 
 use model::document::{
@@ -562,12 +563,13 @@ pub async fn save_document(
         }
     };
 
-    let is_task = sqlx::query!(
+    let sub_type: Option<DocumentSubType> = sqlx::query!(
         r#"
-            SELECT document_id FROM document_task WHERE document_id = $1
+            SELECT sub_type as "sub_type: DocumentSubType" FROM document_sub_type WHERE document_id = $1
         "#,
         document_id
     )
+    .map(|row| row.sub_type)
     .fetch_optional(&mut *transaction)
     .await?;
 
@@ -592,7 +594,7 @@ pub async fn save_document(
         project_name,
         created_at: document_version.created_at,
         updated_at: document_version.updated_at,
-        is_task: is_task.is_some(),
+        sub_type,
     })
 }
 

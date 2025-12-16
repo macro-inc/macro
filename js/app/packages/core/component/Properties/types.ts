@@ -48,6 +48,7 @@ export type Property = {
   displayName: string;
   isMultiSelect: boolean;
   isMetadata?: boolean;
+  isSystemProperty?: boolean;
   options?: PropertyOption[];
   owner: PropertyOwner;
   specificEntityType?: EntityType | null;
@@ -86,6 +87,7 @@ export type PropertyDefinitionFlat = {
   id: string;
   is_metadata: boolean;
   is_multi_select: boolean;
+  is_system: boolean;
   owner:
     | {
         scope: 'user';
@@ -99,7 +101,11 @@ export type PropertyDefinitionFlat = {
         scope: 'user_and_organization';
         user_id: string;
         organization_id: number;
+      }
+    | {
+        scope: 'system';
       };
+  propertyOptions?: PropertyOption[];
   specific_entity_type?: EntityType | null;
   updated_at: string;
 };

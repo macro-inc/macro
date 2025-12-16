@@ -40,6 +40,20 @@ jobs:
         working-directory: infra
         run: biome ci --changed --no-errors-on-unmatched
 
+  check:
+    needs: path-check
+    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
+    runs-on: linux-latest-middy
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: install
+        working-directory: infra
+        run: bun install --frozen-lockfile
+      - name: check
+        working-directory: infra
+        run: bun run check
+
   # Collector job that always runs - use this as the required status check
   status-check:
     name: Infra Status Check

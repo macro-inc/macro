@@ -13,6 +13,7 @@ import {
   type Accessor,
   createEffect,
   createSignal,
+  type JSX,
   onCleanup,
   onMount,
   Show,
@@ -32,11 +33,11 @@ import {
   type ItemMention,
   keyboardFocusPlugin,
   mentionsPlugin,
-  registerRootEventListener,
   type SelectionData,
   selectionDataPlugin,
   tabIndentationPlugin,
 } from '../../plugins';
+import { restoreFocusPlugin } from '../../plugins/restore-focus';
 import { createMenuOperations } from '../../shared/inlineMenu';
 import {
   editorIsEmpty,
@@ -68,6 +69,7 @@ export interface MarkdownTextareaProps {
   initialValue?: string;
   initialHtml?: string;
   placeholder?: string;
+  watermark?: JSX.Element;
   type?: EditorType;
   onEnter?: (e: KeyboardEvent, value: string) => boolean;
   focusOnMount?: boolean;
@@ -124,14 +126,6 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
     }
   });
 
-  // better focus in handling. preserves selection on regain focus!
-  autoRegister(
-    registerRootEventListener(editor, 'focusin', (e) => {
-      e.preventDefault();
-      editor.focus();
-    })
-  );
-
   createEffect(() => {
     editor.setEditable(props.editable());
   });
@@ -160,6 +154,7 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
     .delete()
     .state<string>(setMarkdownState, 'markdown')
     .history(400)
+    .use(restoreFocusPlugin())
     .use(
       props.formatState && props.setFormatState
         ? customSelectionDataPlugin(
@@ -186,16 +181,19 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
     })
   );
 
-  if (props.onFocusLeaveEnd && props.onFocusLeaveStart) {
-    plugins.use(
-      keyboardFocusPlugin({
-        onFocusLeaveStart: props.onFocusLeaveStart,
-        onFocusLeaveEnd: props.onFocusLeaveEnd,
-        ignoreKeys: () =>
-          mentionsMenuOperations.isOpen() || emojisMenuOperations.isOpen(),
-      })
-    );
-  }
+  plugins.useReactive(
+    [() => props.onFocusLeaveEnd, () => props.onFocusLeaveStart],
+    () => {
+      if (props.onFocusLeaveEnd && props.onFocusLeaveStart) {
+        return keyboardFocusPlugin({
+          onFocusLeaveStart: props.onFocusLeaveStart,
+          onFocusLeaveEnd: props.onFocusLeaveEnd,
+          ignoreKeys: () =>
+            mentionsMenuOperations.isOpen() || emojisMenuOperations.isOpen(),
+        });
+      }
+    }
+  );
 
   let cleanupEnterListener: () => void = () => {};
   createEffect(() => {
@@ -285,6 +283,12 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
             </p>
           </div>
         </Show>
+        <Show when={props.watermark}>
+          <div class="text-ink/50 mt-[1lh]" data-watermark>
+            {props.watermark}
+          </div>
+        </Show>
+
         <MentionsMenu
           editor={editor}
           menu={mentionsMenuOperations}

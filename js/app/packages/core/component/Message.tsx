@@ -172,10 +172,10 @@ export const NestedConnectorLines: Component<NestedConnectorLinesProps> = (
   for (let i = 0; i < (props.threadDepth ?? 0); i++) {
     NestedLines.push(
       <div
-        class="absolute h-full w-[1px]"
+        class="absolute h-full border-l"
         classList={{
-          'bg-accent': props.isParentNewMessage,
-          'bg-edge-muted': !props.isParentNewMessage,
+          'border-accent': props.isParentNewMessage,
+          'border-edge-muted': !props.isParentNewMessage,
         }}
         style={{
           left: `calc(${i} * var(--thread-shift) + var(--left-of-connector))`,

@@ -1,7 +1,8 @@
-import type { BlockName } from '@core/block';
+import type { BlockAlias, BlockName } from '@core/block';
 import {
   blockAcceptedFileExtensionSet,
   fileTypeToBlockName,
+  isBlockAlias,
 } from '@core/constant/allBlocks';
 import {
   USE_PIXEL_BLOCK_ICONS,
@@ -26,6 +27,7 @@ import User from '@icon/duotone/user-duotone.svg';
 import Users from '@icon/duotone/users-duotone.svg';
 import Folder from '@icon/fill/folder-simple-fill.svg';
 import FolderUser from '@icon/fill/folder-user-fill.svg';
+import Check from '@icon/regular/check-fat.svg';
 import PixelChat from '@macro-icons/pixel/ai.svg';
 import PixelBuilding from '@macro-icons/pixel/building.svg';
 import PixelCanvas from '@macro-icons/pixel/canvas.svg';
@@ -48,14 +50,17 @@ import WideBook from '@macro-icons/wide/book.svg';
 import WideChannel from '@macro-icons/wide/channel.svg';
 import WideChat from '@macro-icons/wide/chat.svg';
 import WideDiagram from '@macro-icons/wide/diagram.svg';
+import WideDocx from '@macro-icons/wide/docx.svg';
 import WideEmail from '@macro-icons/wide/email.svg';
 import WideFileCode from '@macro-icons/wide/file-code.svg';
 import WideFileImage from '@macro-icons/wide/file-image.svg';
 import WideFileMd from '@macro-icons/wide/file-md.svg';
 import WideFolder from '@macro-icons/wide/folder.svg';
 import WideStar from '@macro-icons/wide/star.svg';
+import WideTask from '@macro-icons/wide/task.svg';
 import WideUnknown from '@macro-icons/wide/unknown.svg';
 import WideUser from '@macro-icons/wide/user.svg';
+import WideVideo from '@macro-icons/wide/video.svg';
 import { FileTypeMap } from '@service-storage/fileTypeMap';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import type { Component, JSX } from 'solid-js';
@@ -70,6 +75,7 @@ type IconConfig = {
 
 export type EntityWithValidIcon =
   | BlockName
+  | BlockAlias
   | 'default'
   | 'sharedProject'
   | 'company'
@@ -212,6 +218,12 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     background: 'bg-default-bg',
     prettyName: 'Direct Message',
   },
+  task: {
+    icon: Check,
+    foreground: 'text-task',
+    background: 'bg-task-bg',
+    prettyName: 'Task',
+  },
 };
 
 // this will match fall-through cases like code files which match multiple extensions
@@ -227,6 +239,8 @@ export function isArchiveType(ext: string): boolean {
 
 function validateEntity(entity: string): EntityWithValidIcon {
   if (entity in ENTITY_ICON_CONFIGS) {
+    return entity as EntityWithValidIcon;
+  } else if (isBlockAlias(entity)) {
     return entity as EntityWithValidIcon;
   } else if (isFileType(entity)) {
     return fileTypeToBlockName(entity, true);
@@ -259,30 +273,32 @@ export const PIXEL_ICONS: Record<EntityWithValidIcon, Component> = {
   directMessage: PixelUsers,
   user: PixelUser,
   emailRead: PixelEmailRead,
+  task: Check,
 };
 
 export const WIDE_ICONS: Record<EntityWithValidIcon, Component> = {
   canvas: WideDiagram,
   html: WideFileCode,
   channel: WideChannel,
-  company: WideChannel,
+  company: Building,
   email: WideEmail,
   code: WideFileCode,
   pdf: WideBook,
   md: WideFileMd,
   image: WideFileImage,
-  write: WideFileMd,
+  write: WideDocx,
   chat: WideStar,
   project: WideFolder,
   sharedProject: WideFolder,
   unknown: WideUnknown,
   archive: WideUnknown,
-  video: WideUnknown,
+  video: WideVideo,
   contact: WideUser,
   default: WideUnknown,
   directMessage: WideChat,
   user: WideUser,
   emailRead: WideEmail,
+  task: WideTask,
 };
 
 export const ICON_SIZES = {

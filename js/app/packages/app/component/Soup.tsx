@@ -5,20 +5,17 @@ import {
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
 import { playSound } from '@app/util/sound';
 import { useIsAuthenticated } from '@core/auth';
+import type { BlockAliasContext } from '@core/block';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { Button } from '@core/component/FormControls/Button';
-import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { ContextMenuContent, MenuItem } from '@core/component/Menu';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import {
-  CONDITIONAL_VIEWS,
   DEFAULT_VIEWS,
   type DefaultView,
-  VIEWS,
-  type View,
   type ViewId,
   type ViewLabel,
 } from '@core/types/view';
@@ -27,6 +24,7 @@ import { ContextMenu } from '@kobalte/core/context-menu';
 import { Tabs } from '@kobalte/core/tabs';
 import type { EntityData } from '@macro-entity';
 import {
+  isTaskEntity,
   queryKeys,
   useQueryClient as useEntityQueryClient,
 } from '@macro-entity';
@@ -55,7 +53,6 @@ import { EntityModal } from './EntityModal/EntityModal';
 import { HelpDrawer } from './HelpDrawer';
 import { SplitHeaderLeft } from './split-layout/components/SplitHeader';
 import { SplitTabs } from './split-layout/components/SplitTabs';
-import { SplitToolbarRight } from './split-layout/components/SplitToolbar';
 import type { SplitPanelContextType } from './split-layout/context';
 import { SplitPanelContext } from './split-layout/context';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
@@ -80,51 +77,31 @@ const ViewTab: ParentComponent<{
   );
 };
 
-const DefaultViewTab: Component<{
-  viewId: ViewId;
-}> = (props) => {
-  return (
-    <ViewTab viewId={props.viewId}>
-      <Suspense>
-        <UnifiedListView />
-      </Suspense>
-    </ViewTab>
-  );
-};
-
-const ConditionalViewTab: ParentComponent<{
-  view: Exclude<View, DefaultView>;
-}> = (props) => {
-  return (
-    <Show when={VIEWS.includes(props.view)}>
-      <ViewTab viewId={props.view}>{props.children}</ViewTab>
-    </Show>
-  );
-};
-
 const ViewWithSearch: Component<{
   viewId: ViewId;
 }> = (props) => {
   return (
-    <Switch>
-      <Match when={props.viewId === 'emails'}>
-        <ConditionalViewTab view="emails">
+    <ViewTab viewId={props.viewId}>
+      <Switch>
+        {/* <Match
+          when={props.viewId === 'emails' && DEFAULT_VIEWS.includes('emails')}
+        >
           <Suspense>
             <EmailView />
           </Suspense>
-        </ConditionalViewTab>
-      </Match>
-      <Match when={props.viewId === 'all'}>
-        <ConditionalViewTab view="all">
+        </Match> */}
+        <Match when={props.viewId === 'all' && DEFAULT_VIEWS.includes('all')}>
           <Suspense>
             <AllView />
           </Suspense>
-        </ConditionalViewTab>
-      </Match>
-      <Match when={true}>
-        <DefaultViewTab viewId={props.viewId} />
-      </Match>
-    </Switch>
+        </Match>
+        <Match when={true}>
+          <Suspense>
+            <UnifiedListView />
+          </Suspense>
+        </Match>
+      </Switch>
+    </ViewTab>
   );
 };
 
@@ -133,13 +110,21 @@ const PreviewPanelContent: Component<{
   orchestrator: BlockOrchestrator;
   splitPanelContext: SplitPanelContextType;
 }> = (props) => {
-  const blockInstance = () =>
-    props.orchestrator.createBlockInstance(
+  const blockInstance = () => {
+    const aliasContext = isTaskEntity(props.selectedEntity)
+      ? ({
+          alias: 'task',
+          baseType: 'md',
+        } as BlockAliasContext)
+      : undefined;
+    return props.orchestrator.createBlockInstance(
       props.selectedEntity.type === 'document'
-        ? fileTypeToBlockName(props.selectedEntity.fileType)
+        ? fileTypeToResolvedBlockName(props.selectedEntity.fileType)
         : props.selectedEntity.type,
-      props.selectedEntity.id
+      props.selectedEntity.id,
+      { aliasContext }
     );
+  };
   const [interactedWith, setInteractedWith] = createSignal(false);
 
   createRenderEffect((prevId: string) => {
@@ -249,13 +234,13 @@ export function Soup() {
     hotkey: ['shift+/'],
     scopeId: splitHotkeyScope,
     description: () =>
-      `${showHelpDrawer().has(selectedView()) ? 'Hide' : 'Show'} help drawer`,
+      `${showHelpDrawer().has(selectedView() as DefaultView) ? 'Hide' : 'Show'} help drawer`,
     hotkeyToken: TOKENS.split.showHelpDrawer,
     keyDownHandler: () => {
-      if (showHelpDrawer().has(selectedView())) {
-        setShowHelpDrawer(new Set<string>());
+      if (showHelpDrawer().has(selectedView() as DefaultView)) {
+        setShowHelpDrawer(new Set<DefaultView>());
       } else {
-        setShowHelpDrawer(new Set([...DEFAULT_VIEWS, ...CONDITIONAL_VIEWS]));
+        setShowHelpDrawer(new Set(DEFAULT_VIEWS));
       }
       return true;
     },
@@ -295,25 +280,25 @@ export function Soup() {
   createEffectOnEntityTypeNotification(
     notificationSource,
     'channel',
-    (notifications) => {
+    (notification) => {
       entityQueryClient.invalidateQueries({
         queryKey: queryKeys.all.channel,
       });
-      const eventItemIds = new Set(
-        notifications.map(({ eventItemId }) => eventItemId)
-      );
-      eventItemIds.forEach((eventItemId) => {
-        entityQueryClient.invalidateQueries({
-          queryKey: queryKeys.notification({ eventItemId }),
-        });
+      entityQueryClient.invalidateQueries({
+        queryKey: queryKeys.notification({
+          eventItemId: notification.eventItemId,
+        }),
       });
     }
   );
-  createEffectOnEntityTypeNotification(notificationSource, 'email', () =>
+
+  createEffectOnEntityTypeNotification(notificationSource, 'email', () => {
     entityQueryClient.invalidateQueries({
-      queryKey: queryKeys.all.email,
-    })
-  );
+      // HACK: this needs to be improved, since we use a single query, per entity invalidations
+      // become a little more complicated.
+      queryKey: queryKeys.all.entity,
+    });
+  });
 
   const saveViewMutation = useUpsertSavedViewMutation();
 
@@ -324,7 +309,7 @@ export function Soup() {
   const TabContextMenu = (props: { value: ViewId; label: string }) => {
     const [isModalOpen, setIsModalOpen] = createSignal(false);
     const isDefaultView = () =>
-      VIEWCONFIG_DEFAULTS_IDS.includes(props.value as View);
+      VIEWCONFIG_DEFAULTS_IDS.includes(props.value as DefaultView);
     return (
       <Show when={!isDefaultView()}>
         <ContextMenu>
@@ -402,7 +387,6 @@ export function Soup() {
             class="@container/soup [container-type:inline-size] flex flex-col gap-1 size-full overflow-x-clip"
             classList={{
               'border-r border-edge-muted': preview(),
-              'pt-2 pb-0': showHelpDrawer().has(selectedView()),
             }}
             value={selectedView()}
             onChange={setSelectedView}
@@ -450,7 +434,7 @@ export function Soup() {
           />
         </Show>
       </div>
-      <Show when={showHelpDrawer().has(selectedView())}>
+      <Show when={showHelpDrawer().has(selectedView() as DefaultView)}>
         <HelpDrawer viewId={view().id} />
       </Show>
     </div>
@@ -461,32 +445,32 @@ function AllView() {
   return <UnifiedListView />;
 }
 
-function EmailView() {
-  const {
-    emailViewSignal: [emailView, setEmailView],
-    viewsDataStore,
-    selectedView,
-  } = useSplitPanelOrThrow().unifiedListContext;
-  const viewData = createMemo(() => viewsDataStore[selectedView()]);
+// function EmailView() {
+//   const {
+//     emailViewSignal: [emailView, setEmailView],
+//     viewsDataStore,
+//     selectedView,
+//   } = useSplitPanelOrThrow().unifiedListContext;
+//   const viewData = createMemo(() => viewsDataStore[selectedView()]);
 
-  return (
-    <>
-      <UnifiedListView />
-      <SplitToolbarRight>
-        <div class="flex flex-row items-center pr-2">
-          <SegmentedControl
-            disabled={!!viewData().searchText}
-            size="SM"
-            label="View"
-            list={['inbox', 'sent', 'drafts']}
-            value={emailView()}
-            onChange={setEmailView}
-          />
-        </div>
-      </SplitToolbarRight>
-    </>
-  );
-}
+//   return (
+//     <>
+//       <UnifiedListView />
+//       <SplitToolbarRight>
+//         <div class="flex flex-row items-center pr-2">
+//           <SegmentedControl
+//             disabled={!!viewData().searchText}
+//             size="SM"
+//             label="View"
+//             list={['inbox', 'sent', 'drafts']}
+//             value={emailView()}
+//             onChange={setEmailView}
+//           />
+//         </div>
+//       </SplitToolbarRight>
+//     </>
+//   );
+// }
 
 export const useUpsertSavedViewMutation = () => {
   const queryClient = useQueryClient();
@@ -503,7 +487,7 @@ export const useUpsertSavedViewMutation = () => {
           }
     ) => {
       const isDefaultView = VIEWCONFIG_DEFAULTS_IDS.includes(
-        viewData.id as View
+        viewData.id as DefaultView
       );
       if ('config' in viewData) {
         // if data id is in defaults, exclude default, set up args to create new view

@@ -22,7 +22,7 @@ import { createMenuOpen, Launcher, setCreateMenuOpen } from './Launcher';
 import { Paywall } from './paywall/Paywall';
 import { QuickCreateMenu } from './QuickCreateMenu';
 import { RightbarWrapper } from './rightbar/Rightbar';
-import { Settings, setViewportOffset } from './settings/Settings';
+import { SettingsWrapper } from './settings/SettingsWrapper';
 
 const AUTH_URLS = [
   '/app/login',
@@ -62,8 +62,6 @@ export function Layout(props: RouteSectionProps) {
         '--viewport-height',
         `${window.visualViewport.height}px`
       );
-
-      setViewportOffset(window.visualViewport.offsetTop);
     }
   };
 
@@ -72,7 +70,6 @@ export function Layout(props: RouteSectionProps) {
       window.visualViewport.addEventListener('resize', handleResize);
       window.visualViewport.addEventListener('scroll', handleResize);
       handleResize();
-      setViewportOffset(window.visualViewport.offsetTop);
     }
 
     if (sessionStorage.getItem('showUpgradeModal') === 'true') {
@@ -127,7 +124,6 @@ export function Layout(props: RouteSectionProps) {
       }}>
       <Show when={isAuthenticated()}>
         <GlobalShortcuts />
-        <Settings />
         <Suspense>
           <KommandMenu />
         </Suspense>
@@ -156,6 +152,7 @@ export function Layout(props: RouteSectionProps) {
               {props.children}
             </Resize.Panel>
             <RightbarWrapper />
+            <SettingsWrapper />
           </ItemDndProvider>
         </Resize.Zone>
       </div>

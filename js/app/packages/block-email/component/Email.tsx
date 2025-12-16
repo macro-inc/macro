@@ -1,8 +1,9 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
+import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
+import { toast } from '@core/component/Toast/Toast';
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerScopeSignalHotkey } from '@core/hotkey/utils';
 import { createMethodRegistration } from '@core/orchestrator';
-import { createActiveTarget } from '@core/signal/activeTarget';
 import {
   blockElementSignal,
   blockHotkeyScopeSignal,
@@ -10,19 +11,19 @@ import {
 import { blockHandleSignal } from '@core/signal/load';
 import {
   type ContactInfo,
-  isPersonEmailContact,
   recipientEntityMapper,
   useContacts,
-  useEmailContacts,
-  useOrganizationUsers,
 } from '@core/user';
+import { whenSettled } from '@core/util/whenSettled';
 import {
   createEffectOnEntityTypeNotification,
-  isNotificationWithMetadata,
+  isNewEmail,
 } from '@notifications';
-import { emailClient } from '@service-email/client';
+import {
+  useArchiveThreadMutation,
+  useThreadQuery,
+} from '@queries/email/thread';
 import type { MessageWithBodyReplyless } from '@service-email/generated/schemas';
-import type { Thread } from '@service-email/generated/schemas/thread';
 import { createCallback } from '@solid-primitives/rootless';
 import { useSearchParams } from '@solidjs/router';
 import {
@@ -37,10 +38,7 @@ import {
 import { createStore } from 'solid-js/store';
 import { URL_PARAMS } from '../constants';
 import { isScrollingToMessage } from '../signal/scrollState';
-import type { createThreadMessagesResource } from '../signal/threadMessages';
-import { useThreadNavigation } from '../signal/threadNavigation';
 import { registerEmailHotkeys } from '../util/emailHotkeys';
-import { getHeaderValue } from '../util/getHeaderValue';
 import {
   getLastMessageId,
   scrollToLastMessage,
@@ -54,25 +52,40 @@ import { TopBar } from './TopBar';
 
 type EmailProps = {
   title: Accessor<string>;
-  threadMessagesResource: Accessor<ReturnType<
-    typeof createThreadMessagesResource
-  > | null>;
-  threadData: Accessor<Thread | undefined>;
+  threadId: Accessor<string>;
 };
 
 export function Email(props: EmailProps) {
   const scopeId = blockHotkeyScopeSignal.get;
 
   const setIsScrollingToMessage = isScrollingToMessage.set;
-  const { navigateThread } = useThreadNavigation();
   const blockElement = blockElementSignal.get;
+  const {
+    unifiedListContext: {
+      entitiesSignal: [entities],
+      actionRegistry,
+    },
+  } = useSplitPanelOrThrow();
+
+  const threadQuery = useThreadQuery(props.threadId);
+  const threadData = () => threadQuery.data?.thread;
+  const hasMore = () => threadQuery.data?.hasMore ?? false;
+  const isFetching = () => threadQuery.isFetching;
+  const fetchNextPage = () => threadQuery.fetchNextPage();
+
+  const { mutate: archiveThreadMutate } = useArchiveThreadMutation({
+    onError: () => {
+      toast.failure('Failed to archive thread');
+    },
+  });
 
   const [searchParams] = useSearchParams();
   const searchParamsMessageId = () => {
-    if (typeof searchParams.message_id === 'string') {
-      return searchParams.message_id;
-    } else if (Array.isArray(searchParams.message_id)) {
-      return searchParams.message_id[0];
+    const messageID = searchParams[URL_PARAMS.messageId];
+    if (typeof messageID === 'string') {
+      return messageID;
+    } else if (Array.isArray(messageID)) {
+      return messageID[0];
     }
     return undefined;
   };
@@ -82,8 +95,7 @@ export function Email(props: EmailProps) {
 
   const filteredMessages = createMemo(() => {
     return (
-      props
-        .threadData()
+      threadData()
         ?.messages.filter((message) => !message.is_draft)
         .sort((a, b) => {
           if (a.internal_date_ts && b.internal_date_ts) {
@@ -107,31 +119,37 @@ export function Email(props: EmailProps) {
   // Map Parent Messages to Draft Children
   // ============================================
 
-  const initialDraftChildren: Record<string, MessageWithBodyReplyless> =
-    (() => {
-      const t = untrack(() => props.threadData());
-      const map: Record<string, MessageWithBodyReplyless> = {};
-      if (!t) return map;
-      for (const message of t.messages) {
-        if (!(message.is_draft && message.body_text?.trim() !== '')) continue;
-        const headers = message.headers_json as unknown;
-        const parentMessageDbId = getHeaderValue(headers, 'Macro-In-Reply-To');
-        if (!parentMessageDbId) continue;
-        map[parentMessageDbId] = message;
-      }
-      return map;
-    })();
-
   const [messageDbIdToDraftChildren, setMessageDbIdToDraftChildren] =
-    createStore<Record<string, MessageWithBodyReplyless>>(initialDraftChildren);
+    createStore<Record<string, MessageWithBodyReplyless>>({});
+  const [draftsSettled, setDraftsSettled] = createSignal(false);
+
+  whenSettled(
+    threadQuery,
+    (data) => {
+      const t = data.thread;
+      if (!t) return;
+      const map: Record<string, MessageWithBodyReplyless> = {};
+      for (const message of t.messages) {
+        if (!message.is_draft || message.body_text?.trim().length === 0)
+          continue;
+        const replyingToId = message.replying_to_id;
+        if (replyingToId) {
+          map[replyingToId] = message;
+        }
+      }
+      setMessageDbIdToDraftChildren(map);
+      setDraftsSettled(true);
+    },
+    (error) => {
+      console.error('Failed to load thread data:', error);
+      toast.failure('Failed to load email thread. Please try again.');
+    }
+  );
 
   // ============================================
   // SHARED RECIPIENT OPTIONS
   // ============================================
-  const organizationUsers = useOrganizationUsers();
   const contacts = useContacts();
-  const emailContacts = useEmailContacts();
-  const personEmailContacts = emailContacts().filter(isPersonEmailContact);
 
   const [augmentedRecipients, setAugmentedRecipients] = createSignal<
     EmailRecipient[]
@@ -159,24 +177,20 @@ export function Email(props: EmailProps) {
   const recipientOptions = createMemo<EmailRecipient[]>(() => {
     const optionsMap = new Map<string, EmailRecipient>();
 
-    organizationUsers()
-      .map(recipientEntityMapper('user'))
-      .forEach((u) => optionsMap.set(u.data.email, u));
     contacts()
       .map(recipientEntityMapper('user'))
       .forEach((u) => optionsMap.set(u.data.email, u));
-    personEmailContacts
-      .map(recipientEntityMapper('contact'))
-      .forEach((c) => optionsMap.set(c.data.email, c));
 
-    const t = props.threadData();
+    const t = threadData();
     if (t) {
       const seen = new Map<string, ContactInfo>();
+
+      const add = (c: ContactInfo) => {
+        const existing = seen.get(c.email);
+        if (!existing || (!existing.name && c.name)) seen.set(c.email, c);
+      };
+
       t.messages.forEach((m) => {
-        const add = (c: ContactInfo) => {
-          const existing = seen.get(c.email);
-          if (!existing || (!existing.name && c.name)) seen.set(c.email, c);
-        };
         m.to.forEach(add);
         m.cc.forEach(add);
         m.bcc.forEach(add);
@@ -211,8 +225,12 @@ export function Email(props: EmailProps) {
   const [focusedMessageId, setFocusedMessageId] = createSignal<string>();
   const [isContainerFilled, setIsContainerFilled] = createSignal(false);
   const [hasHandledTarget, setHasHandledTarget] = createSignal(false);
+  const [targetMessageActive, setTargetMessageActive] = createSignal(false);
 
-  const activeTargetMessageId = createActiveTarget(targetMessageId);
+  const activeTargetMessageId = createMemo(() => {
+    if (!targetMessageActive()) return undefined;
+    return untrack(targetMessageId);
+  });
 
   const blockHandle = blockHandleSignal.get;
   createMethodRegistration(blockHandle, {
@@ -232,14 +250,12 @@ export function Email(props: EmailProps) {
   // ============================================
 
   /**
-   * Waits for a resource to finish loading
+   * Waits for the query to finish fetching
    */
-  const waitForResourceLoad = (
-    resource: ReturnType<typeof createThreadMessagesResource>
-  ): Promise<void> => {
+  const waitForQueryLoad = (): Promise<void> => {
     return new Promise((resolve) => {
       const checkInterval = setInterval(() => {
-        if (!resource.loading()) {
+        if (!threadQuery.isFetching) {
           clearInterval(checkInterval);
           resolve();
         }
@@ -251,11 +267,10 @@ export function Email(props: EmailProps) {
    * Loads messages until the target message is found or no more messages available
    */
   const loadMessagesUntilFound = async (
-    targetMessageId: string,
-    resource: ReturnType<typeof createThreadMessagesResource>
+    targetMessageId: string
   ): Promise<boolean> => {
     while (true) {
-      const data = resource.resource();
+      const data = threadQuery.data;
 
       // Check if message exists in current batch
       const messageExists = data?.thread.messages.some(
@@ -268,8 +283,8 @@ export function Email(props: EmailProps) {
       if (!data?.hasMore) return false;
 
       // Load next batch and wait
-      resource.loadMore();
-      await waitForResourceLoad(resource);
+      threadQuery.fetchNextPage();
+      await waitForQueryLoad();
     }
   };
 
@@ -277,12 +292,10 @@ export function Email(props: EmailProps) {
    * Loads one more batch of messages for better scroll context
    * (useful when target message is at the edge of loaded messages)
    */
-  const loadContextBatch = async (
-    resource: ReturnType<typeof createThreadMessagesResource>
-  ): Promise<void> => {
-    if (resource.resource()?.hasMore && !resource.loading()) {
-      resource.loadMore();
-      await waitForResourceLoad(resource);
+  const loadContextBatch = async (): Promise<void> => {
+    if (hasMore() && !isFetching()) {
+      fetchNextPage();
+      await waitForQueryLoad();
     }
   };
 
@@ -303,6 +316,11 @@ export function Email(props: EmailProps) {
 
     if (success) {
       setFocusedMessageId(messageId);
+      // Flash the message after scroll completes
+      setTargetMessageActive(true);
+      setTimeout(() => {
+        setTargetMessageActive(false);
+      }, 800);
       // Clear scrolling flag after animation
       setTimeout(() => setIsScrollingToMessage(false), 1000);
     } else {
@@ -322,11 +340,15 @@ export function Email(props: EmailProps) {
     const messages = untrack(() => filteredMessages());
     if (!messages) return;
     if (container && messages.length > 0) {
-      scrollToLastMessage(container, behavior);
+      // We need to scroll after focus because the scroll needs to account
+      // for the size of the message with the focused styling applied
       const lastMessageId = getLastMessageId(messages);
       if (lastMessageId) {
         setFocusedMessageId(lastMessageId);
       }
+      queueMicrotask(() => {
+        scrollToLastMessage(container, behavior);
+      });
     }
   };
 
@@ -353,22 +375,16 @@ export function Email(props: EmailProps) {
   // This effect ensures we have enough messages to fill the viewport
   // to avoid a sparse UI on initial load
   createEffect(() => {
-    const resource = props.threadMessagesResource();
     const messageList = messagesRef();
     const containerRef = messagesContainerRef();
 
     // Skip if dependencies not ready
-    if (
-      !resource ||
-      !messageList ||
-      !containerRef ||
-      !untrack(() => props.threadData()?.db_id)
-    ) {
+    if (!messageList || !containerRef || !untrack(threadData)?.db_id) {
       return;
     }
 
     // Skip if still loading or already filled
-    if (resource.loading() || untrack(isContainerFilled)) {
+    if (isFetching() || untrack(isContainerFilled)) {
       return;
     }
 
@@ -376,8 +392,8 @@ export function Email(props: EmailProps) {
     const containerHeight = containerRef.getBoundingClientRect().height;
 
     // Load more if container isn't filled
-    if (messageListHeight < containerHeight) {
-      resource.loadMore();
+    if (messageListHeight < containerHeight && hasMore()) {
+      fetchNextPage();
     } else {
       setIsContainerFilled(true);
     }
@@ -390,14 +406,11 @@ export function Email(props: EmailProps) {
   // This effect should only run once.
   createEffect(() => {
     if (hasHandledTarget()) return;
-    const resource = props.threadMessagesResource();
-    if (!resource) return;
+    const data = threadQuery.data;
+    if (!data) return;
     // Check if initial loading is complete
-    const resourceData = resource.resource();
     const isInitialLoadComplete =
-      !!resourceData &&
-      (isContainerFilled() || resourceData.hasMore === false) &&
-      !resource.loading();
+      (isContainerFilled() || data.hasMore === false) && !isFetching();
 
     // Skip if not ready
     if (!isInitialLoadComplete) {
@@ -405,7 +418,7 @@ export function Email(props: EmailProps) {
     }
 
     // Skip if basic requirements not met
-    if (!untrack(() => props.threadData()) || !untrack(() => messagesRef())) {
+    if (!untrack(threadData) || !untrack(() => messagesRef())) {
       return;
     }
 
@@ -440,19 +453,16 @@ export function Email(props: EmailProps) {
     const messages = untrack(() => filteredMessages());
     if (!messages) return;
     const targetIndex = messages.findIndex((m) => m.db_id === messageId);
-    const resource = untrack(() => props.threadMessagesResource());
-
-    if (!resource) return;
 
     // Case 1: Message not in current loaded batch - need to load more
     if (targetIndex < 0) {
       try {
-        const found = await loadMessagesUntilFound(messageId, resource);
+        const found = await loadMessagesUntilFound(messageId);
         if (found) {
           // Load one more batch for scroll context
-          await loadContextBatch(resource);
+          await loadContextBatch();
           // Scroll to the message after DOM updates
-          setTimeout(() => performScrollToMessage(messageId, 'smooth'));
+          setTimeout(() => performScrollToMessage(messageId, 'instant'));
         } else {
           // Message not found, fallback to last message
           setTimeout(() => scrollToLastMessageAndFocus('instant'));
@@ -464,22 +474,38 @@ export function Email(props: EmailProps) {
     }
     // Case 2: Message is first in current batch - load more for context
     else if (targetIndex === 0) {
-      await loadContextBatch(resource);
-      setTimeout(() => performScrollToMessage(messageId, 'smooth'));
+      await loadContextBatch();
+      setTimeout(() => performScrollToMessage(messageId, 'instant'));
     }
     // Case 3: Message is in current batch with sufficient context
     else {
-      setTimeout(() => performScrollToMessage(messageId, 'smooth'));
+      setTimeout(() => performScrollToMessage(messageId, 'instant'));
     }
   }
 
   const archiveThread = createCallback(() => {
-    if (!props.threadData()) return false;
-    emailClient.flagArchived({
-      value: props.threadData()!.inbox_visible,
-      id: props.threadData()!.db_id!,
+    const thread = threadData();
+    if (!thread?.db_id) return false;
+    archiveThreadMutate({
+      threadId: thread.db_id,
+      archive: thread.inbox_visible,
     });
-    navigateThread('down');
+
+    if (!props) return false;
+
+    const selectedEntity = entities()?.find(
+      (entity) => entity.id === threadData()!.db_id
+    );
+
+    if (selectedEntity) {
+      actionRegistry.execute('mark_as_done', selectedEntity);
+    } else {
+      archiveThreadMutate({
+        threadId: thread.db_id,
+        archive: thread.inbox_visible,
+      });
+    }
+
     return true;
   });
 
@@ -536,7 +562,7 @@ export function Email(props: EmailProps) {
   const navigateToNextMessage = createCallback(() => navigateMessage('next'));
 
   onMount(() => {
-    registerEmailHotkeys(scopeId(), props.threadData, {
+    registerEmailHotkeys(scopeId(), threadData, {
       archiveThread,
       navigateToPreviousMessage,
       navigateToNextMessage,
@@ -554,32 +580,19 @@ export function Email(props: EmailProps) {
   });
 
   const notificationSource = useGlobalNotificationSource();
+
   createEffectOnEntityTypeNotification(
     notificationSource,
     'email',
-    (notifications) => {
-      for (const notification of notifications) {
-        if (!isNotificationWithMetadata(notification)) return;
-        const metadata = notification.notificationMetadata;
-        if (
-          !metadata ||
-          typeof metadata !== 'object' ||
-          !('thread_id' in metadata)
-        )
-          return;
-
-        const notificationThreadId = (metadata as { thread_id: string })
-          .thread_id;
-
-        if (notificationThreadId === props.threadData()?.db_id) {
-          const resource = props.threadMessagesResource();
-          if (!resource) return;
-          resource.refresh();
-          break;
-        }
+    (notification) => {
+      if (!isNewEmail(notification)) return;
+      const notificationThreadId = notification.notificationMetadata.threadId;
+      if (notificationThreadId === threadData()?.db_id) {
+        threadQuery.refetch();
       }
     }
   );
+
   let markdownDomRef!: HTMLDivElement;
 
   registerScopeSignalHotkey(scopeId, {
@@ -596,6 +609,8 @@ export function Email(props: EmailProps) {
     hide: true,
   });
 
+  const refetch = () => threadQuery.refetch();
+
   return (
     <EmailProvider
       value={{
@@ -605,13 +620,18 @@ export function Email(props: EmailProps) {
         setMessageDbIdToDraftChildren,
         messagesRef,
         setMessagesRef: setmessagesRef,
-        threadMessagesResource: props.threadMessagesResource,
+        threadId: props.threadId,
         focusedMessageId,
         setFocusedMessageId,
         filteredMessages,
-        threadData: props.threadData,
+        threadData,
+        hasMore,
+        isFetching,
+        fetchNextPage,
+        refetch,
         archiveThread,
         activeTargetMessageId,
+        draftsSettled,
       }}
     >
       <EmailFormContextProvider>
@@ -624,7 +644,7 @@ export function Email(props: EmailProps) {
             <MessageList initialLoadComplete={hasHandledTarget()} />
           </div>
           {/* <div class="z-4 absolute left-[44px] bottom-[92px] w-[21px] rounded-bl-xl min-h-[84px] border-l border-b border-edge" /> */}
-          <Show when={filteredMessages()?.at(-1)}>
+          <Show when={draftsSettled() && filteredMessages()?.at(-1)}>
             {(lastMessage) => (
               <div class="shrink-0 w-full px-4 pb-2">
                 <div class="w-full flex flex-row justify-center bg-panel macro-message-width mx-auto">

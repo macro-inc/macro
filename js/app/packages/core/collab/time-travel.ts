@@ -1,4 +1,5 @@
 import { isErr } from '@core/util/maybeResult';
+import { syncServiceClient } from '@service-sync/client';
 import {
   type Change,
   type JsonOp,
@@ -8,7 +9,6 @@ import {
   type TextOp,
   type TreeOp,
 } from 'loro-crdt';
-import { syncServiceClient } from '../../service-sync/client';
 
 export type BaseHistory = {
   readonly userId: string;

@@ -65,13 +65,13 @@ export function createMessageActions(params: {
       icon: ReplyIcon,
     },
     {
-      text: 'Copy Link to Message',
+      text: 'Copy Link',
       onClick: copyLinkToMessage,
       icon: LinkIcon,
       enabled: true,
     },
     {
-      text: 'Copy Message Text',
+      text: 'Copy Message',
       onClick: copyMessageText,
       icon: CopyIcon,
       enabled: true,

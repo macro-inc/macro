@@ -6,14 +6,14 @@ import {
   datadogAgentContainer,
   fargateLogRouterSidecarContainer,
   serviceLoadBalancer,
-} from '@resources';
-import { EcrImage } from '@service';
+} from '../../packages/resources';
+import { EcrImage } from '../../packages/service';
 import {
   awsRegion,
   BASE_DOMAIN,
   CLOUD_TRAIL_SNS_TOPIC_ARN,
   stack,
-} from '@shared';
+} from '../../packages/shared';
 
 const BASE_NAME = 'organization-service';
 const BASE_PATH = '../../../rust/cloud-storage';
@@ -204,6 +204,7 @@ export class OrganizationService extends pulumi.ComponentResource {
             service: {
               name: BASE_NAME,
               image: image.image.imageUri,
+              stopTimeout: 10, // 10 seconds to force kill the task
               cpu: stack === 'prod' ? 1024 : 256,
               memory: stack === 'prod' ? 2048 : 512,
               environment: containerEnvVars,

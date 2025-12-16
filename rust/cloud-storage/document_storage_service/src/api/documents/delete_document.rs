@@ -13,8 +13,10 @@ use model::response::{
 };
 use model::user::UserContext;
 use models_permissions::share_permission::access_level::OwnerAccessLevel;
+use properties::PropertiesService;
 use serde::Deserialize;
 use sqs_client::search::{SearchQueueMessage, document::DocumentId};
+use uuid::Uuid;
 
 #[derive(Deserialize)]
 pub struct Params {
@@ -46,6 +48,7 @@ pub async fn delete_document_handler(
     doc: Extension<DocumentBasic>,
 ) -> impl IntoResponse {
     tracing::info!("delete document");
+
     // soft delete the document, this will remove the history and pins and mark the document as deleted
     if let Err(e) = macro_db_client::document::soft_delete_document(&state.db, &document_id).await {
         tracing::error!(error=?e, document_id=?document_id, "unable to soft delete document");
@@ -53,6 +56,24 @@ pub async fn delete_document_handler(
             .message("unable to delete document")
             .is_error(true)
             .send(StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    // Unlink task parent/subtasks if this is a task (no-op for non-tasks)
+    if let Ok(task_id) = Uuid::parse_str(&document_id) {
+        if let Err(e) = state
+            .properties_service
+            .link_parent_task(task_id, None)
+            .await
+        {
+            tracing::warn!(error = ?e, "failed to unlink parent task on delete");
+        }
+        if let Err(e) = state
+            .properties_service
+            .link_subtasks(task_id, vec![])
+            .await
+        {
+            tracing::warn!(error = ?e, "failed to unlink subtasks on delete");
+        }
     }
 
     let response_data = GenericSuccessResponse { success: true };
