@@ -212,7 +212,6 @@ async fn handle_attachment_upload(
     payload: &UpsertMessagePayload,
     message_attachment_count: usize,
 ) -> result::Result<(), ProcessingError> {
-    // temporarily only for macro emails, for testing purposes
     if cfg!(not(feature = "attachment_upload")) || message_attachment_count == 0 {
         return Ok(());
     }
