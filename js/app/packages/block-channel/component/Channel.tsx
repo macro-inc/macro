@@ -11,7 +11,10 @@ import {
   isDraggingOverChannelSignal,
   isValidChannelDragSignal,
 } from '@block-channel/signal/attachment';
-import { refetchChannelData } from '@block-channel/signal/channel';
+import {
+  channelStore,
+  refetchChannelData,
+} from '@block-channel/signal/channel';
 import { activeThreadIdSignal } from '@block-channel/signal/threads';
 import { handleFileUpload } from '@block-channel/utils/inputAttachments';
 import { withAnalytics } from '@coparse/analytics';
@@ -79,6 +82,7 @@ export function createChannelRefetchEffect(channelId: string) {
 }
 
 export function Channel(props: { data: Required<ChannelData> }) {
+  const channelStoreData = channelStore.get;
   const channel = useChannelQuery(() => props.data.channel.id);
 
   const [_activeThreadId, setActiveThreadId] = activeThreadIdSignal;
@@ -351,7 +355,7 @@ export function Channel(props: { data: Required<ChannelData> }) {
           />
           <MessageList
             channelId={channelId}
-            messages={channel.data?.messages ?? []}
+            messages={channelStoreData.messages}
             focusedMessageId={focusedMessageId}
             setFocusedMessageId={setFocusedMessageId}
             targetMessage={targetMessage}
