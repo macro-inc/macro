@@ -7,10 +7,11 @@ import { useBlockAliasedName, useBlockId, useBlockName } from '@core/block';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import { createEffect, createMemo, createSignal, Show } from 'solid-js';
 import { RecipientSelector } from '@core/component/RecipientSelector';
-import { Switch as KobalteSwitch } from '@kobalte/core/switch';
+import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
 import { blockNameToItemType } from '@service-storage/client';
 import { useSendMessageToPeople } from '@core/util/channels';
 import { getDestinationFromOptions } from './NewMessage';
+import { TextButton } from '@core/component/TextButton';
 import type { WithCustomUserInput } from '@core/user';
 import { ShareOptions } from './TopBar/ShareButton';
 import { withAnalytics } from '@coparse/analytics';
@@ -227,33 +228,24 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
               </div>
             </div>
 
-            <KobalteSwitch
+            <ToggleSwitch
               checked={sendAsGroupMessage() && canSendAsGroup()}
               onChange={setSendAsGroupMessage}
               disabled={!canSendAsGroup()}
-              class={canSendAsGroup() ? '' : 'cursor-not-allowed'}
-            >
-              <KobalteSwitch.Input
-                disabled={!canSendAsGroup()}
-                class="sr-only"
-              />
-              <KobalteSwitch.Control
-                class={`mt-1.5 inline-flex h-5 w-9 rounded-full border-2 border-transparent transition-colors bg-edge data-[checked]:bg-accent
-                ${canSendAsGroup() ? 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2' : ''}`}
-              >
-                <KobalteSwitch.Thumb class="block bg-dialog rounded-full w-4 h-4 transition-transform data-[checked]:translate-x-4" />
-              </KobalteSwitch.Control>
-            </KobalteSwitch>
+              switchRootClass={canSendAsGroup() ? '' : 'cursor-not-allowed'}
+              trueLabel="ON"
+              falseLabel="OFF"
+              size="SM"
+            />
           </div>
           <div class="flex justify-between items-center gap-1 mt-1">
             <div class="flex flex-row justify-start items-center gap-0 w-full h-8 cursor-default">
-              <button
-                class="flex flex-row justify-center items-center bg-accent/80 hover:bg-accent active:bg-accent px-2 rounded-lg w-full h-full font-semibold text-dialog text-sm leading-5 whitespace-nowrap gap-2"
+              <TextButton
                 onClick={handleSubmit}
-              >
-                <PaperPlaneRight class="flex w-4 h-4" />
-                {'Share and send message'}
-              </button>
+                icon={PaperPlaneRight}
+                theme="accent"
+                text="Share"
+              />
             </div>
             <Show when={props.submitPermissionInfo?.userPermissions === Permissions.OWNER}>
               <div class="w-32">

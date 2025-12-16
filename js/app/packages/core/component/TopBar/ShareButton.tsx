@@ -6,11 +6,11 @@ import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel
 import { TrackingEvents } from '@coparse/analytics/src/types/TrackingEvents';
 import { beveledCorners } from '../../../block-theme/signals/themeSignals';
 import { DropdownMenuContent, MENU_ITEM_CLASS, MenuItem } from '../Menu';
+import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
 import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { blockEditPermissionEnabledSignal } from '@core/signal/load';
 import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
-import { Switch as KobalteSwitch } from '@kobalte/core/switch';
 import { useIsDocumentOwner } from '@core/signal/permissions';
 import { createCallback } from '@solid-primitives/rootless';
 import { commsServiceClient } from '@service-comms/client';
@@ -541,15 +541,13 @@ export function ShareModal(props: ShareModalProps) {
                     </div>
                   </div>
 
-                  <KobalteSwitch
+                  <ToggleSwitch
                     onChange={togglePublicAccess}
                     checked={isPublic()}
-                  >
-                    <KobalteSwitch.Input class="sr-only" />
-                    <KobalteSwitch.Control class="inline-flex bg-edge/30 data-[checked]:bg-accent mt-1 border-2 border-transparent rounded-full focus-visible:outline-none hover:ring-1 hover:ring-edge focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 w-11 h-6 transition-colors">
-                      <KobalteSwitch.Thumb class="block bg-dialog rounded-full w-5 h-5 transition-transform data-[checked]:translate-x-5" />
-                    </KobalteSwitch.Control>
-                  </KobalteSwitch>
+                    trueLabel="ON"
+                    falseLabel="OFF"
+                    size="SM"
+                  />
                 </div>
 
                 <Show when={props.itemType !== 'chat'}>
