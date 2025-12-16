@@ -660,7 +660,6 @@ export function ShareButton(props: ShareButtonProps) {
               }
               else{
                 track(TrackingEvents.SHARE.OPEN);
-                ShareLinkAction().action(e);
                 setIsSharePermOpen(true);
               }
             }}
