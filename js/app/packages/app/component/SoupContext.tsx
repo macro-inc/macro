@@ -239,6 +239,16 @@ export function createNavigationEntityListShortcut({
   const [attachEntityHotkeys, _entityHotkeyScope] = useHotkeyDOMScope('entity');
   const selectedEntity = () => viewData().selectedEntity;
 
+  const setSelectedEntity = (entity: EntityData | undefined) => {
+    setViewDataStore(
+      selectedView(),
+      produce((state) => {
+        if (!state) return;
+        state.selectedEntity = entity;
+      })
+    );
+  };
+
   const notificationSource = useGlobalNotificationSource();
   const userId = useUserId();
 
@@ -277,13 +287,7 @@ export function createNavigationEntityListShortcut({
       setViewDataStore(selectedView(), 'selectedEntities', []);
     }
     if (entity) {
-      setViewDataStore(
-        selectedView(),
-        produce((state) => {
-          if (!state) return;
-          state.selectedEntity = entity;
-        })
-      );
+      setSelectedEntity(entity);
       setViewDataStore(selectedView(), 'highlightedId', entity.id);
       const nextIndex = entities()?.findIndex(({ id }) => id === entity.id);
       if (nextIndex !== undefined && nextIndex > -1) {
@@ -900,13 +904,7 @@ export function createNavigationEntityListShortcut({
         }
         batch(() => {
           setViewDataStore(selectedView(), 'highlightedId', selectedEntity.id);
-          setViewDataStore(
-            selectedView(),
-            produce((state) => {
-              if (!state) return;
-              state.selectedEntity = selectedEntity;
-            })
-          );
+          setSelectedEntity(selectedEntity);
         });
       }
 

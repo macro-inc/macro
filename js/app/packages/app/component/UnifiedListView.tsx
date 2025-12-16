@@ -230,6 +230,16 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const view = createMemo(() => viewsData[selectedView()]);
   const selectedEntity = createMemo(() => view()?.selectedEntity);
 
+  const setSelectedEntity = (entity: EntityData | undefined) => {
+    setViewDataStore(
+      selectedView(),
+      produce((state) => {
+        if (!state) return;
+        state.selectedEntity = entity;
+      })
+    );
+  };
+
   createEffect(
     on(
       [localEntityListRef, () => entities_()?.at(0)],
@@ -255,13 +265,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
         if (!firstEntity) return;
 
         setViewDataStore(selectedView(), 'highlightedId', firstEntity.id);
-        setViewDataStore(
-          selectedView(),
-          produce((state) => {
-            if (!state) return;
-            state.selectedEntity = firstEntity;
-          })
-        );
+        setSelectedEntity(firstEntity);
 
         tryFocusEntity(firstEntity.id);
 
@@ -1098,13 +1102,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     options
   ) => {
     if (preview() && !options?.ignorePreview) {
-      setViewDataStore(
-        selectedView(),
-        produce((state) => {
-          if (!state) return;
-          state.selectedEntity = entity;
-        })
-      );
+      setSelectedEntity(entity);
 
       return;
     }
@@ -1531,13 +1529,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                     setHighlightedId(innerProps.entity.id);
 
                     if (isPanelActive() && !preview()) {
-                      setViewDataStore(
-                        selectedView(),
-                        produce((state) => {
-                          if (!state) return;
-                          state.selectedEntity = innerProps.entity;
-                        })
-                      );
+                      setSelectedEntity(innerProps.entity);
                     }
 
                     setContextAndModalState((prev) => {
@@ -1582,13 +1574,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                     setHighlightedId(innerProps.entity.id);
 
                     if (isPanelActive() && !preview()) {
-                      setViewDataStore(
-                        selectedView(),
-                        produce((state) => {
-                          if (!state) return;
-                          state.selectedEntity = innerProps.entity;
-                        })
-                      );
+                      setSelectedEntity(innerProps.entity);
                     }
                   }}
                   onMouseLeave={() => {}}
@@ -1596,13 +1582,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                     setHighlightedId(innerProps.entity.id);
 
                     if (isPanelActive() && !preview()) {
-                      setViewDataStore(
-                        selectedView(),
-                        produce((state) => {
-                          if (!state) return;
-                          state.selectedEntity = innerProps.entity;
-                        })
-                      );
+                      setSelectedEntity(innerProps.entity);
                     }
                   }}
                   showLeftColumnIndicator={
