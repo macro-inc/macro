@@ -240,9 +240,12 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     );
   };
 
+  const rawSearchText = createMemo<string>(() => view()?.searchText ?? '');
+  const searchText = createMemo(() => rawSearchText()?.trim() ?? '');
+
   createEffect(
     on(
-      [localEntityListRef, () => entities_()?.at(0)],
+      [localEntityListRef, () => entities_()?.at(0), searchText],
       ([localEntityListRef, firstEntity]) => {
         if (!localEntityListRef) return;
         setEntityListRef(localEntityListRef);
@@ -513,9 +516,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     const types = entityTypeFilter();
     return getSuggestedProperties(types);
   });
-
-  const rawSearchText = createMemo<string>(() => view()?.searchText ?? '');
-  const searchText = createMemo(() => rawSearchText()?.trim() ?? '');
 
   const debouncedSearchForLocal = debouncedDependent(
     searchText,
