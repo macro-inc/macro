@@ -430,7 +430,7 @@ export function ShareModal(props: ShareModalProps) {
     >
       <Dialog.Portal>
         <Dialog.Overlay class="fixed inset-0 z-modal-overlay bg-transparent" />
-        <DialogWrapper width="440px">
+        <DialogWrapper>
           <Dialog.Content class="text-ink max-h-[100%] overflow-y-auto">
             <ClippedPanel tl={!beveledCorners()} active>
                 <ForwardToChannel
