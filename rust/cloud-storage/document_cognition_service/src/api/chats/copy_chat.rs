@@ -13,6 +13,7 @@ use axum::{
 };
 use macro_middleware::cloud_storage::ensure_access::chat::ChatAccessLevelExtractor;
 use model::{response::StringIDResponse, user::UserContext};
+use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::ViewAccessLevel;
 
 #[derive(serde::Deserialize)]
@@ -55,7 +56,7 @@ pub async fn copy_chat_v2(
     req: CopyChatRequest,
 ) -> Result<StringIDResponse, (StatusCode, String)> {
     // 1. create share permission
-    let share_permission = models_permissions::share_permission::SharePermissionV2::default();
+    let share_permission = SharePermissionV2::new_chat_share_permission();
     // 2. create new chat
     let old_chat = get_chat(state, &chat_id, &user_context.user_id)
         .await

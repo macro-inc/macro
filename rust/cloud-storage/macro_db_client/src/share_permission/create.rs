@@ -189,7 +189,7 @@ mod tests {
     async fn test_create_share_permission(pool: Pool<Postgres>) -> anyhow::Result<()> {
         let mut transaction = pool.begin().await?;
 
-        let share_permission = SharePermissionV2::default();
+        let share_permission = SharePermissionV2::new_project_share_permission();
         let result = create_share_permission(&mut transaction, &share_permission).await?;
 
         assert_ne!(result.id, "".to_string());

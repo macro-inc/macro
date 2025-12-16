@@ -320,6 +320,7 @@ async fn insert_document_with_id(
 mod tests {
     use super::*;
     use chrono::{TimeZone, Utc};
+    use model::folder::FileSystemNode::File;
     use sqlx::{Pool, Postgres};
 
     #[sqlx::test(fixtures(path = "../../../fixtures", scripts("basic_user_with_documents")))]
@@ -345,7 +346,9 @@ mod tests {
                 file_type: Some(FileType::Pdf),
                 project_id: Some("project-one"),
                 project_name: None,
-                share_permission: &SharePermissionV2::default(),
+                share_permission: &SharePermissionV2::new_document_share_permission(Some(
+                    FileType::Pdf,
+                )),
                 skip_history: false,
                 email_attachment_id: None,
                 created_at: Some(&ts),
@@ -372,7 +375,9 @@ mod tests {
                 file_type: Some(FileType::Docx),
                 project_id: None,
                 project_name: None,
-                share_permission: &SharePermissionV2::default(),
+                share_permission: &SharePermissionV2::new_document_share_permission(Some(
+                    FileType::Docx,
+                )),
                 skip_history: false,
                 email_attachment_id: None,
                 created_at: None,
@@ -411,7 +416,9 @@ mod tests {
                 file_type: Some(FileType::Pdf),
                 project_id: Some("project-one"),
                 project_name: None,
-                share_permission: &SharePermissionV2::default(),
+                share_permission: &SharePermissionV2::new_document_share_permission(Some(
+                    FileType::Pdf,
+                )),
                 skip_history: false,
                 email_attachment_id: None,
                 created_at: Some(&ts),
@@ -441,7 +448,9 @@ mod tests {
                 file_type: Some(FileType::Docx),
                 project_id: None,
                 project_name: None,
-                share_permission: &SharePermissionV2::default(),
+                share_permission: &SharePermissionV2::new_document_share_permission(Some(
+                    FileType::Docx,
+                )),
                 skip_history: false,
                 email_attachment_id: None,
                 created_at: None,
@@ -472,7 +481,9 @@ mod tests {
                 file_type: Some(FileType::Pdf),
                 project_id: None,
                 project_name: None,
-                share_permission: &SharePermissionV2::default(),
+                share_permission: &SharePermissionV2::new_document_share_permission(Some(
+                    FileType::Pdf,
+                )),
                 skip_history: false,
                 email_attachment_id: None,
                 created_at: None,

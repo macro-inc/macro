@@ -1,5 +1,6 @@
 use crate::{history::upsert_user_history, share_permission};
 use model::project::Project;
+use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::AccessLevel;
 use sqlx::{Pool, Postgres};
 
@@ -9,7 +10,7 @@ pub async fn create_project_v2(
     user_id: &str,
     project_name: &str,
     parent_id: Option<String>,
-    share_permission: &models_permissions::share_permission::SharePermissionV2,
+    share_permission: &SharePermissionV2,
 ) -> anyhow::Result<Project> {
     let mut transaction = db.begin().await?;
     let project = sqlx::query_as!(

@@ -5,6 +5,7 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+model_file_type = { path = "../model_file_type" }
 schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

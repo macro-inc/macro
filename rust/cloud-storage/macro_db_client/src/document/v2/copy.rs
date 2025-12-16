@@ -96,7 +96,7 @@ mod tests {
             "macro|user@user.com",
             "new name",
             Some(&FileType::Docx),
-            &SharePermissionV2::new(Some(true), Some(AccessLevel::View)),
+            &SharePermissionV2::new_document_share_permission(Some(FileType::Docx)),
         )
         .await?;
 

@@ -5578,6 +5578,7 @@ dependencies = [
 name = "models_permissions"
 version = "0.1.0"
 dependencies = [
+ "model_file_type",
  "schemars",
  "serde",
  "serde_json",

@@ -5,8 +5,7 @@ use document_sub_type::DocumentSubType;
 use model::document::response::CreateDocumentResponseData;
 use model::document::response::{DocumentResponse, DocumentResponseMetadata};
 use model::document::{ContentType, FileType, build_cloud_storage_bucket_document_key};
-use models_permissions::share_permission::access_level::AccessLevel;
-use models_permissions::share_permission::{IS_PUBLIC_DEFAULT, SharePermissionV2};
+use models_permissions::share_permission::SharePermissionV2;
 use system_properties::SystemPropertiesService;
 use uuid::Uuid;
 
@@ -48,22 +47,7 @@ pub async fn create_document(
 
     tracing::trace!("creating document v2");
 
-    let share_permission = if let Some(file_type) = file_type {
-        let public_access_level = match file_type {
-            FileType::Md => Some(AccessLevel::Edit),
-            _ => Some(AccessLevel::View),
-        };
-
-        SharePermissionV2 {
-            id: "".to_string(),
-            is_public: IS_PUBLIC_DEFAULT,
-            public_access_level,
-            owner: "".to_string(),
-            channel_share_permissions: None,
-        }
-    } else {
-        macro_share_permissions::share_permission::create_new_share_permission()
-    };
+    let share_permission = SharePermissionV2::new_document_share_permission(file_type);
 
     // create document metadata
     let document_metadata = macro_db_client::document::v2::create::create_document(
