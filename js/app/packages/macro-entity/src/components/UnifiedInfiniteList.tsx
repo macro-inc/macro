@@ -506,7 +506,7 @@ export function createUnifiedInfiniteList<T extends EntityData>({
                   data={sortedEntitiesStore}
                   class={`${LIST_WRAPPER} scrollbar-hidden`}
                   data-unified-entity-list
-                  overscan={computedOverscan()}
+                  bufferSize={computedOverscan() * 50}
                 >
                   {(entity, index) => {
                     if (
