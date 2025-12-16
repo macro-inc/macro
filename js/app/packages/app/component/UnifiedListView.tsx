@@ -2,6 +2,7 @@ import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
 } from '@app/component/GlobalAppState';
+import type { BlockChannelProps } from '@block-channel/component/Block';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { URL_PARAMS as EMAIL_PARAMS } from '@block-email/constants';
 import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
@@ -1101,9 +1102,19 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     if (entity.type === 'document')
       return documentEntityClickHandler(entity, event, location);
 
+    const params =
+      entity.type === 'channel' && location?.type === 'channel'
+        ? ({
+            target: {
+              threadId: location.threadId,
+              messageId: location.messageId,
+            },
+          } as BlockChannelProps)
+        : undefined;
+
     const handle = event.altKey
-      ? insertSplit({ type: entity.type, id: entity.id })
-      : replaceOrInsertSplit({ type: entity.type, id: entity.id });
+      ? insertSplit({ type: entity.type, id: entity.id, params })
+      : replaceOrInsertSplit({ type: entity.type, id: entity.id, params });
 
     handle?.activate();
 
@@ -1111,10 +1122,12 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
     switch (location.type) {
       case 'channel': {
-        const blockHandle = await blockOrchestrator.getBlockHandle(entity.id);
-        await blockHandle?.goToLocationFromParams({
-          [CHANNEL_PARAMS.message]: location.messageId,
-        });
+        // NOTE: this is handled by the channel block params
+        // const blockHandle = await blockOrchestrator.getBlockHandle(entity.id);
+        // await blockHandle?.goToLocationFromParams({
+        //   [CHANNEL_PARAMS.thread]: location.threadId,
+        //   [CHANNEL_PARAMS.message]: location.messageId,
+        // });
         break;
       }
       case 'email': {
