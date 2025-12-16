@@ -128,7 +128,7 @@ export const notificationServiceClient = {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ entity_ids: args.entity_ids }),
+          body: JSON.stringify({ eventItemIds: args.eventItemIds }),
         }
       ),
       (result) => {
