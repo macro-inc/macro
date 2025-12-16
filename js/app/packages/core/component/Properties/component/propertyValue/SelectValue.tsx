@@ -1,4 +1,4 @@
-import { useBlockId } from '@core/block';
+import { useBlockId, useMaybeBlockId } from '@core/block';
 import { IconButton } from '@core/component/IconButton';
 import DeleteIcon from '@icon/bold/x-bold.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
@@ -24,7 +24,7 @@ type SelectValueProps = {
  * Opens options modal on click
  */
 export const SelectValue: Component<SelectValueProps> = (props) => {
-  const blockId = useBlockId();
+  const blockId = useMaybeBlockId();
   const [hoveredValue, setHoveredValue] = createSignal<string | null>(null);
   const [isSaving, setIsSaving] = createSignal(false);
 
@@ -35,7 +35,7 @@ export const SelectValue: Component<SelectValueProps> = (props) => {
   };
 
   const handleRemoveValue = async (valueToRemove: string) => {
-    if (isReadOnly() || isSaving()) return;
+    if (isReadOnly() || isSaving() || !blockId) return;
 
     setIsSaving(true);
 

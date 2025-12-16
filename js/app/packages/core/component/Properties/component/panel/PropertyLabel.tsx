@@ -1,4 +1,4 @@
-import { useBlockAliasedName } from '@core/block';
+import { useMaybeBlockAliasedName } from '@core/block';
 import { IconButton } from '@core/component/IconButton';
 import DeleteIcon from '@icon/bold/x-bold.svg';
 import PinIcon from '@icon/regular/push-pin.svg';
@@ -28,13 +28,17 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
     onPropertyUnpinned,
     pinnedPropertyIds,
   } = usePropertiesContext();
-  const blockName = useBlockAliasedName();
-  const isBuiltin = getBuiltinPropertyIds(blockName).includes(
-    props.property.propertyDefinitionId
-  );
-  const isDefaultPinned = getDefaultPinnedProperties(blockName).includes(
-    props.property.propertyDefinitionId
-  );
+  const blockName = useMaybeBlockAliasedName();
+  const isBuiltin =
+    blockName &&
+    getBuiltinPropertyIds(blockName).includes(
+      props.property.propertyDefinitionId
+    );
+  const isDefaultPinned =
+    blockName &&
+    getDefaultPinnedProperties(blockName).includes(
+      props.property.propertyDefinitionId
+    );
 
   const isPinned = createMemo(
     () => pinnedPropertyIds?.()?.includes(props.property.propertyId) ?? false

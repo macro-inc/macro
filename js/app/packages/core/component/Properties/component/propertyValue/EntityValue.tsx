@@ -1,4 +1,4 @@
-import { useBlockId } from '@core/block';
+import { useMaybeBlockId } from '@core/block';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { Component } from 'solid-js';
@@ -23,7 +23,7 @@ type EntityValueProps = {
  * Shows entity badges and opens modal on click
  */
 export const EntityValue: Component<EntityValueProps> = (props) => {
-  const blockId = useBlockId();
+  const blockId = useMaybeBlockId();
   const [isSaving, setIsSaving] = createSignal(false);
 
   const handleEditClick = (e: MouseEvent) => {
@@ -33,7 +33,7 @@ export const EntityValue: Component<EntityValueProps> = (props) => {
   };
 
   const handleRemoveEntity = async (entityToRemove: EntityReference) => {
-    if (isReadOnly() || isSaving()) return;
+    if (isReadOnly() || isSaving() || !blockId) return;
 
     setIsSaving(true);
 

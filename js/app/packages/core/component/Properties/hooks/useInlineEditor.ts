@@ -1,4 +1,4 @@
-import { useBlockId } from '@core/block';
+import { useBlockId, useMaybeBlockId } from '@core/block';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { type Accessor, createSignal, type Setter } from 'solid-js';
 import { saveEntityProperty } from '../api';
@@ -27,7 +27,7 @@ export function useInlineEditor(
   cancelEdit: () => void;
   save: () => Promise<void>;
 } {
-  const blockId = useBlockId();
+  const blockId = useMaybeBlockId();
 
   const [isEditing, setIsEditing] = createSignal(false);
   const [inputValue, setInputValue] = createSignal('');
@@ -53,7 +53,7 @@ export function useInlineEditor(
   };
 
   const save = async () => {
-    if (isSaving()) return;
+    if (isSaving() || !blockId) return;
 
     const trimmedValue = inputValue().trim();
     const currentRawValue = getCurrentRawValue();

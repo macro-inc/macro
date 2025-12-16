@@ -1,4 +1,4 @@
-import { useBlockId } from '@core/block';
+import { useMaybeBlockId } from '@core/block';
 import { DatePicker } from '@core/component/DatePicker';
 import { type Component, createMemo } from 'solid-js';
 import { Portal, Show } from 'solid-js/web';
@@ -12,7 +12,7 @@ import { EditPropertyValueModal } from './EditPropertyValueModal';
 import { SelectPropertyModal } from './SelectPropertyModal';
 
 export const Modals: Component = () => {
-  const blockId = useBlockId();
+  const blockId = useMaybeBlockId();
   const {
     entityType,
     onPropertyAdded,
@@ -38,6 +38,7 @@ export const Modals: Component = () => {
   };
 
   const handleDateSaved = async (newDate: Date, property: Property) => {
+    if (!blockId) return;
     const result = await saveEntityProperty(blockId, entityType, property, {
       valueType: 'DATE',
       value: newDate.toISOString(),

@@ -1,15 +1,11 @@
-import clickOutside from '@core/directive/clickOutside';
-import { Dialog } from '@kobalte/core/dialog';
-import { createMemo, createSignal, For, Show } from 'solid-js';
-import { Portal } from 'solid-js/web';
-import { createSoupContext } from '../../SoupContext';
-import { SplitPanelContext } from '../context';
-
-false && clickOutside;
-
 import { ClippedPanel } from '@core/component/ClippedPanel';
 import { ScopedPortal } from '@core/component/ScopedPortal';
-import { isPropValid } from 'storybook/internal/theming';
+import clickOutside from '@core/directive/clickOutside';
+import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { Dialog } from '@kobalte/core/dialog';
+import { createMemo, createSignal, For, Show } from 'solid-js';
+import { createSoupContext } from '../../SoupContext';
+import { SplitPanelContext } from '../context';
 import type {
   PopoverSplitOptions,
   SplitContent,
@@ -17,6 +13,8 @@ import type {
   SplitId,
   SplitMount,
 } from '../layoutManager';
+
+false && clickOutside;
 
 export type PopoverSplitData = {
   id: string;
@@ -33,7 +31,6 @@ export function PopoverSplitRenderer(props: {
   const activePopovers = createMemo(() =>
     Array.from(props.popovers().values()).filter((popover) => popover.isOpen)
   );
-
   return (
     <For each={activePopovers()}>
       {(popover, index) => (
@@ -52,8 +49,6 @@ function PopoverSplitModal(props: {
   zIndex: number;
   onClose: () => void;
 }) {
-  const { popover } = props;
-
   // Create stub SplitPanelContext for components that expect it
   const [panelRef, setPanelRef] = createSignal<HTMLElement | null>(null);
   const [contentOffsetTop, setContentOffsetTop] = createSignal(0);
@@ -62,47 +57,41 @@ function PopoverSplitModal(props: {
 
   // Create a stub SplitHandle for the popover
   const stubHandle: SplitHandle = {
-    id: popover.id as SplitId,
+    id: props.popover.id as SplitId,
     close: props.onClose,
-    content: () => popover.content,
-    // Navigation methods (stubbed for popovers)
+    content: () => props.popover.content,
     canGoBack: () => false,
     canGoForward: () => false,
     goBack: () => {},
     goForward: () => {},
     reset: () => {},
-    // Panel state methods
     activate: () => {},
     isActive: () => true,
     isFirst: () => true,
     isLast: () => true,
-    // Display and spotlight methods
-    displayName: () => popover.content.id,
+    displayName: () => props.popover.content.id,
     setDisplayName: () => {},
     toggleSpotlight: () => {},
     isSpotLight: () => false,
-    // Content management methods
     replace: () => {},
     removeFromHistory: () => {},
     registerContentChangeListener: () => {},
     unregisterContentChangeListener: () => {},
-    // URL capabilities
     getUrlSegments: () => [],
     getUrl: () => '',
-    // Metadata (only for component splits)
     meta: () =>
-      popover.mount.kind === 'component'
-        ? (popover.mount as any).meta
+      props.popover.mount.kind === 'component'
+        ? (props.popover.mount as any).meta
         : undefined,
     updateMeta:
-      popover.mount.kind === 'component'
-        ? (popover.mount as any).updateMeta
+      props.popover.mount.kind === 'component'
+        ? (props.popover.mount as any).updateMeta
         : undefined,
   };
 
   const stubPanelContext = {
     handle: stubHandle,
-    splitHotkeyScope: `popover-${popover.id}`,
+    splitHotkeyScope: `popover-${props.popover.id}`,
     unifiedListContext,
     isPanelActive: () => true,
     panelRef,
@@ -118,7 +107,7 @@ function PopoverSplitModal(props: {
   };
 
   const getPositionClass = () => {
-    const position = popover.options.style?.position ?? 'center';
+    const position = props.popover.options.style?.position ?? 'center';
     switch (position) {
       case 'top':
         return 'items-start justify-center pt-16';
@@ -133,9 +122,23 @@ function PopoverSplitModal(props: {
     }
   };
 
+  const [bindHotKeyDom, scopeId] = useHotkeyDOMScope(
+    `popover-split-${props.popover.id}`
+  );
+
+  registerHotkey({
+    hotkey: 'escape',
+    scopeId,
+    description: 'Close Popover',
+    keyDownHandler() {
+      props.onClose();
+      return true;
+    },
+  });
+
   return (
     <Dialog
-      open={popover.isOpen}
+      open={props.popover.isOpen}
       onOpenChange={(open) => {
         if (!open) {
           props.onClose();
@@ -149,15 +152,20 @@ function PopoverSplitModal(props: {
           on:click={() => props.onClose()}
         />
         <div
-          class={`fixed inset-0 z-modal flex ${getPositionClass()} pointer-events-none`}
+          class={`fixed inset-0 z-modal flex ${getPositionClass()} pointer-events-none isolate`}
         >
           <Dialog.Content
             class="w-4xl h-xl"
             use:clickOutside={() => props.onClose()}
+            ref={(r) => {
+              bindHotKeyDom(r);
+            }}
           >
             <ClippedPanel tl ref={setPanelRef}>
               <SplitPanelContext.Provider value={stubPanelContext}>
-                <Show when={popover.mount}>{popover.mount.element()}</Show>
+                <Show when={props.popover.mount}>
+                  {props.popover.mount.element()}
+                </Show>
               </SplitPanelContext.Provider>
             </ClippedPanel>
           </Dialog.Content>
