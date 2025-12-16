@@ -29,7 +29,7 @@ import { playSound } from '@app/util/sound';
 import { QuickAccess } from './QuickAccess';
 
 // import { Debug } from './Debug';
-import Hints from './Hints';
+// import Hints from './Hints';
 
 export function Dock() {
   const activeSplitId = createMemo(() => globalSplitManager()?.activeSplitId());
@@ -269,9 +269,10 @@ export function Dock() {
                   <BasicTierLimit />
                 </Show>
 
-                <Show when={hasPaid()}>
+                {/*<Show when={hasPaid()}>
                   <Hints />
-                </Show>
+                </Show>*/}
+                <div class="w-full"/>
 
                 <Show when={ENABLE_DOCK_NOTITIFCATIONS}>
                   <QuickAccess />
