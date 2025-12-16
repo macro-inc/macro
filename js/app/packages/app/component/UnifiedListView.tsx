@@ -225,21 +225,15 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     selectedView,
     virtualizerHandleSignal: [, setVirtualizerHandle],
     entityListRefSignal: [, setEntityListRef],
-    entitiesSignal: [_entities, setEntities],
-    emailViewSignal: [_emailView],
+    entitiesSignal: [entities_, setEntities],
   } = unifiedListContext;
   const view = createMemo(() => viewsData[selectedView()]);
   const selectedEntity = createMemo(() => view()?.selectedEntity);
 
   createEffect(
     on(
-      () =>
-        [
-          localEntityListRef(),
-          // access index to properly track
-          _entities()?.[0],
-        ] as const,
-      ([localEntityListRef]) => {
+      [localEntityListRef, () => entities_()?.at(0)],
+      ([localEntityListRef, firstEntity]) => {
         if (!localEntityListRef) return;
         setEntityListRef(localEntityListRef);
 
@@ -257,9 +251,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
           return;
         }
 
-        // select first item from entityList until interaction
-        if (!_entities() || !_entities()?.length) return;
-        const firstEntity = _entities()![0];
+        if (!firstEntity) return;
 
         setViewDataStore(
           selectedView(),
@@ -1904,6 +1896,7 @@ function SearchBar(props: {
     if (text !== prevText) {
       setViewDataStore(selectedView(), 'selectedEntity', undefined);
       setViewDataStore(selectedView(), 'highlightedId', undefined);
+      setViewDataStore(selectedView(), 'hasUserInteractedEntity', false);
       virtualizerHandle()?.scrollToIndex(0);
       setWaitForLoadingEnd(true);
     }
