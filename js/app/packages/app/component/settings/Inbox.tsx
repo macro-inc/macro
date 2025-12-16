@@ -1,5 +1,4 @@
 import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
-import { TabContent } from '@core/component/TabContent';
 import { For } from 'solid-js';
 import {
   DEPRIORITY_LABEL_SIGNAL_TOGGLES,
