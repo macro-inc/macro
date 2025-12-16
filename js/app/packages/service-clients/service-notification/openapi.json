@@ -777,6 +777,9 @@
           }
         ]
       },
+      "ChannelMessageDocumentMetadata": {
+        "$ref": "#/components/schemas/DocumentMentionMetadata"
+      },
       "ChannelMessageSendMetadata": {
         "allOf": [
           { "$ref": "#/components/schemas/CommonChannelMetadata" },
@@ -841,34 +844,29 @@
         }
       },
       "CreateNotification": {
-        "type": "object",
-        "required": [
-          "notification_event_type",
-          "event_item_id",
-          "event_item_type",
-          "service_sender"
-        ],
-        "properties": {
-          "event_item_id": {
-            "type": "string",
-            "description": "The item id the notification event was created for"
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Entity",
+            "description": "The [Entity] the notification event was created for"
           },
-          "event_item_type": {
-            "type": "string",
-            "description": "The item type (document, chat, project...)"
-          },
-          "metadata": {
-            "description": "Custom metadata that may be needed for the notification"
-          },
-          "notification_event_type": {
-            "type": "string",
-            "description": "The type of notification"
-          },
-          "service_sender": {
-            "type": "string",
-            "description": "The service that created the notification"
+          {
+            "type": "object",
+            "required": ["notification_event_type", "service_sender"],
+            "properties": {
+              "metadata": {
+                "description": "Custom metadata that may be needed for the notification"
+              },
+              "notification_event_type": {
+                "type": "string",
+                "description": "The type of notification"
+              },
+              "service_sender": {
+                "type": "string",
+                "description": "The service that created the notification"
+              }
+            }
           }
-        }
+        ]
       },
       "DeviceRequest": {
         "type": "object",
@@ -905,6 +903,21 @@
       "EmptyResponse": {
         "type": "object",
         "description": "Empty response is required due to custom fetch forcing `response.json()`"
+      },
+      "Entity": {
+        "type": "object",
+        "description": "The Entity describes the minimum amount of information required to describe a unique thing in Macro\nThis contains the type of the entity [EntityType] and the string id of that entity",
+        "required": ["entity_type", "entity_id"],
+        "properties": {
+          "entity_id": {
+            "type": "string",
+            "description": "The id of that entity"
+          },
+          "entity_type": {
+            "$ref": "#/components/schemas/EntityType",
+            "description": "The type of entity we are describing"
+          }
+        }
       },
       "EntityType": {
         "type": "string",
@@ -1038,7 +1051,7 @@
       },
       "Notification": {
         "allOf": [
-          { "$ref": "#/components/schemas/NotificationEntity" },
+          { "$ref": "#/components/schemas/Entity" },
           { "$ref": "#/components/schemas/NotificationTemporalData" },
           { "$ref": "#/components/schemas/NotificationEvent" },
           {
@@ -1061,15 +1074,6 @@
             "items": { "type": "string", "format": "uuid" },
             "description": "The ids of the notifications to handle"
           }
-        }
-      },
-      "NotificationEntity": {
-        "type": "object",
-        "description": "The entity that triggered the notification\nThis is a combination of an [EntityType] and an id (Uuid or string)",
-        "required": ["eventItemId", "eventItemType"],
-        "properties": {
-          "eventItemId": { "type": "string" },
-          "eventItemType": { "$ref": "#/components/schemas/EntityType" }
         }
       },
       "NotificationEvent": {
@@ -1189,7 +1193,7 @@
                 "enum": ["channel_message_document"]
               },
               "notificationMetadata": {
-                "$ref": "#/components/schemas/DocumentMentionMetadata",
+                "$ref": "#/components/schemas/ChannelMessageDocumentMetadata",
                 "description": "If a document is included via mention or attachment on a message"
               }
             }
@@ -1267,7 +1271,7 @@
       },
       "PushNotificationData": {
         "allOf": [
-          { "$ref": "#/components/schemas/NotificationEntity" },
+          { "$ref": "#/components/schemas/Entity" },
           {
             "type": "object",
             "required": ["openRoute"],
@@ -1295,12 +1299,12 @@
       },
       "UserNotification": {
         "allOf": [
-          { "$ref": "#/components/schemas/NotificationEntity" },
+          { "$ref": "#/components/schemas/Entity" },
           { "$ref": "#/components/schemas/NotificationTemporalData" },
           { "$ref": "#/components/schemas/NotificationEvent" },
           {
             "type": "object",
-            "required": ["id", "sent", "done", "isImportantV0"],
+            "required": ["id", "sent", "done"],
             "properties": {
               "done": {
                 "type": "boolean",
@@ -1310,10 +1314,6 @@
                 "type": "string",
                 "format": "uuid",
                 "description": "The id of the notification. Self-generated uuidv7"
-              },
-              "isImportantV0": {
-                "type": "boolean",
-                "description": "if notification is important or not"
               },
               "senderId": {
                 "type": ["string", "null"],

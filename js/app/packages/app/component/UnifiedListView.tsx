@@ -935,7 +935,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     let thread_id: string | null | undefined;
 
     const blockHandle = await blockOrchestrator.getBlockHandle(
-      notification.eventItemId,
+      notification.entity_id,
       'channel'
     );
     if (!blockHandle) return;

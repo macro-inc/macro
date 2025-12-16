@@ -152,7 +152,7 @@ export function createUnseenNotificationIds(
     const unseen = unseenNotifications().flatMap((notification) => {
       if (notification.viewedAt) return [];
 
-      return [notification.eventItemId];
+      return [notification.entity_id];
     });
 
     return [...new Set(unseen)];
@@ -235,14 +235,6 @@ export function enhanceWithNotifications<T extends EntityData>(
           ? notificationsQuery.data
               .filter(({ viewedAt }) => !viewedAt)
               .toSorted((a, b) => {
-                if (a.isImportantV0 && b.isImportantV0) {
-                  return b.createdAt - a.createdAt;
-                } else if (a.isImportantV0) {
-                  return -1;
-                } else if (b.isImportantV0) {
-                  return 1;
-                }
-
                 return b.createdAt - a.createdAt;
               })
           : [];

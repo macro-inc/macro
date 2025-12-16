@@ -11,7 +11,7 @@ export function TabContent(props: TabContentProps) {
   return (
     <>
       {props.header}
-      <div class="font-medium border-edge pb-3 mb-4 border-b text-ink">
+      <div class="font-medium border-edge pb-3 mb-4 border-b text-ink p-2">
         {props.title}
       </div>
       <Show when={props.description}>

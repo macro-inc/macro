@@ -1,14 +1,10 @@
-use std::{
-    collections::HashMap,
-    hash::{DefaultHasher, Hash, Hasher},
-};
-
+use crate::{api::context::ApiContext, config::APPLE_BUNDLE_ID};
 use anyhow::Context;
-use aws_sdk_sns::types::MessageAttributeValue;
 use futures::StreamExt;
 use notification_db_client::notification::get::BasicNotification;
-
-use crate::{api::context::ApiContext, config::APPLE_BUNDLE_ID};
+use serde::Serialize;
+use sns_client::{APNSPushNotification, MessageAttributes, NotifCollapseKey, PushType, SnsTarget};
+use std::hash::{DefaultHasher, Hash, Hasher};
 
 /// Clears out push notifications for a user in bulk
 #[tracing::instrument(skip(ctx))]
@@ -75,46 +71,6 @@ pub fn clear_push_notifications(
     Ok(())
 }
 
-/// Builds the message attributes for the remove push notification
-pub fn build_message_attributes(
-    collapse_key: &str,
-) -> Option<HashMap<String, MessageAttributeValue>> {
-    Some(HashMap::from([
-        (
-            "AWS.SNS.MOBILE.APNS.TOPIC".to_string(),
-            MessageAttributeValue::builder()
-                .data_type("String")
-                .string_value(&*APPLE_BUNDLE_ID)
-                .build()
-                .unwrap(),
-        ),
-        (
-            "AWS.SNS.MOBILE.APNS.PUSH_TYPE".to_string(),
-            MessageAttributeValue::builder()
-                .data_type("String")
-                .string_value("background")
-                .build()
-                .unwrap(),
-        ),
-        (
-            "AWS.SNS.MOBILE.APNS.PRIORITY".to_string(),
-            MessageAttributeValue::builder()
-                .data_type("String")
-                .string_value("5") // 5 is normal, 10 is high
-                .build()
-                .unwrap(),
-        ),
-        (
-            "AWS.SNS.MOBILE.APNS.COLLAPSE_ID".to_string(),
-            MessageAttributeValue::builder()
-                .data_type("String")
-                .string_value(collapse_key)
-                .build()
-                .unwrap(),
-        ),
-    ]))
-}
-
 /// When a notification is marked as "done" or "seen" for a user, we need to potentially send a
 /// remove notification sns notification to the user to clear it from their device.
 #[tracing::instrument(skip(db, sns_client))]
@@ -150,38 +106,37 @@ pub async fn clear_push_notification(
     let hash = hasher.finish();
     let collapse_key = format!("{:x}", hash);
 
-    let message_attributes = build_message_attributes(&collapse_key);
+    #[derive(Debug, Serialize, Clone)]
+    struct CustomData {
+        identifier: String,
+    }
 
-    let apns = serde_json::json!({
-        "aps": {
-            "content-available": 1,
+    let apns = SnsTarget::Ios(Box::new(APNSPushNotification {
+        aps: sns_client::Aps {
+            content_available: Some(1),
+            ..Default::default()
         },
-        "identifier": collapse_key, // The collapse key is needed to identify what notification needs to be cleared
-    });
-
-    let message_json = serde_json::json!({
-        "APNS": serde_json::to_string(&apns).context("could not convert apns to string")?,
-    });
+        push_notification_data: CustomData {
+            identifier: collapse_key.clone(),
+        },
+    }));
+    let attributes = MessageAttributes {
+        push_type: PushType::Background,
+        apns_bundle_id: &APPLE_BUNDLE_ID,
+        collapse_key: NotifCollapseKey::new_str(&collapse_key),
+    };
 
     futures::stream::iter(device_endpoints.iter())
-        .then(|endpoint| {
-            let message_json = message_json.clone();
-            let message_attributes = message_attributes.clone();
-            async move {
-                if !endpoint.contains("APNS") {
-                    tracing::trace!("skipping non-apns endpoint");
-                    return;
-                }
-                if let Err(e) = sns_client
-                    .push_notification(
-                        endpoint,
-                        &message_json.to_string(),
-                        message_attributes.clone(),
-                    )
-                    .await
-                {
-                    tracing::warn!(error=?e, "unable to send push notification");
-                }
+        .then(|endpoint| async {
+            if !endpoint.contains("APNS") {
+                tracing::trace!("skipping non-apns endpoint");
+                return;
+            }
+            if let Err(e) = sns_client
+                .push_notification(endpoint, &apns, attributes.clone())
+                .await
+            {
+                tracing::warn!(error=?e, "unable to send push notification");
             }
         })
         .collect::<Vec<_>>()

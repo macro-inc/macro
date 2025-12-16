@@ -26,7 +26,6 @@ pub(crate) struct ChatIndex {
     pub chat_message_id: uuid::Uuid,
     pub user_id: String,
     pub role: String,
-    pub updated_at_seconds: i64,
     pub title: String,
     pub content: String,
 }

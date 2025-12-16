@@ -81,11 +81,11 @@ async fn should_email(
             let result = should_email_based_on_user_notification_bulk(
                 db,
                 &notification.inner.notification_event.event_type(),
-                &notification.inner.notification_entity.event_item_id,
+                &notification.inner.notification_entity.entity_id,
                 &notification
                     .inner
                     .notification_entity
-                    .event_item_type
+                    .entity_type
                     .to_string(),
                 user_ids,
             )
@@ -107,7 +107,7 @@ async fn should_email(
         NotificationEventType::ChannelInvite => comms_utils::should_email_channel_notification(
             auth_service_client,
             db,
-            &notification.inner.notification_entity.event_item_id,
+            &notification.inner.notification_entity.entity_id,
             user_ids,
         )
         .await

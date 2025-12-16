@@ -98,8 +98,8 @@ export function useChatInput(
     on(tabAttachments, (tabs, p) => {
       for (const prev of p ?? []) {
         // remove stuff from closed tabs
-        if (!tabs.find((t) => t.id === prev.id)) {
-          attachments.removeAttachment(prev.id);
+        if (!tabs.find((t) => t.attachmentId === prev.attachmentId)) {
+          attachments.removeAttachment(prev.attachmentId);
         }
       }
       for (const tab of tabs) {

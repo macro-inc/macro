@@ -2,19 +2,12 @@ use crate::share_permission::access_level::AccessLevel;
 use crate::share_permission::channel_share_permission::{
     ChannelSharePermission, UpdateChannelSharePermission,
 };
+use model_file_type::FileType;
 use utoipa::ToSchema;
 
 pub mod access_level;
 pub mod channel_share_permission;
 pub mod user_permission;
-
-/// Default value for is public for DSS items excluding projects
-pub static IS_PUBLIC_DEFAULT: bool = true;
-/// Default value for public access level for DSS items excluding projects
-/// Should we ever update IS_PUBLIC_DEFAULT to false, we should set this to None
-pub static PUBLIC_ACCESS_LEVEL_DEFAULT: Option<AccessLevel> = Some(AccessLevel::View);
-pub static IS_PUBLIC_DEFAULT_PROJECT: bool = false;
-pub static PUBLIC_ACCESS_LEVEL_DEFAULT_PROJECT: Option<AccessLevel> = None;
 
 #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, ToSchema, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -33,47 +26,35 @@ pub struct SharePermissionV2 {
     pub channel_share_permissions: Option<Vec<ChannelSharePermission>>,
 }
 
-impl Default for SharePermissionV2 {
-    fn default() -> Self {
-        SharePermissionV2 {
-            id: "".to_string(),
-            is_public: IS_PUBLIC_DEFAULT,
-            public_access_level: PUBLIC_ACCESS_LEVEL_DEFAULT,
-            owner: "".to_string(),
-            channel_share_permissions: None,
-        }
-    }
-}
-
 impl SharePermissionV2 {
-    pub fn new(is_public: Option<bool>, public_access_level: Option<AccessLevel>) -> Self {
+    fn new(is_public: bool, public_access_level: Option<AccessLevel>) -> Self {
         SharePermissionV2 {
             id: "".to_string(),
-            is_public: is_public.unwrap_or(IS_PUBLIC_DEFAULT),
+            is_public,
             public_access_level,
             owner: "".to_string(),
             channel_share_permissions: None,
         }
     }
 
-    pub fn default_project() -> Self {
-        SharePermissionV2 {
-            id: "".to_string(),
-            is_public: IS_PUBLIC_DEFAULT_PROJECT,
-            public_access_level: PUBLIC_ACCESS_LEVEL_DEFAULT_PROJECT,
-            owner: "".to_string(),
-            channel_share_permissions: None,
-        }
+    /// Creates a new share permission object for a document
+    pub fn new_document_share_permission(file_type: Option<FileType>) -> Self {
+        let (is_public, public_access_level) = match file_type {
+            Some(FileType::Md) => (true, Some(AccessLevel::Edit)),
+            _ => (false, None),
+        };
+
+        Self::new(is_public, public_access_level)
     }
 
-    pub fn user_only() -> Self {
-        SharePermissionV2 {
-            id: "".to_string(),
-            is_public: false,
-            public_access_level: None,
-            owner: "".to_string(),
-            channel_share_permissions: None,
-        }
+    /// Creates a new share permission object for an ai chat
+    pub fn new_chat_share_permission() -> Self {
+        Self::new(false, None)
+    }
+
+    /// Creates a new share permission object for a project
+    pub fn new_project_share_permission() -> Self {
+        Self::new(false, None)
     }
 }
 

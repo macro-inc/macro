@@ -173,7 +173,7 @@ mod tests {
             "document-name",
             "macro|user@user.com",
             None,
-            &SharePermissionV2::default(),
+            &SharePermissionV2::new_document_share_permission(Some(FileType::Docx)),
             vec![SaveBomPart {
                 sha: "sha".to_string(),
                 path: "path".to_string(),

@@ -1,18 +1,17 @@
 use anyhow::Context;
 use chrono::{DateTime, serde::ts_seconds_option};
-use model_entity::EntityType;
+use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::Entity;
 use models_pagination::{CreatedAt, Identify, SortOn};
 use serde::{Deserialize, Serialize};
 use strum::{Display, EnumDiscriminants, EnumString};
 use utoipa::ToSchema;
 mod device;
 mod metadata;
-mod push;
 mod raw;
 mod unsubscribe;
 pub use device::*;
 pub use metadata::*;
-pub use push::*;
 pub use raw::*;
 pub use unsubscribe::*;
 use uuid::Uuid;
@@ -43,7 +42,7 @@ pub enum NotificationEvent {
     /// Someone replied to a thread in a channel that the user is part of
     ChannelMessageReply(ChannelReplyMetadata),
     /// If a document is included via mention or attachment on a message
-    ChannelMessageDocument(DocumentMentionMetadata),
+    ChannelMessageDocument(ChannelMessageDocumentMetadata),
     /// A new email has been sent to the user
     NewEmail(NewEmailMetadata),
     /// A user was invited to a team
@@ -52,18 +51,13 @@ pub enum NotificationEvent {
     RejectTeamInvite,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(transparent)]
+pub struct ChannelMessageDocumentMetadata(pub DocumentMentionMetadata);
+
 impl NotificationEvent {
     pub fn event_type(&self) -> NotificationEventType {
         NotificationEventType::from(self)
-    }
-
-    pub fn get_message_content_mut(&mut self) -> Option<&mut String> {
-        match self {
-            NotificationEvent::ChannelMessageSend(meta) => Some(&mut meta.message_content),
-            NotificationEvent::ChannelMessageReply(meta) => Some(&mut meta.message_content),
-            NotificationEvent::ChannelMention(meta) => Some(&mut meta.message_content),
-            _ => None,
-        }
     }
 
     pub fn metadata_json(&self) -> Option<serde_json::Value> {
@@ -145,78 +139,51 @@ pub struct NotificationTemporalData {
     pub deleted_at: TimestampOption,
 }
 
-/// The entity that triggered the notification
-/// This is a combination of an [EntityType] and an id (Uuid or string)
-#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct NotificationEntity {
-    pub event_item_id: String,
-    pub event_item_type: EntityType,
-}
-
-macro_rules! impl_new_entity_with_type {
-    ($method:ident, $variant:ident) => {
-        pub fn $method(event_item_id: String) -> Self {
-            Self {
-                event_item_id,
-                event_item_type: EntityType::$variant,
-            }
-        }
-    };
-}
-
-impl NotificationEntity {
-    pub fn new(event_item_id: String, event_item_type: EntityType) -> Self {
-        Self {
-            event_item_id,
-            event_item_type,
-        }
-    }
-
-    impl_new_entity_with_type!(new_channel, Channel);
-    impl_new_entity_with_type!(new_chat, Chat);
-    impl_new_entity_with_type!(new_document, Document);
-    impl_new_entity_with_type!(new_email, Email);
-    impl_new_entity_with_type!(new_project, Project);
-    impl_new_entity_with_type!(new_team, Team);
-}
-
-#[derive(Serialize, Deserialize, Debug, ToSchema)]
+#[derive(Serialize, Deserialize, Debug, ToSchema, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct UserNotification {
     /// The id of the notification. Self-generated uuidv7
     pub id: Uuid,
     #[serde(flatten)]
-    pub notification_entity: NotificationEntity,
+    pub notification_entity: Entity<'static>,
     /// If the notification has been sent
     pub sent: bool,
     /// If the notification is "done"
     pub done: bool,
     /// user id of the macro user who generated the notification
     pub sender_id: Option<String>,
-    /// if notification is important or not
-    pub is_important_v0: bool,
     #[serde(flatten)]
     pub temporal: NotificationTemporalData,
     #[serde(flatten)]
     pub notification_event: NotificationEvent,
 }
 
+// CAUTION: for hash map purposes we need Hash+Eq impl on UserNotification
+// User notifications are considered equal based only on their id
+
+impl PartialEq for UserNotification {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl Eq for UserNotification {}
+
+impl std::hash::Hash for UserNotification {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
+    }
+}
+
 impl UserNotification {
     /// Create a new UserNotification from a Notification
-    pub fn from_new_notification(
-        notification: Notification,
-        is_important_v0: bool,
-        sent: bool,
-        done: bool,
-    ) -> Self {
+    pub fn from_new_notification(notification: Notification, sent: bool, done: bool) -> Self {
         Self {
             id: notification.id,
             notification_entity: notification.notification_entity,
             sent,
             done,
             sender_id: notification.sender_id,
-            is_important_v0,
             temporal: notification.temporal,
             notification_event: notification.notification_event,
         }
@@ -228,7 +195,7 @@ impl UserNotification {
 pub struct Notification {
     pub id: Uuid,
     #[serde(flatten)]
-    pub notification_entity: NotificationEntity,
+    pub notification_entity: Entity<'static>,
     pub service_sender: String,
     pub sender_id: Option<String>,
     #[serde(flatten)]
@@ -237,7 +204,7 @@ pub struct Notification {
     pub notification_event: NotificationEvent,
 }
 
-#[derive(Serialize, Deserialize, Debug, ToSchema)]
+#[derive(Serialize, Deserialize, Debug, ToSchema, Hash, PartialEq, Eq, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct NotificationWithRecipient {
     #[serde(flatten)]
@@ -245,21 +212,33 @@ pub struct NotificationWithRecipient {
     // USER-SPECIFIC FIELDS
     /// The user actually receiving the notification. used in intermediary processing
     #[serde(skip_serializing)]
-    pub recipient_id: String,
-    /// If the notification should show up in the "Important" vs "Other" view
-    pub is_important_v0: bool,
+    pub recipient_id: MacroUserIdStr<'static>,
+}
+
+#[derive(Debug, Clone)]
+pub enum DeviceEndpoint {
+    Android(String),
+    Ios(String),
+}
+
+impl DeviceEndpoint {
+    pub fn arn(&self) -> &str {
+        match self {
+            DeviceEndpoint::Android(a) => a.as_ref(),
+            DeviceEndpoint::Ios(i) => i.as_ref(),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct NotificationQueueMessage {
     #[serde(flatten)]
-    pub notification_entity: NotificationEntity,
+    pub notification_entity: Entity<'static>,
     #[serde(flatten, rename = "metadata")]
     pub notification_event: NotificationEvent,
     pub sender_id: Option<String>,
     pub recipient_ids: Option<Vec<String>>,
-    pub is_important_v0: Option<bool>,
 }
 
 impl Identify for UserNotification {
