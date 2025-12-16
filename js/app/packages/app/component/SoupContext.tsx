@@ -42,6 +42,7 @@ import {
 } from 'solid-js';
 import {
   createStore,
+  produce,
   reconcile,
   type SetStoreFunction,
   type Store,
@@ -100,7 +101,7 @@ const DEFAULT_VIEW_IDS_SET = new Set(VIEWCONFIG_DEFAULTS_IDS);
 
 export function createSoupContext(): UnifiedListContext {
   const [selectedView, setSelectedView] = createSignal<ViewId>(DEFAULT_VIEW_ID);
-  const [viewsDataStore, setViewDataStore_] = useAllViews({
+  const [viewsDataStore, setViewDataStore] = useAllViews({
     selectedViewSignal: [selectedView, setSelectedView],
   });
   const virtualizerHandleSignal = createSignal<VirtualizerHandle>();
@@ -111,18 +112,6 @@ export function createSoupContext(): UnifiedListContext {
   const [showHelpDrawer, setShowHelpDrawer] = createSignal<Set<DefaultView>>(
     !tutorialCompleted() ? new Set(DEFAULT_VIEWS) : new Set()
   );
-  const setViewDataStore: SetStoreFunction<ViewDataMap> = (...args: any[]) => {
-    // need to create new reference, causes bug where first entity persits highlighting
-    if (
-      args.length === 3 &&
-      args[1] === 'selectedEntity' &&
-      typeof args[2] !== 'function'
-    ) {
-      args[2] = { ...args[2] };
-    }
-    // @ts-ignore narrowing set store function is annoying due to function overloading
-    setViewDataStore_(...args);
-  };
 
   return {
     viewsDataStore,
@@ -270,7 +259,13 @@ export function createNavigationEntityListShortcut({
       setViewDataStore(selectedView(), 'selectedEntities', []);
     }
     if (entity) {
-      setViewDataStore(selectedView(), 'selectedEntity', entity);
+      setViewDataStore(
+        selectedView(),
+        produce((state) => {
+          if (!state) return;
+          state.selectedEntity = entity;
+        })
+      );
       setViewDataStore(selectedView(), 'highlightedId', entity.id);
       const nextIndex = entities()?.findIndex(({ id }) => id === entity.id);
       if (nextIndex !== undefined && nextIndex > -1) {
@@ -887,7 +882,13 @@ export function createNavigationEntityListShortcut({
         }
         batch(() => {
           setViewDataStore(selectedView(), 'highlightedId', selectedEntity.id);
-          setViewDataStore(selectedView(), 'selectedEntity', selectedEntity);
+          setViewDataStore(
+            selectedView(),
+            produce((state) => {
+              if (!state) return;
+              state.selectedEntity = selectedEntity;
+            })
+          );
         });
       }
 

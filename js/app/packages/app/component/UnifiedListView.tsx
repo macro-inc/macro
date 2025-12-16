@@ -104,7 +104,12 @@ import {
   Show,
   type Signal,
 } from 'solid-js';
-import { createStore, type SetStoreFunction, unwrap } from 'solid-js/store';
+import {
+  createStore,
+  produce,
+  type SetStoreFunction,
+  unwrap,
+} from 'solid-js/store';
 import { EntityWithEverything } from '../../macro-entity/src/components/EntityWithEverything';
 import {
   resetCommandCategoryIndex,
@@ -256,8 +261,14 @@ export function UnifiedListView(props: UnifiedListViewProps) {
         if (!_entities() || !_entities()?.length) return;
         const firstEntity = _entities()![0];
 
-        setViewDataStore(selectedView(), 'highlightedId', firstEntity.id);
-        setViewDataStore(selectedView(), 'selectedEntity', firstEntity);
+        setViewDataStore(
+          selectedView(),
+          produce((state) => {
+            if (!state) return;
+            state.highlightedId = firstEntity.id;
+            state.selectedEntity = firstEntity;
+          })
+        );
 
         tryFocusEntity(firstEntity.id);
 
@@ -1094,7 +1105,14 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     options
   ) => {
     if (preview() && !options?.ignorePreview) {
-      setViewDataStore(selectedView(), 'selectedEntity', entity);
+      setViewDataStore(
+        selectedView(),
+        produce((state) => {
+          if (!state) return;
+          state.selectedEntity = entity;
+        })
+      );
+
       return;
     }
 
@@ -1522,8 +1540,10 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                     if (isPanelActive() && !preview()) {
                       setViewDataStore(
                         selectedView(),
-                        'selectedEntity',
-                        innerProps.entity
+                        produce((state) => {
+                          if (!state) return;
+                          state.selectedEntity = innerProps.entity;
+                        })
                       );
                     }
 
@@ -1571,8 +1591,10 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                     if (isPanelActive() && !preview()) {
                       setViewDataStore(
                         selectedView(),
-                        'selectedEntity',
-                        innerProps.entity
+                        produce((state) => {
+                          if (!state) return;
+                          state.selectedEntity = innerProps.entity;
+                        })
                       );
                     }
                   }}
@@ -1583,8 +1605,10 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                     if (isPanelActive() && !preview()) {
                       setViewDataStore(
                         selectedView(),
-                        'selectedEntity',
-                        innerProps.entity
+                        produce((state) => {
+                          if (!state) return;
+                          state.selectedEntity = innerProps.entity;
+                        })
                       );
                     }
                   }}
@@ -1854,7 +1878,14 @@ function SearchBar(props: {
         highlightedEntityEl.focus();
         const entity = entities()?.find(({ id: entityId }) => entityId === id);
         if (entity) {
-          setViewDataStore(selectedView(), 'selectedEntity', entity);
+          setViewDataStore(
+            selectedView(),
+            produce((state) => {
+              if (!state) return;
+              state.selectedEntity = entity;
+            })
+          );
+
           return;
         }
       }
@@ -1871,10 +1902,8 @@ function SearchBar(props: {
   createRenderEffect((prevText: string) => {
     const text = searchText().trim();
     if (text !== prevText) {
-      batch(() => {
-        setViewDataStore(selectedView(), 'selectedEntity', undefined);
-        setViewDataStore(selectedView(), 'highlightedId', undefined);
-      });
+      setViewDataStore(selectedView(), 'selectedEntity', undefined);
+      setViewDataStore(selectedView(), 'highlightedId', undefined);
       virtualizerHandle()?.scrollToIndex(0);
       setWaitForLoadingEnd(true);
     }
