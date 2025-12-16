@@ -28,6 +28,7 @@ pub enum FailureReason {
     SqsEnqueueFailed,
     AccessTokenFetchFailed,
     MessageNotFoundInProvider,
+    MessageNotFoundInDatabase,
     LinkNotFound,
     BackfillJobNotFound,
     GmailApiFailed,

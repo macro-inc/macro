@@ -8,7 +8,9 @@ use email_db_client::labels::insert;
 use email_db_client::threads::update::update_thread_metadata;
 use models_email::email::service::link;
 use models_email::gmail::operations::GmailApiOperation;
-use models_email::gmail::webhook::{UpdateLabelsPayload, WebhookOperation};
+use models_email::gmail::webhook::{
+    UpdateLabelsPayload, UpsertMessagePayload, WebhookOperation, WebhookPubsubMessage,
+};
 use models_email::service;
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use sqlx::PgPool;
@@ -26,7 +28,7 @@ pub async fn update_labels(
     let provider_message_id = &payload.provider_message_id;
 
     // fetch simple message to get db_id from provider_id
-    let db_message =
+    let db_message_opt =
         email_db_client::messages::get_simple_messages::get_simple_message_by_provider_and_link(
             &ctx.db,
             provider_message_id,
@@ -38,13 +40,39 @@ pub async fn update_labels(
                 reason: FailureReason::DatabaseQueryFailed,
                 source: e.context("Failed to get simple message from db".to_string()),
             })
-        })?
-        .ok_or_else(|| {
-            ProcessingError::NonRetryable(DetailedError {
-                reason: FailureReason::MessageNotFoundInProvider,
-                source: anyhow::anyhow!("Message not found in database: {}", provider_message_id),
-            })
         })?;
+
+    let db_message = match db_message_opt {
+        Some(m) => m,
+        None => {
+            // if message exists in gmail but not in db, we should try to upsert it
+            ctx.sqs_client
+                .enqueue_gmail_webhook_notification(WebhookPubsubMessage {
+                    link_id: link.id,
+                    operation: WebhookOperation::UpsertMessage(UpsertMessagePayload {
+                        provider_message_id: provider_message_id.clone(),
+                    }),
+                })
+                .await
+                .map_err(|e| {
+                    ProcessingError::NonRetryable(DetailedError {
+                        reason: FailureReason::SqsEnqueueFailed,
+                        source: e.context(format!(
+                            "Failed to enqueue upsert message {:?} for missing message on label update",
+                            provider_message_id
+                        )),
+                    })
+                })?;
+
+            return Err(ProcessingError::NonRetryable(DetailedError {
+                reason: FailureReason::MessageNotFoundInDatabase,
+                source: anyhow::anyhow!(
+                    "Message {} not found in database. Upsert message queued.",
+                    provider_message_id
+                ),
+            }));
+        }
+    };
 
     let db_message_labels =
         email_db_client::labels::get::fetch_message_labels(&ctx.db, db_message.db_id)
