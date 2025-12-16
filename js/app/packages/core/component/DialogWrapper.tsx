@@ -10,7 +10,7 @@ export function DialogWrapper(props: DialogWrapperProps){
   const width = props.width ?? '800px';
 
   return (
-    <div class="z-50 fixed inset-0 bg-modal-overlay pattern-edge-muted pattern-diagonal-4">
+    <div class="z-modal fixed inset-0 bg-modal-overlay pattern-edge-muted pattern-diagonal-4">
       <div
         style={{
           'max-width': 'calc(100vw - (var(--gutter-size) * 2))',

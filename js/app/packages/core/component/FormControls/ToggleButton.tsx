@@ -6,7 +6,7 @@ import {
   createEffect,
   createSignal,
   type JSX,
-  onMount,
+  // onMount,
   type ParentComponent,
   type ValidComponent,
 } from 'solid-js';
@@ -29,23 +29,23 @@ export const ToggleButton: ParentComponent<
   } & ToggleButtonRootOptions
 > = (props) => {
   const [pressed, setPressed] = createSignal(props.pressed);
-  const [showFlicker, setShowFlicker] = createSignal(false);
-  let init = true;
+  // const [showFlicker, setShowFlicker] = createSignal(false);
+  // let init = true;
 
-  createEffect((prevPressed) => {
-    const pressedVal = pressed();
+  // createEffect((prevPressed) => {
+  //   const pressedVal = pressed();
 
-    if (init) {
-      return pressedVal;
-    }
-    if (pressedVal === prevPressed) return pressedVal;
-    if (props.animateFlickerOnDeactivate === false && pressedVal === false) {
-      return pressedVal;
-    }
+  //   if (init) {
+  //     return pressedVal;
+  //   }
+  //   if (pressedVal === prevPressed) return pressedVal;
+  //   if (props.animateFlickerOnDeactivate === false && pressedVal === false) {
+  //     return pressedVal;
+  //   }
 
-    setShowFlicker(true);
-    return pressedVal;
-  });
+  //   setShowFlicker(true);
+  //   return pressedVal;
+  // });
 
   createEffect(() => {
     if (props.pressed !== undefined) {
@@ -53,11 +53,11 @@ export const ToggleButton: ParentComponent<
     }
   });
 
-  onMount(() => {
-    setTimeout(() => {
-      init = false;
-    });
-  });
+  // onMount(() => {
+  //   setTimeout(() => {
+  //     init = false;
+  //   });
+  // });
 
   const onChange = (isPressed: boolean) => {
     if (props.pressed === undefined) {
@@ -84,12 +84,12 @@ export const ToggleButton: ParentComponent<
             [`${sizeClass[props.size || 'Base']}`]: true,
             'bg-edge-muted text-ink': state.pressed(),
             'text-ink-muted': !state.pressed(),
-            'animate-[flicker_50ms_3]': showFlicker(),
+            // 'animate-[flicker_50ms_3]': showFlicker(),
             'hover:opacity-80': !props.disabled,
           }}
-          onAnimationEnd={() => {
-            setShowFlicker(false);
-          }}
+          // onAnimationEnd={() => {
+          //   setShowFlicker(false);
+          // }}
         >
           {props.children}
         </div>
