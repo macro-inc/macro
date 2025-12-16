@@ -226,7 +226,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     virtualizerHandleSignal: [, setVirtualizerHandle],
     entityListRefSignal: [, setEntityListRef],
     entitiesSignal: [entities_, setEntities],
-    navigateThroughList,
   } = unifiedListContext;
   const view = createMemo(() => viewsData[selectedView()]);
   const selectedEntity = createMemo(() => view()?.selectedEntity);
@@ -1811,6 +1810,7 @@ function SearchBar(props: {
     setViewDataStore,
     virtualizerHandleSignal: [virtualizerHandle],
     entityListRefSignal: [entityListRef],
+    navigateThroughList,
   } = splitContext.unifiedListContext;
   const viewData = createMemo(() => viewsDataStore[selectedView()]);
   const viewName = createMemo(() => viewData().view);
