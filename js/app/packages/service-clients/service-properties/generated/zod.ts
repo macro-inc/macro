@@ -14,7 +14,8 @@ import {
  */
 export const listPropertiesQueryParams = zod.object({
   "scope": zod.enum(['user', 'org', 'system', 'all']).describe('Filter by scope: \'user\', \'org\', \'system\', or \'all\''),
-  "include_options": zod.boolean().optional().describe('Whether to include property options in the response')
+  "include_options": zod.boolean().optional().describe('Whether to include property options in the response'),
+  "for_entity_type": zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).optional().describe('Filter properties applicable to a specific entity type')
 })
 
 export const listPropertiesResponseItem = zod.union([zod.object({

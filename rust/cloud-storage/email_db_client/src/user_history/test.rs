@@ -225,3 +225,32 @@ async fn get_thread_summary_info_viewed_at_logic(pool: Pool<Postgres>) -> Result
 
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("get_thread_summary_info"))
+)]
+async fn get_thread_summary_info_subject_is_from_earliest_message(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-00000000001c")?;
+    let thread_id = Uuid::parse_str("00000000-0000-0000-0000-000000000307")?;
+
+    let result = get_thread_summary_info(&pool, link_id, &[thread_id]).await?;
+
+    assert_eq!(result.len(), 1);
+    let info = result.get(&thread_id).unwrap();
+
+    // The thread has two messages:
+    // 1. Earliest: Subject "Original Subject"
+    // 2. Latest: Subject "Reply Subject"
+    // We want the subject of the earliest message.
+    assert_eq!(info.subject, Some("Original Subject".to_string()));
+
+    // Verify we are still getting snippet/sender from the LATEST message
+    assert_eq!(info.snippet, Some("Reply message".to_string()));
+
+    Ok(())
+}

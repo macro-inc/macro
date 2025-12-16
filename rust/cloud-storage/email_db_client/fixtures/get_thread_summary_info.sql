@@ -349,3 +349,47 @@ VALUES ('00000000-0000-0000-0000-00000000001c',
         '00000000-0000-0000-0000-000000000301',
         NOW(),
         '2025-01-10 13:00:00 +00:00');
+
+------------------------------------------------------------
+-- Thread 7: Subject changes between messages
+-- Validate that we get the subject from the EARLIEST message
+------------------------------------------------------------
+
+INSERT INTO email_threads (id, link_id, inbox_visible, is_read, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-000000000307',
+        '00000000-0000-0000-0000-00000000001c',
+        true, false, NOW(), NOW());
+
+-- Earliest message: "Original Subject"
+INSERT INTO email_messages (id, thread_id, link_id, provider_id, is_sent, from_contact_id, internal_date_ts,
+                            sent_at, is_draft, snippet, subject, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-0000000e0617',
+        '00000000-0000-0000-0000-000000000307',
+        '00000000-0000-0000-0000-00000000001c',
+        'provider-msg-617',
+        FALSE,
+        '00000000-0000-0000-0000-0000000c0020',
+        '2025-01-16 10:00:00 +00:00',
+        '2025-01-16 10:00:00 +00:00',
+        false,
+        'First message',
+        'Original Subject',
+        '2025-01-16 09:00:00 +00:00',
+        '2025-01-16 09:30:00 +00:00');
+
+-- Latest message: "Reply Subject"
+INSERT INTO email_messages (id, thread_id, link_id, provider_id, is_sent, from_contact_id, internal_date_ts,
+                            sent_at, is_draft, snippet, subject, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-0000000e0618',
+        '00000000-0000-0000-0000-000000000307',
+        '00000000-0000-0000-0000-00000000001c',
+        'provider-msg-618',
+        FALSE,
+        '00000000-0000-0000-0000-0000000c0021',
+        '2025-01-16 12:00:00 +00:00',
+        '2025-01-16 12:00:00 +00:00',
+        false,
+        'Reply message',
+        'Reply Subject',
+        '2025-01-16 11:00:00 +00:00',
+        '2025-01-16 11:30:00 +00:00');

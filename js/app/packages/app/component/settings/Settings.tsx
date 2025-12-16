@@ -15,6 +15,7 @@ import { Subscription } from './Subscription';
 import { Appearance } from './Appearance';
 import { Tabs } from '@kobalte/core/tabs';
 import { Account } from './Account';
+import { Inbox } from './Inbox';
 
 const SCROLL_THRESHOLD = 10;
 
@@ -113,6 +114,7 @@ export function SettingsPanel() {
     if(!orgName() && !isNativeMobilePlatform()){tabs.push({value: 'Subscription', label: 'Subscription'})}
     if(orgName() && permissions()?.includes(MacroPermissions.WriteItPanel)){tabs.push({value: 'Organization', label: 'Organization'})}
     if(isNativeMobilePlatform() && DEV_MODE_ENV){tabs.push({ value: 'Mobile', label: 'Mobile Dev Tools' })}
+    if(DEV_MODE_ENV){tabs.push({ value: 'Inbox', label: 'Inbox' })}
 
     return tabs;
   });
@@ -133,7 +135,7 @@ export function SettingsPanel() {
             <Tabs
               value={activeTabId()}
               onChange={(value: string | undefined) => {
-                if(value && (value === 'Account' || value === 'Subscription' || value === 'Organization' || value === 'Appearance' || value === 'Mobile' || value === 'AI Memory')){
+                if(value && (value === 'Account' || value === 'Subscription' || value === 'Organization' || value === 'Appearance' || value === 'Mobile' || value === 'AI Memory' || value === 'Inbox')){
                   setActiveTabId(value as SettingsTab);
                   track(TrackingEvents.SETTINGS.CHANGETAB, { tab: value });
                 }
@@ -254,6 +256,11 @@ export function SettingsPanel() {
                 <Tabs.Content value="Appearance" class="absolute inset-0">
                   <Appearance />
                 </Tabs.Content>
+                <Show when={DEV_MODE_ENV}>
+                  <Tabs.Content value="Inbox" class="absolute inset-0">
+                    <Inbox />
+                  </Tabs.Content>
+                </Show>
               </div>
             </Tabs>
           </div>

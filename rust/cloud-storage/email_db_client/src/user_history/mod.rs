@@ -35,13 +35,15 @@ pub async fn upsert_user_history(
 /// Get summary information for multiple email threads.
 ///
 /// Returns a HashMap of thread history info including:
-/// - `created_at`: timestamp of the first message in the thread (prefers sent_at from non-drafts, falls back to updated_at)
-/// - `updated_at`: timestamp of the last message in the thread (prefers sent_at from non-drafts, falls back to updated_at)
+/// - `created_at`: timestamp of the first message in the thread
+/// - `updated_at`: timestamp of the last message in the thread
 /// - `viewed_at`: last time the user opened/viewed the thread (only included if >= updated_at)
-/// - `snippet`, `subject`, `sender`, `pretty_sender`: from the latest message in the thread
+/// - `snippet`, `sender`, `pretty_sender`: from the *latest* message in the thread
+/// - `subject`: from the *earliest* message in the thread (so it doesn't include "Re:"s
 ///
-/// The "latest message" is determined by:
-/// 1. Message with the most recent sent_at (if available) or updated_at
+/// The "earliest" and "latest" messages are determined by:
+/// 1. Priority: Non-drafts with a valid `sent_at` take precedence over drafts (or messages without `sent_at`).
+/// 2. Sort: Chronological order of `sent_at` (or `updated_at` fallback).
 #[tracing::instrument(skip(pool), err)]
 pub async fn get_thread_summary_info(
     pool: &PgPool,
@@ -53,65 +55,67 @@ pub async fn get_thread_summary_info(
     }
 
     let rows = sqlx::query!(
-        r#"
-        SELECT
-            t.id as thread_id,
-            COALESCE(
-                MIN(m.sent_at) FILTER (WHERE m.is_draft = false),
-                MIN(m.updated_at)
-            ) as "first_message_ts!",
-            COALESCE(
-                MAX(m.sent_at) FILTER (WHERE m.is_draft = false),
-                MAX(m.updated_at)
-            ) as "last_message_ts!",
-            -- Last time user viewed this thread
-            uh.updated_at as "viewed_at?",
-            latest_msg.snippet,
-            latest_msg.subject as "subject?",
-            l.macro_id,
-            latest_msg.sender as sender,
-            latest_msg.pretty_sender as "pretty_sender!"
-        FROM email_threads t
-        INNER JOIN email_messages m ON m.thread_id = t.id AND m.link_id = $1
-        LEFT JOIN email_user_history uh ON uh.thread_id = t.id AND uh.link_id = $1
-        LEFT JOIN email_links l ON l.id = t.link_id
-        -- LATERAL join to get snippet/subject/sender from the single latest message.
-        -- This subquery runs once per thread and returns exactly one message's data.
-        LEFT JOIN LATERAL (
+            r#"
             SELECT
-                m2.snippet,
-                m2.subject,
-                c.email_address as sender,
-                COALESCE(c.name, c.email_address) as pretty_sender
-            FROM email_messages m2
-            LEFT JOIN email_contacts c ON c.id = m2.from_contact_id
-            WHERE m2.thread_id = t.id
-              AND m2.link_id = $1
-            ORDER BY
-                -- Primary sort: most recent timestamp (use sent_at if available, otherwise updated_at)
-                COALESCE(m2.sent_at, m2.updated_at) DESC NULLS LAST,
-                -- Secondary sort: prefer non-drafts over drafts when timestamps are equal
-                -- (0 for non-drafts comes before 1 for drafts in ASC order)
-                (CASE WHEN m2.is_draft THEN 1 ELSE 0 END) ASC
-            LIMIT 1
-        ) latest_msg ON true
-        WHERE t.id = ANY($2)
-          AND t.link_id = $1
-        GROUP BY
-            t.id,
-            uh.updated_at,
-            latest_msg.snippet,
-            latest_msg.subject,
-            l.macro_id,
-            latest_msg.sender,
-            latest_msg.pretty_sender
-        "#,
-        link_id,
-        thread_ids
-    )
-    .fetch_all(pool)
-    .await
-    .map_err(|e| anyhow!("Failed to fetch thread summary info: {}", e))?;
+                t.id as thread_id,
+                -- Return timestamps from the chosen messages directly
+                COALESCE(earliest_msg.sent_at, earliest_msg.updated_at) as "first_message_ts!",
+                COALESCE(latest_msg.sent_at, latest_msg.updated_at) as "last_message_ts!",
+                -- Last time user viewed this thread
+                uh.updated_at as "viewed_at?",
+                latest_msg.snippet,
+                earliest_msg.subject as "subject?",
+                l.macro_id,
+                latest_msg.sender as sender,
+                latest_msg.pretty_sender as "pretty_sender!"
+            FROM email_threads t
+            LEFT JOIN email_user_history uh ON uh.thread_id = t.id AND uh.link_id = $1
+            LEFT JOIN email_links l ON l.id = t.link_id
+            -- LATERAL join for LATEST message
+            -- JOIN (Inner) acts as a filter to ensure we only return threads that actually have messages
+            JOIN LATERAL (
+                SELECT
+                    m2.snippet,
+                    m2.sent_at,
+                    m2.updated_at,
+                    c.email_address as sender,
+                    COALESCE(c.name, c.email_address) as pretty_sender
+                FROM email_messages m2
+                LEFT JOIN email_contacts c ON c.id = m2.from_contact_id
+                WHERE m2.thread_id = t.id
+                  AND m2.link_id = $1
+                ORDER BY
+                    -- 1. Priority: Non-drafts with valid sent_at come first (0), everything else is fallback (1)
+                    (CASE WHEN m2.is_draft = false AND m2.sent_at IS NOT NULL THEN 0 ELSE 1 END) ASC,
+                    -- 2. Sort by time (Newest first)
+                    COALESCE(m2.sent_at, m2.updated_at) DESC NULLS LAST
+                LIMIT 1
+            ) latest_msg ON true
+            -- LATERAL join for EARLIEST message
+            LEFT JOIN LATERAL (
+                SELECT
+                    m3.subject,
+                    m3.sent_at,
+                    m3.updated_at
+                FROM email_messages m3
+                WHERE m3.thread_id = t.id
+                  AND m3.link_id = $1
+                ORDER BY
+                    -- 1. Priority: Non-drafts with valid sent_at come first (0), everything else is fallback (1)
+                    (CASE WHEN m3.is_draft = false AND m3.sent_at IS NOT NULL THEN 0 ELSE 1 END) ASC,
+                    -- 2. Sort by time (Oldest first)
+                    COALESCE(m3.sent_at, m3.updated_at) ASC NULLS LAST
+                LIMIT 1
+            ) earliest_msg ON true
+            WHERE t.id = ANY($2)
+              AND t.link_id = $1
+            "#,
+            link_id,
+            thread_ids
+        )
+        .fetch_all(pool)
+        .await
+        .map_err(|e| anyhow!("Failed to fetch thread summary info: {}", e))?;
 
     let mut result = HashMap::new();
 
