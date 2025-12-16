@@ -81,6 +81,8 @@ import {
   type ViewDataMap,
 } from './ViewConfig';
 
+type NavigateListFn = (input: NavigationInput) => Promise<NavigationResult>;
+
 export type UnifiedListContext = {
   viewsDataStore: Store<ViewDataMap>;
   setViewDataStore: SetStoreFunction<Partial<ViewDataMap>>;
@@ -93,6 +95,8 @@ export type UnifiedListContext = {
   showHelpDrawer: Accessor<Set<DefaultView>>;
   setShowHelpDrawer: Setter<Set<DefaultView>>;
   actionRegistry: EntityActionRegistry;
+  navigateThroughList: NavigateListFn;
+  setNavigateThroughList: (fn: NavigateListFn) => void;
 };
 
 const DEFAULT_VIEW_ID: DefaultView = 'signal';
@@ -112,6 +116,7 @@ export function createSoupContext(): UnifiedListContext {
   const [showHelpDrawer, setShowHelpDrawer] = createSignal<Set<DefaultView>>(
     !tutorialCompleted() ? new Set(DEFAULT_VIEWS) : new Set()
   );
+  let navigateThroughListFn: NavigateListFn | undefined;
 
   return {
     viewsDataStore,
@@ -125,6 +130,15 @@ export function createSoupContext(): UnifiedListContext {
     showHelpDrawer,
     setShowHelpDrawer,
     actionRegistry: createEntityActionRegistry(),
+    navigateThroughList: (input) => {
+      if (!navigateThroughListFn) {
+        throw new Error('navigateThroughList not initialized');
+      }
+      return navigateThroughListFn(input);
+    },
+    setNavigateThroughList: (fn) => {
+      navigateThroughListFn = fn;
+    },
   };
 }
 
@@ -180,13 +194,13 @@ function createViewData(
   };
 }
 
-type NavigationInput = {
+export type NavigationInput = {
   axis: 'start' | 'end'; // movement direction
   mode: 'step' | 'jump'; // how far: one step or to the end
   highlight?: boolean;
 };
 
-type NavigationResult = {
+export type NavigationResult = {
   success: boolean;
   entity: EntityData | undefined;
 };
@@ -928,6 +942,8 @@ export function createNavigationEntityListShortcut({
       entity,
     };
   };
+
+  unifiedListContext.setNavigateThroughList(navigateThroughList);
 
   const scrollToEntityFromId = async () => {
     const index = getHighlightedEntity()?.index;

@@ -1849,6 +1849,13 @@ function SearchBar(props: {
     el.click();
   };
 
+  const focusNextEntity = () => {
+    splitContext.unifiedListContext.navigateThroughList({
+      axis: 'end',
+      mode: 'step',
+    });
+  };
+
   const [waitForLoadingEnd, setWaitForLoadingEnd] = createSignal(false);
 
   // When search text changes, mark that we're waiting for loading to end
@@ -1953,13 +1960,17 @@ function SearchBar(props: {
             setSearchText(e.target.value);
           }}
           onKeyDown={(e) => {
-            if (e.key === 'ArrowDown' || e.key === 'Escape') {
+            if (e.key === 'Escape') {
               e.preventDefault();
               e.currentTarget.blur();
             } else if (e.key === 'Enter') {
               e.preventDefault();
               e.currentTarget.blur();
               selectionClick();
+            } else if (e.key === 'ArrowDown') {
+              e.preventDefault();
+              e.currentTarget.blur();
+              focusNextEntity();
             }
           }}
           class="p-1 pr-0 border-0 outline-none! focus:outline-none ring-0! focus:ring-0 flex-1 text-ink text-sm truncate"
