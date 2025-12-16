@@ -1,4 +1,9 @@
 import type { Entity } from '@core/types';
+import { useUserNotificationsQuery } from '@macro-entity';
+import {
+  useMarkNotificationsAsDoneMutation,
+  useMarkNotificationsAsSeenMutation,
+} from '@queries/notification/user-notifications';
 import type { ConnectionGatewayWebsocket } from '@service-connection/websocket';
 import { notificationServiceClient } from '@service-notification/client';
 import type { UserUnsubscribe } from '@service-notification/generated/schemas';
@@ -24,11 +29,6 @@ import {
   notificationEntity,
   type UnifiedNotification,
 } from './types';
-import { useUserNotificationsQuery } from '@macro-entity';
-import {
-  useMarkNotificationsAsDoneMutation,
-  useMarkNotificationsAsSeenMutation,
-} from '@queries/notification/user-notifications';
 
 type NotificationStoreInner = Record<CompositeEntity, UnifiedNotification[]>;
 

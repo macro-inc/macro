@@ -1,3 +1,4 @@
+import type { Maybe } from '@core/types';
 import { type MaybeResult, throwOnErr } from '@core/util/maybeResult';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { notificationServiceClient } from '@service-notification/client';
@@ -10,7 +11,6 @@ import {
 } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { notificationKeys } from './keys';
-import { Maybe } from '@core/types';
 
 export { notificationKeys } from './keys';
 
