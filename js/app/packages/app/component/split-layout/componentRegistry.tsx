@@ -52,7 +52,7 @@ export function resolveComponent(
   };
 }
 
-registerComponent('unified-list', () => <Soup />, { viewId: 'inbox' });
+registerComponent('unified-list', () => <Soup />, { viewId: 'signal' });
 registerComponent('loading', () => <LoadingBlock />);
 registerComponent('channel-compose', () => <ChannelCompose />);
 registerComponent('email-compose', () => <EmailCompose />);

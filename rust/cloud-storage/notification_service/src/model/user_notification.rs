@@ -5,5 +5,5 @@ use utoipa::ToSchema;
 #[serde(rename_all = "camelCase")]
 pub struct NotificationBulkRequest {
     /// The ids of the notifications to handle
-    pub notification_ids: Vec<String>,
+    pub notification_ids: Vec<uuid::Uuid>,
 }

@@ -14,6 +14,7 @@ comms_service_client = { path = "../comms_service_client" }
 document_storage_service_client = { path = "../document_storage_service_client" }
 email_service_client = { path = "../email_service_client" }
 futures = { workspace = true }
+indexmap = "2"
 http-body-util = { workspace = true }
 macro_auth = { path = "../macro_auth" }
 macro_db_client = { path = "../macro_db_client" }
@@ -41,6 +42,7 @@ utoipa-swagger-ui = { workspace = true }
 item_filters = { path = "../item_filters" }
 thiserror = { workspace = true }
 models_opensearch = { path = "../models_opensearch" }
+document_sub_type = { path = "../document_sub_type" }
 
 [dev-dependencies]
 macro_auth = { path = "../macro_auth", features = ["testing"] }

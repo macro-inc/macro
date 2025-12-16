@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-/// Defines who owns a property - user-scoped, org-scoped, or both.
+/// Defines who owns a property - user-scoped, org-scoped, system, or both user and org.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq)]
 #[serde(rename_all = "snake_case", tag = "scope")]
 pub enum PropertyOwner {
@@ -16,6 +16,8 @@ pub enum PropertyOwner {
         user_id: String,
         organization_id: i32,
     },
+    /// System-owned property (no user or org owner)
+    System,
 }
 
 impl PropertyOwner {
@@ -26,7 +28,7 @@ impl PropertyOwner {
             PropertyOwner::UserAndOrganization {
                 organization_id, ..
             } => Some(*organization_id),
-            PropertyOwner::User { .. } => None,
+            PropertyOwner::User { .. } | PropertyOwner::System => None,
         }
     }
 
@@ -35,25 +37,33 @@ impl PropertyOwner {
         match self {
             PropertyOwner::User { user_id } => Some(user_id.as_str()),
             PropertyOwner::UserAndOrganization { user_id, .. } => Some(user_id.as_str()),
-            PropertyOwner::Organization { .. } => None,
+            PropertyOwner::Organization { .. } | PropertyOwner::System => None,
         }
     }
 
-    /// Create from optional org_id and user_id (for DB conversions)
+    /// Create from optional org_id, user_id, and is_system flag (for DB conversions)
     pub fn from_optional_ids(
         organization_id: Option<i32>,
         user_id: Option<String>,
-    ) -> Option<Self> {
+        is_system: bool,
+    ) -> Self {
+        if is_system {
+            return PropertyOwner::System;
+        }
         match (organization_id, user_id) {
-            (Some(org_id), Some(uid)) => Some(PropertyOwner::UserAndOrganization {
+            (Some(org_id), Some(uid)) => PropertyOwner::UserAndOrganization {
                 user_id: uid,
                 organization_id: org_id,
-            }),
-            (Some(org_id), None) => Some(PropertyOwner::Organization {
+            },
+            (Some(org_id), None) => PropertyOwner::Organization {
                 organization_id: org_id,
-            }),
-            (None, Some(uid)) => Some(PropertyOwner::User { user_id: uid }),
-            (None, None) => None,
+            },
+            (None, Some(uid)) => PropertyOwner::User { user_id: uid },
+            (None, None) => {
+                // This should not happen for non-system properties
+                // but we handle it gracefully by returning System
+                PropertyOwner::System
+            }
         }
     }
 }

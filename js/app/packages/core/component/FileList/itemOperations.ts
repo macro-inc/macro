@@ -2,6 +2,7 @@ import { usePaywallState } from '@core/constant/PaywallState';
 import { isPaymentError } from '@core/util/handlePaymentError';
 import { isErr, isOk } from '@core/util/maybeResult';
 import { cognitionApiServiceClient } from '@service-cognition/client';
+import { commsServiceClient } from '@service-comms/client';
 import { type ItemType, storageServiceClient } from '@service-storage/client';
 import {
   optimisticallyRemoveDeletedItem,
@@ -89,6 +90,13 @@ export async function renameItem(args: {
       result = await cognitionApiServiceClient.renameChat({
         chat_id: id,
         new_name: newName,
+      });
+      break;
+    }
+    case 'channel': {
+      result = await commsServiceClient.patchChannel({
+        channel_id: id,
+        channel_name: newName,
       });
       break;
     }

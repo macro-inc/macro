@@ -1,0 +1,23 @@
+[package]
+edition = "2024"
+name = "properties"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+macro_uuid = { path = "../macro_uuid" }
+models_properties = { path = "../models_properties" }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+system_properties = { path = "../system_properties" }
+tracing = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+mockall = { workspace = true }
+macro_db_migrator = { path = "../macro_db_migrator" }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[package.metadata.sqlx]
+offline = true

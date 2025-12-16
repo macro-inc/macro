@@ -10,7 +10,7 @@ import { staticFileClient } from '@service-static-files/client';
 import { storageServiceClient } from '@service-storage/client';
 import { postNewHistoryItem } from '@service-storage/history';
 import { uploadToPresignedUrl } from '@service-storage/util/uploadToPresignedUrl';
-import { syncServiceClient } from '../../service-sync/client';
+import { syncServiceClient } from '@service-sync/client';
 import { contentHash } from './hash';
 import {
   getExtensionForLanguage,
@@ -35,6 +35,7 @@ type CreateMarkdownFileArgs = {
   title?: string;
   content?: string;
   projectId?: string;
+  isTask?: boolean;
 };
 
 /**
@@ -56,6 +57,7 @@ export async function createMarkdownFile(
     fileType: 'md',
     sha: fakeSha,
     projectId: args?.projectId,
+    isTask: args?.isTask ?? false,
   });
 
   invalidateUserQuota();
@@ -76,6 +78,21 @@ export async function createMarkdownFile(
     return;
   }
   return documentId;
+}
+
+type CreateTaskArgs = {
+  title?: string;
+  content?: string;
+  projectId?: string;
+};
+
+/**
+ * Initializes a new task (markdown file with isTask flag) in dss & sync_service
+ */
+export async function createTask(
+  args?: CreateTaskArgs
+): Promise<string | undefined> {
+  return createMarkdownFile({ ...args, isTask: true });
 }
 
 export async function createCodeFileFromText({

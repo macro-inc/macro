@@ -1,14 +1,14 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { createBucket } from '@resources';
+import { createBucket } from '../../packages/resources';
 import {
   config,
   getMacroApiToken,
   getMacroNotify,
   getSearchEventQueue,
   stack,
-} from '@shared';
-import { get_coparse_api_vpc } from '@vpc';
+} from '../../packages/shared';
+import { get_coparse_api_vpc } from '../../packages/vpc';
 import { CloudStorageService } from './cloud-storage-service';
 import { DeleteChatHandler } from './delete-chat-handler';
 import { DeleteDocumentHandler } from './delete-document-handler';
@@ -346,7 +346,7 @@ const cloudStorageService = new CloudStorageService(
       },
       {
         name: 'SYNC_SERVICE_URL',
-        value: `https://sync-service-${stack}.macroverse.workers.dev`,
+        value: `https://sync-service-${stack === 'dev' ? 'dev3' : 'prod2'}.macroverse.workers.dev`,
       },
       {
         name: 'MACRO_API_TOKEN_ISSUER',

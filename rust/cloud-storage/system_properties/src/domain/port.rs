@@ -15,4 +15,11 @@ pub trait SystemPropertiesRepository: Clone + Send + Sync + 'static {
         &self,
         rows: Vec<crate::domain::model::PropertyRow>,
     ) -> impl Future<Output = Result<(), SystemPropertyError>> + Send;
+
+    /// Copy all task properties from one entity to another.
+    fn copy_task_properties(
+        &self,
+        from_task_id: &str,
+        to_task_id: &str,
+    ) -> impl Future<Output = Result<(), SystemPropertyError>> + Send;
 }

@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use document_sub_type::DocumentSubType;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Default)]
@@ -21,8 +22,8 @@ pub struct DocumentHistoryInfo {
     pub project_id: Option<String>,
     /// Deleted at
     pub deleted_at: Option<DateTime<Utc>>,
-    /// Whether the document is a task
-    pub is_task: bool,
+    /// The sub type of the document if present. This is only applicable for md documents.
+    pub sub_type: Option<DocumentSubType>,
 }
 
 /// Gets document history information including when a user last viewed each document
@@ -49,10 +50,10 @@ pub async fn get_document_history_info(
             c."deletedAt" as "deleted_at?",
             uh."updatedAt" as "viewed_at?",
             c."projectId" as "project_id?",
-            (dt.document_id IS NOT NULL) as "is_task!"
+            dt.sub_type as "sub_type?: DocumentSubType"
         FROM
             "Document" c
-        LEFT JOIN document_task dt ON dt.document_id = c.id
+        LEFT JOIN document_sub_type dt ON dt.document_id = c.id
         LEFT JOIN
             "UserHistory" uh ON uh."itemId" = c."id"
                 AND uh."userId" = $1
@@ -85,7 +86,7 @@ pub async fn get_document_history_info(
                 deleted_at: row
                     .deleted_at
                     .map(|dt| DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc)),
-                is_task: row.is_task,
+                sub_type: row.sub_type,
             };
             (row.item_id, info)
         })

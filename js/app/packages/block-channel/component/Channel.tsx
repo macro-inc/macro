@@ -1,5 +1,6 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { useNavigatedFromJK } from '@app/component/useNavigatedFromJK';
+import { URL_PARAMS } from '@block-channel/constants';
 import type { ChannelData } from '@block-channel/definition';
 import {
   latestActivitySignal,
@@ -10,11 +11,7 @@ import {
   isDraggingOverChannelSignal,
   isValidChannelDragSignal,
 } from '@block-channel/signal/attachment';
-import {
-  channelStore,
-  initializeChannelData,
-  refetchChannelData,
-} from '@block-channel/signal/channel';
+import { refetchChannelData } from '@block-channel/signal/channel';
 import { activeThreadIdSignal } from '@block-channel/signal/threads';
 import { handleFileUpload } from '@block-channel/utils/inputAttachments';
 import { withAnalytics } from '@coparse/analytics';
@@ -34,6 +31,7 @@ import { createTabFocusEffect } from '@core/signal/tabFocus';
 import type { InputAttachment } from '@core/store/cacheChannelInput';
 import { handleFileFolderDrop } from '@core/util/upload';
 import { ChannelDebouncedNotificationReadMarker } from '@notifications';
+import { useChannelQuery } from '@queries/channel/channel';
 import type { Message } from '@service-comms/generated/models';
 import { connectionGatewayClient } from '@service-connection/client';
 import { createCallback } from '@solid-primitives/rootless';
@@ -49,6 +47,7 @@ import {
   on,
   onCleanup,
   onMount,
+  Suspense,
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { type FocusableElement, tabbable } from 'tabbable';
@@ -80,7 +79,8 @@ export function createChannelRefetchEffect(channelId: string) {
 }
 
 export function Channel(props: { data: Required<ChannelData> }) {
-  const channel = channelStore.get; // this is our source of truth because data can be updated outside
+  const channel = useChannelQuery(() => props.data.channel.id);
+
   const [_activeThreadId, setActiveThreadId] = activeThreadIdSignal;
   const latestActivity = latestActivitySignal.get;
   const updateActivityOnOpen = createCallback(updateActivityOnChannelOpen);
@@ -88,7 +88,7 @@ export function Channel(props: { data: Required<ChannelData> }) {
   const channelId = useBlockId();
   const { track } = withAnalytics();
   let containerRef!: HTMLDivElement;
-  const [_searchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const [channelInputAttachmentsStore, setChannelInputAttachmentsStore] =
     createStore<Record<string, InputAttachment[]>>({});
   // All messages, including threads, in order of how they should be displayed, i.e. thread children are placed after their parent message
@@ -100,20 +100,38 @@ export function Channel(props: { data: Required<ChannelData> }) {
   const notificationSource = useGlobalNotificationSource();
 
   const blockHandle = blockHandleSignal.get;
-  const [targetMessage, setTargetMessage] = createSignal<{
-    messageId: string;
-    threadId?: string;
-  }>();
+
+  const initialTargetMessage = () => {
+    const messageID = searchParams[URL_PARAMS.message];
+    const threadID = searchParams[URL_PARAMS.thread];
+
+    if (!messageID) return;
+
+    return {
+      messageId: Array.isArray(messageID) ? messageID[0] : messageID,
+      threadId: Array.isArray(threadID) ? threadID[0] : threadID,
+    };
+  };
+
+  const [targetMessage, setTargetMessage] = createSignal<
+    | {
+        messageId: string;
+        threadId?: string;
+      }
+    | undefined
+  >(initialTargetMessage());
 
   createMethodRegistration(blockHandle, {
     goToLocationFromParams: async (params: Record<string, any>) => {
-      if (params.thread_id) {
-        setActiveThreadId(params.thread_id);
+      const threadId = params[URL_PARAMS.thread];
+      const messageId = params[URL_PARAMS.message];
+      if (threadId) {
+        setActiveThreadId(threadId);
       }
-      if (params.message_id) {
+      if (messageId) {
         setTargetMessage({
-          messageId: params.message_id,
-          threadId: params.thread_id,
+          messageId,
+          threadId,
         });
       }
     },
@@ -124,7 +142,6 @@ export function Channel(props: { data: Required<ChannelData> }) {
   >(undefined);
 
   onMount(() => {
-    initializeChannelData(props.data);
     updateActivityOnOpen();
 
     track(TrackingEvents.BLOCKCHANNEL.CHANNEL.OPEN);
@@ -303,7 +320,9 @@ export function Channel(props: { data: Required<ChannelData> }) {
         channelId={channelId}
       />
       <StaticMarkdownContext>
-        <Top />
+        <Suspense>
+          <Top channelID={channelId} />
+        </Suspense>
         <div
           class="h-full flex flex-col min-h-0 flex-1 relative w-full"
           use:fileFolderDrop={{
@@ -332,7 +351,7 @@ export function Channel(props: { data: Required<ChannelData> }) {
           />
           <MessageList
             channelId={channelId}
-            messages={channel.messages}
+            messages={channel.data?.messages ?? []}
             focusedMessageId={focusedMessageId}
             setFocusedMessageId={setFocusedMessageId}
             targetMessage={targetMessage}
@@ -345,7 +364,7 @@ export function Channel(props: { data: Required<ChannelData> }) {
             {/* seamus: note this element is below the scroll so we translate it back to account for the scroll above */}
             <div class="mx-auto -translate-x-1 w-full macro-message-width">
               <ChannelInput
-                channelName={channel?.channel?.name ?? ''}
+                channelName={channel.data?.channel?.name ?? ''}
                 inputAttachmentsStore={channelInputAttachmentsStore}
                 setInputAttachmentsStore={setChannelInputAttachmentsStore}
                 inputAttachmentsKey={channelId}

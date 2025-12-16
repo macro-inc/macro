@@ -44,15 +44,15 @@ impl IntoResponse for GetPreviewsCursorError {
     }
 }
 
-pub(crate) struct PreviewViewExtractor(pub PreviewView);
+pub(crate) struct PreviewViewPathExtractor(pub PreviewView);
 
 #[async_trait]
-impl<S: Send + Sync> FromRequestParts<S> for PreviewViewExtractor {
+impl<S: Send + Sync> FromRequestParts<S> for PreviewViewPathExtractor {
     type Rejection = GetPreviewsCursorError;
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
         let Path(view) = parts.extract::<Path<String>>().await?;
-        Ok(PreviewViewExtractor(
+        Ok(PreviewViewPathExtractor(
             PreviewView::from_str(&view).map_err(GetPreviewsCursorError::InvalidView)?,
         ))
     }

@@ -78,6 +78,7 @@ pub fn map_db_attachment_to_service(
         mime_type: db_att.mime_type,
         size_bytes: db_att.size_bytes,
         content_id: db_att.content_id,
+        sfs_id: db_att.sfs_id,
     }
 }
 

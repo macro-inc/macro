@@ -13,38 +13,38 @@
   "services": [
     {
       "binding": "SYNC_SERVICE",
-      "service": "sync-service-prod"
+      "service": "sync-service-prod2"
     }
   ],
   "vars": {
-    "SYNC_SERVICE_URL": "https://sync-service-prod.macroverse.workers.dev",
+    "SYNC_SERVICE_URL": "https://sync-service-prod2.macroverse.workers.dev",
   },
   "env": {
     "local": {
       "vars": {
-        "SYNC_SERVICE_URL": "https://sync-service-dev.macroverse.workers.dev",
+        "SYNC_SERVICE_URL": "https://sync-service-dev3.macroverse.workers.dev",
       }
     },
     "dev": {
       "services": [
         {
           "binding": "SYNC_SERVICE",
-          "service": "sync-service-dev"
+          "service": "sync-service-dev3"
         }
       ],
       "vars": {
-        "SYNC_SERVICE_URL": "https://sync-service-dev.macroverse.workers.dev",
+        "SYNC_SERVICE_URL": "https://sync-service-dev3.macroverse.workers.dev",
       }
     },
     "prod": {
       "services": [
         {
           "binding": "SYNC_SERVICE",
-          "service": "sync-service-prod"
+          "service": "sync-service-prod2"
         }
       ],
       "vars": {
-        "SYNC_SERVICE_URL": "https://sync-service-prod.macroverse.workers.dev",
+        "SYNC_SERVICE_URL": "https://sync-service-prod2.macroverse.workers.dev",
       }
     }
   },

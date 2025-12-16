@@ -1,5 +1,6 @@
 import { useOpenInstructionsMd } from '@core/component/AI/util/instructions';
 import { ENABLE_SEARCH_SERVICE } from '@core/constant/featureFlags';
+import { useSettingsState } from '@core/constant/SettingsState';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { useBigChat } from '@core/signal/layout';
@@ -37,6 +38,7 @@ export default function GlobalShortcuts() {
 
   const canFit = () =>
     globalSplitManager()?.resizeContext()?.canFit({ minSize: 400 }) ?? true;
+  const { toggleSettings } = useSettingsState();
 
   const handleCommandMenu = () => {
     const wasOpen = konsoleOpen();
@@ -131,6 +133,18 @@ export default function GlobalShortcuts() {
     condition: canFit,
     keyDownHandler: () => {
       insertSplit({ type: 'component', id: 'unified-list' });
+      return true;
+    },
+    runWithInputFocused: true,
+  });
+
+  registerHotkey({
+    hotkeyToken: TOKENS.global.toggleSettings,
+    hotkey: 'cmd+;',
+    scopeId: 'global',
+    description: 'Toggle settings',
+    keyDownHandler: () => {
+      toggleSettings();
       return true;
     },
     runWithInputFocused: true,

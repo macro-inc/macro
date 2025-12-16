@@ -82,7 +82,7 @@ pub async fn handle_retryable_error(
         }
         BackfillOperation::BackfillAttachment(p) => {
             tracing::debug!(
-                attachment_db_id = %p.metadata.attachment_db_id,
+                attachment_db_id = %p.metadata.attachment_metadata.attachment_db_id,
                 "Retryable error backfilling attachment"
             )
         }

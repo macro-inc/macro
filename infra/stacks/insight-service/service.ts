@@ -6,9 +6,9 @@ import {
   datadogAgentContainer,
   fargateLogRouterSidecarContainer,
   serviceLoadBalancer,
-} from '@resources';
-import { EcrImage } from '@service';
-import { BASE_DOMAIN, stack } from '@shared';
+} from '../../packages/resources';
+import { EcrImage } from '../../packages/service';
+import { BASE_DOMAIN, stack } from '../../packages/shared';
 
 const BASE_NAME = 'insight-service';
 const BASE_PATH = '../../../rust/cloud-storage';
@@ -251,6 +251,7 @@ export class InsightService extends pulumi.ComponentResource {
             service: {
               name: BASE_NAME,
               image: image.image.imageUri,
+              stopTimeout: 10, // 10 seconds to force kill the task
               cpu: 256,
               memory: 512,
               environment: envVars,

@@ -9,10 +9,14 @@ use utoipa::ToSchema;
 pub struct EmailSearchResult {
     /// The email message id.
     /// This is only present if the search result is on the message content
-    pub message_id: Option<String>,
-    /// The sender
-    /// This is only present if the search result is on the message content
-    pub sender: Option<String>,
+    pub message_id: Option<uuid::Uuid>,
+    /// The sender.
+    /// If the match is on the subject, the sender is the latest sender on the thread.
+    pub sender: String,
+    /// The pretty sender.
+    /// If the match is on the subject, the pretty sender is the latest sender on the thread.
+    /// This could be the sender's email if there is no contact name for the sender.
+    pub pretty_sender: String,
     /// This is only present if the search result is on the message content
     pub recipients: Vec<String>,
     /// This is only present if the search result is on the message content
@@ -37,7 +41,7 @@ pub struct EmailSearchResponseItem {
     /// Standardized fields that all item types will share.
     /// These field names are being aligned across all item types
     /// for consistency in our data model.
-    pub id: String,
+    pub id: uuid::Uuid,
     /// Subject of the email thread
     pub name: Option<String>,
     pub owner_id: String,
@@ -47,7 +51,7 @@ pub struct EmailSearchResponseItem {
     pub subject: Option<String>,
 
     /// The id of the email thread
-    pub thread_id: String,
+    pub thread_id: uuid::Uuid,
     /// The id of the owner of the email thread
     pub user_id: String,
     /// The search results for the document
@@ -72,7 +76,7 @@ pub struct EmailSearchResponseItemWithMetadata {
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct EmailSearchMetadata {
     /// The id of the email thread
-    pub thread_id: String,
+    pub thread_id: uuid::Uuid,
     /// The id of the owner of the email thread
     pub user_id: String,
 }

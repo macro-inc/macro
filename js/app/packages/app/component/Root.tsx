@@ -12,15 +12,15 @@ import {
   ENABLE_WEBSOCKET_DEBUGGER,
   PROD_MODE_ENV,
 } from '@core/constant/featureFlags';
-import { useEmailLinksStatus } from '@core/email-link';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { createBlockOrchestrator } from '@core/orchestrator';
 import { formatTabTitle, tabTitleSignal } from '@core/signal/tabTitle';
 import { licenseChannel } from '@core/util/licenseUpdateBroadcastChannel';
 import { isErr } from '@core/util/maybeResult';
+import { isTauri } from '@core/util/platform';
 import { transformShortIdInUrlPathname } from '@core/util/url';
-import { isTauri, MaybeTauriProvider } from '@macro/tauri';
-import { createEmailSource, Provider as EntityProvider } from '@macro-entity';
+import { MaybeTauriProvider } from '@macro/tauri';
+import { Provider as EntityProvider } from '@macro-entity';
 import {
   createNotificationSource,
   type UnifiedNotification,
@@ -235,7 +235,7 @@ const ROUTES: RouteDefinition[] = [
   {
     path: '/login',
     component: () => (
-      <div class="flex w-full h-full overflow-y-hidden">
+      <div class="flex w-full h-dvh overflow-y-hidden">
         <Login />
       </div>
     ),
@@ -243,7 +243,7 @@ const ROUTES: RouteDefinition[] = [
   {
     path: '/onboarding',
     component: () => (
-      <div class="flex *:flex-1 w-full h-full overflow-y-hidden">
+      <div class="flex *:flex-1 w-full h-dvh overflow-y-hidden">
         <Onboarding />
       </div>
     ),
@@ -278,17 +278,11 @@ export function ConfiguredGlobalAppStateProvider(props: ParentProps) {
     onNotification
   );
 
-  const emailActive = useEmailLinksStatus();
-  const emailSource = createEmailSource(undefined, undefined, {
-    disabled: () => !emailActive(),
-  });
-
   const blockOrchestrator = createBlockOrchestrator();
 
   return (
     <GlobalAppStateProvider
       notificationSource={notificationSource}
-      emailSource={emailSource}
       blockOrchestrator={blockOrchestrator}
     >
       {props.children}
@@ -362,6 +356,7 @@ export function Root() {
 
   const [tabInfo] = tabTitleSignal;
   const tabTitle = () => formatTabTitle(tabInfo());
+  const routerBase = isTauri() ? '/' : '/app';
 
   return (
     <MaybeTauriProvider>
@@ -378,7 +373,7 @@ export function Root() {
                   transformUrl={transformShortIdInUrlPathname}
                   root={Layout}
                   rootPreload={rootPreload}
-                  base="/app"
+                  base={routerBase}
                 >
                   {{
                     path: '/',

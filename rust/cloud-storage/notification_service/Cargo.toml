@@ -72,12 +72,16 @@ sqs_worker = { path = "../sqs_worker" }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tower = { workspace = true }
-tower-http = { workspace = true }
+tower-http = { workspace = true, features = [
+  "compression-br",
+  "compression-gzip",
+] }
 tracing = { workspace = true }
 url = { workspace = true }
 utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
 authentication_service_client = { path = "../authentication_service_client" }
+uuid = { workspace = true }
 
 [dev-dependencies]
 macro_auth = { path = "../macro_auth", features = ["testing"] }

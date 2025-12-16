@@ -1,5 +1,4 @@
 import { LoadingSpinner } from '@core/component/LoadingSpinner';
-import { TabContent } from '@core/component/TabContent';
 import { isErr } from '@core/util/maybeResult';
 import { insightClient } from '@service-insight/client';
 import { Match, onMount, Switch } from 'solid-js';
@@ -55,13 +54,10 @@ export function AiMemory() {
   onMount(() => fetchMemories());
 
   return (
-    <div class="w-full h-full flex flex-col">
-      <TabContent title="AI Memory">
-        <div class="text-sm pb-8">
-          Macro AI remembers your preferences and who you are
-        </div>
-      </TabContent>
-      <Switch>
+    <div class="absolute inset-0 overflow-y-auto" style="scrollbar-width: none;">
+      <div class="p-2">
+        <div class="w-full h-full flex flex-col">
+          <Switch>
         <Match when={insights()}>
           {(memories) => (
             <MemoryList
@@ -81,7 +77,9 @@ export function AiMemory() {
             Error loading memory
           </div>
         </Match>
-      </Switch>
+          </Switch>
+        </div>
+      </div>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import * as aws from '@pulumi/aws';
 import type * as pulumi from '@pulumi/pulumi';
 import type { Output } from '@pulumi/pulumi';
-import { MACRO_SUBDOMAIN_CERT, stack } from '@shared';
+import { MACRO_SUBDOMAIN_CERT, stack } from '../../../shared';
 
 export function serviceLoadBalancer(
   parent: pulumi.ComponentResource | undefined,
@@ -33,8 +33,7 @@ export function serviceLoadBalancer(
     `${serviceName}-tg-${stack}`,
     {
       name: `${serviceName}-tg-${stack}`,
-      // TODO: might want to make this smaller?
-      deregistrationDelay: 120,
+      deregistrationDelay: 30, // let any active calls finish within 30 seconds
       port: serviceContainerPort,
       protocol: 'HTTP',
       targetType: 'ip',

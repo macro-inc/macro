@@ -44,7 +44,7 @@ export function MessageReactions(props: MessageReactionsProps) {
               : reaction.users.includes(userId()!);
 
             const tooltipContent = createMemo(() => {
-              let users = reaction.users.map((userId_) => {
+              const users = reaction.users.map((userId_) => {
                 if (userId_ === userId()!) {
                   return 'You';
                 }
@@ -52,8 +52,9 @@ export function MessageReactions(props: MessageReactionsProps) {
               });
 
               if (users.length === 1) {
-                return idToDisplayName(users[0]);
+                return users[0];
               }
+
               const first = users.slice(0, -1);
               const lastUser = users.slice(-1)[0];
               // Team oxford comma

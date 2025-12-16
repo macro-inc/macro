@@ -1,3 +1,5 @@
+import CompanyIcon from '@icon/duotone/building-duotone.svg';
+import ThreadIcon from '@icon/duotone/envelope-duotone.svg';
 import CalculatorIcon from '@icon/regular/calculator.svg';
 import CalendarBlankIcon from '@icon/regular/calendar-blank.svg';
 import ChatIcon from '@icon/regular/chat.svg';
@@ -7,6 +9,7 @@ import FolderIcon from '@icon/regular/folder.svg';
 import HashIcon from '@icon/regular/hash.svg';
 import LinkIcon from '@icon/regular/link.svg';
 import ListBulletIcon from '@icon/regular/list-bullets.svg';
+import TaskIcon from '@icon/regular/list-checks.svg';
 import PencilIcon from '@icon/regular/pencil.svg';
 import SimpleTagIcon from '@icon/regular/tag-simple.svg';
 import UserCircleIcon from '@icon/regular/user-circle.svg';
@@ -38,6 +41,12 @@ export const PropertyDataTypeIcon: Component<PropertyDataTypeIconProps> = (
         return <ChatIcon class={iconClasses} />;
       case 'CHANNEL':
         return <HashIcon class={iconClasses} />;
+      case 'COMPANY':
+        return <CompanyIcon class={iconClasses} />;
+      case 'THREAD':
+        return <ThreadIcon class={iconClasses} />;
+      case 'TASK':
+        return <TaskIcon class={iconClasses} />;
       default:
         return <SimpleTagIcon class={iconClasses} />;
     }

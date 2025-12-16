@@ -1,4 +1,3 @@
-mod create_document;
 mod delete_document;
 mod get_document;
 mod get_document_list;
@@ -11,7 +10,6 @@ pub mod v2;
 
 pub mod copy_document;
 pub mod document_bom;
-pub use create_document::*;
 pub use delete_document::*;
 pub use get_document::*;
 pub use get_document_list::*;

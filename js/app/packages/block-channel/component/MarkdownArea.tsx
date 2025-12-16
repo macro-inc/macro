@@ -28,6 +28,7 @@ import {
 } from '@core/component/LexicalMarkdown/plugins';
 import { codePlugin } from '@core/component/LexicalMarkdown/plugins/code/codePlugin';
 import { emojisPlugin } from '@core/component/LexicalMarkdown/plugins/emojis/emojisPlugin';
+import { restoreFocusPlugin } from '@core/component/LexicalMarkdown/plugins/restore-focus';
 import { createMenuOperations } from '@core/component/LexicalMarkdown/shared/inlineMenu';
 import {
   editorIsEmpty,
@@ -239,6 +240,7 @@ function MarkdownArea(props: MarkdownAreaProps & ConsumableMarkdownAreaProps) {
     .use(textPastePlugin())
     .use(markdownPastePlugin())
     .use(normalizeEnterPlugin())
+    .use(restoreFocusPlugin())
     .use(
       tablePlugin({
         hasCellMerge: true,
@@ -330,14 +332,6 @@ function MarkdownArea(props: MarkdownAreaProps & ConsumableMarkdownAreaProps) {
       },
       COMMAND_PRIORITY_CRITICAL
     )
-  );
-
-  // better focus in handling. preserves selection on regain focus!
-  autoRegister(
-    registerRootEventListener(editor, 'focusin', (e) => {
-      e.preventDefault();
-      editor.focus();
-    })
   );
 
   let disposeBlurFn: () => void = () => {};

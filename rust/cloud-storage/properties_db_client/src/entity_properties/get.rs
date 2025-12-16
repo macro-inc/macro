@@ -1,7 +1,4 @@
 //! Entity property get operations.
-//!
-//! TODO: The `pd.is_system = FALSE` filters are temporary. In a future PR, system properties
-//!       will be properly supported and returned to users via the API.
 
 use crate::error::PropertiesDatabaseError;
 use sqlx::{Pool, Postgres};
@@ -12,7 +9,7 @@ use models_properties::service::entity_property::EntityProperty;
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_value::PropertyValue;
-use models_properties::{DataType, EntityReference, EntityType};
+use models_properties::{DataType, EntityPropertyReference, EntityReference, EntityType};
 
 type Result<T> = std::result::Result<T, PropertiesDatabaseError>;
 
@@ -32,6 +29,7 @@ struct EntityPropertyRow {
     specific_entity_type: Option<Option<EntityType>>,
     definition_created_at: chrono::DateTime<chrono::Utc>,
     definition_updated_at: chrono::DateTime<chrono::Utc>,
+    definition_is_system: bool,
     values: Option<sqlx::types::JsonValue>,
 }
 
@@ -42,8 +40,8 @@ fn row_to_entity_property_with_definition(
     let owner = models_properties::PropertyOwner::from_optional_ids(
         row.definition_organization_id,
         row.definition_user_id,
-    )
-    .unwrap();
+        row.definition_is_system,
+    );
 
     let property_definition = PropertyDefinition {
         id: row.property_definition_id,
@@ -54,6 +52,7 @@ fn row_to_entity_property_with_definition(
         specific_entity_type: row.specific_entity_type.flatten(),
         created_at: row.definition_created_at,
         updated_at: row.definition_updated_at,
+        is_system: row.definition_is_system,
         is_metadata: false,
     };
 
@@ -229,33 +228,36 @@ async fn attach_property_options(
     Ok(())
 }
 
-/// Gets the entity_id and entity_type for a given entity_property_id.
-/// Used for permission checking before deletion.
+/// Looks up an entity property by its ID.
+/// Returns entity reference (for permissions) and definition ID (for required property check).
 #[tracing::instrument(skip(db))]
-pub async fn get_entity_type_from_entity_property(
+pub async fn lookup_entity_property(
     db: &Pool<Postgres>,
     entity_property_id: Uuid,
-) -> Result<Option<EntityReference>> {
+) -> Result<Option<EntityPropertyReference>> {
     let row = sqlx::query!(
         r#"
         SELECT 
-            entity_id,
-            entity_type as "entity_type: EntityType"
-        FROM entity_properties
-        WHERE id = $1
+            ep.entity_id,
+            ep.entity_type as "entity_type: EntityType",
+            ep.property_definition_id
+        FROM entity_properties ep
+        WHERE ep.id = $1
         "#,
         entity_property_id
     )
     .fetch_optional(db)
     .await?;
 
-    Ok(row.map(|r| EntityReference {
+    Ok(row.map(|r| EntityPropertyReference {
         entity_id: r.entity_id,
         entity_type: r.entity_type,
+        property_definition_id: r.property_definition_id,
     }))
 }
 
 /// Gets entity properties with their definitions and values.
+/// Includes both custom and system properties.
 #[tracing::instrument(skip(db))]
 pub async fn get_entity_properties_values(
     db: &Pool<Postgres>,
@@ -279,11 +281,11 @@ pub async fn get_entity_properties_values(
             pd.is_multi_select,
             pd.specific_entity_type as "specific_entity_type: Option<EntityType>",
             pd.created_at as definition_created_at,
-            pd.updated_at as definition_updated_at
+            pd.updated_at as definition_updated_at,
+            pd.is_system as definition_is_system
         FROM entity_properties ep
         INNER JOIN property_definitions pd ON ep.property_definition_id = pd.id
         WHERE ep.entity_id = $1 AND ep.entity_type = $2
-          AND pd.is_system = FALSE
         "#,
         entity_id,
         entity_type as EntityType
@@ -309,6 +311,7 @@ pub async fn get_entity_properties_values(
                 specific_entity_type: row.specific_entity_type,
                 definition_created_at: row.definition_created_at,
                 definition_updated_at: row.definition_updated_at,
+                definition_is_system: row.definition_is_system,
                 values: row.values,
             })
         })
@@ -325,6 +328,7 @@ pub async fn get_entity_properties_values(
 
 /// Gets entity properties with their definitions and values for multiple entities.
 /// Returns a HashMap where the key is the entity_id and the value is Vec<EntityPropertyWithDefinition>.
+/// Includes both custom and system properties.
 #[tracing::instrument(skip(db))]
 pub async fn get_bulk_entity_properties_values(
     db: &Pool<Postgres>,
@@ -355,13 +359,13 @@ pub async fn get_bulk_entity_properties_values(
             pd.is_multi_select,
             pd.specific_entity_type as "specific_entity_type: Option<EntityType>",
             pd.created_at as definition_created_at,
-            pd.updated_at as definition_updated_at
+            pd.updated_at as definition_updated_at,
+            pd.is_system as definition_is_system
         FROM entity_properties ep
         INNER JOIN property_definitions pd ON ep.property_definition_id = pd.id
         WHERE (ep.entity_id, ep.entity_type) IN (
             SELECT * FROM UNNEST($1::TEXT[], $2::property_entity_type[])
         )
-          AND pd.is_system = FALSE
         "#,
         &entity_ids,
         &entity_types as &[EntityType]
@@ -390,6 +394,7 @@ pub async fn get_bulk_entity_properties_values(
             specific_entity_type: row.specific_entity_type,
             definition_created_at: row.definition_created_at,
             definition_updated_at: row.definition_updated_at,
+            definition_is_system: row.definition_is_system,
             values: row.values,
         })?;
 
@@ -574,18 +579,9 @@ mod tests {
         const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
 
         let entity_refs = vec![
-            EntityReference {
-                entity_id: "doc1".to_string(),
-                entity_type: EntityType::Document,
-            },
-            EntityReference {
-                entity_id: "doc2".to_string(),
-                entity_type: EntityType::Document,
-            },
-            EntityReference {
-                entity_id: "proj1".to_string(),
-                entity_type: EntityType::Project,
-            },
+            EntityReference::new("doc1", EntityType::Document),
+            EntityReference::new("doc2", EntityType::Document),
+            EntityReference::new("proj1", EntityType::Project),
         ];
         let properties_map = get_bulk_entity_properties_values(&pool, &entity_refs).await?;
 
@@ -607,14 +603,8 @@ mod tests {
         const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
 
         let entity_refs = vec![
-            EntityReference {
-                entity_id: "doc1".to_string(),
-                entity_type: EntityType::Document,
-            },
-            EntityReference {
-                entity_id: "nonexistent".to_string(),
-                entity_type: EntityType::Document,
-            },
+            EntityReference::new("doc1", EntityType::Document),
+            EntityReference::new("nonexistent", EntityType::Document),
         ];
         let properties_map = get_bulk_entity_properties_values(&pool, &entity_refs).await?;
 
@@ -650,18 +640,24 @@ mod tests {
         migrator = "MACRO_DB_MIGRATIONS",
         fixtures(path = "../../fixtures", scripts("properties"))
     )]
-    async fn test_get_entity_type_from_entity_property(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    async fn test_lookup_entity_property(pool: Pool<Postgres>) -> anyhow::Result<()> {
         const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
 
         let entity_property_id = "e0111111-1111-1111-1111-111111111111"
             .parse::<Uuid>()
             .unwrap();
-        let entity_ref = get_entity_type_from_entity_property(&pool, entity_property_id).await?;
+        let info = lookup_entity_property(&pool, entity_property_id).await?;
 
-        assert!(entity_ref.is_some());
-        let entity_ref = entity_ref.unwrap();
-        assert_eq!(entity_ref.entity_id, "doc1");
-        assert_eq!(entity_ref.entity_type, EntityType::Document);
+        assert!(info.is_some());
+        let info = info.unwrap();
+        assert_eq!(info.entity_id, "doc1");
+        assert_eq!(info.entity_type, EntityType::Document);
+        assert_eq!(
+            info.property_definition_id,
+            "11111111-1111-1111-1111-111111111111"
+                .parse::<Uuid>()
+                .unwrap()
+        );
 
         Ok(())
     }
@@ -670,17 +666,15 @@ mod tests {
         migrator = "MACRO_DB_MIGRATIONS",
         fixtures(path = "../../fixtures", scripts("properties"))
     )]
-    async fn test_get_entity_type_from_entity_property_not_found(
-        pool: Pool<Postgres>,
-    ) -> anyhow::Result<()> {
+    async fn test_lookup_entity_property_not_found(pool: Pool<Postgres>) -> anyhow::Result<()> {
         const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
 
         let entity_property_id = "00000000-0000-0000-0000-000000000000"
             .parse::<Uuid>()
             .unwrap();
-        let entity_ref = get_entity_type_from_entity_property(&pool, entity_property_id).await?;
+        let info = lookup_entity_property(&pool, entity_property_id).await?;
 
-        assert!(entity_ref.is_none());
+        assert!(info.is_none());
 
         Ok(())
     }

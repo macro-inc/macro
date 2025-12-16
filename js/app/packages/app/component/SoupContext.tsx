@@ -1,23 +1,27 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { useChannelsContext } from '@core/component/ChannelsProvider';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { ENABLE_PROPERTIES_METADATA } from '@core/constant/featureFlags';
 import { HotkeyTags } from '@core/hotkey/constants';
 import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { runCommand } from '@core/hotkey/utils';
-import {
-  CONDITIONAL_VIEWS,
-  DEFAULT_VIEWS,
-  type View,
-  type ViewId,
-} from '@core/types/view';
+import { DEFAULT_VIEWS, type DefaultView, type ViewId } from '@core/types/view';
+import { getActualTarget } from '@core/util/getActualTarget';
+import { isInteractiveElement } from '@core/util/isInteractiveElement';
 import { filterMap } from '@core/util/list';
 import { isErr } from '@core/util/maybeResult';
 import { getScrollParent } from '@core/util/scrollParent';
 import { waitForFrames } from '@core/util/sleep';
-import type { EntityData } from '@macro-entity';
+import { type EntityData, isTaskEntity } from '@macro-entity';
 import { entityHasUnreadNotifications } from '@notifications';
+import type { PreviewViewStandardLabel } from '@service-email/generated/schemas';
 import { useTutorialCompleted } from '@service-gql/client';
+import {
+  type PropertiesEntityType,
+  propertiesServiceClient,
+} from '@service-properties/client';
 import { storageServiceClient } from '@service-storage/client';
 import { createLazyMemo } from '@solid-primitives/memo';
 import { useQuery } from '@tanstack/solid-query';
@@ -29,6 +33,7 @@ import {
   createMemo,
   createSignal,
   on,
+  onCleanup,
   type Setter,
   type Signal,
 } from 'solid-js';
@@ -80,13 +85,13 @@ export type UnifiedListContext = {
   virtualizerHandleSignal: Signal<VirtualizerHandle | undefined>;
   entityListRefSignal: Signal<HTMLDivElement | undefined>;
   entitiesSignal: Signal<EntityData[] | undefined>;
-  emailViewSignal: Signal<'inbox' | 'sent' | 'drafts' | 'all'>;
-  showHelpDrawer: Accessor<Set<string>>;
-  setShowHelpDrawer: Setter<Set<string>>;
+  emailViewSignal: Signal<PreviewViewStandardLabel>;
+  showHelpDrawer: Accessor<Set<DefaultView>>;
+  setShowHelpDrawer: Setter<Set<DefaultView>>;
   actionRegistry: EntityActionRegistry;
 };
 
-const DEFAULT_VIEW_ID: View = 'inbox';
+const DEFAULT_VIEW_ID: DefaultView = 'signal';
 
 const DEFAULT_VIEW_IDS_SET = new Set(VIEWCONFIG_DEFAULTS_IDS);
 
@@ -98,14 +103,10 @@ export function createSoupContext(): UnifiedListContext {
   const virtualizerHandleSignal = createSignal<VirtualizerHandle>();
   const entityListRefSignal = createSignal<HTMLDivElement>();
   const entitiesSignal = createSignal<EntityData[]>();
-  const emailViewSignal = createSignal<'inbox' | 'sent' | 'drafts' | 'all'>(
-    'inbox'
-  );
+  const emailViewSignal = createSignal<PreviewViewStandardLabel>('inbox');
   const tutorialCompleted = useTutorialCompleted();
-  const [showHelpDrawer, setShowHelpDrawer] = createSignal<Set<string>>(
-    !tutorialCompleted()
-      ? new Set([...DEFAULT_VIEWS, ...CONDITIONAL_VIEWS])
-      : new Set()
+  const [showHelpDrawer, setShowHelpDrawer] = createSignal<Set<DefaultView>>(
+    !tutorialCompleted() ? new Set(DEFAULT_VIEWS) : new Set()
   );
   const setViewDataStore: SetStoreFunction<ViewDataMap> = (...args: any[]) => {
     // need to create new reference, causes bug where first entity persits highlighting
@@ -136,7 +137,7 @@ export function createSoupContext(): UnifiedListContext {
 }
 
 function createViewData(
-  view: View,
+  view: DefaultView,
   viewProps?: Omit<ViewConfigEnhanced, 'id'> &
     Partial<Pick<ViewConfigEnhanced, 'id'>>
 ): ViewData {
@@ -225,7 +226,7 @@ export function createNavigationEntityListShortcut({
   const viewData = createMemo(() => viewsData[selectedView()]);
   const viewIds = createMemo<ViewId[]>(() => Object.keys(viewsData));
 
-  const [attachEntityHotkeys, entityHotkeyScope] = useHotkeyDOMScope('entity');
+  const [attachEntityHotkeys, _entityHotkeyScope] = useHotkeyDOMScope('entity');
   const selectedEntity = () => viewData().selectedEntity;
 
   const notificationSource = useGlobalNotificationSource();
@@ -294,12 +295,30 @@ export function createNavigationEntityListShortcut({
   // ---------------------------------------------------------------------------
   // MARK AS DONE
   // ---------------------------------------------------------------------------
+
+  // Helper to get the correct properties entity type for an entity
+  // Tasks have type 'document' but subType 'task', so we need special handling
+  const getPropertiesEntityType = (
+    entity: EntityData
+  ): PropertiesEntityType | undefined => {
+    if (isTaskEntity(entity)) return 'TASK';
+    if (entity.type === 'email') return 'THREAD';
+    if (entity.type === 'document') return 'DOCUMENT';
+    if (entity.type === 'project') return 'PROJECT';
+    return undefined;
+  };
+
   actionRegistry.register(
     'mark_as_done',
     async (entities) => {
       const handler =
-        VIEWCONFIG_DEFAULTS[selectedView() as View]?.hotkeyOptions?.e;
-      if (handler) {
+        VIEWCONFIG_DEFAULTS[selectedView() as DefaultView]?.hotkeyOptions?.e;
+
+      const hasSupportedEntity = entities.some(
+        (entity) => getPropertiesEntityType(entity) !== undefined
+      );
+
+      if (handler || hasSupportedEntity) {
         if (isEntityLastItem()) {
           navigateThroughList({ axis: 'start', mode: 'step' });
         } else {
@@ -307,10 +326,23 @@ export function createNavigationEntityListShortcut({
         }
 
         for (const entity of entities) {
-          handler(entity, {
-            soupContext: unifiedListContext,
-            notificationSource,
-          });
+          if (handler) {
+            handler(entity, {
+              soupContext: unifiedListContext,
+              notificationSource,
+            });
+          }
+          const entityType = getPropertiesEntityType(entity);
+          if (entityType && ENABLE_PROPERTIES_METADATA) {
+            propertiesServiceClient
+              .setPropertyStatusComplete({
+                entity_type: entityType,
+                entity_id: entity.id,
+              })
+              .catch((err) =>
+                console.error('Failed to set status complete', err)
+              );
+          }
         }
 
         setViewDataStore(selectedView(), 'selectedEntities', []);
@@ -319,23 +351,27 @@ export function createNavigationEntityListShortcut({
       return { success: true };
     },
     {
-      testEnabled: (entity) => {
+      canExecute: (entity) => {
+        // notifications
         if (entity.type === 'email' || entity.type === 'channel') return true;
-        if (entityHasUnreadNotifications(notificationSource, entity))
+
+        // property status complete (tasks have type 'document' with subType 'task')
+        if (isTaskEntity(entity)) return true;
+        if (['document', 'project'].includes(entity.type)) return true;
+
+        if (entityHasUnreadNotifications(notificationSource, entity)) {
           return true;
+        }
         return false;
       },
     }
   );
 
-  registerHotkey({
+  registerEntityHotkey({
     hotkey: ['e'],
     hotkeyToken: TOKENS.entity.action.markDone,
-    scopeId: entityHotkeyScope,
+    scopeId: splitHotkeyScope,
     description: 'Mark done',
-    condition: () =>
-      isViewingList() &&
-      actionRegistry.isActionEnabled('mark_as_done', plainSelectedEntities()),
     keyDownHandler: () => {
       const entitiesForAction = getEntitiesForAction();
       if (entitiesForAction.entities.length === 0) {
@@ -349,6 +385,9 @@ export function createNavigationEntityListShortcut({
 
       return true;
     },
+    canExecuteKeyDownHandler: () =>
+      isViewingList() &&
+      actionRegistry.isActionEnabled('mark_as_done', plainSelectedEntities()),
     displayPriority: 10,
     tags: [HotkeyTags.SelectionModification],
   });
@@ -385,7 +424,7 @@ export function createNavigationEntityListShortcut({
       return { success: true };
     },
     {
-      testEnabled: (entity) => {
+      canExecute: (entity) => {
         // can't delete these bad boys yet.
         if (entity.type === 'channel' || entity.type === 'email') return false;
         // only delete what you own.
@@ -393,19 +432,16 @@ export function createNavigationEntityListShortcut({
       },
       // TODO (seamus): fix the handler from the modal so that we can delete
       // some of the items. Then switch this to some.
-      enabledMode: 'every',
+      mode: 'every',
     }
   );
 
-  registerHotkey({
+  registerEntityHotkey({
     hotkey: ['delete', 'backspace'],
     hotkeyToken: TOKENS.entity.action.delete,
     scopeId: splitHotkeyScope,
     description: () =>
       viewData().selectedEntities.length > 1 ? 'Delete items' : 'Delete item',
-    condition: () =>
-      isViewingList() &&
-      actionRegistry.isActionEnabled('delete', plainSelectedEntities()),
     keyDownHandler: () => {
       const entitiesForAction = getEntitiesForAction();
       if (entitiesForAction.entities.length === 0) {
@@ -417,6 +453,10 @@ export function createNavigationEntityListShortcut({
       );
       return true;
     },
+    canExecuteKeyDownHandler: () =>
+      isViewingList() &&
+      actionRegistry.isActionEnabled('delete', plainSelectedEntities()),
+
     tags: [HotkeyTags.SelectionModification],
     displayPriority: 10,
   });
@@ -453,9 +493,43 @@ export function createNavigationEntityListShortcut({
       return { success: true };
     },
     {
-      testEnabled: (entity) => {
-        // can't rename these bad boys yet.
-        if (entity.type === 'channel' || entity.type === 'email') return false;
+      canExecute: (entity) => {
+        if (entity.type === 'channel') {
+          if (entity.channelType === 'direct_message') return false;
+
+          const currentUserId = userId();
+          if (!currentUserId) return false;
+
+          // Check if user is the owner
+          if (entity.ownerId === currentUserId) {
+            return true;
+          }
+
+          // Check if user is an admin by looking up channel participant data
+          try {
+            const channelsContext = useChannelsContext();
+            const channel = channelsContext
+              .channels()
+              .find((c) => c.id === entity.id);
+            if (channel) {
+              const participant = channel.participants.find(
+                (p) => p.user_id === currentUserId
+              );
+              if (
+                participant &&
+                ['admin', 'owner'].includes(participant.role)
+              ) {
+                return true;
+              }
+            }
+          } catch (_err) {
+            return false;
+          }
+
+          return false;
+        }
+        if (entity.type === 'email') return false;
+
         // only rename what you own.
         return entity.ownerId === userId();
       },
@@ -501,7 +575,7 @@ export function createNavigationEntityListShortcut({
       return { success: true };
     },
     {
-      testEnabled: (entity) => {
+      canExecute: (entity) => {
         if (entity.type === 'channel' || entity.type === 'email') return false;
         return true;
       },
@@ -510,6 +584,7 @@ export function createNavigationEntityListShortcut({
 
   registerHotkey({
     scopeId: splitHotkeyScope,
+
     hotkeyToken: TOKENS.entity.action.copy,
     description: () =>
       viewData().selectedEntities.length > 1 ? 'Copy items' : 'Copy item',
@@ -556,7 +631,7 @@ export function createNavigationEntityListShortcut({
       return { success: true };
     },
     {
-      testEnabled: (entity) => {
+      canExecute: (entity) => {
         if (entity.type === 'channel' || entity.type === 'email') return false;
         return true;
       },
@@ -594,8 +669,11 @@ export function createNavigationEntityListShortcut({
   const openEntity = (entity: EntityData) => {
     const { type, id } = entity;
     if (type === 'document') {
-      const { fileType } = entity;
-      splitHandle.replace({ type: fileTypeToBlockName(fileType), id });
+      const { fileType, subType } = entity;
+      splitHandle.replace({
+        type: fileTypeToBlockName(subType ?? fileType),
+        id,
+      });
     } else {
       splitHandle.replace({ type, id });
     }
@@ -789,12 +867,15 @@ export function createNavigationEntityListShortcut({
 
       const selectedEntity = entities()?.at(index);
       if (selectedEntity) {
-        if (splitHandle.content().type !== 'component') {
+        if (
+          splitHandle.content().type !== 'component' &&
+          splitHandle.content().type !== 'project'
+        ) {
           const { type, id } = selectedEntity;
           if (type === 'document') {
-            const { fileType } = selectedEntity;
+            const { fileType, subType } = selectedEntity;
             splitHandle.replace(
-              { type: fileTypeToBlockName(fileType), id },
+              { type: fileTypeToBlockName(subType ?? fileType), id },
               true
             );
           } else {
@@ -1039,7 +1120,7 @@ export function createNavigationEntityListShortcut({
     runWithInputFocused: true,
   });
 
-  registerHotkey({
+  registerEntityHotkey({
     hotkey: ['j', 'arrowdown'],
     scopeId: splitHotkeyScope,
     description: 'Down',
@@ -1051,7 +1132,8 @@ export function createNavigationEntityListShortcut({
     },
     hide: true,
   });
-  registerHotkey({
+
+  registerEntityHotkey({
     hotkey: ['shift+arrowdown', 'shift+j'],
     scopeId: splitHotkeyScope,
     description: 'Select down',
@@ -1060,9 +1142,11 @@ export function createNavigationEntityListShortcut({
       const navigationInput: NavigationInput = { axis: 'end', mode: 'step' };
       return handleNavigationSelection(navigationInput);
     },
+    canExecuteKeyDownHandler: () => isViewingList(),
     hide: true,
   });
-  registerHotkey({
+
+  registerEntityHotkey({
     hotkey: ['k', 'arrowup'],
     scopeId: splitHotkeyScope,
     hotkeyToken: TOKENS.entity.step.start,
@@ -1075,7 +1159,7 @@ export function createNavigationEntityListShortcut({
     hide: true,
   });
 
-  registerHotkey({
+  registerEntityHotkey({
     hotkey: ['shift+arrowup', 'shift+k'],
     scopeId: splitHotkeyScope,
     hotkeyToken: TOKENS.entity.select.start,
@@ -1084,9 +1168,10 @@ export function createNavigationEntityListShortcut({
       const navigationInput: NavigationInput = { axis: 'start', mode: 'step' };
       return handleNavigationSelection(navigationInput);
     },
+    canExecuteKeyDownHandler: () => isViewingList(),
     hide: true,
   });
-  registerHotkey({
+  registerEntityHotkey({
     hotkey: ['home'],
     scopeId: splitHotkeyScope,
     hotkeyToken: TOKENS.entity.jump.home,
@@ -1097,7 +1182,7 @@ export function createNavigationEntityListShortcut({
     },
     hide: true,
   });
-  registerHotkey({
+  registerEntityHotkey({
     hotkey: ['shift+g', 'end'],
     scopeId: splitHotkeyScope,
     hotkeyToken: TOKENS.entity.jump.end,
@@ -1191,10 +1276,10 @@ export function createNavigationEntityListShortcut({
     hide: true,
   });
 
-  registerHotkey({
+  registerEntityHotkey({
     hotkey: ['enter'],
     hotkeyToken: TOKENS.entity.open,
-    scopeId: entityHotkeyScope,
+    scopeId: splitHotkeyScope,
     description: 'Open',
     keyDownHandler: () => {
       const entity = getHighlightedEntity()?.entity;
@@ -1203,11 +1288,23 @@ export function createNavigationEntityListShortcut({
       openEntity(entity);
       return true;
     },
+    canExecuteKeyDownHandler: ({ keyboardEvent }) => {
+      if (!isViewingList()) return false;
+
+      if (keyboardEvent) {
+        const target = getActualTarget(keyboardEvent);
+
+        if (isInteractiveElement(target)) {
+          return false;
+        }
+      }
+      return true;
+    },
     displayPriority: 4,
   });
-  registerHotkey({
+  registerEntityHotkey({
     hotkey: ['cmd+enter'],
-    scopeId: entityHotkeyScope,
+    scopeId: splitHotkeyScope,
     description: 'Focus Preview',
     keyDownHandler: () => {
       const [preview] = previewState;
@@ -1253,22 +1350,23 @@ export function createNavigationEntityListShortcut({
       openEntity(entity);
       return true;
     },
+    canExecuteKeyDownHandler: () => isViewingList(),
     displayPriority: 4,
   });
-  registerHotkey({
+  registerEntityHotkey({
     hotkey: ['x'],
     scopeId: splitHotkeyScope,
     description: 'Toggle select item',
-    condition: isViewingList,
     keyDownHandler: () => {
       const entity = getHighlightedEntity();
       if (!entity) return false;
       toggleEntity(entity.entity);
       return true;
     },
+    canExecuteKeyDownHandler: () => isViewingList(),
     displayPriority: 10,
   });
-
+  
   const clearMultiCondition: () => boolean = () =>
     isViewingList() && viewData().selectedEntities.length > 0;
   const closeSpotlightCondition = () => splitHandle.isSpotLight();
@@ -1309,7 +1407,7 @@ const useAllViews = ({
   const [selectedView, setSelectedView] = selectedViewSignal;
   const initialState: ViewDataMap = {};
   for (const [view, viewProps] of Object.entries(VIEWCONFIG_DEFAULTS)) {
-    initialState[view] = createViewData(view as View, viewProps);
+    initialState[view] = createViewData(view as DefaultView, viewProps);
   }
 
   const [viewsData, setViewsData] = createStore(initialState);
@@ -1337,9 +1435,9 @@ const useAllViews = ({
         const savedViewConfigs = data.views.map((view) => {
           const config = view.config as ViewConfigBase;
 
-          return createViewData(view.name as View, {
+          return createViewData(view.name as DefaultView, {
             id: view.id,
-            view: view.name as View,
+            view: view.name as DefaultView,
             display: { ...VIEWCONFIG_BASE.display, ...config.display },
             filters: { ...VIEWCONFIG_BASE.filters, ...config.filters },
             sort: {
@@ -1358,7 +1456,7 @@ const useAllViews = ({
           Object.entries(viewsData).filter(
             ([viewId, viewData]) =>
               savedViewIds.has(viewId) ||
-              DEFAULT_VIEW_IDS_SET.has(viewId as View) ||
+              DEFAULT_VIEW_IDS_SET.has(viewId as DefaultView) ||
               viewData.viewType !== undefined
           )
         );
@@ -1433,4 +1531,111 @@ export function scrollToKeepGap({
       container.scrollTo({ top: newScrollTop, behavior: 'auto' });
     }
   }
+}
+
+let globalKeyboardEvent: KeyboardEvent | undefined;
+
+type ExecuteKeyDownHandlerCallback = (props: {
+  keyboardEvent?: KeyboardEvent;
+}) => boolean;
+
+/**
+ *
+ * Registers entity hotkeys to global scope and split panel scope. When global hotkey is fired, runs hotkey command from active split panel scope.
+ *
+ */
+function registerEntityHotkey(
+  opts: Omit<Parameters<typeof registerHotkey>[0], 'condition'> & {
+    canExecuteKeyDownHandler?: ExecuteKeyDownHandlerCallback;
+    globalCommandScope?: string;
+  }
+): {
+  registerHotkeyReturn: {
+    commandScopeId: string;
+  };
+  globalRegisterHotkeyReturn: {
+    commandScopeId: string;
+  };
+} {
+  onCleanup(() => {
+    globalKeyboardEvent = undefined;
+  });
+
+  // scoped hotkey
+  const registerHotkeyReturn = registerHotkey({
+    ...opts,
+    keyDownHandler: (e) => {
+      const canExecuteKeyDownHandler = () => {
+        if (!opts.canExecuteKeyDownHandler) return true;
+        return opts.canExecuteKeyDownHandler({
+          keyboardEvent: e ?? globalKeyboardEvent,
+        });
+      };
+
+      if (canExecuteKeyDownHandler()) {
+        return opts.keyDownHandler(e);
+      }
+
+      return false;
+    },
+    condition: undefined,
+  });
+  // global hotkey to run active split scope command
+  const globalRegisterHotkeyReturn = registerHotkey({
+    ...opts,
+    scopeId: opts.globalCommandScope ? opts.globalCommandScope : 'global',
+    hotkeyToken: undefined,
+    tags: undefined,
+    condition: undefined,
+    keyDownHandler: (event) => {
+      globalKeyboardEvent = event;
+      queueMicrotask(() => {
+        globalKeyboardEvent = undefined;
+      });
+
+      if (event) {
+        const target = event.target as HTMLElement;
+        if (
+          target.closest(
+            `
+            [role="dialog"],
+            [role="alertdialog"],
+            [data-modal="true"],
+            .z-modal,
+            .z-modal-overlay
+            `
+          )
+        ) {
+          return false;
+        }
+      }
+
+      const currentActiveSplitId = globalSplitManager()?.activeSplitId();
+
+      const getCommand = () => {
+        const splitScope = document.querySelector(
+          `[data-split-id="${currentActiveSplitId}"]`
+        );
+        if (!splitScope || !(splitScope instanceof HTMLElement)) return;
+        const scopeId = splitScope.dataset.hotkeyScope;
+        if (!scopeId) return undefined;
+        const splitNode = hotkeyScopeTree.get(scopeId);
+        if (!splitNode) return undefined;
+        return splitNode.hotkeyCommands.get(
+          // @ts-expect-error
+          opts.hotkey[0]
+        );
+      };
+      const command = getCommand();
+      if (!command) return false;
+
+      runCommand(command);
+      return false;
+    },
+  });
+
+  return {
+    registerHotkeyReturn,
+    globalRegisterHotkeyReturn,
+  } as any;
 }

@@ -29,7 +29,7 @@ impl PropertyRow {
         property_definition_id: Uuid,
         ref_type: EntityType,
         ref_ids: Vec<String>,
-        specific_message_id: Option<String>,
+        specific_message_id: Option<Uuid>,
     ) -> Self {
         let refs: Vec<serde_json::Value> = ref_ids
             .into_iter()
@@ -73,6 +73,22 @@ impl PropertyRow {
                 "type": "String",
                 "value": value.into()
             }),
+        }
+    }
+
+    /// Create a property row with a null JSON value.
+    ///
+    /// Used to initialize system properties with empty/null values.
+    pub fn null_value(
+        entity_id: impl Into<String>,
+        entity_type: EntityType,
+        property_definition_id: Uuid,
+    ) -> Self {
+        Self {
+            entity_id: entity_id.into(),
+            entity_type,
+            property_definition_id,
+            values: serde_json::Value::Null,
         }
     }
 

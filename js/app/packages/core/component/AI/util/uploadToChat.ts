@@ -11,11 +11,11 @@ import type {
 } from '@core/component/AI/types';
 import { toast } from '@core/component/Toast/Toast';
 import { chatRuleset, uploadFile } from '@core/util/upload';
+import { waitExtractionStatus } from '@service-cognition/extraction';
 import {
   fileExtension,
   filenameWithoutExtension,
 } from '@service-storage/util/filename';
-import { waitExtractionStatus } from 'service-cognition/extraction';
 import { createSignal, untrack } from 'solid-js';
 import { asFileType } from './attachment';
 

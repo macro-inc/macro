@@ -22,7 +22,10 @@
           config.android_sdk.accept_license = true;
         };
 
-        android_sdk =
+        isDarwin = pkgs.stdenv.isDarwin;
+        isLinux = pkgs.stdenv.isLinux;
+
+        android_sdk = pkgs.lib.optionalAttrs isLinux (
           (pkgs.androidenv.composeAndroidPackages {
             platformVersions = [
               "34"
@@ -40,9 +43,10 @@
             systemImageTypes = [ "google_apis_playstore" ];
             abiVersions = [ "x86_64" ];
             includeSources = false;
-          }).androidsdk;
+          }).androidsdk
+        );
 
-        packages = with pkgs; [
+        basePackages = with pkgs; [
           curl
           wget
           pkg-config
@@ -58,32 +62,36 @@
           pulumiPackages.pulumi-nodejs
           pulumiPackages.pulumi-aws-native
 
-          gst_all_1.gstreamer
-          gst_all_1.gst-plugins-base
-          gst_all_1.gst-plugins-good
-          gst_all_1.gst-plugins-bad
-
           (
             with fenix.packages.${system};
-            combine [
+            combine ([
               complete.rustc
               complete.rust-src
               complete.cargo
               complete.clippy
               complete.rustfmt
               complete.rust-analyzer
+            ] ++ pkgs.lib.optionals isLinux [
               targets.aarch64-linux-android.latest.rust-std
               targets.armv7-linux-androideabi.latest.rust-std
               targets.i686-linux-android.latest.rust-std
               targets.x86_64-linux-android.latest.rust-std
-            ]
+            ])
           )
+        ];
 
-          android_sdk
+        linuxPackages = with pkgs; [
+          gst_all_1.gstreamer
+          gst_all_1.gst-plugins-base
+          gst_all_1.gst-plugins-good
+          gst_all_1.gst-plugins-bad
           jdk
         ];
 
-        libraries = with pkgs; [
+        packages = basePackages
+          ++ pkgs.lib.optionals isLinux (linuxPackages ++ [ android_sdk ]);
+
+        linuxLibraries = with pkgs; [
           gtk3
           libsoup_3
           webkitgtk_4_1
@@ -93,20 +101,28 @@
           dbus
           openssl
           librsvg
-          lsb-release # without this single instance can fail on nixos
+          lsb-release
         ];
+
+        darwinLibraries = with pkgs; [
+          openssl
+          libiconv
+        ];
+
+        libraries = if isDarwin then darwinLibraries else linuxLibraries;
       in
       {
-        devShell = pkgs.mkShell {
+        devShell = pkgs.mkShell ({
           buildInputs = packages ++ libraries;
-
+          PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
+        } // pkgs.lib.optionalAttrs isLinux {
           LD_LIBRARY_PATH = "${pkgs.lib.makeLibraryPath libraries}:$LD_LIBRARY_PATH";
           XDG_DATA_DIRS = "${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}:${pkgs.gtk3}/share/gsettings-schemas/${pkgs.gtk3.name}:$XDG_DATA_DIRS";
           ANDROID_HOME = "${android_sdk}/libexec/android-sdk";
           NDK_HOME = "${android_sdk}/libexec/android-sdk/ndk/26.3.11579264";
           GRADLE_OPTS = "-Dorg.gradle.project.android.aapt2FromMavenOverride=${android_sdk}/libexec/android-sdk/build-tools/35.0.0/aapt2";
           GIO_MODULE_DIR = "${pkgs.glib-networking}/lib/gio/modules/";
-        };
+        });
       }
     );
 }

@@ -7,22 +7,17 @@ type ToolSetName = ToolSet['type'];
 
 const TOOLSETS = [
   {
-    value: 'none' as const,
-    label: 'ASK',
-    tooltip: 'Simple answers to simple questions',
-  },
-  {
     value: 'all' as const,
     label: 'AGENT',
     tooltip: 'Dynamically search Macro for useful context',
   },
 ] as const;
 
-const TOOLSET_TO_DISPLAY = Object.fromEntries(
+const _TOOLSET_TO_DISPLAY = Object.fromEntries(
   TOOLSETS.map((t) => [t.value, t.label])
 ) as Record<ToolSetName, string>;
 
-const TOOLSET_FROM_DISPLAY = Object.fromEntries(
+const _TOOLSET_FROM_DISPLAY = Object.fromEntries(
   TOOLSETS.map((t) => [t.label, { value: t.value, tooltip: t.tooltip }])
 ) as Record<string, { value: ToolSetName; tooltip: string }>;
 
@@ -48,12 +43,12 @@ export function ToolsetSelector(props: {
   toolset: Signal<ToolSet>;
   sources: Signal<Source>;
 }) {
-  const [toolset, setToolset] = props.toolset;
+  const [toolset, _setToolset] = props.toolset;
   const [source, setSource] = props.sources;
 
   return (
     <div class="flex items-center gap-x-1">
-      <SegmentedControl
+      {/*<SegmentedControl
         size="SM"
         defaultValue={TOOLSET_TO_DISPLAY[toolset().type]}
         onChange={(s) => {
@@ -67,7 +62,7 @@ export function ToolsetSelector(props: {
           label: t.label,
           tooltip: t.tooltip,
         }))}
-      />
+      />*/}
 
       <Show when={toolset().type === 'all'}>
         <div class="flex">

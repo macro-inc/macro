@@ -23,6 +23,7 @@ aws-sdk-secretsmanager = { workspace = true }
 axum = { workspace = true, features = ["tower-log", "ws"] }
 chrono = { workspace = true }
 comms_service_client = { path = "../comms_service_client" }
+email_db_client = { path = "../email_db_client" }
 http-body-util = { workspace = true }
 macro_auth = { path = "../macro_auth" }
 macro_cors = { path = "../macro_cors" }
@@ -37,6 +38,8 @@ model = { path = "../model" }
 models_permissions = { path = "../models_permissions" }
 models_properties = { path = "../models_properties" }
 properties_db_client = { path = "../properties_db_client" }
+properties = { path = "../properties" }
+system_properties = { path = "../system_properties" }
 secretsmanager_client = { path = "../secretsmanager_client" }
 serde = { workspace = true }
 serde_json = { workspace = true }

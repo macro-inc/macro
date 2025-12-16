@@ -22,7 +22,7 @@ import { createMenuOpen, Launcher, setCreateMenuOpen } from './Launcher';
 import { Paywall } from './paywall/Paywall';
 import { QuickCreateMenu } from './QuickCreateMenu';
 import { RightbarWrapper } from './rightbar/Rightbar';
-import { Settings, setViewportOffset } from './settings/Settings';
+import { SettingsWrapper } from './settings/SettingsWrapper';
 
 const AUTH_URLS = [
   '/app/login',
@@ -62,8 +62,6 @@ export function Layout(props: RouteSectionProps) {
         '--viewport-height',
         `${window.visualViewport.height}px`
       );
-
-      setViewportOffset(window.visualViewport.offsetTop);
     }
   };
 
@@ -72,7 +70,6 @@ export function Layout(props: RouteSectionProps) {
       window.visualViewport.addEventListener('resize', handleResize);
       window.visualViewport.addEventListener('scroll', handleResize);
       handleResize();
-      setViewportOffset(window.visualViewport.offsetTop);
     }
 
     if (sessionStorage.getItem('showUpgradeModal') === 'true') {
@@ -114,10 +111,21 @@ export function Layout(props: RouteSectionProps) {
   attachGlobalDOMScope(document.body);
 
   return (
-    <div class="relative pb-[max(env(safe-area-inset-bottom),var(--tauri-inset-bottom))] pt-[max(env(safe-area-inset-top),var(--tauri-inset-top))] flex flex-col justify-between w-dvw h-dvh">
+    <div
+      class="relative flex flex-col justify-between w-dvw h-dvh"
+      style={{
+        'padding-top':
+          'max(env(safe-area-inset-top, 0px), var(--tauri-inset-top, 0px))',
+        'padding-bottom':
+          'max(env(safe-area-inset-bottom, 0px), var(--tauri-inset-bottom, 0px))',
+        'padding-left':
+          'max(env(safe-area-inset-left, 0px), var(--tauri-inset-left, 0px))',
+        'padding-right':
+          'max(env(safe-area-inset-right, 0px), var(--tauri-inset-right, 0px))',
+      }}
+    >
       <Show when={isAuthenticated()}>
         <GlobalShortcuts />
-        <Settings />
         <Suspense>
           <KommandMenu />
         </Suspense>
@@ -146,6 +154,7 @@ export function Layout(props: RouteSectionProps) {
               {props.children}
             </Resize.Panel>
             <RightbarWrapper />
+            <SettingsWrapper />
           </ItemDndProvider>
         </Resize.Zone>
       </div>

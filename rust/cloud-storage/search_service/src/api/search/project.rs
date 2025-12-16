@@ -5,11 +5,13 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
+use indexmap::IndexMap;
 use model::{response::ErrorResponse, user::UserContext};
 use models_search::project::{
     ProjectSearchRequest, ProjectSearchResponse, ProjectSearchResponseItem,
     ProjectSearchResponseItemWithMetadata, ProjectSearchResult,
 };
+use sqlx::types::Uuid;
 use std::collections::HashMap;
 
 use crate::api::ApiContext;
@@ -32,7 +34,7 @@ pub(in crate::api::search) async fn enrich_projects(
         return Ok(vec![]);
     }
     // Extract project IDs from results
-    let project_ids: Vec<String> = results.iter().map(|r| r.entity_id.clone()).collect();
+    let project_ids: Vec<String> = results.iter().map(|r| r.entity_id.to_string()).collect();
 
     // Fetch project metadata from database
     let project_histories =
@@ -105,8 +107,8 @@ pub fn construct_search_result(
         macro_db_client::projects::get_project_history::ProjectHistoryInfo,
     >,
 ) -> anyhow::Result<Vec<ProjectSearchResponseItemWithMetadata>> {
-    // construct entity hit map of id -> vec<hits>
-    let entity_id_hit_map: HashMap<String, Vec<ProjectSearchResult>> = search_results
+    // construct entity hit map of id -> vec<hits> using IndexMap to preserve insertion order
+    let entity_id_hit_map: IndexMap<Uuid, Vec<ProjectSearchResult>> = search_results
         .into_iter()
         .map(|hit| {
             let result = ProjectSearchResult {
@@ -116,16 +118,16 @@ pub fn construct_search_result(
 
             (hit.entity_id, result)
         })
-        .fold(HashMap::new(), |mut map, (entity_id, result)| {
+        .fold(IndexMap::new(), |mut map, (entity_id, result)| {
             map.entry(entity_id).or_insert_with(Vec::new).push(result);
             map
         });
 
-    // now construct the search results
+    // now construct the search results in the original search result order
     let result: Vec<ProjectSearchResponseItemWithMetadata> = entity_id_hit_map
         .into_iter()
         .filter_map(|(entity_id, hits)| {
-            if let Some(info) = project_histories.get(&entity_id) {
+            if let Some(info) = project_histories.get(&entity_id.to_string()) {
                 let info = info.clone();
                 let metadata = models_search::project::ProjectMetadata {
                     created_at: info.created_at.timestamp(),
@@ -137,7 +139,7 @@ pub fn construct_search_result(
                 Some(ProjectSearchResponseItemWithMetadata {
                     metadata: Some(metadata),
                     extra: ProjectSearchResponseItem {
-                        id: entity_id.clone(),
+                        id: entity_id,
                         owner_id: info.user_id.clone(),
                         name: info.name,
                         project_search_results: hits,

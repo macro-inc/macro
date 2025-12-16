@@ -232,14 +232,7 @@ export function QuickCreateMenuInner(props: QuickCreateMenuProps) {
           name = getNameFromEmail(email);
           break;
         case 'contact':
-          switch (option.data.type) {
-            case 'extracted':
-              name = getNameFromEmail(email);
-              break;
-            case 'person':
-              name = option.data.name;
-              break;
-          }
+          name = getNameFromEmail(email);
           break;
         default:
           name = option.data.name;

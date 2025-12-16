@@ -2,15 +2,15 @@ import * as aws from '@pulumi/aws';
 import * as awsx from '@pulumi/awsx';
 import * as pulumi from '@pulumi/pulumi';
 import {
+  ALLOWED_ORIGINS,
   DATADOG_API_KEY,
   datadogAgentContainer,
   fargateLogRouterSidecarContainer,
   QueueAlarms,
   serviceLoadBalancer,
-} from '@resources';
-import { ALLOWED_ORIGINS } from '@resources/resources/cors';
-import { EcrImage } from '@service';
-import { BASE_DOMAIN, MACRO_SUBDOMAIN_CERT } from '@shared';
+} from '../../packages/resources';
+import { EcrImage } from '../../packages/service';
+import { BASE_DOMAIN, MACRO_SUBDOMAIN_CERT } from '../../packages/shared';
 import { StaticFileCloudFront } from './distribution';
 
 const stack = pulumi.getStack();
@@ -429,6 +429,7 @@ export class StaticFileService extends pulumi.ComponentResource {
             service: {
               name: SERVICE_NAME,
               image: image.image.imageUri,
+              stopTimeout: 10, // 10 seconds to force kill the task
               cpu: 256,
               memory: 512,
               environment: [

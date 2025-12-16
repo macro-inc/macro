@@ -1,0 +1,12 @@
+[package]
+edition = "2024"
+name = "document_sub_type"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+serde = { workspace = true }
+sqlx = { workspace = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
+utoipa = { workspace = true }

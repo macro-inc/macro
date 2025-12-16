@@ -30,6 +30,7 @@ import Trash from '@icon/regular/trash.svg';
 import XIcon from '@icon/regular/x.svg';
 import { logger } from '@observability';
 import type { SimpleMention } from '@service-comms/generated/models/simpleMention';
+import { staticFileClient } from '@service-static-files/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { leading, throttle } from '@solid-primitives/scheduled';
 import { activeElement } from 'app/signal/focus';
@@ -48,7 +49,6 @@ import {
 } from 'solid-js';
 import type { SetStoreFunction } from 'solid-js/store';
 import { tabbable } from 'tabbable';
-import { staticFileClient } from '../../service-static-files/client';
 import { ActionButton } from './ActionButton';
 import { AttachMenu } from './AttachMenu';
 import { Attachment } from './Attachment';
@@ -545,7 +545,7 @@ export function BaseInput(props: BaseInputProps) {
           >
             <FormatIcon width={20} height={20} />
           </ActionButton>
-          <Show when={props.onEmptyBlur}>
+          <Show when={props.isReplyInput && props.onEmptyBlur}>
             <ActionButton
               tooltip="Delete reply"
               onClick={(e) => {

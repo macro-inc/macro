@@ -1,0 +1,71 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                t.id as thread_id,\n                -- Return timestamps from the chosen messages directly\n                COALESCE(earliest_msg.sent_at, earliest_msg.updated_at) as \"first_message_ts!\",\n                COALESCE(latest_msg.sent_at, latest_msg.updated_at) as \"last_message_ts!\",\n                -- Last time user viewed this thread\n                uh.updated_at as \"viewed_at?\",\n                latest_msg.snippet,\n                earliest_msg.subject as \"subject?\",\n                l.macro_id,\n                latest_msg.sender as sender,\n                latest_msg.pretty_sender as \"pretty_sender!\"\n            FROM email_threads t\n            LEFT JOIN email_user_history uh ON uh.thread_id = t.id AND uh.link_id = $1\n            LEFT JOIN email_links l ON l.id = t.link_id\n            -- LATERAL join for LATEST message\n            -- JOIN (Inner) acts as a filter to ensure we only return threads that actually have messages\n            JOIN LATERAL (\n                SELECT\n                    m2.snippet,\n                    m2.sent_at,\n                    m2.updated_at,\n                    c.email_address as sender,\n                    COALESCE(c.name, c.email_address) as pretty_sender\n                FROM email_messages m2\n                LEFT JOIN email_contacts c ON c.id = m2.from_contact_id\n                WHERE m2.thread_id = t.id\n                  AND m2.link_id = $1\n                ORDER BY\n                    -- 1. Priority: Non-drafts with valid sent_at come first (0), everything else is fallback (1)\n                    (CASE WHEN m2.is_draft = false AND m2.sent_at IS NOT NULL THEN 0 ELSE 1 END) ASC,\n                    -- 2. Sort by time (Newest first)\n                    COALESCE(m2.sent_at, m2.updated_at) DESC NULLS LAST\n                LIMIT 1\n            ) latest_msg ON true\n            -- LATERAL join for EARLIEST message\n            LEFT JOIN LATERAL (\n                SELECT\n                    m3.subject,\n                    m3.sent_at,\n                    m3.updated_at\n                FROM email_messages m3\n                WHERE m3.thread_id = t.id\n                  AND m3.link_id = $1\n                ORDER BY\n                    -- 1. Priority: Non-drafts with valid sent_at come first (0), everything else is fallback (1)\n                    (CASE WHEN m3.is_draft = false AND m3.sent_at IS NOT NULL THEN 0 ELSE 1 END) ASC,\n                    -- 2. Sort by time (Oldest first)\n                    COALESCE(m3.sent_at, m3.updated_at) ASC NULLS LAST\n                LIMIT 1\n            ) earliest_msg ON true\n            WHERE t.id = ANY($2)\n              AND t.link_id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "thread_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "first_message_ts!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "last_message_ts!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "viewed_at?",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "snippet",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "subject?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "macro_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "sender",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 8,
+        "name": "pretty_sender!",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null,
+      false,
+      true,
+      true,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "b14a0b4df422aeacd17d6d4652f01696e684b2c10fbc4cfe92e07db8fb8ef1c4"
+}

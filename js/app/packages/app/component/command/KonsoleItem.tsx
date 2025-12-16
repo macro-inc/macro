@@ -1,7 +1,7 @@
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/signal/location';
-import type { BlockName } from '@core/block';
+import type { BlockAlias, BlockName } from '@core/block';
 import { BozzyBracket } from '@core/component/BozzyBracket';
 import type { ChannelsContext } from '@core/component/ChannelsProvider';
 import { Hotkey } from '@core/component/Hotkey';
@@ -9,7 +9,10 @@ import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/S
 import { Message } from '@core/component/Message';
 import { UserIcon } from '@core/component/UserIcon';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import { ENABLE_GMAIL_BASED_CONTACTS } from '@core/constant/featureFlags';
+import {
+  ENABLE_GMAIL_BASED_CONTACTS,
+  ENABLE_TASKS_TABS,
+} from '@core/constant/featureFlags';
 import { HotkeyTags } from '@core/hotkey/constants';
 import {
   type CommandWithInfo,
@@ -25,14 +28,15 @@ import Terminal from '@phosphor-icons/core/regular/terminal.svg?component-solid'
 import type { Channel } from '@service-comms/generated/models/channel';
 import type { Attachment } from '@service-email/generated/schemas';
 import { useUserId } from '@service-gql/client';
+import type { BasicDocumentSubType } from '@service-storage/generated/schemas';
 import type { BasicDocumentFileType } from '@service-storage/generated/schemas/basicDocumentFileType';
 import type { Item } from '@service-storage/generated/schemas/item';
+import { syncServiceClient } from '@service-sync/client';
 import {
   CustomEntityIcon,
   EntityIcon,
   type EntityWithValidIcon,
 } from 'core/component/EntityIcon';
-import { syncServiceClient } from 'service-sync/client';
 import {
   type Component,
   createMemo,
@@ -104,10 +108,11 @@ const DEFAULT_CATEGORIES = [
   { name: 'Channels', visible: true },
   { name: 'DMs', visible: true },
   { name: 'Notes', visible: true },
+  { name: 'Tasks', visible: ENABLE_TASKS_TABS },
   { name: 'Documents', visible: true },
   { name: 'Chats', visible: true },
   { name: 'Folders', visible: true },
-  { name: 'Emails', visible: true },
+  { name: 'Emails', visible: false },
   { name: 'Contacts', visible: ENABLE_GMAIL_BASED_CONTACTS },
   { name: 'Companies', visible: ENABLE_GMAIL_BASED_CONTACTS },
 ] as const;
@@ -257,6 +262,7 @@ type ItemPreview = {
   id: string;
   name: string;
   fileType?: BasicDocumentFileType;
+  subType?: BasicDocumentSubType;
   itemType: Item['type'];
 };
 
@@ -428,10 +434,15 @@ export interface CommandItemProps {
 function getCommandItemBlockName(
   item: CommandItemCard,
   icon?: boolean
-): BlockName | undefined {
+): BlockName | BlockAlias | undefined {
   if (item.type === 'item') {
-    if (item.data.itemType === 'document' && item.data.fileType) {
-      return fileTypeToBlockName(item.data.fileType, icon);
+    if (item.data.itemType === 'document') {
+      if (item.data.subType === 'task') {
+        return 'task';
+      }
+      if (item.data.fileType) {
+        return fileTypeToBlockName(item.data.fileType, icon);
+      }
     }
     return fileTypeToBlockName(item.data.itemType, icon) ?? 'unknown';
   } else if (item.type === 'channel') {
@@ -494,7 +505,14 @@ export function filterItemByCategory(item: CommandItemCard) {
       return (
         item.type === 'item' &&
         item.data.itemType === 'document' &&
+        item.data.subType !== 'task' &&
         fileTypeToBlockName(item.data.fileType) === 'md'
+      );
+    case 'Tasks':
+      return (
+        item.type === 'item' &&
+        item.data.itemType === 'document' &&
+        item.data.subType === 'task'
       );
     case 'Chats':
       return item.type === 'item' && item.data.itemType === 'chat';

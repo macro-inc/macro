@@ -1,3 +1,4 @@
+use document_sub_type::DocumentSubType;
 use model::item::{
     Item,
     map_item::{map_chat_item, map_document_item, map_project_item},
@@ -25,9 +26,9 @@ pub async fn get_recently_deleted(
             d."deletedAt"::timestamptz as "deleted_at",
             d."projectId" as "project_id",
             NULL as "is_persistent",
-            (dt.document_id IS NOT NULL) as "is_task!"
+            dt.sub_type as "sub_type?: DocumentSubType"
         FROM "Document" d
-        LEFT JOIN document_task dt ON dt.document_id = d.id
+        LEFT JOIN document_sub_type dt ON dt.document_id = d.id
         LEFT JOIN LATERAL (
             SELECT
                 b.id
@@ -64,7 +65,7 @@ pub async fn get_recently_deleted(
             c."deletedAt"::timestamptz as "deleted_at",
             c."projectId" as "project_id",
             c."isPersistent" as "is_persistent",
-            false as "is_task"
+            NULL as "sub_type"
         FROM "Chat" c
         WHERE c."userId" = $1 AND c."deletedAt" IS NOT NULL
         UNION ALL
@@ -80,7 +81,7 @@ pub async fn get_recently_deleted(
             p."deletedAt"::timestamptz as "deleted_at",
             p."parentId" as "project_id",
             NULL as "is_persistent",
-            false as "is_task"
+            NULL as "sub_type"
         FROM "Project" p
         WHERE p."userId" = $1 AND p."deletedAt" IS NOT NULL
     ORDER BY deleted_at DESC
@@ -103,7 +104,7 @@ pub async fn get_recently_deleted(
                 None, // don't care about branched_from_id
                 None, // don't care about branched_from_version_id
                 r.project_id,
-                r.is_task,
+                r.sub_type,
             )
             .map_err(|e| sqlx::Error::TypeNotFound {
                 type_name: e.to_string(),

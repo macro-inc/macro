@@ -18,6 +18,7 @@ pub struct PropertyDefinition {
     pub specific_entity_type: Option<EntityType>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub is_system: bool,
 }
 
 // ===== Conversions =====
@@ -26,8 +27,7 @@ impl From<PropertyDefinition> for crate::service::property_definition::PropertyD
     fn from(db: PropertyDefinition) -> Self {
         use crate::shared::PropertyOwner;
 
-        let owner = PropertyOwner::from_optional_ids(db.organization_id, db.user_id)
-            .expect("PropertyDefinition must have at least one owner (user_id or organization_id)");
+        let owner = PropertyOwner::from_optional_ids(db.organization_id, db.user_id, db.is_system);
 
         Self {
             id: db.id,
@@ -38,8 +38,9 @@ impl From<PropertyDefinition> for crate::service::property_definition::PropertyD
             specific_entity_type: db.specific_entity_type,
             created_at: db.created_at,
             updated_at: db.updated_at,
-            // is_metadata is a service layer concept, not stored in DB
-            // Default to false (user-defined property)
+            is_system: db.is_system,
+            // is_metadata is a service layer concept for computed properties
+            // Default to false (stored property)
             is_metadata: false,
         }
     }

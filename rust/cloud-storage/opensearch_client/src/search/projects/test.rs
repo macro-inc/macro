@@ -21,7 +21,7 @@ fn test_build_search_request() -> anyhow::Result<()> {
             "field": "entity_id"
         },
         "sort": ProjectSearchConfig::default_sort_types().iter().map(|s| s.to_json()).collect::<Vec<_>>(),
-        "highlight": ProjectSearchConfig::default_highlight().to_json(),
+        "highlight": ProjectSearchConfig::append_owner_highlights(ProjectSearchConfig::default_highlight()).to_json(),
         "query": {
             "bool": {
                 "must": [

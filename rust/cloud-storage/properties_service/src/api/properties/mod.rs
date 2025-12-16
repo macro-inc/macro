@@ -1,7 +1,7 @@
 use crate::api::context::ApiContext;
 use axum::{
     Router,
-    routing::{delete, get, put},
+    routing::{delete, get, patch, put},
 };
 
 pub mod definitions;
@@ -50,6 +50,13 @@ pub fn router() -> Router<ApiContext> {
         )
         .route(
             "/entity_properties/:entity_property_id",
-            delete(entities::delete_property::delete_entity_property).layer(ensure_user_exists),
+            delete(entities::delete_property::delete_entity_property)
+                .layer(ensure_user_exists.clone()),
+        )
+        // Status shortcut - requires authentication
+        .route(
+            "/entities/:entity_type/:entity_id/status/complete",
+            patch(entities::set_property_status_complete::set_property_status_complete)
+                .layer(ensure_user_exists),
         )
 }

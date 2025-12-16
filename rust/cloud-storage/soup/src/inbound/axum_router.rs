@@ -116,7 +116,11 @@ where
         &self,
         macro_user_id: MacroUserIdStr<'static>,
         email_link: Option<Link>,
-        PostSoupRequest { filters, params }: PostSoupRequest,
+        PostSoupRequest {
+            filters,
+            params,
+            email_view,
+        }: PostSoupRequest,
         cursor: SoupCursor,
     ) -> Result<Json<PaginatedOpaqueCursor<SoupApiItem>>, SoupHandlerErr> {
         let filters = EntityFilterAst::new_from_filters(filters)?;
@@ -159,9 +163,7 @@ where
                 limit: params.limit.unwrap_or(20),
                 cursor,
                 user: macro_user_id,
-                email_preview_view: PreviewView::StandardLabel(
-                    email::domain::models::PreviewViewStandardLabel::Inbox,
-                ),
+                email_preview_view: email_view,
                 link_id: email_link.map(|l| l.id),
             })
             .await?;
@@ -265,6 +267,7 @@ where
             PostSoupRequest {
                 params,
                 filters: Default::default(),
+                email_view: Default::default(),
             },
             cursor,
         )
@@ -272,11 +275,16 @@ where
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct PostSoupRequest {
     #[serde(default, flatten)]
     filters: EntityFilters,
     #[serde(default, flatten)]
     params: Params,
+    /// the view of specific emails to display
+    #[serde(default)]
+    #[schema(value_type = String)]
+    email_view: PreviewView,
 }
 
 type SoupCursor = EitherWrapper<
@@ -308,6 +316,7 @@ where
     T: SoupService,
     U: EmailService,
 {
+    dbg!(&post_soup_request);
     let link = match email_link {
         Ok(l) => Some(l.0.0),
         Err(EmailLinkErr::NotFound) => None,

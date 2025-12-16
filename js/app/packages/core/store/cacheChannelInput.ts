@@ -1,4 +1,4 @@
-import type { BlockName } from '@core/block';
+import type { BlockAlias, BlockName } from '@core/block';
 import { makePersisted } from '@solid-primitives/storage';
 import { createStore } from 'solid-js/store';
 
@@ -16,7 +16,7 @@ export function isStaticAttachmentType(
   return value === STATIC_IMAGE || value === STATIC_VIDEO;
 }
 
-export type AttachmentType = BlockName | StaticAttachmentType;
+export type AttachmentType = BlockName | BlockAlias | StaticAttachmentType;
 
 export type InputAttachment = {
   id: string;

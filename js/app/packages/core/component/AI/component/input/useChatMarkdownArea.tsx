@@ -24,7 +24,6 @@ import {
   mentionsPlugin,
   NODE_TRANSFORM,
   type NodeTransformType,
-  registerRootEventListener,
   type SelectionData,
   tabIndentationPlugin,
   tableCellResizerPlugin,
@@ -33,6 +32,7 @@ import {
 import { codePlugin } from '@core/component/LexicalMarkdown/plugins/code/codePlugin';
 import { emojisPlugin } from '@core/component/LexicalMarkdown/plugins/emojis/emojisPlugin';
 import { normalizeEnterPlugin } from '@core/component/LexicalMarkdown/plugins/normalize-enter/';
+import { restoreFocusPlugin } from '@core/component/LexicalMarkdown/plugins/restore-focus';
 import { createMenuOperations } from '@core/component/LexicalMarkdown/shared/inlineMenu';
 import {
   $traverseNodes,
@@ -340,6 +340,7 @@ function MarkdownArea(
     )
     .use(textPastePlugin())
     .use(markdownPastePlugin())
+    .use(restoreFocusPlugin())
     .use(normalizeEnterPlugin())
     .use(
       tablePlugin({
@@ -400,14 +401,6 @@ function MarkdownArea(
       )
     );
   }
-
-  // better focus in handling. preserves selection on regain focus!
-  autoRegister(
-    registerRootEventListener(editor, 'focusin', (e) => {
-      e.preventDefault();
-      editor.focus();
-    })
-  );
 
   onCleanup(() => {
     cleanup();

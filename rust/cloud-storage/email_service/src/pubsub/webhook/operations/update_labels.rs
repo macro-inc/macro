@@ -1,5 +1,6 @@
 use crate::pubsub::context::PubSubContext;
 use crate::pubsub::util::{cg_refresh_email, complete_transaction_with_processing_error};
+use crate::pubsub::webhook::operations::shared::notify_search;
 use crate::pubsub::webhook::process;
 use crate::pubsub::webhook::process::check_gmail_rate_limit_webhook;
 use email_db_client::labels::delete::delete_db_message_labels;
@@ -123,6 +124,7 @@ pub async fn update_labels(
     }
 
     if has_label_changes {
+        notify_search(ctx, link, db_message.db_id).await?;
         // tell FE to refresh user's inbox
         cg_refresh_email(
             &ctx.connection_gateway_client,

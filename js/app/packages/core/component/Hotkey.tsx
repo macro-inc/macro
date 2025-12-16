@@ -160,7 +160,7 @@ export const Hotkey = (props: HotkeyProps) => {
             </span>
 
             <Show when={local.showPlus}>
-              <span class="text-current">+</span>
+              <span class="text-current"> + </span>
             </Show>
           </>
         )}

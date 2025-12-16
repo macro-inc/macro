@@ -18,7 +18,7 @@ name = "backfill_gmail_attachments"
 path = "src/bin/backfill_gmail_attachments/backfill_gmail_attachments.rs"
 
 [[bin]]
-name = "backfill_search"
+name = "backfill_email_search"
 path = "src/bin/backfill_search/backfill_search.rs"
 
 [features]
@@ -82,6 +82,7 @@ models_email = { path = "../models_email" }
 models_opensearch = { path = "../models_opensearch" }
 models_pagination = { path = "../models_pagination", features = ["axum"] }
 models_permissions = { path = "../models_permissions" }
+models_properties = { path = "../models_properties" }
 redis = { workspace = true, features = [
   "cluster-async",
   "tokio-native-tls-comp",
@@ -106,10 +107,14 @@ sqs_client = { path = "../sqs_client", default-features = false, features = [
 sqs_worker = { path = "../sqs_worker" }
 static_file_service_client = { path = "../static_file_service_client" }
 strum_macros = { workspace = true }
+system_properties = { path = "../system_properties" }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tower = { workspace = true }
-tower-http = { workspace = true }
+tower-http = { workspace = true, features = [
+  "compression-br",
+  "compression-gzip",
+] }
 tracing = { workspace = true }
 url = { workspace = true }
 urlencoding = { workspace = true }

@@ -2,6 +2,7 @@ import EntityNavigationIndicator from '@app/component/EntityNavigationIndicator'
 import { IconButton } from '@core/component/IconButton';
 import { ENABLE_PREVIEW } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
+import { isRightPanelOpen, isSettingsPanelOpen } from '@core/signal/layout';
 import CollapseIcon from '@icon/regular/arrows-in.svg';
 import ExpandIcon from '@icon/regular/arrows-out.svg';
 import CaretLeft from '@icon/regular/caret-left.svg';
@@ -55,7 +56,11 @@ function SplitSpotlightButton() {
   const layout = useContext(SplitLayoutContext);
   if (!context || !layout) return '';
   const show = () => {
-    return layout.manager.splits().length > 1;
+    return (
+      layout.manager.splits().length > 1 ||
+      isSettingsPanelOpen() ||
+      isRightPanelOpen()
+    );
   };
   return (
     <Show when={show()}>
@@ -104,16 +109,18 @@ function SplitPreviewToggle() {
 
   return (
     <Show when={isUnifiedList()}>
-      <IconButton
-        size="sm"
-        icon={SplitIcon}
-        theme={preview() ? 'accent' : 'current'}
-        tooltip={{
-          label: !preview() ? 'Split View (Preview)' : 'Full View (List)',
-          hotkeyToken: TOKENS.unifiedList.togglePreview,
-        }}
-        onClick={() => setPreview((prev) => !prev)}
-      />
+      <div class="max-sm:rotate-90">
+        <IconButton
+          size="sm"
+          icon={SplitIcon}
+          theme={preview() ? 'accent' : 'current'}
+          tooltip={{
+            label: !preview() ? 'Split View (Preview)' : 'Full View (List)',
+            hotkeyToken: TOKENS.unifiedList.togglePreview,
+          }}
+          onClick={() => setPreview((prev) => !prev)}
+        />
+      </div>
     </Show>
   );
 }

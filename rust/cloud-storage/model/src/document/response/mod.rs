@@ -1,5 +1,6 @@
 mod location;
 
+use document_sub_type::DocumentSubType;
 pub use location::*;
 use std::str::FromStr;
 
@@ -127,9 +128,9 @@ pub struct DocumentResponseMetadata {
     #[serde(with = "ts_seconds_option")]
     #[schema(value_type = i64, nullable=false)]
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
-    /// Whether or not the document is a task.
-    /// This is only applicable for md documents.
-    pub is_task: bool,
+    /// The sub type of the document if present.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sub_type: Option<DocumentSubType>,
 }
 
 impl DocumentResponseMetadata {
@@ -149,7 +150,7 @@ impl DocumentResponseMetadata {
             document_family_id: document_metadata.document_family_id,
             created_at: document_metadata.created_at,
             updated_at: document_metadata.updated_at,
-            is_task: document_metadata.is_task,
+            sub_type: document_metadata.sub_type,
         }
     }
 

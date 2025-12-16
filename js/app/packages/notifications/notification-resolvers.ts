@@ -1,5 +1,5 @@
 import type { BlockName } from '@core/block';
-import { itemToBlockName } from '@core/constant/allBlocks';
+import { itemToResolvedBlockName } from '@core/constant/allBlocks';
 import { isAccessiblePreviewItem, useItemPreview } from '@core/signal/preview';
 import type { EntityType } from '@core/types';
 import { useDisplayName } from '@core/user/displayName';
@@ -45,7 +45,7 @@ export const DefaultNotificationBlockNameResolver: NotificationBlockNameResolver
     const preview = await getPreview(entityId, entityType);
     if (!isAccessiblePreviewItem(preview)) return undefined;
 
-    return itemToBlockName({
+    return itemToResolvedBlockName({
       type: preview.type,
       fileType: preview.fileType,
       name: preview.name,
