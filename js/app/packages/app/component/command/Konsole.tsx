@@ -5,7 +5,7 @@ import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component
 import { ENABLE_SEARCH_PAGINATION } from '@core/constant/featureFlags';
 import type { CommandWithInfo } from '@core/hotkey/getCommands';
 import { createFreshSearch } from '@core/util/freshSort';
-import { Popover } from '@kobalte/core';
+import { Dialog } from '@kobalte/core/dialog';
 import { Command as CommandK, useCommandState } from 'cmdk-solid';
 import {
   registerHotkey,
@@ -80,23 +80,23 @@ export function KommandMenu() {
 
   return (
     <StaticMarkdownContext>
-      <Popover.Root
+      <Dialog
         open={konsoleOpen()}
         onOpenChange={(_) => toggleKonsoleVisibility()}
       >
-        <Popover.Anchor />
-        <Popover.Portal>
+        <Dialog.Portal>
+          <Dialog.Overlay class="fixed inset-0 z-modal bg-transparent" />
           <DialogWrapper>
             <div ref={setCommandKRef}>
-              <Popover.Content>
+              <Dialog.Content>
                 <ClippedPanel tl={!beveledCorners()} active>
                   <KommandMenuInner commandKRef={commandKRef} />
                 </ClippedPanel>
-              </Popover.Content>
+              </Dialog.Content>
             </div>
           </DialogWrapper>
-        </Popover.Portal>
-      </Popover.Root>
+        </Dialog.Portal>
+      </Dialog>
     </StaticMarkdownContext>
   );
 }
