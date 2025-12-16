@@ -226,6 +226,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     virtualizerHandleSignal: [, setVirtualizerHandle],
     entityListRefSignal: [, setEntityListRef],
     entitiesSignal: [entities_, setEntities],
+    navigateThroughList,
   } = unifiedListContext;
   const view = createMemo(() => viewsData[selectedView()]);
   const selectedEntity = createMemo(() => view()?.selectedEntity);
@@ -1830,7 +1831,7 @@ function SearchBar(props: {
   };
 
   const focusNextEntity = () => {
-    splitContext.unifiedListContext.navigateThroughList({
+    navigateThroughList({
       axis: 'end',
       mode: 'step',
     });
