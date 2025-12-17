@@ -49,13 +49,11 @@ function PopoverSplitModal(props: {
   zIndex: number;
   onClose: () => void;
 }) {
-  // Create stub SplitPanelContext for components that expect it
   const [panelRef, setPanelRef] = createSignal<HTMLElement | null>(null);
   const [contentOffsetTop, setContentOffsetTop] = createSignal(0);
   const [previewState, setPreviewState] = createSignal(false);
   const unifiedListContext = createSoupContext();
 
-  // Create a stub SplitHandle for the popover
   const stubHandle: SplitHandle = {
     id: props.popover.id as SplitId,
     close: props.onClose,
