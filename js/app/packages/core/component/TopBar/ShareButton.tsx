@@ -710,7 +710,7 @@ export function ShareButton(props: ShareButtonProps) {
           }
         >
           <button
-            class="text-xs hover:bg-hover text-ink p-1 flex items-center gap-1"
+            class="text-xs font-mono hover:bg-hover text-ink p-1 flex items-center gap-1"
             onClick={() => {
               if (!isAuthenticated()) {
                 openLoginModal();
@@ -720,7 +720,7 @@ export function ShareButton(props: ShareButtonProps) {
               }
             }}
           >
-            &nbsp;Share
+            &nbsp;SHARE
             {shareAccessLevelText() === 'Public' && (
               <IconGlobe class="size-4" />
             )}
