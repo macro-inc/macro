@@ -1,7 +1,6 @@
 import { useChannelsContext } from '@core/component/ChannelsProvider';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
 import { activeScope } from '@core/hotkey/state';
-import { useContacts } from '@core/user';
 import { mapFromListsByKey } from '@core/util/compareUtils';
 import type { Channel } from '@service-comms/generated/models/channel';
 import type { ChannelType } from '@service-comms/generated/models/channelType';
@@ -30,7 +29,6 @@ export function useCommandItems() {
   const history = useHistory();
   const channelsContext = useChannelsContext();
   const channels = () => channelsContext.channels();
-  const contactItems = useContacts();
   const activeCommands = getActiveCommandsFromScope(activeScope(), {
     sortByScopeLevel: false,
     hideShadowedCommands: false,
@@ -101,22 +99,10 @@ export function useCommandItems() {
       updatedAt: channel.updated_at,
     }));
 
-    const contacts = contactItems().map<CommandItemCard>((contact) => {
-      return {
-        type: 'contact',
-        data: {
-          id: contact.id,
-          name: contact.name,
-          email: contact.email,
-        },
-      };
-    });
-
     return mapFromListsByKey<CommandItemCard>(
       (item) => item.data.id,
       items,
       channels_,
-      contacts,
       commands
     );
   });
