@@ -4,6 +4,7 @@ import {
 } from '@app/component/GlobalAppState';
 import type { BlockChannelProps } from '@block-channel/component/Block';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
+import { codeFileExtensions } from '@block-code/util/languageSupport';
 import { URL_PARAMS as EMAIL_PARAMS } from '@block-email/constants';
 import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/signal/location';
@@ -38,7 +39,6 @@ import SearchIcon from '@icon/regular/magnifying-glass.svg?component-solid';
 import LoadingSpinner from '@icon/regular/spinner.svg?component-solid';
 import XIcon from '@icon/regular/x.svg?component-solid';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import { supportedExtensions } from '@lexical-core/utils';
 import {
   createChannelsQuery,
   createDssInfiniteQuery,
@@ -753,7 +753,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
         if (fileTypeFilter().length > 0) {
           const documentFileTypes = fileTypeFilter().flatMap((fileType) => {
             // not ideal but it works for most cases
-            if (fileType === 'code') return supportedExtensions;
+            if (fileType === 'code') return codeFileExtensions;
             return [fileType];
           });
           fileTypes.push(...documentFileTypes);
