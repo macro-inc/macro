@@ -153,7 +153,7 @@ export function SharedFilesSection(props: { contactEmail: string }) {
           }
         >
           <Show when={sharedFiles().length > 0} fallback={<EmptyState />}>
-            <VList data={sharedFiles()} class="flex-1 px-4 py-2" overscan={5}>
+            <VList data={sharedFiles()} class="flex-1 px-4 py-2" bufferSize={5}>
               {(attachment) => <FileItem attachment={attachment} />}
             </VList>
           </Show>

@@ -286,7 +286,9 @@ export function createNavigationEntityListShortcut({
           }
         });
       } else {
-        const firstIndex = virtualizerHandle()?.findStartIndex();
+        const handle = virtualizerHandle();
+        if (!handle) return;
+        const firstIndex = handle.findItemIndex(handle.scrollOffset);
         if (!firstIndex) return;
         const elem = getEntityElAtIndex(firstIndex);
         if (elem instanceof HTMLElement) elem.focus();
@@ -846,7 +848,7 @@ export function createNavigationEntityListShortcut({
       virtualizerHandle()?.scrollToIndex(index, {
         // align: mode === 'jump' && axis === 'end' ? 'end' : undefined,
         // align: align(),
-        // align: index() < virtuaRef()!.findStartIndex() ? 'start' : 'end',
+        // align: index() < virtuaRef()!.findItemIndex(virtuaRef()!.scrollOffset) ? 'start' : 'end',
         align: 'nearest',
         // offset: 50,
       });

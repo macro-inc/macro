@@ -1,3 +1,4 @@
+import { useSuspenseContext } from '@app/component/SuspenseContext';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import Fragment from '@core/util/Fragment';
 import { onElementConnect } from '@solid-primitives/lifecycle';
@@ -193,6 +194,7 @@ const getOperations = <T extends Partial<EntityQueryOperations>>(
 };
 
 interface UnifiedInfiniteListContext<T extends EntityData> {
+  id: string;
   entityInfiniteQueries: Array<
     EntityQueryWithOperations<
       EntityData | WithSearch<EntityData>,
@@ -210,6 +212,7 @@ interface UnifiedInfiniteListContext<T extends EntityData> {
 }
 
 export function createUnifiedInfiniteList<T extends EntityData>({
+  id,
   entityInfiniteQueries,
   entityQueries,
   entityMapper = (entity: EntityData) => entity as T,
@@ -474,6 +477,67 @@ export function createUnifiedInfiniteList<T extends EntityData>({
 
     onCleanup(() => debouncedFetchMore.clear());
 
+    const [virtualizerHandle, setVirtualizerHandle] =
+      createSignal<VirtualizerHandle>();
+    const cacheKey = createMemo(() => (id ? `list-cache-${id}` : null));
+
+    // Load cached scroll position and cache snapshot
+    const cachedData = createMemo(() => {
+      const key = cacheKey();
+      if (!key) return null;
+
+      return cacheStore[key] || null;
+    });
+
+    // Restore scroll position on mount
+    const restoreScrollPosition = () => {
+      const handle = virtualizerHandle();
+      const [cachedOffset, cachedCache] = cachedData() || [0, undefined];
+      if (handle && cachedOffset) {
+        handle.scrollTo(cachedOffset);
+      }
+    };
+
+    createEffect(
+      on(virtualizerHandle, (virtualizerHandle, prev) => {
+        if (virtualizerHandle && prev == null) {
+          restoreScrollPosition();
+        }
+      })
+    );
+
+    const cacheVirtualizerHandle = () => {
+      const handle = virtualizerHandle();
+      const key = cacheKey();
+
+      if (handle && key) {
+        const cacheData: [number, any] = [handle.scrollOffset, handle.cache];
+
+        setCacheStore(key, cacheData);
+      }
+    };
+    const { isPending } = useSuspenseContext();
+
+    // Save scroll position and cache on cleanup
+    onCleanup(() => {
+      cacheVirtualizerHandle();
+    });
+
+    createEffect(
+      on(
+        isPending,
+        (isPending, prevIsPending) => {
+          if (isPending) {
+            cacheVirtualizerHandle();
+          }
+          if (isPending === false && prevIsPending === true) {
+            restoreScrollPosition();
+          }
+        },
+        { defer: true }
+      )
+    );
+
     return (
       <Switch>
         <Match
@@ -502,11 +566,18 @@ export function createUnifiedInfiniteList<T extends EntityData>({
                 }}
               >
                 <VList
-                  ref={props.virtualizerHandle}
+                  ref={(ref) => {
+                    // runs before onCleanup
+                    // prevent ref from being set to null on cleanup otherwise the scroll position will be lost in onCleanup saving the cache
+                    if (ref) {
+                      setVirtualizerHandle(ref);
+                    }
+                    props.virtualizerHandle?.(ref);
+                  }}
                   data={sortedEntitiesStore}
                   class={`${LIST_WRAPPER} scrollbar-hidden`}
                   data-unified-entity-list
-                  overscan={computedOverscan()}
+                  bufferSize={computedOverscan()}
                 >
                   {(entity, index) => {
                     if (
@@ -561,3 +632,7 @@ export function createUnifiedInfiniteList<T extends EntityData>({
     isLoading: debouncedIsLoading,
   };
 }
+
+const [cacheStore, setCacheStore] = createStore<Record<string, [number, any]>>(
+  {}
+);

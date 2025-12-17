@@ -174,7 +174,9 @@ export function MessageList(props: MessageListProps) {
     const list = props.orderedMessages();
     if (!handle || !list || list.length === 0) return;
 
-    const endIndex = handle.findEndIndex?.();
+    const endIndex = handle.findItemIndex(
+      handle.scrollOffset + handle.viewportSize
+    );
     if (endIndex === undefined) return;
 
     const index = clampIndex(endIndex, 0, list.length - 1);
@@ -466,7 +468,9 @@ export function MessageList(props: MessageListProps) {
     on(filteredTopLevelMessages, (newFilteredMessages, oldFilteredMessages) => {
       const handle = virtualHandle();
       if (!handle) return;
-      const lastIndexInView = handle.findEndIndex();
+      const lastIndexInView = handle.findItemIndex(
+        handle.scrollOffset + handle.viewportSize
+      );
       const lastItemOffset = handle.getItemOffset(
         (oldFilteredMessages?.length ?? 0) - 1
       );
@@ -573,7 +577,9 @@ export function MessageList(props: MessageListProps) {
     const newCount = splitCount();
     const handle = untrack(virtualHandle);
     if (handle && prev !== 0 && newCount > prev) {
-      const endIndex = handle.findEndIndex();
+      const endIndex = handle.findItemIndex(
+        handle.scrollOffset + handle.viewportSize
+      );
       queueMicrotask(() => {
         handle.scrollToIndex(endIndex, {
           align: 'end',
@@ -605,7 +611,10 @@ export function MessageList(props: MessageListProps) {
       if (
         firstUnviewedIndex !== undefined &&
         firstUnviewedIndex >= 0 &&
-        (virtualHandle()?.findEndIndex() ?? 0) >= firstUnviewedIndex
+        (virtualHandle()?.findItemIndex(
+          (virtualHandle()?.scrollOffset ?? 0) +
+            (virtualHandle()?.viewportSize ?? 0)
+        ) ?? 0) >= firstUnviewedIndex
       ) {
         setUnviewedMessages(undefined);
       }
@@ -674,7 +683,7 @@ export function MessageList(props: MessageListProps) {
               itemSize={BASE_ITEM_SIZE}
               data-channel-message-list
               data={rows() ?? []}
-              overscan={10}
+              bufferSize={10}
               keepMounted={keepMountedIndices()}
               onScroll={handleScroll}
               onScrollEnd={() => {

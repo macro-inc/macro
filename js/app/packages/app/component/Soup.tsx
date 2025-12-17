@@ -51,6 +51,7 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { EntityModal } from './EntityModal/EntityModal';
 import { HelpDrawer } from './HelpDrawer';
+import { SuspenseContextComp } from './SuspenseContext';
 import { SplitHeaderLeft } from './split-layout/components/SplitHeader';
 import { SplitTabs } from './split-layout/components/SplitTabs';
 import type { SplitPanelContextType } from './split-layout/context';
@@ -96,9 +97,9 @@ const ViewWithSearch: Component<{
           </Suspense>
         </Match>
         <Match when={true}>
-          <Suspense>
+          <SuspenseContextComp fallback={''}>
             <UnifiedListView />
-          </Suspense>
+          </SuspenseContextComp>
         </Match>
       </Switch>
     </ViewTab>
