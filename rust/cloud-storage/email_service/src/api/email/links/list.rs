@@ -1,6 +1,6 @@
 use crate::api::context::ApiContext;
 use crate::util::gmail::auth::fetch_gmail_access_token_from_link;
-use axum::extract::State;
+use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
@@ -41,6 +41,12 @@ pub struct ListLinksResponse {
     pub links: Vec<api::link::Link>,
 }
 
+#[derive(serde::Deserialize, Debug, ToSchema)]
+pub struct QueryParams {
+    /// the threshold in seconds to consider a user active
+    pub include_signature: Option<bool>,
+}
+
 /// List all links belonging to the user.
 #[utoipa::path(
     get,
@@ -58,6 +64,7 @@ pub struct ListLinksResponse {
 pub async fn list_links_handler(
     State(ctx): State<ApiContext>,
     user_context: Extension<UserContext>,
+    Query(query_params): Query<QueryParams>,
 ) -> Result<Response, ListLinksError> {
     let links = email_db_client::links::get::fetch_links_by_fusionauth_user_id(
         &ctx.db,
@@ -73,19 +80,22 @@ pub async fn list_links_handler(
                 .await
                 .map_err(ListLinksError::DatabaseError)?;
 
-            let access_token = fetch_gmail_access_token_from_link(
-                &link,
-                &ctx.redis_client,
-                &ctx.auth_service_client,
-            )
-            .await
-            .map_err(ListLinksError::AuthError)?;
-
-            let signature = ctx
-                .gmail_client
-                .get_email_signature(&access_token, link.email_address.0.as_ref())
+            let signature = if query_params.include_signature == Some(true) {
+                let access_token = fetch_gmail_access_token_from_link(
+                    &link,
+                    &ctx.redis_client,
+                    &ctx.auth_service_client,
+                )
                 .await
-                .unwrap_or(None);
+                .map_err(ListLinksError::AuthError)?;
+
+                ctx.gmail_client
+                    .get_email_signature(&access_token, link.email_address.0.as_ref())
+                    .await
+                    .unwrap_or(None)
+            } else {
+                None
+            };
 
             Ok(api::link::Link::new(
                 link,
