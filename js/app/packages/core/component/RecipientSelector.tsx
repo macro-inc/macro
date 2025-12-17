@@ -431,7 +431,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
     >
       <Combobox.Control<CombinedRecipientItem>>
         {(state) => (
-          <div class="flex flex-wrap gap-1.5 max-h-[150px] min-h-[40px] overflow-y-auto text-ink">
+          <div class="flex flex-wrap gap-2 max-h-[150px] min-h-[40px] overflow-y-auto text-ink">
             <For each={state.selectedOptions()}>
               {(option) => {
                 return (
@@ -451,7 +451,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                           name && name !== email ? `${name} | ${email}` : email;
 
                         return (
-                          <div class="flex flex-row ml-2 py-1 pl-2 gap-1 pr-0.5 overflow-hidden items-center bg-hover">
+                          <div class="flex flex-row py-1 pl-2 gap-1 pr-0.5 overflow-hidden items-center bg-hover">
                             <UserIcon id={opt.id} size="xs" isDeleted={false} />
                             <p class={'text-sm'}>
                               {truncateString(displayText ?? '', 20)}
@@ -467,7 +467,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                     <Match when={matches(option, (o) => o.kind === 'channel')}>
                       {(channelOption) => {
                         return (
-                          <div class="flex flex-row ml-2 py-1 pl-2 gap-1 pr-0.5 overflow-hidden items-center bg-hover">
+                          <div class="flex flex-row py-1 pl-2 gap-1 pr-0.5 overflow-hidden items-center bg-hover">
                             <HashIcon class="w-4 h-4" />
                             <p class={'text-sm'}>
                               {truncateString(
@@ -487,7 +487,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                       {(customOption) => {
                         const email = customOption().data.email;
                         return (
-                          <div class="flex flex-row ml-2 py-1 pl-2 gap-1 pr-0.5 overflow-hidden items-center bg-hover">
+                          <div class="flex flex-row py-1 pl-2 gap-1 pr-0.5 overflow-hidden items-center bg-hover">
                             <UserIcon id={email} size="xs" isDeleted={false} />
                             <p class={'text-sm'}>{truncateString(email, 20)}</p>
                             <XIcon
@@ -506,9 +506,6 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
               disabled={disabled()}
               ref={setInputRef}
               class="flex-1 min-h-7 p-1 min-w-[200px] outline-none placeholder:text-ink-placeholder"
-              classList={{
-                'ml-1': selectedLen() === 0,
-              }}
               onKeyDown={(e) => {
                 if (
                   (e.key === 'a' && e.ctrlKey) ||

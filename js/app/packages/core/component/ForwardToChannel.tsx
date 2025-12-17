@@ -244,17 +244,19 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
   return (
     <Show when={isAuthenticated()}>
       <div class="flex flex-col w-full">
-        <RecipientSelector<'user' | 'contact' | 'channel'>
-          placeholder="To: Email Or Group"
-          setSelectedOptions={setSelectedOptions}
-          selectedOptions={selectedOptions}
-          triedToSubmit={triedToSubmit}
-          options={destinationOptions}
-          triggerMode="input"
-          noBrackets
-          hideBorder
-          noPadding
-        />
+        <div class="p-2">
+          <RecipientSelector<'user' | 'contact' | 'channel'>
+            placeholder="To: Email Or Group"
+            setSelectedOptions={setSelectedOptions}
+            selectedOptions={selectedOptions}
+            triedToSubmit={triedToSubmit}
+            options={destinationOptions}
+            triggerMode="input"
+            noBrackets
+            hideBorder
+            noPadding
+          />
+        </div>
         <div class="flex flex-col w-full h-[150px] overflow-y-auto border-t-1 border-edge-muted/50">
           <div
             class="flex-1 px-2.5 py-1 w-full text-sm"
@@ -278,16 +280,18 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
           </div>
 
           <Show when={canSendAsGroup()}>
-            <ToggleSwitch
-              switchRootClass={canSendAsGroup() ? '' : 'cursor-not-allowed'}
-              checked={sendAsGroupMessage() && canSendAsGroup()}
-              onChange={setSendAsGroupMessage}
-              disabled={!canSendAsGroup()}
-              label={'Send In Channel'}
-              falseLabel="FALSE"
-              trueLabel="TRUE"
-              size="SM"
-            />
+            <div class="p-2">
+              <ToggleSwitch
+                switchRootClass={canSendAsGroup() ? '' : 'cursor-not-allowed'}
+                checked={sendAsGroupMessage() && canSendAsGroup()}
+                onChange={setSendAsGroupMessage}
+                disabled={!canSendAsGroup()}
+                label={'Send In Channel'}
+                falseLabel="FALSE"
+                trueLabel="TRUE"
+                size="SM"
+              />
+            </div>
           </Show>
         </div>
       </div>
