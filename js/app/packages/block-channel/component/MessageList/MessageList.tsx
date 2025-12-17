@@ -750,6 +750,7 @@ export function MessageList(props: MessageListProps) {
           />
         </Show>
         <CustomScrollbar
+          reverse
           scrollContainer={scrollContainerRef}
           label={scrollHintLabel()}
           showLabel={isScrollHintVisible()}

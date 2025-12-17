@@ -7,6 +7,7 @@ interface CustomScrollbarProps {
   showLabel?: boolean;
   labelClass?: string;
   enabled?: boolean;
+  reverse?: boolean;
 }
 
 export function CustomScrollbar(props: CustomScrollbarProps) {
@@ -37,7 +38,7 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
 
     // scrollTop is negative when reversed so adding to scrollHeight will
     // set the scrollTop to be the total scrollable space - the current scroll position
-    setScrollTop(scrollTop + scrollHeight);
+    setScrollTop(props.reverse ? scrollTop + scrollHeight : scrollTop);
     setScrollHeight(scrollHeight);
     setClientHeight(clientHeight);
   };
@@ -52,7 +53,13 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
   const thumbTop = () => {
     const containerHeight = clientHeight();
     const contentHeight = scrollHeight();
-    const maxScroll = contentHeight;
+
+    let maxScroll = contentHeight;
+
+    if (!props.reverse) {
+      maxScroll -= containerHeight;
+    }
+
     if (maxScroll <= 0) return 0;
     const thumbH = thumbHeight();
     return (scrollTop() / maxScroll) * (containerHeight - thumbH);
