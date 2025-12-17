@@ -1,0 +1,18 @@
+[package]
+edition = "2024"
+name = "comms"
+version = "0.1.0"
+
+[dependencies]
+chrono = { workspace = true }
+doppleganger = { workspace = true }
+frecency = { path = "../frecency" }
+macro_user_id = { path = "../macro_user_id" }
+model-entity = { path = "../model-entity" }
+models_comms = { path = "../models_comms" }
+rootcause = "0.10"
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
