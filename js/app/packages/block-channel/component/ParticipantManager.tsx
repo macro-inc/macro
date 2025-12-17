@@ -29,8 +29,8 @@ import { ChannelType } from '@service-comms/generated/models/channelType';
 import { useUserId } from '@service-gql/client';
 import { createMemo, createSignal, Show } from 'solid-js';
 import { VList } from 'virtua/solid';
-import { UserItem } from './UserItem';
 import { beveledCorners } from '../../block-theme/signals/themeSignals';
+import { UserItem } from './UserItem';
 
 export function ParticipantManager(props: { participantCount: number }) {
   const channel = channelStore.get;
@@ -90,51 +90,51 @@ export function ParticipantManager(props: { participantCount: number }) {
         <DialogWrapper>
           <Dialog.Content>
             <ClippedPanel tl={!beveledCorners()} active>
-                <div class="flex flex-row items-center px-2 h-[40px] gap-2 border-b-1 border-b-edge-muted">
-                  <Dialog.CloseButton>
-                    <IconButton
-                      tooltip={{ label: 'Close' }}
-                      icon={CloseIcon}
-                      iconSize={16}
-                      theme="clear"
-                      size="sm"
-                    />
-                  </Dialog.CloseButton>
-                  <Dialog.Title class="text-sm">{title()}</Dialog.Title>
-                </div>
-                <Show
-                  when={
-                    channelType() &&
-                    ['private'].includes(channelType()!) &&
-                    isChannelAdminOrOwnerMemo()
-                  }
-                >
-                  <div class="flex flex-row justify-between gap-2 h-[40px] text-ink-muted border-b border-edge-muted/50 px-2 items-center">
-                    <RecipientSelector<'user'>
-                      setSelectedOptions={setUsersToInvite}
-                      selectedOptions={usersToInvite}
-                      placeholder={'Search'}
-                      options={options}
-                      hideBorder
-                      noPadding
-                    />
-                    <TextButton
-                      disabled={usersToInvite().length === 0}
-                      onClick={handleAddParticipants}
-                      icon={InvitedIcon}
-                      text="Add Participant"
-                      theme="accent"
-                    />
-                  </div>
-                </Show>
-
-                <div class="flex flex-col">
-                  <ParticipantList
-                    editable={editable()}
-                    participants={channel.participants}
-                    userId={userId()!}
+              <div class="flex flex-row items-center px-2 h-[40px] gap-2 border-b-1 border-b-edge-muted">
+                <Dialog.CloseButton>
+                  <IconButton
+                    tooltip={{ label: 'Close' }}
+                    icon={CloseIcon}
+                    iconSize={16}
+                    theme="clear"
+                    size="sm"
+                  />
+                </Dialog.CloseButton>
+                <Dialog.Title class="text-sm">{title()}</Dialog.Title>
+              </div>
+              <Show
+                when={
+                  channelType() &&
+                  ['private'].includes(channelType()!) &&
+                  isChannelAdminOrOwnerMemo()
+                }
+              >
+                <div class="flex flex-row justify-between gap-2 h-[40px] text-ink-muted border-b border-edge-muted/50 px-2 items-center">
+                  <RecipientSelector<'user'>
+                    setSelectedOptions={setUsersToInvite}
+                    selectedOptions={usersToInvite}
+                    placeholder={'Search'}
+                    options={options}
+                    hideBorder
+                    noPadding
+                  />
+                  <TextButton
+                    disabled={usersToInvite().length === 0}
+                    onClick={handleAddParticipants}
+                    icon={InvitedIcon}
+                    text="Add Participant"
+                    theme="accent"
                   />
                 </div>
+              </Show>
+
+              <div class="flex flex-col">
+                <ParticipantList
+                  editable={editable()}
+                  participants={channel.participants}
+                  userId={userId()!}
+                />
+              </div>
             </ClippedPanel>
           </Dialog.Content>
         </DialogWrapper>

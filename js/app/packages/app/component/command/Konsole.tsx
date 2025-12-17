@@ -18,12 +18,12 @@ import {
   createMemo,
   createSignal,
   For,
-  type JSXElement,
   onMount,
   Show,
   untrack,
 } from 'solid-js';
 import { VList } from 'virtua/solid';
+import { beveledCorners } from '../../../block-theme/signals/themeSignals';
 import { KonsoleFilter } from './KonsoleFilter';
 import {
   COMMAND_ITEM_HEIGHT,
@@ -52,7 +52,6 @@ import {
 } from './state';
 import { useCommandItems } from './useCommandItems';
 import { usePaginatedSearchItems } from './useSearchItems';
-import { beveledCorners } from '../../../block-theme/signals/themeSignals';
 
 // equivalent to h-96
 const MAX_CONTAINER_HEIGHT = 96 * 4;

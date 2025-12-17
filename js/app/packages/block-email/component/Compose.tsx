@@ -31,8 +31,8 @@ import {
   Suspense,
   Switch,
 } from 'solid-js';
-import { ComposeEmailInput, type ComposeInputData } from './ComposeEmailInput';
 import { beveledCorners } from '../../block-theme/signals/themeSignals';
+import { ComposeEmailInput, type ComposeInputData } from './ComposeEmailInput';
 
 type EmailComposeErrors =
   | 'no_recipient'
