@@ -107,7 +107,9 @@ export function SplitContainer(
             <div class="flex flex-col min-h-0 size-full">
               <SplitHeader ref={setHeaderRef} />
               <SplitToolbar ref={setToolbarRef} />
-              <div class="@container/split size-full overflow-hidden">{props.children}</div>
+              <div class="@container/split size-full overflow-hidden">
+                {props.children}
+              </div>
               <Show when={panel.handle.isSpotLight()}>
                 <MacroJump tabbableParent={ref} />
               </Show>
