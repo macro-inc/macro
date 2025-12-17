@@ -510,7 +510,6 @@ export function ShareModal(props: ShareModalProps) {
 
               <Show when={recipients() || props.owner}>
                 <div class="border-t-1 border-edge-muted p-2">
-                  <div class="text-sm select-none">Shared With</div>
                   <div class="flex w-full h-fit max-h-[120px] overflow-y-auto">
                     <table class="w-full text-ink text-sm border-collapse">
                       <tbody class="select-none">
