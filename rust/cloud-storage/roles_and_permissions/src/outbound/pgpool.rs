@@ -9,7 +9,7 @@ use macro_user_id::{
     cowlike::CowLike,
     email::{Email, ReadEmailParts},
     lowercased::Lowercase,
-    user_id::{MacroUserId, MacroUserIdStr},
+    user_id::MacroUserIdStr,
 };
 use sqlx::PgPool;
 

@@ -10,7 +10,7 @@ use axum::{
 use comms_service_client::CommsServiceClient;
 use model::{
     chat::ChatBasic,
-    user::{UserContext, axum_extractor::MacroUserExtractor},
+    user::axum_extractor::MacroUserExtractor,
 };
 use models_permissions::share_permission::access_level::AccessLevel;
 use sqlx::PgPool;

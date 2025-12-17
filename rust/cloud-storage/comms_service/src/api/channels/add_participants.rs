@@ -105,7 +105,7 @@ pub async fn handler(
             &ctx,
             &channel_id,
             &MacroUserIdStr::parse_from_str(&channel_admin.context.user_id)
-                .map_err(|e| (StatusCode::BAD_REQUEST, "Invalid macro user id".to_string()))?
+                .map_err(|_e| (StatusCode::BAD_REQUEST, "Invalid macro user id".to_string()))?
                 .into_owned(),
             req.participants.clone(),
             metadata.clone(),

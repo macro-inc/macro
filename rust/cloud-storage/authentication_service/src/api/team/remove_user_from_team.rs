@@ -4,7 +4,6 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use macro_user_id::user_id::MacroUserId;
 use model_user::axum_extractor::MacroUserExtractor;
 use teams::domain::{model::RemoveUserFromTeamError, team_repo::TeamService};
 
@@ -16,7 +15,6 @@ use crate::api::{
 use model::{
     response::{EmptyResponse, ErrorResponse},
     tracking::IPContext,
-    user::UserContext,
 };
 
 #[derive(serde::Deserialize)]

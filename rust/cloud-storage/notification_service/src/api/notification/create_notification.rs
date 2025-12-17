@@ -1,12 +1,10 @@
 use crate::{api::context::ApiContext, model::notification::CreateNotification};
 use axum::{
-    Extension, Json,
+    Json,
     extract::{self, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use macro_user_id::user_id::MacroUserIdStr;
-use model::user::UserContext;
 use model::{response::ErrorResponse, user::axum_extractor::MacroUserExtractor};
 use model_notifications::{
     Notification, NotificationEvent, NotificationEventType, RawNotification,

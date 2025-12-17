@@ -1,11 +1,11 @@
 use crate::{
     api::context::ApiContext, model::response::instructions::GetInstructionsDocumentResponse,
 };
-use axum::{Extension, Json, extract::State, http::StatusCode, response::IntoResponse};
+use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 use macro_user_id::cowlike::CowLike;
 use model::{
     response::{GenericErrorResponse, GenericResponse},
-    user::{UserContext, axum_extractor::MacroUserExtractor},
+    user::axum_extractor::MacroUserExtractor,
 };
 
 /// Gets the instructions document for the current user

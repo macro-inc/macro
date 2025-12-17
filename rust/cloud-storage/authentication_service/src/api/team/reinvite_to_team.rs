@@ -16,7 +16,7 @@ use crate::api::{
 use model::{
     response::{EmptyResponse, ErrorResponse},
     tracking::IPContext,
-    user::{UserContext, axum_extractor::MacroUserExtractor},
+    user::axum_extractor::MacroUserExtractor,
 };
 
 #[derive(serde::Deserialize)]

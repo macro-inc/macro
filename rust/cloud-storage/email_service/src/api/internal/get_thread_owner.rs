@@ -36,7 +36,7 @@ pub async fn handler(
                 .into_response()
         })?;
     let user_id = MacroUserIdStr::parse_from_str(&user_id)
-        .map_err(|e| {
+        .map_err(|_e| {
             (
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {

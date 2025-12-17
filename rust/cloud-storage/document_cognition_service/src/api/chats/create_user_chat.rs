@@ -13,7 +13,7 @@ use crate::{
 use anyhow::Context;
 use axum::{
     Json,
-    extract::{Extension, State},
+    extract::State,
     http::StatusCode,
     response::{IntoResponse, Response},
 };
@@ -21,7 +21,7 @@ use macro_db_client::dcs::create_chat;
 use macro_middleware::cloud_storage::ensure_access::{
     get_users_access_level_v2, project::ProjectBodyAccessLevelExtractor,
 };
-use model::{chat::AttachmentType, response::StringIDResponse, user::UserContext};
+use model::{chat::AttachmentType, response::StringIDResponse};
 use model::{chat::NewChatAttachment, user::axum_extractor::MacroUserExtractor};
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::EditAccessLevel;
@@ -51,7 +51,7 @@ pub(in crate::api) async fn create_chat_handler(
             get_users_access_level_v2(
                 &state.db,
                 &state.comms_service_client,
-                &user_context.macro_user_id.as_ref(),
+                user_context.macro_user_id.as_ref(),
                 &attachment.attachment_id,
                 "document",
             )

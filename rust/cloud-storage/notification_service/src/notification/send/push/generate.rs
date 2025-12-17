@@ -80,11 +80,11 @@ pub fn generate_apns_notification<T: XmlFormatter>(
     };
 
     let parse_user = || -> Result<MacroUserIdStr<'_>, NotificationErr> {
-        Ok(notif
+        notif
             .inner
             .sender_id
             .clone()
-            .ok_or(NotificationErr::SenderDoesntExist)?)
+            .ok_or(NotificationErr::SenderDoesntExist)
     };
 
     Ok(match &notif.inner.notification_event {

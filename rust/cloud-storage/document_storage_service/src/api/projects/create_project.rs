@@ -1,16 +1,14 @@
 use crate::api::context::ApiContext;
 use axum::{
-    Extension,
     extract::State,
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
 use macro_middleware::cloud_storage::ensure_access::project::ProjectBodyAccessLevelExtractor;
-use macro_user_id::cowlike::CowLike;
 use model::{
     project::{Project, request::CreateProjectRequest, response::CreateProjectResponse},
     response::{GenericErrorResponse, GenericResponse},
-    user::{UserContext, axum_extractor::MacroUserExtractor},
+    user::axum_extractor::MacroUserExtractor,
 };
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::EditAccessLevel;

@@ -1,6 +1,6 @@
 use anyhow::Context;
 use macro_cache_client::MacroCache;
-use macro_user_id::{cowlike::CowLike, email::ReadEmailParts};
+use macro_user_id::email::ReadEmailParts;
 use model_notifications::{Notification, NotificationEventType};
 
 /// Performs a basic rate limit check on the notification

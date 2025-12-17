@@ -4,7 +4,6 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use model_user::axum_extractor::MacroUserExtractor;
 use teams::domain::{model::JoinTeamError, team_repo::TeamService};
 
@@ -13,7 +12,6 @@ use crate::api::context::ApiContext;
 use model::{
     response::{EmptyResponse, ErrorResponse},
     tracking::IPContext,
-    user::UserContext,
 };
 
 #[derive(serde::Deserialize)]

@@ -3,7 +3,7 @@
 use macro_user_id::{
     email::Email,
     lowercased::Lowercase,
-    user_id::{MacroUserId, MacroUserIdStr},
+    user_id::MacroUserIdStr,
 };
 
 use crate::domain::model::{

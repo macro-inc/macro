@@ -8,7 +8,7 @@ use macro_user_id::{
     cowlike::CowLike,
     email::Email,
     lowercased::Lowercase,
-    user_id::{MacroUserId, MacroUserIdStr},
+    user_id::MacroUserIdStr,
 };
 use model_entity::EntityType;
 use model_user::axum_extractor::MacroUserExtractor;
@@ -26,7 +26,7 @@ use crate::api::{
     team::TeamPathParam,
 };
 
-use model::{response::ErrorResponse, tracking::IPContext, user::UserContext};
+use model::{response::ErrorResponse, tracking::IPContext};
 
 use model_notifications::{InviteToTeamMetadata, NotificationEvent, NotificationQueueMessage};
 
