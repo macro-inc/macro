@@ -205,10 +205,6 @@ export function BaseInput(props: BaseInputProps) {
       entity_id: m.itemId,
     }));
 
-  createEffect(() => {
-    console.log('### ALL MENTIONS', mentions(), allMentions());
-  });
-
   const [attachFn, scopeId] = useHotkeyDOMScope('channel.baseInput');
 
   onMount(() => {

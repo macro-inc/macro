@@ -239,7 +239,6 @@ export async function sendMessage({
   threadId?: string;
   mentions?: SimpleMention[];
 }) {
-  console.log('SIMPLE MENTIONS PASSED TO SEND MESSAGE', mentions);
   const optimisticSend = createCallback(optimisticChannelMessage);
   const channelsContext = useChannelsContext();
   const userId = useUserId();
