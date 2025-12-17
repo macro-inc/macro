@@ -4,6 +4,7 @@ import { IconButton } from '@core/component/IconButton';
 import { BlockLink } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { initializeEditorEmpty } from '@core/component/LexicalMarkdown/utils';
 import {
   propertyApiValuesToNormalized,
@@ -32,7 +33,7 @@ import { propertiesServiceClient } from '@service-properties/client';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import { useQuery } from '@tanstack/solid-query';
 import type { LexicalEditor } from 'lexical';
-import { createMemo, createSignal, For, Show, Suspense } from 'solid-js';
+import { createSignal, For, Show, Suspense } from 'solid-js';
 import { createStore, reconcile, type Store } from 'solid-js/store';
 
 export interface ComposeTaskProps {
@@ -74,6 +75,27 @@ function extractPropertyValue(
   } else {
     return value;
   }
+}
+
+
+function TaskToastPreview(props: { title: string; body: string; id: string }) {
+  return (
+    <BlockLink blockOrFileName="task" id={props.id}>
+      <div class="text-ink size-full">
+        <div class="flex row items-center gap-2 mb-4">
+          <EntityIcon targetType="task" />
+          <span class="text-base font-medium">{props.title}</span>
+        </div>
+        <div class="text-ink-muted text-sm h-fit max-h-18 w-full overflow-ellipsis truncate">
+          <StaticMarkdown
+            markdown={props.body}
+            theme={unifiedListMarkdownTheme}
+            singleLine
+          />
+        </div>
+      </div>
+    </BlockLink>
+  );
 }
 
 export function ComposeTask(props: ComposeTaskProps) {
@@ -206,22 +228,11 @@ export function ComposeTask(props: ComposeTaskProps) {
         props.onClose?.();
         Promise.allSettled(propertyRequests).then(() => {
           toast.embed(
-            () => {
-              // TODO (seamus) : make this suck less
-              return (
-                <BlockLink blockOrFileName="task" id={res}>
-                  <div class="">
-                    <div class="flex row">
-                      <EntityIcon targetType="task" />
-                      <span>{taskTitle}</span>
-                    </div>
-                    <StaticMarkdown markdown={taskContent} />
-                  </div>
-                </BlockLink>
-              );
-            },
+            () => (
+              <TaskToastPreview id={res} title={taskTitle} body={content()} />
+            ),
             {
-              duration: 2000,
+              duration: 9000000,
             }
           );
         });

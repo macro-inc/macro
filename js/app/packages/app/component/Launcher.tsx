@@ -129,17 +129,6 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
               componentId: 'task-compose',
               asPopover: true,
             });
-            // createBlock({
-            //   blockName: 'task',
-            //   loading: true,
-            //   createFn: () =>
-            //     createTask({
-            //       title: '',
-            //       content: '',
-            //       projectId: undefined,
-            //     }),
-            //   shouldInsert: pressedKeys().has('opt'),
-            // });
             return true;
           },
         },

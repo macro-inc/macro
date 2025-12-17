@@ -302,20 +302,18 @@ function embed(
       <Toast
         toastId={props.toastId}
         class="flex flex-col items-center justify-between gap-2 border rounded-md p-3 pointer-events-auto
-          floating-accent-bg border-gray-200 text-gray-700
+          border-edge-muted bg-panel relative
           ui-opened:animate-slide-in ui-closed:animate-hide transition-transform ui-swipe-move:translate-x-[var(--kb-toast-swipe-move-x)]
           ui-swipe-cancel:translate-x-0 ui-swipe-cancel:ease-out ui-swipe-cancel:duration-200 ui-swipe-end:animate-swipe-out"
         duration={options?.duration}
         persistent={options?.persistent}
       >
-        <div class="flex items-center w-full">
-          <div class="flex-1">
-            <Dynamic component={component} />
-          </div>
-          <Toast.CloseButton class="ml-auto">
-            <XIcon class="h-5 ml-4 text-gray-500" />
-          </Toast.CloseButton>
+        <div class="size-full">
+          <Dynamic component={component} />
         </div>
+        <Toast.CloseButton class="ml-auto absolute top-2 right-2 z-1">
+          <XIcon class="h-5 ml-4 text-gray-500" />
+        </Toast.CloseButton>
       </Toast>
     ),
     { region: options?.region || 'toast-region' }
