@@ -1,5 +1,5 @@
 import { ItemPreview } from '@core/component/ItemPreview';
-import { staticFileIdEndpoint } from '@core/constant/servers';
+import { VideoPreview } from '@core/component/VideoPreview';
 import type { Attachment } from '@service-comms/generated/models/attachment';
 import { stringToItemType } from '@service-storage/client';
 import { type Accessor, For, Show } from 'solid-js';
@@ -22,16 +22,12 @@ export function MessageAttachments(props: MessageAttachmentsProps) {
       {/* Video attachments */}
       <Show when={props.videoAttachments()?.length > 0 && !props.isDeleted()}>
         <For each={props.videoAttachments()}>
-          {(item) => (
-            <div class="flex size-full max-w-50 max-h-100 object-contain">
-              <video controls src={staticFileIdEndpoint(item.entity_id)} />
-            </div>
-          )}
+          {(item) => <VideoPreview id={item.entity_id} variant="dynamic" />}
         </For>
       </Show>
       {/* Image attachments */}
       <Show when={props.imageAttachments()?.length > 0 && !props.isDeleted()}>
-        <div class="flex">
+        <div class="flex not-first:mt-2">
           <DynamicImageList
             ids={props.imageAttachments()?.map((a) => a.entity_id)}
             attachmentIds={props.imageAttachments()?.map((a) => a.id)}
@@ -46,7 +42,7 @@ export function MessageAttachments(props: MessageAttachmentsProps) {
       <Show
         when={props.documentAttachments()?.length > 0 && !props.isDeleted()}
       >
-        <div class={`flex flex-row mt-0.5 gap-2 flex-wrap max-w-full`}>
+        <div class={`flex flex-row mt-2 gap-2 flex-wrap max-w-full`}>
           <For each={props.documentAttachments()}>
             {(attachment) => (
               <ItemPreview

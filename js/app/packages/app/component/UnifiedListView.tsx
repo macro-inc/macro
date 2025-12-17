@@ -1011,6 +1011,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       createUnifiedInfiniteList<
         WithNotification<WithSearch<EntityData> | EntityData>
       >({
+        id: `${selectedView()}-${splitContext.handle.id}`,
         entityInfiniteQueries: [
           {
             query: dssInfiniteQuery,

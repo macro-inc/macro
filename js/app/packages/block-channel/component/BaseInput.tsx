@@ -331,14 +331,15 @@ export function BaseInput(props: BaseInputProps) {
     if (isPendingSend()) return false;
     setIsPendingSend(true);
     const content = markdownState();
-    clearMarkdownArea();
-    focusMarkdownArea();
 
     const args = {
       content: content,
       attachments: props.inputAttachments.store[key] ?? [],
       mentions: allMentions(),
     };
+
+    clearMarkdownArea();
+    focusMarkdownArea();
 
     props
       .onSend(args)
