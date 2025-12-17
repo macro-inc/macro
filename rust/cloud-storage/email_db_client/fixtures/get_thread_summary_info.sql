@@ -30,6 +30,19 @@ VALUES ('00000000-0000-0000-0000-0000000c0020',
         NOW(), NOW());
 
 ------------------------------------------------------------
+-- Labels
+------------------------------------------------------------
+
+-- Create the TRASH label for this user
+INSERT INTO email_labels (id, link_id, provider_label_id, name, created_at, type)
+VALUES ('00000000-0000-0000-0000-0000000a0001',
+        '00000000-0000-0000-0000-00000000001c',
+        'TRASH',
+        'TRASH',
+        NOW(),
+        'System');
+
+------------------------------------------------------------
 -- Thread 1: All non-draft messages with sent_at
 -- Should use MIN(sent_at) and MAX(sent_at)
 ------------------------------------------------------------
@@ -393,3 +406,70 @@ VALUES ('00000000-0000-0000-0000-0000000e0618',
         'Reply Subject',
         '2025-01-16 11:00:00 +00:00',
         '2025-01-16 11:30:00 +00:00');
+
+------------------------------------------------------------
+-- Thread 8: Latest message has TRASH label
+-- Tests that threads with latest message in trash are handled correctly
+------------------------------------------------------------
+
+INSERT INTO email_threads (id, link_id, inbox_visible, is_read, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-000000000308',
+        '00000000-0000-0000-0000-00000000001c',
+        true, false, NOW(), NOW());
+
+-- First message (not in trash)
+INSERT INTO email_messages (id, thread_id, link_id, provider_id, is_sent, from_contact_id, internal_date_ts,
+                            sent_at, is_draft, snippet, subject, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-0000000e0619',
+        '00000000-0000-0000-0000-000000000308',
+        '00000000-0000-0000-0000-00000000001c',
+        'provider-msg-619',
+        FALSE,
+        '00000000-0000-0000-0000-0000000c0020',
+        '2025-01-17 10:00:00 +00:00',
+        '2025-01-17 10:00:00 +00:00',
+        false,
+        'First message in thread',
+        'Trash Test Subject',
+        '2025-01-17 09:00:00 +00:00',
+        '2025-01-17 09:30:00 +00:00');
+
+-- Middle message (not in trash)
+INSERT INTO email_messages (id, thread_id, link_id, provider_id, is_sent, from_contact_id, internal_date_ts,
+                            sent_at, is_draft, snippet, subject, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-0000000e0620',
+        '00000000-0000-0000-0000-000000000308',
+        '00000000-0000-0000-0000-00000000001c',
+        'provider-msg-620',
+        FALSE,
+        '00000000-0000-0000-0000-0000000c0021',
+        '2025-01-17 11:00:00 +00:00',
+        '2025-01-17 11:00:00 +00:00',
+        false,
+        'Middle message in thread',
+        'Trash Test Subject',
+        '2025-01-17 10:00:00 +00:00',
+        '2025-01-17 10:30:00 +00:00');
+
+-- Latest message (in trash)
+INSERT INTO email_messages (id, thread_id, link_id, provider_id, is_sent, from_contact_id, internal_date_ts,
+                            sent_at, is_draft, snippet, subject, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-0000000e0621',
+        '00000000-0000-0000-0000-000000000308',
+        '00000000-0000-0000-0000-00000000001c',
+        'provider-msg-621',
+        FALSE,
+        '00000000-0000-0000-0000-0000000c0020',
+        '2025-01-17 12:00:00 +00:00',
+        '2025-01-17 12:00:00 +00:00',
+        false,
+        'Latest message - in trash',
+        'Trash Test Subject',
+        '2025-01-17 11:00:00 +00:00',
+        '2025-01-17 11:30:00 +00:00');
+
+-- Add TRASH label to the latest message
+INSERT INTO email_message_labels (message_id, label_id)
+VALUES ('00000000-0000-0000-0000-0000000e0621',
+        '00000000-0000-0000-0000-0000000a0001');
+
