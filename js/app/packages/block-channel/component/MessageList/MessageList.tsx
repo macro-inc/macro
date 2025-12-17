@@ -613,9 +613,12 @@ export function MessageList(props: MessageListProps) {
         .orderedMessages()
         ?.findIndex((m) => m.id === messages[0].id);
       if (firstUnviewedIndex === undefined) return;
-      virtualHandle()?.scrollToIndex(firstUnviewedIndex, {
-        align: 'start',
-      });
+      virtualHandle()?.scrollToIndex(
+        props.orderedMessages().length - 1 - firstUnviewedIndex,
+        {
+          align: 'start',
+        }
+      );
     }
   };
 
@@ -713,7 +716,7 @@ export function MessageList(props: MessageListProps) {
                       newMessageIndex={newMessageIndex}
                       isFocused={isFocused(row.id)}
                       setFocusedMessageId={props.setFocusedMessageId}
-                      index={i}
+                      index={() => props.orderedMessages().length - 1 - i()}
                       orderedMessages={props.orderedMessages}
                       threadSiblings={viewThreads[
                         row.message.thread_id ?? ''
