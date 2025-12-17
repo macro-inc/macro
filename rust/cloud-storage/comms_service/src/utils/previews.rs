@@ -27,7 +27,18 @@ pub fn resolve_previews(
         .iter()
         .map(|preview| {
             let resolved_name = resolve_channel_name(
-                &preview.channel_type,
+                &match preview.channel_type {
+                    model::comms::ChannelType::Public => models_comms::channel::ChannelType::Public,
+                    model::comms::ChannelType::Organization => {
+                        models_comms::channel::ChannelType::Organization
+                    }
+                    model::comms::ChannelType::Private => {
+                        models_comms::channel::ChannelType::Private
+                    }
+                    model::comms::ChannelType::DirectMessage => {
+                        models_comms::channel::ChannelType::DirectMessage
+                    }
+                },
                 preview.channel_name.as_deref(),
                 &preview.participants,
                 &preview.channel_id,

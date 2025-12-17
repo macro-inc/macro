@@ -55,7 +55,7 @@ impl AuthServiceClient {
         let mut user_ids: HashSet<String> = HashSet::new();
         for channel in channels {
             for p in &channel.participants {
-                user_ids.insert(p.user_id.clone());
+                user_ids.insert(p.user_id.to_string());
             }
         }
 

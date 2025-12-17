@@ -42,7 +42,7 @@ pub async fn handler(
     Cached(ChannelId(channel_id)): Cached<ChannelId>,
     req: Json<RemoveParticipantsRequest>,
 ) -> Result<StatusCode, (StatusCode, String)> {
-    if let ChannelType::DirectMessage = channel_type {
+    if let models_comms::channel::ChannelType::DirectMessage = channel_type {
         tracing::error!("cannot add or remove participants from direct message channel");
         return Err((
             StatusCode::BAD_REQUEST,

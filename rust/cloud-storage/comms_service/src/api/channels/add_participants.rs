@@ -9,11 +9,12 @@ use axum::extract::Json;
 use axum::{extract::State, http::StatusCode};
 use axum_extra::extract::Cached;
 use comms_db_client::participants::add_participant::{AddParticipantOptions, add_participant};
+use doppleganger::Mirror;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
-use model::comms::{ChannelType, ParticipantRole};
 use model::document_storage_service_internal::UpdateUserChannelPermissionsRequest;
 use model_notifications::CommonChannelMetadata;
+use models_comms::channel::ChannelType;
 use models_permissions::share_permission::channel_share_permission::UpdateOperation;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -65,7 +66,7 @@ pub async fn handler(
             AddParticipantOptions {
                 channel_id: &channel_id,
                 user_id: participant.as_str(),
-                participant_role: Some(ParticipantRole::Member),
+                participant_role: Some(model::comms::ParticipantRole::Member),
             },
         )
         .await
@@ -98,7 +99,7 @@ pub async fn handler(
     // There should always be participants, but better safe than sorry
     if !participants.is_empty() {
         let metadata = CommonChannelMetadata {
-            channel_type,
+            channel_type: model_notifications::ChannelType::mirror(channel_type),
             channel_name: channel_name.clone(),
         };
         comms_notification::dispatch_notifications_for_invite(
@@ -116,7 +117,7 @@ pub async fn handler(
         })
         .ok();
 
-        if channel_type == ChannelType::Private && !channel_participants.is_empty() {
+        if matches!(channel_type, ChannelType::Private) && !channel_participants.is_empty() {
             // Contacts: add participants to social graph
             let channel_participants: Vec<String> = channel_participants
                 .iter()

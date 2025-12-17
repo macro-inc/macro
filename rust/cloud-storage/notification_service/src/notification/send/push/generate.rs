@@ -210,7 +210,9 @@ impl BuildNotification for ChannelMessageSendMetadata {
             aps: Aps {
                 alert: Some(sns_client::Alert::Dictionary(sns_client::AlertDictionary {
                     title: Some(match self.common.channel_type {
-                        ChannelType::DirectMessage => self.common.channel_name.to_string(),
+                        model_notifications::ChannelType::DirectMessage => {
+                            self.common.channel_name.to_string()
+                        }
                         _ => format!(
                             "{} <{}>",
                             self.sender.email_part().local_part(),

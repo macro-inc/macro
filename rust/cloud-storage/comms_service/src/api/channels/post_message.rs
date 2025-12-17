@@ -21,6 +21,8 @@ use comms_db_client::{
     messages::{add_attachments, create_message, create_message_mentions},
     model::{ActivityType, NewAttachment, SimpleMention},
 };
+use doppleganger::Mirror;
+use macro_user_id::cowlike::CowLike;
 use model::comms::ChannelParticipant;
 use model::document_storage_service_internal::UpdateChannelSharePermissionRequest;
 use model_notifications::CommonChannelMetadata;
@@ -205,10 +207,9 @@ pub async fn post_message_handler(
 
     // TODO: -- end
 
-    let participants: Vec<String> = channel_participants
-        .clone()
+    let participants: Vec<_> = channel_participants
         .iter()
-        .map(|p| p.user_id.clone())
+        .map(|p| p.user_id.copied())
         .collect();
 
     let start_time = Instant::now();
@@ -280,7 +281,7 @@ pub async fn post_message_handler(
         &ctx,
         channel_id,
         CommonChannelMetadata {
-            channel_type,
+            channel_type: model_notifications::ChannelType::mirror(channel_type),
             channel_name: channel_name.clone(),
         },
         channel_participants.clone(),

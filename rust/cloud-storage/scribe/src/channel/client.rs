@@ -1,6 +1,7 @@
 use ai_format::{Indent, InsightContextLog};
 use anyhow::Error;
 use comms_service_client::CommsServiceClient;
+use doppleganger::Mirror;
 use models_comms::ChannelMetadata;
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -39,10 +40,19 @@ impl ChannelClient {
                 .await
                 .map_err(Error::from)?,
         };
-        Ok(ChannelMetadata::from((
-            response.channel_name,
-            response.channel_type,
-        )))
+        Ok(ChannelMetadata {
+            name: response.channel_name,
+            channel_type: match response.channel_type {
+                model::comms::ChannelType::Public => models_comms::channel::ChannelType::Public,
+                model::comms::ChannelType::Organization => {
+                    models_comms::channel::ChannelType::Organization
+                }
+                model::comms::ChannelType::Private => models_comms::channel::ChannelType::Private,
+                model::comms::ChannelType::DirectMessage => {
+                    models_comms::channel::ChannelType::DirectMessage
+                }
+            },
+        })
     }
 
     /// Get channel transcript (message history) by channel ID

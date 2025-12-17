@@ -31,7 +31,11 @@ pub async fn patch_channel_handler(
     Cached(ChannelTypeExtractor(channel_type)): Cached<ChannelTypeExtractor>,
     Json(req): Json<PatchChannelOptions>,
 ) -> Result<(StatusCode, String), (StatusCode, String)> {
-    if channel_type == ChannelType::DirectMessage && req.channel_name.is_some() {
+    if matches!(
+        channel_type,
+        models_comms::channel::ChannelType::DirectMessage
+    ) && req.channel_name.is_some()
+    {
         return Err((
             StatusCode::BAD_REQUEST,
             "cannot change channel_name for direct message channels".to_string(),

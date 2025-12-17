@@ -26,6 +26,8 @@ anyhow = { workspace = true }
 axum = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }
 chrono = { workspace = true }
+comms = { path = "../comms" }
+document_sub_type = { path = "../document_sub_type" }
 doppleganger = { workspace = true, features = ["chrono", "uuid"] }
 either = { workspace = true }
 email = { path = "../email", features = ["ports"] }
@@ -47,7 +49,6 @@ tokio = { workspace = true, features = ["macros"], optional = true }
 tracing = { workspace = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
-document_sub_type = { path = "../document_sub_type" }
 
 [dev-dependencies]
 cool_asserts = "2"

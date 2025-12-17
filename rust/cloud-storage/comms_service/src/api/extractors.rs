@@ -33,7 +33,7 @@ pub struct ChannelId(pub Uuid);
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ChannelParticipants(pub Vec<ChannelParticipant>);
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct ChannelTypeExtractor(pub ChannelType);
 
 #[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]
@@ -176,7 +176,7 @@ where
 
         let user_ids = participants
             .iter()
-            .map(|p| p.user_id.clone())
+            .map(|p| p.user_id.to_string())
             .collect::<Vec<String>>();
 
         let name_lookup = auth_service_client
@@ -223,7 +223,16 @@ where
                 .into_response()
         })?;
 
-        Ok(ChannelTypeExtractor(info.channel_type))
+        Ok(ChannelTypeExtractor(match info.channel_type {
+            model::comms::ChannelType::Public => models_comms::channel::ChannelType::Public,
+            model::comms::ChannelType::Organization => {
+                models_comms::channel::ChannelType::Organization
+            }
+            model::comms::ChannelType::Private => models_comms::channel::ChannelType::Private,
+            model::comms::ChannelType::DirectMessage => {
+                models_comms::channel::ChannelType::DirectMessage
+            }
+        }))
     }
 }
 
@@ -240,15 +249,15 @@ pub async fn get_user_role(
 ) -> Option<ParticipantRole> {
     let user_participant = participants
         .iter()
-        .find(|p| p.user_id == user_context.user_id);
+        .find(|p| p.user_id.as_ref() == user_context.user_id);
 
     match info.channel_type {
-        ChannelType::Public => Some(
+        model::comms::ChannelType::Public => Some(
             user_participant
                 .map(|p| p.role)
                 .unwrap_or(ParticipantRole::Member),
         ),
-        ChannelType::Organization => {
+        model::comms::ChannelType::Organization => {
             let org_match = user_context
                 .organization_id
                 .and_then(|user_org| info.org_id.map(|ch_org| ch_org == user_org as i64))
