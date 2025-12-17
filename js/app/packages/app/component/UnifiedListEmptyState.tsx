@@ -32,7 +32,7 @@ function EmptyStateHelpDrawer(props: {
   });
   return (
     <EmptyStateInner
-      emptyMessage={props.message}
+      message={props.message}
       showDropZone={props.showDropZone}
     />
   );
@@ -44,7 +44,7 @@ export function EmptyState(props: { viewId?: ViewId; search?: boolean }) {
   return (
     <Switch>
       <Match when={props.search}>
-        <EmptyStateInner emptyMessage={'No results.'} />
+        <EmptyStateInner message={'No results.'} />
       </Match>
       <Match when={props.viewId === 'noise' && !emailActive()}>
         <EmptyStateHelpDrawer
@@ -58,7 +58,7 @@ export function EmptyState(props: { viewId?: ViewId; search?: boolean }) {
           emailActive()
         }
       >
-        <EmptyStateInner emptyMessage={'Inbox zero.'} />
+        <EmptyStateInner message={'Inbox zero.'} />
       </Match>
       <Match when={props.viewId === 'signal' && !emailActive()}>
         <EmptyStateHelpDrawer
@@ -99,14 +99,14 @@ export function EmptyState(props: { viewId?: ViewId; search?: boolean }) {
         />
       </Match>
       <Match when={true}>
-        <EmptyStateInner emptyMessage={'No items to show.'} showDropZone />
+        <EmptyStateInner message={'No items to show.'} showDropZone />
       </Match>
     </Switch>
   );
 }
 
 export interface EmptyStateInnerProps {
-  emptyMessage?: string;
+  message?: string;
   showDropZone?: boolean;
   cta?: {
     label: string;
@@ -129,8 +129,8 @@ export function EmptyStateInner(props: EmptyStateInnerProps) {
   return (
     <div class="size-full flex items-center justify-center p-4 text-ink-muted">
       <div class="panel w-full flex flex-col size-full">
-        <Show when={props.emptyMessage}>
-          <p class="text-ink-muted font-mono">{props.emptyMessage}</p>
+        <Show when={props.message}>
+          <p class="text-ink-muted font-mono">{props.message}</p>
         </Show>
         <Show when={props.cta}>
           {(cta) => (
