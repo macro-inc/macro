@@ -1,13 +1,3 @@
-use std::str::FromStr;
-
-use axum::{Extension, extract::State, http::StatusCode, response::IntoResponse};
-use macro_middleware::cloud_storage::ensure_access::project::ProjectBodyAccessLevelExtractor;
-use models_opensearch::SearchEntityType;
-use models_permissions::share_permission::access_level::EditAccessLevel;
-use sqs_client::search::SearchQueueMessage;
-use sqs_client::search::name::EntityName;
-use tracing::Instrument;
-
 use crate::api::middleware::internal_access::InternalUser;
 use crate::api::{
     context::ApiContext,
@@ -16,13 +6,21 @@ use crate::api::{
         utils::{self},
     },
 };
+use axum::{Extension, extract::State, http::StatusCode, response::IntoResponse};
+use macro_middleware::cloud_storage::ensure_access::project::ProjectBodyAccessLevelExtractor;
 use model::document::FileTypeExt;
 use model::document::response::{CreateDocumentRequest, CreateDocumentResponse};
 use model::{
     document::FileType,
     response::{GenericErrorResponse, GenericResponse},
-    user::UserContext,
 };
+use model_user::axum_extractor::MacroUserExtractor;
+use models_opensearch::SearchEntityType;
+use models_permissions::share_permission::access_level::EditAccessLevel;
+use sqs_client::search::SearchQueueMessage;
+use sqs_client::search::name::EntityName;
+use std::str::FromStr;
+use tracing::Instrument;
 
 /// Handles creating a document
 #[utoipa::path(
@@ -38,12 +36,12 @@ use model::{
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(state, user_context, project), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(state, user_context, project), fields(user_id=?user_context.macro_user_id))]
 #[axum::debug_handler(state = ApiContext)]
 pub(in crate::api) async fn create_document_handler(
     State(state): State<ApiContext>,
     internal_user: Option<Extension<InternalUser>>,
-    user_context: Extension<UserContext>,
+    user_context: MacroUserExtractor,
     project: ProjectBodyAccessLevelExtractor<EditAccessLevel, CreateDocumentRequest>,
 ) -> impl IntoResponse {
     let req = project.into_inner();
@@ -93,7 +91,7 @@ pub(in crate::api) async fn create_document_handler(
             id: req.id.as_deref(),
             sha: &req.sha,
             document_name: &document_name,
-            owner: &user_context.user_id,
+            owner: user_context.macro_user_id,
             file_type,
             job_id: req.job_id.as_deref(),
             project_id: req.project_id.as_deref(),

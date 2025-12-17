@@ -250,7 +250,7 @@ impl Read {
                 content: content_str,
                 metadata: DocumentMetadata {
                     document_name: metadata.document_name,
-                    owner: metadata.owner,
+                    owner: metadata.owner.to_string(),
                     file_type: metadata.file_type,
                     project_id: metadata.project_id,
                     deleted: metadata.deleted_at.is_some(),

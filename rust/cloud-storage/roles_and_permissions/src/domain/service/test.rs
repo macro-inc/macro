@@ -1,14 +1,10 @@
+//! Tests for the service logic for roles and permissions
+use super::*;
+use crate::domain::model::Permission;
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
-use super::UserRolesAndPermissionsServiceImpl;
-use crate::domain::model::Permission;
-
-///! Tests for the service logic for roles and permissions
-use super::*;
-
 use macro_user_id::email::ReadEmailParts;
-use macro_user_id::user_id::MacroUserId;
 
 #[derive(Debug, Clone, Default)]
 struct MockUserRepository {}
@@ -17,12 +13,10 @@ impl UserRepository for MockUserRepository {
     async fn get_user_id_by_email(
         &self,
         email: &Email<Lowercase<'_>>,
-    ) -> Result<MacroUserId<Lowercase<'_>>, UserRolesAndPermissionsError> {
+    ) -> Result<MacroUserIdStr<'_>, UserRolesAndPermissionsError> {
         match email.email_str() {
             "doesnotexist@doesnotexist.com" => Err(UserRolesAndPermissionsError::UserDoesNotExist),
-            "user@user.com" => Ok(MacroUserId::parse_from_str("macro|user@user.com")
-                .unwrap()
-                .lowercase()),
+            "user@user.com" => Ok(MacroUserIdStr::parse_from_str("macro|user@user.com").unwrap()),
             _ => Err(UserRolesAndPermissionsError::StorageLayerError(
                 anyhow::anyhow!("unexpected email"),
             )),
@@ -49,14 +43,14 @@ impl MockUserRolesAndPermissionsRepository {
 impl UserRolesAndPermissionsRepository for MockUserRolesAndPermissionsRepository {
     async fn get_user_permissions(
         &self,
-        _user_id: &MacroUserId<Lowercase<'_>>,
+        _user_id: &MacroUserIdStr<'_>,
     ) -> Result<HashSet<Permission>, UserRolesAndPermissionsError> {
         Ok(HashSet::new())
     }
 
     async fn add_roles_to_user(
         &self,
-        _user_id: &MacroUserId<Lowercase<'_>>,
+        _user_id: &MacroUserIdStr<'_>,
         _role_ids: &[RoleId],
     ) -> Result<(), UserRolesAndPermissionsError> {
         *self.add_roles_to_user_calls.lock().unwrap() += 1;
@@ -65,7 +59,7 @@ impl UserRolesAndPermissionsRepository for MockUserRolesAndPermissionsRepository
 
     async fn remove_roles_from_user(
         &self,
-        _user_id: &MacroUserId<Lowercase<'_>>,
+        _user_id: &MacroUserIdStr<'_>,
         _role_ids: &[RoleId],
     ) -> Result<(), UserRolesAndPermissionsError> {
         *self.remove_roles_from_user_calls.lock().unwrap() += 1;

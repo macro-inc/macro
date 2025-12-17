@@ -85,7 +85,7 @@ pub async fn handler(
             _ => {
                 export_basic_document(
                     &state,
-                    &document_context.owner,
+                    document_context.owner.as_ref(),
                     &document_context.document_id,
                     file_type,
                 )

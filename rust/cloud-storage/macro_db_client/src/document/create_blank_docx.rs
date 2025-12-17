@@ -1,3 +1,5 @@
+use macro_user_id::cowlike::CowLike;
+use macro_user_id::user_id::MacroUserIdStr;
 use model::document::FileType;
 use model::document::SaveBomPart;
 use models_permissions::share_permission::SharePermissionV2;
@@ -18,7 +20,7 @@ use tracing::instrument;
 pub async fn create_blank_docx(
     db: Pool<Postgres>,
     document_name: &str,
-    user_id: &str,
+    user_id: MacroUserIdStr<'static>,
     project_id: Option<&str>,
     share_permission: &SharePermissionV2,
     bom_parts: Vec<SaveBomPart>,
@@ -53,7 +55,7 @@ pub async fn create_blank_docx(
             VALUES ($1, $2, $3, $4)
             RETURNING id;
         "#,
-        user_id,
+        user_id.as_ref(),
         document_name,
         "docx", // hard coded file type as it's create blank docx
         project_id,
@@ -126,7 +128,7 @@ pub async fn create_blank_docx(
     .await?;
 
     // Add item to user history for creator
-    upsert_user_history(&mut transaction, user_id, &document.id, "document").await?;
+    upsert_user_history(&mut transaction, user_id.copied(), &document.id, "document").await?;
     upsert_item_last_accessed(&mut transaction, &document.id, "document").await?;
 
     if let Err(err) = transaction.commit().await {
@@ -143,7 +145,7 @@ pub async fn create_blank_docx(
     Ok(DocumentMetadata {
         document_id: document.id,
         document_version_id: document_version.id,
-        owner: user_id.to_string(),
+        owner: user_id,
         document_name: document_name.to_string(),
         file_type: Some(FileType::Docx.as_str().to_string()),
         sha: None,
@@ -171,7 +173,7 @@ mod tests {
         let document_metadata = create_blank_docx(
             pool.clone(),
             "document-name",
-            "macro|user@user.com",
+            MacroUserIdStr::parse_from_str("macro|user@user.com").unwrap(),
             None,
             &SharePermissionV2::new_document_share_permission(Some(FileType::Docx)),
             vec![SaveBomPart {
@@ -183,7 +185,7 @@ mod tests {
 
         assert!(!document_metadata.document_id.is_empty());
         assert_eq!(document_metadata.document_name, "document-name".to_string());
-        assert_eq!(document_metadata.owner, "macro|user@user.com".to_string());
+        assert_eq!(document_metadata.owner.as_ref(), "macro|user@user.com");
 
         Ok(())
     }

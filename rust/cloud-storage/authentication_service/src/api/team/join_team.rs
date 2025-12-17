@@ -5,6 +5,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
+use model_user::axum_extractor::MacroUserExtractor;
 use teams::domain::{model::JoinTeamError, team_repo::TeamService};
 
 use crate::api::context::ApiContext;
@@ -64,21 +65,17 @@ impl IntoResponse for JoinTeamHandlerError {
             (status = 500, body=ErrorResponse),
         ),
     )]
-#[tracing::instrument(skip(ctx, user_context, ip_context), err, fields(user_id=%user_context.user_id, client_ip=%ip_context.client_ip))]
+#[tracing::instrument(skip(ctx, user_context, ip_context), err, fields(user_id=%user_context.macro_user_id, client_ip=%ip_context.client_ip))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     ip_context: Extension<IPContext>,
-    user_context: Extension<UserContext>,
+    user_context: MacroUserExtractor,
     Path(TeamInvitePathParam { team_invite_id }): Path<TeamInvitePathParam>,
 ) -> Result<Json<EmptyResponse>, JoinTeamHandlerError> {
     tracing::info!("join_team");
 
-    let user_id: MacroUserId<Lowercase> = MacroUserId::parse_from_str(&user_context.user_id)
-        .map_err(|_| JoinTeamHandlerError::InvalidMacroUserId)?
-        .lowercase();
-
     ctx.teams_service
-        .join_team(&team_invite_id, &user_id)
+        .join_team(&team_invite_id, &user_context.macro_user_id)
         .await?;
 
     Ok(Json(EmptyResponse::default()))

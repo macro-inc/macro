@@ -1,4 +1,5 @@
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::{Pool, Postgres};
 
 ///! Tests for the team_repo implementation for teams
@@ -12,7 +13,7 @@ async fn test_get_stripe_customer_id(pool: Pool<Postgres>) -> anyhow::Result<()>
     let team_repo = TeamRepositoryImpl::new(pool);
 
     let stripe_customer_id = team_repo
-        .get_stripe_customer_id(&MacroUserId::parse_from_str("macro|user@user.com")?.lowercase())
+        .get_stripe_customer_id(&MacroUserIdStr::parse_from_str("macro|user@user.com")?)
         .await?;
 
     let expected_stripe_customer_id = stripe::CustomerId::from_str("cus_1234").unwrap();
@@ -20,7 +21,7 @@ async fn test_get_stripe_customer_id(pool: Pool<Postgres>) -> anyhow::Result<()>
     assert_eq!(stripe_customer_id, Some(expected_stripe_customer_id));
 
     let stripe_customer_id = team_repo
-        .get_stripe_customer_id(&MacroUserId::parse_from_str("macro|user2@user.com")?.lowercase())
+        .get_stripe_customer_id(&MacroUserIdStr::parse_from_str("macro|user2@user.com")?)
         .await?;
 
     assert!(stripe_customer_id.is_none());
@@ -74,7 +75,7 @@ async fn test_get_team_subscription_id(pool: Pool<Postgres>) -> anyhow::Result<(
 async fn test_create_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let team_repo = TeamRepositoryImpl::new(pool);
 
-    let user_id = MacroUserId::parse_from_str("macro|user@user.com")?.lowercase();
+    let user_id = MacroUserIdStr::parse_from_str("macro|user@user.com")?;
     let result = team_repo.create_team(&user_id, "team1").await?;
 
     assert!(!result.id.to_string().is_empty());
@@ -100,7 +101,7 @@ async fn test_create_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
 async fn test_invite_users_to_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let team_repo = TeamRepositoryImpl::new(pool);
 
-    let user_id = MacroUserId::parse_from_str("macro|user@user.com")?.lowercase();
+    let user_id = MacroUserIdStr::parse_from_str("macro|user@user.com")?;
 
     let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
 
@@ -138,12 +139,12 @@ async fn test_remove_user_from_team(pool: Pool<Postgres>) -> anyhow::Result<()> 
 
     let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
 
-    let user_id = MacroUserId::parse_from_str("macro|user2@user.com")?.lowercase();
+    let user_id = MacroUserIdStr::parse_from_str("macro|user2@user.com")?;
 
     team_repo.remove_user_from_team(&team_id, &user_id).await?;
 
     // Try to remove user that isn't on team
-    let user_id = MacroUserId::parse_from_str("macro|user3@user.com")?.lowercase();
+    let user_id = MacroUserIdStr::parse_from_str("macro|user3@user.com")?;
 
     let err = team_repo
         .remove_user_from_team(&team_id, &user_id)
@@ -154,7 +155,7 @@ async fn test_remove_user_from_team(pool: Pool<Postgres>) -> anyhow::Result<()> 
     assert!(err.to_string().contains("not in the team"));
 
     // Try to remove owner
-    let user_id = MacroUserId::parse_from_str("macro|user@user.com")?.lowercase();
+    let user_id = MacroUserIdStr::parse_from_str("macro|user@user.com")?;
 
     let err = team_repo
         .remove_user_from_team(&team_id, &user_id)
@@ -319,7 +320,7 @@ async fn test_accept_team_invite(pool: Pool<Postgres>) -> anyhow::Result<()> {
 
     let team_invite_id = macro_uuid::string_to_uuid("22222222-2222-2222-2222-222222222222")?;
 
-    let user_id = MacroUserId::parse_from_str("macro|user3@user.com")?.lowercase();
+    let user_id = MacroUserIdStr::parse_from_str("macro|user3@user.com")?;
 
     let team_member = team_repo
         .accept_team_invite(&team_invite_id, &user_id)
@@ -347,13 +348,13 @@ async fn test_accept_team_invite(pool: Pool<Postgres>) -> anyhow::Result<()> {
 async fn test_is_user_member_of_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let team_repo = TeamRepositoryImpl::new(pool);
 
-    let user_id = MacroUserId::parse_from_str("macro|user@user.com")?.lowercase();
+    let user_id = MacroUserIdStr::parse_from_str("macro|user@user.com")?;
 
     let is_member = team_repo.is_user_member_of_team(&user_id).await?;
 
     assert!(!is_member);
 
-    let user_id = MacroUserId::parse_from_str("macro|user2@user.com")?.lowercase();
+    let user_id = MacroUserIdStr::parse_from_str("macro|user2@user.com")?;
 
     let is_member = team_repo.is_user_member_of_team(&user_id).await?;
 
@@ -400,8 +401,8 @@ async fn test_bulk_is_member_of_other_team(pool: Pool<Postgres>) -> anyhow::Resu
     )?];
 
     let users = vec![
-        MacroUserId::parse_from_str("macro|user@user.com")?.lowercase(),
-        MacroUserId::parse_from_str("macro|user2@user.com")?.lowercase(),
+        MacroUserIdStr::parse_from_str("macro|user@user.com")?,
+        MacroUserIdStr::parse_from_str("macro|user2@user.com")?,
     ];
 
     let ignore_team_ids = non_empty::NonEmpty::new(ignore_team_ids.as_slice())?;
@@ -418,7 +419,7 @@ async fn test_bulk_is_member_of_other_team(pool: Pool<Postgres>) -> anyhow::Resu
         "33333333-3333-3333-3333-333333333333",
     )?];
 
-    let users = vec![MacroUserId::parse_from_str("macro|user4@user.com")?.lowercase()];
+    let users = vec![MacroUserIdStr::parse_from_str("macro|user4@user.com")?];
 
     let ignore_team_ids = non_empty::NonEmpty::new(ignore_team_ids.as_slice())?;
     let users = non_empty::NonEmpty::new(users.as_slice())?;

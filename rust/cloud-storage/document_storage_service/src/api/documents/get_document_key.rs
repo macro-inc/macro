@@ -77,7 +77,7 @@ pub async fn get_document_key_handler(
                 };
 
             build_cloud_storage_bucket_document_key(
-                &document_context.owner,
+                document_context.owner.as_ref(),
                 &document_id,
                 document_version_id,
                 Some(file_type.as_str()),
