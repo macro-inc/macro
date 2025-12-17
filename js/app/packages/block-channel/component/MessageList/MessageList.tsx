@@ -37,7 +37,6 @@ import {
   Match,
   mapArray,
   on,
-  onCleanup,
   onMount,
   type Setter,
   Show,
@@ -173,22 +172,6 @@ export function MessageList(props: MessageListProps) {
   });
 
   const isActiveTargetMessage = createSelector(activeTargetMessageId);
-
-  const getScrollHint = (offset: number) => {
-    if (!hasUserScrolled()) return;
-    const handle = virtualHandle();
-    const list = props.orderedMessages();
-    if (!handle || !list || list.length === 0) return;
-
-    const endIndex = handle.findItemIndex(offset);
-    if (endIndex === undefined) return;
-
-    const index = clampIndex(endIndex, 0, list.length - 1);
-    const message = list[index];
-    const label = toScrollHintDate(message?.created_at);
-
-    return label;
-  };
 
   /**
    * Scroll to the bottom of the document or the target message depending on the
@@ -379,6 +362,23 @@ export function MessageList(props: MessageListProps) {
     rows();
     setIsPrepend(false);
   });
+
+  const getScrollHint = () => {
+    if (!hasUserScrolled()) return;
+    const handle = virtualHandle();
+    const list = props.orderedMessages();
+    if (!handle || !list || list.length === 0) return;
+
+    const endIndex = handle.findItemIndex(handle.scrollOffset);
+
+    if (endIndex === undefined) return;
+
+    const index = clampIndex(endIndex, 0, list.length - 1);
+    const row = rows()[index];
+    const label = toScrollHintDate(row?.message.created_at);
+
+    return label;
+  };
 
   // Ensure thread view store store reflects drafts. Only sets when no entry exists to avoid overriding user actions.
   createEffect(() => {
