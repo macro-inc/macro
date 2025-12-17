@@ -545,6 +545,7 @@ export function MessageList(props: MessageListProps) {
     on(props.targetMessage, (target) => {
       if (!target) return;
       setLastTargetMessageTimestamp(Date.now());
+      debouncedScrollToBottomOrTarget();
     })
   );
 

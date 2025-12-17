@@ -254,3 +254,20 @@ async fn get_thread_summary_info_subject_is_from_earliest_message(
 
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("get_thread_summary_info"))
+)]
+async fn get_thread_summary_info_filter_out_trash(pool: Pool<Postgres>) -> Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-00000000001c")?;
+    let thread_id = Uuid::parse_str("00000000-0000-0000-0000-000000000308")?;
+
+    let result = get_thread_summary_info(&pool, link_id, &[thread_id]).await?;
+
+    assert!(result.is_empty());
+
+    Ok(())
+}

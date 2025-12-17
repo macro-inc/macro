@@ -125,8 +125,7 @@ async fn handle_attachment_upload(
     link: &Link,
     job_id: Uuid,
 ) -> Result<(), ProcessingError> {
-    // temporarily only enabling for macro emails for testing
-    if !link.macro_id.as_ref().ends_with("@macro.com") || cfg!(not(feature = "attachment_upload")) {
+    if cfg!(not(feature = "attachment_upload")) {
         return Ok(());
     }
 
@@ -333,8 +332,7 @@ async fn handle_thread_attachment_upload(
     job_id: Uuid,
     thread_db_id: Uuid,
 ) -> Result<(), ProcessingError> {
-    // temporarily only for macro emails, for testing
-    if !link.macro_id.as_ref().ends_with("@macro.com") || cfg!(not(feature = "attachment_upload")) {
+    if cfg!(not(feature = "attachment_upload")) {
         return Ok(());
     }
 
