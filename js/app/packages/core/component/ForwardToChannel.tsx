@@ -280,7 +280,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
           </div>
 
           <Show when={canSendAsGroup()}>
-            <div class="p-2">
+            <div class="p-2 w-min">
               <ToggleSwitch
                 switchRootClass={canSendAsGroup() ? '' : 'cursor-not-allowed'}
                 checked={sendAsGroupMessage() && canSendAsGroup()}

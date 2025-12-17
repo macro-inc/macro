@@ -66,7 +66,7 @@ export const ToggleSwitch: Component<
 
   return (
     <KSwitch
-      class="flex justify-between items-center font-medium gap-1"
+      class="flex justify-between items-center font-medium gap-2"
       classList={{
         [`${sizeClass[props.size || 'Base']}`]: true,
         [`${props.switchRootClass}`]: !!props.switchRootClass,
@@ -83,6 +83,7 @@ export const ToggleSwitch: Component<
           classList={{
             [`${sizeClass[props.size || 'Base']}`]: true,
             'cursor-not-allowed': props.disabled,
+            'whitespace-nowrap': true
           }}
           // style={{ 'font-size-adjust': 'ex-height 0.5' }}
         >
@@ -93,14 +94,9 @@ export const ToggleSwitch: Component<
       <div class="relative focus-bracket-within [&:focus-within]:[--focus-border-inset:-3px] w-fit h-fit">
         <KSwitch.Input class="absolute inset-0 !h-full !w-full pointer-events-none" />
         <KSwitch.Control
+          classList={{'animate-[flicker_50ms_3_150ms]': props.animateFlicker && showFlicker()}}
+          onAnimationEnd={() => {setShowFlicker(false)}}
           class="relative"
-          classList={{
-            'animate-[flicker_50ms_3_150ms]':
-              props.animateFlicker && showFlicker(),
-          }}
-          onAnimationEnd={() => {
-            setShowFlicker(false);
-          }}
         >
           <div
             class="relative grid grid-cols-[auto_1fr] auto-cols-auto overflow-clip"
@@ -116,10 +112,8 @@ export const ToggleSwitch: Component<
 
             {/* Visible Interactive, size relative to Fake Invisible Node */}
             <div
+              style={{'container-type': 'size'}}
               class="absolute inset-0"
-              style={{
-                'container-type': 'size',
-              }}
             >
               <div class="absolute inset-0">
                 <div
