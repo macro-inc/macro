@@ -317,6 +317,13 @@ export function MessageList(props: MessageListProps) {
     return out;
   });
 
+  const [isPrepend, setIsPrepend] = createSignal(false);
+
+  createEffect(() => {
+    props.messages;
+    setIsPrepend(true);
+  });
+
   createEffect(
     on(flattenedThreaded, (flat, prev) => {
       const oldFlat = prev;
@@ -379,8 +386,16 @@ export function MessageList(props: MessageListProps) {
     return currentTypingId;
   });
 
-  const rows = mapArray(props.orderedMessages, (msg) => {
-    return { id: msg.id, message: msg } as RowModel;
+  const rows = mapArray(
+    () => props.orderedMessages().toReversed(),
+    (msg) => {
+      return { id: msg.id, message: msg } as RowModel;
+    }
+  );
+
+  createEffect(() => {
+    rows();
+    setIsPrepend(false);
   });
 
   // Ensure thread view store store reflects drafts. Only sets when no entry exists to avoid overriding user actions.
@@ -680,7 +695,8 @@ export function MessageList(props: MessageListProps) {
               }}
               class="scrollbar-hidden"
               data-channel-message-list
-              data={(rows() ?? []).toReversed()}
+              data={rows() ?? []}
+              shift={isPrepend()}
               bufferSize={20 * BASE_ITEM_SIZE}
               keepMounted={keepMountedIndices()}
               onScroll={handleScroll}
