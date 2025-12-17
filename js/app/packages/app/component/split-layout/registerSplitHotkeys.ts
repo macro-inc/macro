@@ -80,7 +80,7 @@ export function registerSplitHotkeys({
 
   registerHotkey({
     scopeId: splitHotkeyScope,
-    hotkey: 'cmd+w',
+    hotkey: 'cmd+escape',
     condition: () => getSplitCount() > 1,
     description: `Close split`,
     keyDownHandler: () => {
