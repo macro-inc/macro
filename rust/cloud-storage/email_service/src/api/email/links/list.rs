@@ -43,8 +43,9 @@ pub struct ListLinksResponse {
 
 #[derive(serde::Deserialize, Debug, ToSchema)]
 pub struct QueryParams {
-    /// the threshold in seconds to consider a user active
-    pub include_signature: Option<bool>,
+    /// if we should include the user's gmail signature in the response. hits gmail api
+    #[serde(default)]
+    pub include_signature: bool,
 }
 
 /// List all links belonging to the user.
@@ -80,7 +81,7 @@ pub async fn list_links_handler(
                 .await
                 .map_err(ListLinksError::DatabaseError)?;
 
-            let signature = if query_params.include_signature == Some(true) {
+            let signature = if query_params.include_signature {
                 let access_token = fetch_gmail_access_token_from_link(
                     &link,
                     &ctx.redis_client,
