@@ -184,6 +184,7 @@ export function useTabAttachments(): Accessor<ChatAttachmentWithName[]> {
       .filter((split) => split.content.type === 'email');
   });
 
+  console.log('requery');
   const emailQuery = useQuery(() => ({
     queryKey: [
       'tab-attachments',
@@ -191,6 +192,7 @@ export function useTabAttachments(): Accessor<ChatAttachmentWithName[]> {
       emailTabs().map((t) => t.content.id),
     ],
     queryFn: async () => {
+      console.log('requery');
       const eTabs = emailTabs();
       const threads = await Promise.allSettled(
         eTabs.map((email) =>
@@ -254,8 +256,7 @@ export function useTabAttachments(): Accessor<ChatAttachmentWithName[]> {
   const combinedAttachments = createMemo(() => {
     const tabs = tabAttachments();
     const existingAttachments = new Set(tabs.map((a) => a.attachmentId));
-    const queriedEmails =
-      emailQuery.isLoading || emailQuery.isError ? [] : (emailQuery.data ?? []);
+    const queriedEmails = emailQuery.isSuccess ? (emailQuery.data ?? []) : [];
     const newEmails = queriedEmails.filter(
       (e) => !existingAttachments.has(e.attachmentId)
     );
