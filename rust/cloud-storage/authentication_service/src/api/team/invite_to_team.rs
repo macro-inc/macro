@@ -38,8 +38,6 @@ pub struct InviteToTeamRequest {
 pub enum InviteToTeamError {
     #[error("unable to invite users to team")]
     InviteUsersToTeamError(#[from] InviteUsersToTeamError),
-    #[error("unable to parse user id")]
-    InvalidMacroUserId,
     #[error("unable to parse email")]
     InvalidEmails,
     #[error("no valid emails provided")]
@@ -49,12 +47,6 @@ pub enum InviteToTeamError {
 impl IntoResponse for InviteToTeamError {
     fn into_response(self) -> Response {
         match self {
-            InviteToTeamError::InvalidMacroUserId => (
-                StatusCode::BAD_REQUEST,
-                Json(ErrorResponse {
-                    message: "invalid user id",
-                }),
-            ),
             InviteToTeamError::InvalidEmails => (
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {

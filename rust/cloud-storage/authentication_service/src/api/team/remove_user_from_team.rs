@@ -1,21 +1,19 @@
+use crate::api::{
+    context::ApiContext,
+    middleware::team_access::{OwnerRole, TeamAccessRoleExtractor},
+};
 use axum::{
     Extension, Json,
     extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use model_user::axum_extractor::MacroUserExtractor;
-use teams::domain::{model::RemoveUserFromTeamError, team_repo::TeamService};
-
-use crate::api::{
-    context::ApiContext,
-    middleware::team_access::{OwnerRole, TeamAccessRoleExtractor},
-};
-
 use model::{
     response::{EmptyResponse, ErrorResponse},
     tracking::IPContext,
 };
+use model_user::axum_extractor::MacroUserExtractor;
+use teams::domain::{model::RemoveUserFromTeamError, team_repo::TeamService};
 
 #[derive(serde::Deserialize)]
 pub struct Param {
@@ -27,8 +25,6 @@ pub struct Param {
 pub enum RemoveFromTeamError {
     #[error("unable to remove user from team")]
     RemoveUserFromTeamError(#[from] RemoveUserFromTeamError),
-    #[error("unable to parse user id")]
-    InvalidMacroUserId,
 }
 
 impl IntoResponse for RemoveFromTeamError {
@@ -74,12 +70,6 @@ impl IntoResponse for RemoveFromTeamError {
                     }),
                 ),
             },
-            RemoveFromTeamError::InvalidMacroUserId => (
-                StatusCode::BAD_REQUEST,
-                Json(ErrorResponse {
-                    message: "invalid user id",
-                }),
-            ),
         }
         .into_response()
     }

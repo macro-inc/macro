@@ -23,8 +23,6 @@ pub struct TeamInvitePathParam {
 pub enum JoinTeamHandlerError {
     #[error("unable to join team")]
     JoinTeamError(#[from] JoinTeamError),
-    #[error("unable to parse user id")]
-    InvalidMacroUserId,
 }
 
 impl IntoResponse for JoinTeamHandlerError {
@@ -34,13 +32,6 @@ impl IntoResponse for JoinTeamHandlerError {
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
                     message: "unable to join team",
-                }),
-            )
-                .into_response(),
-            JoinTeamHandlerError::InvalidMacroUserId => (
-                StatusCode::BAD_REQUEST,
-                Json(ErrorResponse {
-                    message: &self.to_string(),
                 }),
             )
                 .into_response(),

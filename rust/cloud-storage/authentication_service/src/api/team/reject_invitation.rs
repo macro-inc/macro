@@ -21,8 +21,6 @@ pub struct TeamInvitePathParam {
 pub enum RejectInvitationError {
     #[error("unable to reject invitation")]
     RemoveTeamInviteError(#[from] RemoveTeamInviteError),
-    #[error("unable to parse user id")]
-    InvalidMacroUserId,
 }
 
 impl IntoResponse for RejectInvitationError {
@@ -50,12 +48,6 @@ impl IntoResponse for RejectInvitationError {
                     }),
                 ),
             },
-            RejectInvitationError::InvalidMacroUserId => (
-                StatusCode::BAD_REQUEST,
-                Json(ErrorResponse {
-                    message: "invalid user id",
-                }),
-            ),
         }
         .into_response()
     }
