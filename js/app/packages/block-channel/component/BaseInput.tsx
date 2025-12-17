@@ -205,6 +205,10 @@ export function BaseInput(props: BaseInputProps) {
       entity_id: m.itemId,
     }));
 
+  createEffect(() => {
+    console.log('### ALL MENTIONS', mentions(), allMentions());
+  });
+
   const [attachFn, scopeId] = useHotkeyDOMScope('channel.baseInput');
 
   onMount(() => {
@@ -331,14 +335,15 @@ export function BaseInput(props: BaseInputProps) {
     if (isPendingSend()) return false;
     setIsPendingSend(true);
     const content = markdownState();
-    clearMarkdownArea();
-    focusMarkdownArea();
 
     const args = {
       content: content,
       attachments: props.inputAttachments.store[key] ?? [],
       mentions: allMentions(),
     };
+
+    clearMarkdownArea();
+    focusMarkdownArea();
 
     props
       .onSend(args)
