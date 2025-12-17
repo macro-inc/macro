@@ -1,7 +1,9 @@
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { IconButton } from '@core/component/IconButton';
+import { BlockLink } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
+import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { initializeEditorEmpty } from '@core/component/LexicalMarkdown/utils';
 import {
   propertyApiValuesToNormalized,
@@ -194,9 +196,33 @@ export function ComposeTask(props: ComposeTaskProps) {
         if (ed) initializeEditorEmpty(ed);
         setPropertyValues(reconcile({}));
 
+        if (splitPanel?.isPopover) {
+          splitPanel.handle.close();
+        }
+
         props.onCreateTask?.(taskTitle, taskContent);
         props.onClose?.();
-        await Promise.allSettled(propertyRequests);
+        Promise.allSettled(propertyRequests).then(() => {
+          toast.embed(
+            () => {
+              // TODO (seamus) : make this suck less
+              return (
+                <BlockLink blockOrFileName="task" id={res}>
+                  <div class="">
+                    <div class="flex row">
+                      <EntityIcon targetType="task" />
+                      <span>{taskTitle}</span>
+                    </div>
+                    <StaticMarkdown markdown={taskContent} />
+                  </div>
+                </BlockLink>
+              );
+            },
+            {
+              duration: 2000,
+            }
+          );
+        });
       } else {
         toast.failure('Failed to create task');
       }
@@ -204,7 +230,7 @@ export function ComposeTask(props: ComposeTaskProps) {
   };
 
   return (
-    <div class="flex flex-col gap-4 p-4 relative">
+    <div class="flex flex-col gap-4 p-3 relative">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-2">
           <EntityIcon targetType="task" size="sm" />
