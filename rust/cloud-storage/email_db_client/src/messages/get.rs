@@ -206,6 +206,7 @@ pub async fn fetch_messages_with_labels(
     thread_db_id: Uuid,
     link_id: Uuid,
 ) -> anyhow::Result<Vec<Message>> {
+    let start = std::time::Instant::now();
     let db_messages = sqlx::query_as!(
         db::message::Message,
         r#"
@@ -252,17 +253,18 @@ pub async fn fetch_messages_with_labels(
             thread_db_id
         )
     })?;
+    println!("fetch messages took {:?}", start.elapsed());
 
     if db_messages.is_empty() {
         return Ok(Vec::new());
     }
 
     let message_ids: Vec<Uuid> = db_messages.iter().map(|m| m.id).collect();
-
+    let start = std::time::Instant::now();
     let labels_map = get::fetch_message_labels_in_bulk(conn, &message_ids)
         .await
         .context("Failed to fetch message labels in bulk")?;
-
+    println!("fetch labels took {:?}", start.elapsed());
     let mut processed_messages = Vec::with_capacity(db_messages.len());
     for message in db_messages {
         let labels = labels_map.get(&message.id).cloned().unwrap_or_default();
