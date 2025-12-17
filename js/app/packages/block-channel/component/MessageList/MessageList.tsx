@@ -551,7 +551,7 @@ export function MessageList(props: MessageListProps) {
         if (
           !handle ||
           !listContainerRef ||
-          orderedMessages.length === 0 ||
+          !orderedMessages.length ||
           initialScrollComplete()
         )
           return;
