@@ -203,7 +203,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
           hideBorder
           noPadding
         />
-        <div class="flex flex-col w-full min-h-[60px] sm:min-h-[80px] max-h-[150px] overflow-y-auto border-t-1 border-edge-muted/50">
+        <div class="flex flex-col w-full min-h-[60px] sm:min-h-[80px] max-h-[150px] overflow-y-auto border-y-1 border-edge-muted/50">
           <div
             class="flex-1 px-2.5 py-1 w-full text-sm"
             onClick={() => focusMarkdownArea()}
@@ -224,41 +224,39 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
           </div>
         </div>
         <div class="flex flex-col">
-          <div class={`flex flex-row justify-between items-center align-middle h-fit ${canSendAsGroup() ? '' : 'opacity-50'}`}>
-            <div class="flex flex-col gap-0.5">
-              <div class="font-sm text-ink-muted text-xs select-none">
-                {'Send as group message'}
-              </div>
-            </div>
+          <div class={"flex flex-row justify-between items-center align-middle min-h-[40px] px-2"}>
+            <Show when={canSendAsGroup()}>
 
-            <ToggleSwitch
-              checked={sendAsGroupMessage() && canSendAsGroup()}
-              onChange={setSendAsGroupMessage}
-              disabled={!canSendAsGroup()}
-              switchRootClass={canSendAsGroup() ? '' : 'cursor-not-allowed'}
-              trueLabel="ON"
-              falseLabel="OFF"
-              size="SM"
-            />
-          </div>
-          <div class="flex justify-between items-center gap-1">
-            <div class="flex flex-row justify-start items-center gap-0 w-full h-8 cursor-default">
-              <TextButton
-                onClick={handleSubmit}
-                icon={PaperPlaneRight}
-                theme="accent"
-                text="Share"
+              <div class="font-sm text-ink-muted text-xs select-none">{'Send as group message'}</div>
+
+              <ToggleSwitch
+                checked={sendAsGroupMessage() && canSendAsGroup()}
+                onChange={setSendAsGroupMessage}
+                disabled={!canSendAsGroup()}
+                switchRootClass={canSendAsGroup() ? '' : 'cursor-not-allowed'}
+                trueLabel="ON"
+                falseLabel="OFF"
+                size="SM"
               />
-            </div>
+            </Show>
+
             <Show when={props.submitPermissionInfo?.userPermissions === Permissions.OWNER}>
               <div class="w-32">
                 <ShareOptions
                   setPermissions={(accessLevel) => {setSubmitAccessLevel(accessLevel)}}
                   permissions={submitAccessLevel()}
+                  label='Share&nbsp;Permission'
                   hideNoAccess
                 />
               </div>
             </Show>
+
+            <TextButton
+              onClick={handleSubmit}
+              icon={PaperPlaneRight}
+              theme="accent"
+              text="Share"
+            />
           </div>
         </div>
       </div>

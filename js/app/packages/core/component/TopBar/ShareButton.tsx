@@ -400,85 +400,83 @@ export function ShareModal(props: ShareModalProps) {
                 />
 
               <Show when={recipients() || props.owner}>
-                <div class="font-medium text-ink text-md select-none">
-                  Share Recipients
-                </div>
-                <div class="flex w-full h-fit max-h-[120px] overflow-y-auto">
-                  <table class="w-full text-ink text-sm border-collapse">
-                    <tbody class="select-none">
+                <div class="border-t-1 border-edge-muted p-2">
+                  <div class="text-sm select-none">Share Recipients</div>
+                  <div class="flex w-full h-fit max-h-[120px] overflow-y-auto">
+                    <table class="w-full text-ink text-sm border-collapse">
+                      <tbody class="select-none">
 
-                      <Show when={props.owner}>
-                        <tr class="rounded-md">
-                          <td class="w-full min-w-0">
-                            <div class="flex items-center gap-2 overflow-hidden">
-                              <UserIcon
-                                isDeleted={false}
-                                id={props.owner!}
-                                size="xs"
-                              />
-                              <div class="font-medium truncate">
-                                {formattedOwner()}
+                        <Show when={props.owner}>
+                          <tr class="rounded-md">
+                            <td class="w-full min-w-0">
+                              <div class="flex items-center gap-2 overflow-hidden">
+                                <UserIcon
+                                  isDeleted={false}
+                                  id={props.owner!}
+                                  size="xs"
+                                />
+                                <div class="font-medium truncate">
+                                  {formattedOwner()}
+                                </div>
                               </div>
-                            </div>
-                          </td>
-                          <td class="align-middle">
-                            <div class={MENU_ITEM_CLASS}>Owner</div>
-                          </td>
-                        </tr>
-                      </Show>
+                            </td>
+                            <td class="align-middle">
+                              <div class={MENU_ITEM_CLASS}>Owner</div>
+                            </td>
+                          </tr>
+                        </Show>
 
-                      <Show when={recipients()}>
-                        <For each={recipients()!}>
-                          {(recipient) => (
-                            <tr class="hover:bg-hover rounded-md hover-transition-bg">
-                              <td
-                                onClick={() => navigateToChannel(recipient.channel_id)}
-                                class="w-full min-w-0 cursor-pointer"
-                              >
-                                <div class="flex items-center gap-2 overflow-hidden">
-                                  <Switch>
-                                    <Match when={channelNameMap().get(recipient.channel_id)}>
-                                      <User class="flex-shrink-0 w-4 h-4" />
-                                    </Match>
-                                    <Match when={true}>
-                                      <IconUsers class="flex-shrink-0 w-4 h-4" />
-                                    </Match>
-                                  </Switch>
-                                  <div class="font-medium truncate">
-                                    {channelNameMap().get(recipient.channel_id)?.name || recipient.channel_id}
+                        <Show when={recipients()}>
+                          <For each={recipients()!}>
+                            {(recipient) => (
+                              <tr class="hover:bg-hover rounded-md hover-transition-bg">
+                                <td
+                                  onClick={() => navigateToChannel(recipient.channel_id)}
+                                  class="w-full min-w-0 cursor-pointer"
+                                >
+                                  <div class="flex items-center gap-2 overflow-hidden">
+                                    <Switch>
+                                      <Match when={channelNameMap().get(recipient.channel_id)}>
+                                        <User class="flex-shrink-0 w-4 h-4" />
+                                      </Match>
+                                      <Match when={true}>
+                                        <IconUsers class="flex-shrink-0 w-4 h-4" />
+                                      </Match>
+                                    </Switch>
+                                    <div class="font-medium truncate">
+                                      {channelNameMap().get(recipient.channel_id)?.name || recipient.channel_id}
+                                    </div>
                                   </div>
-                                </div>
-                              </td>
-                              <td class="align-middle">
-                                <div class="font-medium text-ink-muted text-xs">
-                                  <ShareOptions
-                                    permissions={recipient.access_level}
-                                    setPermissions={(accessLevel) => {
-                                      if(accessLevel === null){removeChannelAccess(recipient.channel_id)}
-                                      else if(accessLevel !== recipient.access_level){setChannelPermissions(recipient.channel_id, accessLevel)}
-                                    }}
-                                  />
-                                </div>
-                              </td>
-                            </tr>
-                          )}
-                        </For>
-                      </Show>
+                                </td>
+                                <td class="align-middle">
+                                  <div class="font-medium text-ink-muted text-xs">
+                                    <ShareOptions
+                                      permissions={recipient.access_level}
+                                      setPermissions={(accessLevel) => {
+                                        if(accessLevel === null){removeChannelAccess(recipient.channel_id)}
+                                        else if(accessLevel !== recipient.access_level){setChannelPermissions(recipient.channel_id, accessLevel)}
+                                      }}
+                                    />
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </For>
+                        </Show>
 
-                    </tbody>
-                  </table>
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </Show>
 
               <Show when={props.userPermissions === Permissions.OWNER}>
-                <div class="flex gap-2">
-                  <div class="font-medium text-ink text-base select-none">
-                    Public Link
-                  </div>
+                <div class="flex gap-2 border-t-1 items-center px-2 border-edge-muted h-[40px]">
                   <ShareOptions
                     permissions={publicAccessLevel() ?? null}
-                    setPermissions={setPublicPermissions}
                     hideNoAccess={props.itemType === 'chat'}
+                    setPermissions={setPublicPermissions}
+                    label="Public Link Permission"
                   />
                 </div>
               </Show>
@@ -622,6 +620,7 @@ export function ShareOptions(props: {
   setPermissions: (accessLevel: AccessLevel | null) => void;
   permissions?: AccessLevel | null;
   hideNoAccess?: boolean;
+  label?: string | '';
   disabled?: boolean;
 }){
   const editPermissionEnabled = blockEditPermissionEnabledSignal();
@@ -666,10 +665,11 @@ export function ShareOptions(props: {
 
   return (
     <SegmentedControl
-      list={options()}
-      value={currentValue()}
-      onChange={handleChange}
       disabled={props.disabled}
+      onChange={handleChange}
+      value={currentValue()}
+      label={props.label}
+      list={options()}
       size="SM"
     />
   );
