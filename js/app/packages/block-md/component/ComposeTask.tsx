@@ -1,5 +1,12 @@
+import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
+import { EntityIcon } from '@core/component/EntityIcon';
+import { IconButton } from '@core/component/IconButton';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
-import { propertyApiValuesToNormalized } from '@core/component/Properties/api/converters';
+import { initializeEditorEmpty } from '@core/component/LexicalMarkdown/utils';
+import {
+  propertyApiValuesToNormalized,
+  propertyValueToApi,
+} from '@core/component/Properties/api/converters';
 import { Modals } from '@core/component/Properties/component/modal';
 import { PropertyRow } from '@core/component/Properties/component/panel';
 import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
@@ -18,18 +25,13 @@ import { toast } from '@core/component/Toast/Toast';
 import { createMarkdownFile } from '@core/util/create';
 import { filterMap } from '@core/util/list';
 import { isErr } from '@core/util/maybeResult';
+import XIcon from '@icon/regular/x.svg';
 import { propertiesServiceClient } from '@service-properties/client';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import { useQuery } from '@tanstack/solid-query';
 import type { LexicalEditor } from 'lexical';
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  For,
-  Suspense,
-} from 'solid-js';
-import { createStore, type Store } from 'solid-js/store';
+import { createMemo, createSignal, For, Show, Suspense } from 'solid-js';
+import { createStore, reconcile, type Store } from 'solid-js/store';
 
 export interface ComposeTaskProps {
   onCreateTask?: (title: string, content: string) => void;
@@ -42,9 +44,8 @@ export interface ComposeTaskProps {
 const COMPOSER_PROPERTIES = [
   SYSTEM_PROPERTY_IDS.ASSIGNEES,
   SYSTEM_PROPERTY_IDS.STATUS,
-  SYSTEM_PROPERTY_IDS.PRIORITY,
   SYSTEM_PROPERTY_IDS.DUE_DATE,
-  // SYSTEM_PROPERTY_IDS.SUBJECT,
+  SYSTEM_PROPERTY_IDS.PRIORITY,
 ];
 
 function extractPropertyValue(
@@ -64,7 +65,8 @@ function extractPropertyValue(
     if (!opts) return null;
     if (Array.isArray(value)) {
       return filterMap(value as string[], (id) => {
-        return opts.find((opt) => opt.id === id)?.value?.value ?? undefined;
+        const opt = opts.find((opt) => opt.id === id);
+        return opt ? opt.value.value : undefined;
       });
     }
   } else {
@@ -75,7 +77,8 @@ function extractPropertyValue(
 export function ComposeTask(props: ComposeTaskProps) {
   const [title, setTitle] = createSignal(props.initialTitle ?? '');
   const [content, setContent] = createSignal(props.initialContent ?? '');
-  const [, setBodyEditor] = createSignal<LexicalEditor>();
+  const [bodyEditor, setBodyEditor] = createSignal<LexicalEditor>();
+  const splitPanel = useSplitPanel();
 
   const [propertyValues, setPropertyValues] = createStore<
     Record<string, PropertyApiValues>
@@ -129,23 +132,19 @@ export function ComposeTask(props: ComposeTaskProps) {
     return filterMap<string, Property>(COMPOSER_PROPERTIES, (id) => {
       const definition = definitions().get(id);
       if (!definition) return;
-
       return {
         propertyId: `compose-${definition.display_name}`,
         propertyDefinitionId: definition.id,
         displayName: definition.display_name,
         isMultiSelect: definition.is_multi_select,
         owner: definition.owner,
+        specificEntityType: definition.specific_entity_type ?? null,
         updatedAt: '',
         createdAt: '',
         valueType: definition.data_type,
         value: extractPropertyValue(definition, propertyValues, options()),
-      };
+      } as Property;
     });
-  });
-
-  createEffect(() => {
-    console.log(properties(), options());
   });
 
   const saveHandler: PropertySaveHandler = {
@@ -175,38 +174,29 @@ export function ComposeTask(props: ComposeTaskProps) {
       });
 
       if (res) {
-        // // Apply stored property values to the newly created task
-        // const storedValues = propertyValues();
-        // const promises = Object.entries(storedValues).map(
-        //   async ([propertyId, value]) => {
-        //     const property = properties().find(
-        //       (p) => p.propertyDefinitionId === propertyId
-        //     );
-        //     if (property) {
-        //       await saveEntityProperty(
-        //         res, // res is the document ID string
-        //         'TASK',
-        //         property,
-        //         value
-        //       );
-        //     }
-        //   }
-        // );
+        const propertyRequests: Promise<any>[] = [];
+        for (const [id, value] of Object.entries(propertyValues)) {
+          const isMultiSelect = definitions().get(id)?.is_multi_select ?? false;
+          propertyRequests.push(
+            propertiesServiceClient.setEntityProperty({
+              entity_id: res,
+              entity_type: 'TASK',
+              property_id: id,
+              body: {
+                value: propertyValueToApi(value, isMultiSelect),
+              },
+            })
+          );
+        }
 
-        // try {
-        //   await Promise.all(promises);
-        // } catch (error) {
-        //   console.error('Failed to save some properties:', error);
-        //   toast.failure('Task created but some properties failed to save');
-        // }
-
-        // Reset form
         setTitle('');
-        setContent('');
-        setPropertyValues({});
+        const ed = bodyEditor();
+        if (ed) initializeEditorEmpty(ed);
+        setPropertyValues(reconcile({}));
 
         props.onCreateTask?.(taskTitle, taskContent);
         props.onClose?.();
+        await Promise.allSettled(propertyRequests);
       } else {
         toast.failure('Failed to create task');
       }
@@ -214,19 +204,33 @@ export function ComposeTask(props: ComposeTaskProps) {
   };
 
   return (
-    <div class="flex flex-col gap-4 h-96 p-4 relative">
-      {/* Title Input */}
-      <div class="flex-shrink-0">
+    <div class="flex flex-col gap-4 p-4 relative">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <EntityIcon targetType="task" size="sm" />
+          <span class="text-sm text-ink-disabled/50">Create Task</span>
+        </div>
+        <Show when={splitPanel?.isPopover}>
+          <IconButton
+            icon={XIcon}
+            onClick={splitPanel?.handle.close}
+            size="sm"
+            tabIndex={-1}
+            theme="clear"
+          />
+        </Show>
+      </div>
+      <div class="flex-shrink-0 flex gap-2 items-center -my-1">
         <input
           type="text"
           placeholder="Task title..."
           value={title()}
           onInput={(e) => setTitle(e.currentTarget.value)}
-          class="w-full py-2 text-xl font-regular placeholder-ink-placeholder"
+          class="w-full py-2 text-xl font-medium placeholder-ink-placeholder/50"
         />
       </div>
 
-      <div class="flex-1 min-h-0 text-base">
+      <div class="min-h-0 text-base">
         <MarkdownTextarea
           editable={() => true}
           onChange={(value) => setContent(value)}
@@ -246,7 +250,7 @@ export function ComposeTask(props: ComposeTaskProps) {
           onPropertyDeleted={() => {}}
           saveHandler={saveHandler}
         >
-          <div class="w-full flex row gap-2">
+          <div class="w-full grid grid-cols-2 gap-1 flex-wrap text-xs font-mono text-ink-muted">
             <For each={properties()}>
               {(prop) => {
                 const { openPropertyEditor, openDatePicker } =
@@ -266,10 +270,12 @@ export function ComposeTask(props: ComposeTaskProps) {
                   }
                 };
                 return (
-                  <div class="bg-edge/20 rounded-sm flex row items-center p-1">
+                  <div class="grid grid-cols-[8rem_auto] rounded-xs items-center p-1">
                     <PropertyRow
                       property={prop}
                       onValueClick={handleValueClick}
+                      withDelete={false}
+                      withPin={false}
                     />
                   </div>
                 );
@@ -280,6 +286,7 @@ export function ComposeTask(props: ComposeTaskProps) {
         </PropertiesProvider>
       </Suspense>
 
+      <div class="w-full border-b border-edge-muted/50" />
       {/* Action Button */}
       <div class="flex-shrink-0 flex justify-end">
         <TextButton

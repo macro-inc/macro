@@ -17,6 +17,8 @@ import { PropertyDataTypeIcon } from '../../utils';
 
 type PropertyLabelProps = {
   property: Property;
+  withPin?: boolean;
+  withDelete?: boolean;
 };
 
 export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
@@ -98,7 +100,12 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
           fallback={<div class="w-3 h-3 flex-shrink-0" />}
         >
           <Show
-            when={onPropertyPinned && onPropertyUnpinned && !isDefaultPinned}
+            when={
+              onPropertyPinned &&
+              onPropertyUnpinned &&
+              !isDefaultPinned &&
+              props.withPin
+            }
           >
             <div
               class={`flex-shrink-0 transition-opacity ${
@@ -117,7 +124,7 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
             </div>
           </Show>
 
-          <Show when={!isBuiltin}>
+          <Show when={!isBuiltin && props.withDelete}>
             <div
               class={`flex-shrink-0 transition-opacity ${
                 isHovered() ? 'opacity-100' : 'opacity-0'

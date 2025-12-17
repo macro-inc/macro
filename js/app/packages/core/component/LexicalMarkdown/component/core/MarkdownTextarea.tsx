@@ -277,7 +277,7 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
         <DecoratorRenderer editor={editor} />
         <NodeAccessoryRenderer editor={editor} store={accessoryStore} />
         <Show when={showPlaceholder()}>
-          <div class="pointer-events-none text-ink-extra-muted absolute top-0">
+          <div class="pointer-events-none text-ink-placeholder/50 absolute top-0">
             <p class="my-1.5 pointer-events-none">
               {props.placeholder ?? '...'}
             </p>

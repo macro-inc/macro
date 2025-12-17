@@ -1,4 +1,5 @@
 import { DatePicker } from '@core/component/DatePicker';
+import { ScopedPortal } from '@core/component/ScopedPortal';
 import { type Component, createMemo } from 'solid-js';
 import { Portal, Show } from 'solid-js/web';
 import { usePropertiesContext } from '../../context/PropertiesContext';
@@ -83,14 +84,14 @@ export const Modals: Component = () => {
           const anchor = state().anchor;
 
           return anchor ? (
-            <Portal>
+            <ScopedPortal scope="local">
               <DatePicker
                 value={dateValue}
                 onChange={(newDate) => handleDateSaved(newDate, property)}
                 onClose={closeDatePicker}
                 anchorRef={anchor}
               />
-            </Portal>
+            </ScopedPortal>
           ) : null;
         }}
       </Show>
