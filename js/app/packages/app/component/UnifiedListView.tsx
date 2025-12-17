@@ -1122,12 +1122,12 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
     switch (location.type) {
       case 'channel': {
-        // NOTE: this is handled by the channel block params
-        // const blockHandle = await blockOrchestrator.getBlockHandle(entity.id);
-        // await blockHandle?.goToLocationFromParams({
-        //   [CHANNEL_PARAMS.thread]: location.threadId,
-        //   [CHANNEL_PARAMS.message]: location.messageId,
-        // });
+        // NOTE: this is handled by the channel block params but this can be used to re-flash an open channel
+        const blockHandle = await blockOrchestrator.getBlockHandle(entity.id);
+        await blockHandle?.goToLocationFromParams({
+          [CHANNEL_PARAMS.thread]: location.threadId,
+          [CHANNEL_PARAMS.message]: location.messageId,
+        });
         break;
       }
       case 'email': {

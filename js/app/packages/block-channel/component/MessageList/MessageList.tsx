@@ -537,27 +537,26 @@ export function MessageList(props: MessageListProps) {
     on(props.targetMessage, (target) => {
       if (!target) return;
       setLastTargetMessageTimestamp(Date.now());
+      debouncedScrollToBottomOrTarget();
     })
   );
 
   // initial scroll
   createRenderEffect(
     on(
-      [
-        virtualHandle,
-        props.targetMessage,
-        listContainerRef,
-        props.orderedMessages,
-      ],
+      [virtualHandle, listContainerRef, props.orderedMessages],
       // NOTE: ordered messages gets updated on initial load due to thread layout calculations
       // so we need to keep scrolling down until it settles
-      ([handle, target, listContainerRef, orderedMessages]) => {
-        if (!handle || !listContainerRef || orderedMessages.length === 0)
+      ([handle, listContainerRef, orderedMessages]) => {
+        if (
+          !handle ||
+          !listContainerRef ||
+          orderedMessages.length === 0 ||
+          initialScrollComplete()
+        )
           return;
 
-        const forceBottom = target === undefined;
-
-        scrollToBottomOrTarget({ forceBottom });
+        scrollToBottomOrTarget({ forceBottom: true });
       }
     )
   );
