@@ -494,9 +494,7 @@ export function createUnifiedInfiniteList<T extends EntityData>({
     const restoreScrollPosition = () => {
       const handle = virtualizerHandle();
       const { offset: cachedOffset } = cacheMap.get(cacheKey) || { offset: 0 };
-      console.log('restoreScrollPosition', { cacheKey, handle, cachedOffset });
       if (handle && cachedOffset) {
-        console.log({ cachedOffset });
         handle.scrollTo(cachedOffset);
       }
     };
@@ -515,8 +513,7 @@ export function createUnifiedInfiniteList<T extends EntityData>({
 
       if (handle && key) {
         const { scrollOffset } = handle;
-        console.log('cacheVirtualizerHandle', { key, scrollOffset });
-        cacheMap.set(key, { offset: handle.scrollOffset });
+        cacheMap.set(key, { offset: scrollOffset });
       }
     };
     const { isPending } = useSuspenseContext();
@@ -531,7 +528,6 @@ export function createUnifiedInfiniteList<T extends EntityData>({
         isPending,
         (isPending, prevIsPending) => {
           if (isPending) {
-            console.log(cacheKey, 'cache BY SUSPENSE');
             cacheVirtualizerHandle();
           }
           if (isPending === false && prevIsPending === true) {
