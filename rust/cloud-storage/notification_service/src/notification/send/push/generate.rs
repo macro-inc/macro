@@ -204,7 +204,11 @@ impl BuildNotification for ChannelMessageSendMetadata {
                 alert: Some(sns_client::Alert::Dictionary(sns_client::AlertDictionary {
                     title: Some(match self.common.channel_type {
                         ChannelType::DirectMessage => self.common.channel_name.to_string(),
-                        _ => format!("{} <{}>", self.sender, self.common.channel_name),
+                        _ => format!(
+                            "{} <{}>",
+                            self.sender.email_part().local_part(),
+                            self.common.channel_name
+                        ),
                     }),
                     body: Some(T::format_xml_text(ParsedXmlText::parse(&self.message_content)?).0),
                     ..Default::default()
