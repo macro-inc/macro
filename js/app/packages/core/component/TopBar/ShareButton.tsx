@@ -1,5 +1,7 @@
-import { createMemo, createResource, createSignal, For, Match, onCleanup, onMount, Show, Switch } from 'solid-js';
+import { createEffect, createMemo, createResource, createSignal, For, Match, onCleanup, onMount, Show, Switch } from 'solid-js';
 import { blockNameToItemType, type ItemType, storageServiceClient } from '@service-storage/client';
+import PaperPlaneRight from '@phosphor-icons/core/fill/paper-plane-right-fill.svg?component-solid';
+import { TextButton } from '@core/component/TextButton';
 import { createBlockEffect, createBlockResource, useBlockId, useBlockName} from '@core/block';
 import { isErr, isOk, type MaybeError, type MaybeResult } from '@core/util/maybeResult';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
@@ -104,6 +106,17 @@ export function ShareModal(props: ShareModalProps) {
   const { track } = withAnalytics();
   const [permissionsResource, { refetch }] = permissionsBlockResource;
   const userId = useUserId();
+  const [submitAccessLevel, setSubmitAccessLevel] = createSignal<AccessLevel | null>(null);
+  const [forwardToChannelRef, setForwardToChannelRef] = createSignal<any>(null);
+
+  // Sync submitAccessLevel with ForwardToChannel's initial value
+  createEffect(() => {
+    const ref = forwardToChannelRef();
+    if (ref && ref.getSubmitAccessLevel) {
+      const currentLevel = ref.getSubmitAccessLevel();
+      setSubmitAccessLevel(currentLevel);
+    }
+  });
 
   const [channelNamesResource] = createResource(
     () => {
@@ -375,17 +388,40 @@ export function ShareModal(props: ShareModalProps) {
           <Dialog.Content class="text-ink max-h-[100%] overflow-y-auto">
             <ClippedPanel tl={!beveledCorners()} active>
 
-              <div class="flex flex-row items-center px-2 h-[40px] gap-2 border-b-1 border-b-edge-muted">
-                <Dialog.CloseButton>
-                  <IconButton
-                    tooltip={{label: 'Close'}}
-                    icon={CloseIcon}
-                    iconSize={16}
-                    theme="clear"
-                    size="sm"
+              <div class="flex flex-row items-center justify-between px-2 h-[40px] gap-2 border-b-1 border-b-edge-muted">
+                <div class="flex flex-row items-center gap-2">
+                  <Dialog.CloseButton>
+                    <IconButton
+                      tooltip={{label: 'Close'}}
+                      icon={CloseIcon}
+                      iconSize={16}
+                      theme="clear"
+                      size="sm"
+                    />
+                  </Dialog.CloseButton>
+                  <Dialog.Title class="text-sm">{`Share: ${props.name}`}</Dialog.Title>
+                </div>
+
+                <div class="flex flex-row items-center gap-2">
+                  <Show when={props.userPermissions === Permissions.OWNER}>
+                    <ShareOptions
+                      setPermissions={(accessLevel) => {
+                        setSubmitAccessLevel(accessLevel);
+                        forwardToChannelRef()?.setSubmitAccessLevel(accessLevel);
+                      }}
+                      permissions={submitAccessLevel()}
+                      label='Permission'
+                      hideNoAccess
+                    />
+                  </Show>
+
+                  <TextButton
+                    onClick={() => forwardToChannelRef()?.handleSubmit()}
+                    icon={PaperPlaneRight}
+                    theme="accent"
+                    text="Share"
                   />
-                </Dialog.CloseButton>
-                <Dialog.Title class="text-sm">{`Share: ${props.name}`}</Dialog.Title>
+                </div>
               </div>
 
                 <ForwardToChannel
@@ -397,6 +433,7 @@ export function ShareModal(props: ShareModalProps) {
                   onSubmit={() => props.setIsSharePermOpen(false)}
                   refetch={refetch}
                   name={props.name}
+                  ref={setForwardToChannelRef}
                 />
 
               <Show when={recipients() || props.owner}>

@@ -1,19 +1,16 @@
 import type { SharePermissionV2ChannelSharePermissions } from '@service-storage/generated/schemas/sharePermissionV2ChannelSharePermissions';
-import PaperPlaneRight from '@phosphor-icons/core/fill/paper-plane-right-fill.svg?component-solid';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import { useChannelMarkdownArea } from '@block-channel/component/MarkdownArea';
 import { TrackingEvents } from '@coparse/analytics/src/types/TrackingEvents';
 import { useBlockAliasedName, useBlockId, useBlockName } from '@core/block';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
-import { createEffect, createMemo, createSignal, Show } from 'solid-js';
+import { createEffect, createMemo, createSignal, onMount, Show } from 'solid-js';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
 import { blockNameToItemType } from '@service-storage/client';
 import { useSendMessageToPeople } from '@core/util/channels';
 import { getDestinationFromOptions } from './NewMessage';
-import { TextButton } from '@core/component/TextButton';
 import type { WithCustomUserInput } from '@core/user';
-import { ShareOptions } from './TopBar/ShareButton';
 import { withAnalytics } from '@coparse/analytics';
 import { Permissions } from './SharePermissions';
 import { useIsAuthenticated } from '@core/auth';
@@ -29,7 +26,11 @@ interface ForwardToChannelProps {
   refetch?: () => void;
   projectId?: string;
   name: string;
-
+  ref?: (ref: {
+    handleSubmit: () => void;
+    setSubmitAccessLevel: (level: AccessLevel | null) => void;
+    getSubmitAccessLevel: () => AccessLevel | null;
+  }) => void;
 }
 
 export function ForwardToChannel(props: ForwardToChannelProps) {
@@ -189,6 +190,16 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
     props.onSubmit?.();
   }
 
+  onMount(() => {
+    if (props.ref) {
+      props.ref({
+        handleSubmit,
+        setSubmitAccessLevel,
+        getSubmitAccessLevel: submitAccessLevel
+      });
+    }
+  });
+
   return (
     <Show when={isAuthenticated()}>
       <div class="flex flex-col w-full">
@@ -203,7 +214,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
           hideBorder
           noPadding
         />
-        <div class="flex flex-col w-full min-h-[60px] sm:min-h-[80px] max-h-[150px] overflow-y-auto border-y-1 border-edge-muted/50">
+        <div class="flex flex-col w-full min-h-[60px] sm:min-h-[80px] max-h-[150px] overflow-y-auto border-t-1 border-edge-muted/50">
           <div
             class="flex-1 px-2.5 py-1 w-full text-sm"
             onClick={() => focusMarkdownArea()}
@@ -235,28 +246,6 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
               size="SM"
             />
           </Show>
-        </div>
-        <div class="flex flex-col">
-          <div class={"flex flex-row justify-between items-center align-middle min-h-[40px] px-2"}>
-
-            <Show when={props.submitPermissionInfo?.userPermissions === Permissions.OWNER}>
-              <div class="w-32">
-                <ShareOptions
-                  setPermissions={(accessLevel) => {setSubmitAccessLevel(accessLevel)}}
-                  permissions={submitAccessLevel()}
-                  label='Permission'
-                  hideNoAccess
-                />
-              </div>
-            </Show>
-
-            <TextButton
-              onClick={handleSubmit}
-              icon={PaperPlaneRight}
-              theme="accent"
-              text="Share"
-            />
-          </div>
         </div>
       </div>
     </Show>
