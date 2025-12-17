@@ -483,10 +483,13 @@ export function ShareModal(props: ShareModalProps) {
                   </Show>
 
                   <TextButton
-                    onClick={() => forwardToChannelRef()?.handleSubmit()}
+                    onClick={() => {
+                      const selectedOptions = forwardToChannelRef()?.getSelectedOptions();
+                      if(selectedOptions && selectedOptions.length > 0){forwardToChannelRef()?.handleSubmit()}
+                    }}
+                    theme={forwardToChannelRef()?.getSelectedOptions()?.length > 0 ? "accent" : "disabled"}
                     icon={PaperPlaneRight}
                     height="h-[22px]"
-                    theme="accent"
                     text="Share"
                   />
                 </div>

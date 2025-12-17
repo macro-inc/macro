@@ -36,6 +36,7 @@ interface ForwardToChannelProps {
   projectId?: string;
   name: string;
   ref?: (ref: {
+    getSelectedOptions: () => WithCustomUserInput<'user' | 'contact' | 'channel'>[];
     setSubmitAccessLevel: (level: AccessLevel | null) => void;
     getSubmitAccessLevel: () => AccessLevel | null;
     handleSubmit: () => void;
@@ -233,6 +234,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
     if (props.ref) {
       props.ref({
         getSubmitAccessLevel: submitAccessLevel,
+        getSelectedOptions: selectedOptions,
         setSubmitAccessLevel,
         handleSubmit,
       });
