@@ -250,10 +250,10 @@ export function ComposeTask(props: ComposeTaskProps) {
           />
         </Show>
       </div>
-      <div class="flex-shrink-0 flex gap-2 items-center -my-1">
+      <div class="flex-shrink-0 flex gap-2 items-center">
         <input
           type="text"
-          placeholder="Task title..."
+          placeholder="Task Title"
           value={title()}
           onInput={(e) => setTitle(e.currentTarget.value)}
           class="w-full py-2 text-xl font-medium placeholder-ink-placeholder/50"
@@ -280,7 +280,7 @@ export function ComposeTask(props: ComposeTaskProps) {
           onPropertyDeleted={() => {}}
           saveHandler={saveHandler}
         >
-          <div class="w-full grid grid-cols-2 gap-1 flex-wrap text-xs font-mono text-ink-muted">
+          <div class="w-full grid grid-cols-2 gap-1 flex-wrap text-xs font-mono text-ink-muted mt-8">
             <For each={properties()}>
               {(prop) => {
                 const { openPropertyEditor, openDatePicker } =
