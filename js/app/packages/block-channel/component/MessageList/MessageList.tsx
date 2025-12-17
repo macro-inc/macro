@@ -547,49 +547,6 @@ export function MessageList(props: MessageListProps) {
     })
   );
 
-  // initial scroll
-  createRenderEffect(
-    on(
-      [
-        virtualHandle,
-        props.targetMessage,
-        listContainerRef,
-        props.orderedMessages,
-      ],
-      // NOTE: ordered messages gets updated on initial load due to thread layout calculations
-      // so we need to keep scrolling down until it settles
-      ([handle, target, listContainerRef, orderedMessages]) => {
-        if (!handle || !listContainerRef || orderedMessages.length === 0)
-          return;
-
-        const forceBottom = target === undefined;
-
-        // scrollToBottomOrTarget({ forceBottom });
-      }
-    )
-  );
-
-  const splitLayoutContext = useContext(SplitLayoutContext);
-  const manager = splitLayoutContext?.manager;
-  const splitCount = createMemo(() => manager?.splits().length ?? 0);
-
-  // Due to channel data reconciliation, adding a new split will cause the virtualizer scroll state
-  // to unset. This effect will attempt to restore the scroll position. It is a reasonable approximation
-  // but will clamp to the end of the message so there can be a small shift.
-  createEffect((prev: number) => {
-    const newCount = splitCount();
-    const handle = untrack(virtualHandle);
-    if (handle && prev !== 0 && newCount > prev) {
-      const endIndex = handle.findItemIndex(0);
-      queueMicrotask(() => {
-        handle.scrollToIndex(endIndex, {
-          align: 'end',
-        });
-      });
-    }
-    return newCount;
-  }, 0);
-
   // Handle vlistscroll events
   const handleScroll = () => {
     if (!initialScrollComplete()) return;
