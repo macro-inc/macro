@@ -105,9 +105,11 @@ export function ComposeTask(props: ComposeTaskProps) {
     refetchOnWindowFocus: false,
     refetchOnMount: false,
     refetchOnReconnect: false,
+    placeholderData: (prev) => prev,
+    // initialData: [],
   }));
 
-  const definitions = createMemo<Map<string, PropertyDefinition>>(() => {
+  const definitions = () => {
     if (!systemPropertiesQuery.isSuccess) return new Map();
     const data = systemPropertiesQuery.data;
     return new Map(
@@ -116,9 +118,9 @@ export function ComposeTask(props: ComposeTaskProps) {
         return [definition.id, definition];
       })
     );
-  });
+  };
 
-  const options = createMemo<Map<string, PropertyOption[]>>(() => {
+  const options = () => {
     if (!systemPropertiesQuery.isSuccess) return new Map();
     const data = systemPropertiesQuery.data;
     return new Map(
@@ -128,9 +130,9 @@ export function ComposeTask(props: ComposeTaskProps) {
         return [definition.id, options];
       })
     );
-  });
+  };
 
-  const properties = createMemo(() => {
+  const properties = () => {
     return filterMap<string, Property>(COMPOSER_PROPERTIES, (id) => {
       const definition = definitions().get(id);
       if (!definition) return;
@@ -147,7 +149,7 @@ export function ComposeTask(props: ComposeTaskProps) {
         value: extractPropertyValue(definition, propertyValues, options()),
       } as Property;
     });
-  });
+  };
 
   const saveHandler: PropertySaveHandler = {
     saveProperty: async (property: Property, value: PropertyApiValues) => {
@@ -230,11 +232,13 @@ export function ComposeTask(props: ComposeTaskProps) {
   };
 
   return (
-    <div class="flex flex-col gap-4 p-3 relative">
+    <div class="flex flex-col gap-2 p-3 relative">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-2">
           <EntityIcon targetType="task" size="sm" />
-          <span class="text-sm text-ink-disabled/50">Create Task</span>
+          <span class="text-sm font-medium text-ink-disabled/50">
+            Create Task
+          </span>
         </div>
         <Show when={splitPanel?.isPopover}>
           <IconButton
