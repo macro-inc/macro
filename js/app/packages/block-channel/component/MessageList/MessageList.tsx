@@ -118,9 +118,6 @@ function EmptyMessageList() {
 export function MessageList(props: MessageListProps) {
   const [containerRef, setContainerRef] = createSignal<HTMLDivElement>();
   const [virtualHandle, setVirtualHandle] = createSignal<VirtualizerHandle>();
-  const [listContainerRef, setListContainerRef] = createSignal<
-    HTMLDivElement | undefined
-  >();
   const [scrollContainerRef, setScrollContainerRef] = createSignal<
     HTMLDivElement | undefined
   >();
@@ -144,6 +141,12 @@ export function MessageList(props: MessageListProps) {
   const [initialScrollComplete, setInitialScrollComplete] = createSignal(false);
 
   const openedChannel = openedChannelSignal.get;
+
+  const normalizeIndex = (index: number) => {
+    const length = props.orderedMessages().length;
+
+    return length - 1 - index;
+  };
 
   const lastViewed = createMemo(() => {
     return props?.latestActivity?.viewed_at;
@@ -255,7 +258,7 @@ export function MessageList(props: MessageListProps) {
     if (scrollTimeoutId) clearTimeout(scrollTimeoutId);
 
     setTargetMessageActive(true);
-    virtualHandle()?.scrollToIndex(props.orderedMessages().length - 1 - index, {
+    virtualHandle()?.scrollToIndex(normalizeIndex(index), {
       align: 'center',
     });
     setTimeout(() => {
@@ -467,7 +470,7 @@ export function MessageList(props: MessageListProps) {
       [lastMessageReaction, lastMessageThread, lastMessageThreadCount],
       () => {
         if (!isNearBottom()) return;
-        // debouncedScrollToBottomOrTarget({ forceBottom: true });
+        debouncedScrollToBottomOrTarget({ forceBottom: true });
       },
       { defer: true }
     )
@@ -585,12 +588,9 @@ export function MessageList(props: MessageListProps) {
         .orderedMessages()
         ?.findIndex((m) => m.id === messages[0].id);
       if (firstUnviewedIndex === undefined) return;
-      virtualHandle()?.scrollToIndex(
-        props.orderedMessages().length - 1 - firstUnviewedIndex,
-        {
-          align: 'start',
-        }
-      );
+      virtualHandle()?.scrollToIndex(normalizeIndex(firstUnviewedIndex), {
+        align: 'start',
+      });
     }
   };
 
@@ -620,8 +620,6 @@ export function MessageList(props: MessageListProps) {
       <div
         class="flex flex-col h-full relative"
         ref={(el) => {
-          setListContainerRef(el);
-
           onMount(() => {
             const scrollContainer = el.querySelector(
               '[data-channel-message-list]'
@@ -689,7 +687,7 @@ export function MessageList(props: MessageListProps) {
                       newMessageIndex={newMessageIndex}
                       isFocused={isFocused(row.id)}
                       setFocusedMessageId={props.setFocusedMessageId}
-                      index={() => props.orderedMessages().length - 1 - i()}
+                      index={() => normalizeIndex(i())}
                       orderedMessages={props.orderedMessages}
                       threadSiblings={viewThreads[
                         row.message.thread_id ?? ''
