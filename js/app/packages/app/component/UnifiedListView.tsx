@@ -134,7 +134,6 @@ import {
 } from './split-layout/components/SplitToolbar';
 import { useSplitLayout } from './split-layout/layout';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
-import { EmptyState } from './UnifiedListEmptyState';
 import {
   applyClientFilters,
   type DisplayOptions,
@@ -1510,13 +1509,9 @@ export function UnifiedListView(props: UnifiedListViewProps) {
           <UnifiedListComponent
             entityListRef={setLocalEntityListRef}
             virtualizerHandle={setVirtualizerHandle}
-            emptyState={
-              <EmptyState
-                viewId={view()?.id}
-                search={searchText().length > 0}
-              />
-            }
-            hasRefinementsFromBase={isViewConfigChanged}
+            viewId={view()?.id}
+            searchText={searchText()}
+            hasRefinementsFromBase={isViewConfigChanged()}
           >
             {(innerProps) => {
               const displayDoneButton = () => {

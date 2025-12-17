@@ -13,6 +13,8 @@ import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 false && fileSelector;
 false && folderSelector;
 
+const DEFAULT_EMPTY_MESSAGE = 'No items to show.';
+
 function EmptyStateHelpDrawer(props: {
   message?: string;
   helpDrawer: DefaultView;
@@ -38,13 +40,20 @@ function EmptyStateHelpDrawer(props: {
   );
 }
 
-export function EmptyState(props: { viewId?: ViewId; search?: boolean }) {
+export function EmptyState(props: {
+  viewId?: ViewId;
+  search?: boolean;
+  hasRefinementsFromBase?: boolean;
+}) {
   const emailActive = useEmailLinksStatus();
 
   return (
     <Switch>
       <Match when={props.search}>
         <EmptyStateInner message={'No results.'} />
+      </Match>
+      <Match when={props.hasRefinementsFromBase}>
+        <EmptyStateInner />
       </Match>
       <Match when={props.viewId === 'noise' && !emailActive()}>
         <EmptyStateHelpDrawer
@@ -99,7 +108,7 @@ export function EmptyState(props: { viewId?: ViewId; search?: boolean }) {
         />
       </Match>
       <Match when={true}>
-        <EmptyStateInner message={'No items to show.'} showDropZone />
+        <EmptyStateInner />
       </Match>
     </Switch>
   );
@@ -129,9 +138,9 @@ export function EmptyStateInner(props: EmptyStateInnerProps) {
   return (
     <div class="size-full flex items-center justify-center p-4 text-ink-muted">
       <div class="panel w-full flex flex-col size-full">
-        <Show when={props.message}>
-          <p class="text-ink-muted font-mono">{props.message}</p>
-        </Show>
+        <p class="text-ink-muted font-mono">
+          {props.message ?? DEFAULT_EMPTY_MESSAGE}
+        </p>
         <Show when={props.cta}>
           {(cta) => (
             <div class="w-full flex justify-start pt-4">
