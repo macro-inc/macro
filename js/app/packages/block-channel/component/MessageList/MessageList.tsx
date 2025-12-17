@@ -681,7 +681,7 @@ export function MessageList(props: MessageListProps) {
               class="scrollbar-hidden"
               data-channel-message-list
               data={(rows() ?? []).toReversed()}
-              bufferSize={10 * BASE_ITEM_SIZE}
+              bufferSize={20 * BASE_ITEM_SIZE}
               keepMounted={keepMountedIndices()}
               onScroll={handleScroll}
               onScrollEnd={() => {
