@@ -2,11 +2,7 @@
 
 use std::{collections::HashSet, str::FromStr};
 
-use macro_user_id::{
-    email::Email,
-    lowercased::Lowercase,
-    user_id::MacroUserIdStr,
-};
+use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr};
 use roles_and_permissions::domain::{model::RoleId, port::UserRolesAndPermissionsService};
 
 use crate::domain::{

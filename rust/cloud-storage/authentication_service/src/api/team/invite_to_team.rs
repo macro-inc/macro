@@ -5,10 +5,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use macro_user_id::{
-    cowlike::CowLike,
-    email::Email,
-    lowercased::Lowercase,
-    user_id::MacroUserIdStr,
+    cowlike::CowLike, email::Email, lowercased::Lowercase, user_id::MacroUserIdStr,
 };
 use model_entity::EntityType;
 use model_user::axum_extractor::MacroUserExtractor;

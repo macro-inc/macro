@@ -1,10 +1,6 @@
 //! Contains the domain logic for teams
 
-use macro_user_id::{
-    email::Email,
-    lowercased::Lowercase,
-    user_id::MacroUserIdStr,
-};
+use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr};
 
 use crate::domain::model::{
     CreateTeamError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError, RemoveTeamInviteError,
