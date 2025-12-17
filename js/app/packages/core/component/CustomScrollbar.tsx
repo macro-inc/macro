@@ -172,6 +172,25 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
     setScrollTop(newScrollTop);
   };
 
+  const getThumbOpacity = () => {
+    if (isDragging()) return 1;
+    if (isHovering()) return 0.8;
+    const vel = scrollVelocity();
+    if (vel === 0) return 0;
+    // Normalize velocity (0-5px/ms is typical fast scroll)
+    const normalizedVel = Math.min(vel / 5, 1);
+    return normalizedVel;
+  };
+
+  const getThumbTransform = () => {
+    if (isDragging()) return 'scaleX(1.6)';
+    const vel = scrollVelocity();
+    if (vel === 0) return 'scaleX(1)';
+    // Scale more aggressively with velocity - up to 2x width at high speeds
+    const normalizedVel = Math.min(vel / 5, 1);
+    return `scaleX(${1 + normalizedVel * 1.0})`;
+  };
+
   return (
     <Show when={isVisible()}>
       <div
@@ -193,23 +212,8 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
             width: '1px',
             'background-color': 'var(--color-accent)',
             'transform-origin': 'right center',
-            opacity: (() => {
-              if (isDragging()) return 1;
-              if (isHovering()) return 0.8;
-              const vel = scrollVelocity();
-              if (vel === 0) return 0;
-              // Normalize velocity (0-5px/ms is typical fast scroll)
-              const normalizedVel = Math.min(vel / 5, 1);
-              return normalizedVel;
-            })(),
-            transform: (() => {
-              if (isDragging()) return 'scaleX(1.6)';
-              const vel = scrollVelocity();
-              if (vel === 0) return 'scaleX(1)';
-              // Scale more aggressively with velocity - up to 2x width at high speeds
-              const normalizedVel = Math.min(vel / 5, 1);
-              return `scaleX(${1 + normalizedVel * 1.0})`;
-            })(),
+            opacity: getThumbOpacity(),
+            transform: getThumbTransform(),
             'transition-property': 'opacity, transform',
           }}
           onMouseDown={handleMouseDown}
