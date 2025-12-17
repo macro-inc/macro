@@ -503,16 +503,16 @@ export function EntityWithEverything(
       const isSearch = () => isSearchEntity(props.entity);
 
       return (
-        <div class="flex gap-1 items-center text-sm min-w-0 w-full truncate overflow-hidden @max-sm/split:flex-col @max-sm/split:items-start @max-sm/split:gap-1 @max-sm/split:truncate-none">
+        <div class="flex gap-1 items-center text-sm min-w-0 w-full truncate overflow-hidden @max-md/split:flex-col @max-md/split:items-start @max-md/split:gap-1 @max-md/split:truncate-none">
           {/* sometimes senderName and senderEmail are the same */}
           <div
-            class="flex gap-2 items-center font-semibold shrink-0 @max-sm/split:w-full @max-sm/split:truncate"
+            class="flex gap-2 items-center font-semibold shrink-0 @max-md/split:w-full @max-md/split:truncate"
             classList={{
               'w-[20cqw]': !isSearch(),
             }}
           >
             {/* Icon inline with sender in narrow mode */}
-            <div class="hidden @max-sm/split:flex size-[1em] shrink-0 items-center justify-center relative group/icon-checkbox">
+            <div class="hidden @max-md/split:flex size-[1em] shrink-0 items-center justify-center relative group/icon-checkbox">
               {/* Checkbox for narrow mode - shown on hover or when checked */}
               <button
                 type="button"
@@ -551,7 +551,7 @@ export function EntityWithEverything(
               </div>
             </div>
             {/* Sender Name */}
-            <div class="truncate @max-sm/split:min-w-0">
+            <div class="truncate @max-md/split:min-w-0">
               {displayedNames() ??
                 props.entity.senderName ??
                 props.entity.senderEmail?.split('@')[0]}
@@ -569,17 +569,17 @@ export function EntityWithEverything(
           </div>
           {/* Subject */}
           {/*<ImportantBadge active={props.importantIndicatorActive} />*/}
-          <div class="flex items-center w-full gap-2 flex-1 min-w-0 @max-sm/split:flex-col @max-sm/split:items-start @max-sm/split:w-full @max-sm/split:gap-1">
-            <div class="flex items-center gap-2 flex-1 min-w-0 @max-sm/split:w-full @max-sm/split:justify-between @max-sm/split:min-w-0">
+          <div class="flex items-center w-full gap-2 flex-1 min-w-0 @max-md/split:flex-col @max-md/split:items-start @max-md/split:w-full @max-md/split:gap-1">
+            <div class="flex items-center gap-2 flex-1 min-w-0 @max-md/split:w-full @max-md/split:justify-between @max-md/split:min-w-0">
               <div
-                class="shrink-0 truncate @max-sm/split:min-w-0 @max-sm/split:flex-1"
+                class="shrink-0 truncate @max-md/split:min-w-0 @max-md/split:flex-1"
                 classList={{
                   'font-regular text-ink-disabled': isSearch(),
                   'font-medium': !isSearch(),
                 }}
               >
                 <Show when={isSearch()}>
-                  <span class="@max-sm/split:hidden"> – </span>
+                  <span class="@max-md/split:hidden"> – </span>
                 </Show>
                 <Show when={searchHighlightName()} fallback={props.entity.name}>
                   {(name) => (
@@ -592,7 +592,7 @@ export function EntityWithEverything(
                 </Show>
               </div>
               {/* Body snippet - inline in wide mode */}
-              <div class="truncate shrink grow opacity-60 @max-sm/split:hidden">
+              <div class="truncate shrink grow opacity-60 @max-md/split:hidden">
                 {props.entity.snippet}
               </div>
               {/* Timestamp inline with subject in narrow mode */}
@@ -600,7 +600,7 @@ export function EntityWithEverything(
                 {(date) => {
                   const formattedDate = createFormattedDate(date());
                   return (
-                    <span class="hidden @max-sm/split:inline shrink-0 whitespace-nowrap text-xs font-mono uppercase text-ink-extra-muted">
+                    <span class="hidden @max-md/split:inline shrink-0 whitespace-nowrap text-xs font-mono uppercase text-ink-extra-muted">
                       {formattedDate()}
                     </span>
                   );
@@ -608,7 +608,7 @@ export function EntityWithEverything(
               </Show>
             </div>
             {/* Body snippet - below subject in narrow mode */}
-            <div class="hidden @max-sm/split:block truncate w-full text-xs opacity-60">
+            <div class="hidden @max-md/split:block truncate w-full text-xs opacity-60">
               {props.entity.snippet}
             </div>
           </div>
@@ -638,11 +638,11 @@ export function EntityWithEverything(
     };
 
     return (
-      <div class="flex gap-2 items-center min-w-0 w-fit max-w-full overflow-hidden @max-sm/split:flex-col @max-sm/split:items-start @max-sm/split:w-full @max-sm/split:gap-1">
-        <span class="flex gap-1 truncate font-medium text-sm shrink-0 items-center @max-sm/split:w-full @max-sm/split:flex-col @max-sm/split:items-start @max-sm/split:gap-1">
-          <div class="flex items-center gap-2 w-full @max-sm/split:justify-between @max-sm/split:min-w-0">
+      <div class="flex gap-2 items-center min-w-0 w-fit max-w-full overflow-hidden @max-md/split:flex-col @max-md/split:items-start @max-md/split:w-full @max-md/split:gap-1">
+        <span class="flex gap-1 truncate font-medium text-sm shrink-0 items-center @max-md/split:w-full @max-md/split:flex-col @max-md/split:items-start @max-md/split:gap-1">
+          <div class="flex items-center gap-2 w-full @max-md/split:justify-between @max-md/split:min-w-0">
             {/* Icon inline with title in narrow mode */}
-            <div class="hidden @max-sm/split:flex size-[1em] shrink-0 items-center justify-center relative group/icon-checkbox-nonemail">
+            <div class="hidden @max-md/split:flex size-[1em] shrink-0 items-center justify-center relative group/icon-checkbox-nonemail">
               {/* Checkbox for narrow mode - shown on hover or when checked */}
               <button
                 type="button"
@@ -691,7 +691,7 @@ export function EntityWithEverything(
               </div>
             </div>
             <span
-              class="font-semibold truncate @max-sm/split:min-w-0 @max-sm/split:flex-1"
+              class="font-semibold truncate @max-md/split:min-w-0 @max-md/split:flex-1"
               classList={{
                 'w-[20cqw]': !props.showUnrollNotifications,
               }}
@@ -711,7 +711,7 @@ export function EntityWithEverything(
               {(date) => {
                 const formattedDate = createFormattedDate(date());
                 return (
-                  <span class="hidden @max-sm/split:inline shrink-0 whitespace-nowrap text-xs font-mono uppercase text-ink-extra-muted">
+                  <span class="hidden @max-md/split:inline shrink-0 whitespace-nowrap text-xs font-mono uppercase text-ink-extra-muted">
                     {formattedDate()}
                   </span>
                 );
@@ -720,14 +720,14 @@ export function EntityWithEverything(
           </div>
 
           <Show when={showLatestMessageInfo()}>
-            <div class="flex items-center gap-1 @max-sm/split:w-full @max-sm/split:flex-col @max-sm/split:items-start @max-sm/split:gap-1">
+            <div class="flex items-center gap-1 @max-md/split:w-full @max-md/split:flex-col @max-md/split:items-start @max-md/split:gap-1">
               {/*<ImportantBadge active={props.importantIndicatorActive} />*/}
-              <span class="font-medium shrink-0 truncate @max-sm/split:w-full">
+              <span class="font-medium shrink-0 truncate @max-md/split:w-full">
                 {userNameFromSender()}
               </span>
               <Show when={latestMessage()}>
                 {(lastMessage) => (
-                  <div class="truncate shrink grow opacity-60 flex items-center @max-sm/split:w-full @max-sm/split:text-xs">
+                  <div class="truncate shrink grow opacity-60 flex items-center @max-md/split:w-full @max-md/split:text-xs">
                     {/* TODO (seamus): Channels endpoint does not return any information about attachments. If we have an empty message, assume it's attachments.*/}
                     <Show
                       when={lastMessage().content.trim()}
@@ -827,7 +827,7 @@ export function EntityWithEverything(
       <div
         data-entity
         data-entity-id={props.entity.id}
-        class="w-full min-w-0 grid flex-1 items-center suppress-css-bracket grid-cols-[2rem_1fr_auto] @max-sm/split:flex @max-sm/split:flex-col pr-2 @max-sm/split:px-2 @max-sm/split:py-2"
+        class="w-full min-w-0 grid flex-1 items-center suppress-css-bracket grid-cols-[2rem_1fr_auto] @max-md/split:flex @max-md/split:flex-col pr-2 @max-md/split:px-2 @max-md/split:py-2"
         onClick={(e) => {
           if (blocksNavigation(e)) return;
           props.onClick?.(props.entity, e);
@@ -859,7 +859,7 @@ export function EntityWithEverything(
       >
         <button
           type="button"
-          class="col-1 size-full relative group/button flex items-center justify-center bracket-never @max-sm/split:hidden"
+          class="col-1 size-full relative group/button flex items-center justify-center bracket-never @max-md/split:hidden"
           onClick={(e) => {
             props.onChecked?.(!props.checked, e.shiftKey);
           }}
@@ -878,7 +878,7 @@ export function EntityWithEverything(
             </Show>
           </div>
           <Show when={props.showLeftColumnIndicator && !props.checked}>
-            <div class="absolute inset-0 flex items-center justify-center -z-1 @max-sm/split:hidden">
+            <div class="absolute inset-0 flex items-center justify-center -z-1 @max-md/split:hidden">
               <UnreadIndicator active={props.unreadIndicatorActive} />
             </div>
           </Show>
@@ -886,7 +886,7 @@ export function EntityWithEverything(
         {/* Left Column Indicator(s) */}
         {/* Icon and name - top left on mobile, first item on desktop */}
         <div
-          class="min-h-10 min-w-[50px] flex flex-row items-center gap-2 col-2 @max-sm/split:col-auto @max-sm/split:w-full @max-sm/split:min-h-0 @max-sm/split:items-start"
+          class="min-h-10 min-w-[50px] flex flex-row items-center gap-2 col-2 @max-md/split:col-auto @max-md/split:w-full @max-md/split:min-h-0 @max-md/split:items-start"
           classList={{
             grow: props.contentPlacement === 'bottom-row',
             'opacity-70': props.fadeIfRead && !props.unreadIndicatorActive,
@@ -894,11 +894,11 @@ export function EntityWithEverything(
         >
           {/* Icon/Checkbox container - in narrow mode, shows icon by default, checkbox on hover */}
           {/* For emails, icon is inline with sender, so hide this container in narrow mode */}
-          <div class="flex size-5 shrink-0 items-center justify-center relative group/icon-checkbox @max-sm/split:hidden">
+          <div class="flex size-5 shrink-0 items-center justify-center relative group/icon-checkbox @max-md/split:hidden">
             {/* Checkbox for narrow mode - shown on hover or when checked, hidden at larger widths */}
             <button
               type="button"
-              class="hidden @max-sm/split:flex @min-sm/split:hidden absolute inset-0 items-center justify-center opacity-0 group-hover/icon-checkbox:opacity-100 transition-opacity"
+              class="hidden @max-md/split:flex @min-md/split:hidden absolute inset-0 items-center justify-center opacity-0 group-hover/icon-checkbox:opacity-100 transition-opacity"
               classList={{
                 'opacity-100': props.checked,
               }}
@@ -921,9 +921,9 @@ export function EntityWithEverything(
             </button>
             {/* Icon - hidden on hover in narrow mode when not checked */}
             <div
-              class="flex items-center justify-center @max-sm/split:group-hover/icon-checkbox:opacity-0 @max-sm/split:transition-opacity"
+              class="flex items-center justify-center @max-md/split:group-hover/icon-checkbox:opacity-0 @max-md/split:transition-opacity"
               classList={{
-                '@max-sm/split:opacity-0': props.checked,
+                '@max-md/split:opacity-0': props.checked,
               }}
             >
               <Show
@@ -946,12 +946,12 @@ export function EntityWithEverything(
         </div>
         {/* Date and user - top right on mobile, end on desktop  */}
         <div
-          class="row-1 ml-2 @md:ml-4 self-center min-w-0 col-3 @max-sm/split:col-auto @max-sm/split:row-auto @max-sm/split:ml-0 @max-sm/split:mt-1 @max-sm/split:self-start @max-sm/split:w-full"
+          class="row-1 ml-2 @md:ml-4 self-center min-w-0 col-3 @max-md/split:col-auto @max-md/split:row-auto @max-md/split:ml-0 @max-md/split:mt-1 @max-md/split:self-start @max-md/split:w-full"
           classList={{
             'opacity-50': props.fadeIfRead && !props.unreadIndicatorActive,
           }}
         >
-          <div class="flex flex-row items-center justify-end gap-2 min-w-0 @max-sm/split:justify-start @max-sm/split:flex-wrap">
+          <div class="flex flex-row items-center justify-end gap-2 min-w-0 @max-md/split:justify-start @max-md/split:flex-wrap">
             <Show when={properties().length > 0}>
               <div class="pr-2 overflow-hidden shrink min-w-0">
                 <PropertyPills properties={properties()} />
@@ -975,14 +975,14 @@ export function EntityWithEverything(
               {(date) => {
                 const formattedDate = createFormattedDate(date());
                 return (
-                  <span class="shrink-0 whitespace-nowrap text-xs font-mono uppercase text-ink-extra-muted @max-sm/split:hidden">
+                  <span class="shrink-0 whitespace-nowrap text-xs font-mono uppercase text-ink-extra-muted @max-md/split:hidden">
                     {formattedDate()}
                   </span>
                 );
               }}
             </Show>
             <Show when={props.highlighted && props.onClickRowAction}>
-              <div class="absolute top-1 right-1 items-center flex @max-sm/split:hidden">
+              <div class="absolute top-1 right-1 items-center flex @max-md/split:hidden">
                 <Tooltip
                   tooltip={
                     <LabelAndHotKey
@@ -1009,7 +1009,7 @@ export function EntityWithEverything(
         </div>
         {/* Content Hits from Search */}
         <Show when={contentHitData().length > 0}>
-          <div class="relative row-2 col-2 col-end-4 pb-2 @max-sm/split:row-auto @max-sm/split:col-auto @max-sm/split:w-full @max-sm/split:mt-1">
+          <div class="relative row-2 col-2 col-end-4 pb-2 @max-md/split:row-auto @max-md/split:col-auto @max-md/split:w-full @max-md/split:mt-1">
             <CollapsibleList items={contentHitData()} threadBorder>
               {(data, index, count) => (
                 <ContentHitRow
@@ -1032,7 +1032,7 @@ export function EntityWithEverything(
             contentHitData().length === 0
           }
         >
-          <div class="relative col-2 col-end-4 pb-2 @max-sm/split:col-auto @max-sm/split:w-full @max-sm/split:mt-1">
+          <div class="relative col-2 col-end-4 pb-2 @max-md/split:col-auto @max-md/split:w-full @max-md/split:mt-1">
             <CollapsibleList items={notDoneNotifications()} threadBorder>
               {(notification) => (
                 <NotificationRow
