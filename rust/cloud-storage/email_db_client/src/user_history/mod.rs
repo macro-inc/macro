@@ -130,7 +130,7 @@ pub async fn get_thread_summary_info(
     for row in rows {
         // If the latest message of the thread is in the trash, do not insert ThreadHistoryInfo.
         // We don't want to include threads that are most likely in trash in the search results.
-        if row.trash_label.unwrap_or(false) {
+        if row.trash_label.unwrap_or_default() {
             continue;
         }
         let summary_info = ThreadHistoryInfo {
