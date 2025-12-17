@@ -64,6 +64,24 @@ const LONG_DATE_FORMATTER = new Intl.DateTimeFormat(undefined, {
   year: 'numeric',
 });
 
+const toScrollHintDate = (isoDate?: string) => {
+  if (!isoDate) return '';
+  const date = new Date(isoDate);
+  if (Number.isNaN(date.getTime())) return '';
+  const now = new Date();
+  const formatter =
+    date.getFullYear() === now.getFullYear()
+      ? SHORT_DATE_FORMATTER
+      : LONG_DATE_FORMATTER;
+  return formatter.format(date).toUpperCase();
+};
+
+// Provide stable row models to VList so item instances are preserved across moves/insertions
+type RowModel = {
+  id: string;
+  message: Message;
+};
+
 // The size of a message with a profile picture and a one line message
 const BASE_ITEM_SIZE = 50;
 
@@ -148,26 +166,16 @@ export function MessageList(props: MessageListProps) {
   // represents active highlighted state on the target message
   const [targetMessageActive, setTargetMessageActive] =
     createSignal<boolean>(false);
+
   const activeTargetMessageId = createMemo(() => {
     if (!targetMessageActive()) return;
     return untrack(props.targetMessage)?.messageId;
   });
+
   const isActiveTargetMessage = createSelector(activeTargetMessageId);
 
   let scrollTimeoutId: ReturnType<typeof setTimeout> | undefined;
   let scrollHintTimeoutId: ReturnType<typeof setTimeout> | undefined;
-
-  const formatScrollHintDate = (isoDate?: string) => {
-    if (!isoDate) return '';
-    const date = new Date(isoDate);
-    if (Number.isNaN(date.getTime())) return '';
-    const now = new Date();
-    const formatter =
-      date.getFullYear() === now.getFullYear()
-        ? SHORT_DATE_FORMATTER
-        : LONG_DATE_FORMATTER;
-    return formatter.format(date).toUpperCase();
-  };
 
   const updateScrollHint = () => {
     if (!hasUserScrolled()) return;
@@ -182,7 +190,8 @@ export function MessageList(props: MessageListProps) {
 
     const index = clampIndex(endIndex, 0, list.length - 1);
     const message = list[index];
-    const label = formatScrollHintDate(message?.created_at);
+    const label = toScrollHintDate(message?.created_at);
+
     if (!label) return;
 
     if (scrollHintTimeoutId) {
@@ -273,11 +282,8 @@ export function MessageList(props: MessageListProps) {
     const activeMessageId = activeElement_?.getAttribute(
       'data-message-body-id'
     );
-    if (activeMessageId) {
-      props.setFocusedMessageId(activeMessageId);
-    } else {
-      props.setFocusedMessageId(undefined);
-    }
+
+    props.setFocusedMessageId(activeMessageId ?? undefined);
   });
 
   const isFocused = createSelector(props.focusedMessageId);
@@ -343,13 +349,15 @@ export function MessageList(props: MessageListProps) {
         if (currentView !== threadArr) {
           dirtyTypingThreadId = id;
         }
-      } else {
-        if (currentView !== threadArr) {
-          setViewThreads(id, reconcile(threadArr));
-        }
-        if (dirtyTypingThreadId === id) {
-          dirtyTypingThreadId = undefined;
-        }
+        continue;
+      }
+
+      if (currentView !== threadArr) {
+        setViewThreads(id, reconcile(threadArr));
+      }
+
+      if (dirtyTypingThreadId === id) {
+        dirtyTypingThreadId = undefined;
       }
     }
   });
@@ -370,12 +378,6 @@ export function MessageList(props: MessageListProps) {
 
     return currentTypingId;
   });
-
-  // Provide stable row models to VList so item instances are preserved across moves/insertions
-  type RowModel = {
-    id: string;
-    message: Message;
-  };
 
   const rows = mapArray(props.orderedMessages, (msg) => {
     return { id: msg.id, message: msg } as RowModel;
@@ -450,7 +452,7 @@ export function MessageList(props: MessageListProps) {
       [lastMessageReaction, lastMessageThread, lastMessageThreadCount],
       () => {
         if (!isNearBottom()) return;
-        debouncedScrollToBottomOrTarget({ forceBottom: true });
+        // debouncedScrollToBottomOrTarget({ forceBottom: true });
       },
       { defer: true }
     )
@@ -547,7 +549,7 @@ export function MessageList(props: MessageListProps) {
 
         const forceBottom = target === undefined;
 
-        scrollToBottomOrTarget({ forceBottom });
+        // scrollToBottomOrTarget({ forceBottom });
       }
     )
   );
