@@ -148,7 +148,11 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
     if (!container) return;
 
     setIsDragging(true);
-    setScrollStartTop(container.scrollTop);
+    setScrollStartTop(
+      props.reverse
+        ? container.scrollHeight + container.scrollTop
+        : container.scrollTop
+    );
 
     let isDraggingLocal = true;
     const handleMouseMove = (moveEvent: MouseEvent) => {
@@ -157,14 +161,24 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
       const deltaY = moveEvent.clientY - e.clientY;
       const trackH = clientHeight();
       const contentHeight = scrollHeight();
-      const maxScroll = contentHeight - trackH;
+
+      let maxScroll = contentHeight;
+
+      if (!props.reverse) {
+        maxScroll -= trackH;
+      }
+
       const thumbH = thumbHeight();
 
       const scrollRatio = deltaY / (trackH - thumbH);
-      const newScrollTop = Math.max(
+      let newScrollTop = Math.max(
         0,
         Math.min(maxScroll, scrollStartTop() + scrollRatio * maxScroll)
       );
+
+      if (props.reverse) {
+        newScrollTop = newScrollTop - contentHeight;
+      }
 
       container.scrollTop = newScrollTop;
       setScrollTop(newScrollTop);
@@ -190,13 +204,21 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
     const clickY = e.clientY - rect.top;
     const trackH = clientHeight();
     const contentHeight = scrollHeight();
-    const maxScroll = contentHeight - trackH;
+    let maxScroll = contentHeight;
+
+    if (!props.reverse) {
+      maxScroll -= trackH;
+    }
 
     const scrollRatio = clickY / trackH;
-    const newScrollTop = Math.max(
+    let newScrollTop = Math.max(
       0,
       Math.min(maxScroll, scrollRatio * maxScroll)
     );
+
+    if (props.reverse) {
+      newScrollTop = newScrollTop - contentHeight;
+    }
 
     container.scrollTop = newScrollTop;
     setScrollTop(newScrollTop);
@@ -256,7 +278,9 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
               opacity: scrollLabelVisible() ? 1 : 0,
             }}
           >
-            {props.getLabel?.(scrollHeight() + scrollTop() + thumbTop())}
+            {props.getLabel?.(
+              props.reverse ? scrollTop() + scrollHeight() : scrollTop()
+            )}
           </div>
         </Show>
       </div>
