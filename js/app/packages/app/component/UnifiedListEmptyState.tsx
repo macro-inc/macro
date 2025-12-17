@@ -7,7 +7,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import type { DefaultView, ViewId } from '@core/types/view';
 import { handleFolderSelect } from '@core/util/upload';
-import { createMemo, Match, onMount, Show, Switch } from 'solid-js';
+import { createMemo, Match, onCleanup, onMount, Show, Switch } from 'solid-js';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 
 false && fileSelector;
@@ -23,6 +23,12 @@ function EmptyStateHelpDrawer(props: {
   } = useSplitPanelOrThrow();
   onMount(() => {
     setShowHelpDrawer((prev) => new Set([...prev, props.helpDrawer]));
+  });
+  onCleanup(() => {
+    setShowHelpDrawer((prev) => {
+      const deleted = prev.delete(props.helpDrawer);
+      return deleted ? prev : new Set(prev);
+    });
   });
   return (
     <EmptyStateInner
