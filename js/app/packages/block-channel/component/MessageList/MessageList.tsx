@@ -186,12 +186,10 @@ export function MessageList(props: MessageListProps) {
     const list = props.orderedMessages();
     if (!handle || !list || list.length === 0) return;
 
-    const endIndex = handle.findItemIndex?.(
-      handle.scrollSize - handle.scrollOffset
-    );
+    const endIndex = handle.findItemIndex(handle.scrollOffset);
     if (endIndex === undefined) return;
 
-    const index = clampIndex(endIndex, 0, list.length - 1);
+    const index = clampIndex(normalizeIndex(endIndex), 0, list.length - 1);
     const message = list[index];
     const label = toScrollHintDate(message?.created_at);
 
