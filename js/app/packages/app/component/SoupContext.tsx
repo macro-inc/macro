@@ -1046,64 +1046,6 @@ export function createNavigationEntityListShortcut({
     return true;
   };
 
-  let virtuaMount = true;
-  createEffect(
-    on(virtualizerHandle, (virtuaRef) => {
-      if (!virtuaRef) return;
-
-      // reselect entity on mount
-      if (!jumpedToEnd() && activeHighlightedId()) {
-        if (!virtuaMount) return;
-
-        virtuaMount = false;
-        scrollToEntityFromId();
-        const scrollOffset = viewData()?.scrollOffset;
-        // restore scroll overrides scroll to id
-        const offset = scrollOffset;
-        if (offset) virtuaRef.scrollTo(offset);
-
-        // only add scroll event after virtua is done scrolling to scrollTop/index
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            addScrollEventToList();
-          });
-        });
-      } else {
-        addScrollEventToList();
-      }
-    })
-  );
-
-  createEffect(
-    on([entities, virtualizerHandle] as const, ([curr, virtuaRef], _prev) => {
-      const prev = _prev?.[0];
-      if (!curr || !prev || !virtuaRef) return;
-
-      const newIndex = getHighlightedEntity()?.index;
-
-      // ReSelectEntity
-      // ScrollTo and Select correct Entity after EntityList fetches new page, since list shuffles items
-      if (newIndex && curr[newIndex]?.id !== prev[newIndex]?.id) {
-        scrollToEntityFromId().then(() => {
-          const entityEl = getSelectedEntityEl();
-
-          if (jumpedToEnd()) {
-            // only refocus when navigation hotkey is activated before
-
-            if (entityEl instanceof HTMLElement) {
-              entityEl.focus();
-              setTimeout(() => {
-                entityEl.focus();
-                setJumpedToEnd(false);
-              });
-              return true;
-            }
-          }
-        });
-      }
-    })
-  );
-
   registerHotkey({
     scopeId: splitHotkeyScope,
     description: 'Root Modify selection',

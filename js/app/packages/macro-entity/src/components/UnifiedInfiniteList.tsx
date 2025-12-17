@@ -40,6 +40,14 @@ import type {
 import type { WithSearch } from '../types/search';
 import { Entity } from './Entity';
 
+const cacheMap = new Map<
+  string,
+  {
+    offset: number;
+    cache?: any; // TBD
+  }
+>();
+
 /**
  * Merges search data from two entities, preferring service source with local as fallback.
  * - Uses service entity as base
@@ -479,21 +487,16 @@ export function createUnifiedInfiniteList<T extends EntityData>({
 
     const [virtualizerHandle, setVirtualizerHandle] =
       createSignal<VirtualizerHandle>();
-    const cacheKey = createMemo(() => (id ? `list-cache-${id}` : null));
-
-    // Load cached scroll position and cache snapshot
-    const cachedData = createMemo(() => {
-      const key = cacheKey();
-      if (!key) return null;
-
-      return cacheStore[key] || null;
-    });
+    // const cacheKey = createMemo(() => (id ? `list-cache-${id}` : null));
+    const cacheKey = `list-cache-${id}`;
 
     // Restore scroll position on mount
     const restoreScrollPosition = () => {
       const handle = virtualizerHandle();
-      const [cachedOffset, cachedCache] = cachedData() || [0, undefined];
+      const { offset: cachedOffset } = cacheMap.get(cacheKey) || { offset: 0 };
+      console.log('restoreScrollPosition', { cacheKey, handle, cachedOffset });
       if (handle && cachedOffset) {
+        console.log({ cachedOffset });
         handle.scrollTo(cachedOffset);
       }
     };
@@ -508,12 +511,12 @@ export function createUnifiedInfiniteList<T extends EntityData>({
 
     const cacheVirtualizerHandle = () => {
       const handle = virtualizerHandle();
-      const key = cacheKey();
+      const key = cacheKey;
 
       if (handle && key) {
-        const cacheData: [number, any] = [handle.scrollOffset, handle.cache];
-
-        setCacheStore(key, cacheData);
+        const { scrollOffset } = handle;
+        console.log('cacheVirtualizerHandle', { key, scrollOffset });
+        cacheMap.set(key, { offset: handle.scrollOffset });
       }
     };
     const { isPending } = useSuspenseContext();
@@ -528,6 +531,7 @@ export function createUnifiedInfiniteList<T extends EntityData>({
         isPending,
         (isPending, prevIsPending) => {
           if (isPending) {
+            console.log(cacheKey, 'cache BY SUSPENSE');
             cacheVirtualizerHandle();
           }
           if (isPending === false && prevIsPending === true) {
@@ -577,7 +581,7 @@ export function createUnifiedInfiniteList<T extends EntityData>({
                   data={sortedEntitiesStore}
                   class={`${LIST_WRAPPER} scrollbar-hidden`}
                   data-unified-entity-list
-                  bufferSize={computedOverscan()}
+                  bufferSize={computedOverscan() * 50}
                 >
                   {(entity, index) => {
                     if (
@@ -632,7 +636,3 @@ export function createUnifiedInfiniteList<T extends EntityData>({
     isLoading: debouncedIsLoading,
   };
 }
-
-const [cacheStore, setCacheStore] = createStore<Record<string, [number, any]>>(
-  {}
-);

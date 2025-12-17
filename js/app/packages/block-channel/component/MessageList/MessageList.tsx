@@ -682,7 +682,7 @@ export function MessageList(props: MessageListProps) {
               itemSize={BASE_ITEM_SIZE}
               data-channel-message-list
               data={rows() ?? []}
-              bufferSize={10}
+              bufferSize={10 * BASE_ITEM_SIZE}
               keepMounted={keepMountedIndices()}
               onScroll={handleScroll}
               onScrollEnd={() => {
