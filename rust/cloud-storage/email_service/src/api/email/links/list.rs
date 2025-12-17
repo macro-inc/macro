@@ -53,6 +53,9 @@ pub struct QueryParams {
     get,
     tag = "Links",
     path = "/email/links",
+    params(
+        ("include_signature" = Option<bool>, Query, description = "If the user's gmail signature should be included in the response. Defaults to false."),
+    ),
     operation_id = "list_links",
     responses(
             (status = 200, body=ListLinksResponse),
