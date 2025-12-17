@@ -1,12 +1,12 @@
 import type { SharePermissionV2ChannelSharePermissions } from '@service-storage/generated/schemas/sharePermissionV2ChannelSharePermissions';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
+import { createEffect, createMemo, createSignal, onMount, Show } from 'solid-js';
 import { useChannelMarkdownArea } from '@block-channel/component/MarkdownArea';
 import { TrackingEvents } from '@coparse/analytics/src/types/TrackingEvents';
 import { useBlockAliasedName, useBlockId, useBlockName } from '@core/block';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
-import { createEffect, createMemo, createSignal, onMount, Show } from 'solid-js';
-import { RecipientSelector } from '@core/component/RecipientSelector';
 import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
+import { RecipientSelector } from '@core/component/RecipientSelector';
 import { blockNameToItemType } from '@service-storage/client';
 import { useSendMessageToPeople } from '@core/util/channels';
 import { getDestinationFromOptions } from './NewMessage';
@@ -27,9 +27,9 @@ interface ForwardToChannelProps {
   projectId?: string;
   name: string;
   ref?: (ref: {
-    handleSubmit: () => void;
     setSubmitAccessLevel: (level: AccessLevel | null) => void;
     getSubmitAccessLevel: () => AccessLevel | null;
+    handleSubmit: () => void;
   }) => void;
 }
 
@@ -193,9 +193,9 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
   onMount(() => {
     if (props.ref) {
       props.ref({
-        handleSubmit,
+        getSubmitAccessLevel: submitAccessLevel,
         setSubmitAccessLevel,
-        getSubmitAccessLevel: submitAccessLevel
+        handleSubmit
       });
     }
   });

@@ -1,14 +1,12 @@
 import { createEffect, createMemo, createResource, createSignal, For, Match, onCleanup, onMount, Show, Switch } from 'solid-js';
 import { blockNameToItemType, type ItemType, storageServiceClient } from '@service-storage/client';
 import PaperPlaneRight from '@phosphor-icons/core/fill/paper-plane-right-fill.svg?component-solid';
-import { TextButton } from '@core/component/TextButton';
 import { createBlockEffect, createBlockResource, useBlockId, useBlockName} from '@core/block';
 import { isErr, isOk, type MaybeError, type MaybeResult } from '@core/util/maybeResult';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
+import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { TrackingEvents } from '@coparse/analytics/src/types/TrackingEvents';
 import { beveledCorners } from '../../../block-theme/signals/themeSignals';
-import { MENU_ITEM_CLASS } from '../Menu';
-import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { blockEditPermissionEnabledSignal } from '@core/signal/load';
@@ -16,6 +14,7 @@ import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import { useIsDocumentOwner } from '@core/signal/permissions';
 import { createCallback } from '@solid-primitives/rootless';
 import { commsServiceClient } from '@service-comms/client';
+import { TextButton } from '@core/component/TextButton';
 import clickOutside from '@core/directive/clickOutside';
 import IconEyeSlash from '@icon/regular/eye-slash.svg';
 import { ForwardToChannel } from '../ForwardToChannel';
@@ -24,20 +23,20 @@ import { registerHotkey } from '@core/hotkey/hotkeys';
 import { UserIcon } from '@core/component/UserIcon';
 import { withAnalytics } from '@coparse/analytics';
 import { Permissions } from '../SharePermissions';
+import { DialogWrapper } from '../DialogWrapper';
 import { useIsAuthenticated } from '@core/auth';
 import IconGlobe from '@icon/regular/globe.svg';
 import IconUsers from '@icon/regular/users.svg';
 import { useUserId } from '@service-gql/client';
 import { openLoginModal } from './LoginButton';
-import { DialogWrapper } from '../DialogWrapper';
 import { ClippedPanel } from '../ClippedPanel';
 import { useNavigate } from '@solidjs/router';
 import IconLink from '@icon/regular/link.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { TOKENS } from '@core/hotkey/tokens';
 import CloseIcon from '@icon/regular/x.svg';
-
 import { IconButton } from '../IconButton';
+import { MENU_ITEM_CLASS } from '../Menu';
 import User from '@icon/regular/user.svg';
 import { idToEmail } from '@core/user';
 import { toast } from '../Toast/Toast';
@@ -109,10 +108,9 @@ export function ShareModal(props: ShareModalProps) {
   const [submitAccessLevel, setSubmitAccessLevel] = createSignal<AccessLevel | null>(null);
   const [forwardToChannelRef, setForwardToChannelRef] = createSignal<any>(null);
 
-  // Sync submitAccessLevel with ForwardToChannel's initial value
   createEffect(() => {
     const ref = forwardToChannelRef();
-    if (ref && ref.getSubmitAccessLevel) {
+    if(ref && ref.getSubmitAccessLevel){
       const currentLevel = ref.getSubmitAccessLevel();
       setSubmitAccessLevel(currentLevel);
     }
@@ -431,9 +429,9 @@ export function ShareModal(props: ShareModalProps) {
                     channelSharePermissions: recipients(),
                   }}
                   onSubmit={() => props.setIsSharePermOpen(false)}
+                  ref={setForwardToChannelRef}
                   refetch={refetch}
                   name={props.name}
-                  ref={setForwardToChannelRef}
                 />
 
               <Show when={recipients() || props.owner}>
