@@ -1,4 +1,3 @@
-import { useBlockId } from '@core/block';
 import { IconButton } from '@core/component/IconButton';
 import { useUnfurl } from '@core/signal/unfurl';
 import DeleteIcon from '@icon/bold/x-bold.svg';
@@ -8,7 +7,7 @@ import { proxyResource } from '@service-unfurl/client';
 import type { Component } from 'solid-js';
 import { createSignal, For, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import { saveEntityProperty } from '../../api';
+import { usePropertiesContext } from '../../context/PropertiesContext';
 import type { Property } from '../../types';
 import {
   extractDomain,
@@ -27,7 +26,7 @@ type LinkValueProps = {
 };
 
 export const LinkValue: Component<LinkValueProps> = (props) => {
-  const blockId = useBlockId();
+  const { saveHandler } = usePropertiesContext();
   const [isAdding, setIsAdding] = createSignal(false);
   const [inputValue, setInputValue] = createSignal('');
   const [error, setError] = createSignal<string | null>(null);
@@ -80,15 +79,10 @@ export const LinkValue: Component<LinkValueProps> = (props) => {
         newValues = [normalized];
       }
 
-      const result = await saveEntityProperty(
-        blockId,
-        props.entityType,
-        props.property,
-        {
-          valueType: 'LINK',
-          values: newValues,
-        }
-      );
+      const result = await saveHandler.saveProperty(props.property, {
+        valueType: 'LINK',
+        values: newValues,
+      });
 
       if (result.ok) {
         cancelAdding();
@@ -111,15 +105,10 @@ export const LinkValue: Component<LinkValueProps> = (props) => {
     try {
       const newValues = linkValues.filter((link: string) => link !== url);
 
-      const result = await saveEntityProperty(
-        blockId,
-        props.entityType,
-        props.property,
-        {
-          valueType: 'LINK',
-          values: newValues.length > 0 ? newValues : null,
-        }
-      );
+      const result = await saveHandler.saveProperty(props.property, {
+        valueType: 'LINK',
+        values: newValues.length > 0 ? newValues : null,
+      });
 
       if (result.ok) {
         props.onRefresh?.();

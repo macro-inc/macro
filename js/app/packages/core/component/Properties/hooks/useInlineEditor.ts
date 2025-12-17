@@ -1,8 +1,6 @@
-import { useBlockId, useMaybeBlockId } from '@core/block';
-import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { type Accessor, createSignal, type Setter } from 'solid-js';
-import { saveEntityProperty } from '../api';
 import { NUMBER_DECIMAL_PLACES } from '../constants';
+import { usePropertiesContext } from '../context/PropertiesContext';
 import type { Property, PropertyApiValues } from '../types';
 import { formatPropertyValue } from '../utils';
 import { ERROR_MESSAGES, handlePropertyError } from '../utils/errorHandling';
@@ -16,7 +14,6 @@ import { ERROR_MESSAGES, handlePropertyError } from '../utils/errorHandling';
  */
 export function useInlineEditor(
   property: Property,
-  entityType: EntityType,
   onSaved?: () => void
 ): {
   isEditing: Accessor<boolean>;
@@ -27,8 +24,7 @@ export function useInlineEditor(
   cancelEdit: () => void;
   save: () => Promise<void>;
 } {
-  const blockId = useMaybeBlockId();
-
+  const { saveHandler } = usePropertiesContext();
   const [isEditing, setIsEditing] = createSignal(false);
   const [inputValue, setInputValue] = createSignal('');
   const [isSaving, setIsSaving] = createSignal(false);
@@ -53,7 +49,7 @@ export function useInlineEditor(
   };
 
   const save = async () => {
-    if (isSaving() || !blockId) return;
+    if (isSaving()) return;
 
     const trimmedValue = inputValue().trim();
     const currentRawValue = getCurrentRawValue();
@@ -86,12 +82,7 @@ export function useInlineEditor(
         throw new Error(`Unsupported property type: ${property.valueType}`);
       }
 
-      const result = await saveEntityProperty(
-        blockId,
-        entityType,
-        property,
-        apiValues
-      );
+      const result = await saveHandler.saveProperty(property, apiValues);
 
       if (
         handlePropertyError(
