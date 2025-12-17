@@ -65,7 +65,7 @@ const ListEmailsToolResponse = (props: { results: ListEmailsResult[] }) => {
           <div class="max-h-[480px] overflow-hidden">
             <VList
               data={results()}
-              overscan={5}
+              bufferSize={5 * 32}
               itemSize={32}
               style={{
                 height: `${Math.min(results().length * 32, 480)}px`,

@@ -153,7 +153,7 @@ export function AttachMenu(props: AttachMenuProps) {
               >
                 <VList
                   data={rankedHistory()}
-                  overscan={10}
+                  bufferSize={10 * 40}
                   itemSize={40}
                   style={{ height: '100%', contain: 'content' }}
                 >

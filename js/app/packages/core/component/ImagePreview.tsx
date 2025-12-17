@@ -13,7 +13,6 @@ import { Dialog } from '@kobalte/core/dialog';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import Panzoom from '@panzoom/panzoom';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
-import { commsServiceClient } from '@service-comms/client';
 import { storageServiceClient } from '@service-storage/client';
 import { fetchBinary } from '@service-storage/util/fetchBinary';
 import { createEffect, createSignal, onCleanup, Show } from 'solid-js';
@@ -26,11 +25,7 @@ export type ImagePreviewProps = {
   id: string;
   variant: 'small' | 'dynamic';
   square?: boolean;
-  channelId?: string;
-  messageId?: string;
-  attachmentId?: string;
-  isCurrentUser: boolean;
-  content?: string;
+  onDelete?: () => void;
   isContext?: boolean;
   isDss?: boolean;
   onError?: (err: any) => void;
@@ -133,23 +128,8 @@ export function ImagePreview(props: ImagePreviewProps) {
     }
   };
 
-  const showDeleteMediaButton = () => {
-    return (
-      props.channelId &&
-      props.messageId &&
-      props.attachmentId &&
-      props.isCurrentUser
-    );
-  };
-
-  const handleDeleteChannelMedia = async () => {
-    if (!props.channelId || !props.messageId || !props.attachmentId) return;
-    await commsServiceClient.patchMessage({
-      channel_id: props.channelId,
-      message_id: props.messageId,
-      content: props.content,
-      attachment_ids_to_delete: [props.attachmentId],
-    });
+  const handleDelete = () => {
+    props.onDelete?.();
   };
 
   const handleMouseMove = () => {
@@ -296,12 +276,12 @@ export function ImagePreview(props: ImagePreviewProps) {
                     icon={DownloadIcon}
                     onClick={downloadImage}
                   />
-                  <Show when={showDeleteMediaButton()}>
+                  <Show when={props.onDelete}>
                     <MenuSeparator />
                     <MenuItem
                       text="Delete image"
                       icon={TrashIcon}
-                      onClick={handleDeleteChannelMedia}
+                      onClick={handleDelete}
                     />
                   </Show>
                 </DropdownMenuContent>

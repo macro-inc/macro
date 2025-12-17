@@ -458,7 +458,7 @@ export function EntityWithEverything(
       const isLikelyEmail = (value?: string) =>
         typeof value === 'string' && value.includes('@');
 
-      const combinedParticipantFirstNames = createMemo(() => {
+      const combinedParticipantNames = createMemo(() => {
         if (props.entity.type !== 'email') return [];
         const me = userEmail();
         if (
@@ -475,15 +475,14 @@ export function EntityWithEverything(
           const macroDisplayName = useDisplayName(
             emailToId(participant.email)
           )[0]?.();
-          const macroFirstName = macroDisplayName?.split(' ')[0];
-          const participantFirstName = participant.name?.split(' ')[0] ?? '';
-          if (macroFirstName && !isLikelyEmail(macroFirstName)) {
-            namesSet.add(macroFirstName);
+          const participantFullName = participant.name ?? '';
+          if (macroDisplayName && !isLikelyEmail(macroDisplayName)) {
+            namesSet.add(macroDisplayName);
           } else if (
-            participantFirstName &&
-            !isLikelyEmail(participantFirstName)
+            participantFullName &&
+            !isLikelyEmail(participantFullName)
           ) {
-            namesSet.add(participantFirstName);
+            namesSet.add(participantFullName);
           } else {
             const emailName = participant.email.split('@')[0];
             namesSet.add(emailName);
@@ -493,10 +492,13 @@ export function EntityWithEverything(
       });
 
       const displayedNames = () => {
-        const names = combinedParticipantFirstNames();
+        const names = combinedParticipantNames();
         if (!names || names.length === 0) return undefined;
-        if (names.length <= 3) return names.join(', ');
-        return `${names[0]} .. ${names[names.length - 2]}, ${names[names.length - 1]}`;
+        if (names.length === 1) return names[0];
+        // For multiple participants, use first names only
+        const firstNames = names.map((name) => name.split(' ')[0]);
+        if (firstNames.length <= 3) return firstNames.join(', ');
+        return `${firstNames[0]} .. ${firstNames[firstNames.length - 2]}, ${firstNames[firstNames.length - 1]}`;
       };
 
       const isSearch = () => isSearchEntity(props.entity);
