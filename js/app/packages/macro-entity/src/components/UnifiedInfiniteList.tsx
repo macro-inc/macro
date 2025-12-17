@@ -15,7 +15,6 @@ import {
   on,
   onCleanup,
   type Setter,
-  Show,
   Switch,
   untrack,
 } from 'solid-js';
@@ -456,13 +455,11 @@ export function createUnifiedInfiniteList<T extends EntityData>({
 
     // stable empty state
     const entityCount = createMemo(() => sortedEntities().length);
-    const [showEmptyState, setShowEmptyState] = createSignal<
-      boolean | undefined
-    >();
-    const [loadFinished, setLoadFinished] = createSignal<boolean | undefined>();
+    const [showEmptyState, setShowEmptyState] = createSignal<boolean>(false);
+    const [loadFinished, setLoadFinished] = createSignal<boolean>(false);
     createEffect(() => {
       if (entityCount() === 0) {
-        setLoadFinished(undefined);
+        setLoadFinished(false);
         let count = 0;
         const timeoutId = setInterval(() => {
           const countExceeded = ++count > 10;
@@ -492,14 +489,12 @@ export function createUnifiedInfiniteList<T extends EntityData>({
 
     return (
       <Switch>
-        <Match when={showEmptyState() === undefined || showEmptyState()}>
-          <Show when={showEmptyState()} fallback={<div />}>
-            <EmptyState
-              viewId={props.viewId}
-              search={!!props.searchText}
-              hasRefinementsFromBase={props.hasRefinementsFromBase}
-            />
-          </Show>
+        <Match when={showEmptyState()}>
+          <EmptyState
+            viewId={props.viewId}
+            search={!!props.searchText}
+            hasRefinementsFromBase={props.hasRefinementsFromBase}
+          />
         </Match>
         <Match when={true}>
           <div class="flex size-full relative" ref={setListRef}>
