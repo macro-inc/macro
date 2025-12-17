@@ -345,7 +345,7 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
                 access_bool_query.filter(filter_bool_query);
 
                 // Only search on the provided index
-                access_bool_query.must(QueryType::term("_index", T::ENTITY_INDEX.as_ref()));
+                access_bool_query.filter(QueryType::term("_index", T::ENTITY_INDEX.as_ref()));
 
                 Some(access_bool_query)
             }
@@ -372,11 +372,11 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
 
                 match T::ENTITY_INDEX {
                     SearchEntityType::Projects => {
-                        bool_query.must(QueryType::term("_index", SearchIndex::Projects.as_ref()));
+                        bool_query.filter(QueryType::term("_index", SearchIndex::Projects.as_ref()));
                     }
                     _ => {
-                        bool_query.must(QueryType::term("_index", SearchIndex::Names.as_ref()));
-                        bool_query.must(QueryType::term("entity_type", T::ENTITY_INDEX.as_ref()));
+                        bool_query.filter(QueryType::term("_index", SearchIndex::Names.as_ref()));
+                        bool_query.filter(QueryType::term("entity_type", T::ENTITY_INDEX.as_ref()));
                     }
                 }
 
