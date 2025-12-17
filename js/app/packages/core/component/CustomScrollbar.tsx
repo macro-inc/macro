@@ -1,10 +1,12 @@
+import { debounce } from '@solid-primitives/scheduled';
 import { createEffect, createSignal, onCleanup, Show } from 'solid-js';
 
 interface CustomScrollbarProps {
   scrollContainer: () => HTMLElement | undefined;
   class?: string;
-  label?: string;
-  showLabel?: boolean;
+  getLabel?: (offset: number) => string | undefined;
+  /** How long a label is visible for. Set to `Infinity` to keep the label visible at all times * */
+  labelVisibilityDebounceMs?: number;
   labelClass?: string;
   enabled?: boolean;
   reverse?: boolean;
@@ -26,6 +28,16 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
   const [scrollStartTop, setScrollStartTop] = createSignal(0);
   const [scrollVelocity, setScrollVelocity] = createSignal(0);
   const [isHovering, setIsHovering] = createSignal(false);
+
+  const [scrollLabelVisible, setScrollLabelVisible] = createSignal(
+    props.labelVisibilityDebounceMs === Infinity
+  );
+
+  const debouncedHideScrollLabel = debounce(
+    () => setScrollLabelVisible(false),
+    props.labelVisibilityDebounceMs ?? 300
+  );
+
   let lastScrollTop = 0;
   let lastScrollTime = Date.now();
   let velocityTimeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -36,9 +48,7 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
 
     const { scrollTop, scrollHeight, clientHeight } = container;
 
-    // scrollTop is negative when reversed so adding to scrollHeight will
-    // set the scrollTop to be the total scrollable space - the current scroll position
-    setScrollTop(props.reverse ? scrollTop + scrollHeight : scrollTop);
+    setScrollTop(scrollTop);
     setScrollHeight(scrollHeight);
     setClientHeight(clientHeight);
   };
@@ -62,8 +72,16 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
 
     if (maxScroll <= 0) return 0;
     const thumbH = thumbHeight();
-    return (scrollTop() / maxScroll) * (containerHeight - thumbH);
+
+    // scrollTop is negative when reversed so adding to scrollHeight will
+    // set the scrollTop to be the total scrollable space - the current scroll position
+    const scrollOffset = props.reverse
+      ? scrollTop() + scrollHeight()
+      : scrollTop();
+
+    return (scrollOffset / maxScroll) * (containerHeight - thumbH);
   };
+
   const isVisible = () => scrollHeight() > clientHeight();
 
   // Handle scroll events
@@ -88,6 +106,11 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
       lastScrollTime = now;
 
       setScrollVelocity(velocity);
+
+      if (props.labelVisibilityDebounceMs !== Infinity) {
+        setScrollLabelVisible(true);
+        debouncedHideScrollLabel();
+      }
 
       // Gradually reduce velocity - slower fade out
       if (velocityTimeoutId) clearTimeout(velocityTimeoutId);
@@ -225,15 +248,15 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
           }}
           onMouseDown={handleMouseDown}
         />
-        <Show when={props.label}>
+        <Show when={props.getLabel}>
           <div
             class={`absolute right-[calc(100%+8px)] -translate-y-1/2 whitespace-nowrap font-mono text-sm text-accent pointer-events-none select-none drop-shadow transition-opacity duration-200 ease-out ${props.labelClass || ''}`}
             style={{
               top: `${thumbTop() + thumbHeight() / 2}px`,
-              opacity: props.showLabel ? 1 : 0,
+              opacity: scrollLabelVisible() ? 1 : 0,
             }}
           >
-            {props.label}
+            {props.getLabel?.(scrollHeight() + scrollTop() + thumbTop())}
           </div>
         </Show>
       </div>

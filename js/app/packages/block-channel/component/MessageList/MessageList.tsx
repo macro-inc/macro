@@ -1,4 +1,3 @@
-import { SplitLayoutContext } from '@app/component/split-layout/context';
 import {
   COLLAPSED_THREAD_INDEX_CUTOFF,
   TARGET_MESSAGE_ACTIVE_TIME,
@@ -39,12 +38,11 @@ import {
   mapArray,
   on,
   onCleanup,
+  onMount,
   type Setter,
   Show,
   Switch,
   untrack,
-  useContext,
-  onMount,
 } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
@@ -121,8 +119,7 @@ export function MessageList(props: MessageListProps) {
   const [scrollContainerRef, setScrollContainerRef] = createSignal<
     HTMLDivElement | undefined
   >();
-  const [scrollHintLabel, setScrollHintLabel] = createSignal<string>();
-  const [isScrollHintVisible, setIsScrollHintVisible] = createSignal(false);
+
   const [newIndicatorShown, setNewIndicatorShown] = createSignal<number>();
   const [hasUserScrolled, setHasUserScrolled] = createSignal(false);
   const [messageListContext, setMessageListContext] =
@@ -177,33 +174,20 @@ export function MessageList(props: MessageListProps) {
 
   const isActiveTargetMessage = createSelector(activeTargetMessageId);
 
-  let scrollTimeoutId: ReturnType<typeof setTimeout> | undefined;
-  let scrollHintTimeoutId: ReturnType<typeof setTimeout> | undefined;
-
-  const updateScrollHint = () => {
+  const getScrollHint = (offset: number) => {
     if (!hasUserScrolled()) return;
     const handle = virtualHandle();
     const list = props.orderedMessages();
     if (!handle || !list || list.length === 0) return;
 
-    const endIndex = handle.findItemIndex(handle.scrollOffset);
+    const endIndex = handle.findItemIndex(offset);
     if (endIndex === undefined) return;
 
-    const index = clampIndex(normalizeIndex(endIndex), 0, list.length - 1);
+    const index = clampIndex(endIndex, 0, list.length - 1);
     const message = list[index];
     const label = toScrollHintDate(message?.created_at);
 
-    if (!label) return;
-
-    if (scrollHintTimeoutId) {
-      clearTimeout(scrollHintTimeoutId);
-    }
-
-    setScrollHintLabel(label);
-    setIsScrollHintVisible(true);
-    scrollHintTimeoutId = setTimeout(() => {
-      setIsScrollHintVisible(false);
-    }, 300);
+    return label;
   };
 
   /**
@@ -222,7 +206,6 @@ export function MessageList(props: MessageListProps) {
       forceBottom ||
       ((!target || delta > TARGET_MESSAGE_ACTIVE_TIME) && isNearBottom())
     ) {
-      if (scrollTimeoutId) clearTimeout(scrollTimeoutId);
       const lastIndex = 0;
       virtualHandle()?.scrollToIndex(lastIndex, {
         align: 'end',
@@ -252,8 +235,6 @@ export function MessageList(props: MessageListProps) {
         threadExpanded: true,
       }));
     }
-
-    if (scrollTimeoutId) clearTimeout(scrollTimeoutId);
 
     setTargetMessageActive(true);
     virtualHandle()?.scrollToIndex(normalizeIndex(index), {
@@ -552,7 +533,6 @@ export function MessageList(props: MessageListProps) {
   // Handle vlistscroll events
   const handleScroll = () => {
     if (!initialScrollComplete()) return;
-    updateScrollHint();
 
     const nearBottom = checkIfNearBottom();
     setIsNearBottom(nearBottom);
@@ -596,12 +576,6 @@ export function MessageList(props: MessageListProps) {
   const showJumpToUnviewedMessages = createMemo(
     () => !dismissUnviewedMessages() && !!unviewedMessages()?.length
   );
-
-  onCleanup(() => {
-    if (scrollHintTimeoutId) {
-      clearTimeout(scrollHintTimeoutId);
-    }
-  });
 
   const markUserScrolled = () => {
     if (!hasUserScrolled()) {
@@ -752,8 +726,7 @@ export function MessageList(props: MessageListProps) {
         <CustomScrollbar
           reverse
           scrollContainer={scrollContainerRef}
-          label={scrollHintLabel()}
-          showLabel={isScrollHintVisible()}
+          getLabel={getScrollHint}
           enabled={hasUserScrolled()}
         />
       </div>
