@@ -400,7 +400,7 @@ export function ShareModal(props: ShareModalProps) {
                 />
 
               <Show when={recipients() || props.owner}>
-                <div class="pt-0.5 pb-2 pl-0.5 font-medium text-ink text-md select-none">
+                <div class="font-medium text-ink text-md select-none">
                   Share Recipients
                 </div>
                 <div class="flex w-full h-fit max-h-[120px] overflow-y-auto">
@@ -409,7 +409,7 @@ export function ShareModal(props: ShareModalProps) {
 
                       <Show when={props.owner}>
                         <tr class="rounded-md">
-                          <td class="py-1 w-full min-w-0">
+                          <td class="w-full min-w-0">
                             <div class="flex items-center gap-2 overflow-hidden">
                               <UserIcon
                                 isDeleted={false}
@@ -433,7 +433,7 @@ export function ShareModal(props: ShareModalProps) {
                             <tr class="hover:bg-hover rounded-md hover-transition-bg">
                               <td
                                 onClick={() => navigateToChannel(recipient.channel_id)}
-                                class="py-1 w-full min-w-0 cursor-pointer"
+                                class="w-full min-w-0 cursor-pointer"
                               >
                                 <div class="flex items-center gap-2 overflow-hidden">
                                   <Switch>
@@ -471,14 +471,10 @@ export function ShareModal(props: ShareModalProps) {
               </Show>
 
               <Show when={props.userPermissions === Permissions.OWNER}>
-                <div class="flex flex-col gap-2 mb-1">
+                <div class="flex gap-2">
                   <div class="font-medium text-ink text-base select-none">
-                    Public link sharing
+                    Public Link
                   </div>
-                  <div class="font-medium text-ink-muted text-sm mb-2">
-                    {publicAccessLevel() ? 'Anyone with the link can access' : 'Only shared users have access'}
-                  </div>
-
                   <ShareOptions
                     permissions={publicAccessLevel() ?? null}
                     setPermissions={setPublicPermissions}

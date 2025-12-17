@@ -191,7 +191,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
 
   return (
     <Show when={isAuthenticated()}>
-      <div class="flex flex-col gap-1.5 p-0.5 w-full">
+      <div class="flex flex-col w-full">
         <RecipientSelector<'user' | 'contact' | 'channel'>
           placeholder="To: enter emails or group name"
           setSelectedOptions={setSelectedOptions}
@@ -199,8 +199,11 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
           triedToSubmit={triedToSubmit}
           options={destinationOptions}
           triggerMode="input"
+          noBrackets
+          hideBorder
+          noPadding
         />
-        <div class="flex flex-col bg-input shadow-[inset_0_2px_20px_rgba(0,0,0,0.015)] border border-edge w-full min-h-[60px] sm:min-h-[80px] max-h-[150px] overflow-y-auto">
+        <div class="flex flex-col w-full min-h-[60px] sm:min-h-[80px] max-h-[150px] overflow-y-auto border-t-1 border-edge-muted/50">
           <div
             class="flex-1 px-2.5 py-1 w-full text-sm"
             onClick={() => focusMarkdownArea()}
@@ -221,7 +224,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
           </div>
         </div>
         <div class="flex flex-col">
-          <div class={`mx-1.5 flex flex-row justify-between items-center align-middle h-fit ${canSendAsGroup() ? '' : 'opacity-50'}`}>
+          <div class={`flex flex-row justify-between items-center align-middle h-fit ${canSendAsGroup() ? '' : 'opacity-50'}`}>
             <div class="flex flex-col gap-0.5">
               <div class="font-sm text-ink-muted text-xs select-none">
                 {'Send as group message'}
@@ -238,7 +241,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
               size="SM"
             />
           </div>
-          <div class="flex justify-between items-center gap-1 mt-1">
+          <div class="flex justify-between items-center gap-1">
             <div class="flex flex-row justify-start items-center gap-0 w-full h-8 cursor-default">
               <TextButton
                 onClick={handleSubmit}
