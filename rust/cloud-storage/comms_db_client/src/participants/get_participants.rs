@@ -1,4 +1,7 @@
 use anyhow::{Context, Result};
+use macro_user_id::cowlike::CowLike;
+use macro_user_id::user_id::MacroUserIdStr;
+use model::comms::ChannelId;
 use model::comms::ChannelParticipant;
 use model::comms::ParticipantRole;
 use sqlx::{Pool, Postgres};
@@ -9,8 +12,7 @@ pub async fn get_participants(
     db: &Pool<Postgres>,
     channel_id: &Uuid,
 ) -> Result<Vec<ChannelParticipant>, sqlx::Error> {
-    let participants = sqlx::query_as!(
-        ChannelParticipant,
+    let participants = sqlx::query!(
         r#"
         SELECT
             user_id,
@@ -24,6 +26,17 @@ pub async fn get_participants(
         "#,
         channel_id
     )
+    .try_map(|row| {
+        Ok(ChannelParticipant {
+            channel_id: ChannelId(row.channel_id),
+            user_id: macro_user_id::user_id::MacroUserIdStr::parse_from_str(&row.user_id)
+                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
+                .into_owned(),
+            role: row.role,
+            joined_at: row.joined_at,
+            left_at: row.left_at,
+        })
+    })
     .fetch_all(db)
     .await?;
 
@@ -56,8 +69,8 @@ pub async fn get_channel_participants_for_notification(
 pub async fn get_channel_participants_for_thread_id(
     db: &Pool<Postgres>,
     thread_id: &Uuid,
-) -> Result<Vec<String>> {
-    let participants: Vec<String> = sqlx::query!(
+) -> Result<Vec<MacroUserIdStr<'static>>> {
+    let participants: Vec<_> = sqlx::query!(
         r#"
         SELECT DISTINCT(m.sender_id) as id
         FROM comms_channel_participants cp
@@ -67,7 +80,11 @@ pub async fn get_channel_participants_for_thread_id(
         "#,
         thread_id
     )
-    .map(|participant| participant.id)
+    .try_map(|participant| {
+        Ok(MacroUserIdStr::parse_from_str(&participant.id)
+            .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
+            .into_owned())
+    })
     .fetch_all(db)
     .await?;
 
@@ -92,10 +109,18 @@ mod tests {
 
         assert_eq!(participants.len(), 4);
 
-        assert!(participants.contains(&"user1".to_string()));
-        assert!(participants.contains(&"user2".to_string()));
-        assert!(participants.contains(&"user3".to_string()));
-        assert!(participants.contains(&"user4".to_string()));
+        assert!(
+            participants.contains(&MacroUserIdStr::parse_from_str("macro|user1@test.com").unwrap())
+        );
+        assert!(
+            participants.contains(&MacroUserIdStr::parse_from_str("macro|user2@test.com").unwrap())
+        );
+        assert!(
+            participants.contains(&MacroUserIdStr::parse_from_str("macro|user3@test.com").unwrap())
+        );
+        assert!(
+            participants.contains(&MacroUserIdStr::parse_from_str("macro|user4@test.com").unwrap())
+        );
 
         Ok(())
     }

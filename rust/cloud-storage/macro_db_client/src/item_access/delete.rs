@@ -1,4 +1,5 @@
 use anyhow::Context;
+use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::{Postgres, Transaction};
 
 /// Deletes all user access records for a specific item
@@ -85,7 +86,7 @@ pub async fn delete_user_item_access(
 #[tracing::instrument(skip_all)]
 pub async fn delete_user_item_access_by_users_and_channel(
     executor: impl sqlx::Executor<'_, Database = Postgres>,
-    user_ids: &[String],
+    user_ids: &[MacroUserIdStr<'_>],
     item_id: &str,
     item_type: &str,
     granted_from_channel_id: uuid::Uuid,
@@ -93,6 +94,8 @@ pub async fn delete_user_item_access_by_users_and_channel(
     if user_ids.is_empty() {
         return Ok(0);
     }
+
+    let macro_ids: Vec<String> = user_ids.iter().map(|s| s.to_string()).collect();
 
     let result = sqlx::query!(
         r#"
@@ -102,7 +105,7 @@ pub async fn delete_user_item_access_by_users_and_channel(
           AND "item_type" = $3
           AND "granted_from_channel_id" = $4
         "#,
-        user_ids,
+        macro_ids.as_slice(),
         item_id,
         item_type,
         granted_from_channel_id,
