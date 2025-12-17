@@ -96,6 +96,10 @@ import {
   initializeEditorWithState,
   setEditorStateFromMarkdown,
 } from '@core/component/LexicalMarkdown/utils';
+import {
+  documentUploadToItem,
+  handleBasicMention,
+} from '@core/component/LexicalMarkdown/utils/mentionsUtils';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
 import {
@@ -139,8 +143,8 @@ import {
   type PeerIdValidator,
   peerIdPlugin,
 } from '@lexical-core';
+import { logger } from '@observability';
 import type { MarkdownRewriteOutput } from '@service-cognition/generated/tools/types';
-import { waitBulkUploadStatus } from '@service-connection/bulkUpload';
 import { fileExtension } from '@service-storage/util/filename';
 import { createCallback } from '@solid-primitives/rootless';
 import { debounce, throttle } from '@solid-primitives/scheduled';
@@ -153,13 +157,7 @@ import {
   registerInternalLayoutShiftListener,
 } from 'core/component/LexicalMarkdown/plugins/shared/utils';
 import { createMethodRegistration } from 'core/orchestrator';
-import {
-  $getRoot,
-  $getSelection,
-  $isElementNode,
-  type EditorState,
-} from 'lexical';
-
+import { $getRoot, $isElementNode, type EditorState } from 'lexical';
 import {
   type Accessor,
   createEffect,
@@ -313,48 +311,23 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
   };
 
   async function processInlineMediaFiles(files: File[]) {
-    let success = false;
     for (const file of files) {
       const ext = fileExtension(file.name);
       if (ext != null && IMAGE_EXTENSIONS_HEIC.includes(ext)) {
         const res = await addMediaFromFile(editor, file, 'image');
-        success = success && res.success;
+        if (!res.success) {
+          toast.failure('Invalid media attachment file(s)');
+        }
       } else if (ext != null && VIDEO_EXTENSIONS.includes(ext)) {
         const res = await addMediaFromFile(editor, file, 'video');
-        success = success && res.success;
+        if (!res.success) {
+          toast.failure('Invalid media attachment file(s)');
+        }
       }
     }
-    return success;
   }
 
-  async function insertMention(
-    documentId: string,
-    documentName: string,
-    blockName: string,
-    position?: ReturnType<typeof getDragDropPosition>
-  ) {
-    const mentionId = await trackMention(blockId, 'document', documentId);
-    editor.update(() => {
-      const mention = $createDocumentMentionNode({
-        documentId,
-        documentName,
-        blockName: blockName,
-        mentionUuid: mentionId,
-      });
-      if (position && position.key) {
-        if (position.position === 'before') {
-          $insertWrappedBefore(position.key, mention);
-        } else {
-          $insertWrappedAfter(position.key, mention);
-        }
-      } else {
-        $getSelection()?.insertNodes([mention]);
-      }
-      mention.selectEnd();
-    });
-  }
-
-  async function handleUploadEntriesForEditor(
+  async function onFilesReady(
     uploadEntries: UploadInput[],
     position?: ReturnType<typeof getDragDropPosition>
   ): Promise<void> {
@@ -379,68 +352,60 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
       }
     }
 
-    const processInlineMediaFilesSuccess =
-      await processInlineMediaFiles(mediaFiles);
-
-    // exit early if we can't process media files
-    if (!processInlineMediaFilesSuccess) {
-      toast.failure('Invalid media attachment file(s)');
-      return;
+    if (position) {
+      const { key, position: position_ } = position;
+      if (key !== null && position_ !== null) {
+        editor.dispatchCommand(SET_SELECTION_AT_INSERTION, [key, position_]);
+      }
     }
 
-    if (filesToUpload.length === 0) {
-      return;
-    }
+    await processInlineMediaFiles(mediaFiles);
+
+    if (filesToUpload.length === 0) return;
 
     const results = await uploadFiles(filesToUpload, forceDssRuleset);
 
-    const failedUploads: string[] = [];
-    const failedFolders: string[] = [];
-
     for (const result of results) {
-      if (result.failed) {
-        failedUploads.push(result.name);
-        continue;
-      }
+      if (result.failed) continue;
 
-      if (result.destination !== 'dss') {
-        continue;
-      }
+      if (result.destination !== 'dss') continue;
 
       if (result.type === 'document') {
         const blockName = fileTypeToBlockName(result.fileType, true);
         if (blockName) {
-          await insertMention(
-            result.documentId,
-            result.name,
-            blockName,
-            position
-          );
+          const item = await documentUploadToItem(result);
+          if (!item) {
+            toast.failure('Document upload failed or timed out');
+            logger.error('Document upload failed or timed out', {
+              cause: new Error(),
+            });
+            continue;
+          }
+          handleBasicMention(item, {
+            editor,
+            blockName: 'md',
+            blockId: blockId,
+            onDocumentMention: () => {},
+            disableMentionTracking: false,
+          });
         }
       } else if (result.type === 'folder') {
-        const projectId = await waitBulkUploadStatus(result.requestId);
-        if (projectId) {
-          await insertMention(projectId, result.name, 'project', position);
-        } else {
-          failedFolders.push(result.name);
+        const item = await documentUploadToItem(result);
+        if (!item) {
+          toast.failure('Folder upload failed or timed out');
+          logger.error('Folder upload failed or timed out', {
+            cause: new Error(),
+          });
+          continue;
         }
+        handleBasicMention(item, {
+          editor,
+          blockName: 'md',
+          blockId: blockId,
+          onDocumentMention: () => {},
+          disableMentionTracking: false,
+        });
       }
-    }
-
-    // Aggregate and show failure toasts
-    if (failedUploads.length > 0 || failedFolders.length > 0) {
-      const failures: string[] = [];
-      if (failedUploads.length > 0) {
-        failures.push(
-          `${failedUploads.length} file${failedUploads.length > 1 ? 's' : ''} failed to upload`
-        );
-      }
-      if (failedFolders.length > 0) {
-        failures.push(
-          `${failedFolders.length} folder${failedFolders.length > 1 ? 's' : ''} failed to upload`
-        );
-      }
-      toast.failure(failures.join('. '));
     }
   }
 
@@ -685,11 +650,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     .use(
       filePastePlugin({
         onPasteFilesAndDirs: (fileEntries, directories) =>
-          handleFileFolderDrop(
-            fileEntries,
-            directories,
-            handleUploadEntriesForEditor
-          ),
+          handleFileFolderDrop(fileEntries, directories, onFilesReady),
       })
     )
     .use(
@@ -1017,7 +978,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
           onDrop: (fileEntries, folderEntries, e) => {
             handleFileFolderDrop(fileEntries, folderEntries, (entries) => {
               const position = e ? getDragDropPosition(e, true) : undefined;
-              handleUploadEntriesForEditor(entries, position);
+              onFilesReady(entries, position);
             });
           },
         }}
