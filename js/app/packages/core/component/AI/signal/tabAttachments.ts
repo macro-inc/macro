@@ -184,7 +184,6 @@ export function useTabAttachments(): Accessor<ChatAttachmentWithName[]> {
       .filter((split) => split.content.type === 'email');
   });
 
-  console.log('requery');
   const emailQuery = useQuery(() => ({
     queryKey: [
       'tab-attachments',
@@ -192,7 +191,6 @@ export function useTabAttachments(): Accessor<ChatAttachmentWithName[]> {
       emailTabs().map((t) => t.content.id),
     ],
     queryFn: async () => {
-      console.log('requery');
       const eTabs = emailTabs();
       const threads = await Promise.allSettled(
         eTabs.map((email) =>
