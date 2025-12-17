@@ -13,6 +13,8 @@ import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 false && fileSelector;
 false && folderSelector;
 
+const EMPTY_STATE_HELP_DRAWER_TIMEOUT_MS = 2000;
+
 const DEFAULT_EMPTY_MESSAGE = 'No items to show.';
 
 function EmptyStateHelpDrawer(props: {
@@ -23,15 +25,20 @@ function EmptyStateHelpDrawer(props: {
   const {
     unifiedListContext: { setShowHelpDrawer },
   } = useSplitPanelOrThrow();
+
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+  // because the empty state can sometimes be mounted and unmounted rapidly, we need to
+  // ensure that the help drawer is only shown when this state is stable
   onMount(() => {
-    setShowHelpDrawer((prev) => new Set([...prev, props.helpDrawer]));
+    timeoutId = setTimeout(() => {
+      setShowHelpDrawer((prev) => new Set([...prev, props.helpDrawer]));
+    }, EMPTY_STATE_HELP_DRAWER_TIMEOUT_MS);
   });
   onCleanup(() => {
-    setShowHelpDrawer((prev) => {
-      const deleted = prev.delete(props.helpDrawer);
-      return deleted ? prev : new Set(prev);
-    });
+    clearTimeout(timeoutId);
   });
+
   return (
     <EmptyStateInner
       message={props.message}
