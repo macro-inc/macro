@@ -83,6 +83,16 @@ pub async fn process_macro_id(
                                 macro_id,
                                 e
                             );
+                        } else if err_str.contains("400") {
+                            println!(
+                                "Attachment upload got 400; skipping and continuing. filename: {}, provider_attachment_id: {}, provider_message_id: {}, index: {}, macro_id: {}, error: {:?}",
+                                attachment.filename.clone().unwrap_or("N/A".to_string()),
+                                attachment.provider_attachment_id,
+                                attachment.email_provider_id,
+                                index,
+                                macro_id,
+                                e
+                            );
                         } else {
                             panic!(
                                 "Failed to upload attachment - filename: {}, provider_attachment_id: {}, provider_message_id: {}, index: {}, macro_id: {}, error: {:?}",
