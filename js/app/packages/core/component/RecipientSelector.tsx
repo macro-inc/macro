@@ -431,7 +431,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
     >
       <Combobox.Control<CombinedRecipientItem>>
         {(state) => (
-          <div class="flex flex-wrap gap-1.5 max-h-[150px] overflow-y-auto text-ink">
+          <div class="flex flex-wrap gap-1.5 max-h-[150px] min-h-[40px] overflow-y-auto text-ink">
             <For each={state.selectedOptions()}>
               {(option) => {
                 return (
