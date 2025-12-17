@@ -35,8 +35,9 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
 
     const { scrollTop, scrollHeight, clientHeight } = container;
 
-    // console.log(container.scrollTop);
-    setScrollTop(scrollTop + (scrollHeight - thumbHeight()));
+    // scrollTop is negative when reversed so adding to scrollHeight will
+    // set the scrollTop to be the total scrollable space - the current scroll position
+    setScrollTop(scrollTop + scrollHeight);
     setScrollHeight(scrollHeight);
     setClientHeight(clientHeight);
   };
@@ -51,7 +52,7 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
   const thumbTop = () => {
     const containerHeight = clientHeight();
     const contentHeight = scrollHeight();
-    const maxScroll = contentHeight - containerHeight;
+    const maxScroll = contentHeight;
     if (maxScroll <= 0) return 0;
     const thumbH = thumbHeight();
     return (scrollTop() / maxScroll) * (containerHeight - thumbH);
