@@ -222,30 +222,29 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
               dontFocusOnMount
             />
           </div>
+
+          <Show when={canSendAsGroup()}>
+            <ToggleSwitch
+              switchRootClass={canSendAsGroup() ? '' : 'cursor-not-allowed'}
+              checked={sendAsGroupMessage() && canSendAsGroup()}
+              onChange={setSendAsGroupMessage}
+              disabled={!canSendAsGroup()}
+              label={'Send In Channel'}
+              falseLabel="FALSE"
+              trueLabel="TRUE"
+              size="SM"
+            />
+          </Show>
         </div>
         <div class="flex flex-col">
           <div class={"flex flex-row justify-between items-center align-middle min-h-[40px] px-2"}>
-            <Show when={canSendAsGroup()}>
-
-              <div class="font-sm text-ink-muted text-xs select-none">{'Send as group message'}</div>
-
-              <ToggleSwitch
-                checked={sendAsGroupMessage() && canSendAsGroup()}
-                onChange={setSendAsGroupMessage}
-                disabled={!canSendAsGroup()}
-                switchRootClass={canSendAsGroup() ? '' : 'cursor-not-allowed'}
-                trueLabel="ON"
-                falseLabel="OFF"
-                size="SM"
-              />
-            </Show>
 
             <Show when={props.submitPermissionInfo?.userPermissions === Permissions.OWNER}>
               <div class="w-32">
                 <ShareOptions
                   setPermissions={(accessLevel) => {setSubmitAccessLevel(accessLevel)}}
                   permissions={submitAccessLevel()}
-                  label='Share&nbsp;Permission'
+                  label='Permission'
                   hideNoAccess
                 />
               </div>
