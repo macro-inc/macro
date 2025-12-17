@@ -124,31 +124,31 @@ impl EmailQueryBuilder {
 
             // If link_ids are provided, add them to the query
             if !self.link_ids.is_empty() {
-                bool_query.must(QueryType::terms("link_id", self.link_ids.clone()));
+                bool_query.filter(QueryType::terms("link_id", self.link_ids.clone()));
             }
 
             if !self.sender.is_empty() {
                 // Create new query for senders
                 let senders_query = should_wildcard_field_query_builder("sender", &self.sender);
-                bool_query.must(senders_query);
+                bool_query.filter(senders_query);
             }
 
             if !self.cc.is_empty() {
                 let ccs_query = should_wildcard_field_query_builder("cc", &self.cc);
-                bool_query.must(ccs_query);
+                bool_query.filter(ccs_query);
             }
 
             if !self.bcc.is_empty() {
                 // Create new query for bccs
                 let bccs_query = should_wildcard_field_query_builder("bcc", &self.bcc);
-                bool_query.must(bccs_query);
+                bool_query.filter(bccs_query);
             }
 
             if !self.recipients.is_empty() {
                 // Create new query for recipients
                 let recipients_query =
                     should_wildcard_field_query_builder("recipients", &self.recipients);
-                bool_query.must(recipients_query);
+                bool_query.filter(recipients_query);
             }
 
             content_and_name_bool_queries.content_bool_query = Some(bool_query);

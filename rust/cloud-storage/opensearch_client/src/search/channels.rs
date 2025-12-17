@@ -121,17 +121,17 @@ impl ChannelMessageQueryBuilder {
 
             // Add thread_ids to must clause if provided
             if !self.thread_ids.is_empty() {
-                bool_query.must(QueryType::terms("thread_id", self.thread_ids.clone()));
+                bool_query.filter(QueryType::terms("thread_id", self.thread_ids.clone()));
             }
 
             // Add mentions to must clause if provided
             if !self.mentions.is_empty() {
-                bool_query.must(QueryType::terms("mentions", self.mentions.clone()));
+                bool_query.filter(QueryType::terms("mentions", self.mentions.clone()));
             }
 
             // Add sender_ids to must clause if provided
             if !self.sender_ids.is_empty() {
-                bool_query.must(QueryType::terms("sender_id", self.sender_ids.clone()));
+                bool_query.filter(QueryType::terms("sender_id", self.sender_ids.clone()));
             }
 
             content_and_name_bool_queries.content_bool_query = Some(bool_query);

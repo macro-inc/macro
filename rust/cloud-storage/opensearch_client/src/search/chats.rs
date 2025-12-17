@@ -99,7 +99,7 @@ impl ChatQueryBuilder {
             // Add role to must clause if provided
             if !self.role.is_empty() {
                 let should_query = should_wildcard_field_query_builder("role", &self.role);
-                bool_query.must(should_query);
+                bool_query.filter(should_query);
             }
 
             content_and_name_bool_queries.content_bool_query = Some(bool_query);
