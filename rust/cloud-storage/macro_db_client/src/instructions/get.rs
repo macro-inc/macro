@@ -102,7 +102,7 @@ mod tests {
     async fn test_get_instructions_document_nonexistent_user(
         pool: Pool<Postgres>,
     ) -> anyhow::Result<()> {
-        let nonexistent_user = MacroUserIdStr::parse_from_str("nonexistent|user@fake.com").unwrap();
+        let nonexistent_user = MacroUserIdStr::parse_from_str("macro|user@fake.com").unwrap();
 
         // Should return None for non-existent user
         let result = get_instructions_document(&pool, nonexistent_user).await?;

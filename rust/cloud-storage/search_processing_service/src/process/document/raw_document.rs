@@ -329,7 +329,7 @@ mod tests {
         let document_info = DocumentMetadata {
             document_id: "AAA".to_string(),
             document_version_id: 0,
-            owner: MacroUserIdStr::parse_from_str("fake|nobody@macro.com").unwrap(),
+            owner: MacroUserIdStr::parse_from_str("macro|nobody@macro.com").unwrap(),
             document_name: "test_document".to_string(),
             file_type: Some("md".to_string()),
             sha: None,

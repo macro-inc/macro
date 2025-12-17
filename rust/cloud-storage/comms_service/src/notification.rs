@@ -376,9 +376,9 @@ mod tests {
     fn sender_excluded_from_all_recipients() {
         let channel_id = Uuid::new_v4();
         let participants = vec![
-            participant("sender", channel_id),
-            participant("alice", channel_id),
-            participant("bob", channel_id),
+            participant("macro|sender@test.com", channel_id),
+            participant("macro|alice@test.com", channel_id),
+            participant("macro|bob@test.com", channel_id),
         ];
         let msg = message(
             channel_id,
@@ -547,10 +547,10 @@ mod tests {
         let channel_id = Uuid::new_v4();
         let thread_id = Uuid::new_v4();
         let participants = vec![
-            participant("sender", channel_id),
-            participant("alice", channel_id),
-            participant("bob", channel_id),
-            participant("charlie", channel_id),
+            participant("macro|sender@test.com", channel_id),
+            participant("macro|alice@test.com", channel_id),
+            participant("macro|bob@test.com", channel_id),
+            participant("macro|charlie@test.com", channel_id),
         ];
         let msg = message(
             channel_id,
@@ -560,12 +560,12 @@ mod tests {
             Some(thread_id),
         );
         let metadata = private_metadata();
-        let user_mentions = vec!["alice".to_string()];
+        let user_mentions = vec!["macro|alice@test.com".to_string()];
         let thread_participants = vec![
-            "sender".to_string(),
-            "alice".to_string(),
-            "bob".to_string(),
-            "charlie".to_string(),
+            "macro|sender@test.com".to_string(),
+            "macro|alice@test.com".to_string(),
+            "macro|bob@test.com".to_string(),
+            "macro|charlie@test.com".to_string(),
         ];
 
         let event = ChannelMessageEvent {
@@ -593,19 +593,19 @@ mod tests {
             .expect("should have reply notification");
 
         let recipients = reply.recipient_ids.as_ref().unwrap();
-        assert!(!recipients.contains(&"sender".to_string()));
-        assert!(!recipients.contains(&"alice".to_string()));
-        assert!(recipients.contains(&"bob".to_string()));
-        assert!(recipients.contains(&"charlie".to_string()));
+        assert!(!recipients.contains(&"macro|sender@test.com".to_string()));
+        assert!(!recipients.contains(&"macro|alice@test.com".to_string()));
+        assert!(recipients.contains(&"macro|bob@test.com".to_string()));
+        assert!(recipients.contains(&"macro|charlie@test.com".to_string()));
     }
 
     #[test]
     fn document_mentions_exclude_sender() {
         let channel_id = Uuid::new_v4();
         let participants = vec![
-            participant("sender", channel_id),
-            participant("alice", channel_id),
-            participant("bob", channel_id),
+            participant("macro|sender@test.com", channel_id),
+            participant("macro|alice@test.com", channel_id),
+            participant("macro|bob@test.com", channel_id),
         ];
         let msg = message(
             channel_id,
@@ -642,9 +642,9 @@ mod tests {
             .expect("should have document notification");
 
         let recipients = doc_notif.recipient_ids.as_ref().unwrap();
-        assert!(!recipients.contains(&"sender".to_string()));
-        assert!(recipients.contains(&"alice".to_string()));
-        assert!(recipients.contains(&"bob".to_string()));
+        assert!(!recipients.contains(&"macro|sender@test.com".to_string()));
+        assert!(recipients.contains(&"macro|alice@test.com".to_string()));
+        assert!(recipients.contains(&"macro|bob@test.com".to_string()));
     }
 
     #[test]
