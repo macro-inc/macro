@@ -1,7 +1,7 @@
 import { DatePicker } from '@core/component/DatePicker';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { type Component, createMemo } from 'solid-js';
-import { Portal, Show } from 'solid-js/web';
+import { Show } from 'solid-js/web';
 import { usePropertiesContext } from '../../context/PropertiesContext';
 import type { Property } from '../../types';
 import { useModalPosition } from '../../utils/position';
