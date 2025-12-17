@@ -12,10 +12,11 @@ import type {
 } from '@service-cognition/generated/schemas';
 import { emailClient } from '@service-email/client';
 import { useHistory } from '@service-storage/history';
+import { useQuery } from '@tanstack/solid-query';
 import type { SplitContent } from 'app/component/split-layout/layoutManager';
 import { globalSplitManager } from 'app/signal/splitLayout';
 import type { Accessor } from 'solid-js';
-import { createMemo, createResource } from 'solid-js';
+import { createMemo } from 'solid-js';
 
 type Item = ReturnType<ReturnType<typeof useHistory>>[number] | null;
 
@@ -183,48 +184,59 @@ export function useTabAttachments(): Accessor<ChatAttachmentWithName[]> {
       .filter((split) => split.content.type === 'email');
   });
 
-  const [emailAttachments] = createResource(emailTabs, async (eTabs) => {
-    const threads = await Promise.allSettled(
-      eTabs.map((email) =>
-        emailClient
-          .getThread({
-            thread_id: email.content.id,
-            limit: 1,
-          })
-          .then((r) => ({ id: email.content.id, result: r }))
-      )
-    ).then((threads) =>
-      threads.flatMap((r) => {
-        if (r.status === 'rejected') return [];
-        return isOk(r.value.result)
-          ? [
-              {
-                id: r.value.id,
-                thread: r.value.result[1],
-              },
-            ]
-          : [];
-      })
-    );
+  const emailQuery = useQuery(() => ({
+    queryKey: [
+      'tab-attachments',
+      'emails',
+      emailTabs().map((t) => t.content.id),
+    ],
+    queryFn: async () => {
+      const eTabs = emailTabs();
+      const threads = await Promise.allSettled(
+        eTabs.map((email) =>
+          emailClient
+            .getThread({
+              thread_id: email.content.id,
+              limit: 1,
+            })
+            .then((r) => ({ id: email.content.id, result: r }))
+        )
+      ).then((threads) =>
+        threads.flatMap((r) => {
+          if (r.status === 'rejected') return [];
+          return isOk(r.value.result)
+            ? [
+                {
+                  id: r.value.id,
+                  thread: r.value.result[1],
+                },
+              ]
+            : [];
+        })
+      );
 
-    const attachments: ChatAttachmentWithName[] = threads.flatMap((thread) => {
-      // :(
-      const subject = thread.thread.thread.messages[0]?.subject;
-      if (!subject) return [];
-      return [
-        {
-          attachmentType: 'email',
-          attachmentId: thread.id,
-          id: thread.id,
-          metadata: {
-            email_subject: subject,
-            type: 'email',
-          },
-        },
-      ];
-    });
-    return attachments;
-  });
+      const attachments: ChatAttachmentWithName[] = threads.flatMap(
+        (thread) => {
+          // :(
+          const subject = thread.thread.thread.messages[0]?.subject;
+          if (!subject) return [];
+          return [
+            {
+              attachmentType: 'email',
+              attachmentId: thread.id,
+              id: thread.id,
+              metadata: {
+                email_subject: subject,
+                type: 'email',
+              },
+            },
+          ];
+        }
+      );
+      return attachments;
+    },
+    enabled: emailTabs().length > 0,
+  }));
 
   const tabAttachments = createMemo(() => {
     const openTabs = tabs();
@@ -242,7 +254,7 @@ export function useTabAttachments(): Accessor<ChatAttachmentWithName[]> {
   const combinedAttachments = createMemo(() => {
     const tabs = tabAttachments();
     const existingAttachments = new Set(tabs.map((a) => a.attachmentId));
-    const queriedEmails = emailAttachments() ?? [];
+    const queriedEmails = emailQuery.isSuccess ? (emailQuery.data ?? []) : [];
     const newEmails = queriedEmails.filter(
       (e) => !existingAttachments.has(e.attachmentId)
     );

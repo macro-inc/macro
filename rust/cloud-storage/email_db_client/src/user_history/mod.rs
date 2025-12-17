@@ -44,6 +44,8 @@ pub async fn upsert_user_history(
 /// The "earliest" and "latest" messages are determined by:
 /// 1. Priority: Non-drafts with a valid `sent_at` take precedence over drafts (or messages without `sent_at`).
 /// 2. Sort: Chronological order of `sent_at` (or `updated_at` fallback).
+///
+/// Note: This will exclude any threads where the latest message is marked as TRASH
 #[tracing::instrument(skip(pool), err)]
 pub async fn get_thread_summary_info(
     pool: &PgPool,
@@ -67,7 +69,8 @@ pub async fn get_thread_summary_info(
                 earliest_msg.subject as "subject?",
                 l.macro_id,
                 latest_msg.sender as sender,
-                latest_msg.pretty_sender as "pretty_sender!"
+                latest_msg.pretty_sender as "pretty_sender!",
+                latest_msg.trash_label as trash_label
             FROM email_threads t
             LEFT JOIN email_user_history uh ON uh.thread_id = t.id AND uh.link_id = $1
             LEFT JOIN email_links l ON l.id = t.link_id
@@ -79,15 +82,20 @@ pub async fn get_thread_summary_info(
                     m2.sent_at,
                     m2.updated_at,
                     c.email_address as sender,
-                    COALESCE(c.name, c.email_address) as pretty_sender
+                    COALESCE(c.name, c.email_address) as pretty_sender,
+                    EXISTS(
+                        SELECT 1 
+                        FROM email_message_labels eml 
+                        JOIN email_labels el ON el.id = eml.label_id 
+                        WHERE eml.message_id = m2.id 
+                          AND el.provider_label_id = 'TRASH'
+                    ) as trash_label
                 FROM email_messages m2
                 LEFT JOIN email_contacts c ON c.id = m2.from_contact_id
                 WHERE m2.thread_id = t.id
                   AND m2.link_id = $1
                 ORDER BY
-                    -- 1. Priority: Non-drafts with valid sent_at come first (0), everything else is fallback (1)
                     (CASE WHEN m2.is_draft = false AND m2.sent_at IS NOT NULL THEN 0 ELSE 1 END) ASC,
-                    -- 2. Sort by time (Newest first)
                     COALESCE(m2.sent_at, m2.updated_at) DESC NULLS LAST
                 LIMIT 1
             ) latest_msg ON true
@@ -120,6 +128,11 @@ pub async fn get_thread_summary_info(
     let mut result = HashMap::new();
 
     for row in rows {
+        // If the latest message of the thread is in the trash, do not insert ThreadHistoryInfo.
+        // We don't want to include threads that are most likely in trash in the search results.
+        if row.trash_label.unwrap_or_default() {
+            continue;
+        }
         let summary_info = ThreadHistoryInfo {
             item_id: row.thread_id,
             user_id: row.macro_id,
