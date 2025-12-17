@@ -31,6 +31,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
+import { arrayEquals } from '@core/util/compareUtils';
 import { debouncedDependent } from '@core/util/debounce';
 import { fuzzyMatch } from '@core/util/fuzzy';
 import SearchIcon from '@icon/regular/magnifying-glass.svg?component-solid';
@@ -708,46 +709,73 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     setOptionalFilters(filterFns);
   });
 
-  const unifiedSearchIncludeArray = createMemo<UnifiedSearchIndex[]>(() => {
-    let types = entityTypeFilter();
-    // NOTE: empty array means search all
-    if (types.length === 0) types = [];
-    const includeArray: UnifiedSearchIndex[] = [];
-    for (const type of types) {
-      switch (type) {
-        case 'document':
-        case 'task':
-          includeArray.push('documents');
-          break;
-        case 'chat':
-          includeArray.push('chats');
-          break;
-        case 'channel':
-          includeArray.push('channels');
-          break;
-        case 'email':
-          includeArray.push('emails');
-          break;
-        case 'project':
-          includeArray.push('projects');
-          break;
+  const unifiedSearchIncludeArray = createMemo<UnifiedSearchIndex[]>(
+    () => {
+      let types = entityTypeFilter();
+      // NOTE: empty array means search all
+      if (types.length === 0) types = [];
+      const includeArray: UnifiedSearchIndex[] = [];
+      for (const type of types) {
+        switch (type) {
+          case 'document':
+          case 'task':
+            includeArray.push('documents');
+            break;
+          case 'chat':
+            includeArray.push('chats');
+            break;
+          case 'channel':
+            includeArray.push('channels');
+            break;
+          case 'email':
+            includeArray.push('emails');
+            break;
+          case 'project':
+            includeArray.push('projects');
+            break;
+        }
       }
+      return Array.from(new Set(includeArray));
+    },
+    [],
+    { equals: arrayEquals }
+  );
+
+  // accounts for task entity type filtering as "note" type files
+  const joinedFileTypeFilter = createMemo<string[]>(
+    () => {
+      let fileTypes = [];
+      if (entityTypeFilter().includes('task')) {
+        fileTypes.push('md');
+      }
+
+      if (entityTypeFilter().includes('document')) {
+        if (fileTypeFilter().length > 0) {
+          const documentFileTypes = fileTypeFilter().flatMap((fileType) => {
+            // not ideal but it works for most cases
+            if (fileType === 'code') return supportedExtensions;
+            return [fileType];
+          });
+          fileTypes.push(...documentFileTypes);
+        } else {
+          // if we have task + document and no file type filter, we want to include all file types
+          fileTypes = [];
+        }
+      }
+
+      return Array.from(new Set(fileTypes));
+    },
+    [],
+    {
+      equals: arrayEquals,
     }
-    return includeArray;
-  });
+  );
 
   const unifiedSearchFilters = createMemo<UnifiedSearchRequestFilters>(() => {
     let documentFilters: DocumentFilters | null = null;
-    if (fileTypeFilter().length > 0) {
-      const fileTypes = fileTypeFilter().flatMap((fileType) => {
-        // not ideal but it works for most cases
-        if (fileType === 'code') return supportedExtensions;
-        return [fileType];
-      });
-      documentFilters = {
-        file_types: fileTypes,
-      };
-    }
+    documentFilters = {
+      file_types: joinedFileTypeFilter(),
+    };
 
     let emailFilters: EmailFilters | null = null;
     if (shouldFilterEmails()) {
@@ -835,6 +863,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
             ? []
             : [GARBAGE_UUID],
         project_ids: view().viewType === 'project' ? [view().id] : [],
+        file_types: joinedFileTypeFilter(),
       },
       chat_filters: {
         chat_ids:
