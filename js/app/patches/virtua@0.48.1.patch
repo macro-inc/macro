@@ -1,0 +1,25 @@
+diff --git a/node_modules/virtua/.bun-tag-172fdc1cd9f249d3 b/.bun-tag-172fdc1cd9f249d3
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/node_modules/virtua/.bun-tag-69ffcae45e968edb b/.bun-tag-69ffcae45e968edb
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/node_modules/virtua/.bun-tag-dc314e50881f3a5e b/.bun-tag-dc314e50881f3a5e
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/node_modules/virtua/.bun-tag-eeedd702ea82f0a5 b/.bun-tag-eeedd702ea82f0a5
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/lib/solid/index.jsx b/lib/solid/index.jsx
+index 84788e713100b0e5a746bae3411a789002b42b8d..a62faf6f759e654aea303717fd18f9767428f7be 100644
+--- a/lib/solid/index.jsx
++++ b/lib/solid/index.jsx
+@@ -1069,7 +1069,7 @@ const createResizeObserver = (cb) => {
+             // https://www.w3.org/TR/resize-observer/#intro
+             (ro ||
+                 // https://bugs.chromium.org/p/chromium/issues/detail?id=1491739
+-                (ro = new (getCurrentWindow(getCurrentDocument(e)).ResizeObserver)(cb))).observe(e);
++                (ro = new window.ResizeObserver(cb))).observe(e);
+         },
+         _unobserve(e) {
+             ro.unobserve(e);
