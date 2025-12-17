@@ -4,9 +4,8 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use model_notifications::{
-    InviteToTeamMetadata, NotificationEntity, NotificationEvent, NotificationQueueMessage,
-};
+use model_entity::EntityType;
+use model_notifications::{InviteToTeamMetadata, NotificationEvent, NotificationQueueMessage};
 
 use crate::api::{
     context::ApiContext,
@@ -140,11 +139,10 @@ async fn notify_team_invite(
     };
 
     let notification_queue_message = NotificationQueueMessage {
-        notification_entity: NotificationEntity::new_team(team_invite_id.to_string()),
+        notification_entity: EntityType::Team.with_entity_string(team_invite_id.to_string()),
         notification_event: NotificationEvent::InviteToTeam(notification_metadata),
         sender_id: Some(invited_by.to_string()),
         recipient_ids: Some(vec![format!("macro|{normalized_email}")]),
-        is_important_v0: Some(false),
     };
 
     macro_notify_client

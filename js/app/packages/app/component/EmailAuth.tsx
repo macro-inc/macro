@@ -79,7 +79,7 @@ function EmailSignUp(props: EmailAuthParams) {
   const withAppPrefix = (path: string) => `/app${path}`;
 
   onMount(() => {
-    if (emailLinks.data && emailLinks.data?.length > 0) {
+    if (emailLinks.data && emailLinks.data.links.length > 0) {
       navigate(props.successPath);
       return;
     }

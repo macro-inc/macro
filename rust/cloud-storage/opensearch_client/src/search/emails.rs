@@ -188,8 +188,6 @@ pub(crate) struct EmailIndex {
     pub link_id: String,
     /// The user id of the email message
     pub user_id: String,
-    /// The updated at time of the email message
-    pub updated_at_seconds: i64,
     /// The subject of the email message
     pub subject: Option<String>,
     /// The sent at time of the email message

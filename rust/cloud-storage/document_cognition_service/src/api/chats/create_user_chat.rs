@@ -23,6 +23,7 @@ use macro_middleware::cloud_storage::ensure_access::{
 };
 use model::chat::NewChatAttachment;
 use model::{chat::AttachmentType, response::StringIDResponse, user::UserContext};
+use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::EditAccessLevel;
 use sqs_client::search::SearchQueueMessage;
 use tracing::Instrument;
@@ -105,7 +106,7 @@ pub async fn create_user_chat_v2(
     req: CreateChatRequest,
 ) -> Result<StringIDResponse, (StatusCode, String)> {
     let chat_name = req.name.unwrap_or(DEFAULT_CHAT_NAME.to_string());
-    let share_permission = macro_share_permissions::share_permission::create_new_share_permission();
+    let share_permission = SharePermissionV2::new_chat_share_permission();
 
     let attachment_token_count =
         futures::future::try_join_all(req.attachments.as_ref().into_iter().flatten().map(

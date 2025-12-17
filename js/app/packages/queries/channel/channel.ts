@@ -105,3 +105,9 @@ export function optimisticUpdateChannelName(
     }
   );
 }
+
+export function invalidateChannelWithID(channelID: string) {
+  queryClient.invalidateQueries({
+    queryKey: channelKeys.withID(channelID).queryKey,
+  });
+}

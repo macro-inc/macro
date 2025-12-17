@@ -16,12 +16,7 @@ use crate::{env::SENDER_ADDRESS, notification::context::QueueWorkerContext};
 pub async fn process_email_notifications(
     queue_worker_context: &QueueWorkerContext,
     notification: &NotificationWithRecipient,
-    user_ids: &[String],
 ) -> anyhow::Result<()> {
-    let user_ids = user_ids
-        .iter()
-        .map(|user_id| user_id.to_string())
-        .collect::<Vec<String>>();
     // Only include valid events we want to send emails for
     match notification.inner.notification_event.event_type() {
         // NotificationEventType::CloudStorageItemSharedUser => {}
@@ -53,7 +48,12 @@ pub async fn process_email_notifications(
 
     let sender_address = &*SENDER_ADDRESS;
 
-    let emails = filter_emails(queue_worker_context, notification, &user_ids).await?;
+    let emails = filter_emails(
+        queue_worker_context,
+        notification,
+        &[notification.recipient_id.as_ref().to_string()],
+    )
+    .await?;
 
     if emails.is_empty() {
         tracing::info!("no valid emails to send emails to");
@@ -77,7 +77,7 @@ pub async fn process_email_notifications(
 
         notification_db_client::channel_notification_email_sent::upsert::upsert_channel_notification_email_sent_bulk(
                 &queue_worker_context.db,
-                &notification.inner.notification_entity.event_item_id,
+                &notification.inner.notification_entity.entity_id,
                 &channel_invite_sent_user_ids,
             )
             .await.context("unable to upsert channel notification email sent")?;

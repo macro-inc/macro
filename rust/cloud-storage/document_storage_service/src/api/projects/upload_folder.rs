@@ -170,7 +170,7 @@ async fn upload_folder_handler_inner(
         }
     };
 
-    let share_permission = SharePermissionV2::default();
+    let share_permission = SharePermissionV2::new_project_share_permission();
 
     let mut transaction = match db.begin().await {
         Ok(transaction) => transaction,

@@ -11,6 +11,7 @@ use model::{
     response::{GenericErrorResponse, GenericResponse},
     user::UserContext,
 };
+use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::EditAccessLevel;
 use sqs_client::search::{SearchQueueMessage, project};
 use tracing::Instrument;
@@ -61,8 +62,7 @@ async fn create_project_v2(
     user_context: Extension<UserContext>,
     req: CreateProjectRequest,
 ) -> Result<Project, (StatusCode, String)> {
-    let share_permission =
-        macro_share_permissions::share_permission::create_new_project_share_permission();
+    let share_permission = SharePermissionV2::new_project_share_permission();
 
     let project = match macro_db_client::projects::create_project_v2(
         ctx.db.clone(),

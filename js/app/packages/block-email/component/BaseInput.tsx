@@ -18,7 +18,6 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { trackMention } from '@core/signal/mention';
 import { useDisplayName } from '@core/user';
-import { isErr } from '@core/util/maybeResult';
 import Spinner from '@icon/bold/spinner-gap-bold.svg';
 import ReplyAll from '@icon/regular/arrow-bend-double-up-left.svg';
 import Reply from '@icon/regular/arrow-bend-up-left.svg';
@@ -36,8 +35,8 @@ import {
   type DocumentMentionInfo,
 } from '@lexical-core';
 import { logger } from '@observability';
+import { useEmailLinksQuery } from '@queries/email/link';
 import { useSendMessageMutation } from '@queries/email/thread';
-import { emailClient } from '@service-email/client';
 import type {
   AttachmentMacro,
   MessageToSend,
@@ -151,6 +150,7 @@ export function BaseInput(props: {
     getOrInitEmailFormContext(props.replyingTo().db_id!)()
   );
   const blockId = useBlockId();
+  const emailLinksQuery = useEmailLinksQuery();
 
   const [bodyMacro, setBodyMacro] = createSignal<string>('');
   const [expandedRecipientsRef, setExpandedRecipientsRef] =
@@ -301,15 +301,23 @@ export function BaseInput(props: {
 
     let linkId: string | undefined = currentThread?.link_id;
     if (newMessage || !linkId) {
-      const maybeFallbackLinks = await emailClient.getLinks();
-      if (
-        isErr(maybeFallbackLinks) ||
-        maybeFallbackLinks[1].links.length === 0
-      ) {
+      if (emailLinksQuery.isPending) {
+        return false;
+      }
+
+      if (emailLinksQuery.isError) {
+        logger.error(
+          new Error('Failed to save email draft: could not load email links')
+        );
+        return false;
+      }
+
+      const linksData = emailLinksQuery.data;
+      if (!linksData || linksData.links.length === 0) {
         logger.error(new Error('Failed to save email draft: no links found'));
         return false;
       }
-      linkId = maybeFallbackLinks[1].links[0].id;
+      linkId = linksData.links[0].id;
     }
 
     const draftResponse = await saveEmailDraft({
@@ -422,13 +430,24 @@ export function BaseInput(props: {
 
     let linkId: string | undefined = currentThread?.link_id;
     if (newMessage || !linkId) {
-      const maybeFallbackLinks = await emailClient.getLinks();
-      if (isErr(maybeFallbackLinks) || maybeFallbackLinks[1].links.length < 1) {
-        toast.failure('Email failed to send');
+      if (emailLinksQuery.isPending) {
+        toast.alert('Loading email accounts...');
+        return;
+      }
+
+      if (emailLinksQuery.isError) {
+        toast.failure('Email failed to send: Could not load email accounts');
+        logger.error('Failed to load email links');
+        return;
+      }
+
+      const linksData = emailLinksQuery.data;
+      if (!linksData || linksData.links.length < 1) {
+        toast.failure('Email failed to send: No email account connected');
         logger.error('No links found');
         return;
       }
-      linkId = maybeFallbackLinks[1].links[0].id;
+      linkId = linksData.links[0].id;
     }
 
     const _editor = editor();

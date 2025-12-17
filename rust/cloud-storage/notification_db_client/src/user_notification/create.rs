@@ -6,17 +6,15 @@ pub async fn create_bulk_user_notifications(
     transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     notification_id: &Uuid,
     user_ids: &[String],
-    is_important_v0: bool,
 ) -> anyhow::Result<()> {
     sqlx::query!(
         r#"
-        INSERT INTO user_notification ("notification_id", "user_id", "is_important_v0") 
-        SELECT $1, user_id, $3
+        INSERT INTO user_notification ("notification_id", "user_id") 
+        SELECT $1, user_id
         FROM UNNEST($2::text[]) as user_id
         "#,
         notification_id,
         user_ids,
-        is_important_v0,
     )
     .execute(transaction.as_mut())
     .await?;
@@ -39,7 +37,6 @@ mod tests {
                 "macro|user2@user.com".to_string(),
                 "macro|user3@user.com".to_string(),
             ],
-            true,
         )
         .await?;
 

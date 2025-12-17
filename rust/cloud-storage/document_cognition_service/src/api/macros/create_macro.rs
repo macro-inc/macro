@@ -6,6 +6,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use model::{response::StringIDResponse, user::UserContext};
+use models_permissions::share_permission::SharePermissionV2;
 use sqlx::PgPool;
 
 #[utoipa::path(
@@ -38,8 +39,7 @@ async fn create_macro_v2(
     user_context: Extension<UserContext>,
     req: CreateMacroRequest,
 ) -> Result<StringIDResponse, (StatusCode, String)> {
-    let share_permission: models_permissions::share_permission::SharePermissionV2 =
-        models_permissions::share_permission::SharePermissionV2::default();
+    let share_permission: SharePermissionV2 = SharePermissionV2::new_chat_share_permission();
 
     let macro_item = macro_db_client::macros::create::create_macro(
         db,

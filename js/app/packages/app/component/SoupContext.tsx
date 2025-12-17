@@ -42,6 +42,7 @@ import {
 } from 'solid-js';
 import {
   createStore,
+  produce,
   reconcile,
   type SetStoreFunction,
   type Store,
@@ -80,6 +81,8 @@ import {
   type ViewDataMap,
 } from './ViewConfig';
 
+type NavigateListFn = (input: NavigationInput) => Promise<NavigationResult>;
+
 export type UnifiedListContext = {
   viewsDataStore: Store<ViewDataMap>;
   setViewDataStore: SetStoreFunction<Partial<ViewDataMap>>;
@@ -92,6 +95,9 @@ export type UnifiedListContext = {
   showHelpDrawer: Accessor<Set<DefaultView>>;
   setShowHelpDrawer: Setter<Set<DefaultView>>;
   actionRegistry: EntityActionRegistry;
+  navigateThroughList: NavigateListFn;
+  // this is a private method that should be registered once by createNavigationEntityListShortcut
+  _setNavigateThroughList: (fn: NavigateListFn) => void;
 };
 
 const DEFAULT_VIEW_ID: DefaultView = 'signal';
@@ -100,7 +106,7 @@ const DEFAULT_VIEW_IDS_SET = new Set(VIEWCONFIG_DEFAULTS_IDS);
 
 export function createSoupContext(): UnifiedListContext {
   const [selectedView, setSelectedView] = createSignal<ViewId>(DEFAULT_VIEW_ID);
-  const [viewsDataStore, setViewDataStore_] = useAllViews({
+  const [viewsDataStore, setViewDataStore] = useAllViews({
     selectedViewSignal: [selectedView, setSelectedView],
   });
   const virtualizerHandleSignal = createSignal<VirtualizerHandle>();
@@ -111,18 +117,7 @@ export function createSoupContext(): UnifiedListContext {
   const [showHelpDrawer, setShowHelpDrawer] = createSignal<Set<DefaultView>>(
     !tutorialCompleted() ? new Set(DEFAULT_VIEWS) : new Set()
   );
-  const setViewDataStore: SetStoreFunction<ViewDataMap> = (...args: any[]) => {
-    // need to create new reference, causes bug where first entity persits highlighting
-    if (
-      args.length === 3 &&
-      args[1] === 'selectedEntity' &&
-      typeof args[2] !== 'function'
-    ) {
-      args[2] = { ...args[2] };
-    }
-    // @ts-ignore narrowing set store function is annoying due to function overloading
-    setViewDataStore_(...args);
-  };
+  let navigateThroughListFn: NavigateListFn | undefined;
 
   return {
     viewsDataStore,
@@ -136,6 +131,18 @@ export function createSoupContext(): UnifiedListContext {
     showHelpDrawer,
     setShowHelpDrawer,
     actionRegistry: createEntityActionRegistry(),
+    navigateThroughList: (input) => {
+      if (!navigateThroughListFn) {
+        throw new Error('navigateThroughList not initialized');
+      }
+      return navigateThroughListFn(input);
+    },
+    _setNavigateThroughList: (fn) => {
+      if (navigateThroughListFn) {
+        console.warn('navigateThroughList already initialized');
+      }
+      navigateThroughListFn = fn;
+    },
   };
 }
 
@@ -191,13 +198,13 @@ function createViewData(
   };
 }
 
-type NavigationInput = {
+export type NavigationInput = {
   axis: 'start' | 'end'; // movement direction
   mode: 'step' | 'jump'; // how far: one step or to the end
   highlight?: boolean;
 };
 
-type NavigationResult = {
+export type NavigationResult = {
   success: boolean;
   entity: EntityData | undefined;
 };
@@ -231,6 +238,16 @@ export function createNavigationEntityListShortcut({
 
   const [attachEntityHotkeys, _entityHotkeyScope] = useHotkeyDOMScope('entity');
   const selectedEntity = () => viewData().selectedEntity;
+
+  const setSelectedEntity = (entity: EntityData | undefined) => {
+    setViewDataStore(
+      selectedView(),
+      produce((state) => {
+        if (!state) return;
+        state.selectedEntity = entity;
+      })
+    );
+  };
 
   const notificationSource = useGlobalNotificationSource();
   const userId = useUserId();
@@ -270,7 +287,7 @@ export function createNavigationEntityListShortcut({
       setViewDataStore(selectedView(), 'selectedEntities', []);
     }
     if (entity) {
-      setViewDataStore(selectedView(), 'selectedEntity', entity);
+      setSelectedEntity(entity);
       setViewDataStore(selectedView(), 'highlightedId', entity.id);
       const nextIndex = entities()?.findIndex(({ id }) => id === entity.id);
       if (nextIndex !== undefined && nextIndex > -1) {
@@ -887,7 +904,7 @@ export function createNavigationEntityListShortcut({
         }
         batch(() => {
           setViewDataStore(selectedView(), 'highlightedId', selectedEntity.id);
-          setViewDataStore(selectedView(), 'selectedEntity', selectedEntity);
+          setSelectedEntity(selectedEntity);
         });
       }
 
@@ -927,6 +944,8 @@ export function createNavigationEntityListShortcut({
       entity,
     };
   };
+
+  unifiedListContext._setNavigateThroughList(navigateThroughList);
 
   const scrollToEntityFromId = async () => {
     const index = getHighlightedEntity()?.index;

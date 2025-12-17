@@ -1,26 +1,28 @@
+use macro_user_id::user_id::MacroUserIdStr;
 use model_notifications::{Notification, NotificationWithRecipient, UserNotification};
+use std::collections::HashMap;
 
 // convert the Notification object from a single generic notification to a list of user-specific
 // notifications that may have different values depending on the user.
-pub async fn populate_user_data(
+pub fn populate_user_data(
     notification: Notification,
-    user_ids: &[String],
-    is_important: bool,
-) -> Vec<NotificationWithRecipient> {
+    user_ids: &[MacroUserIdStr<'static>],
+) -> HashMap<MacroUserIdStr<'static>, Vec<NotificationWithRecipient>> {
     // Determine importance and create new notification object
-    let notifications: Vec<NotificationWithRecipient> = user_ids
+    user_ids
         .iter()
-        .map(|user_id| NotificationWithRecipient {
-            inner: UserNotification::from_new_notification(
-                notification.clone(),
-                is_important,
-                false,
-                false,
-            ),
-            recipient_id: user_id.to_string(),
-            is_important_v0: is_important,
+        .map(|user_id| {
+            (
+                user_id.clone(),
+                vec![NotificationWithRecipient {
+                    inner: UserNotification::from_new_notification(
+                        notification.clone(),
+                        false,
+                        false,
+                    ),
+                    recipient_id: user_id.clone(),
+                }],
+            )
         })
-        .collect();
-
-    notifications
+        .collect()
 }

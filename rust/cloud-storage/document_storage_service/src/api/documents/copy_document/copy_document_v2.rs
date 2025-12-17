@@ -24,7 +24,7 @@ pub async fn copy_document<'a>(
     version_id: Option<SyncServiceVersionID>,
 ) -> Result<Response, (Option<String>, anyhow::Error, &'a str)> {
     tracing::info!("copy document");
-    let share_permission = SharePermissionV2::default();
+    let share_permission = SharePermissionV2::new_document_share_permission(file_type.copied());
     // Create new document in db using document metadata
     let updated_document_metadata = match macro_db_client::document::v2::copy::copy_document(
         &ctx.db,

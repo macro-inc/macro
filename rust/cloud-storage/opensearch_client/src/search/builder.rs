@@ -201,6 +201,13 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
     pub fn build_content_and_name_bool_query<'a>(
         &'a self,
     ) -> Result<ContentAndNameBoolQueries<'a>> {
+        // FIXES: https://linear.app/macro-eng/issue/BAC-173/sending-invalid-queries-to-opensearch
+        // If we try and build queries with ids only = true and no ids provided we should
+        // error out as it creates an invalid query since we have minimum_should_match = 1.
+        if self.ids_only && self.ids.is_empty() {
+            return Err(OpensearchClientError::EmptyIdsWithIdsOnly(T::ENTITY_INDEX));
+        }
+
         let content_bool_query = match self.search_on {
             SearchOn::Name => None,
             SearchOn::NameContent | SearchOn::Content => {

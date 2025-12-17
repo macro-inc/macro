@@ -5,6 +5,7 @@ use crate::{
 };
 use anyhow::Context;
 use macro_env::{Environment, ext::frontend_url::FrontendUrl};
+use model_entity::EntityType;
 use model_notifications::{
     ChannelInviteMetadata, ChannelMessageSendMetadata, NotificationEventType,
     NotificationWithRecipient,
@@ -63,13 +64,10 @@ pub fn fill_email_template(
 
             let item_url = get_item_share_url(notification).context("unable to create item url")?;
 
-            if notification
-                .inner
-                .notification_entity
-                .event_item_type
-                .to_string()
-                == "document"
-            {
+            if matches!(
+                notification.inner.notification_entity.entity_type,
+                EntityType::Document
+            ) {
                 let file_type =
                     metadata_utils::get_metadata_value::<String>(notification, "file_type")?;
 
@@ -85,7 +83,7 @@ pub fn fill_email_template(
                 &notification
                     .inner
                     .notification_entity
-                    .event_item_type
+                    .entity_type
                     .to_string(),
             ))
         }

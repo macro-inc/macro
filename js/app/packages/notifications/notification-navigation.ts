@@ -58,7 +58,7 @@ async function openChannelNotification(
   notification: TypedNotification<ChannelNotificationType>,
   layoutManager: SplitManager
 ) {
-  const channelId = notification.eventItemId;
+  const channelId = notification.entity_id;
   const messageId = notification.notificationMetadata.messageId;
   const threadId =
     'threadId' in notification.notificationMetadata
@@ -102,7 +102,7 @@ function getSupportedHandler(
     .with(
       { notificationEventType: 'channel_invite' },
       (n) => async (lm: SplitManager) =>
-        openSplitIfNotOpen(lm, 'channel', n.eventItemId)
+        openSplitIfNotOpen(lm, 'channel', n.entity_id)
     )
     .with(
       {
@@ -115,7 +115,7 @@ function getSupportedHandler(
         openSplitIfNotOpen(
           lm,
           safeFileTypeToBlockName(n.notificationMetadata.itemType),
-          n.eventItemId
+          n.entity_id
         )
     )
     .with(
@@ -129,7 +129,7 @@ function getSupportedHandler(
         openSplitIfNotOpen(
           lm,
           safeFileTypeToBlockName(n.notificationMetadata.fileType),
-          n.eventItemId
+          n.entity_id
         )
     )
     .with(

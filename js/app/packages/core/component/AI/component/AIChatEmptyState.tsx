@@ -1,9 +1,7 @@
 import { BrightJoins } from '@core/component/BrightJoins';
-import { useSettingsState } from '@core/constant/SettingsState';
 import { useOpenInstructionsMd } from '../util/instructions';
 
 export function AiChatEmptyState() {
-  const { setActiveTabId, openSettings } = useSettingsState();
   const openInstructions = useOpenInstructionsMd();
   return (
     <div class="relative p-2 border border-edge-muted bg-dialog text-sm flex flex-col gap-2 text-ink">
@@ -31,20 +29,6 @@ export function AiChatEmptyState() {
           Instructions
         </span>
         to feed AI some basic context on what you do, who you work with, etc
-      </div>
-      <div>
-        Check your AI
-        <span
-          class="font-medium text-accent underline mx-1"
-          onClick={() => {
-            setActiveTabId('AI Memory');
-            openSettings();
-          }}
-        >
-          {' '}
-          Memories
-        </span>
-        that are auto-generated for accuracy and relevance
       </div>
     </div>
   );

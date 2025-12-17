@@ -18,13 +18,11 @@ import {
   useDisplayName,
   type WithCustomUserInput,
 } from '@core/user';
-import { isErr } from '@core/util/maybeResult';
 import Caution from '@icon/regular/warning.svg';
+import { useEmailLinksQuery } from '@queries/email/link';
 import { useSendMessageMutation } from '@queries/email/thread';
-import { emailClient } from '@service-email/client';
 import {
   createMemo,
-  createResource,
   createSignal,
   Match,
   Show,
@@ -52,23 +50,22 @@ export function EmailCompose() {
 
   const [subject, setSubject] = createSignal<string>('');
 
-  const [linkError, setLinkError] = createSignal<string | null>(null);
+  const emailLinksQuery = useEmailLinksQuery();
 
-  const hasLinkError = createMemo(() => linkError() != null);
+  const link = createMemo(() => {
+    const data = emailLinksQuery.data;
+    if (data && data.links.length > 0) {
+      return data.links[0];
+    }
+    return undefined;
+  });
 
-  const [link] = createResource(async () => {
-    const maybeLinks = await emailClient.getLinks();
-    if (isErr(maybeLinks)) {
-      setLinkError('Could not find linked email account.');
-      return;
-    }
-    const [, { links }] = maybeLinks;
-    const [link] = links;
-    if (link) {
-      return link;
-    } else {
-      setLinkError('Could not find linked email account.');
-    }
+  const hasLinkError = createMemo(() => {
+    if (emailLinksQuery.isPending) return false;
+    return (
+      emailLinksQuery.isError ||
+      (emailLinksQuery.data && emailLinksQuery.data.links.length === 0)
+    );
   });
 
   const { users: destinationOptions } = useCombinedRecipients();

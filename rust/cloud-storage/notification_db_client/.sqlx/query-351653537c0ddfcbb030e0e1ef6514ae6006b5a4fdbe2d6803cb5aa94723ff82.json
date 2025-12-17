@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n    SELECT\n        un.user_id as owner_id,\n        un.notification_id,\n        n.event_item_id,\n        n.event_item_type,\n        un.sent,\n        un.done,\n        un.created_at::timestamptz,\n        un.seen_at::timestamptz as viewed_at,\n        un.created_at::timestamptz as updated_at,\n        un.deleted_at::timestamptz,\n        n.metadata as notification_metadata,\n        n.notification_event_type as notification_event_type,\n        n.sender_id as sender_id,\n        un.is_important_v0 as is_important_v0\n    FROM user_notification un\n    JOIN notification n ON n.id = un.notification_id\n    WHERE un.user_id = $1\n    AND un.deleted_at IS NULL\n    AND un.done = false\n    AND (($3::timestamptz IS NULL)\n        OR (un.created_at, un.notification_id) < ($3, $4))\n    ORDER BY un.created_at DESC, un.notification_id DESC\n    LIMIT $2\n    ",
+  "query": "\n    SELECT\n        un.user_id as owner_id,\n        un.notification_id,\n        n.event_item_id,\n        n.event_item_type,\n        un.sent,\n        un.done,\n        un.created_at::timestamptz,\n        un.seen_at::timestamptz as viewed_at,\n        un.created_at::timestamptz as updated_at,\n        un.deleted_at::timestamptz,\n        n.metadata as notification_metadata,\n        n.notification_event_type as notification_event_type,\n        n.sender_id as sender_id\n    FROM user_notification un\n    JOIN notification n ON n.id = un.notification_id\n    WHERE un.user_id = $1\n    AND n.event_item_id = ANY($2)\n    AND un.deleted_at IS NULL\n    AND un.done = false\n    AND (($4::timestamptz IS NULL)\n        OR (un.created_at, un.notification_id) < ($4, $5))\n    ORDER BY un.created_at DESC, un.notification_id DESC\n    LIMIT $3\n    ",
   "describe": {
     "columns": [
       {
@@ -67,16 +67,12 @@
         "ordinal": 12,
         "name": "sender_id",
         "type_info": "Text"
-      },
-      {
-        "ordinal": 13,
-        "name": "is_important_v0",
-        "type_info": "Bool"
       }
     ],
     "parameters": {
       "Left": [
         "Text",
+        "TextArray",
         "Int8",
         "Timestamptz",
         "Uuid"
@@ -95,9 +91,8 @@
       null,
       true,
       false,
-      true,
-      false
+      true
     ]
   },
-  "hash": "e9c68f229a0be9bbf5df4b69ad8e5e90c296e454f91fbc9d1c9ac66c953f6183"
+  "hash": "351653537c0ddfcbb030e0e1ef6514ae6006b5a4fdbe2d6803cb5aa94723ff82"
 }
