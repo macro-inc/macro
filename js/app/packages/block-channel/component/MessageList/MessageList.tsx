@@ -44,6 +44,7 @@ import {
   Switch,
   untrack,
   useContext,
+  onMount,
 } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
@@ -522,18 +523,6 @@ export function MessageList(props: MessageListProps) {
 
   const [size, setSize] = createSignal<DOMRect>();
 
-  // set scroll container ref on virtualizer updates
-  createEffect(
-    on([virtualHandle, listContainerRef], ([handle, listContainerRef]) => {
-      if (!handle || !listContainerRef) return;
-
-      const scrollContainer = listContainerRef.querySelector(
-        '[data-channel-message-list]'
-      ) as HTMLDivElement | null;
-      setScrollContainerRef(scrollContainer ?? undefined);
-    })
-  );
-
   createRenderEffect(
     on(props.targetMessage, (target) => {
       if (!target) return;
@@ -653,7 +642,17 @@ export function MessageList(props: MessageListProps) {
     >
       <div
         class="flex flex-col h-full relative"
-        ref={setListContainerRef}
+        ref={(el) => {
+          setListContainerRef(el);
+
+          onMount(() => {
+            const scrollContainer = el.querySelector(
+              '[data-channel-message-list]'
+            ) as HTMLDivElement | null;
+
+            setScrollContainerRef(scrollContainer ?? undefined);
+          });
+        }}
         onWheel={markUserScrolled}
         onTouchMove={markUserScrolled}
         onPointerDown={markUserScrolled}
