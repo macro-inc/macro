@@ -31,8 +31,9 @@ import {
   initializeEditorEmpty,
   setEditorStateFromMarkdown,
 } from '../../utils';
+import type { UserMentionRecord } from '../../utils/mentionsUtils';
 import { DecoratorRenderer } from '../core/DecoratorRenderer';
-import { MentionsMenu, type UserMentionRecord } from '../menu/MentionsMenu';
+import { MentionsMenu } from '../menu/MentionsMenu';
 
 // Version of MarkdownTextArea modified for email to/cc/bcc input fields
 
