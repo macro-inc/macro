@@ -5,10 +5,14 @@ import {
 import { openedChannelSignal } from '@block-channel/signal/activity';
 import { messageToReactionStore } from '@block-channel/signal/reactions';
 import {
+  type MessageWithThreadId,
   type ThreadStoreData,
   threadsStore,
 } from '@block-channel/signal/threads';
-import type { ThreadViewData } from '@block-channel/type/threadView';
+import type {
+  ThreadView,
+  ThreadViewData,
+} from '@block-channel/type/threadView';
 import { loadDraftMessage } from '@block-channel/utils/draftMessages';
 import {
   createMessageListContextLookup,
@@ -42,11 +46,14 @@ import {
   Show,
   Switch,
   untrack,
+  createContext,
+  useContext,
 } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
 import { MessageContainer } from '../Message/MessageContainer';
 import { ReplyInputsPortaler } from '../ReplyInputsPortaler';
+import { clamp } from '@core/util/math';
 
 false && observedSize;
 
@@ -82,8 +89,28 @@ type RowModel = {
 // The size of a message with a profile picture and a one line message
 const BASE_ITEM_SIZE = 50;
 
-const clampIndex = (value: number, minValue: number, maxValue: number) =>
-  Math.min(Math.max(value, minValue), maxValue);
+type MessageListContentContextValues = {
+  registerVirtualHandle: (handle: VirtualizerHandle) => void;
+  scrollContainerRef: Accessor<HTMLElement>;
+  registerScrollContainer: (el: HTMLElement) => void;
+  scrollToIndex: (index: number) => void;
+  scrollToMessage: (messageID: string, focus?: boolean) => void;
+  createReply: (type: 'thread' | 'message', id: string) => void;
+  expandThread: (threadID: string) => void;
+  registerThreadAppendMountTarget: (el: HTMLElement) => void;
+  getThreadState: (threadID: string) => ThreadView;
+  getThreadDetails: (threadID: string) => MessageWithThreadId;
+  orderedMessages: Accessor<Message[]>;
+};
+
+const MessageListContentContext =
+  createContext<MessageListContentContextValues>();
+
+export const useMessageListContext = () => {
+  const context = useContext(MessageListContentContext);
+
+  return context!;
+};
 
 export type TargetMessageInfo = { messageId: string; threadId?: string };
 
@@ -113,11 +140,49 @@ function EmptyMessageList() {
 }
 
 export function MessageList(props: MessageListProps) {
-  const [containerRef, setContainerRef] = createSignal<HTMLDivElement>();
   const [virtualHandle, setVirtualHandle] = createSignal<VirtualizerHandle>();
   const [scrollContainerRef, setScrollContainerRef] = createSignal<
     HTMLDivElement | undefined
   >();
+
+  const context: MessageListContentContextValues = {
+    registerVirtualHandle: setVirtualHandle,
+    registerScrollContainer: setScrollContainerRef,
+    scrollToIndex: function (index: number): void {
+      throw new Error('Function not implemented.');
+    },
+    scrollToMessage: function (messageID: string, focus?: boolean): void {
+      throw new Error('Function not implemented.');
+    },
+    createReply: function (type: 'thread' | 'message', id: string): void {
+      throw new Error('Function not implemented.');
+    },
+    expandThread: function (threadID: string): void {
+      throw new Error('Function not implemented.');
+    },
+    registerThreadAppendMountTarget: function (el: HTMLElement): void {
+      throw new Error('Function not implemented.');
+    },
+    getThreadState: function (threadID: string): ThreadView {
+      throw new Error('Function not implemented.');
+    },
+    getThreadDetails: function (threadID: string): MessageWithThreadId {
+      throw new Error('Function not implemented.');
+    },
+    orderedMessages: props.orderedMessages,
+  };
+  return (
+    <MessageListContentContext.Provider value={context}>
+      <MessageListImpl {...props} />
+    </MessageListContentContext.Provider>
+  );
+}
+
+function MessageListImpl(props: MessageListProps) {
+  const listContext = useMessageListContext();
+
+  const [virtualHandle, setVirtualHandle] = createSignal<VirtualizerHandle>();
+  const [containerRef, setContainerRef] = createSignal<HTMLDivElement>();
 
   const [newIndicatorShown, setNewIndicatorShown] = createSignal<number>();
   const [hasUserScrolled, setHasUserScrolled] = createSignal(false);
@@ -373,7 +438,7 @@ export function MessageList(props: MessageListProps) {
 
     if (endIndex === undefined) return;
 
-    const index = clampIndex(endIndex, 0, list.length - 1);
+    const index = clamp(endIndex, 0, list.length - 1);
     const row = rows()[index];
     const label = toScrollHintDate(row?.message.created_at);
 
@@ -602,7 +667,9 @@ export function MessageList(props: MessageListProps) {
               '[data-channel-message-list]'
             ) as HTMLDivElement | null;
 
-            setScrollContainerRef(scrollContainer ?? undefined);
+            if (!scrollContainer) return;
+
+            listContext.registerScrollContainer(scrollContainer);
           });
         }}
         onWheel={markUserScrolled}
@@ -615,7 +682,12 @@ export function MessageList(props: MessageListProps) {
         <Switch fallback={<EmptyMessageList />}>
           <Match when={props.messages.length > 0}>
             <VList
-              ref={setVirtualHandle}
+              ref={(handle) => {
+                if (handle) {
+                  listContext.registerVirtualHandle(handle);
+                }
+                setVirtualHandle(handle);
+              }}
               style={{
                 height: `${listHeight()}px`,
                 contain: 'none',
@@ -723,7 +795,7 @@ export function MessageList(props: MessageListProps) {
         </Show>
         <CustomScrollbar
           reverse
-          scrollContainer={scrollContainerRef}
+          scrollContainer={listContext.scrollContainerRef}
           getLabel={getScrollHint}
           enabled={hasUserScrolled()}
         />
