@@ -148,7 +148,7 @@ function ChatInput(props: ChatInputInternalProps) {
   const generating = props.isGenerating ?? (() => false);
   const toolsetSignal = createSignal<ToolSet>({ type: 'all' });
 
-  const [source, setSource] = createSignal<Source>('everything');
+  const [source] = createSignal<Source>('everything');
   const [showAttachMenu, setShowAttachMenu] = createSignal(false);
   const [attachMenuAnchorRef, setAttachMenuAnchorRef] =
     createSignal<HTMLDivElement>();
