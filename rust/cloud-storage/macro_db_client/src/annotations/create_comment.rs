@@ -9,7 +9,6 @@ use sqlx::{Pool, Postgres};
 use crate::annotations::CommentError;
 
 use super::{create_anchor::create_comment_anchor, get::get_comment_thread};
-
 fn map_value_to_option(maybe_value: Option<Value>) -> Option<Value> {
     match maybe_value {
         Some(value) => {
@@ -34,7 +33,7 @@ pub async fn create_document_comment(
     db: &Pool<Postgres>,
     document_id: &str,
     owner: &str,
-    req: CreateCommentRequest,
+    req: &CreateCommentRequest,
 ) -> Result<CreateCommentResponse> {
     let mut transaction = db.begin().await?;
 
@@ -119,7 +118,7 @@ pub async fn create_document_comment(
     };
 
     let mut anchor: Option<Anchor> = None;
-    if let Some(anchor_req) = req.anchor {
+    if let Some(anchor_req) = &req.anchor {
         let res = create_comment_anchor(
             &mut transaction,
             owner,
@@ -196,7 +195,7 @@ mod tests {
         };
 
         let CreateCommentResponse { comment_thread, .. } =
-            create_document_comment(&pool, document_id, owner, req).await?;
+            create_document_comment(&pool, document_id, owner, &req).await?;
 
         // Verify the thread and comment were created
         assert_eq!(comment_thread.comments.len(), 1);
@@ -235,10 +234,11 @@ mod tests {
             thread_metadata: None,
             anchor: None,
             metadata: None,
+            mentions: None,
         };
 
         let CreateCommentResponse { comment_thread, .. } =
-            create_document_comment(&pool, document_id, owner, req).await?;
+            create_document_comment(&pool, document_id, owner, &req).await?;
 
         // Verify the comment was added to the existing thread
         assert_eq!(comment_thread.thread.thread_id, 1001);
