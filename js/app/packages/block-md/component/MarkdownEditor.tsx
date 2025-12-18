@@ -38,7 +38,6 @@ import {
 } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
 import {
   CLOSE_INLINE_SEARCH_COMMAND,
-  calculateInsertPoint,
   createDragInsertStore,
   createWordcountStatsStore,
   DefaultShortcuts,
@@ -52,7 +51,6 @@ import {
   markdownPastePlugin,
   mentionsPlugin,
   pinnedPropertiesPlugin,
-  SET_SELECTION_AT_INSERTION,
   selectionDataPlugin,
   tabIndentationPlugin,
   tableActionMenuPlugin,
@@ -79,7 +77,6 @@ import {
   parsePersistentLocation,
 } from '@core/component/LexicalMarkdown/plugins/location';
 import {
-  addMediaFromFile,
   INSERT_MEDIA_COMMAND,
   mediaPlugin,
 } from '@core/component/LexicalMarkdown/plugins/media';
@@ -97,15 +94,12 @@ import {
   setEditorStateFromMarkdown,
 } from '@core/component/LexicalMarkdown/utils';
 import {
-  documentUploadToItem,
-  handleBasicMention,
-} from '@core/component/LexicalMarkdown/utils/mentionsUtils';
+  createFilesReadyHandler,
+  getDragDropPosition,
+} from '@core/component/LexicalMarkdown/utils/fileUploadUtils';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  blockNameToFileExtensions,
-  fileTypeToBlockName,
-} from '@core/constant/allBlocks';
+import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import {
   ENABLE_MARKDOWN_COMMENTS,
   ENABLE_MARKDOWN_DIFF,
@@ -113,7 +107,6 @@ import {
   LOCAL_ONLY,
 } from '@core/constant/featureFlags';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
-import { HEIC_EXTENSIONS } from '@core/heic/constants';
 import { blockElementSignal } from '@core/signal/blockElement';
 import {
   blockFileSignal,
@@ -126,13 +119,7 @@ import { useCanComment, useCanEdit } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { isSourceDSS, isSourceSyncService } from '@core/util/source';
 import { bufToString } from '@core/util/string';
-import {
-  forceDssRuleset,
-  handleFileFolderDrop,
-  isFileUploadEntry,
-  type UploadInput,
-  uploadFiles,
-} from '@core/util/upload';
+import { handleFileFolderDrop } from '@core/util/upload';
 import WarningIcon from '@icon/regular/warning.svg';
 import {
   $createDocumentMentionNode,
@@ -143,9 +130,7 @@ import {
   type PeerIdValidator,
   peerIdPlugin,
 } from '@lexical-core';
-import { logger } from '@observability';
 import type { MarkdownRewriteOutput } from '@service-cognition/generated/tools/types';
-import { fileExtension } from '@service-storage/util/filename';
 import { createCallback } from '@solid-primitives/rootless';
 import { debounce, throttle } from '@solid-primitives/scheduled';
 import { useSearchParams } from '@solidjs/router';
@@ -190,8 +175,6 @@ const DEBUG = LOCAL_ONLY;
 // once the editor has at least one full page of content.
 const EDITOR_PADDING_BOTTOM = 200;
 
-const DRAG_EVENT_PADDING = 8;
-
 export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
   const blockData = blockDataSignal.get;
   const blockId = useBlockId();
@@ -208,12 +191,6 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     createSignal<Record<string, string>>();
   const [findAndReplaceStore, setFindAndReplaceStore] = FindAndReplaceStore;
   const docSource = blockSourceSignal.get;
-
-  const IMAGE_EXTENSIONS_HEIC = [
-    ...blockNameToFileExtensions.image,
-    ...HEIC_EXTENSIONS,
-  ];
-  const VIDEO_EXTENSIONS = blockNameToFileExtensions.video;
 
   const blockHandle = blockHandleSignal.get;
   createMethodRegistration(blockHandle, {
@@ -295,120 +272,6 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
   const emojiMenuOperations = createMenuOperations();
   const actionsMenuOperations = createMenuOperations();
 
-  const getDragDropPosition = (
-    e: DragEvent | { clientX: number; clientY: number },
-    setSelection = false
-  ) => {
-    const { key, position } = calculateInsertPoint(
-      editor,
-      e,
-      DRAG_EVENT_PADDING
-    );
-    if (setSelection && key !== null && position !== null) {
-      editor.dispatchCommand(SET_SELECTION_AT_INSERTION, [key, position]);
-    }
-    return { key, position };
-  };
-
-  async function processInlineMediaFiles(files: File[]) {
-    for (const file of files) {
-      const ext = fileExtension(file.name);
-      if (ext != null && IMAGE_EXTENSIONS_HEIC.includes(ext)) {
-        const res = await addMediaFromFile(editor, file, 'image');
-        if (!res.success) {
-          toast.failure('Invalid media attachment file(s)');
-        }
-      } else if (ext != null && VIDEO_EXTENSIONS.includes(ext)) {
-        const res = await addMediaFromFile(editor, file, 'video');
-        if (!res.success) {
-          toast.failure('Invalid media attachment file(s)');
-        }
-      }
-    }
-  }
-
-  async function onFilesReady(
-    uploadEntries: UploadInput[],
-    position?: ReturnType<typeof getDragDropPosition>
-  ): Promise<void> {
-    const mediaFiles: File[] = [];
-    const filesToUpload: UploadInput[] = [];
-
-    for (const entry of uploadEntries) {
-      if (isFileUploadEntry(entry) && entry.isFolder) {
-        filesToUpload.push(entry);
-      } else {
-        const file = isFileUploadEntry(entry) ? entry.file : entry;
-        const ext = fileExtension(file.name);
-        if (
-          ext != null &&
-          (IMAGE_EXTENSIONS_HEIC.includes(ext) ||
-            VIDEO_EXTENSIONS.includes(ext))
-        ) {
-          mediaFiles.push(file);
-        } else {
-          filesToUpload.push(entry);
-        }
-      }
-    }
-
-    if (position) {
-      const { key, position: position_ } = position;
-      if (key !== null && position_ !== null) {
-        editor.dispatchCommand(SET_SELECTION_AT_INSERTION, [key, position_]);
-      }
-    }
-
-    await processInlineMediaFiles(mediaFiles);
-
-    if (filesToUpload.length === 0) return;
-
-    const results = await uploadFiles(filesToUpload, forceDssRuleset);
-
-    for (const result of results) {
-      if (result.failed) continue;
-
-      if (result.destination !== 'dss') continue;
-
-      if (result.type === 'document') {
-        const blockName = fileTypeToBlockName(result.fileType, true);
-        if (blockName) {
-          const item = await documentUploadToItem(result);
-          if (!item) {
-            toast.failure('Document upload failed or timed out');
-            logger.error('Document upload failed or timed out', {
-              cause: new Error(),
-            });
-            continue;
-          }
-          handleBasicMention(item, {
-            editor,
-            blockName: 'md',
-            blockId: blockId,
-            onDocumentMention: () => {},
-            disableMentionTracking: false,
-          });
-        }
-      } else if (result.type === 'folder') {
-        const item = await documentUploadToItem(result);
-        if (!item) {
-          toast.failure('Folder upload failed or timed out');
-          logger.error('Folder upload failed or timed out', {
-            cause: new Error(),
-          });
-          continue;
-        }
-        handleBasicMention(item, {
-          editor,
-          blockName: 'md',
-          blockId: blockId,
-          onDocumentMention: () => {},
-          disableMentionTracking: false,
-        });
-      }
-    }
-  }
-
   // store for the drag insert pluign.
   const [dragInsertStore, setDragInsertStore] = createDragInsertStore();
 
@@ -451,7 +314,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
 
     const res = wrapDndEvent(event);
     if (!res) return;
-    const { key, position } = getDragDropPosition(res.mousePos, true);
+    const { key, position } = getDragDropPosition(editor, res.mousePos, true);
 
     if (res.blockName === 'image' || res.blockName === 'video') {
       editor.dispatchCommand(INSERT_MEDIA_COMMAND, {
@@ -491,7 +354,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     const res = wrapDndEvent(event);
     if (!res) return;
     const { mousePos } = res;
-    const { key, position } = getDragDropPosition(mousePos, false);
+    const { key, position } = getDragDropPosition(editor, mousePos, false);
     if (key !== null && position !== null) {
       setDragInsertStore({ nodeKey: key, position, visible: true });
     }
@@ -650,7 +513,11 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     .use(
       filePastePlugin({
         onPasteFilesAndDirs: (fileEntries, directories) =>
-          handleFileFolderDrop(fileEntries, directories, onFilesReady),
+          handleFileFolderDrop(
+            fileEntries,
+            directories,
+            createFilesReadyHandler(editor, blockId)
+          ),
       })
     )
     .use(
@@ -976,10 +843,15 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
         ref={editorContainerRef}
         use:fileFolderDrop={{
           onDrop: (fileEntries, folderEntries, e) => {
-            handleFileFolderDrop(fileEntries, folderEntries, (entries) => {
-              const position = e ? getDragDropPosition(e, true) : undefined;
-              onFilesReady(entries, position);
-            });
+            handleFileFolderDrop(
+              fileEntries,
+              folderEntries,
+              createFilesReadyHandler(
+                editor,
+                blockId,
+                e ? () => getDragDropPosition(editor, e, true) : undefined
+              )
+            );
           },
         }}
         use:droppable
