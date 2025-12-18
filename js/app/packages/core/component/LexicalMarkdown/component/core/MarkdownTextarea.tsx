@@ -33,6 +33,7 @@ import {
   filePastePlugin,
   type ItemMention,
   keyboardFocusPlugin,
+  mediaPlugin,
   mentionsPlugin,
   type SelectionData,
   selectionDataPlugin,
@@ -161,6 +162,7 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
     .state<string>(setMarkdownState, 'markdown')
     .history(400)
     .use(restoreFocusPlugin())
+    .use(mediaPlugin())
     .use(
       props.formatState && props.setFormatState
         ? customSelectionDataPlugin(

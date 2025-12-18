@@ -6,7 +6,12 @@ import { useHasPaidAccess } from '@core/auth';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { IconButton } from '@core/component/IconButton';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
-import { fileDrop } from '@core/directive/fileDrop';
+import {
+  createFilesReadyHandler,
+  getDragDropPosition,
+} from '@core/component/LexicalMarkdown/utils/fileUploadUtils';
+import { fileFolderDrop } from '@core/directive/fileFolderDrop';
+import { handleFileFolderDrop } from '@core/util/upload';
 import TextAa from '@icon/regular/text-aa.svg';
 import {
   $appendWatermarkNodeToLast,
@@ -31,7 +36,6 @@ import {
 } from 'lexical';
 import { createSignal, onMount, Show } from 'solid-js';
 import { type FocusableElement, tabbable } from 'tabbable';
-import { handleFileUpload } from '../util/handleFileUpload';
 import { makeAttachmentPublic } from '../util/makeAttachmentPublic';
 import {
   appendItemsAsMacroMentions,
@@ -39,7 +43,7 @@ import {
 } from '../util/prepareEmailBody';
 import { AttachMenu } from './AttachMenu';
 
-false && fileDrop;
+false && fileFolderDrop;
 
 export type ComposeInputData = {
   body: {
@@ -108,13 +112,10 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
   }
 
   function onAttachDocuments(items: DocumentMentionInfo[]) {
-    console.log('ComposeEmailInput: onAttachDocuments called with', items);
-    console.log('ComposeEmailInput: Current editor state:', editor());
     appendItemsAsMacroMentions(editor(), items);
     items.forEach((item) => {
       makeAttachmentPublic(item.documentId);
     });
-    console.log('ComposeEmailInput: Document attachments processed');
   }
 
   // Set up hotkey scope for the compose message component
@@ -137,6 +138,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
     if (!prepared) return;
 
     const bodyMacro = content();
+
 
     props.onSubmit({
       body: {
@@ -195,17 +197,29 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
           onclick={() => {
             editor()?.focus();
           }}
-          use:fileDrop={{
+          use:fileFolderDrop={{
             onDragStart: () => setIsDragging(true),
             onDragEnd: () => setIsDragging(false),
-            onDrop: async (files) => {
-              handleFileUpload(files, setIsPendingUpload, (items) => {
-                setIsDragging(false);
-                appendItemsAsMacroMentions(editor(), items);
-                items.forEach((item) => {
-                  makeAttachmentPublic(item.documentId);
-                });
-              });
+            onDrop: (fileEntries, folderEntries, e) => {
+              const editor_ = editor();
+              if (!editor_ || !e) return;
+              handleFileFolderDrop(
+                fileEntries,
+                folderEntries,
+                createFilesReadyHandler(
+                  editor_,
+                  undefined,
+                  undefined,
+                  () => getDragDropPosition(editor_, e, true),
+                  (uploadedItemIds) => {
+                    setIsDragging(false);
+                    uploadedItemIds.forEach((itemId) => {
+                      makeAttachmentPublic(itemId);
+                    });
+                    // TODO: schedule draft save, when implemented
+                  }
+                )
+              );
             },
           }}
         >
@@ -228,6 +242,25 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
               focusSibling('next');
             }}
             portalScope="local"
+            onPasteFilesAndDirs={(files, directories) => {
+              const editor_ = editor();
+              if (!editor_) return;
+              handleFileFolderDrop(
+                files,
+                directories,
+                createFilesReadyHandler(
+                  editor_,
+                  undefined,
+                  undefined,
+                  undefined,
+                  (uploadedItemIds) => {
+                    uploadedItemIds.forEach((itemId) => {
+                      makeAttachmentPublic(itemId);
+                    });
+                  }
+                )
+              );
+            }}
           />
         </div>
       </div>

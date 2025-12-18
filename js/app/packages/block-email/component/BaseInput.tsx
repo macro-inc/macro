@@ -7,14 +7,17 @@ import { BrightJoins } from '@core/component/BrightJoins';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { IconButton } from '@core/component/IconButton';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
-import { createFilesReadyHandler } from '@core/component/LexicalMarkdown/utils/fileUploadUtils';
+import {
+  createFilesReadyHandler,
+  getDragDropPosition,
+} from '@core/component/LexicalMarkdown/utils/fileUploadUtils';
 import type { UserMentionRecord } from '@core/component/LexicalMarkdown/utils/mentionsUtils';
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { TextButton } from '@core/component/TextButton';
 import { toast } from '@core/component/Toast/Toast';
 import { Tooltip } from '@core/component/Tooltip';
-import { fileDrop } from '@core/directive/fileDrop';
+import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { trackMention } from '@core/signal/mention';
@@ -78,7 +81,6 @@ import {
 } from 'solid-js';
 import { createStore, produce } from 'solid-js/store';
 import { deleteEmailDraft, saveEmailDraft } from '../signal/emailDraft';
-import { handleFileUpload } from '../util/handleFileUpload';
 import { makeAttachmentPublic } from '../util/makeAttachmentPublic';
 import { getFirstName } from '../util/name';
 import {
@@ -95,7 +97,7 @@ import { AttachMenu } from './AttachMenu';
 import { type EmailRecipient, useEmailContext } from './EmailContext';
 import { getOrInitEmailFormContext } from './EmailFormContext';
 
-false && fileDrop;
+false && fileFolderDrop;
 
 const getRecipientDisplayName = (item: EmailRecipient): string => {
   switch (item.kind) {
@@ -808,18 +810,29 @@ export function BaseInput(props: {
           onclick={() => {
             editor()?.focus();
           }}
-          use:fileDrop={{
+          use:fileFolderDrop={{
             onDragStart: () => setIsDragging(true),
             onDragEnd: () => setIsDragging(false),
-            onDrop: async (files) => {
-              handleFileUpload(files, setIsPendingUpload, (items) => {
-                setIsDragging(false);
-                appendItemsAsMacroMentions(editor(), items);
-                items.forEach((item) => {
-                  makeAttachmentPublic(item.documentId);
-                });
-                scheduleDraftSave();
-              });
+            onDrop: (fileEntries, folderEntries, e) => {
+              const editor_ = editor();
+              if (!editor_ || !e) return;
+              handleFileFolderDrop(
+                fileEntries,
+                folderEntries,
+                createFilesReadyHandler(
+                  editor_,
+                  blockId,
+                  'email',
+                  () => getDragDropPosition(editor_, e, true),
+                  (uploadedItemIds) => {
+                    setIsDragging(false);
+                    uploadedItemIds.forEach((itemId) => {
+                      makeAttachmentPublic(itemId);
+                    });
+                    scheduleDraftSave();
+                  }
+                )
+              );
             },
           }}
         >
@@ -849,10 +862,22 @@ export function BaseInput(props: {
             setFormatState={setFormatState}
             domRef={props.markdownDomRef}
             onPasteFilesAndDirs={(files, directories) => {
+              const editor_ = editor();
+              if (!editor_) return;
               handleFileFolderDrop(
                 files,
                 directories,
-                createFilesReadyHandler(editor(), blockId)
+                createFilesReadyHandler(
+                  editor_,
+                  blockId,
+                  'email',
+                  undefined,
+                  (uploadedItemIds) => {
+                    uploadedItemIds.forEach((itemId) => {
+                      makeAttachmentPublic(itemId);
+                    });
+                  }
+                )
               );
             }}
           />

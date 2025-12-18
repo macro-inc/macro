@@ -1,3 +1,4 @@
+import type { BlockName } from '@core/block';
 import { toast } from '@core/component/Toast/Toast';
 import {
   blockNameToFileExtensions,
@@ -62,8 +63,10 @@ export const getDragDropPosition = (
 export async function onFilesReady(
   editor: LexicalEditor,
   uploadEntries: UploadInput[],
-  blockId: string,
-  position?: ReturnType<typeof getDragDropPosition>
+  blockId?: string,
+  parentBlockName?: BlockName,
+  position?: ReturnType<typeof getDragDropPosition>,
+  afterFileUpload?: (uploadedItemIds: string[]) => void
 ): Promise<void> {
   const IMAGE_EXTENSIONS_HEIC = getImageExtensionsHeic();
   const VIDEO_EXTENSIONS = getVideoExtensions();
@@ -100,6 +103,8 @@ export async function onFilesReady(
 
   const results = await uploadFiles(filesToUpload, forceDssRuleset);
 
+  let uploadedItemIds: string[] = [];
+
   for (const result of results) {
     if (result.failed) continue;
 
@@ -116,10 +121,11 @@ export async function onFilesReady(
           });
           continue;
         }
+        uploadedItemIds.push(item.id);
         handleBasicMention(item, {
           editor,
-          blockName: 'md',
-          blockId: blockId,
+          blockName: parentBlockName,
+          blockId,
           onDocumentMention: () => {},
           disableMentionTracking: false,
         });
@@ -133,32 +139,44 @@ export async function onFilesReady(
         });
         continue;
       }
+      uploadedItemIds.push(item.id);
       handleBasicMention(item, {
         editor,
-        blockName: 'md',
-        blockId: blockId,
+        blockName: parentBlockName,
+        blockId,
         onDocumentMention: () => {},
         disableMentionTracking: false,
       });
     }
   }
+
+  afterFileUpload?.(uploadedItemIds);
 }
 
 /**
  * Creates a handler for files ready event.
- * @param editor - The editor instance. Can be undefined to support editor capture scenarios.
+ * @param editor - The editor instance
  * @param blockId - The block ID.
  * @param getPosition - An optionalfunction to get the position of the files.
  * @returns A function to handle files ready event.
  */
 export function createFilesReadyHandler(
-  editor: LexicalEditor | undefined,
-  blockId: string,
-  getPosition?: () => ReturnType<typeof getDragDropPosition>
+  editor: LexicalEditor,
+  blockId?: string,
+  parentBlockName?: BlockName,
+  getPosition?: () => ReturnType<typeof getDragDropPosition>,
+  afterFileUpload?: (uploadedItemIds: string[]) => void
 ) {
   return async (uploadEntries: UploadInput[]) => {
     if (!editor) return;
     const position = getPosition?.();
-    await onFilesReady(editor, uploadEntries, blockId, position);
+    await onFilesReady(
+      editor,
+      uploadEntries,
+      blockId,
+      parentBlockName,
+      position,
+      afterFileUpload
+    );
   };
 }

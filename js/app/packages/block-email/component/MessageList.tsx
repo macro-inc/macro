@@ -1,5 +1,6 @@
 import { isScrollingToMessage } from '@block-email/signal/scrollState';
 import { CircleSpinner } from '@core/component/CircleSpinner';
+import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { createSelector, For, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { useEmailContext } from './EmailContext';
@@ -45,24 +46,26 @@ export function MessageList(props: MessageListProps) {
           <CircleSpinner />
         </div>
       </Show>
-      <For each={context.filteredMessages()}>
-        {(message, index) => {
-          return (
-            <MessageContainer
-              isFirstMessage={index() === 0}
-              isLastMessage={
-                index() === (context.filteredMessages().length ?? 0) - 1
-              }
-              isFocused={isFocusedSelector(message.db_id ?? undefined)}
-              isTarget={isTargetSelector(message.db_id ?? undefined)}
-              message={message}
-              expandedMessageBodyIds={expandedMessageBodyIds}
-              setExpandedMessageBodyIds={setExpandedMessageBodyIds}
-              threadMessageIndex={index()}
-            />
-          );
-        }}
-      </For>
+      <StaticMarkdownContext>
+        <For each={context.filteredMessages()}>
+          {(message, index) => {
+            return (
+              <MessageContainer
+                isFirstMessage={index() === 0}
+                isLastMessage={
+                  index() === (context.filteredMessages().length ?? 0) - 1
+                }
+                isFocused={isFocusedSelector(message.db_id ?? undefined)}
+                isTarget={isTargetSelector(message.db_id ?? undefined)}
+                message={message}
+                expandedMessageBodyIds={expandedMessageBodyIds}
+                setExpandedMessageBodyIds={setExpandedMessageBodyIds}
+                threadMessageIndex={index()}
+              />
+            );
+          }}
+        </For>
+      </StaticMarkdownContext>
     </div>
   );
 }
