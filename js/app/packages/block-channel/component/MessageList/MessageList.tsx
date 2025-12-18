@@ -54,6 +54,7 @@ import { type VirtualizerHandle, VList } from 'virtua/solid';
 import { MessageContainer } from '../Message/MessageContainer';
 import { ReplyInputsPortaler } from '../ReplyInputsPortaler';
 import { clamp } from '@core/util/math';
+import type { ScrollToIndexOpts } from 'virtua/unstable_core';
 
 false && observedSize;
 
@@ -91,14 +92,18 @@ const BASE_ITEM_SIZE = 50;
 
 type MessageListContentContextValues = {
   registerVirtualHandle: (handle: VirtualizerHandle) => void;
-  scrollContainerRef: Accessor<HTMLElement>;
+  scrollContainerRef: Accessor<HTMLElement | undefined>;
   registerScrollContainer: (el: HTMLElement) => void;
-  scrollToIndex: (index: number) => void;
+  scrollToIndex: (index: number, alignOpts?: ScrollToIndexOpts) => void;
   scrollToMessage: (messageID: string, focus?: boolean) => void;
-  createReply: (type: 'thread' | 'message', id: string) => void;
-  expandThread: (threadID: string) => void;
-  registerThreadAppendMountTarget: (el: HTMLElement) => void;
-  getThreadState: (threadID: string) => ThreadView;
+  createReply: (
+    type: 'thread' | 'message',
+    id: string,
+    focus?: boolean
+  ) => void;
+  toggleThread: (threadID: string, value?: boolean) => void;
+  registerThreadAppendMountTarget: (threadID: string, el: HTMLElement) => void;
+  getThreadState: (threadID: string) => ThreadView | undefined;
   getThreadDetails: (threadID: string) => MessageWithThreadId;
   orderedMessages: Accessor<Message[]>;
 };
@@ -145,26 +150,70 @@ export function MessageList(props: MessageListProps) {
     HTMLDivElement | undefined
   >();
 
+  const [threadViewStore, setThreadViewStore] = createStore<ThreadViewData>({});
+
+  const normalizeIndex = (index: number) => {
+    const length = props.orderedMessages().length;
+
+    return length - 1 - index;
+  };
+
   const context: MessageListContentContextValues = {
     registerVirtualHandle: setVirtualHandle,
+    scrollContainerRef,
     registerScrollContainer: setScrollContainerRef,
-    scrollToIndex: function (index: number): void {
-      throw new Error('Function not implemented.');
+    scrollToIndex: function (index: number, opts?: ScrollToIndexOpts): void {
+      virtualHandle()?.scrollToIndex(normalizeIndex(index), opts);
     },
     scrollToMessage: function (messageID: string, focus?: boolean): void {
-      throw new Error('Function not implemented.');
+      const handle = virtualHandle();
+
+      if (!handle) return;
+
+      //   const indx = handle.findItemIndex()
+      // handle.scrollToIndex(targetIndex);
+      const targetEl = scrollContainerRef()?.querySelector<HTMLElement>(
+        `[data-message-body-id="${messageID}"]`
+      );
+      if (targetEl) {
+        requestAnimationFrame(() => {
+          targetEl.focus();
+        });
+      }
     },
-    createReply: function (type: 'thread' | 'message', id: string): void {
-      throw new Error('Function not implemented.');
+    createReply: function (
+      type: 'thread' | 'message',
+      id: string,
+      focus = false
+    ): void {
+      setThreadViewStore(id, (prev) => {
+        return {
+          ...prev,
+          threadExpanded: true,
+          hasActiveReply: true,
+          replyInputShouldFocus: false,
+        };
+      });
     },
-    expandThread: function (threadID: string): void {
-      throw new Error('Function not implemented.');
+    toggleThread: function (threadID: string, value?: boolean): void {
+      setThreadViewStore(threadID, (prev) => {
+        return {
+          ...prev,
+          threadExpanded: (value ?? prev) ? !prev.threadExpanded : true,
+        };
+      });
     },
-    registerThreadAppendMountTarget: function (el: HTMLElement): void {
-      throw new Error('Function not implemented.');
+    registerThreadAppendMountTarget: function (
+      threadID: string,
+      el: HTMLElement
+    ): void {
+      setThreadViewStore(threadID, (prev) => ({
+        ...prev,
+        replyInputMountTarget: el,
+      }));
     },
-    getThreadState: function (threadID: string): ThreadView {
-      throw new Error('Function not implemented.');
+    getThreadState: function (threadID: string): ThreadView | undefined {
+      return threadViewStore[threadID];
     },
     getThreadDetails: function (threadID: string): MessageWithThreadId {
       throw new Error('Function not implemented.');
@@ -195,8 +244,6 @@ function MessageListImpl(props: MessageListProps) {
 
   const [threadInputAttachmentsStore, setThreadInputAttachmentsStore] =
     createStore<Record<string, InputAttachment[]>>({});
-
-  const [threadViewStore, setThreadViewStore] = createStore<ThreadViewData>({});
 
   const [isNearBottom, setIsNearBottom] = createSignal(true);
   const [initialScrollComplete, setInitialScrollComplete] = createSignal(false);
@@ -278,10 +325,7 @@ function MessageListImpl(props: MessageListProps) {
     }
 
     if (threadId) {
-      setThreadViewStore(threadId, (prev) => ({
-        ...prev,
-        threadExpanded: true,
-      }));
+      listContext.toggleThread(threadId, true);
     }
 
     setTargetMessageActive(true);
@@ -450,11 +494,9 @@ function MessageListImpl(props: MessageListProps) {
     const base = filteredTopLevelMessages() ?? [];
     for (const message of base) {
       const hasDraft = !!loadDraftMessage(message.channel_id, message.id);
-      if (hasDraft && !threadViewStore[message.id]) {
-        setThreadViewStore(message.id, {
-          threadExpanded: true,
-          hasActiveReply: true,
-        });
+      const threadDetails = listContext.getThreadState(message.id);
+      if (hasDraft && threadDetails) {
+        listContext.createReply('thread', message.id);
       }
     }
   });
@@ -467,13 +509,24 @@ function MessageListImpl(props: MessageListProps) {
     for (let i = 0; i < list.length; i++) {
       const msg = list[i];
       const next = list[i + 1];
-      const threadId = msg.thread_id ?? '';
+      const threadId = msg.thread_id;
+
+      if (!threadId) continue;
+
+      const threadState = listContext.getThreadState(threadId);
+
+      // Since orderedMessages is a flat list: if the next message' thread id is different OR
+      // there is no next message, then this message is the last message in the thread
+      const isLastInThread =
+        (next && next.thread_id !== msg.thread_id) || !next;
+
+      // We captured this thread reply but there was no message. The user might be
+      // typing or want to type a reply
+      const isLocallyFrozenWithEmptyMessage = !viewThreads[msg.id]?.length;
+
       if (
-        (threadId &&
-          ((next && next.thread_id !== msg.thread_id) || !next) &&
-          threadViewStore[threadId]?.hasActiveReply) ||
-        (threadViewStore[msg.id]?.hasActiveReply &&
-          !viewThreads[msg.id]?.length)
+        (isLastInThread && threadState?.hasActiveReply) ||
+        (threadState?.hasActiveReply && isLocallyFrozenWithEmptyMessage)
       ) {
         indices.push(i);
       }
@@ -712,10 +765,15 @@ function MessageListImpl(props: MessageListProps) {
             >
               {(row: { id: string; message: Message }, i) => {
                 const isParentless = () => !row.message.thread_id;
-                const isThreadExpanded = createMemo(
-                  () =>
-                    threadViewStore[row.message.thread_id ?? '']?.threadExpanded
-                );
+                const isThreadExpanded = createMemo(() => {
+                  if (!row.message.thread_id) return false;
+
+                  const state = listContext.getThreadState(
+                    row.message.thread_id
+                  );
+
+                  return state?.threadExpanded === true;
+                });
                 const isThreadIndexWithinCutoff = createMemo(
                   () =>
                     messageListContext[row.id].threadIndex !== -1 &&
@@ -742,8 +800,6 @@ function MessageListImpl(props: MessageListProps) {
                       threadChildren={viewThreads[row.message.id ?? '']?.filter(
                         messageFilterFn
                       )}
-                      threadViewStore={threadViewStore}
-                      setThreadViewStore={setThreadViewStore}
                       newIndicatorShown={newIndicatorShown}
                       setNewIndicatorShown={setNewIndicatorShown}
                       virtualHandle={virtualHandle()!}
