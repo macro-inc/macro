@@ -1,4 +1,3 @@
-use crate::pubsub::util::check_gmail_rate_limit;
 use crate::util::redis::RedisClient;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
