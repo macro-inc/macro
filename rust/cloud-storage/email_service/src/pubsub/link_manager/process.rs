@@ -1,19 +1,19 @@
-use crate::pubsub::refresh::context::RefreshContext;
+use crate::pubsub::link_manager::context::LinkManagerContext;
 use crate::pubsub::util::{fetch_access_token_for_link, fetch_link};
 use crate::util::sync_contacts::sync_contacts;
 use anyhow::{Context, anyhow};
-use models_email::email::service::pubsub::RefreshMessage;
+use models_email::email::service::pubsub::LinkManagerMessage;
 use models_email::service::link::Link;
 use sqs_worker::cleanup_message;
 // --- Main Orchestrator Function ---
 
-/// Processes a refresh message by orchestrating data fetching, API calls, and database updates.
+/// Processes a link manager message by orchestrating data fetching, API calls, and database updates.
 pub async fn process_message(
-    ctx: RefreshContext,
+    ctx: LinkManagerContext,
     message: &aws_sdk_sqs::types::Message,
 ) -> anyhow::Result<()> {
     // Step 1: Parse the incoming message
-    let notification_data = extract_refresh_message(message)?;
+    let notification_data = extract_message(message)?;
 
     // Step 2: Fetch the user's link details from the database
     let link = fetch_link(&ctx.db, notification_data.link_id).await?;
@@ -57,18 +57,16 @@ pub async fn process_message(
 }
 
 #[tracing::instrument(skip(message))]
-fn extract_refresh_message(
-    message: &aws_sdk_sqs::types::Message,
-) -> anyhow::Result<RefreshMessage> {
+fn extract_message(message: &aws_sdk_sqs::types::Message) -> anyhow::Result<LinkManagerMessage> {
     let message_body = message.body().context("message body not found")?;
 
     serde_json::from_str(message_body)
-        .context("Failed to deserialize message body to RefreshMessage")
+        .context("Failed to deserialize message body to LinkManagerMessage")
 }
 
 /// Calls the Gmail API to renew the watch subscription for inbox updates.
 async fn renew_gmail_watch(
-    ctx: &RefreshContext,
+    ctx: &LinkManagerContext,
     gmail_access_token: &str,
     link: &Link,
 ) -> anyhow::Result<()> {
