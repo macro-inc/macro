@@ -131,11 +131,14 @@ export function MessageList(props: MessageListProps) {
   });
 
   const checkIfNewMessage = (message: Message) => {
+    const lastViewed_ = lastViewed();
+    const openedChannel_ = openedChannel();
     return (
-      !!lastViewed() &&
-      new Date(message.created_at) > new Date(lastViewed()!) &&
+      !!lastViewed_ &&
+      !!openedChannel_ &&
+      new Date(message.created_at) > new Date(lastViewed_) &&
       userId() !== message.sender_id &&
-      new Date(message.created_at) < new Date(openedChannel()!)
+      new Date(message.created_at) < new Date(openedChannel_)
     );
   };
 
@@ -706,39 +709,44 @@ export function MessageList(props: MessageListProps) {
                 return (
                   <Show
                     when={
-                      isParentless() ||
-                      isThreadExpanded() ||
-                      isThreadIndexWithinCutoff()
+                      (isParentless() ||
+                        isThreadExpanded() ||
+                        isThreadIndexWithinCutoff()) &&
+                      virtualHandle()
                     }
                   >
-                    <MessageContainer
-                      message={row.message}
-                      lastViewed={lastViewed}
-                      newMessageIndex={newMessageIndex}
-                      isFocused={isFocused(row.id)}
-                      setFocusedMessageId={props.setFocusedMessageId}
-                      index={i}
-                      orderedMessages={props.orderedMessages}
-                      threadSiblings={viewThreads[
-                        row.message.thread_id ?? ''
-                      ]?.filter(messageFilterFn)}
-                      threadChildren={viewThreads[row.message.id ?? '']?.filter(
-                        messageFilterFn
-                      )}
-                      threadViewStore={threadViewStore}
-                      setThreadViewStore={setThreadViewStore}
-                      threadInputAttachmentsStore={threadInputAttachmentsStore}
-                      setThreadInputAttachmentsStore={
-                        setThreadInputAttachmentsStore
-                      }
-                      newIndicatorShown={newIndicatorShown}
-                      setNewIndicatorShown={setNewIndicatorShown}
-                      virtualHandle={virtualHandle()!}
-                      container={containerRef()}
-                      listContext={messageListContext[row.id]}
-                      setLastMessageRef={props.setLastMessageRef}
-                      isTarget={isActiveTargetMessage(row.message.id)}
-                    />
+                    {(handle) => (
+                      <MessageContainer
+                        message={row.message}
+                        lastViewed={lastViewed}
+                        newMessageIndex={newMessageIndex}
+                        isFocused={isFocused(row.id)}
+                        setFocusedMessageId={props.setFocusedMessageId}
+                        index={i}
+                        orderedMessages={props.orderedMessages}
+                        threadSiblings={viewThreads[
+                          row.message.thread_id ?? ''
+                        ]?.filter(messageFilterFn)}
+                        threadChildren={viewThreads[
+                          row.message.id ?? ''
+                        ]?.filter(messageFilterFn)}
+                        threadViewStore={threadViewStore}
+                        setThreadViewStore={setThreadViewStore}
+                        threadInputAttachmentsStore={
+                          threadInputAttachmentsStore
+                        }
+                        setThreadInputAttachmentsStore={
+                          setThreadInputAttachmentsStore
+                        }
+                        newIndicatorShown={newIndicatorShown}
+                        setNewIndicatorShown={setNewIndicatorShown}
+                        virtualHandle={handle()}
+                        container={containerRef()}
+                        listContext={messageListContext[row.id]}
+                        setLastMessageRef={props.setLastMessageRef}
+                        isTarget={isActiveTargetMessage(row.message.id)}
+                      />
+                    )}
                   </Show>
                 );
               }}
