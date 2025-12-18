@@ -1149,8 +1149,8 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   };
 
   const focusedSelector = createSelector(() => selectedEntity()?.id);
-  const multiselectedSelector = createSelector(
-    () => view()?.multiselectedEntities,
+  const multiSelectSelector = createSelector(
+    () => view()?.multiSelectEntities,
     (a: string, b: EntityData[]) => b.find((e) => e.id === a) !== undefined
   );
 
@@ -1240,7 +1240,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   // reset last clicked on reset multi-selection.
   createEffect(() => {
     if (
-      unifiedListContext.viewsDataStore[selectedView()].multiselectedEntities
+      unifiedListContext.viewsDataStore[selectedView()].multiSelectEntities
         .length === 0
     ) {
       lastClickedEntityId = -1;
@@ -1591,12 +1591,12 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                     isPanelActive() && focusedSelector(innerProps.entity.id)
                   }
                   selected={focusedSelector(innerProps.entity.id)}
-                  checked={multiselectedSelector(innerProps.entity.id)}
+                  checked={multiSelectSelector(innerProps.entity.id)}
                   onChecked={(next, shiftKey) => {
                     const toggleSingle = () =>
                       unifiedListContext.setViewDataStore(
                         selectedView(),
-                        'multiselectedEntities',
+                        'multiSelectEntities',
                         (p) => {
                           if (!next) {
                             return p.filter(
@@ -1614,7 +1614,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       const selectedEntitySet = new Set(
                         unifiedListContext.viewsDataStore[
                           unifiedListContext.selectedView()
-                        ].multiselectedEntities
+                        ].multiSelectEntities
                       );
                       const newEnititiesForSeleciton: EntityData[] = [];
 
@@ -1653,7 +1653,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       }
                       unifiedListContext.setViewDataStore(
                         selectedView(),
-                        'multiselectedEntities',
+                        'multiSelectEntities',
                         (p) => {
                           return p.concat(newEnititiesForSeleciton);
                         }
@@ -1710,20 +1710,20 @@ export function UnifiedListView(props: UnifiedListViewProps) {
             </Show>
           </ContextMenu.Portal>
         </ContextMenu.Trigger>
-        <Show when={view()?.multiselectedEntities.length}>
+        <Show when={view()?.multiSelectEntities.length}>
           <EntitySelectionToolbarModal
-            multiselectedEntities={view()?.multiselectedEntities ?? []}
+            multiSelectEntities={view()?.multiSelectEntities ?? []}
             onClose={() =>
               unifiedListContext.setViewDataStore(
                 selectedView(),
-                'multiselectedEntities',
+                'multiSelectEntities',
                 []
               )
             }
             onAction={() => {
-              const multiselectedEntities =
-                viewsData[selectedView()].multiselectedEntities;
-              const hasSelection = multiselectedEntities.length > 0;
+              const multiSelectEntities =
+                viewsData[selectedView()].multiSelectEntities;
+              const hasSelection = multiSelectEntities.length > 0;
               if (hasSelection) {
                 setKonsoleMode('SELECTION_MODIFICATION');
                 const selectionIndex =
@@ -1736,11 +1736,11 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                 searchCategories.showCategory('Selection');
 
                 setKonsoleContextInformation({
-                  selectedEntities: multiselectedEntities.slice(),
+                  selectedEntities: multiSelectEntities.slice(),
                   clearSelection: () => {
                     unifiedListContext.setViewDataStore(
                       selectedView(),
-                      'multiselectedEntities',
+                      'multiSelectEntities',
                       []
                     );
                   },

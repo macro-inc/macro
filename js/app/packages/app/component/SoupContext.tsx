@@ -191,7 +191,7 @@ function createViewData(
     selectedEntity: undefined,
     scrollOffset: undefined,
     initialConfig: undefined,
-    multiselectedEntities: [],
+    multiSelectEntities: [],
     hasUserInteractedEntity: false,
     searchText: viewProps?.searchText,
   };
@@ -281,7 +281,7 @@ export function createNavigationEntityListShortcut({
     clearSelection?: boolean
   ) => {
     if (clearSelection) {
-      setViewDataStore(selectedView(), 'multiselectedEntities', []);
+      setViewDataStore(selectedView(), 'multiSelectEntities', []);
     }
     if (entity) {
       setSelectedEntity(entity);
@@ -363,7 +363,7 @@ export function createNavigationEntityListShortcut({
           }
         }
 
-        setViewDataStore(selectedView(), 'multiselectedEntities', []);
+        setViewDataStore(selectedView(), 'multiSelectEntities', []);
       }
 
       return { success: true };
@@ -459,7 +459,7 @@ export function createNavigationEntityListShortcut({
     hotkeyToken: TOKENS.entity.action.delete,
     scopeId: splitHotkeyScope,
     description: () =>
-      viewData().multiselectedEntities.length > 1
+      viewData().multiSelectEntities.length > 1
         ? 'Delete items'
         : 'Delete item',
     keyDownHandler: () => {
@@ -560,7 +560,7 @@ export function createNavigationEntityListShortcut({
     scopeId: splitHotkeyScope,
     hotkeyToken: TOKENS.entity.action.rename,
     description: () =>
-      viewData().multiselectedEntities.length > 1
+      viewData().multiSelectEntities.length > 1
         ? 'Rename items'
         : 'Rename item',
     condition: () =>
@@ -609,7 +609,7 @@ export function createNavigationEntityListShortcut({
 
     hotkeyToken: TOKENS.entity.action.copy,
     description: () =>
-      viewData().multiselectedEntities.length > 1 ? 'Copy items' : 'Copy item',
+      viewData().multiSelectEntities.length > 1 ? 'Copy items' : 'Copy item',
     condition: () =>
       isViewingList() &&
       actionRegistry.isActionEnabled('copy', plainSelectedEntities()),
@@ -664,7 +664,7 @@ export function createNavigationEntityListShortcut({
     scopeId: splitHotkeyScope,
     hotkeyToken: TOKENS.entity.action.moveToFolder,
     description: () =>
-      viewData().multiselectedEntities.length > 1
+      viewData().multiSelectEntities.length > 1
         ? 'Move items to folder'
         : 'Move item to folder',
     condition: () =>
@@ -737,9 +737,9 @@ export function createNavigationEntityListShortcut({
     let selectedEntityIndices: Array<{ entity: EntityData; index: number }> =
       [];
 
-    if (viewData().multiselectedEntities.length > 0) {
+    if (viewData().multiSelectEntities.length > 0) {
       selectedEntityIndices = filterMap(
-        viewData().multiselectedEntities,
+        viewData().multiSelectEntities,
         (entity) => {
           const index = idToIndexMap.get(entity.id);
           if (index === undefined) {
@@ -936,13 +936,13 @@ export function createNavigationEntityListShortcut({
 
   const isEntitySelected = (entityID: string) => {
     return (
-      viewData()?.multiselectedEntities.find((e) => e.id === entityID) !==
+      viewData()?.multiSelectEntities.find((e) => e.id === entityID) !==
       undefined
     );
   };
 
   const toggleEntity = (entity: EntityData) => {
-    setViewDataStore(selectedView(), 'multiselectedEntities', (s) => {
+    setViewDataStore(selectedView(), 'multiSelectEntities', (s) => {
       if (isEntitySelected(entity.id)) {
         return s.filter((e) => e.id !== entity.id);
       }
@@ -971,9 +971,9 @@ export function createNavigationEntityListShortcut({
       return true;
     }
 
-    // If multiselectedEntities is empty, select current item first without moving
-    const multiselectedEntities = viewData()?.multiselectedEntities || [];
-    if (multiselectedEntities.length === 0) {
+    // If multiSelectEntities is empty, select current item first without moving
+    const multiSelectEntities = viewData()?.multiSelectEntities || [];
+    if (multiSelectEntities.length === 0) {
       toggleEntity(selectedEntity.entity);
       return true;
     }
@@ -1006,9 +1006,9 @@ export function createNavigationEntityListShortcut({
     condition: () => !konsoleOpen() && isViewingList(),
     keyDownHandler: (e) => {
       e?.preventDefault();
-      const multiselectedEntities = viewData().multiselectedEntities;
+      const multiSelectEntities = viewData().multiSelectEntities;
 
-      const hasSelection = multiselectedEntities.length > 0;
+      const hasSelection = multiSelectEntities.length > 0;
 
       if (hasSelection) {
         setKonsoleMode('SELECTION_MODIFICATION');
@@ -1021,7 +1021,7 @@ export function createNavigationEntityListShortcut({
         searchCategories.showCategory('Selection');
 
         setKonsoleContextInformation({
-          multiselectedEntities: multiselectedEntities.slice(),
+          multiSelectEntities: multiSelectEntities.slice(),
         });
 
         toggleKonsoleVisibility();
@@ -1282,12 +1282,12 @@ export function createNavigationEntityListShortcut({
     scopeId: splitHotkeyScope,
     description: 'Clear multi selection',
     keyDownHandler: () => {
-      const length = viewData().multiselectedEntities.length;
-      setViewDataStore(selectedView(), 'multiselectedEntities', []);
+      const length = viewData().multiSelectEntities.length;
+      setViewDataStore(selectedView(), 'multiSelectEntities', []);
       return length > 1;
     },
     canExecuteKeyDownHandler: () =>
-      isViewingList() && viewData().multiselectedEntities.length > 0,
+      isViewingList() && viewData().multiSelectEntities.length > 0,
   });
 }
 
