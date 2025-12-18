@@ -12,7 +12,6 @@ import type { InputAttachment } from '@core/store/cacheChannelInput';
 import { channelParticipantInfo } from '@core/user/util';
 import { createCallback } from '@solid-primitives/rootless';
 import {
-  type Accessor,
   createEffect,
   createMemo,
   createSignal,
@@ -21,13 +20,11 @@ import {
 } from 'solid-js';
 import type { SetStoreFunction } from 'solid-js/store';
 import { Portal } from 'solid-js/web';
-import type { VirtualizerHandle } from 'virtua/solid';
 import { BaseInput } from './BaseInput';
 
 export type ReplyInputsPortalerProps = {
   channelId: string;
   threads: ThreadStoreData;
-  virtualHandle: Accessor<VirtualizerHandle | undefined>;
   threadInputAttachmentsStore: Record<string, InputAttachment[]>;
   setThreadInputAttachmentsStore: SetStoreFunction<
     Record<string, InputAttachment[]>
@@ -69,7 +66,7 @@ export function ReplyInputsPortaler(props: ReplyInputsPortalerProps) {
         if (!targetMessageId) return;
 
         // Ensure it's scrolled into view in the virtual list
-        props.virtualHandle()?.scrollToIndex(targetIndex, { align: 'nearest' });
+        listContext.scrollToIndex(targetIndex, { align: 'nearest' });
 
         // Then focus the element once mounted
         setTimeout(() => {

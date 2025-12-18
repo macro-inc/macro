@@ -868,7 +868,6 @@ function MessageListImpl(props: MessageListProps) {
       <ReplyInputsPortaler
         channelId={props.channelId}
         threads={viewThreads}
-        virtualHandle={virtualHandle}
         threadInputAttachmentsStore={threadInputAttachmentsStore}
         setThreadInputAttachmentsStore={setThreadInputAttachmentsStore}
         setLocalTypingThreadId={setLocalTypingThreadId}
