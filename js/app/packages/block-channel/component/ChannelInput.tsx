@@ -1,4 +1,7 @@
-import { channelStore, sendMessage } from '@block-channel/signal/channel';
+import {
+  channelStore,
+  useSendChannelMessageAction,
+} from '@block-channel/signal/channel';
 import { postTypingUpdate } from '@block-channel/signal/typing';
 import {
   clearDraftMessage,
@@ -30,11 +33,8 @@ export type ChannelInputProps = {
 export function ChannelInput(props: ChannelInputProps) {
   const channelId = useBlockId();
 
-  const sendMessage_ = createCallback(
-    (args: Parameters<typeof sendMessage>[0]) => {
-      return sendMessage(args);
-    }
-  );
+  const sendMessage = useSendChannelMessageAction();
+
   const postTypingUpdate_ = createCallback(postTypingUpdate);
 
   const channel = channelStore.get;
@@ -72,7 +72,7 @@ export function ChannelInput(props: ChannelInputProps) {
       placeholder={`Message ${props.channelName} — @mention to share`}
       onStartTyping={() => postTypingUpdate_('start')}
       onStopTyping={() => postTypingUpdate_('stop')}
-      onSend={sendMessage_}
+      onSend={sendMessage}
       afterSend={() => clearDraftMessage(channelId)}
       onChange={handleChange}
       initialValue={() => draftMessage()?.content ?? ''}

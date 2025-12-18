@@ -1,4 +1,8 @@
-import { channelStore, sendMessage } from '@block-channel/signal/channel';
+import {
+  channelStore,
+  useSendChannelMessageAction,
+  type SendMessageArgs,
+} from '@block-channel/signal/channel';
 import type { ThreadStoreData } from '@block-channel/signal/threads';
 import { postTypingUpdate } from '@block-channel/signal/typing';
 import type { ThreadViewData } from '@block-channel/type/threadView';
@@ -40,8 +44,9 @@ export type ReplyInputsPortalerProps = {
 };
 
 export function ReplyInputsPortaler(props: ReplyInputsPortalerProps) {
+  const sendMessage = useSendChannelMessageAction();
+
   const postTypingUpdate_ = createCallback(postTypingUpdate);
-  const sendMessage_ = createCallback(sendMessage);
   const blockRef = blockElementSignal.get;
 
   const channel = channelStore.get;
@@ -53,36 +58,33 @@ export function ReplyInputsPortaler(props: ReplyInputsPortalerProps) {
   const [focusedReplyInputThreadId, setFocusedReplyInputThreadId] =
     createSignal<string>();
 
-  const onSend =
-    (threadId: string) => async (args: Parameters<typeof sendMessage>[0]) => {
-      clearDraftMessage(props.channelId, threadId);
-      await sendMessage_({ ...args, threadId });
-      // After sending, focus the message immediately after the current one in the
-      // flattened list.
-      // Use a timeout to ensure the new message mounts in the DOM first.
+  const onSend = (threadId: string) => async (args: SendMessageArgs) => {
+    clearDraftMessage(props.channelId, threadId);
+    await sendMessage({ ...args, threadId });
+    // After sending, focus the message immediately after the current one in the
+    // flattened list.
+    // Use a timeout to ensure the new message mounts in the DOM first.
+    setTimeout(() => {
+      const list = props.orderedMessages() ?? [];
+      const lastMessageInThreadId = props.threads[threadId]?.at(-1)?.id;
+      const currentIdx = list.findIndex((m) => m.id === lastMessageInThreadId);
+      const targetIndex = currentIdx >= 0 ? currentIdx + 1 : -1;
+      if (targetIndex < 0 || targetIndex >= list.length) return;
+      const targetMessageId = list[targetIndex]?.id;
+      if (!targetMessageId) return;
+
+      // Ensure it's scrolled into view in the virtual list
+      props.virtualHandle()?.scrollToIndex(targetIndex, { align: 'nearest' });
+
+      // Then focus the element once mounted
       setTimeout(() => {
-        const list = props.orderedMessages() ?? [];
-        const lastMessageInThreadId = props.threads[threadId]?.at(-1)?.id;
-        const currentIdx = list.findIndex(
-          (m) => m.id === lastMessageInThreadId
-        );
-        const targetIndex = currentIdx >= 0 ? currentIdx + 1 : -1;
-        if (targetIndex < 0 || targetIndex >= list.length) return;
-        const targetMessageId = list[targetIndex]?.id;
-        if (!targetMessageId) return;
-
-        // Ensure it's scrolled into view in the virtual list
-        props.virtualHandle()?.scrollToIndex(targetIndex, { align: 'nearest' });
-
-        // Then focus the element once mounted
-        setTimeout(() => {
-          const el = document.querySelector(
-            `[data-message-body-id="${targetMessageId}"]`
-          ) as HTMLElement | null;
-          el?.focus();
-        }, 0);
-      }, 100);
-    };
+        const el = document.querySelector(
+          `[data-message-body-id="${targetMessageId}"]`
+        ) as HTMLElement | null;
+        el?.focus();
+      }, 0);
+    }, 100);
+  };
 
   const onAfterSend = (threadId: string) => () => {
     props.setThreadViewStore(threadId, (prev) =>
