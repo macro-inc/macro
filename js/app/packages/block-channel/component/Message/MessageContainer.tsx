@@ -4,7 +4,6 @@ import { messageAttachmentsStore } from '@block-channel/signal/attachment';
 import { editMessage } from '@block-channel/signal/channel';
 import { reactToMessage } from '@block-channel/signal/reactions';
 import type { MessageListContext } from '@block-channel/utils/listContext';
-import { scrollIntoViewAndFocus } from '@block-channel/utils/scrollAndFocus';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
 import {
@@ -375,7 +374,7 @@ export function MessageContainer(props: MessageProps) {
         .findIndex((m) => m.id === message.id);
       if (focusedIndex === -1) return false;
       listContext.createReply('message', message.id);
-      props.virtualHandle?.scrollToIndex(focusedIndex);
+      listContext.scrollToIndex(focusedIndex);
       return true;
     },
     hotkeyToken: TOKENS.channel.replyToMessage,
@@ -418,12 +417,7 @@ export function MessageContainer(props: MessageProps) {
     hotkeyToken: TOKENS.channel.expandThread,
     keyDownHandler: () => {
       setThreadExpansion(true);
-      scrollIntoViewAndFocus({
-        virtualHandle: props.virtualHandle,
-        container: props.container,
-        targetIndex: props.index(),
-        targetId: message.id,
-      });
+      listContext.scrollToMessage(message.id, props.index());
       return true;
     },
     displayPriority: 10,
@@ -444,12 +438,7 @@ export function MessageContainer(props: MessageProps) {
         .orderedMessages()
         .findIndex((m) => m.id === parentId);
       if (parentIndex >= 0) {
-        scrollIntoViewAndFocus({
-          virtualHandle: props.virtualHandle,
-          container: props.container,
-          targetIndex: parentIndex,
-          targetId: parentId,
-        });
+        listContext.scrollToMessage(parentId, parentIndex);
       }
       return true;
     },
@@ -468,13 +457,13 @@ export function MessageContainer(props: MessageProps) {
     if (!threadState_) {
       listContext.toggleThread(message.thread_id, true);
 
-      scrollIntoViewAndFocus({
-        virtualHandle: props.virtualHandle,
-        container: props.container,
-        targetIndex: props.index() + 1,
-        targetId:
-          props.threadSiblings?.at(COLLAPSED_THREAD_INDEX_CUTOFF + 1)?.id ?? '',
-      });
+      const lastSiblingId = props.threadSiblings?.at(
+        COLLAPSED_THREAD_INDEX_CUTOFF + 1
+      )?.id;
+
+      if (!lastSiblingId) return;
+
+      listContext.scrollToMessage(lastSiblingId, props.index() + 1);
       return;
     }
 

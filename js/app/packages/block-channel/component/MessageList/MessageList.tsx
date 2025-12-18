@@ -95,7 +95,7 @@ type MessageListContentContextValues = {
   scrollContainerRef: Accessor<HTMLElement | undefined>;
   registerScrollContainer: (el: HTMLElement) => void;
   scrollToIndex: (index: number, alignOpts?: ScrollToIndexOpts) => void;
-  scrollToMessage: (messageID: string, focus?: boolean) => void;
+  scrollToMessage: (messageID: string, index: number, focus?: boolean) => void;
   createReply: (
     type: 'thread' | 'message',
     id: string,
@@ -168,13 +168,17 @@ export function MessageList(props: MessageListProps) {
     scrollToIndex: function (index: number, opts?: ScrollToIndexOpts): void {
       virtualHandle()?.scrollToIndex(normalizeIndex(index), opts);
     },
-    scrollToMessage: function (messageID: string, focus?: boolean): void {
+    scrollToMessage: function (
+      messageID: string,
+      index: number,
+      focus: boolean = true
+    ): void {
       const handle = virtualHandle();
 
       if (!handle) return;
 
-      //   const indx = handle.findItemIndex()
-      // handle.scrollToIndex(targetIndex);
+      handle.scrollToIndex(index);
+      if (!focus) return;
       const targetEl = scrollContainerRef()?.querySelector<HTMLElement>(
         `[data-message-body-id="${messageID}"]`
       );
