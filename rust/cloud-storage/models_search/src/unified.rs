@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use uuid::Uuid;
 
 use crate::channel::ChannelSearchResponseItemWithMetadata;
 use crate::chat::ChatSearchResponseItemWithMetadata;
@@ -131,6 +132,15 @@ pub enum UnifiedSearchResponseItem {
 }
 
 impl UnifiedSearchResponseItem {
+    pub fn entity_id(&self) -> Uuid {
+        match self {
+            Self::Document(item) => item.extra.id,
+            Self::Chat(item) => item.extra.id,
+            Self::Email(item) => item.extra.id,
+            Self::Channel(item) => item.extra.id,
+            Self::Project(item) => item.extra.id,
+        }
+    }
     /// Get the updated_at timestamp for each item
     pub fn updated_at(&self) -> i64 {
         match self {

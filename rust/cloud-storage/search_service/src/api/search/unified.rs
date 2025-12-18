@@ -13,7 +13,9 @@ use axum::{
     response::{IntoResponse, Json, Response},
 };
 use model::{response::ErrorResponse, user::UserContext};
-use models_search::unified::{UnifiedSearchRequest, UnifiedSearchResponse};
+use models_search::unified::{
+    UnifiedSearchRequest, UnifiedSearchResponse, UnifiedSearchResponseItem,
+};
 use opensearch_client::search::unified::{
     SplitUnifiedSearchResponse, SplitUnifiedSearchResponseValues,
 };
@@ -103,6 +105,16 @@ pub async fn handler(
     results.extend(enriched_project_results);
     results.extend(enriched_email_results);
 
+    results = sort_unified_search_results(results);
+
+    Ok((StatusCode::OK, Json(UnifiedSearchResponse { results })).into_response())
+}
+
+/// Sorts the unified results
+/// This method is so we can more easily test sorting
+fn sort_unified_search_results(
+    mut results: Vec<UnifiedSearchResponseItem>,
+) -> Vec<UnifiedSearchResponseItem> {
     // Sort the results by their updated_at
     results.sort_by(|a, b| {
         b.updated_at()
@@ -110,5 +122,8 @@ pub async fn handler(
             .unwrap_or(Ordering::Equal)
     });
 
-    Ok((StatusCode::OK, Json(UnifiedSearchResponse { results })).into_response())
+    results
 }
+
+#[cfg(test)]
+mod test;
