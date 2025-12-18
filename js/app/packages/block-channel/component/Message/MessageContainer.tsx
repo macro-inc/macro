@@ -483,36 +483,11 @@ export function MessageContainer(props: MessageProps) {
       props.setThreadViewStore(message.thread_id, () => ({
         threadExpanded: true,
       }));
-
-      scrollIntoViewAndFocus({
-        virtualHandle: props.virtualHandle,
-        container: props.container,
-        targetIndex: props.index() + 1,
-        targetId:
-          props.threadSiblings?.at(COLLAPSED_THREAD_INDEX_CUTOFF + 1)?.id ?? '',
-      });
     } else {
       props.setThreadViewStore(message.thread_id, (prev) => ({
         ...prev,
         threadExpanded: !prev.threadExpanded,
       }));
-      if (props.threadViewStore[message.thread_id]?.threadExpanded) {
-        scrollIntoViewAndFocus({
-          virtualHandle: props.virtualHandle,
-          container: props.container,
-          targetIndex: props.index() + 1,
-          targetId: message.thread_id,
-        });
-      } else {
-        scrollIntoViewAndFocus({
-          virtualHandle: props.virtualHandle,
-          container: props.container,
-          targetIndex: props
-            .orderedMessages()
-            .findIndex((m) => m.id === message.thread_id),
-          targetId: message.thread_id,
-        });
-      }
     }
   };
 
