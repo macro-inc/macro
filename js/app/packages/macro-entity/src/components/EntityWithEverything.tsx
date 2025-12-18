@@ -391,6 +391,8 @@ interface EntityProps<T extends WithNotification<EntityData>>
   checked?: boolean;
 }
 
+const [hoveredEntityId, setHoveredEntityId] = createSignal<string | null>(null);
+
 export function EntityWithEverything(
   props: EntityProps<WithNotification<EntityData | WithSearch<EntityData>>>
 ) {
@@ -805,11 +807,11 @@ export function EntityWithEverything(
       use:draggable
       use:droppable
       data-checked={props.checked}
-      class="everything-entity relative group/entity"
+      class="everything-entity relative group/entity hover:bg-hover/30"
       classList={{
-        'bg-hover/30 outline outline-accent/20 outline-offset-[-1px]':
+        'outline outline-accent/20 outline-offset-[-1px]':
           props.selected && !props.checked,
-        'bg-accent/5 outline outline-accent/20 outline-offset-[-1px]':
+        '!bg-accent/5 outline outline-accent/20 outline-offset-[-1px]':
           props.checked,
         'bracket outline outline-accent/20 outline-offset-[-1px]':
           props.highlighted,
@@ -818,6 +820,7 @@ export function EntityWithEverything(
         if (!didCursorMove(e)) {
           return;
         }
+        setHoveredEntityId(props.entity.id);
         props.onMouseOver?.();
       }}
       onContextMenu={() => {
@@ -981,7 +984,12 @@ export function EntityWithEverything(
                 );
               }}
             </Show>
-            <Show when={props.selected && props.onClickRowAction}>
+            <Show
+              when={
+                (props.selected || hoveredEntityId() === props.entity.id) &&
+                props.onClickRowAction
+              }
+            >
               <div class="absolute top-1 right-1 items-center flex @max-sm/split:hidden">
                 <Tooltip
                   tooltip={
