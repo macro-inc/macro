@@ -35,6 +35,7 @@ import { useQuery } from '@tanstack/solid-query';
 import type { LexicalEditor } from 'lexical';
 import { createSignal, For, Show, Suspense } from 'solid-js';
 import { createStore, reconcile, type Store, unwrap } from 'solid-js/store';
+import { tabbable } from 'tabbable';
 
 // Show these props in the composer.
 const COMPOSER_PROPERTIES = [
@@ -164,6 +165,8 @@ export function ComposeTask(props: ComposeTaskProps) {
   const [title, setTitle] = createSignal(props.initialTitle ?? '');
   const [content, setContent] = createSignal(props.initialContent ?? '');
   const [bodyEditor, setBodyEditor] = createSignal<LexicalEditor>();
+  const [containerRef, setContainerRef] = createSignal<HTMLDivElement>();
+  const [titleInputRef, setTitleInputRef] = createSignal<HTMLInputElement>();
 
   const [propertyValues, setPropertyValues] = createStore<
     Record<string, PropertyApiValues>
@@ -267,8 +270,17 @@ export function ComposeTask(props: ComposeTaskProps) {
     props.onClose?.();
   };
 
+  const editorFocusChange = (e: FocusEvent) => {
+    const root =
+  }
+
+
   return (
-    <div class="flex flex-col relative">
+    <div
+      class="flex flex-col relative bracket-never"
+      tabIndex={-1}
+      ref={setContainerRef}
+    >
       <div class="flex items-center gap-1 p-2">
         <Show when={splitPanel?.isPopover}>
           <IconButton
@@ -293,8 +305,27 @@ export function ComposeTask(props: ComposeTaskProps) {
             type="text"
             placeholder="Task Title"
             value={title()}
+            ref={setTitleInputRef}
             onInput={(e) => setTitle(e.currentTarget.value)}
             class="w-full py-2 text-xl font-medium placeholder-ink-placeholder/50"
+            on:keydown={(e) => {
+              if (e.key === 'Escape') {
+                const container = containerRef();
+                if (container) {
+                  container.focus();
+                  e.stopPropagation();
+                  e.preventDefault();
+                }
+              }
+              if (e.key === 'Enter' || e.key === 'ArrowDown') {
+                const editor = bodyEditor();
+                if (editor) {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  editor.focus(undefined, { defaultSelection: 'rootEnd' });
+                }
+              }
+            }}
           />
         </div>
 
@@ -305,6 +336,29 @@ export function ComposeTask(props: ComposeTaskProps) {
             initialValue={props.initialContent}
             placeholder={props.placeholder ?? 'Add description...'}
             captureEditor={setBodyEditor}
+            onEscape={() => {
+              containerRef()?.focus();
+              return true;
+            }}
+            onFocusLeaveStart={(e) => {
+              const input = titleInputRef();
+              if (input) {
+                input.focus();
+                e.preventDefault();
+                e.stopPropagation();
+              }
+            }}
+            onFocusLeaveEnd={(e) => {
+              const container = containerRef();
+              const root = bodyEditor()?.getRootElement();
+              if (container && root) {
+                const tabbables = tabbable(container);
+                const nextInx = tabbables.indexOf(root) + 1;
+                tabbables.at(nextInx % tabbables.length)?.focus();
+                e.preventDefault();
+                e.stopPropagation();
+              }
+            }}
           />
         </div>
 

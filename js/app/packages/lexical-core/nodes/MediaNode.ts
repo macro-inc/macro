@@ -1,4 +1,5 @@
 import type {
+    LexicalEditor,
   LexicalNode,
   NodeKey,
   SerializedLexicalNode,
@@ -133,7 +134,7 @@ export abstract class MediaNode<
     return false;
   }
 
-  exportDOM() {
+  exportDOM(_: LexicalEditor) {
     const element = this.getDOMElement();
     element.setAttribute('src', this.__url);
     element.setAttribute('width', this.__width.toString());
