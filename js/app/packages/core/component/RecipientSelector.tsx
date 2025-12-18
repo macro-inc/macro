@@ -387,7 +387,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
     () => {}
   );
 
-  // const selectedLen = () => props.selectedOptions().length;
+  const selectedLen = () => props.selectedOptions().length;
 
   const onInputChange = (next: string) => {
     setInputValue(next);
@@ -434,93 +434,109 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
       }}
     >
       <Combobox.Control<CombinedRecipientItem>>
-        {(state) => (
-          <div class="flex flex-wrap gap-2 max-h-[150px] min-h-[40px] overflow-y-auto text-ink">
-            <For each={state.selectedOptions()}>
-              {(option) => {
-                return (
-                  <Switch>
-                    <Match
-                      when={matches(
-                        option,
-                        (o) => o.kind === 'user' || o.kind === 'contact'
-                      )}
-                    >
-                      {(userOrContactOption) => {
-                        const opt = userOrContactOption();
-                        const name = getRecipientOptionName(opt);
-                        const email = getRecipientOptionEmail(opt);
+        {(state) => {
+          const context = useComboboxContext();
+          return (
+            <div class="flex flex-wrap gap-1.5 max-h-[150px] overflow-y-auto text-ink">
+              <For each={state.selectedOptions()}>
+                {(option) => {
+                  return (
+                    <Switch>
+                      <Match
+                        when={matches(
+                          option,
+                          (o) => o.kind === 'user' || o.kind === 'contact'
+                        )}
+                      >
+                        {(userOrContactOption) => {
+                          const opt = userOrContactOption();
+                          const name = getRecipientOptionName(opt);
+                          const email = getRecipientOptionEmail(opt);
 
-                        const displayText =
-                          name && name !== email ? `${name} | ${email}` : email;
+                          const displayText =
+                            name && name !== email
+                              ? `${name} | ${email}`
+                              : email;
 
-                        return (
-                          <div class="flex flex-row py-1 pl-2 gap-1 pr-0.5 overflow-hidden items-center bg-hover">
-                            <UserIcon id={opt.id} size="xs" isDeleted={false} />
-                            <p class={'text-sm'}>
-                              {truncateString(displayText ?? '', 20)}
-                            </p>
-                            <XIcon
-                              class="w-5 h-5 cursor-pointer hover:bg-hover hover-transition-bg p-1 "
-                              onClick={() => state.remove(option)}
-                            />
-                          </div>
-                        );
-                      }}
-                    </Match>
-                    <Match when={matches(option, (o) => o.kind === 'channel')}>
-                      {(channelOption) => {
-                        return (
-                          <div class="flex flex-row py-1 pl-2 gap-1 pr-0.5 overflow-hidden items-center bg-hover">
-                            <HashIcon class="w-4 h-4" />
-                            <p class={'text-sm'}>
-                              {truncateString(
-                                channelOption().data.name ?? channelOption().id,
-                                20
-                              )}
-                            </p>
-                            <XIcon
-                              class="w-5 h-5 cursor-pointer hover:bg-hover hover-transition-bg p-1 "
-                              onClick={() => state.remove(option)}
-                            />
-                          </div>
-                        );
-                      }}
-                    </Match>
-                    <Match when={matches(option, (o) => o.kind === 'custom')}>
-                      {(customOption) => {
-                        const email = customOption().data.email;
-                        return (
-                          <div class="flex flex-row py-1 pl-2 gap-1 pr-0.5 overflow-hidden items-center bg-hover">
-                            <UserIcon id={email} size="xs" isDeleted={false} />
-                            <p class={'text-sm'}>{truncateString(email, 20)}</p>
-                            <XIcon
-                              class="w-5 h-5 cursor-pointer hover:bg-hover hover-transition-bg p-1 "
-                              onClick={() => state.remove(option)}
-                            />
-                          </div>
-                        );
-                      }}
-                    </Match>
-                  </Switch>
-                );
-              }}
-            </For>
-            <Combobox.Input
-              disabled={disabled()}
-              ref={setInputRef}
-              class="flex-1 min-h-7 p-1 min-w-[200px] outline-none placeholder:text-ink-placeholder"
-              onKeyDown={(e) => {
-                if (
-                  (e.key === 'a' && e.ctrlKey) ||
-                  (e.key === 'a' && e.metaKey)
-                ) {
-                  setDisabled(true);
-                  queueMicrotask(() => setDisabled(false));
-                }
-                if (e.key === 'Escape') {
-                  if (inputValue().length === 0) {
-                    inputRef()?.blur();
+                          return (
+                            <div class="flex flex-row ml-2 py-1 pl-2 gap-1 pr-0.5 overflow-hidden items-center bg-hover">
+                              <UserIcon
+                                id={opt.id}
+                                size="xs"
+                                isDeleted={false}
+                              />
+                              <p class={'text-sm'}>
+                                {truncateString(displayText ?? '', 20)}
+                              </p>
+                              <XIcon
+                                class="w-5 h-5 cursor-pointer hover:bg-hover hover-transition-bg p-1 "
+                                onClick={() => state.remove(option)}
+                              />
+                            </div>
+                          );
+                        }}
+                      </Match>
+                      <Match
+                        when={matches(option, (o) => o.kind === 'channel')}
+                      >
+                        {(channelOption) => {
+                          return (
+                            <div class="flex flex-row ml-2 py-1 pl-2 gap-1 pr-0.5 overflow-hidden items-center bg-hover">
+                              <HashIcon class="w-4 h-4" />
+                              <p class={'text-sm'}>
+                                {truncateString(
+                                  channelOption().data.name ??
+                                    channelOption().id,
+                                  20
+                                )}
+                              </p>
+                              <XIcon
+                                class="w-5 h-5 cursor-pointer hover:bg-hover hover-transition-bg p-1 "
+                                onClick={() => state.remove(option)}
+                              />
+                            </div>
+                          );
+                        }}
+                      </Match>
+                      <Match when={matches(option, (o) => o.kind === 'custom')}>
+                        {(customOption) => {
+                          const email = customOption().data.email;
+                          return (
+                            <div class="flex flex-row ml-2 py-1 pl-2 gap-1 pr-0.5 overflow-hidden items-center bg-hover">
+                              <UserIcon
+                                id={email}
+                                size="xs"
+                                isDeleted={false}
+                              />
+                              <p class={'text-sm'}>
+                                {truncateString(email, 20)}
+                              </p>
+                              <XIcon
+                                class="w-5 h-5 cursor-pointer hover:bg-hover hover-transition-bg p-1 "
+                                onClick={() => state.remove(option)}
+                              />
+                            </div>
+                          );
+                        }}
+                      </Match>
+                    </Switch>
+                  );
+                }}
+              </For>
+              <Combobox.Input
+                disabled={disabled()}
+                ref={setInputRef}
+                class="flex-1 min-h-7 p-1 min-w-[200px] outline-none placeholder:text-ink-placeholder"
+                classList={{
+                  'ml-1': selectedLen() === 0,
+                }}
+                onKeyDown={(e) => {
+                  if (
+                    (e.key === 'a' && e.ctrlKey) ||
+                    (e.key === 'a' && e.metaKey)
+                  ) {
+                    setDisabled(true);
+                    queueMicrotask(() => setDisabled(false));
                   }
                   if (e.key === 'Escape') {
                     if (inputValue().length === 0) {

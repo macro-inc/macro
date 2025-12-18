@@ -1,7 +1,7 @@
+import { ENABLE_DOCK_NOTITIFCATIONS, ENABLE_JACK_IN } from '@core/constant/featureFlags';
 import { GlobalNotificationBell } from '@core/component/GlobalNotificationBell';
 import { createMemo, createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { isRightPanelOpen, useToggleRightPanel } from '@core/signal/layout';
-import { ENABLE_DOCK_NOTITIFCATIONS, ENABLE_JACK_IN } from '@core/constant/featureFlags';
 import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useGlobalNotificationSource } from '../GlobalAppState';
@@ -272,6 +272,7 @@ export function Dock() {
                 {/*<Show when={hasPaid()}>
                   <Hints />
                 </Show>*/}
+
                 <div class="w-full"/>
 
                 <Show when={ENABLE_DOCK_NOTITIFCATIONS}>
