@@ -101,19 +101,13 @@ function NewMessageIndicator(props: NewIndicatorProps) {
 type MessageProps = {
   message: MessageType;
   lastViewed: Accessor<string | null | undefined>;
-  newMessageIndex: Accessor<number | undefined>;
   isFocused: boolean;
-  setFocusedMessageId: Setter<string | undefined>;
   index: Accessor<number>;
   orderedMessages: Accessor<MessageType[]>;
   threadChildren?: MessageType[];
   threadSiblings?: MessageType[];
   threadViewStore: ThreadViewData;
   setThreadViewStore: SetStoreFunction<ThreadViewData>;
-  threadInputAttachmentsStore: Record<string, InputAttachment[]>;
-  setThreadInputAttachmentsStore: SetStoreFunction<
-    Record<string, InputAttachment[]>
-  >;
   newIndicatorShown: Accessor<number | undefined>;
   setNewIndicatorShown: Setter<number | undefined>;
   virtualHandle: VirtualizerHandle;

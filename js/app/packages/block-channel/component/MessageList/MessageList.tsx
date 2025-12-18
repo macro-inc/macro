@@ -661,9 +661,7 @@ export function MessageList(props: MessageListProps) {
                     <MessageContainer
                       message={row.message}
                       lastViewed={lastViewed}
-                      newMessageIndex={newMessageIndex}
                       isFocused={isFocused(row.id)}
-                      setFocusedMessageId={props.setFocusedMessageId}
                       index={() => normalizeIndex(i())}
                       orderedMessages={props.orderedMessages}
                       threadSiblings={viewThreads[
@@ -674,10 +672,6 @@ export function MessageList(props: MessageListProps) {
                       )}
                       threadViewStore={threadViewStore}
                       setThreadViewStore={setThreadViewStore}
-                      threadInputAttachmentsStore={threadInputAttachmentsStore}
-                      setThreadInputAttachmentsStore={
-                        setThreadInputAttachmentsStore
-                      }
                       newIndicatorShown={newIndicatorShown}
                       setNewIndicatorShown={setNewIndicatorShown}
                       virtualHandle={virtualHandle()!}
