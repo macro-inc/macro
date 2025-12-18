@@ -13,7 +13,7 @@ import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 false && fileSelector;
 false && folderSelector;
 
-const EMPTY_STATE_HELP_DRAWER_TIMEOUT_MS = 100;
+const EMPTY_STATE_HELP_DRAWER_TIMEOUT_MS = 0;
 
 const DEFAULT_EMPTY_MESSAGE = 'No items to show.';
 
