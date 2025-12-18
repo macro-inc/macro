@@ -9,6 +9,7 @@ import {
 } from '@core/store/cacheChannelInput';
 import { isErr } from '@core/util/maybeResult';
 import { invalidateChannelWithID } from '@queries/channel/channel';
+import { useSendMessageMutation } from '@queries/channel/message';
 import { commsServiceClient } from '@service-comms/client';
 import type { Attachment } from '@service-comms/generated/models/attachment';
 import type { Channel } from '@service-comms/generated/models/channel';
@@ -228,17 +229,73 @@ function isMessageSendable(
   return (content && content.trim().length > 0) || attachments.length > 0;
 }
 
+export type SendMessageArgs = {
+  content: string | undefined;
+  attachments: InputAttachment[];
+  threadId?: string;
+  mentions?: SimpleMention[];
+};
+
+export function useSendChannelMessageAction() {
+  const optimisticSend = createCallback(optimisticChannelMessage);
+  const channelsContext = useChannelsContext();
+  const userId = useUserId();
+
+  const mutation = useSendMessageMutation({
+    onSettled() {
+      channelsContext.refetchChannels();
+    },
+  });
+
+  return async ({
+    content,
+    attachments,
+    threadId,
+    mentions,
+  }: SendMessageArgs) => {
+    if (!userId) return;
+    if (!isMessageSendable(content, attachments)) return;
+    const channelId = channelStore.get.id;
+    if (!channelId) return;
+
+    const attachmentsToSend = attachments
+      .map((a) => ({
+        entity_id: a.id,
+        entity_type: isStaticAttachmentType(a.blockName)
+          ? a.blockName
+          : blockNameToItemType(a.blockName as BlockName),
+      }))
+      .filter((a) => a.entity_type !== undefined) as {
+      entity_id: string;
+      entity_type: string;
+    }[];
+
+    const data = await mutation.mutateAsync({
+      channelID: channelId,
+      message: {
+        attachments: attachmentsToSend,
+        content: content ?? '',
+        thread_id: threadId,
+        mentions: mentions ?? [],
+      },
+    });
+
+    optimisticSend({
+      channelId,
+      messageId: data.id,
+      content: content ?? '',
+      threadId,
+      senderId: userId()!,
+    });
+  };
+}
+
 export async function sendMessage({
   content,
   attachments,
   threadId,
   mentions,
-}: {
-  content: string | undefined;
-  attachments: InputAttachment[];
-  threadId?: string;
-  mentions?: SimpleMention[];
-}) {
+}: SendMessageArgs) {
   const optimisticSend = createCallback(optimisticChannelMessage);
   const channelsContext = useChannelsContext();
   const userId = useUserId();
