@@ -24,6 +24,7 @@ import { runCommand } from '@core/hotkey/hotkeys';
 import { Hotkey } from '@core/component/Hotkey';
 import { setCreateMenuOpen } from '../Launcher';
 import { useHasPaidAccess } from '@core/auth';
+import { isTauri } from '@core/util/platform';
 import { TOKENS } from '@core/hotkey/tokens';
 import { playSound } from '@app/util/sound';
 import { QuickAccess } from './QuickAccess';

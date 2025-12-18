@@ -701,19 +701,6 @@ export function createNavigationEntityListShortcut({
     }
   };
 
-  const _activeHighlightedId = () => {
-    return viewData()?.highlightedId;
-  };
-
-  const [_jumpedToEnd, _setJumpedToEnd] = createSignal(false);
-
-  const _getSelectedEntityEl = () => {
-    const entity = selectedEntity();
-    if (!entity) return;
-
-    return entityListRef()?.querySelector(`[data-entity-id="${entity.id}"]`);
-  };
-
   const getEntityElAtIndex = (index: number) => {
     const entity = entities()?.at(index);
     if (!entity) return;
@@ -946,39 +933,6 @@ export function createNavigationEntityListShortcut({
   };
 
   unifiedListContext._setNavigateThroughList(navigateThroughList);
-
-  const _scrollToEntityFromId = async () => {
-    const index = getHighlightedEntity()?.index;
-    if (!index) return;
-
-    virtualizerHandle()?.scrollToIndex(index, {
-      align: 'nearest',
-    });
-
-    await new Promise<true>((resolve) =>
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          resolve(true);
-        });
-      })
-    );
-  };
-
-  const _addScrollEventToList = () => {
-    const listScrollEl = entityListRef();
-
-    const onListScroll = () => {
-      if (listScrollEl) {
-        setViewDataStore(
-          selectedView(),
-          'scrollOffset',
-          listScrollEl.scrollTop
-        );
-      }
-    };
-
-    listScrollEl?.addEventListener('scroll', onListScroll);
-  };
 
   const isEntitySelected = (entityID: string) => {
     return (
