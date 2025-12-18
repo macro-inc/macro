@@ -2,7 +2,6 @@ import EntityNavigationIndicator from '@app/component/EntityNavigationIndicator'
 import { IconButton } from '@core/component/IconButton';
 import { ENABLE_PREVIEW } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
-import { isRightPanelOpen, isSettingsPanelOpen } from '@core/signal/layout';
 import CollapseIcon from '@icon/regular/arrows-in.svg';
 import ExpandIcon from '@icon/regular/arrows-out.svg';
 import CaretLeft from '@icon/regular/caret-left.svg';
@@ -20,6 +19,7 @@ import {
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { SplitLayoutContext, SplitPanelContext } from '../context';
+import { canSpotlight } from '../utils/canSpotlight';
 
 function SplitBackButton() {
   const context = useContext(SplitPanelContext);
@@ -55,15 +55,8 @@ function SplitSpotlightButton() {
   const context = useContext(SplitPanelContext);
   const layout = useContext(SplitLayoutContext);
   if (!context || !layout) return '';
-  const show = () => {
-    return (
-      layout.manager.splits().length > 1 ||
-      isSettingsPanelOpen() ||
-      isRightPanelOpen()
-    );
-  };
   return (
-    <Show when={show()}>
+    <Show when={canSpotlight(layout.manager)}>
       <IconButton
         size="sm"
         icon={context.handle.isSpotLight() ? CollapseIcon : ExpandIcon}

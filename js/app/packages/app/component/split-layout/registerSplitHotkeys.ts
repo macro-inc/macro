@@ -10,6 +10,7 @@ import { globalSplitManager } from '../../signal/splitLayout';
 import { fireMacroJump } from '../MacroJump';
 import type { SplitContent } from './layoutManager';
 import { focusAdjacentSplit } from './layoutUtils';
+import { canSpotlight } from './utils/canSpotlight';
 
 export function registerSplitHotkeys({
   splitHotkeyScope,
@@ -95,6 +96,10 @@ export function registerSplitHotkeys({
     hotkey: 'm',
     hotkeyToken: TOKENS.window.spotlight.toggle,
     description: () => `Maximize ${splitName()}`,
+    condition: () => {
+      if (!splitManager) return false;
+      return canSpotlight(splitManager);
+    },
     keyDownHandler: () => {
       toggleSpotlight();
       return true;
