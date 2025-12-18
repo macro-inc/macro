@@ -384,11 +384,6 @@ async fn generate_email_insights_for_new_message(
     };
 
     if thread.latest_outbound_message_ts.is_none() {
-        tracing::debug!(
-            %thread_id,
-            link_id = %link.id,
-            "Thread has no latest_outbound_message_ts; skipping insight generation"
-        );
         return Ok(());
     }
 
