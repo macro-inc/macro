@@ -339,6 +339,7 @@ export function MessageContainer(props: MessageProps) {
   };
 
   const actions = createMessageActions({
+    channelId: message.channel_id,
     messageId: message.id,
     messageContent: message.content ?? '',
     threadId: message.thread_id ?? undefined,
