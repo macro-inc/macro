@@ -23,6 +23,7 @@ import { TextButton } from '@core/component/TextButton';
 import { toast } from '@core/component/Toast/Toast';
 import { observedSize } from '@core/directive/observedSize';
 import type { InputAttachment } from '@core/store/cacheChannelInput';
+import { clamp } from '@core/util/math';
 import SunIcon from '@icon/duotone/sun-horizon-duotone.svg';
 import ArrowDownIcon from '@icon/regular/arrow-down.svg';
 import XIcon from '@icon/regular/x.svg';
@@ -33,6 +34,7 @@ import { debounce } from '@solid-primitives/scheduled';
 import { activeElement } from 'app/signal/focus';
 import {
   type Accessor,
+  createContext,
   createEffect,
   createMemo,
   createRenderEffect,
@@ -46,15 +48,13 @@ import {
   Show,
   Switch,
   untrack,
-  createContext,
   useContext,
 } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
+import type { ScrollToIndexOpts } from 'virtua/unstable_core';
 import { MessageContainer } from '../Message/MessageContainer';
 import { ReplyInputsPortaler } from '../ReplyInputsPortaler';
-import { clamp } from '@core/util/math';
-import type { ScrollToIndexOpts } from 'virtua/unstable_core';
 
 false && observedSize;
 
@@ -102,6 +102,9 @@ type MessageListContentContextValues = {
     focus?: boolean
   ) => void;
   toggleThread: (threadID: string, value?: boolean) => void;
+  clearThreadFocus: (threadID: string, expanded?: boolean) => void;
+  toggleReplyInputFocus: (threadID: string, value?: boolean) => void;
+  getThreadsWithActiveReplies: () => string[];
   registerThreadAppendMountTarget: (threadID: string, el: HTMLElement) => void;
   getThreadState: (threadID: string) => ThreadView | undefined;
   getThreadDetails: (threadID: string) => MessageWithThreadId;
@@ -202,6 +205,28 @@ export function MessageList(props: MessageListProps) {
           threadExpanded: (value ?? prev) ? !prev.threadExpanded : true,
         };
       });
+    },
+    clearThreadFocus: function (threadID: string, expanded?: boolean): void {
+      setThreadViewStore(threadID, (prev) => {
+        return {
+          ...prev,
+          threadExpanded: expanded,
+          hasActiveReply: false,
+        };
+      });
+    },
+    toggleReplyInputFocus: function (threadID: string, value?: boolean): void {
+      setThreadViewStore(threadID, (prev) => {
+        return {
+          ...prev,
+          replyInputShouldFocus: (value ?? prev) ? !prev.threadExpanded : true,
+        };
+      });
+    },
+    getThreadsWithActiveReplies: () => {
+      return Object.keys(threadViewStore).filter(
+        (threadId) => threadViewStore[threadId].hasActiveReply
+      );
     },
     registerThreadAppendMountTarget: function (
       threadID: string,
@@ -858,9 +883,6 @@ function MessageListImpl(props: MessageListProps) {
       </div>
       <ReplyInputsPortaler
         channelId={props.channelId}
-        orderedMessages={props.orderedMessages}
-        threadViewStore={threadViewStore}
-        setThreadViewStore={setThreadViewStore}
         threads={viewThreads}
         virtualHandle={virtualHandle}
         threadInputAttachmentsStore={threadInputAttachmentsStore}
