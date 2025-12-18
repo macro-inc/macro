@@ -43,7 +43,9 @@ const BACKFILL_QUEUE_MAX_MESSAGES = config.require(
   `backfill_queue_max_messages`
 );
 const INBOX_SYNC_QUEUE_WORKERS = config.require(`inbox_sync_queue_workers`);
-const INBOX_SYNC_QUEUE_MAX_MESSAGES = config.require(`inbox_sync_queue_max_messages`);
+const INBOX_SYNC_QUEUE_MAX_MESSAGES = config.require(
+  `inbox_sync_queue_max_messages`
+);
 const INBOX_SYNC_RETRY_QUEUE_WORKERS = config.require(
   `inbox_sync_retry_queue_workers`
 );
