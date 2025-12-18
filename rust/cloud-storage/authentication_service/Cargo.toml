@@ -74,6 +74,7 @@ macro_uuid = { path = "../macro_uuid" }
 maud = { version = "0.27.0" }
 mockall = { workspace = true }
 model = { path = "../model" }
+model-entity = { path = "../model-entity" }
 model_notifications = { path = "../model_notifications" }
 models_team = { path = "../models_team" }
 native_app_service = { path = "../native_app_service" }

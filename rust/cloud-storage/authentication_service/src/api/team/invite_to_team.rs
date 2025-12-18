@@ -5,6 +5,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use macro_user_id::{cowlike::CowLike, email::Email, lowercased::Lowercase, user_id::MacroUserId};
+use model_entity::EntityType;
 use teams::domain::{
     model::{InviteUsersToTeamError, TeamInvite},
     team_repo::TeamService,
@@ -21,9 +22,7 @@ use crate::api::{
 
 use model::{response::ErrorResponse, tracking::IPContext, user::UserContext};
 
-use model_notifications::{
-    InviteToTeamMetadata, NotificationEntity, NotificationEvent, NotificationQueueMessage,
-};
+use model_notifications::{InviteToTeamMetadata, NotificationEvent, NotificationQueueMessage};
 
 /// The request body to invite a user to a team
 #[derive(serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
@@ -192,13 +191,11 @@ pub(in crate::api::team) async fn notify_team_invite(
 
     for team_invite in team_invites {
         let notification_queue_message = NotificationQueueMessage {
-            notification_entity: NotificationEntity::new_team(
-                team_invite.team_invite_id.to_string(),
-            ),
+            notification_entity: EntityType::Team
+                .with_entity_string(team_invite.team_invite_id.to_string()),
             notification_event: NotificationEvent::InviteToTeam(notification_metadata.clone()),
             sender_id: Some(invited_by.to_string()),
             recipient_ids: Some(vec![format!("macro|{}", team_invite.email.as_ref())]),
-            is_important_v0: Some(false),
         };
 
         macro_notify_client

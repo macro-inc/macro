@@ -1,12 +1,6 @@
-import { QueryClient } from '@tanstack/solid-query';
+import { queryClient as _queryClient } from '@queries/client';
 
-export const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      experimental_prefetchInRender: true,
-    },
-  },
-});
+export const queryClient = _queryClient;
 
 export function useQueryClient() {
   return queryClient;

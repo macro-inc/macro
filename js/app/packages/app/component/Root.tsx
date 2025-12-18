@@ -16,8 +16,9 @@ import { createBlockOrchestrator } from '@core/orchestrator';
 import { formatTabTitle, tabTitleSignal } from '@core/signal/tabTitle';
 import { licenseChannel } from '@core/util/licenseUpdateBroadcastChannel';
 import { isErr } from '@core/util/maybeResult';
+import { isTauri } from '@core/util/platform';
 import { transformShortIdInUrlPathname } from '@core/util/url';
-import { isTauri, MaybeTauriProvider } from '@macro/tauri';
+import { MaybeTauriProvider } from '@macro/tauri';
 import { Provider as EntityProvider } from '@macro-entity';
 import {
   createNotificationSource,
@@ -48,7 +49,6 @@ import {
   onMount,
   type ParentProps,
   Show,
-  Suspense,
 } from 'solid-js';
 import { currentThemeId } from '../../block-theme/signals/themeSignals';
 import {
@@ -66,6 +66,7 @@ import { GlobalAppStateProvider } from './GlobalAppState';
 import { Layout } from './Layout';
 import MacroJump from './MacroJump';
 import Onboarding from './Onboarding';
+import { SuspenseContextComp } from './SuspenseContext';
 import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
 
 const { track, identify, TrackingEvents } = withAnalytics();
@@ -231,7 +232,7 @@ const ROUTES: RouteDefinition[] = [
   {
     path: '/login',
     component: () => (
-      <div class="flex w-full h-full overflow-y-hidden">
+      <div class="flex w-full h-dvh overflow-y-hidden">
         <Login />
       </div>
     ),
@@ -239,7 +240,7 @@ const ROUTES: RouteDefinition[] = [
   {
     path: '/onboarding',
     component: () => (
-      <div class="flex *:flex-1 w-full h-full overflow-y-hidden">
+      <div class="flex *:flex-1 w-full h-dvh overflow-y-hidden">
         <Onboarding />
       </div>
     ),
@@ -345,6 +346,25 @@ export function Root() {
 
   const [tabInfo] = tabTitleSignal;
   const tabTitle = () => formatTabTitle(tabInfo());
+  const routerBase = isTauri() ? '/' : '/app';
+
+  let runRootWarningLog = false;
+  const RootSuspenseFallback = () => {
+    const runWarningLog = () => {
+      if (!runRootWarningLog) {
+        setTimeout(() => {
+          runRootWarningLog = true;
+        });
+        return;
+      }
+
+      console.warn('Root Suspsense Triggered');
+    };
+
+    runWarningLog();
+
+    return '';
+  };
 
   return (
     <MaybeTauriProvider>
@@ -354,12 +374,12 @@ export function Root() {
             <ChannelsContextProvider>
               <Title>{tabTitle()}</Title>
               <MacroJump />
-              <Suspense fallback={''}>
+              <SuspenseContextComp fallback={<RootSuspenseFallback />}>
                 <IsomorphicRouter
                   transformUrl={transformShortIdInUrlPathname}
                   root={Layout}
                   rootPreload={rootPreload}
-                  base="/app"
+                  base={routerBase}
                 >
                   {{
                     path: '/',
@@ -367,7 +387,7 @@ export function Root() {
                     children: ROUTES,
                   }}
                 </IsomorphicRouter>
-              </Suspense>
+              </SuspenseContextComp>
               <ToastRegion />
               <Show when={ENABLE_WEBSOCKET_DEBUGGER}>
                 <WebsocketDebugger />

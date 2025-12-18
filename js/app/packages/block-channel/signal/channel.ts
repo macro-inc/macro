@@ -8,6 +8,7 @@ import {
   isStaticAttachmentType,
 } from '@core/store/cacheChannelInput';
 import { isErr } from '@core/util/maybeResult';
+import { invalidateChannelWithID } from '@queries/channel/channel';
 import { commsServiceClient } from '@service-comms/client';
 import type { Attachment } from '@service-comms/generated/models/attachment';
 import type { Channel } from '@service-comms/generated/models/channel';
@@ -269,6 +270,7 @@ export async function sendMessage({
   });
 
   channelsContext.refetchChannels();
+  invalidateChannelWithID(channelId);
 
   if (isErr(result)) {
     console.error('failed to send message', result[0]);

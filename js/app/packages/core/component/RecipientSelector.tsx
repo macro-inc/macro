@@ -19,7 +19,11 @@ import CheckIcon from '@icon/regular/check.svg';
 import HashIcon from '@icon/regular/hash.svg';
 import XIcon from '@icon/regular/x.svg';
 import type { CollectionNode } from '@kobalte/core';
-import { Combobox, type ComboboxTriggerMode } from '@kobalte/core/combobox';
+import {
+  Combobox,
+  type ComboboxTriggerMode,
+  useComboboxContext,
+} from '@kobalte/core/combobox';
 import type { Channel } from '@service-comms/generated/models/channel';
 import { useEmail, useUserId } from '@service-gql/client';
 import { debounce } from '@solid-primitives/scheduled';
@@ -518,11 +522,30 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                   if (inputValue().length === 0) {
                     inputRef()?.blur();
                   }
-                }
-              }}
-            />
-          </div>
-        )}
+                  if (e.key === 'Escape') {
+                    if (inputValue().length === 0) {
+                      inputRef()?.blur();
+                    }
+                  }
+                }}
+                // use a non-delegated event here so that we can process it before Kobalte
+                on:keydown={(e: KeyboardEvent) => {
+                  if (e.key === 'Tab' && context.isOpen()) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    inputRef()?.dispatchEvent(
+                      // We need to send `bubbles: true` because otherwise Kobalte ignores the event
+                      new KeyboardEvent('keydown', {
+                        bubbles: true,
+                        key: 'Enter',
+                      })
+                    );
+                  }
+                }}
+              />
+            </div>
+          );
+        }}
       </Combobox.Control>
 
       <Combobox.Portal>

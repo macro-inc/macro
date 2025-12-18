@@ -2,6 +2,7 @@ use super::append_attachment_to_chat::append_attachment_to_chat;
 use crate::history::{upsert_item_last_accessed, upsert_user_history};
 use ai::types::Model;
 use model::{IDWithTimeStamps, chat::NewChatAttachment};
+use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::AccessLevel;
 use sqlx::{Pool, Postgres};
 
@@ -14,7 +15,7 @@ pub async fn create_chat_v2(
     name: &str,
     model: Model,
     project_id: Option<&str>,
-    share_permission: &models_permissions::share_permission::SharePermissionV2,
+    share_permission: &SharePermissionV2,
     attachments: Vec<NewChatAttachment>,
     attachment_token_count: i64,
     is_persistent: bool,

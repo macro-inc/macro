@@ -24,7 +24,10 @@ export function EmailAttachmentPill(props: {
   return (
     <div
       ref={parentDiv}
-      class={`items-center text-xs flex flex-row ${props.removable ? 'pl-2' : 'p-2'} m-1 w-36 rounded border border-edge hover:bg-hover hover-transition-bg`}
+      class="items-center text-xs flex flex-row p-2 w-36 rounded border border-edge hover:bg-hover hover-transition-bg"
+      classList={{
+        'pl-2': props.removable,
+      }}
       onclick={() => props.onClick(props.attachment, fileType)}
     >
       <Show when={fileType !== undefined || props.attachment.mime_type}>

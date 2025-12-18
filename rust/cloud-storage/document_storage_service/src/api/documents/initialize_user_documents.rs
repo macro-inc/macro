@@ -1,3 +1,4 @@
+use crate::api::context::ApiContext;
 use axum::{
     Extension,
     extract::State,
@@ -9,9 +10,8 @@ use model::{
     response::{ErrorResponse, GenericErrorResponse, GenericSuccessResponse},
     user::UserContext,
 };
+use models_permissions::share_permission::SharePermissionV2;
 use reqwest::StatusCode;
-
-use crate::api::context::ApiContext;
 
 const ONBOARDING_FOLDER_NAME: &str = "ONBOARDING_DOCUMENTS";
 const PROJECT_NAME: &str = "Starter Docs";
@@ -75,7 +75,7 @@ pub async fn handler(
     })?;
 
     // Create default share permission
-    let share_permission = macro_share_permissions::share_permission::create_new_share_permission();
+    let share_permission = SharePermissionV2::new_project_share_permission();
 
     let start_time = std::time::Instant::now();
     let project =

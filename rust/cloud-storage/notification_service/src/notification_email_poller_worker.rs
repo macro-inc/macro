@@ -261,7 +261,7 @@ async fn process_user_notifications(
     // Filter out notifications where the channel id is in the `channel_notification_email_sent`
     let channel_ids = notifications
         .iter()
-        .map(|n| n.event_item_id.clone())
+        .map(|n| n.entity.entity_id.to_string())
         .collect::<Vec<String>>();
     tracing::trace!(channel_ids=?channel_ids, "got channel ids");
 
@@ -273,7 +273,7 @@ async fn process_user_notifications(
 
     let notifications = notifications
         .iter()
-        .filter(|n| !channel_notification_email_sent.contains(&n.event_item_id))
+        .filter(|n| !channel_notification_email_sent.contains(n.entity.entity_id.as_ref()))
         .collect::<Vec<&UnsentNotification>>();
 
     if notifications.is_empty() {
@@ -300,8 +300,8 @@ async fn process_user_notifications(
     let notifications = notifications
         .into_iter()
         .filter(|notification| {
-            if user_unsubscribed_channel_ids.contains(&notification.event_item_id) {
-                tracing::debug!(notification=?notification, "unsubscribed channel {}", notification.event_item_id);
+            if user_unsubscribed_channel_ids.contains(notification.entity.entity_id.as_ref()) {
+                tracing::debug!(notification=?notification, "unsubscribed channel {}", notification.entity.entity_id);
                 false
             } else {
                 true

@@ -191,6 +191,49 @@ fn test_build_search_request() -> anyhow::Result<()> {
 }
 
 #[test]
+fn test_build_content_and_name_query_empty_ids() -> anyhow::Result<()> {
+    // Empty ids ok with ids only false
+    let term = vec!["test".to_string()];
+    let ids: Vec<String> = vec![];
+    let user_id = "user123";
+    let page = 1;
+    let page_size = 20;
+
+    let builder = SearchQueryBuilder::<TestSearchConfig>::new(term.clone())
+        .match_type("exact")
+        .page_size(page_size)
+        .page(page)
+        .user_id(user_id)
+        .search_on(SearchOn::Content)
+        .ids(ids.clone())
+        .ids_only(false);
+
+    let result = builder.build_content_and_name_bool_query()?;
+
+    assert!(result.name_bool_query.is_none());
+    assert!(result.content_bool_query.is_some());
+
+    // Empty ids fails with ids only true
+    let builder = SearchQueryBuilder::<TestSearchConfig>::new(term.clone())
+        .match_type("exact")
+        .page_size(page_size)
+        .page(page)
+        .user_id(user_id)
+        .search_on(SearchOn::Content)
+        .ids(ids.clone())
+        .ids_only(true);
+
+    let error = builder.build_content_and_name_bool_query().err().unwrap();
+
+    assert_eq!(
+        OpensearchClientError::EmptyIdsWithIdsOnly(SearchEntityType::Documents),
+        error
+    );
+
+    Ok(())
+}
+
+#[test]
 fn test_build_bool_query() -> anyhow::Result<()> {
     let terms = vec!["test".to_string()];
     let ids = vec!["id1".to_string(), "id2".to_string()];

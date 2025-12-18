@@ -15,9 +15,8 @@ use model::insight_context::email_insights::{
     EMAIL_INSIGHT_PROVIDER_SOURCE_NAME, EmailInfo, GenerateEmailInsightContext, NewMessagePayload,
     NewMessagesPayload,
 };
-use model_notifications::{
-    NewEmailMetadata, NotificationEntity, NotificationEvent, NotificationQueueMessage,
-};
+use model_entity::EntityType;
+use model_notifications::{NewEmailMetadata, NotificationEvent, NotificationQueueMessage};
 use models_email::db::address::EmailRecipientType;
 use models_email::email::service;
 use models_email::email::service::link;
@@ -213,11 +212,7 @@ async fn handle_attachment_upload(
     payload: &UpsertMessagePayload,
     message_attachment_count: usize,
 ) -> result::Result<(), ProcessingError> {
-    // temporarily only for macro emails, for testing purposes
-    if !link.macro_id.0.as_ref().ends_with("@macro.com")
-        || cfg!(not(feature = "attachment_upload"))
-        || message_attachment_count == 0
-    {
+    if cfg!(not(feature = "attachment_upload")) || message_attachment_count == 0 {
         return Ok(());
     }
 
@@ -588,11 +583,10 @@ async fn send_notifications(
     };
 
     let notification_queue_message = NotificationQueueMessage {
-        notification_entity: NotificationEntity::new_email(message.db_id.to_string()),
+        notification_entity: EntityType::Email.with_entity_string(message.db_id.to_string()),
         notification_event: NotificationEvent::NewEmail(notification_metadata),
         sender_id,
         recipient_ids: Some(vec![link.macro_id.to_string()]),
-        is_important_v0: Some(false),
     };
 
     if let Err(e) = ctx

@@ -706,6 +706,13 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
                     }
                   }
                 ],
+                "must_not": [
+                {
+                    "term": {
+                        "labels": "TRASH",
+                    }
+                },
+                ],
                 "should": [
                   {
                     "terms": {
@@ -1474,6 +1481,13 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
                           }
                         }
                       ],
+                     "must_not":  [
+                    {
+                    "term": {
+                        "labels": "TRASH",
+                    }
+                    }
+                    ],
                       "should": [
                         {
                           "terms": {

@@ -32,6 +32,7 @@ import {
   type Accessor,
   createEffect,
   createMemo,
+  createRenderEffect,
   createSelector,
   createSignal,
   Match,
@@ -68,7 +69,7 @@ const BASE_ITEM_SIZE = 50;
 const clampIndex = (value: number, minValue: number, maxValue: number) =>
   Math.min(Math.max(value, minValue), maxValue);
 
-type TargetMessageInfo = { messageId: string; threadId?: string };
+export type TargetMessageInfo = { messageId: string; threadId?: string };
 
 export type MessageListProps = {
   channelId: string;
@@ -98,7 +99,9 @@ function EmptyMessageList() {
 export function MessageList(props: MessageListProps) {
   const [containerRef, setContainerRef] = createSignal<HTMLDivElement>();
   const [virtualHandle, setVirtualHandle] = createSignal<VirtualizerHandle>();
-  let listContainerRef!: HTMLDivElement;
+  const [listContainerRef, setListContainerRef] = createSignal<
+    HTMLDivElement | undefined
+  >();
   const [scrollContainerRef, setScrollContainerRef] = createSignal<
     HTMLDivElement | undefined
   >();
@@ -171,7 +174,9 @@ export function MessageList(props: MessageListProps) {
     const list = props.orderedMessages();
     if (!handle || !list || list.length === 0) return;
 
-    const endIndex = handle.findEndIndex?.();
+    const endIndex = handle.findItemIndex(
+      handle.scrollOffset + handle.viewportSize
+    );
     if (endIndex === undefined) return;
 
     const index = clampIndex(endIndex, 0, list.length - 1);
@@ -196,60 +201,59 @@ export function MessageList(props: MessageListProps) {
    * @param params.forceBottom - force the scroll to bottom ignoring target message
    * @returns
    */
-  const scrollToBottomOrTarget = debounce(
-    (params: { forceBottom?: boolean } = {}) => {
-      const { forceBottom } = params;
-      const timeStamp = Date.now();
-      const delta = timeStamp - lastTargetMessageTimestamp();
-      const target = props.targetMessage();
+  const scrollToBottomOrTarget = (params: { forceBottom?: boolean } = {}) => {
+    const { forceBottom } = params;
+    const timeStamp = Date.now();
+    const delta = timeStamp - lastTargetMessageTimestamp();
+    const target = props.targetMessage();
 
-      if (
-        forceBottom ||
-        ((!target || delta > TARGET_MESSAGE_ACTIVE_TIME) && isNearBottom())
-      ) {
-        if (scrollTimeoutId) clearTimeout(scrollTimeoutId);
-        const lastIndex = props.orderedMessages().length - 1;
-        virtualHandle()?.scrollToIndex(lastIndex, {
-          align: 'end',
-        });
-        return;
-      }
-
-      const { messageId: targetMessageId, threadId } = target || {};
-
-      if (!targetMessageId) return;
-
-      // If we have a target message, scroll to it and focus it
-      const index = props
-        .orderedMessages()
-        ?.findIndex((m) => m.id === targetMessageId);
-
-      if (index === -1) {
-        console.warn('Target message not found');
-        toast.failure('Message not found.');
-        scrollToBottomOrTarget({ forceBottom: true });
-        return;
-      }
-
-      if (threadId) {
-        setThreadViewStore(threadId, (prev) => ({
-          ...prev,
-          threadExpanded: true,
-        }));
-      }
-
+    if (
+      forceBottom ||
+      ((!target || delta > TARGET_MESSAGE_ACTIVE_TIME) && isNearBottom())
+    ) {
       if (scrollTimeoutId) clearTimeout(scrollTimeoutId);
-
-      setTargetMessageActive(true);
-      virtualHandle()?.scrollToIndex(index, {
-        align: 'center',
+      const lastIndex = props.orderedMessages().length - 1;
+      virtualHandle()?.scrollToIndex(lastIndex, {
+        align: 'end',
       });
-      setTimeout(() => {
-        setTargetMessageActive(false);
-      }, TARGET_MESSAGE_ACTIVE_TIME);
-    },
-    5
-  );
+      return;
+    }
+
+    const { messageId: targetMessageId, threadId } = target || {};
+
+    if (!targetMessageId) return;
+
+    // If we have a target message, scroll to it and focus it
+    const index = props
+      .orderedMessages()
+      ?.findIndex((m) => m.id === targetMessageId);
+
+    if (index === -1) {
+      console.warn('Target message not found');
+      toast.failure('Message not found.');
+      scrollToBottomOrTarget({ forceBottom: true });
+      return;
+    }
+
+    if (threadId) {
+      setThreadViewStore(threadId, (prev) => ({
+        ...prev,
+        threadExpanded: true,
+      }));
+    }
+
+    if (scrollTimeoutId) clearTimeout(scrollTimeoutId);
+
+    setTargetMessageActive(true);
+    virtualHandle()?.scrollToIndex(index, {
+      align: 'center',
+    });
+    setTimeout(() => {
+      setTargetMessageActive(false);
+    }, TARGET_MESSAGE_ACTIVE_TIME);
+  };
+
+  const debouncedScrollToBottomOrTarget = debounce(scrollToBottomOrTarget, 5);
 
   /**
    * Track context for messages as they are rendered in the list
@@ -442,10 +446,14 @@ export function MessageList(props: MessageListProps) {
 
   // scroll to bottom on change to last message state (including new messages)
   createEffect(
-    on([lastMessageReaction, lastMessageThread, lastMessageThreadCount], () => {
-      if (!isNearBottom()) return;
-      scrollToBottomOrTarget({ forceBottom: true });
-    })
+    on(
+      [lastMessageReaction, lastMessageThread, lastMessageThreadCount],
+      () => {
+        if (!isNearBottom()) return;
+        debouncedScrollToBottomOrTarget({ forceBottom: true });
+      },
+      { defer: true }
+    )
   );
 
   const [unviewedMessages, setUnviewedMessages] = createSignal<Message[]>();
@@ -460,7 +468,9 @@ export function MessageList(props: MessageListProps) {
     on(filteredTopLevelMessages, (newFilteredMessages, oldFilteredMessages) => {
       const handle = virtualHandle();
       if (!handle) return;
-      const lastIndexInView = handle.findEndIndex();
+      const lastIndexInView = handle.findItemIndex(
+        handle.scrollOffset + handle.viewportSize
+      );
       const lastItemOffset = handle.getItemOffset(
         (oldFilteredMessages?.length ?? 0) - 1
       );
@@ -515,28 +525,44 @@ export function MessageList(props: MessageListProps) {
 
   const [size, setSize] = createSignal<DOMRect>();
 
-  // scroll to bottom on size change, if the user is near the bottom
+  // set scroll container ref on virtualizer updates
   createEffect(
-    on(virtualHandle, (handle) => {
-      if (!handle) return;
+    on([virtualHandle, listContainerRef], ([handle, listContainerRef]) => {
+      if (!handle || !listContainerRef) return;
 
       const scrollContainer = listContainerRef.querySelector(
         '[data-channel-message-list]'
       ) as HTMLDivElement | null;
       setScrollContainerRef(scrollContainer ?? undefined);
-
-      scrollToBottomOrTarget({
-        forceBottom: true,
-      });
     })
   );
 
-  createEffect(
+  createRenderEffect(
     on(props.targetMessage, (target) => {
       if (!target) return;
       setLastTargetMessageTimestamp(Date.now());
-      scrollToBottomOrTarget();
+      debouncedScrollToBottomOrTarget();
     })
+  );
+
+  // initial scroll
+  createRenderEffect(
+    on(
+      [virtualHandle, listContainerRef, props.orderedMessages],
+      // NOTE: ordered messages gets updated on initial load due to thread layout calculations
+      // so we need to keep scrolling down until it settles
+      ([handle, listContainerRef, orderedMessages]) => {
+        if (
+          !handle ||
+          !listContainerRef ||
+          !orderedMessages.length ||
+          initialScrollComplete()
+        )
+          return;
+
+        scrollToBottomOrTarget({ forceBottom: true });
+      }
+    )
   );
 
   const splitLayoutContext = useContext(SplitLayoutContext);
@@ -550,7 +576,9 @@ export function MessageList(props: MessageListProps) {
     const newCount = splitCount();
     const handle = untrack(virtualHandle);
     if (handle && prev !== 0 && newCount > prev) {
-      const endIndex = handle.findEndIndex();
+      const endIndex = handle.findItemIndex(
+        handle.scrollOffset + handle.viewportSize
+      );
       queueMicrotask(() => {
         handle.scrollToIndex(endIndex, {
           align: 'end',
@@ -582,7 +610,10 @@ export function MessageList(props: MessageListProps) {
       if (
         firstUnviewedIndex !== undefined &&
         firstUnviewedIndex >= 0 &&
-        (virtualHandle()?.findEndIndex() ?? 0) >= firstUnviewedIndex
+        (virtualHandle()?.findItemIndex(
+          (virtualHandle()?.scrollOffset ?? 0) +
+            (virtualHandle()?.viewportSize ?? 0)
+        ) ?? 0) >= firstUnviewedIndex
       ) {
         setUnviewedMessages(undefined);
       }
@@ -628,12 +659,12 @@ export function MessageList(props: MessageListProps) {
     >
       <div
         class="flex flex-col h-full relative"
-        ref={listContainerRef}
+        ref={setListContainerRef}
         onWheel={markUserScrolled}
         onTouchMove={markUserScrolled}
         onPointerDown={markUserScrolled}
         use:observedSize={{
-          setSize: setSize,
+          setSize,
         }}
       >
         <Switch fallback={<EmptyMessageList />}>
@@ -651,7 +682,7 @@ export function MessageList(props: MessageListProps) {
               itemSize={BASE_ITEM_SIZE}
               data-channel-message-list
               data={rows() ?? []}
-              overscan={10}
+              bufferSize={10 * BASE_ITEM_SIZE}
               keepMounted={keepMountedIndices()}
               onScroll={handleScroll}
               onScrollEnd={() => {
@@ -740,7 +771,9 @@ export function MessageList(props: MessageListProps) {
             icon={ArrowDownIcon}
             theme="base"
             text="Jump to latest"
-            onMouseDown={() => scrollToBottomOrTarget({ forceBottom: true })}
+            onMouseDown={() =>
+              debouncedScrollToBottomOrTarget({ forceBottom: true })
+            }
             secondaryIcon={XIcon}
             onOptionClick={() => setDismissJumpToLatest(true)}
             showSeparator

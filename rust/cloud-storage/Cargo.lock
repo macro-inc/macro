@@ -529,6 +529,7 @@ dependencies = [
  "maud",
  "mockall",
  "model",
+ "model-entity",
  "model_notifications",
  "models_team",
  "native_app_service",
@@ -5066,6 +5067,7 @@ dependencies = [
  "nom 8.0.0",
  "serde",
  "thiserror 2.0.17",
+ "tracing",
 ]
 
 [[package]]
@@ -5234,9 +5236,13 @@ name = "mention_utils"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "cool_asserts",
+ "macro_user_id",
+ "nom 8.0.0",
  "regex",
  "serde",
  "serde_json",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -5443,6 +5449,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "macro_user_id",
  "model-entity",
  "models_comms",
  "models_pagination",
@@ -5578,6 +5585,7 @@ dependencies = [
 name = "models_permissions"
 version = "0.1.0"
 dependencies = [
+ "model_file_type",
  "schemars",
  "serde",
  "serde_json",
@@ -5781,8 +5789,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "macro_user_id",
  "macro_uuid",
  "model",
+ "model-entity",
  "model_notifications",
  "models_pagination",
  "serde",
@@ -5817,10 +5827,12 @@ dependencies = [
  "macro_env",
  "macro_middleware",
  "macro_notify",
+ "macro_user_id",
  "macro_uuid",
  "mention_utils",
  "model",
  "model-entity",
+ "model_file_type",
  "model_notifications",
  "models_comms",
  "models_pagination",
@@ -8143,6 +8155,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "aws-sdk-sns",
+ "model-entity",
+ "serde",
+ "serde_json",
+ "tracing",
 ]
 
 [[package]]

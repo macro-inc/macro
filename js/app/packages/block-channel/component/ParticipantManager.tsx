@@ -198,7 +198,7 @@ export function ParticipantList(props: {
               height: '300px',
               width: '100%',
             }}
-            overscan={10}
+            bufferSize={500}
           >
             {(participant) => (
               <UserItem

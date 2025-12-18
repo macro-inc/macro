@@ -1,5 +1,4 @@
 import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
-import { TabContent } from '@core/component/TabContent';
 import { For } from 'solid-js';
 import {
   DEPRIORITY_LABEL_SIGNAL_TOGGLES,
@@ -19,8 +18,7 @@ export function Inbox() {
   ];
 
   return (
-    <TabContent title="Inbox">
-      <div class="font-mono flex flex-col gap-3 text-sm">
+      <div class="font-mono flex flex-col gap-3 text-sm p-2">
         <div class="border border-[var(--b4)] box-border px-5 py-3 flex flex-col gap-3">
           <div class="font-bold mb-1">Signal</div>
           <For each={prioritySignals}>
@@ -51,7 +49,6 @@ export function Inbox() {
           </For>
         </div>
       </div>
-    </TabContent>
   );
 }
 

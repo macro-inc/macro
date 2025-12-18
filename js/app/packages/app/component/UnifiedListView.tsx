@@ -2,6 +2,7 @@ import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
 } from '@app/component/GlobalAppState';
+import type { BlockChannelProps } from '@block-channel/component/Block';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { URL_PARAMS as EMAIL_PARAMS } from '@block-email/constants';
 import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
@@ -104,7 +105,12 @@ import {
   Show,
   type Signal,
 } from 'solid-js';
-import { createStore, type SetStoreFunction, unwrap } from 'solid-js/store';
+import {
+  createStore,
+  produce,
+  type SetStoreFunction,
+  unwrap,
+} from 'solid-js/store';
 import { EntityWithEverything } from '../../macro-entity/src/components/EntityWithEverything';
 import {
   resetCommandCategoryIndex,
@@ -220,31 +226,39 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     selectedView,
     virtualizerHandleSignal: [, setVirtualizerHandle],
     entityListRefSignal: [, setEntityListRef],
-    entitiesSignal: [_entities, setEntities],
-    emailViewSignal: [_emailView],
+    entitiesSignal: [entities_, setEntities],
   } = unifiedListContext;
   const view = createMemo(() => viewsData[selectedView()]);
   const selectedEntity = createMemo(() => view()?.selectedEntity);
 
+  const setSelectedEntity = (entity: EntityData | undefined) => {
+    setViewDataStore(
+      selectedView(),
+      produce((state) => {
+        if (!state) return;
+        state.selectedEntity = entity;
+      })
+    );
+  };
+
+  const rawSearchText = createMemo<string>(() => view()?.searchText ?? '');
+  const searchText = createMemo(() => rawSearchText()?.trim() ?? '');
+
   createEffect(
     on(
-      () =>
-        [
-          localEntityListRef(),
-          // access index to properly track
-          _entities()?.[0],
-        ] as const,
-      ([localEntityListRef]) => {
+      [localEntityListRef, () => entities_()?.at(0), searchText],
+      ([localEntityListRef, firstEntity]) => {
         if (!localEntityListRef) return;
         setEntityListRef(localEntityListRef);
 
         if (view()?.hasUserInteractedEntity) {
-          if (selectedEntity()) {
+          const selectedEntityId = selectedEntity()?.id;
+          if (selectedEntityId) {
             if (localEntityListRef && localEntityListRef.isConnected) {
               // focusing non-first entity causes issue where 100ms later, that focused entity loses focus and document.body is focused
               // forcing refocus on that entity works for now
               // read TODO inside function for more info
-              tryFocusEntity(selectedEntity()!.id, {
+              tryFocusEntity(selectedEntityId, {
                 forceRefocusOnce: true,
               });
             }
@@ -252,12 +266,10 @@ export function UnifiedListView(props: UnifiedListViewProps) {
           return;
         }
 
-        // select first item from entityList until interaction
-        if (!_entities() || !_entities()?.length) return;
-        const firstEntity = _entities()![0];
+        if (!firstEntity) return;
 
         setViewDataStore(selectedView(), 'highlightedId', firstEntity.id);
-        setViewDataStore(selectedView(), 'selectedEntity', firstEntity);
+        setSelectedEntity(firstEntity);
 
         tryFocusEntity(firstEntity.id);
 
@@ -505,9 +517,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     const types = entityTypeFilter();
     return getSuggestedProperties(types);
   });
-
-  const rawSearchText = createMemo<string>(() => view()?.searchText ?? '');
-  const searchText = createMemo(() => rawSearchText()?.trim() ?? '');
 
   const debouncedSearchForLocal = debouncedDependent(
     searchText,
@@ -934,7 +943,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     let thread_id: string | null | undefined;
 
     const blockHandle = await blockOrchestrator.getBlockHandle(
-      notification.eventItemId,
+      notification.entity_id,
       'channel'
     );
     if (!blockHandle) return;
@@ -1003,6 +1012,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       createUnifiedInfiniteList<
         WithNotification<WithSearch<EntityData> | EntityData>
       >({
+        id: `${selectedView()}-${splitContext.handle.id}`,
         entityInfiniteQueries: [
           {
             query: dssInfiniteQuery,
@@ -1094,16 +1104,27 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     options
   ) => {
     if (preview() && !options?.ignorePreview) {
-      setViewDataStore(selectedView(), 'selectedEntity', entity);
+      setSelectedEntity(entity);
+
       return;
     }
 
     if (entity.type === 'document')
       return documentEntityClickHandler(entity, event, location);
 
+    const params =
+      entity.type === 'channel' && location?.type === 'channel'
+        ? ({
+            target: {
+              threadId: location.threadId,
+              messageId: location.messageId,
+            },
+          } as BlockChannelProps)
+        : undefined;
+
     const handle = event.altKey
-      ? insertSplit({ type: entity.type, id: entity.id })
-      : replaceOrInsertSplit({ type: entity.type, id: entity.id });
+      ? insertSplit({ type: entity.type, id: entity.id, params })
+      : replaceOrInsertSplit({ type: entity.type, id: entity.id, params });
 
     handle?.activate();
 
@@ -1111,8 +1132,10 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
     switch (location.type) {
       case 'channel': {
+        // NOTE: this is handled by the channel block params but this can be used to re-flash an open channel
         const blockHandle = await blockOrchestrator.getBlockHandle(entity.id);
         await blockHandle?.goToLocationFromParams({
+          [CHANNEL_PARAMS.thread]: location.threadId,
           [CHANNEL_PARAMS.message]: location.messageId,
         });
         break;
@@ -1520,11 +1543,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                     setHighlightedId(innerProps.entity.id);
 
                     if (isPanelActive() && !preview()) {
-                      setViewDataStore(
-                        selectedView(),
-                        'selectedEntity',
-                        innerProps.entity
-                      );
+                      setSelectedEntity(innerProps.entity);
                     }
 
                     setContextAndModalState((prev) => {
@@ -1569,11 +1588,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                     setHighlightedId(innerProps.entity.id);
 
                     if (isPanelActive() && !preview()) {
-                      setViewDataStore(
-                        selectedView(),
-                        'selectedEntity',
-                        innerProps.entity
-                      );
+                      setSelectedEntity(innerProps.entity);
                     }
                   }}
                   onMouseLeave={() => {}}
@@ -1581,11 +1596,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                     setHighlightedId(innerProps.entity.id);
 
                     if (isPanelActive() && !preview()) {
-                      setViewDataStore(
-                        selectedView(),
-                        'selectedEntity',
-                        innerProps.entity
-                      );
+                      setSelectedEntity(innerProps.entity);
                     }
                   }}
                   showLeftColumnIndicator={
@@ -1810,10 +1821,11 @@ function SearchBar(props: {
   const {
     viewsDataStore,
     selectedView,
+    setSelectedView,
     setViewDataStore,
-    entitiesSignal: [entities],
     virtualizerHandleSignal: [virtualizerHandle],
     entityListRefSignal: [entityListRef],
+    navigateThroughList,
   } = splitContext.unifiedListContext;
   const viewData = createMemo(() => viewsDataStore[selectedView()]);
   const viewName = createMemo(() => viewData().view);
@@ -1825,44 +1837,19 @@ function SearchBar(props: {
     setViewDataStore(selectedView(), 'searchText', text);
   };
 
-  const isElementInViewport = (element: Element): Promise<boolean> => {
-    return new Promise((resolve) => {
-      const observer = new IntersectionObserver(
-        (entries) => {
-          resolve(entries[0].isIntersecting);
-          observer.disconnect();
-        },
-        { threshold: 0.1 }
-      );
-      observer.observe(element);
-    });
+  const selectionClick = () => {
+    const id = viewsDataStore[selectedView()].highlightedId;
+    if (!id) return;
+    const el = entityListRef()?.querySelector(`[data-entity-id="${id}"]`);
+    if (!(el instanceof HTMLElement)) return;
+    el.click();
   };
 
-  const focusFirstEntity = async () => {
-    const highlightedId = viewData()?.highlightedId;
-    const id = highlightedId;
-
-    if (id) {
-      const highlightedEntityEl = entityListRef()?.querySelector(
-        `[data-entity-id="${id}"]`
-      );
-
-      if (
-        highlightedEntityEl instanceof HTMLElement &&
-        (await isElementInViewport(highlightedEntityEl))
-      ) {
-        highlightedEntityEl.focus();
-        const entity = entities()?.find(({ id: entityId }) => entityId === id);
-        if (entity) {
-          setViewDataStore(selectedView(), 'selectedEntity', entity);
-          return;
-        }
-      }
-    }
-
-    // Fallback to first entity
-    const firstEntity = entityListRef()?.querySelector('[data-entity]');
-    if (firstEntity instanceof HTMLElement) firstEntity.focus();
+  const focusNextEntity = () => {
+    navigateThroughList({
+      axis: 'end',
+      mode: 'step',
+    });
   };
 
   const [waitForLoadingEnd, setWaitForLoadingEnd] = createSignal(false);
@@ -1871,10 +1858,9 @@ function SearchBar(props: {
   createRenderEffect((prevText: string) => {
     const text = searchText().trim();
     if (text !== prevText) {
-      batch(() => {
-        setViewDataStore(selectedView(), 'selectedEntity', undefined);
-        setViewDataStore(selectedView(), 'highlightedId', undefined);
-      });
+      setViewDataStore(selectedView(), 'selectedEntity', undefined);
+      setViewDataStore(selectedView(), 'highlightedId', undefined);
+      setViewDataStore(selectedView(), 'hasUserInteractedEntity', false);
       virtualizerHandle()?.scrollToIndex(0);
       setWaitForLoadingEnd(true);
     }
@@ -1894,25 +1880,43 @@ function SearchBar(props: {
     return loading;
   }, props.isLoading());
 
+  const focusSearch = () => {
+    setTimeout(() => {
+      const searchInput = document.getElementById(
+        `search-input-${splitContext.handle.id}-${selectedView()}`
+      ) as HTMLInputElement;
+      searchInput?.focus();
+    }, 0);
+  };
+
   onMount(() => {
-    const { dispose } = registerHotkey({
+    const { dispose: disposeSlash } = registerHotkey({
       hotkey: ['/'],
       scopeId: splitContext.splitHotkeyScope,
-      description: 'Search in current view',
+      description: 'Search all',
       hotkeyToken: TOKENS.soup.openSearch,
       keyDownHandler: () => {
-        setTimeout(() => {
-          const searchInput = document.getElementById(
-            `search-input-${splitContext.handle.id}-${selectedView()}`
-          ) as HTMLInputElement;
-          searchInput?.focus();
-        }, 0);
+        setSelectedView(VIEWCONFIG_DEFAULTS_IDS_ENUM.all);
+        focusSearch();
         return true;
       },
       displayPriority: 5,
     });
+
+    const { dispose: disposeCmd } = registerHotkey({
+      hotkey: ['cmd+f'],
+      scopeId: splitContext.splitHotkeyScope,
+      description: 'Search in current view',
+      keyDownHandler: () => {
+        focusSearch();
+        return true;
+      },
+      displayPriority: 5,
+    });
+
     onCleanup(() => {
-      dispose();
+      disposeSlash();
+      disposeCmd();
     });
   });
 
@@ -1970,14 +1974,17 @@ function SearchBar(props: {
             setSearchText(e.target.value);
           }}
           onKeyDown={(e) => {
-            if (
-              e.key === 'Escape' ||
-              e.key === 'ArrowDown' ||
-              e.key === 'Enter'
-            ) {
+            if (e.key === 'Escape') {
               e.preventDefault();
               e.currentTarget.blur();
-              focusFirstEntity();
+            } else if (e.key === 'Enter') {
+              e.preventDefault();
+              e.currentTarget.blur();
+              selectionClick();
+            } else if (e.key === 'ArrowDown') {
+              e.preventDefault();
+              e.currentTarget.blur();
+              focusNextEntity();
             }
           }}
           class="p-1 pr-0 border-0 outline-none! focus:outline-none ring-0! focus:ring-0 flex-1 text-ink text-sm truncate"

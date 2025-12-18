@@ -5,7 +5,7 @@ use model_notifications::{Notification, NotificationEventType};
 /// Performs a basic rate limit check on the notification
 /// If this returns false, the notification can proceed
 /// If this returns true, the notification should be skipped.
-#[tracing::instrument(skip(macro_cache_client, notification), fields(notification_id=?notification.id, notification_event_type=?notification.notification_event.event_type(), event_item_id=?notification.notification_entity.event_item_id, event_item_type=?notification.notification_entity.event_item_type, sender_id=?notification.sender_id))]
+#[tracing::instrument(skip(macro_cache_client, notification), fields(notification_id=?notification.id, notification_event_type=?notification.notification_event.event_type(), event_id=?notification.notification_entity, sender_id=?notification.sender_id))]
 pub async fn rate_limit(
     macro_cache_client: &MacroCache,
     notification: &Notification,

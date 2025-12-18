@@ -119,6 +119,9 @@ impl EmailQueryBuilder {
                 .content_bool_query
                 .ok_or(OpensearchClientError::BoolQueryNotBuilt)?;
 
+            // We don't want to include trash items in your email search
+            bool_query.must_not(QueryType::term("labels", "TRASH"));
+
             // If link_ids are provided, add them to the query
             if !self.link_ids.is_empty() {
                 bool_query.must(QueryType::terms("link_id", self.link_ids.clone()));
@@ -188,8 +191,6 @@ pub(crate) struct EmailIndex {
     pub link_id: String,
     /// The user id of the email message
     pub user_id: String,
-    /// The updated at time of the email message
-    pub updated_at_seconds: i64,
     /// The subject of the email message
     pub subject: Option<String>,
     /// The sent at time of the email message

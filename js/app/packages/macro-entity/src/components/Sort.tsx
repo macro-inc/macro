@@ -195,14 +195,6 @@ export function notifiedSortFn<T extends WithNotification<EntityData>>(
   const bNotification = b.notifications?.()[0];
 
   if (aNotification && bNotification) {
-    if (aNotification.isImportantV0 && bNotification.isImportantV0) {
-      return bNotification.createdAt - aNotification.createdAt;
-    } else if (aNotification.isImportantV0) {
-      return -1;
-    } else if (bNotification.isImportantV0) {
-      return 1;
-    }
-
     return bNotification.createdAt - aNotification.createdAt;
   } else if (aNotification) {
     return -1;

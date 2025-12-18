@@ -51,6 +51,7 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { EntityModal } from './EntityModal/EntityModal';
 import { HelpDrawer } from './HelpDrawer';
+import { SuspenseContextComp } from './SuspenseContext';
 import { SplitHeaderLeft } from './split-layout/components/SplitHeader';
 import { SplitTabs } from './split-layout/components/SplitTabs';
 import type { SplitPanelContextType } from './split-layout/context';
@@ -96,9 +97,9 @@ const ViewWithSearch: Component<{
           </Suspense>
         </Match>
         <Match when={true}>
-          <Suspense>
+          <SuspenseContextComp fallback={''}>
             <UnifiedListView />
-          </Suspense>
+          </SuspenseContextComp>
         </Match>
       </Switch>
     </ViewTab>
@@ -183,7 +184,7 @@ const PreviewPanel: Component<{
   splitPanelContext: SplitPanelContextType;
 }> = (props) => {
   return (
-    <div class="flex flex-row size-full w-[70%] shrink-0">
+    <div class="flex flex-row size-full sm:w-[70%] max-sm:h-[50%] max-sm:border-t border-edge-muted shrink-0 sm:shadow-inner">
       <Show
         when={props.selectedEntity?.type !== 'project' && props.selectedEntity}
       >
@@ -286,7 +287,7 @@ export function Soup() {
       });
       entityQueryClient.invalidateQueries({
         queryKey: queryKeys.notification({
-          eventItemId: notification.eventItemId,
+          entity_id: notification.entity_id,
         }),
       });
     }
@@ -374,7 +375,7 @@ export function Soup() {
         </FileDropOverlay>
       </Show>
 
-      <div class="relative flex-grow min-h-0 flex flex-row size-full">
+      <div class="relative flex-grow min-h-0 flex max-sm:flex-col flex-row size-full">
         <SplitPanelContext.Provider
           value={{
             ...splitPanelContext,
@@ -387,7 +388,6 @@ export function Soup() {
             class="@container/soup [container-type:inline-size] flex flex-col gap-1 size-full overflow-x-clip"
             classList={{
               'border-r border-edge-muted': preview(),
-              'pt-2 pb-0': showHelpDrawer().has(selectedView() as DefaultView),
             }}
             value={selectedView()}
             onChange={setSelectedView}

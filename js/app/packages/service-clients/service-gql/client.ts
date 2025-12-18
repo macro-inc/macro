@@ -1,24 +1,33 @@
+import { ENABLE_BEARER_TOKEN_AUTH } from '@core/constant/featureFlags';
+import { SERVER_HOSTS } from '@core/constant/servers';
 import { cache } from '@core/util/cache';
-import {
-  type FetchWithTokenErrorCode,
-  fetchWithToken,
-} from '@core/util/fetchWithToken';
-import {
-  err,
-  isErr,
-  type MaybeResult,
-  mapOk,
-  type ObjectLike,
-  ok,
-} from '@core/util/maybeResult';
+import { err, ok } from '@core/util/maybeResult';
 import { registerClient } from '@core/util/mockClient';
 import { getAccessToken } from '@service-auth/client';
 import { createSingletonRoot } from '@solid-primitives/rootless';
 import { makePersisted } from '@solid-primitives/storage';
-import { ENABLE_BEARER_TOKEN_AUTH } from 'core/constant/featureFlags';
 import { createMemo, createResource, createSignal } from 'solid-js';
+import { LegacyApiRpcClient } from '../../codegen/auth_service/auth_service_rpc';
 
-export const GQL_ENDPOINT = import.meta.env.__MACRO_GQL_SERVICE__;
+// Create a singleton instance of the RPC client
+let rpcClientInstance: LegacyApiRpcClient | null = null;
+
+async function getRpcClient(): Promise<LegacyApiRpcClient> {
+  if (!rpcClientInstance) {
+    const headers = new Headers();
+
+    if (ENABLE_BEARER_TOKEN_AUTH) {
+      const token = await getAccessToken();
+      if (token) headers.set('Authorization', `Bearer ${token}`);
+    }
+
+    rpcClientInstance = LegacyApiRpcClient.construct_with_headers(
+      `${SERVER_HOSTS['auth-service']}/user`,
+      () => headers
+    );
+  }
+  return rpcClientInstance;
+}
 
 export enum MacroPermissions {
   /** Able to use editor feature */
@@ -58,173 +67,89 @@ type SetGroupRequest = {
   group: string;
 };
 
-export async function gqlFetch<T extends ObjectLike>(
-  query: string,
-  variables?: Record<string, any>
-): Promise<MaybeResult<FetchWithTokenErrorCode, T>> {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
-
-  if (ENABLE_BEARER_TOKEN_AUTH) {
-    const token = await getAccessToken();
-    if (token) headers.Authorization = `Bearer ${token}`;
-  }
-
-  const result = await fetchWithToken<{ data: T; errors?: any[] }>(
-    GQL_ENDPOINT,
-    {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ query, variables }),
-      retry: {
-        delay: 'exponential',
-        maxTries: 3,
-      },
-    }
-  );
-  if (isErr(result)) return result;
-
-  const [, { data, errors }] = result;
-  if (errors && errors[0]) return err('GRAPHQL_ERROR', errors[0].message);
-  return ok(data);
-}
-
 export const gqlServiceClient = {
   getUserInfo: cache(
     async function getUserPermissions() {
-      const query = `
-      query userPermissions {
-        me {
-          id
-          permissions
-          email
-          name
-          licenseStatus
-          tutorialComplete
-          hasChromeExt
-          group
-          stripe {
-            id
-            metadata {
-              has_trialed
-            }
-            subscriptions {
-              data {
-                ... on StripeSubscriptionData {
-                  id
-                  trial_end
-                  current_period_end
-                  cancel_at_period_end
-                }
-              }
-            }
-          }
-        }
+      try {
+        const client = await getRpcClient();
+        const data = await client.get_legacy_user_permissions();
+
+        return ok({
+          id: data.userId,
+          permissions: data.permissions as MacroPermissions[],
+          email: data.email,
+          name: data.name,
+          licenseStatus: data.licenseStatus,
+          tutorialComplete: data.tutorialComplete,
+          group: data.group,
+          hasChromeExt: data.hasChromeExt,
+          authenticated: !!data.userId,
+          userId: data.userId,
+          hasTrialed: data.hasTrialed,
+        });
+      } catch (error) {
+        return err('NETWORK_ERROR', String(error));
       }
-    `;
-      return mapOk(
-        await gqlFetch<
-          Partial<{
-            me: Partial<{
-              id: string;
-              permissions: MacroPermissions[];
-              email: string;
-              name: string;
-              licenseStatus: string;
-              tutorialComplete: boolean;
-              group?: 'A' | 'B';
-              hasChromeExt: boolean;
-              stripe: {
-                metadata: {
-                  has_trialed: boolean;
-                };
-              };
-            }>;
-          }>
-        >(query),
-        (data) => ({
-          ...data?.me,
-          authenticated: !!data?.me?.id,
-          userId: data?.me?.id,
-          hasTrialed: data?.me?.stripe?.metadata?.has_trialed,
-          group: data?.me?.group,
-          hasChromeExt: data?.me?.hasChromeExt,
-        })
-      );
     },
     {
       seconds: 15,
     }
   ),
   async getOrganization() {
-    const query = `
-    query org {
-      me {
-        organization {
-          id
-          name
-        }
+    try {
+      const client = await getRpcClient();
+      const result = await client.get_user_organization();
+
+      if (!result) {
+        return {
+          organizationId: undefined,
+          organizationName: undefined,
+        };
       }
-    }
-  `;
-    const maybeResult = await gqlFetch<{
-      me: { organization: { id: string; name: string } | null };
-    }>(query);
-    if (isErr(maybeResult))
+
+      return {
+        organizationId: String(result.organizationId),
+        organizationName: result.organizationName,
+      };
+    } catch (error) {
       return {
         organizationId: undefined,
         organizationName: undefined,
       };
-    const [, res] = maybeResult;
-    const id = res.me.organization?.id;
-    const name = res.me.organization?.name;
-    return { organizationId: id, organizationName: name };
+    }
   },
 
   async isUserInOrg() {
-    const query = `
-      query isUserInOrg {
-        me {
-          id
-          organizationId
-        }
-      }
-    `;
-    return mapOk(
-      await gqlFetch<{ me: { id: string; organizationId: string | null } }>(
-        query
-      ),
-      (result) => ({
-        isInOrg: !!result?.me.organizationId,
-        organizationId: result.me.organizationId || undefined,
-      })
-    );
+    try {
+      const client = await getRpcClient();
+      const result = await client.get_user_organization();
+
+      return ok({
+        isInOrg: !!result,
+        organizationId: result ? String(result.organizationId) : undefined,
+      });
+    } catch (error) {
+      return err('NETWORK_ERROR', String(error));
+    }
   },
 
   async completeOnboarding(args: CompleteOnboardingRequest) {
-    const query = `
-      mutation {
-        onboarding(
-          firstName: "${args.firstName}",
-          lastName: "${args.lastName}",
-          title: "${args.title}",
-          industry: "${args.industry}"
-        )
-      }
-    `;
-    const response = await gqlFetch(query, { ...args });
-
-    return mapOk(response, (result) => result);
+    try {
+      const client = await getRpcClient();
+      await client.patch_user_onboarding(args);
+      return ok(undefined);
+    } catch (error) {
+      return err('NETWORK_ERROR', String(error));
+    }
   },
   async setGroup(args: SetGroupRequest) {
-    const query = `
-      mutation {
-        setGroup(group: "${args.group}")
-      }
-    `;
-    const response = await gqlFetch(query, { ...args });
-    return mapOk(response, (result) => result);
+    try {
+      const client = await getRpcClient();
+      await client.patch_user_group(args);
+      return ok(undefined);
+    } catch (error) {
+      return err('NETWORK_ERROR', String(error));
+    }
   },
 };
 
@@ -302,11 +227,17 @@ const persistedUserInfo = makePersisted(
   createSignal<Awaited<ReturnType<typeof gqlServiceClient.getUserInfo>>>([
     null,
     {
-      userId: undefined,
+      userId: '',
       authenticated: false,
       hasTrialed: false,
-      group: undefined,
+      group: null,
       hasChromeExt: false,
+      id: '',
+      permissions: [],
+      email: '',
+      name: null,
+      licenseStatus: '',
+      tutorialComplete: false,
     },
   ]),
   {
@@ -380,40 +311,3 @@ export function useLicenseStatus() {
     return info.licenseStatus;
   });
 }
-
-// TODO: remove unused code
-//
-// // Function to check if email domain has Google MX records
-// export async function checkGoogleMXRecords(
-//   emailAddress: string | undefined
-// ): Promise<boolean> {
-//   if (!emailAddress) return false;
-//
-//   try {
-//     const domain = emailAddress.split('@')[1];
-//     if (!domain) return false;
-//
-//     const response = await platformFetch(
-//       `https://dns.google/resolve?name=${domain}&type=MX`
-//     );
-//     const data = await response.json();
-//
-//     if (data.Answer && Array.isArray(data.Answer)) {
-//       return data.Answer.some(
-//         (record: { data: string }) =>
-//           record.data && record.data.includes('google.com')
-//       );
-//     }
-//
-//     return false;
-//   } catch (error) {
-//     console.error('Failed to check MX records:', error);
-//     return false;
-//   }
-// }
-//
-// export function useHasGoogleMX() {
-//   const email = useEmail();
-//   const [hasGoogleMX] = createResource(email, checkGoogleMXRecords);
-//   return hasGoogleMX;
-// }
