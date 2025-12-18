@@ -314,7 +314,7 @@ export function KommandMenuInner(props: {
       <div class="flex items-center gap-2 bg-panel px-2 h-[40px] border-b border-edge-muted">
         <span class="pl-2 pointer-events-none">❯</span>
         <CommandK.Input
-          class="flex-1 border-0 outline-none! focus:outline-none ring-0! focus:ring-0 font-mono"
+          class="flex-1 border-0 outline-none! focus:outline-none ring-0! focus:ring-0"
           onValueChange={setRawQuery}
           placeholder="Search"
           value={rawQuery()}
