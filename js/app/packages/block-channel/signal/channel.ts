@@ -191,36 +191,6 @@ function optimisticChannelMessage({
   }
 }
 
-export async function deleteMessage(messageId: string) {
-  const channelId = channelStore.get.id;
-  if (!channelId) return;
-
-  try {
-    await commsServiceClient.deleteMessage({
-      channel_id: channelId,
-      message_id: messageId,
-    });
-  } catch (e) {
-    console.error(e);
-  }
-}
-
-export async function editMessage(messageId: string, content: string) {
-  const channelId = channelStore.get.id;
-  if (content.trim().length === 0) return;
-  if (!channelId) return;
-
-  try {
-    await commsServiceClient.patchMessage({
-      message_id: messageId,
-      channel_id: channelId,
-      content,
-    });
-  } catch (e) {
-    console.error(e);
-  }
-}
-
 function isMessageSendable(
   content: string | undefined,
   attachments: InputAttachment[]
