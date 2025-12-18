@@ -15,39 +15,49 @@ fn test_build_search_request() -> anyhow::Result<()> {
     let result = builder.build_search_request()?;
 
     let expected = serde_json::json!({
-        "from": 20,
-        "size": 20,
-        "collapse": {
-            "field": "entity_id"
-        },
-        "sort": ProjectSearchConfig::default_sort_types().iter().map(|s| s.to_json()).collect::<Vec<_>>(),
-        "highlight": ProjectSearchConfig::append_owner_highlights(ProjectSearchConfig::default_highlight()).to_json(),
-        "query": {
+          "from": 20,
+          "size": 20,
+          "collapse": {
+              "field": "entity_id"
+          },
+          "sort": ProjectSearchConfig::default_sort_types().iter().map(|s| s.to_json()).collect::<Vec<_>>(),
+          "highlight": ProjectSearchConfig::append_owner_highlights(ProjectSearchConfig::default_highlight()).to_json(),
+          "query": {
+      "bool": {
+        "filter": [
+          {
             "bool": {
-                "must": [
-                    {
-                        "match_phrase": {
-                            "project_name": "test"
-                        }
-                    },
-                    {"term": {"_index": "projects"}},
-                ],
-                "should": [
-                    {
-                        "terms": {
-                            "entity_id": ["proj1", "proj2"]
-                        }
-                    },
-                    {
-                        "term": {
-                            "user_id": "user123"
-                        }
-                    }
-                ],
-                "minimum_should_match": 1,
+              "minimum_should_match": 1,
+              "should": [
+                {
+                  "terms": {
+                    "entity_id": ["proj1", "proj2"]
+                  }
+                },
+                {
+                  "term": {
+                    "user_id": "user123"
+                  }
+                }
+              ]
             }
-        }
-    });
+          },
+          {
+            "term": {
+              "_index": "projects"
+            }
+          }
+        ],
+        "must": [
+          {
+            "match_phrase": {
+              "project_name": "test"
+            }
+          }
+        ]
+      }
+    },
+      });
 
     assert_eq!(result.to_json(), expected);
 

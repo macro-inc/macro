@@ -153,9 +153,8 @@ export function MessageContainer(props: MessageProps) {
 
   // Scroll message to have editing input visible
   createEffect(() => {
-    if (editing() && props.virtualHandle) {
-      const handle = props.virtualHandle!;
-
+    const handle = props.virtualHandle;
+    if (editing() && handle) {
       requestAnimationFrame(() => {
         const messageBounds = messageContainerRef.getBoundingClientRect();
         const containerBounds = props.container?.getBoundingClientRect();
@@ -190,8 +189,11 @@ export function MessageContainer(props: MessageProps) {
       : undefined;
   });
 
-  const previousNonThreadMessage = () =>
-    props.listContext?.previousNonThreadedMessage;
+  const newDayPreviousNonThreadMessage = createMemo(() => {
+    const prev = props.listContext?.previousNonThreadedMessage;
+    if (!prev) return false;
+    return !isSameDay(new Date(message.created_at), new Date(prev.created_at));
+  });
 
   // We consider a message consecutive if it's from the same user and the same day and has the same thread id.
   const isConsecutive = createMemo(() => {
@@ -480,23 +482,6 @@ export function MessageContainer(props: MessageProps) {
     }
 
     listContext.toggleThread(message.thread_id);
-    if (threadState_.threadExpanded) {
-      scrollIntoViewAndFocus({
-        virtualHandle: props.virtualHandle,
-        container: props.container,
-        targetIndex: props.index() + 1,
-        targetId: message.thread_id,
-      });
-    } else {
-      scrollIntoViewAndFocus({
-        virtualHandle: props.virtualHandle,
-        container: props.container,
-        targetIndex: props
-          .orderedMessages()
-          .findIndex((m) => m.id === message.thread_id),
-        targetId: message.thread_id,
-      });
-    }
   };
 
   return (
@@ -517,11 +502,7 @@ export function MessageContainer(props: MessageProps) {
             (props.index() === 0 ||
               (props.index() > 0 &&
                 !message.thread_id &&
-                previousNonThreadMessage() &&
-                !isSameDay(
-                  new Date(message.created_at),
-                  new Date(previousNonThreadMessage()!.created_at)
-                )))
+                newDayPreviousNonThreadMessage()))
           }
         >
           <MessageFlag text={formatRelativeDate(message.created_at)} />
@@ -745,7 +726,7 @@ export function MessageContainer(props: MessageProps) {
                   </ContextMenu.Item>
                 </Show>
                 <Show when={!reactionSearchOpen()}>
-                  <div class={MENU_CONTENT_CLASS + ' mt-4'}>
+                  <div class={`${MENU_CONTENT_CLASS} mt-4`}>
                     <For each={actions().filter((a) => a.enabled)}>
                       {(a) => (
                         <>

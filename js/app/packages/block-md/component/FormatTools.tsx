@@ -328,22 +328,22 @@ export function FormatTools(props: { withinPopup?: boolean }) {
   const cleanups: Array<() => void> = [];
 
   function handleLink() {
-    const _editor = editor();
-    if (_editor === undefined) return;
+    const currentEditor = editor();
+    if (currentEditor === undefined) return;
     if (selection()?.hasLinks) {
-      _editor.dispatchCommand(UNLINK_COMMAND, undefined);
+      currentEditor.dispatchCommand(UNLINK_COMMAND, undefined);
       setTimeout(() => {
-        _editor.focus();
+        currentEditor.focus();
       });
       return;
     }
-    _editor.dispatchCommand(TRY_INSERT_LINK_COMMAND, undefined);
+    currentEditor.dispatchCommand(TRY_INSERT_LINK_COMMAND, undefined);
   }
 
   function handleInsertEquation() {
-    const _editor = editor();
-    if (_editor === undefined) return;
-    _editor.dispatchCommand(TRY_INSERT_EQUATION_COMMAND, undefined);
+    const currentEditor = editor();
+    if (currentEditor === undefined) return;
+    currentEditor.dispatchCommand(TRY_INSERT_EQUATION_COMMAND, undefined);
   }
 
   createEffect(() => {

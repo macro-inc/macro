@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use sqlx::{Postgres, Transaction};
 
 /// Upserts an item into the ItemLastAccessed table
@@ -40,7 +41,7 @@ pub async fn upsert_item_last_accessed_timestamp(
 #[tracing::instrument(skip(transaction))]
 pub async fn upsert_user_history(
     transaction: &mut Transaction<'_, Postgres>,
-    user_id: &str,
+    user_id: MacroUserIdStr<'_>,
     item_id: &str,
     item_type: &str,
 ) -> anyhow::Result<()> {
@@ -51,7 +52,7 @@ pub async fn upsert_user_history(
 #[tracing::instrument(skip(transaction))]
 pub async fn upsert_user_history_timestamp(
     transaction: &mut Transaction<'_, Postgres>,
-    user_id: &str,
+    user_id: MacroUserIdStr<'_>,
     item_id: &str,
     item_type: &str,
     timestamp: &DateTime<Utc>,
@@ -63,7 +64,7 @@ pub async fn upsert_user_history_timestamp(
         ON CONFLICT ("userId", "itemId", "itemType") DO UPDATE
         SET "updatedAt" = $4;
         "#,
-        user_id,
+        user_id.as_ref(),
         item_id,
         item_type,
         timestamp.naive_utc()
@@ -78,7 +79,7 @@ pub async fn upsert_user_history_timestamp(
 #[tracing::instrument(skip(transaction))]
 async fn insert_user_history_batch(
     transaction: &mut Transaction<'_, Postgres>,
-    user_id: &str,
+    user_id: MacroUserIdStr<'_>,
     item_ids: &Vec<String>,
     item_type: &str,
     timestamp: DateTime<Utc>,
@@ -111,13 +112,13 @@ async fn insert_user_history_batch(
 #[tracing::instrument(skip(transaction))]
 pub async fn add_user_history_for_project_tree(
     transaction: &mut Transaction<'_, Postgres>,
-    user_id: &str,
+    user_id: MacroUserIdStr<'_>,
     project_ids: &Vec<String>,
     document_ids: &Vec<String>,
 ) -> anyhow::Result<()> {
     let now: DateTime<Utc> = Utc::now();
 
-    insert_user_history_batch(transaction, user_id, project_ids, "project", now).await?;
+    insert_user_history_batch(transaction, user_id.copied(), project_ids, "project", now).await?;
     insert_user_history_batch(transaction, user_id, document_ids, "document", now).await?;
 
     Ok(())
@@ -166,7 +167,7 @@ mod tests {
         let mut transaction = pool.begin().await.unwrap();
         upsert_user_history(
             &mut transaction,
-            "macro|user@user.com",
+            MacroUserIdStr::parse_from_str("macro|user@user.com").unwrap(),
             "document-one",
             "document",
         )
@@ -190,7 +191,7 @@ mod tests {
         let mut transaction = pool.begin().await.unwrap();
         upsert_user_history(
             &mut transaction,
-            "macro|user@user.com",
+            MacroUserIdStr::parse_from_str("macro|user@user.com").unwrap(),
             "document-two",
             "document",
         )
@@ -214,7 +215,7 @@ mod tests {
 
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("basic_user_history")))]
     async fn test_add_user_history_for_project_tree(pool: Pool<Postgres>) -> anyhow::Result<()> {
-        let user_id = "macro|user@user.com";
+        let user_id = MacroUserIdStr::parse_from_str("macro|user@user.com").unwrap();
 
         let mut transaction = pool.begin().await?;
 
@@ -225,7 +226,7 @@ mod tests {
         FROM "UserHistory"
         WHERE "userId" = $1 AND "itemId" = $2
         "#,
-            user_id,
+            user_id.as_ref(),
             "document-one"
         )
         .fetch_one(&mut *transaction)
@@ -235,8 +236,13 @@ mod tests {
         let document_ids = vec!["document-one".to_string(), "document-two".to_string()];
 
         // Call function under test
-        add_user_history_for_project_tree(&mut transaction, user_id, &project_ids, &document_ids)
-            .await?;
+        add_user_history_for_project_tree(
+            &mut transaction,
+            user_id.clone(),
+            &project_ids,
+            &document_ids,
+        )
+        .await?;
 
         // Confirm document-one was updated
         let updated = sqlx::query!(
@@ -245,7 +251,7 @@ mod tests {
         FROM "UserHistory"
         WHERE "userId" = $1 AND "itemId" = $2
         "#,
-            user_id,
+            user_id.as_ref(),
             "document-one"
         )
         .fetch_one(&mut *transaction)
@@ -264,7 +270,7 @@ mod tests {
         FROM "UserHistory"
         WHERE "userId" = $1 AND "itemId" = $2
         "#,
-            user_id,
+            user_id.as_ref(),
             "document-two"
         )
         .fetch_one(&mut *transaction)
@@ -279,7 +285,7 @@ mod tests {
         FROM "UserHistory"
         WHERE "userId" = $1 AND "itemId" = $2 AND "itemType" = 'project'
         "#,
-            user_id,
+            user_id.as_ref(),
             "project-alpha"
         )
         .fetch_one(&mut *transaction)

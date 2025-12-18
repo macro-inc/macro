@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 use anyhow::Context;
 use authentication_service_client::AuthServiceClient;
+use macro_user_id::email::ReadEmailParts;
 use model_notifications::{NotificationEventType, NotificationWithRecipient};
 use notification_db_client::user_notification::get::should_email::should_email_based_on_user_notification_bulk;
 
@@ -125,16 +126,17 @@ async fn filter_by_rate_limit(
 ) -> anyhow::Result<Vec<String>> {
     match notification.inner.notification_event.event_type() {
         NotificationEventType::ChannelInvite => {
-            let invited_by_email = notification
+            let sender_id = notification
                 .inner
                 .sender_id
                 .as_ref()
-                .map(|sender_id| sender_id.replace("macro|", ""))
                 .context("unable to get sender id")?;
+
+            let invited_by_email = sender_id.email_part();
 
             let channel_invited_rate_limit = queue_worker_context
                 .macro_cache_client
-                .get_channel_invited_rate_limit_bulk(emails, &invited_by_email)
+                .get_channel_invited_rate_limit_bulk(emails, invited_by_email.email_str())
                 .await
                 .context("unable to get channel invited rate limit")?;
 

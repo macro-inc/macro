@@ -287,11 +287,14 @@ function MessageListImpl(props: MessageListProps) {
   });
 
   const checkIfNewMessage = (message: Message) => {
+    const lastViewed_ = lastViewed();
+    const openedChannel_ = openedChannel();
     return (
-      !!lastViewed() &&
-      new Date(message.created_at) > new Date(lastViewed()!) &&
+      !!lastViewed_ &&
+      !!openedChannel_ &&
+      new Date(message.created_at) > new Date(lastViewed_) &&
       userId() !== message.sender_id &&
-      new Date(message.created_at) < new Date(openedChannel()!)
+      new Date(message.created_at) < new Date(openedChannel_)
     );
   };
 
@@ -809,9 +812,10 @@ function MessageListImpl(props: MessageListProps) {
                 return (
                   <Show
                     when={
-                      isParentless() ||
-                      isThreadExpanded() ||
-                      isThreadIndexWithinCutoff()
+                      (isParentless() ||
+                        isThreadExpanded() ||
+                        isThreadIndexWithinCutoff()) &&
+                      virtualHandle()
                     }
                   >
                     <MessageContainer

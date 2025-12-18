@@ -375,6 +375,7 @@ generate_file_types!(
     (Rbi, "rbi", "text/plain", "code"),
     (Rs, "rs", "text/plain", "code"),
     (Scss, "scss", "text/plain", "code"),
+    (Sass, "sass", "text/plain", "code"),
     (Shader, "shader", "text/plain", "code"),
     (Sh, "sh", "text/plain", "code"),
     (Bash, "bash", "text/plain", "code"),

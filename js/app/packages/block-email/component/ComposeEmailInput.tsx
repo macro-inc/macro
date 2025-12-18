@@ -123,17 +123,17 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
   let composeContainerRef: HTMLDivElement | undefined;
 
   async function handleSend() {
-    const _editor = editor();
+    const currentEditor = editor();
 
     // We handle cleaning up the signature after we've sent the request because
     // otherwise the `bodyMacro` signal would update after the clean up call and
     // not contain the signature in the request data
     const cleanupWatermark = $appendWatermarkNodeToLast(
-      _editor,
+      currentEditor,
       !hasPaidAccess() ? MACRO_EMAIL_SIGNATURE : undefined
     );
 
-    const prepared = prepareEmailBody(_editor, undefined);
+    const prepared = prepareEmailBody(currentEditor, undefined);
     if (!prepared) return;
 
     const bodyMacro = content();

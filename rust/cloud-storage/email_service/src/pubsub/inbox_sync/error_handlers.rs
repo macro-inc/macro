@@ -1,5 +1,5 @@
 use crate::pubsub::context::PubSubContext;
-use models_email::gmail::webhook::WebhookPubsubMessage;
+use models_email::gmail::inbox_sync::InboxSyncPubsubMessage;
 use models_email::service::pubsub::{DetailedError, ProcessingError};
 use sqs_worker::cleanup_message;
 
@@ -8,10 +8,10 @@ use sqs_worker::cleanup_message;
 pub async fn handle_non_retryable_error(
     ctx: &PubSubContext,
     message: &aws_sdk_sqs::types::Message,
-    data: &WebhookPubsubMessage,
+    data: &InboxSyncPubsubMessage,
     e: &DetailedError,
 ) -> anyhow::Result<()> {
-    tracing::error!(error = %e, payload = format!("{:?}", data.operation), "Non-retryable error processing webhook message. The message will be deleted.");
+    tracing::error!(error = %e, payload = format!("{:?}", data.operation), "Non-retryable error processing inbox sync message. The message will be deleted.");
 
     cleanup_message(&ctx.sqs_worker, message).await?;
     Ok(())
@@ -20,10 +20,10 @@ pub async fn handle_non_retryable_error(
 /// Handles retryable errors by updating status to InProgress and adding the error message
 #[tracing::instrument]
 pub async fn handle_retryable_error(
-    data: &WebhookPubsubMessage,
+    data: &InboxSyncPubsubMessage,
     e: &DetailedError,
 ) -> anyhow::Result<()> {
-    tracing::debug!(error = %e, payload = format!("{:?}", data.operation), "Retryable error processing webhook message.");
+    tracing::debug!(error = %e, payload = format!("{:?}", data.operation), "Retryable error processing inbox sync message.");
 
     Ok(())
 }

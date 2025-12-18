@@ -6,7 +6,7 @@ use strum::Display;
 use uuid::Uuid;
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct GmailWebhookPayload {
+pub struct GmailInboxSyncPayload {
     pub message: PubSubMessage,
     pub subscription: String,
 }
@@ -49,15 +49,15 @@ where
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct WebhookPubsubMessage {
+pub struct InboxSyncPubsubMessage {
     pub link_id: Uuid,
     // the operation being performed
-    pub operation: WebhookOperation,
+    pub operation: InboxSyncOperation,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, Display)]
 #[serde(rename_all = "snake_case")]
-pub enum WebhookOperation {
+pub enum InboxSyncOperation {
     // The original message we get from gmail when there is a change to the user's inbox.
     // Contains the new history_id for the user's inbox.
     GmailMessage(GmailMessagePayload),
@@ -94,7 +94,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_deserialize_webhook_payload() {
+    fn test_deserialize_inbox_sync_payload() {
         let json_str = r#"
         {
           "message": {
@@ -106,7 +106,7 @@ mod tests {
         }
         "#;
 
-        let payload: GmailWebhookPayload = serde_json::from_str(json_str).unwrap();
+        let payload: GmailInboxSyncPayload = serde_json::from_str(json_str).unwrap();
 
         assert_eq!(
             payload.subscription,

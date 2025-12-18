@@ -5,7 +5,7 @@ use lambda_runtime::{
     Error, LambdaEvent,
     tracing::{self},
 };
-use models_email::email::service::pubsub::RefreshMessage;
+use models_email::email::service::pubsub::LinkManagerMessage;
 use sqlx::Type;
 
 #[derive(Type, Debug, Clone, Copy)]
@@ -24,7 +24,7 @@ pub async fn handler(
 
     // uses the index idx_links_active_provider_hash_bucket
     let notifications = sqlx::query_as!(
-        RefreshMessage,
+        LinkManagerMessage,
         r#"
         SELECT
             id as "link_id"

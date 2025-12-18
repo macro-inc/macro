@@ -21,7 +21,7 @@ pub async fn create_notification(
         entity_type,
         notification.service_sender,
         notification.metadata,
-        notification.sender_id,
+        notification.sender_id.as_ref().map(|id| id.as_ref()),
     )
     .fetch_one(&pool)
     .await?;
@@ -58,7 +58,7 @@ pub async fn create_notification_transaction(
         entity_type,
         notification.service_sender,
         notification.metadata,
-        notification.sender_id,
+        notification.sender_id.as_ref().map(|id| id.as_ref()),
     )
     .fetch_one( transaction.as_mut())
     .await?;

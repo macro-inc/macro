@@ -581,11 +581,11 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                 createSignal<VirtualizerHandle | null>(null);
 
               setScrollToItem(() => (key: string) => {
-                const _handle = handle();
-                if (_handle) {
+                const virtualizerHandle = handle();
+                if (virtualizerHandle) {
                   const ndx = arr.findIndex((item) => item.key === key);
                   if (ndx > -1) {
-                    _handle.scrollToIndex(ndx, { align: 'nearest' });
+                    virtualizerHandle.scrollToIndex(ndx, { align: 'nearest' });
                   }
                 }
               });

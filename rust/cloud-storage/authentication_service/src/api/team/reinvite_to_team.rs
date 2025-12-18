@@ -4,6 +4,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use model_notifications::{InviteToTeamMetadata, NotificationEvent, NotificationQueueMessage};
 
@@ -15,7 +16,7 @@ use crate::api::{
 use model::{
     response::{EmptyResponse, ErrorResponse},
     tracking::IPContext,
-    user::UserContext,
+    user::axum_extractor::MacroUserExtractor,
 };
 
 #[derive(serde::Deserialize)]
@@ -41,12 +42,12 @@ pub struct Param {
             (status = 500, body=ErrorResponse),
         ),
     )]
-#[tracing::instrument(skip(ctx, ip_context, user_context), fields(client_ip=%ip_context.client_ip, user_id=%user_context.user_id, fusion_user_id=%user_context.fusion_user_id))]
+#[tracing::instrument(skip(ctx, ip_context, user_context), fields(client_ip=%ip_context.client_ip, user_id=%user_context.macro_user_id, fusion_user_id=%user_context.user_context.fusion_user_id))]
 pub async fn handler(
     access: TeamAccessRoleExtractor<AdminRole>,
     State(ctx): State<ApiContext>,
     ip_context: Extension<IPContext>,
-    user_context: Extension<UserContext>,
+    user_context: MacroUserExtractor,
     Path(Param {
         team_id,
         team_invite_id,
@@ -102,7 +103,7 @@ pub async fn handler(
         let db = ctx.db.clone();
         let macro_notify_client = ctx.macro_notify_client.clone();
         let normalized_email = team_invite.email;
-        let invited_by = user_context.user_id.clone();
+        let invited_by = user_context.macro_user_id;
         let team_invite_id = team_invite.id;
         async move {
             let _ = notify_team_invite(
@@ -110,7 +111,7 @@ pub async fn handler(
                 &macro_notify_client,
                 &team_id,
                 &team_invite_id,
-                &invited_by,
+                invited_by,
                 &normalized_email,
             )
             .await
@@ -126,13 +127,13 @@ async fn notify_team_invite(
     macro_notify_client: &macro_notify::MacroNotify,
     team_id: &uuid::Uuid,
     team_invite_id: &uuid::Uuid,
-    invited_by: &str,
+    invited_by: MacroUserIdStr<'static>,
     normalized_email: &str,
 ) -> anyhow::Result<()> {
     let team_name = macro_db_client::team::get::get_team_name(db, team_id).await?;
 
     let notification_metadata = InviteToTeamMetadata {
-        invited_by: invited_by.to_string(),
+        invited_by: invited_by.clone(),
         team_name: team_name.clone(),
         team_id: team_id.to_string(),
         role: None,
@@ -141,7 +142,7 @@ async fn notify_team_invite(
     let notification_queue_message = NotificationQueueMessage {
         notification_entity: EntityType::Team.with_entity_string(team_invite_id.to_string()),
         notification_event: NotificationEvent::InviteToTeam(notification_metadata),
-        sender_id: Some(invited_by.to_string()),
+        sender_id: Some(invited_by),
         recipient_ids: Some(vec![format!("macro|{normalized_email}")]),
     };
 

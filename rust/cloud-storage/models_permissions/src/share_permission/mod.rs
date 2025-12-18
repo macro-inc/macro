@@ -4,7 +4,6 @@ use crate::share_permission::channel_share_permission::{
 };
 use model_file_type::FileType;
 use utoipa::ToSchema;
-
 pub mod access_level;
 pub mod channel_share_permission;
 pub mod user_permission;
