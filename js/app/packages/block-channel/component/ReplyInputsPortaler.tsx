@@ -1,4 +1,4 @@
-import { sendMessage } from '@block-channel/signal/channel';
+import { channelStore, sendMessage } from '@block-channel/signal/channel';
 import type { ThreadStoreData } from '@block-channel/signal/threads';
 import { postTypingUpdate } from '@block-channel/signal/typing';
 import type { ThreadViewData } from '@block-channel/type/threadView';
@@ -9,11 +9,13 @@ import {
 } from '@block-channel/utils/draftMessages';
 import { blockElementSignal } from '@core/signal/blockElement';
 import type { InputAttachment } from '@core/store/cacheChannelInput';
+import { channelParticipantInfo } from '@core/user/util';
 import type { Message } from '@service-comms/generated/models';
 import { createCallback } from '@solid-primitives/rootless';
 import {
   type Accessor,
   createEffect,
+  createMemo,
   createSignal,
   For,
   type Setter,
@@ -41,6 +43,12 @@ export function ReplyInputsPortaler(props: ReplyInputsPortalerProps) {
   const postTypingUpdate_ = createCallback(postTypingUpdate);
   const sendMessage_ = createCallback(sendMessage);
   const blockRef = blockElementSignal.get;
+
+  const channel = channelStore.get;
+  const channelUsers = createMemo(() => {
+    const participants = channel.participants ?? [];
+    return participants.map(channelParticipantInfo);
+  });
 
   const [focusedReplyInputThreadId, setFocusedReplyInputThreadId] =
     createSignal<string>();
@@ -181,6 +189,7 @@ export function ReplyInputsPortaler(props: ReplyInputsPortalerProps) {
                   setStore: props.setThreadInputAttachmentsStore,
                   key: threadId,
                 }}
+                channelUsers={channelUsers}
                 setLocalTyping={
                   props.setLocalTypingThreadId
                     ? (isTyping) =>

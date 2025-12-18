@@ -807,10 +807,10 @@ export function EntityWithEverything(
       data-checked={props.checked}
       class="everything-entity relative group/entity"
       classList={{
-        'bg-hover/30': props.highlighted && !props.checked,
+        'bg-hover/30': props.selected && !props.checked,
         'bg-accent/5': props.checked,
         'bracket outline outline-accent/20 outline-offset-[-1px]':
-          props.selected,
+          props.highlighted,
       }}
       onMouseOver={(e) => {
         if (!didCursorMove(e)) {
@@ -866,8 +866,8 @@ export function EntityWithEverything(
           <div
             class="size-4 p-0.5 flex items-center justify-center rounded-xs group-hover/button:border-accent group-hover/button:border pointer-events-none"
             classList={{
-              'ring ring-edge-muted': props.selected,
-              'bg-panel': !props.checked && props.selected,
+              'ring ring-edge-muted': props.highlighted,
+              'bg-panel': !props.checked && props.highlighted,
               'bg-accent border border-accent': props.checked,
             }}
           >
@@ -979,7 +979,7 @@ export function EntityWithEverything(
                 );
               }}
             </Show>
-            <Show when={props.highlighted && props.onClickRowAction}>
+            <Show when={props.selected && props.onClickRowAction}>
               <div class="absolute top-1 right-1 items-center flex @max-sm/split:hidden">
                 <Tooltip
                   tooltip={

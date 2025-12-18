@@ -11,10 +11,7 @@ use crate::{
 
 use crate::SearchOn;
 use models_opensearch::{SearchEntityType, SearchIndex};
-use opensearch_query_builder::{
-    BoolQueryBuilder, FieldSort, QueryType, ScoreWithOrderSort, SearchRequest, SortOrder, SortType,
-    ToOpenSearchJson,
-};
+use opensearch_query_builder::{BoolQueryBuilder, QueryType, SearchRequest, ToOpenSearchJson};
 
 use crate::search::model::DefaultSearchResponse;
 use serde_json::Value;
@@ -25,13 +22,6 @@ impl SearchQueryConfig for EmailSearchConfig {
     const USER_ID_KEY: &'static str = "user_id";
     const TITLE_KEY: &'static str = "name";
     const ENTITY_INDEX: SearchEntityType = SearchEntityType::Emails;
-
-    fn default_sort_types<'a>() -> Vec<SortType<'a>> {
-        vec![
-            SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
-            SortType::Field(FieldSort::new(Self::ID_KEY, SortOrder::Asc)),
-        ]
-    }
 
     fn append_owner_highlights<'a>(
         highlight: opensearch_query_builder::Highlight<'a>,
@@ -124,31 +114,31 @@ impl EmailQueryBuilder {
 
             // If link_ids are provided, add them to the query
             if !self.link_ids.is_empty() {
-                bool_query.must(QueryType::terms("link_id", self.link_ids.clone()));
+                bool_query.filter(QueryType::terms("link_id", self.link_ids.clone()));
             }
 
             if !self.sender.is_empty() {
                 // Create new query for senders
                 let senders_query = should_wildcard_field_query_builder("sender", &self.sender);
-                bool_query.must(senders_query);
+                bool_query.filter(senders_query);
             }
 
             if !self.cc.is_empty() {
                 let ccs_query = should_wildcard_field_query_builder("cc", &self.cc);
-                bool_query.must(ccs_query);
+                bool_query.filter(ccs_query);
             }
 
             if !self.bcc.is_empty() {
                 // Create new query for bccs
                 let bccs_query = should_wildcard_field_query_builder("bcc", &self.bcc);
-                bool_query.must(bccs_query);
+                bool_query.filter(bccs_query);
             }
 
             if !self.recipients.is_empty() {
                 // Create new query for recipients
                 let recipients_query =
                     should_wildcard_field_query_builder("recipients", &self.recipients);
-                bool_query.must(recipients_query);
+                bool_query.filter(recipients_query);
             }
 
             content_and_name_bool_queries.content_bool_query = Some(bool_query);

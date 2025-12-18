@@ -2,6 +2,8 @@ use crate::api::context::ApiContext;
 use axum::{http::StatusCode, response::Response};
 use document_sub_type::DocumentSubType;
 use macro_db_client::history::upsert_user_history;
+use macro_user_id::cowlike::CowLike;
+use macro_user_id::user_id::MacroUserIdStr;
 use model::document::response::{DocumentResponse, DocumentResponseMetadata};
 use model::{document::FileTypeExt, sync_service::SyncServiceVersionID};
 use model::{
@@ -17,7 +19,7 @@ use system_properties::SystemPropertiesService;
 #[tracing::instrument(skip(ctx))]
 pub async fn copy_document<'a>(
     ctx: &'a ApiContext,
-    user_id: &'a str,
+    user_id: MacroUserIdStr<'static>,
     original_document_metadata: &'a DocumentMetadata,
     updated_document_name: &'a str,
     file_type: Option<&'a FileType>,
@@ -29,7 +31,7 @@ pub async fn copy_document<'a>(
     let updated_document_metadata = match macro_db_client::document::v2::copy::copy_document(
         &ctx.db,
         original_document_metadata,
-        user_id,
+        user_id.clone(),
         updated_document_name,
         file_type,
         &share_permission,
@@ -70,7 +72,7 @@ pub async fn copy_document<'a>(
 
             // Since we now store a pdf version of docx files (when the conversion is successful)
             // we need to also copy this over into the new dss file
-            let url_encoded_owner = urlencoding::encode(&original_document_metadata.owner);
+            let url_encoded_owner = urlencoding::encode(original_document_metadata.owner.as_ref());
             // Get the source document key
             let source_key = format!(
                 "{}/{}/{}.pdf",
@@ -131,7 +133,7 @@ pub async fn copy_document<'a>(
             })?
             .0;
 
-            let url_encoded_owner = urlencoding::encode(&original_document_metadata.owner);
+            let url_encoded_owner = urlencoding::encode(original_document_metadata.owner.as_ref());
             let file_type_str = file_type.map(|s| s.as_str());
 
             // Get the source document key
@@ -143,7 +145,7 @@ pub async fn copy_document<'a>(
             );
 
             let dest_key = build_cloud_storage_bucket_document_key(
-                user_id,
+                user_id.as_ref(),
                 &updated_document_metadata.document_id,
                 updated_document_metadata.document_version_id,
                 file_type_str,
@@ -209,7 +211,7 @@ pub async fn copy_document<'a>(
                 .0
             };
 
-            let url_encoded_owner = urlencoding::encode(&original_document_metadata.owner);
+            let url_encoded_owner = urlencoding::encode(original_document_metadata.owner.as_ref());
             let file_type_str = file_type.map(|s| s.as_str());
 
             // Get the source document key
@@ -221,7 +223,7 @@ pub async fn copy_document<'a>(
             );
 
             let dest_key = build_cloud_storage_bucket_document_key(
-                user_id,
+                user_id.as_ref(),
                 &updated_document_metadata.document_id,
                 updated_document_metadata.document_version_id,
                 file_type_str,
@@ -270,7 +272,7 @@ pub async fn copy_document<'a>(
     };
     if let Err(e) = upsert_user_history(
         &mut transaction,
-        user_id,
+        user_id.copied(),
         &updated_document_metadata.document_id,
         "document",
     )

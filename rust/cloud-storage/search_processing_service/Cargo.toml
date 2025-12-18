@@ -6,10 +6,10 @@ publish = false
 version = "0.1.0"
 
 [features]
+backfill_names = ["comms_db_client", "email_db_client"]
 default = ["processing", "service"]
 processing = []
 service = ["macro_db_client"]
-backfill_names = ["email_db_client", "comms_db_client"]
 
 [[bin]]
 name = "backfill_chat"
@@ -53,9 +53,11 @@ macro_env = { path = "../macro_env" }
 macro_middleware = { path = "../macro_middleware", default-features = false, features = [
   "auth",
 ] }
+macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 mention_utils = { path = "../mention_utils" }
 model = { path = "../model" }
+models_opensearch = { path = "../models_opensearch" }
 models_search = { path = "../models_search" }
 nom = { workspace = true }
 opensearch_client = { path = "../opensearch_client" }
@@ -78,4 +80,3 @@ tracing = { workspace = true }
 utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
 uuid = { workspace = true }
-models_opensearch = { path = "../models_opensearch" }

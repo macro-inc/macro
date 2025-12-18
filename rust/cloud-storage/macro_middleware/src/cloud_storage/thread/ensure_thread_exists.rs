@@ -5,6 +5,7 @@ use axum::http::StatusCode;
 use axum::middleware::Next;
 use axum::response::Response;
 use email_service_client::EmailServiceClient;
+use macro_user_id::cowlike::CowLike;
 use model::thread::EmailThreadPermission;
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::AccessLevel;
@@ -58,14 +59,14 @@ pub async fn insert_thread_share_permissions(
         .await
         .context("Failed to get thread owner from email-service")?;
 
-    let owner_id = owner_result.user_id.to_string();
+    let owner_id = owner_result.user_id;
 
     // Create a new share permission
     let share_permission = SharePermissionV2 {
         id: macro_uuid::generate_uuid_v7().to_string(),
         is_public: false,
         public_access_level: None,
-        owner: owner_id.clone(),
+        owner: owner_id.to_string(),
         channel_share_permissions: None,
     };
 
@@ -73,7 +74,7 @@ pub async fn insert_thread_share_permissions(
 
     let permission = macro_db_client::share_permission::create::create_thread_permission(
         &mut tx,
-        &owner_id,
+        owner_id.copied(),
         thread_id,
         &share_permission,
     )
@@ -83,7 +84,7 @@ pub async fn insert_thread_share_permissions(
     // insert UserItemAccess for owner
     macro_db_client::item_access::insert::insert_user_item_access(
         &mut tx,
-        &owner_id,
+        owner_id,
         thread_id,
         "thread",
         AccessLevel::Owner,

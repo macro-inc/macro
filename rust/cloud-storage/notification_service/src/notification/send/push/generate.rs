@@ -13,299 +13,6 @@ use sns_client::{APNSPushNotification, Aps};
 use std::str::FromStr;
 use thiserror::Error;
 
-/// Given a notification, this generates a push notification object
-/// Returns (message_json, message_attributes) if the notification is valid
-/// Returns Err if the notification is invalid
-/// NOTE: @synoet - I think push notifications should be generated using the new
-/// [NotificationEvnet] type instead of the [NotificationWithRecipient] type
-/// Simmilarly, each of these should implement some sort of PushDisplay trait
-// pub fn generate_push_notification(notification: &NotificationWithRecipient) {
-//     let (title, message, open_route): (String, String, String) = match notification
-//         .inner
-//         .notification_event
-//         .event_type()
-//     {
-//         NotificationEventType::ChannelInvite => {
-//             let metadata = if let Some(metadata) = notification
-//                 .inner
-//                 .notification_event
-//                 .metadata_json()
-//                 .as_ref()
-//             {
-//                 metadata.clone()
-//             } else {
-//                 return Err(anyhow::anyhow!("notification does not have metadata"));
-//             };
-//             let metadata: ChannelInviteMetadata = serde_json::from_value(metadata.clone())?;
-
-//             let title = format!(
-//                 "{} invited you to join {}",
-//                 metadata.invited_by, metadata.common.channel_name
-//             );
-
-//             let open_route = format!(
-//                 "/channel/{}",
-//                 notification.inner.notification_entity.entity_id
-//             );
-
-//             (title, "".to_string(), open_route)
-//         }
-//         NotificationEventType::ChannelMessageSend => {
-//             let metadata = if let Some(metadata) = notification
-//                 .inner
-//                 .notification_event
-//                 .metadata_json()
-//                 .as_ref()
-//             {
-//                 metadata.clone()
-//             } else {
-//                 return Err(anyhow::anyhow!("notification does not have metadata"));
-//             };
-//             let metadata: ChannelMessageSendMetadata = serde_json::from_value(metadata.clone())?;
-//             let message: String = metadata.message_content;
-//             let email = notification
-//                 .inner
-//                 .sender_id
-//                 .clone()
-//                 .context("expected sender id")?
-//                 .replace("macro|", "");
-
-//             let message_item = if message.is_empty() {
-//                 "an attachment"
-//             } else {
-//                 "a message"
-//             };
-
-//             let channel_name = metadata.common.channel_name;
-
-//             let title = match metadata.common.channel_type {
-//                 ChannelType::DirectMessage => {
-//                     format!("{} sent you {}", email, message_item)
-//                 }
-//                 _ => {
-//                     format!("{} sent {} to #{}", email, message_item, channel_name)
-//                 }
-//             };
-
-//             let message_id = format!("?message_id={}", metadata.message_id);
-
-//             let open_route = format!(
-//                 "/channel/{}{}",
-//                 notification.inner.notification_entity.entity_id, message_id
-//             );
-
-//             (title, message, open_route)
-//         }
-//         NotificationEventType::ChannelMessageReply => {
-//             let metadata = if let Some(metadata) = notification
-//                 .inner
-//                 .notification_event
-//                 .metadata_json()
-//                 .as_ref()
-//             {
-//                 metadata.clone()
-//             } else {
-//                 return Err(anyhow::anyhow!("notification does not have metadata"));
-//             };
-//             let metadata: ChannelReplyMetadata = serde_json::from_value(metadata.clone())?;
-//             let message = metadata.message_content;
-
-//             let email = notification
-//                 .inner
-//                 .sender_id
-//                 .clone()
-//                 .context("expected sender id")?
-//                 .replace("macro|", "");
-
-//             let title = format!("{} replied to thread", email);
-//             let open_route = format!(
-//                 "/channel/{}?message_id={}&thread_id={}",
-//                 notification.inner.notification_entity.entity_id,
-//                 metadata.message_id,
-//                 metadata.thread_id
-//             );
-
-//             (title, message, open_route)
-//         }
-//         NotificationEventType::ChannelMention => {
-//             let channel_metadata = if let Some(channel_metadata) =
-//                 &notification.inner.notification_event.metadata_json()
-//             {
-//                 channel_metadata.clone()
-//             } else {
-//                 return Err(anyhow::anyhow!("no channel metadata was provided"));
-//             };
-
-//             let metadata: ChannelMentionMetadata = serde_json::from_value(channel_metadata)?;
-
-//             let email = notification
-//                 .inner
-//                 .sender_id
-//                 .clone()
-//                 .context("expected sender id")?
-//                 .replace("macro|", "");
-
-//             let message = metadata.message_content;
-
-//             let title = format!(
-//                 "{} mentioned you in #{}",
-//                 email, metadata.common.channel_name
-//             );
-
-//             let thread_id = if let Some(thread_id) = metadata.thread_id {
-//                 format!("&thread_id={}", thread_id)
-//             } else {
-//                 "".to_string()
-//             };
-
-//             let open_route = format!(
-//                 "/channel/{}?message_id={}{}",
-//                 notification.inner.notification_entity.entity_id, metadata.message_id, thread_id
-//             );
-
-//             (title, message, open_route)
-//         }
-//         NotificationEventType::DocumentMention => {
-//             let document_metadata = if let Some(document_metadata) =
-//                 &notification.inner.notification_event.metadata_json()
-//             {
-//                 document_metadata.clone()
-//             } else {
-//                 return Err(anyhow::anyhow!("no document metadata was provided"));
-//             };
-
-//             let metadata: DocumentMentionMetadata = serde_json::from_value(document_metadata)?;
-
-//             let sender_id = notification
-//                 .inner
-//                 .sender_id
-//                 .as_ref()
-//                 .context("expected sender id")?;
-
-//             if let Some(file_type) = metadata.file_type {
-//                 let email = sender_id.replace("macro|", "");
-//                 let message = format!(
-//                     "{} mentioned you in {}.{}",
-//                     email, metadata.document_name, file_type
-//                 );
-//                 let file_type = FileType::from_str(file_type.as_str())?;
-
-//                 let block_route = if file_type.is_image() {
-//                     "image"
-//                 } else {
-//                     match file_type {
-//                         FileType::Pdf => "pdf",
-//                         FileType::Docx => "write",
-//                         FileType::Md => "md",
-//                         _ => "code", // Default to code block
-//                     }
-//                 };
-
-//                 let open_route = format!(
-//                     "/{}/{}",
-//                     block_route, notification.inner.notification_entity.entity_id
-//                 );
-
-//                 ("New Mention".to_string(), message, open_route)
-//             } else {
-//                 return Err(anyhow::anyhow!("no file type was provided"));
-//             }
-//         }
-//         // no push notifs for email yet
-
-//         // NotificationEventType::NewEmail => {
-//         //     let metadata = if let Some(metadata) = notification.inner.notification_event.metadata_as_json().as_ref() {
-//         //         metadata.clone()
-//         //     } else {
-//         //         return Err(anyhow::anyhow!("notification does not have metadata"));
-//         //     };
-//         //     let metadata: NewEmailMetadata = serde_json::from_value(metadata)?;
-//         //
-//         //     let title = if let Some(from_email) = metadata.sender {
-//         //         format!("New email from {}", from_email)
-//         //     } else {
-//         //         "New email".to_string()
-//         //     };
-//         //     let message = metadata.subject;
-//         //     let open_route = format!(
-//         //         "/email/{}?message_id={}",
-//         //         metadata.thread_id, notification.inner.notification_entity.event_item_id
-//         //     );
-//         //
-//         //     (title, message, open_route)
-//         // }
-//         _ => return Ok(None), // unsupported push notification
-//     };
-
-//     tracing::trace!(message=?message, "created message");
-
-//     let collapse_key = format!(
-//         "{}{}",
-//         notification.inner.notification_entity.entity_id,
-//         notification.inner.notification_event.event_type()
-//     );
-
-//     // hash the collapse key to shorten it
-//     let mut hasher = DefaultHasher::new();
-//     collapse_key.hash(&mut hasher);
-//     let hash = hasher.finish();
-//     let collapse_key = format!("{:x}", hash);
-
-//     let push_notification_data = PushNotificationData {
-//         notification_entity: notification.inner.notification_entity.clone(),
-//         sender_id: notification.inner.sender_id.clone(),
-//         open_route: open_route.clone(),
-//     };
-
-//     let notification_body = serde_json::json!({
-//         "title": title,
-//         "body": message,
-//     });
-
-//     let apns = APNSPushNotification {
-//         aps: Aps {
-//             alert: Some(sns_client::Alert::Dictionary(sns_client::AlertDictionary {
-//                 title: Some(title),
-//                 body: Some(message),
-//                 ..Default::default()
-//             })),
-//             ..Default::default()
-//         },
-//         push_notification_data: push_notification_data.clone(),
-//     };
-
-//     let message_json = serde_json::json!({
-//         "default": serde_json::json!({
-//             "notification": notification_body
-//         }).to_string(),
-//         "APNS": serde_json::to_string(&apns).unwrap_or_else(|_| serde_json::json!({
-//             "aps": apns.aps
-//         }).to_string()),
-//         "GCM": serde_json::json!({
-//             "fcmV1Message": {
-//                 "message": {
-//                     "android": {
-//                         "notification": notification_body,
-//                         "priority": "normal", // options are normal and high
-//                         "collapse_key": collapse_key.clone()
-//                     },
-//                     "data": push_notification_data,
-//                 },
-//             }
-//         }).to_string()
-//     });
-
-//     Ok(Some((
-//         SnsPayload {
-//             default: todo!(),
-//             apns: todo!(),
-//             apns_sandbox: todo!(),
-//             gcm: todo!(),
-//         },
-//         // build_message_attributes(&collapse_key),
-//     )))
-// }
-
 #[derive(Debug, Error)]
 pub enum NotificationErr {
     #[error("The sender_id field was None for a notification which must have a sender")]
@@ -368,18 +75,16 @@ pub fn generate_apns_notification<T: XmlFormatter>(
 ) -> Result<Option<APNSPushNotification<PushNotificationData>>, NotificationErr> {
     let create_push_data = |route: Route| PushNotificationData {
         notification_entity: notif.inner.notification_entity.clone(),
-        sender_id: notif.inner.sender_id.clone(),
+        sender_id: notif.inner.sender_id.as_ref().map(|x| x.to_string()),
         open_route: route.0,
     };
 
     let parse_user = || -> Result<MacroUserIdStr<'_>, NotificationErr> {
-        Ok(MacroUserIdStr::parse_from_str(
-            notif
-                .inner
-                .sender_id
-                .as_ref()
-                .ok_or(NotificationErr::SenderDoesntExist)?,
-        )?)
+        notif
+            .inner
+            .sender_id
+            .clone()
+            .ok_or(NotificationErr::SenderDoesntExist)
     };
 
     Ok(match &notif.inner.notification_event {
@@ -499,7 +204,11 @@ impl BuildNotification for ChannelMessageSendMetadata {
                 alert: Some(sns_client::Alert::Dictionary(sns_client::AlertDictionary {
                     title: Some(match self.common.channel_type {
                         ChannelType::DirectMessage => self.common.channel_name.to_string(),
-                        _ => format!("{} <{}>", self.sender, self.common.channel_name),
+                        _ => format!(
+                            "{} <{}>",
+                            self.sender.email_part().local_part(),
+                            self.common.channel_name
+                        ),
                     }),
                     body: Some(T::format_xml_text(ParsedXmlText::parse(&self.message_content)?).0),
                     ..Default::default()

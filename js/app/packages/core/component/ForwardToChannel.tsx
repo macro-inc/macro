@@ -95,9 +95,10 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
     createSignal<boolean>(true);
 
   const canSendAsGroup = createMemo(() => {
-    const _selectedOptions = selectedOptions();
-    if (!_selectedOptions || _selectedOptions.length <= 1) return false;
-    for (const selectedOption of _selectedOptions) {
+    const currentSelectedOptions = selectedOptions();
+    if (!currentSelectedOptions || currentSelectedOptions.length <= 1)
+      return false;
+    for (const selectedOption of currentSelectedOptions) {
       if (selectedOption.kind === 'channel') {
         return false;
       }

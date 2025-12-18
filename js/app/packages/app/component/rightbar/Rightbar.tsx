@@ -193,7 +193,7 @@ function TopBar(props: {
       <IconButton
         size="sm"
         icon={PlusIcon}
-        tooltip={{ label: 'Start new thread' }}
+        tooltip={{ label: 'Create New Chat' }}
         theme="current"
         onClick={() => {
           createNewRightbarChat();
@@ -322,29 +322,6 @@ export function Rightbar(props: {
     props.setState.setModel(model_);
   });
 
-  // gone for now may want in future - ehayes 11/17/2025
-  // const timeString = () => {
-  //   const now = new Date().getHours();
-  //   if (now < 12) {
-  //     return 'morning';
-  //   } else if (now < 18) {
-  //     return 'afternoon';
-  //   } else {
-  //     return 'evening';
-  //   }
-  // };
-  // const userId = useUserId();
-  // const [name] = useDisplayName(userId());
-
-  // let greeting = () => {
-  //   const firstName = name().split(' ').at(0);
-  //   if (!firstName || firstName.length === 0 || firstName.includes('@')) {
-  //     return ``;
-  //   } else {
-  //     return `Good ${timeString()} ${firstName}, what can I assist you with?`;
-  //   }
-  // };
-
   const [editor, setEditor] = createSignal<LexicalEditor>();
   let borrowedFocus: Element | null = null;
   const returnFocus = () => {
@@ -458,14 +435,15 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
   const [attachHotkeys, scopeId] = useHotkeyDOMScope('ai-right-panel');
 
   const clearChatState = () => {
+    const attached = attachments();
     setStream(undefined);
     setModel(undefined);
-    setAttachments([]);
+    setAttachments(attached);
     setText(undefined);
     setMessages([]);
     setInitialChatState({
       model: undefined,
-      attachments: [],
+      attachments: attached,
       text: undefined,
     });
   };

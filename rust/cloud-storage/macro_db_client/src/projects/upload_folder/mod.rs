@@ -5,6 +5,7 @@ use crate::{
     history::add_user_history_for_project_tree, share_permission::create::create_project_permission,
 };
 use async_recursion::async_recursion;
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model::{
     document::{DocumentMetadata, FileType, FileTypeExt},
     folder::{FileSystemNode, FileSystemNodeWithIds, UploadFolderWithIdsResponse},
@@ -19,7 +20,7 @@ use sqlx::{Pool, Postgres, Transaction};
 #[tracing::instrument(skip(transaction, root_folder), fields(root_folder=?root_folder))]
 pub async fn upload_folder_with_ids(
     transaction: &mut Transaction<'_, Postgres>,
-    user_id: &str,
+    user_id: MacroUserIdStr<'static>,
     share_permission: &SharePermissionV2,
     root_folder: &FileSystemNode,
     root_folder_name: &str,
@@ -29,7 +30,7 @@ pub async fn upload_folder_with_ids(
     // Create root project
     let root_project = create_project(
         transaction,
-        user_id,
+        user_id.copied(),
         share_permission,
         root_folder_name,
         parent_id.map(|s| s.to_string()),
@@ -52,7 +53,7 @@ pub async fn upload_folder_with_ids(
                 let extended_node = traverse_with_ids(
                     transaction,
                     node,
-                    user_id,
+                    user_id.clone(),
                     share_permission,
                     name,
                     Some((root_project.id.as_str(), root_project.name.as_str())),
@@ -95,7 +96,7 @@ pub async fn upload_folder_with_ids(
 async fn traverse_with_ids(
     transaction: &mut Transaction<'_, Postgres>,
     node: &FileSystemNode,
-    user_id: &str,
+    user_id: MacroUserIdStr<'static>,
     share_permission: &SharePermissionV2,
     key: &str,
     parent_project: Option<(&str, &str)>, // id, name
@@ -142,7 +143,7 @@ async fn traverse_with_ids(
             if let Some((project_id, _)) = parent_project {
                 let project = create_project(
                     transaction,
-                    user_id,
+                    user_id.copied(),
                     share_permission,
                     key,
                     Some(project_id.to_string()),
@@ -159,7 +160,7 @@ async fn traverse_with_ids(
                     let extended_node = traverse_with_ids(
                         transaction,
                         sub_node,
-                        user_id,
+                        user_id.clone(),
                         share_permission,
                         name,
                         Some((project.id.as_str(), project.name.as_str())),
@@ -187,7 +188,7 @@ async fn traverse_with_ids(
 /// Creates a project for the folder traversal
 async fn create_project(
     transaction: &mut Transaction<'_, Postgres>,
-    user_id: &str,
+    user_id: MacroUserIdStr<'_>,
     share_permission: &SharePermissionV2,
     name: &str,
     parent_id: Option<String>,
@@ -202,7 +203,7 @@ async fn create_project(
         "updatedAt"::timestamptz as updated_at, "parentId" as parent_id
         "#,
         name,
-        user_id,
+        user_id.as_ref(),
         parent_id,
         upload_request_id
     )
@@ -409,7 +410,7 @@ mod tests {
     #[sqlx::test]
     async fn test_upload_folder_preserves_structure(pool: Pool<Postgres>) -> anyhow::Result<()> {
         // Create test data
-        let user_id = "macro|user@user.com";
+        let user_id = MacroUserIdStr::parse_from_str("macro|user@user.com").unwrap();
         let upload_request_id = "upload_request_id";
         let (folder_tree, root_folder_name) = create_test_folder_structure();
         let share_permission = create_test_permission(&pool).await?;
@@ -424,7 +425,7 @@ mod tests {
             ..
         } = upload_folder_with_ids(
             &mut transaction,
-            &user_id,
+            user_id,
             &share_permission,
             &folder_tree,
             &root_folder_name,
@@ -645,7 +646,7 @@ mod tests {
         let empty_folder = FileSystemNode::Folder(HashMap::new());
         let upload_request_id = "upload_request_id";
 
-        let user_id = "macro|user@user.com";
+        let user_id = MacroUserIdStr::parse_from_str("macro|user@user.com").unwrap();
         let share_permission = create_test_permission(&pool).await?;
 
         // Start a transaction
@@ -658,7 +659,7 @@ mod tests {
             ..
         } = upload_folder_with_ids(
             &mut transaction,
-            &user_id,
+            user_id,
             &share_permission,
             &empty_folder,
             &root_folder_name,
@@ -779,7 +780,7 @@ mod tests {
         root_content.insert("root_file.txt".to_string(), FileSystemNode::File(root_file));
 
         let folder_tree = FileSystemNode::Folder(root_content);
-        let user_id = "macro|user@user.com";
+        let user_id = MacroUserIdStr::parse_from_str("macro|user@user.com").unwrap();
         let share_permission = create_test_permission(&pool).await?;
 
         // Start a transaction
@@ -792,7 +793,7 @@ mod tests {
             ..
         } = upload_folder_with_ids(
             &mut transaction,
-            &user_id,
+            user_id,
             &share_permission,
             &folder_tree,
             &root_folder_name,
@@ -922,7 +923,7 @@ mod tests {
         );
 
         let folder_tree = FileSystemNode::Folder(root_content);
-        let user_id = "macro|user@user.com";
+        let user_id = MacroUserIdStr::parse_from_str("macro|user@user.com").unwrap();
         let share_permission = create_test_permission(&pool).await?;
 
         // Start a transaction
@@ -935,7 +936,7 @@ mod tests {
             documents,
         } = upload_folder_with_ids(
             &mut transaction,
-            &user_id,
+            user_id,
             &share_permission,
             &folder_tree,
             &root_folder_name,
@@ -1129,7 +1130,7 @@ mod tests {
     async fn test_upload_request_id_set_for_root_and_subprojects(
         pool: Pool<Postgres>,
     ) -> anyhow::Result<()> {
-        let user_id = "macro|user@user.com";
+        let user_id = MacroUserIdStr::parse_from_str("macro|user@user.com").unwrap();
         let upload_request_id = "upload_request_test_id";
         let (folder_tree, root_folder_name) = create_test_folder_structure();
         let share_permission = create_test_permission(&pool).await?;
@@ -1194,7 +1195,7 @@ mod tests {
 
         let root_folder_name = "Conflicting Names Test";
         let upload_request_id = "conflict_test_123";
-        let user_id = "macro|user@user.com";
+        let user_id = MacroUserIdStr::parse_from_str("macro|user@user.com").unwrap();
         let share_permission = create_test_permission(&pool).await?;
 
         // Create a file called "Report.pdf"

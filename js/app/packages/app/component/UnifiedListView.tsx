@@ -134,7 +134,6 @@ import {
 } from './split-layout/components/SplitToolbar';
 import { useSplitLayout } from './split-layout/layout';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
-import { EmptyState } from './UnifiedListEmptyState';
 import {
   applyClientFilters,
   type DisplayOptions,
@@ -259,7 +258,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
         if (view()?.hasUserInteractedEntity) {
           const selectedEntityId = selectedEntity()?.id;
           if (selectedEntityId) {
-            if (localEntityListRef && localEntityListRef.isConnected) {
+            if (localEntityListRef?.isConnected) {
               // focusing non-first entity causes issue where 100ms later, that focused entity loses focus and document.body is focused
               // forcing refocus on that entity works for now
               // read TODO inside function for more info
@@ -273,7 +272,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
         if (!firstEntity) return;
 
-        setViewDataStore(selectedView(), 'highlightedId', firstEntity.id);
         setSelectedEntity(firstEntity);
 
         tryFocusEntity(firstEntity.id);
@@ -302,9 +300,9 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
             if (dontFocus()) return;
 
-            const focusElement = localEntityListRef!.querySelector(
+            const focusElement = localEntityListRef?.querySelector(
               `[data-entity-id="${entityId}"]`
-            ) as HTMLElement;
+            );
 
             if (focusElement instanceof HTMLElement) {
               focusElement.focus({ preventScroll: true });
@@ -562,10 +560,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     if (!view()) return null;
     return stringify(currentViewConfigBase());
   });
-
-  const setHighlightedId = (id: string) => {
-    setViewDataStore(selectedView(), 'highlightedId', id);
-  };
 
   const { setFilters: setOptionalFilters, filterFn: optionalFilter } =
     createFilterComposer();
@@ -1162,11 +1156,9 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     return <span class="text-[0.625rem]">{props.children}</span>;
   };
 
-  const highlightedSelector = createSelector(() => view()?.highlightedId);
-
   const focusedSelector = createSelector(() => selectedEntity()?.id);
-  const selectedSelector = createSelector(
-    () => view()?.selectedEntities,
+  const multiSelectSelector = createSelector(
+    () => view()?.multiSelectEntities,
     (a: string, b: EntityData[]) => b.find((e) => e.id === a) !== undefined
   );
 
@@ -1256,7 +1248,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   // reset last clicked on reset multi-selection.
   createEffect(() => {
     if (
-      unifiedListContext.viewsDataStore[selectedView()].selectedEntities
+      unifiedListContext.viewsDataStore[selectedView()].multiSelectEntities
         .length === 0
     ) {
       lastClickedEntityId = -1;
@@ -1524,13 +1516,9 @@ export function UnifiedListView(props: UnifiedListViewProps) {
           <UnifiedListComponent
             entityListRef={setLocalEntityListRef}
             virtualizerHandle={setVirtualizerHandle}
-            emptyState={
-              <EmptyState
-                viewId={view()?.id}
-                search={searchText().length > 0}
-              />
-            }
-            hasRefinementsFromBase={isViewConfigChanged}
+            viewId={view()?.id}
+            searchText={searchText()}
+            hasRefinementsFromBase={isViewConfigChanged()}
           >
             {(innerProps) => {
               const displayDoneButton = () => {
@@ -1553,8 +1541,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
               return (
                 <EntityWithEverything
                   onContextMenu={() => {
-                    setHighlightedId(innerProps.entity.id);
-
                     if (isPanelActive() && !preview()) {
                       setSelectedEntity(innerProps.entity);
                     }
@@ -1598,19 +1584,11 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       true
                     );
 
-                    setHighlightedId(innerProps.entity.id);
-
-                    if (isPanelActive() && !preview()) {
-                      setSelectedEntity(innerProps.entity);
-                    }
+                    setSelectedEntity(innerProps.entity);
                   }}
                   onMouseLeave={() => {}}
                   onFocusIn={() => {
-                    setHighlightedId(innerProps.entity.id);
-
-                    if (isPanelActive() && !preview()) {
-                      setSelectedEntity(innerProps.entity);
-                    }
+                    setSelectedEntity(innerProps.entity);
                   }}
                   showLeftColumnIndicator={
                     showUnreadIndicator() || importantFilter()
@@ -1622,16 +1600,16 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                   )}
                   unreadIndicatorActive={unreadFilterFn(innerProps.entity)}
                   showDoneButton={displayDoneButton()}
-                  highlighted={highlightedSelector?.(innerProps.entity.id)}
-                  selected={
+                  highlighted={
                     isPanelActive() && focusedSelector(innerProps.entity.id)
                   }
-                  checked={selectedSelector(innerProps.entity.id)}
+                  selected={focusedSelector(innerProps.entity.id)}
+                  checked={multiSelectSelector(innerProps.entity.id)}
                   onChecked={(next, shiftKey) => {
                     const toggleSingle = () =>
                       unifiedListContext.setViewDataStore(
                         selectedView(),
-                        'selectedEntities',
+                        'multiSelectEntities',
                         (p) => {
                           if (!next) {
                             return p.filter(
@@ -1649,7 +1627,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       const selectedEntitySet = new Set(
                         unifiedListContext.viewsDataStore[
                           unifiedListContext.selectedView()
-                        ].selectedEntities
+                        ].multiSelectEntities
                       );
                       const newEnititiesForSeleciton: EntityData[] = [];
 
@@ -1688,7 +1666,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       }
                       unifiedListContext.setViewDataStore(
                         selectedView(),
-                        'selectedEntities',
+                        'multiSelectEntities',
                         (p) => {
                           return p.concat(newEnititiesForSeleciton);
                         }
@@ -1745,20 +1723,20 @@ export function UnifiedListView(props: UnifiedListViewProps) {
             </Show>
           </ContextMenu.Portal>
         </ContextMenu.Trigger>
-        <Show when={view()?.selectedEntities.length}>
+        <Show when={view()?.multiSelectEntities.length}>
           <EntitySelectionToolbarModal
-            selectedEntities={view()?.selectedEntities ?? []}
+            multiSelectEntities={view()?.multiSelectEntities ?? []}
             onClose={() =>
               unifiedListContext.setViewDataStore(
                 selectedView(),
-                'selectedEntities',
+                'multiSelectEntities',
                 []
               )
             }
             onAction={() => {
-              const selectedEntities =
-                viewsData[selectedView()].selectedEntities;
-              const hasSelection = selectedEntities.length > 0;
+              const multiSelectEntities =
+                viewsData[selectedView()].multiSelectEntities;
+              const hasSelection = multiSelectEntities.length > 0;
               if (hasSelection) {
                 setKonsoleMode('SELECTION_MODIFICATION');
                 const selectionIndex =
@@ -1771,11 +1749,11 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                 searchCategories.showCategory('Selection');
 
                 setKonsoleContextInformation({
-                  selectedEntities: selectedEntities.slice(),
+                  selectedEntities: multiSelectEntities.slice(),
                   clearSelection: () => {
                     unifiedListContext.setViewDataStore(
                       selectedView(),
-                      'selectedEntities',
+                      'multiSelectEntities',
                       []
                     );
                   },
@@ -1851,7 +1829,7 @@ function SearchBar(props: {
   };
 
   const selectionClick = () => {
-    const id = viewsDataStore[selectedView()].highlightedId;
+    const id = viewsDataStore[selectedView()].selectedEntity?.id;
     if (!id) return;
     const el = entityListRef()?.querySelector(`[data-entity-id="${id}"]`);
     if (!(el instanceof HTMLElement)) return;
@@ -1872,7 +1850,6 @@ function SearchBar(props: {
     const text = searchText().trim();
     if (text !== prevText) {
       setViewDataStore(selectedView(), 'selectedEntity', undefined);
-      setViewDataStore(selectedView(), 'highlightedId', undefined);
       setViewDataStore(selectedView(), 'hasUserInteractedEntity', false);
       virtualizerHandle()?.scrollToIndex(0);
       setWaitForLoadingEnd(true);
