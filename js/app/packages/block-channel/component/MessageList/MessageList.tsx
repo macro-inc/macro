@@ -177,7 +177,7 @@ export function MessageList(props: MessageListProps) {
 
       if (!handle) return;
 
-      handle.scrollToIndex(index);
+      handle.scrollToIndex(normalizeIndex(index), { align: 'end' });
       if (!focus) return;
       const targetEl = scrollContainerRef()?.querySelector<HTMLElement>(
         `[data-message-body-id="${messageID}"]`

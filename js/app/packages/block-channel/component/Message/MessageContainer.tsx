@@ -323,7 +323,9 @@ export function MessageContainer(props: MessageProps) {
 
   const onCreateReply = () => {
     listContext.createReply('message', message.id, true);
-    listContext.scrollToIndex(props.index());
+    listContext.scrollToIndex(props.index(), {
+      align: 'end',
+    });
   };
 
   const actions = createMessageActions({
@@ -456,14 +458,6 @@ export function MessageContainer(props: MessageProps) {
 
     if (!threadState_) {
       listContext.toggleThread(message.thread_id, true);
-
-      const lastSiblingId = props.threadSiblings?.at(
-        COLLAPSED_THREAD_INDEX_CUTOFF + 1
-      )?.id;
-
-      if (!lastSiblingId) return;
-
-      listContext.scrollToMessage(lastSiblingId, props.index() + 1);
       return;
     }
 
