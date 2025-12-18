@@ -5,7 +5,6 @@ import {
 import { openedChannelSignal } from '@block-channel/signal/activity';
 import { messageToReactionStore } from '@block-channel/signal/reactions';
 import {
-  type MessageWithThreadId,
   type ThreadStoreData,
   threadsStore,
 } from '@block-channel/signal/threads';
