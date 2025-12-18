@@ -1578,6 +1578,8 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       gotoChannelNotification(notification);
                   }}
                   onMouseOver={() => {
+                    if (preview()) return;
+
                     setViewDataStore(
                       selectedView(),
                       'hasUserInteractedEntity',
@@ -1588,6 +1590,8 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                   }}
                   onMouseLeave={() => {}}
                   onFocusIn={() => {
+                    if (preview()) return;
+
                     setSelectedEntity(innerProps.entity);
                   }}
                   showLeftColumnIndicator={
@@ -1603,7 +1607,11 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                   highlighted={
                     isPanelActive() && focusedSelector(innerProps.entity.id)
                   }
-                  selected={focusedSelector(innerProps.entity.id)}
+                  selected={
+                    focusedSelector(innerProps.entity.id) ||
+                    contextAndModalState.selectedEntity?.id ===
+                      innerProps.entity.id
+                  }
                   checked={multiSelectSelector(innerProps.entity.id)}
                   onChecked={(next, shiftKey) => {
                     const toggleSingle = () =>

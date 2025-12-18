@@ -807,8 +807,10 @@ export function EntityWithEverything(
       data-checked={props.checked}
       class="everything-entity relative group/entity"
       classList={{
-        'bg-hover/30': props.selected && !props.checked,
-        'bg-accent/5': props.checked,
+        'bg-hover/30 outline outline-accent/20 outline-offset-[-1px]':
+          props.selected && !props.checked,
+        'bg-accent/5 outline outline-accent/20 outline-offset-[-1px]':
+          props.checked,
         'bracket outline outline-accent/20 outline-offset-[-1px]':
           props.highlighted,
       }}
