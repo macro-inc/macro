@@ -1,3 +1,4 @@
+use macro_user_id::user_id::MacroUserIdStr;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::user_item_access::UserItemAccess;
 use sqlx::{Executor, Postgres, Transaction};
@@ -6,7 +7,7 @@ use uuid::Uuid;
 #[tracing::instrument(skip(transaction))]
 pub async fn insert_user_item_access(
     transaction: &mut Transaction<'_, Postgres>,
-    user_id: &str,
+    user_id: MacroUserIdStr<'_>,
     item_id: &str,
     item_type: &str,
     access_level: AccessLevel,
@@ -38,7 +39,7 @@ pub async fn insert_user_item_access(
         )
         "#,
         id,
-        user_id,
+        user_id.as_ref(),
         item_id,
         item_type,
         access_level as _,
@@ -253,7 +254,7 @@ mod tests {
 
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("user_item_access.sql")))]
     async fn test_insert_user_item_access(pool: Pool<Postgres>) -> anyhow::Result<()> {
-        let user_id = "test-user";
+        let user_id = MacroUserIdStr::parse_from_str("macro|test@user.com").unwrap();
         let item_id = "new-test-item";
         let item_type = "document";
         let access_level = AccessLevel::Edit;
@@ -264,7 +265,7 @@ mod tests {
         // Insert a new record
         insert_user_item_access(
             &mut transaction,
-            user_id,
+            user_id.clone(),
             item_id,
             item_type,
             access_level,
@@ -280,7 +281,7 @@ mod tests {
         WHERE "user_id" = $1 AND "item_id" = $2 AND "item_type" = $3 
         AND "access_level"::text = $4 AND "granted_from_channel_id" = $5
         "#,
-            user_id,
+            user_id.as_ref(),
             item_id,
             item_type,
             access_level.to_string(),

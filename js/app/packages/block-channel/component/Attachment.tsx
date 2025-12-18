@@ -2,11 +2,11 @@ import { useSplitLayout } from '@app/component/split-layout/layout';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { ImagePreview } from '@core/component/ImagePreview';
 import { TextButton } from '@core/component/TextButton';
+import { VideoPreview } from '@core/component/VideoPreview';
 import {
   blockNameToDefaultFile,
   fileTypeToBlockName,
 } from '@core/constant/allBlocks';
-import { staticFileIdEndpoint } from '@core/constant/servers';
 import {
   type InputAttachment,
   isStaticAttachmentType,
@@ -71,17 +71,10 @@ export function Attachment(props: AttachmentProps) {
           </div>
         </Match>
         <Match when={props.attachment.blockName === STATIC_IMAGE}>
-          <ImagePreview
-            id={props.attachment.id}
-            variant="small"
-            isCurrentUser={true}
-          />
+          <ImagePreview id={props.attachment.id} variant="small" />
         </Match>
         <Match when={props.attachment.blockName === STATIC_VIDEO}>
-          <video
-            src={staticFileIdEndpoint(props.attachment.id)}
-            class="size-15"
-          />
+          <VideoPreview id={props.attachment.id} variant="small" />
         </Match>
         <Match
           when={matches(

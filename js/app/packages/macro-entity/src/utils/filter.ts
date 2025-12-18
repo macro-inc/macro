@@ -36,10 +36,7 @@ export function unreadFilterFn(entity: WithNotification<EntityData>) {
 
 export function importantFilterFn(entity: WithNotification<EntityData>) {
   if (entity.type === 'email') return entity.isImportant;
-  return (
-    !!entity.notifications &&
-    entity.notifications().some(({ isImportantV0 }) => isImportantV0)
-  );
+  return !!entity.notifications && entity.notifications().length > 0;
 }
 
 export function notDoneFilterFn(entity: WithNotification<EntityData>) {

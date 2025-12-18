@@ -18,19 +18,18 @@ import {
   useDisplayName,
   type WithCustomUserInput,
 } from '@core/user';
-import { isErr } from '@core/util/maybeResult';
 import Caution from '@icon/regular/warning.svg';
+import { useEmailLinksQuery } from '@queries/email/link';
 import { useSendMessageMutation } from '@queries/email/thread';
-import { emailClient } from '@service-email/client';
 import {
   createMemo,
-  createResource,
   createSignal,
   Match,
   Show,
   Suspense,
   Switch,
 } from 'solid-js';
+import { beveledCorners } from '../../block-theme/signals/themeSignals';
 import { ComposeEmailInput, type ComposeInputData } from './ComposeEmailInput';
 
 type EmailComposeErrors =
@@ -52,23 +51,22 @@ export function EmailCompose() {
 
   const [subject, setSubject] = createSignal<string>('');
 
-  const [linkError, setLinkError] = createSignal<string | null>(null);
+  const emailLinksQuery = useEmailLinksQuery();
 
-  const hasLinkError = createMemo(() => linkError() != null);
+  const link = createMemo(() => {
+    const data = emailLinksQuery.data;
+    if (data && data.links.length > 0) {
+      return data.links[0];
+    }
+    return undefined;
+  });
 
-  const [link] = createResource(async () => {
-    const maybeLinks = await emailClient.getLinks();
-    if (isErr(maybeLinks)) {
-      setLinkError('Could not find linked email account.');
-      return;
-    }
-    const [, { links }] = maybeLinks;
-    const [link] = links;
-    if (link) {
-      return link;
-    } else {
-      setLinkError('Could not find linked email account.');
-    }
+  const hasLinkError = createMemo(() => {
+    if (emailLinksQuery.isPending) return false;
+    return (
+      emailLinksQuery.isError ||
+      (emailLinksQuery.data && emailLinksQuery.data.links.length === 0)
+    );
   });
 
   const { users: destinationOptions } = useCombinedRecipients();
@@ -138,7 +136,7 @@ export function EmailCompose() {
   const onSubmit = (data: ComposeInputData) => {
     setValidationError(null);
 
-    const _link = link();
+    const currentLink = link();
 
     if (!selectedRecipients().length) {
       setValidationError(
@@ -164,7 +162,7 @@ export function EmailCompose() {
       return;
     }
 
-    if (!_link) {
+    if (!currentLink) {
       setValidationError(
         new EmailComposeError('no_link', 'Unable to find linked email account')
       );
@@ -173,7 +171,7 @@ export function EmailCompose() {
 
     sendMutation.mutate({
       message: {
-        link_id: _link.id,
+        link_id: currentLink.id,
         to: convertToContactInfoArray(selectedRecipients()),
         cc:
           ccRecipients().length > 0
@@ -246,12 +244,12 @@ export function EmailCompose() {
         </Switch>
 
         <div
-          class="macro-message-width mx-auto w-full max-h-full my-12 overflow-hidden"
+          class="macro-message-width mx-auto w-full max-h-full my-12 overflow-hidden px-4"
           classList={{
             'pointer-events-none opacity-50': hasLinkError(),
           }}
         >
-          <ClippedPanel tl tr>
+          <ClippedPanel tl={!beveledCorners()}>
             <div
               class="w-full p-4 bg-input max-h-full overflow-hidden flex flex-col min-h-0"
               classList={{

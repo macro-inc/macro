@@ -30,6 +30,7 @@ send_email_notifications = ["notification_worker"]
 
 [dependencies]
 anyhow = { workspace = true }
+authentication_service_client = { path = "../authentication_service_client" }
 aws-config = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sesv2 = { workspace = true }
@@ -53,10 +54,12 @@ macro_env = { path = "../macro_env", features = ["frontend_url"] }
 macro_middleware = { path = "../macro_middleware", default-features = false, features = [
   "auth",
 ] }
+macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 mention_utils = { path = "../mention_utils" }
 model = { path = "../model" }
 model-entity = { path = "../model-entity" }
+model_file_type = { path = "../model_file_type" }
 model_notifications = { path = "../model_notifications" }
 models_comms = { path = "../models_comms" }
 models_pagination = { path = "../models_pagination", features = ["axum"] }
@@ -80,7 +83,6 @@ tracing = { workspace = true }
 url = { workspace = true }
 utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
-authentication_service_client = { path = "../authentication_service_client" }
 uuid = { workspace = true }
 
 [dev-dependencies]

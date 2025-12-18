@@ -1,4 +1,9 @@
-import type { BlockAlias, BlockAliasContext, BlockName } from '@core/block';
+import type {
+  BlockAlias,
+  BlockAliasContext,
+  BlockComponentProps,
+  BlockName,
+} from '@core/block';
 import type { ResizeZoneCtx } from '@core/component/Resize/types';
 import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
 import type {
@@ -29,7 +34,7 @@ export type SplitContent =
   | {
       type: BlockName | BlockAlias;
       id: string;
-      params?: Record<string, string>;
+      params?: BlockComponentProps[BlockName];
       aliasContext?: BlockAliasContext;
     }
   | {
@@ -270,6 +275,7 @@ function createPinnedMount(
   const blockType = resolveBlockAlias(content.type);
   const handle = orchestrator.createBlockInstance(blockType, content.id, {
     aliasContext: content.aliasContext,
+    params: content.params,
   });
 
   return {

@@ -106,17 +106,18 @@ function wasRecentlyShown(message: string, type: ToastType): boolean {
 function success(
   message: string,
   subtext?: string,
-  action?: { text: string; onClick: () => void }
+  action?: { text: string; onClick: () => void },
+  duration?: number
 ) {
   if (!wasRecentlyShown(message, ToastType.SUCCESS)) {
-    createToast(message, ToastType.SUCCESS, subtext, action);
+    createToast(message, ToastType.SUCCESS, subtext, action, duration);
   }
 }
 
 // Tell users that an action has failed, because of us
-function failure(message: string, subtext?: string) {
+function failure(message: string, subtext?: string, duration?: number) {
   if (!wasRecentlyShown(message, ToastType.FAILURE)) {
-    createToast(message, ToastType.FAILURE, subtext);
+    createToast(message, ToastType.FAILURE, subtext, undefined, duration);
   }
 }
 
@@ -282,7 +283,7 @@ function createToast(
         message={message}
         subtext={subtext}
         action={action}
-        duration={duration}
+        duration={duration ?? THROTTLE_DURATION + 100}
       />
     ),
     { region: 'toast-region' }

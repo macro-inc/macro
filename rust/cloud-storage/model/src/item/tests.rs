@@ -6,6 +6,7 @@
  * as a normal rust type.
  */
 use super::*;
+use macro_user_id::user_id::MacroUserIdStr;
 use utoipa::ToSchema;
 #[test]
 fn test_expected_schema() {
@@ -110,7 +111,7 @@ fn test_document_serde() {
     let doc = BasicDocument {
         document_id: "doc123".to_string(),
         document_version_id: 1,
-        owner: "user1".to_string(),
+        owner: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
         document_name: "Test Document".to_string(),
         file_type: Some("pdf".to_string()),
         sha: Some("abc123".to_string()),

@@ -1,18 +1,15 @@
-use std::str::FromStr;
-
+use crate::{api::context::ApiContext, model::notification::CreateNotification};
 use axum::{
-    Extension, Json,
+    Json,
     extract::{self, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use model::response::ErrorResponse;
+use model::{response::ErrorResponse, user::axum_extractor::MacroUserExtractor};
 use model_notifications::{
     Notification, NotificationEvent, NotificationEventType, RawNotification,
 };
-
-use crate::{api::context::ApiContext, model::notification::CreateNotification};
-use model::user::UserContext;
+use std::str::FromStr;
 
 /// Creates a notification.
 /// Will generate an id for the notification.
@@ -24,25 +21,13 @@ use model::user::UserContext;
             (status = 200, body=Notification),
         )
     )]
-#[tracing::instrument(skip(ctx, user_context, req))]
+#[tracing::instrument(skip(ctx, macro_user, req))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    macro_user: MacroUserExtractor,
     extract::Json(req): extract::Json<CreateNotification>,
 ) -> Result<Response, Response> {
     let id = macro_uuid::generate_uuid_v7();
-
-    // Parse event item type from string to EntityType
-    let event_item_type = req.event_item_type.parse().map_err(|e| {
-        tracing::error!(error=?e, "invalid event item type");
-        (
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                message: "invalid event item type",
-            }),
-        )
-            .into_response()
-    })?;
 
     let notification_event_type = NotificationEventType::from_str(&req.notification_event_type)
         .map_err(|e| {
@@ -72,12 +57,9 @@ pub async fn handler(
 
     let notification = Notification {
         id,
-        notification_entity: model_notifications::NotificationEntity {
-            event_item_id: req.event_item_id,
-            event_item_type,
-        },
+        notification_entity: req.entity,
         service_sender: req.service_sender,
-        sender_id: Some(user_context.user_id.clone()),
+        sender_id: Some(macro_user.macro_user_id),
         temporal: Default::default(),
         notification_event,
     };

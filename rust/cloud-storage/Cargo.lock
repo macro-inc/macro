@@ -529,7 +529,9 @@ dependencies = [
  "maud",
  "mockall",
  "model",
+ "model-entity",
  "model_notifications",
+ "model_user",
  "models_team",
  "native_app_service",
  "non_empty",
@@ -1781,6 +1783,7 @@ dependencies = [
  "chrono",
  "futures",
  "macro_db_migrator",
+ "macro_user_id",
  "macro_uuid",
  "model",
  "serde",
@@ -2666,6 +2669,7 @@ dependencies = [
  "model",
  "model-entity",
  "model_notifications",
+ "model_user",
  "models_bulk_upload",
  "models_opensearch",
  "models_pagination",
@@ -4511,9 +4515,11 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "cool_asserts",
+ "either",
  "filter_ast",
  "macro_user_id",
  "model_file_type",
+ "nom 8.0.0",
  "non_empty",
  "schemars",
  "serde",
@@ -5048,6 +5054,7 @@ dependencies = [
  "anyhow",
  "comms_service_client",
  "macro_db_client",
+ "macro_user_id",
  "model",
  "model-entity",
  "model_notifications",
@@ -5066,6 +5073,7 @@ dependencies = [
  "nom 8.0.0",
  "serde",
  "thiserror 2.0.17",
+ "tracing",
 ]
 
 [[package]]
@@ -5234,9 +5242,13 @@ name = "mention_utils"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "cool_asserts",
+ "macro_user_id",
+ "nom 8.0.0",
  "regex",
  "serde",
  "serde_json",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -5388,6 +5400,7 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "document_sub_type",
+ "macro_user_id",
  "model-error-response",
  "model_file_type",
  "model_user",
@@ -5433,6 +5446,8 @@ name = "model_file_type"
 version = "0.1.0"
 dependencies = [
  "serde",
+ "serde_json",
+ "strum",
  "thiserror 2.0.17",
  "utoipa",
 ]
@@ -5443,6 +5458,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "macro_user_id",
  "model-entity",
  "models_comms",
  "models_pagination",
@@ -5578,6 +5594,7 @@ dependencies = [
 name = "models_permissions"
 version = "0.1.0"
 dependencies = [
+ "model_file_type",
  "schemars",
  "serde",
  "serde_json",
@@ -5781,8 +5798,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "macro_user_id",
  "macro_uuid",
  "model",
+ "model-entity",
  "model_notifications",
  "models_pagination",
  "serde",
@@ -5817,10 +5836,12 @@ dependencies = [
  "macro_env",
  "macro_middleware",
  "macro_notify",
+ "macro_user_id",
  "macro_uuid",
  "mention_utils",
  "model",
  "model-entity",
+ "model_file_type",
  "model_notifications",
  "models_comms",
  "models_pagination",
@@ -5998,9 +6019,9 @@ dependencies = [
 
 [[package]]
 name = "opensearch_query_builder"
-version = "0.2.4"
+version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2be0ec85f59a03d8bc068a79c4397f48695d89d6129a3bfec8712b378bc5b73c"
+checksum = "88471616dad533248e2ed35df90a076887afcbc000b0913739797fa7fea5df1a"
 dependencies = [
  "serde",
  "serde_json",
@@ -7533,9 +7554,11 @@ dependencies = [
  "macro_entrypoint",
  "macro_env",
  "macro_middleware",
+ "macro_user_id",
  "macro_uuid",
  "mention_utils",
  "model",
+ "model_file_type",
  "models_opensearch",
  "models_search",
  "nom 8.0.0",
@@ -8143,6 +8166,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "aws-sdk-sns",
+ "model-entity",
+ "serde",
+ "serde_json",
+ "tracing",
 ]
 
 [[package]]

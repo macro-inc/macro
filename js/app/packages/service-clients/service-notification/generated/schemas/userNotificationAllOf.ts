@@ -11,8 +11,6 @@ export type UserNotificationAllOf = {
   done: boolean;
   /** The id of the notification. Self-generated uuidv7 */
   id: string;
-  /** if notification is important or not */
-  isImportantV0: boolean;
   /** user id of the macro user who generated the notification */
   senderId?: UserNotificationAllOfSenderId;
   /** If the notification has been sent */

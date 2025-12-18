@@ -11,16 +11,18 @@ import type {
   FileType,
 } from '@service-cognition/generated/schemas';
 import { emailClient } from '@service-email/client';
-import type { BasicDocument } from '@service-storage/generated/schemas/basicDocument';
 import { useHistory } from '@service-storage/history';
+import { useQuery } from '@tanstack/solid-query';
 import type { SplitContent } from 'app/component/split-layout/layoutManager';
 import { globalSplitManager } from 'app/signal/splitLayout';
 import type { Accessor } from 'solid-js';
-import { createMemo, createResource } from 'solid-js';
+import { createMemo } from 'solid-js';
+
+type Item = ReturnType<ReturnType<typeof useHistory>>[number] | null;
 
 function convertSplitToAttachment(
   split: SplitContent,
-  item: BasicDocument | null,
+  item: Item,
   channel: ChannelWithParticipants | null = null,
   email: EmailEntity | null = null
 ): Attachment | null {
@@ -29,15 +31,16 @@ function convertSplitToAttachment(
 
   switch (split.type) {
     case 'image':
-      if (!item) return null;
+      if (!item || item.type !== 'document') return null;
       const imageName = item.name || 'Image';
       const imageExtension = (item.fileType || 'png') as FileType;
+      // this is correct
       metadata = {
-        type: 'image',
-        image_name: imageName,
-        image_extension: imageExtension,
+        type: 'document',
+        document_name: imageName,
+        document_type: imageExtension,
       };
-      attachmentType = 'image';
+      attachmentType = 'document';
       break;
     case 'channel':
       if (!channel) return null;
@@ -59,8 +62,16 @@ function convertSplitToAttachment(
       };
       attachmentType = 'email';
       break;
+    case 'project':
+      if (!item || item.type !== 'project') return null;
+      metadata = {
+        type: 'project',
+        project_name: item.name,
+      };
+      attachmentType = 'project';
+      break;
     default:
-      if (!item) return null;
+      if (!item || item.type !== 'document') return null;
       const documentName = item.name || 'Document';
       const documentType = (item.fileType || 'txt') as FileType;
       metadata = {
@@ -101,7 +112,7 @@ export function useTabAttachments(): Accessor<ChatAttachmentWithName[]> {
       string,
       {
         split: SplitContent;
-        item: BasicDocument | null;
+        item: Item;
         channel: ChannelWithParticipants | null;
         email: EmailEntity | null;
       }
@@ -117,39 +128,42 @@ export function useTabAttachments(): Accessor<ChatAttachmentWithName[]> {
       }
 
       const key = `${split.content.type}:${split.content.id}`;
-      if (!uniqueSplits.has(key)) {
-        // For email splits, find in email list
-        if (split.content.type === 'email') {
-          const emailItem = emailList.find(
-            (email) => email.id === split.content.id
-          );
-          if (!emailItem) {
-            continue;
-          }
-
-          uniqueSplits.set(key, {
-            split: split.content,
-            item: null,
-            channel: null,
-            email: emailItem,
-          });
+      // For email splits, find in email list
+      if (split.content.type === 'email') {
+        const emailItem = emailList.find(
+          (email) => email.id === split.content.id
+        );
+        if (!emailItem) {
           continue;
         }
 
-        // Find matching item in history
-        const historyItem =
-          historyItems.find((item) => item.id === split.content.id) || null;
-        if (!historyItem || historyItem.type !== 'document') {
-          continue;
-        }
+        uniqueSplits.set(key, {
+          split: split.content,
+          item: null,
+          channel: null,
+          email: emailItem,
+        });
+        continue;
+      }
 
-        // Find matching channel if this is a channel split
-        const channelItem =
-          split.content.type === 'channel'
-            ? channelList.find((channel) => channel.id === split.content.id) ||
-              null
-            : null;
+      const channelItem =
+        split.content.type === 'channel'
+          ? channelList.find((channel) => channel.id === split.content.id) ||
+            null
+          : null;
+      if (split.content.type === 'channel') {
+        uniqueSplits.set(key, {
+          split: split.content,
+          item: null,
+          channel: channelItem,
+          email: null,
+        });
+        continue;
+      }
 
+      const historyItem =
+        historyItems.find((item) => item.id === split.content.id) || null;
+      if (historyItem) {
         uniqueSplits.set(key, {
           split: split.content,
           item: historyItem,
@@ -170,48 +184,59 @@ export function useTabAttachments(): Accessor<ChatAttachmentWithName[]> {
       .filter((split) => split.content.type === 'email');
   });
 
-  const [emailAttachments] = createResource(emailTabs, async (eTabs) => {
-    const threads = await Promise.allSettled(
-      eTabs.map((email) =>
-        emailClient
-          .getThread({
-            thread_id: email.content.id,
-            limit: 1,
-          })
-          .then((r) => ({ id: email.content.id, result: r }))
-      )
-    ).then((threads) =>
-      threads.flatMap((r) => {
-        if (r.status === 'rejected') return [];
-        return isOk(r.value.result)
-          ? [
-              {
-                id: r.value.id,
-                thread: r.value.result[1],
-              },
-            ]
-          : [];
-      })
-    );
+  const emailQuery = useQuery(() => ({
+    queryKey: [
+      'tab-attachments',
+      'emails',
+      emailTabs().map((t) => t.content.id),
+    ],
+    queryFn: async () => {
+      const eTabs = emailTabs();
+      const threads = await Promise.allSettled(
+        eTabs.map((email) =>
+          emailClient
+            .getThread({
+              thread_id: email.content.id,
+              limit: 1,
+            })
+            .then((r) => ({ id: email.content.id, result: r }))
+        )
+      ).then((threads) =>
+        threads.flatMap((r) => {
+          if (r.status === 'rejected') return [];
+          return isOk(r.value.result)
+            ? [
+                {
+                  id: r.value.id,
+                  thread: r.value.result[1],
+                },
+              ]
+            : [];
+        })
+      );
 
-    const attachments: ChatAttachmentWithName[] = threads.flatMap((thread) => {
-      // :(
-      const subject = thread.thread.thread.messages[0]?.subject;
-      if (!subject) return [];
-      return [
-        {
-          attachmentType: 'email',
-          attachmentId: thread.id,
-          id: thread.id,
-          metadata: {
-            email_subject: subject,
-            type: 'email',
-          },
-        },
-      ];
-    });
-    return attachments;
-  });
+      const attachments: ChatAttachmentWithName[] = threads.flatMap(
+        (thread) => {
+          // :(
+          const subject = thread.thread.thread.messages[0]?.subject;
+          if (!subject) return [];
+          return [
+            {
+              attachmentType: 'email',
+              attachmentId: thread.id,
+              id: thread.id,
+              metadata: {
+                email_subject: subject,
+                type: 'email',
+              },
+            },
+          ];
+        }
+      );
+      return attachments;
+    },
+    enabled: emailTabs().length > 0,
+  }));
 
   const tabAttachments = createMemo(() => {
     const openTabs = tabs();
@@ -229,7 +254,7 @@ export function useTabAttachments(): Accessor<ChatAttachmentWithName[]> {
   const combinedAttachments = createMemo(() => {
     const tabs = tabAttachments();
     const existingAttachments = new Set(tabs.map((a) => a.attachmentId));
-    const queriedEmails = emailAttachments() ?? [];
+    const queriedEmails = emailQuery.isSuccess ? (emailQuery.data ?? []) : [];
     const newEmails = queriedEmails.filter(
       (e) => !existingAttachments.has(e.attachmentId)
     );

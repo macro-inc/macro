@@ -206,9 +206,9 @@ export function DocumentCard(props: DocumentCardDecoratorProps) {
       resolveBlockAlias(verifyBlockName(props.blockName)),
       documentId,
       {
+        params: previewData(),
         nested: {
           parentContext: previewContext(),
-          initArgs: previewData(),
         },
       }
     );

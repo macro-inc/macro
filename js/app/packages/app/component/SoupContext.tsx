@@ -39,6 +39,7 @@ import {
 } from 'solid-js';
 import {
   createStore,
+  produce,
   reconcile,
   type SetStoreFunction,
   type Store,
@@ -77,6 +78,8 @@ import {
   type ViewDataMap,
 } from './ViewConfig';
 
+type NavigateListFn = (input: NavigationInput) => Promise<NavigationResult>;
+
 export type UnifiedListContext = {
   viewsDataStore: Store<ViewDataMap>;
   setViewDataStore: SetStoreFunction<Partial<ViewDataMap>>;
@@ -89,6 +92,9 @@ export type UnifiedListContext = {
   showHelpDrawer: Accessor<Set<DefaultView>>;
   setShowHelpDrawer: Setter<Set<DefaultView>>;
   actionRegistry: EntityActionRegistry;
+  navigateThroughList: NavigateListFn;
+  // this is a private method that should be registered once by createNavigationEntityListShortcut
+  _setNavigateThroughList: (fn: NavigateListFn) => void;
 };
 
 const DEFAULT_VIEW_ID: DefaultView = 'signal';
@@ -97,7 +103,7 @@ const DEFAULT_VIEW_IDS_SET = new Set(VIEWCONFIG_DEFAULTS_IDS);
 
 export function createSoupContext(): UnifiedListContext {
   const [selectedView, setSelectedView] = createSignal<ViewId>(DEFAULT_VIEW_ID);
-  const [viewsDataStore, setViewDataStore_] = useAllViews({
+  const [viewsDataStore, setViewDataStore] = useAllViews({
     selectedViewSignal: [selectedView, setSelectedView],
   });
   const virtualizerHandleSignal = createSignal<VirtualizerHandle>();
@@ -108,18 +114,7 @@ export function createSoupContext(): UnifiedListContext {
   const [showHelpDrawer, setShowHelpDrawer] = createSignal<Set<DefaultView>>(
     !tutorialCompleted() ? new Set(DEFAULT_VIEWS) : new Set()
   );
-  const setViewDataStore: SetStoreFunction<ViewDataMap> = (...args: any[]) => {
-    // need to create new reference, causes bug where first entity persits highlighting
-    if (
-      args.length === 3 &&
-      args[1] === 'selectedEntity' &&
-      typeof args[2] !== 'function'
-    ) {
-      args[2] = { ...args[2] };
-    }
-    // @ts-ignore narrowing set store function is annoying due to function overloading
-    setViewDataStore_(...args);
-  };
+  let navigateThroughListFn: NavigateListFn | undefined;
 
   return {
     viewsDataStore,
@@ -133,6 +128,18 @@ export function createSoupContext(): UnifiedListContext {
     showHelpDrawer,
     setShowHelpDrawer,
     actionRegistry: createEntityActionRegistry(),
+    navigateThroughList: (input) => {
+      if (!navigateThroughListFn) {
+        throw new Error('navigateThroughList not initialized');
+      }
+      return navigateThroughListFn(input);
+    },
+    _setNavigateThroughList: (fn) => {
+      if (navigateThroughListFn) {
+        console.warn('navigateThroughList already initialized');
+      }
+      navigateThroughListFn = fn;
+    },
   };
 }
 
@@ -178,23 +185,21 @@ function createViewData(
       limit: viewProps?.display?.limit,
     },
     sort: viewProps?.sort ?? VIEWCONFIG_BASE.sort,
-    highlightedId: undefined,
     selectedEntity: undefined,
     scrollOffset: undefined,
     initialConfig: undefined,
-    selectedEntities: [],
+    multiSelectEntities: [],
     hasUserInteractedEntity: false,
     searchText: viewProps?.searchText,
   };
 }
 
-type NavigationInput = {
+export type NavigationInput = {
   axis: 'start' | 'end'; // movement direction
   mode: 'step' | 'jump'; // how far: one step or to the end
-  highlight?: boolean;
 };
 
-type NavigationResult = {
+export type NavigationResult = {
   success: boolean;
   entity: EntityData | undefined;
 };
@@ -219,7 +224,6 @@ export function createNavigationEntityListShortcut({
     virtualizerHandleSignal: [virtualizerHandle],
     selectedView,
     setSelectedView,
-    // selectedEntitySignal: [selectedEntity, setSelectedEntity],
     entitiesSignal: [entities],
     actionRegistry,
   } = unifiedListContext;
@@ -228,6 +232,16 @@ export function createNavigationEntityListShortcut({
 
   const [attachEntityHotkeys, _entityHotkeyScope] = useHotkeyDOMScope('entity');
   const selectedEntity = () => viewData().selectedEntity;
+
+  const setSelectedEntity = (entity: EntityData | undefined) => {
+    setViewDataStore(
+      selectedView(),
+      produce((state) => {
+        if (!state) return;
+        state.selectedEntity = entity;
+      })
+    );
+  };
 
   const notificationSource = useGlobalNotificationSource();
   const userId = useUserId();
@@ -264,11 +278,10 @@ export function createNavigationEntityListShortcut({
     clearSelection?: boolean
   ) => {
     if (clearSelection) {
-      setViewDataStore(selectedView(), 'selectedEntities', []);
+      setViewDataStore(selectedView(), 'multiSelectEntities', []);
     }
     if (entity) {
-      setViewDataStore(selectedView(), 'selectedEntity', entity);
-      setViewDataStore(selectedView(), 'highlightedId', entity.id);
+      setSelectedEntity(entity);
       const nextIndex = entities()?.findIndex(({ id }) => id === entity.id);
       if (nextIndex !== undefined && nextIndex > -1) {
         virtualizerHandle()?.scrollToIndex(nextIndex, {
@@ -283,7 +296,9 @@ export function createNavigationEntityListShortcut({
           }
         });
       } else {
-        const firstIndex = virtualizerHandle()?.findStartIndex();
+        const handle = virtualizerHandle();
+        if (!handle) return;
+        const firstIndex = handle.findStartIndex();
         if (!firstIndex) return;
         const elem = getEntityElAtIndex(firstIndex);
         if (elem instanceof HTMLElement) elem.focus();
@@ -345,7 +360,7 @@ export function createNavigationEntityListShortcut({
           }
         }
 
-        setViewDataStore(selectedView(), 'selectedEntities', []);
+        setViewDataStore(selectedView(), 'multiSelectEntities', []);
       }
 
       return { success: true };
@@ -441,7 +456,9 @@ export function createNavigationEntityListShortcut({
     hotkeyToken: TOKENS.entity.action.delete,
     scopeId: splitHotkeyScope,
     description: () =>
-      viewData().selectedEntities.length > 1 ? 'Delete items' : 'Delete item',
+      viewData().multiSelectEntities.length > 1
+        ? 'Delete items'
+        : 'Delete item',
     keyDownHandler: () => {
       const entitiesForAction = getEntitiesForAction();
       if (entitiesForAction.entities.length === 0) {
@@ -540,7 +557,9 @@ export function createNavigationEntityListShortcut({
     scopeId: splitHotkeyScope,
     hotkeyToken: TOKENS.entity.action.rename,
     description: () =>
-      viewData().selectedEntities.length > 1 ? 'Rename items' : 'Rename item',
+      viewData().multiSelectEntities.length > 1
+        ? 'Rename items'
+        : 'Rename item',
     condition: () =>
       isViewingList() &&
       actionRegistry.isActionEnabled('rename', plainSelectedEntities()),
@@ -587,7 +606,7 @@ export function createNavigationEntityListShortcut({
 
     hotkeyToken: TOKENS.entity.action.copy,
     description: () =>
-      viewData().selectedEntities.length > 1 ? 'Copy items' : 'Copy item',
+      viewData().multiSelectEntities.length > 1 ? 'Copy items' : 'Copy item',
     condition: () =>
       isViewingList() &&
       actionRegistry.isActionEnabled('copy', plainSelectedEntities()),
@@ -642,7 +661,7 @@ export function createNavigationEntityListShortcut({
     scopeId: splitHotkeyScope,
     hotkeyToken: TOKENS.entity.action.moveToFolder,
     description: () =>
-      viewData().selectedEntities.length > 1
+      viewData().multiSelectEntities.length > 1
         ? 'Move items to folder'
         : 'Move item to folder',
     condition: () =>
@@ -679,19 +698,6 @@ export function createNavigationEntityListShortcut({
     }
   };
 
-  const activeHighlightedId = () => {
-    return viewData()?.highlightedId;
-  };
-
-  const [jumpedToEnd, setJumpedToEnd] = createSignal(false);
-
-  const getSelectedEntityEl = () => {
-    const entity = selectedEntity();
-    if (!entity) return;
-
-    return entityListRef()?.querySelector(`[data-entity-id="${entity.id}"]`);
-  };
-
   const getEntityElAtIndex = (index: number) => {
     const entity = entities()?.at(index);
     if (!entity) return;
@@ -699,9 +705,11 @@ export function createNavigationEntityListShortcut({
     return entityListRef()?.querySelector(`[data-entity-id="${entity.id}"]`);
   };
 
-  const getHighlightedEntity = createLazyMemo(() => {
+  const getSelectedEntity = createLazyMemo(() => {
     const index =
-      entities()?.findIndex(({ id }) => id === activeHighlightedId()) ?? -1;
+      entities()?.findIndex(
+        ({ id }) => id === viewData()?.selectedEntity?.id
+      ) ?? -1;
     if (index < 0) return;
 
     const entity = entities()?.at(index);
@@ -726,9 +734,9 @@ export function createNavigationEntityListShortcut({
     let selectedEntityIndices: Array<{ entity: EntityData; index: number }> =
       [];
 
-    if (viewData().selectedEntities.length > 0) {
+    if (viewData().multiSelectEntities.length > 0) {
       selectedEntityIndices = filterMap(
-        viewData().selectedEntities,
+        viewData().multiSelectEntities,
         (entity) => {
           const index = idToIndexMap.get(entity.id);
           if (index === undefined) {
@@ -741,7 +749,7 @@ export function createNavigationEntityListShortcut({
         }
       );
     } else {
-      const entity = getHighlightedEntity();
+      const entity = getSelectedEntity();
       if (entity) selectedEntityIndices = [entity];
     }
 
@@ -790,10 +798,10 @@ export function createNavigationEntityListShortcut({
     const entityList = entities();
     if (!entityList) return false;
 
-    const highlightedEntity = getHighlightedEntity();
-    if (!highlightedEntity) return false;
+    const selectedEntity = getSelectedEntity();
+    if (!selectedEntity) return false;
 
-    return highlightedEntity.index >= entityList.length - 1;
+    return selectedEntity.index >= entityList.length - 1;
   });
 
   const calculateEntityIndex = (
@@ -828,11 +836,10 @@ export function createNavigationEntityListShortcut({
     axis,
     mode,
   }: NavigationInput): Promise<NavigationResult> => {
-    let index = calculateEntityIndex(getHighlightedEntity()?.index ?? -1, {
+    let index = calculateEntityIndex(getSelectedEntity()?.index ?? -1, {
       axis,
       mode,
     });
-    setJumpedToEnd(false);
 
     setViewDataStore(selectedView(), 'hasUserInteractedEntity', true);
 
@@ -843,14 +850,12 @@ export function createNavigationEntityListShortcut({
       virtualizerHandle()?.scrollToIndex(index, {
         // align: mode === 'jump' && axis === 'end' ? 'end' : undefined,
         // align: align(),
-        // align: index() < virtuaRef()!.findStartIndex() ? 'start' : 'end',
+        // align: index() < virtuaRef()!.findItemIndex(virtuaRef()!.scrollOffset) ? 'start' : 'end',
         align: 'nearest',
         // offset: 50,
       });
 
       if (mode === 'jump') {
-        setJumpedToEnd(true);
-
         await new Promise<true>((resolve) =>
           requestAnimationFrame(() => {
             requestAnimationFrame(() => {
@@ -883,8 +888,7 @@ export function createNavigationEntityListShortcut({
           }
         }
         batch(() => {
-          setViewDataStore(selectedView(), 'highlightedId', selectedEntity.id);
-          setViewDataStore(selectedView(), 'selectedEntity', selectedEntity);
+          setSelectedEntity(selectedEntity);
         });
       }
 
@@ -925,47 +929,17 @@ export function createNavigationEntityListShortcut({
     };
   };
 
-  const scrollToEntityFromId = async () => {
-    const index = getHighlightedEntity()?.index;
-    if (!index) return;
-
-    virtualizerHandle()?.scrollToIndex(index, {
-      align: 'nearest',
-    });
-
-    await new Promise<true>((resolve) =>
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          resolve(true);
-        });
-      })
-    );
-  };
-
-  const addScrollEventToList = () => {
-    const listScrollEl = entityListRef();
-
-    const onListScroll = () => {
-      if (listScrollEl) {
-        setViewDataStore(
-          selectedView(),
-          'scrollOffset',
-          listScrollEl.scrollTop
-        );
-      }
-    };
-
-    listScrollEl?.addEventListener('scroll', onListScroll);
-  };
+  unifiedListContext._setNavigateThroughList(navigateThroughList);
 
   const isEntitySelected = (entityID: string) => {
     return (
-      viewData()?.selectedEntities.find((e) => e.id === entityID) !== undefined
+      viewData()?.multiSelectEntities.find((e) => e.id === entityID) !==
+      undefined
     );
   };
 
   const toggleEntity = (entity: EntityData) => {
-    setViewDataStore(selectedView(), 'selectedEntities', (s) => {
+    setViewDataStore(selectedView(), 'multiSelectEntities', (s) => {
       if (isEntitySelected(entity.id)) {
         return s.filter((e) => e.id !== entity.id);
       }
@@ -982,37 +956,37 @@ export function createNavigationEntityListShortcut({
   };
 
   const handleNavigationSelection = (input: NavigationInput) => {
-    const highlightedEntity = getHighlightedEntity();
-    const currentIndex = highlightedEntity?.index ?? -1;
+    const selectedEntity = getSelectedEntity();
+    const currentIndex = selectedEntity?.index ?? -1;
     const nextIndex = calculateEntityIndex(currentIndex, input);
 
     const nextEntity = entities()?.at(nextIndex);
     if (!nextEntity) return true;
 
-    if (!highlightedEntity) {
+    if (!selectedEntity) {
       navigateAndSelectEntity(input);
       return true;
     }
 
-    // If selectedEntities is empty, select current item first without moving
-    const selectedEntities = viewData()?.selectedEntities || [];
-    if (selectedEntities.length === 0) {
-      toggleEntity(highlightedEntity.entity);
+    // If multiSelectEntities is empty, select current item first without moving
+    const multiSelectEntities = viewData()?.multiSelectEntities || [];
+    if (multiSelectEntities.length === 0) {
+      toggleEntity(selectedEntity.entity);
       return true;
     }
 
     if (
-      !isEntitySelected(highlightedEntity.entity.id) &&
+      !isEntitySelected(selectedEntity.entity.id) &&
       !isEntitySelected(nextEntity.id)
     ) {
-      toggleEntity(highlightedEntity.entity);
+      toggleEntity(selectedEntity.entity);
       navigateAndSelectEntity(input);
 
       return true;
     }
 
     if (isEntitySelected(nextEntity.id)) {
-      toggleEntity(highlightedEntity.entity);
+      toggleEntity(selectedEntity.entity);
       navigateThroughList(input);
       return true;
     }
@@ -1021,64 +995,6 @@ export function createNavigationEntityListShortcut({
 
     return true;
   };
-
-  let virtuaMount = true;
-  createEffect(
-    on(virtualizerHandle, (virtuaRef) => {
-      if (!virtuaRef) return;
-
-      // reselect entity on mount
-      if (!jumpedToEnd() && activeHighlightedId()) {
-        if (!virtuaMount) return;
-
-        virtuaMount = false;
-        scrollToEntityFromId();
-        const scrollOffset = viewData()?.scrollOffset;
-        // restore scroll overrides scroll to id
-        const offset = scrollOffset;
-        if (offset) virtuaRef.scrollTo(offset);
-
-        // only add scroll event after virtua is done scrolling to scrollTop/index
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            addScrollEventToList();
-          });
-        });
-      } else {
-        addScrollEventToList();
-      }
-    })
-  );
-
-  createEffect(
-    on([entities, virtualizerHandle] as const, ([curr, virtuaRef], _prev) => {
-      const prev = _prev?.[0];
-      if (!curr || !prev || !virtuaRef) return;
-
-      const newIndex = getHighlightedEntity()?.index;
-
-      // ReSelectEntity
-      // ScrollTo and Select correct Entity after EntityList fetches new page, since list shuffles items
-      if (newIndex && curr[newIndex]?.id !== prev[newIndex]?.id) {
-        scrollToEntityFromId().then(() => {
-          const entityEl = getSelectedEntityEl();
-
-          if (jumpedToEnd()) {
-            // only refocus when navigation hotkey is activated before
-
-            if (entityEl instanceof HTMLElement) {
-              entityEl.focus();
-              setTimeout(() => {
-                entityEl.focus();
-                setJumpedToEnd(false);
-              });
-              return true;
-            }
-          }
-        });
-      }
-    })
-  );
 
   registerHotkey({
     scopeId: splitHotkeyScope,
@@ -1089,9 +1005,9 @@ export function createNavigationEntityListShortcut({
     condition: () => !konsoleOpen() && isViewingList(),
     keyDownHandler: (e) => {
       e?.preventDefault();
-      const selectedEntities = viewData().selectedEntities;
+      const multiSelectEntities = viewData().multiSelectEntities;
 
-      const hasSelection = selectedEntities.length > 0;
+      const hasSelection = multiSelectEntities.length > 0;
 
       if (hasSelection) {
         setKonsoleMode('SELECTION_MODIFICATION');
@@ -1104,7 +1020,7 @@ export function createNavigationEntityListShortcut({
         searchCategories.showCategory('Selection');
 
         setKonsoleContextInformation({
-          selectedEntities: selectedEntities.slice(),
+          multiSelectEntities: multiSelectEntities.slice(),
         });
 
         toggleKonsoleVisibility();
@@ -1282,7 +1198,7 @@ export function createNavigationEntityListShortcut({
     scopeId: splitHotkeyScope,
     description: 'Open',
     keyDownHandler: () => {
-      const entity = getHighlightedEntity()?.entity;
+      const entity = getSelectedEntity()?.entity;
       if (!entity) return false;
 
       openEntity(entity);
@@ -1309,7 +1225,7 @@ export function createNavigationEntityListShortcut({
     keyDownHandler: () => {
       const [preview] = previewState;
 
-      const entity = getHighlightedEntity()?.entity;
+      const entity = getSelectedEntity()?.entity;
       if (!entity) return false;
 
       if (preview()) {
@@ -1358,7 +1274,7 @@ export function createNavigationEntityListShortcut({
     scopeId: splitHotkeyScope,
     description: 'Toggle select item',
     keyDownHandler: () => {
-      const entity = getHighlightedEntity();
+      const entity = getSelectedEntity();
       if (!entity) return false;
       toggleEntity(entity.entity);
       return true;
@@ -1368,7 +1284,7 @@ export function createNavigationEntityListShortcut({
   });
   
   const clearMultiCondition: () => boolean = () =>
-    isViewingList() && viewData().selectedEntities.length > 0;
+    isViewingList() && viewData().multiSelectEntities.length > 0;
   const closeSpotlightCondition = () => splitHandle.isSpotLight();
   const escapeDescription = () => {
     if (clearMultiCondition()) {
@@ -1386,8 +1302,8 @@ export function createNavigationEntityListShortcut({
     condition: () => clearMultiCondition() || closeSpotlightCondition(),
     keyDownHandler: () => {
       if (clearMultiCondition()) {
-        const length = viewData().selectedEntities.length;
-        setViewDataStore(selectedView(), 'selectedEntities', []);
+        const length = viewData().multiSelectEntities.length;
+        setViewDataStore(selectedView(), 'multiSelectEntities', []);
         return length > 1;
       }
       if (closeSpotlightCondition()) {

@@ -1191,6 +1191,7 @@ function takeInlineUntilLineBreak(parent: ElementNode): LexicalNode[] {
   }
   return out;
 }
+
 const $singleLineNode = (node: ElementNode): ElementNode | null => {
   if ($isParagraphNode(node)) {
     const inline = takeInlineUntilLineBreak(node);
@@ -1207,7 +1208,7 @@ const $singleLineNode = (node: ElementNode): ElementNode | null => {
     for (const item of items) {
       if (!$isListItemNode(item)) continue;
 
-      const inline = takeInlineUntilLineBreak(node);
+      const inline = takeInlineUntilLineBreak(item);
       if (!inline.length) continue;
 
       item.clear();
