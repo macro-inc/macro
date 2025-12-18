@@ -34,16 +34,9 @@ import type { PropertyDefinition } from '@service-properties/generated/schemas/p
 import { useQuery } from '@tanstack/solid-query';
 import type { LexicalEditor } from 'lexical';
 import { createSignal, For, Show, Suspense } from 'solid-js';
-import { createStore, reconcile, type Store } from 'solid-js/store';
+import { createStore, reconcile, type Store, unwrap } from 'solid-js/store';
 
-export interface ComposeTaskProps {
-  onCreateTask?: (title: string, content: string) => void;
-  onClose?: () => void;
-  initialTitle?: string;
-  initialContent?: string;
-  placeholder?: string;
-}
-
+// Show these props in the composer.
 const COMPOSER_PROPERTIES = [
   SYSTEM_PROPERTY_IDS.ASSIGNEES,
   SYSTEM_PROPERTY_IDS.STATUS,
@@ -51,6 +44,62 @@ const COMPOSER_PROPERTIES = [
   SYSTEM_PROPERTY_IDS.PRIORITY,
 ];
 
+/**
+ * Make a task and append props.
+ * @param taskTitle Title string
+ * @param taskContent content markdown string
+ * @param properties Stored prop value map
+ * @param definitions The definitions map for extra meta data
+ * @returns
+ */
+async function createTaskWithProperties(
+  taskTitle: string,
+  taskContent: string,
+  properties: Array<[string, PropertyApiValues]>,
+  definitions: Map<string, PropertyDefinition>
+) {
+  const res = await createMarkdownFile({
+    title: taskTitle,
+    content: taskContent,
+    isTask: true,
+  });
+
+  if (!res) {
+    toast.failure('Failed to create Task');
+    return null;
+  }
+
+  const propReqs = properties.map(([id, value]) => {
+    const isMultiSelect = definitions.get(id)?.is_multi_select ?? false;
+    return propertiesServiceClient.setEntityProperty({
+      entity_id: res,
+      entity_type: 'TASK',
+      property_id: id,
+      body: {
+        value: propertyValueToApi(value, isMultiSelect),
+      },
+    });
+  });
+
+  await Promise.allSettled(propReqs);
+
+  toast.embed(
+    () => <TaskToastPreview id={res} title={taskTitle} body={taskContent} />,
+    {
+      duration: 2_000,
+    }
+  );
+
+  return res;
+}
+
+/**
+ * Helper to get display value of local property
+ * @param definition The prop definition
+ * @param savedValues The map of saved vals by propDef id
+ * @param options The map of the options for the prop from the server
+ * @returns
+ */
 function extractPropertyValue(
   definition: PropertyDefinition,
   savedValues: Store<Record<string, PropertyApiValues>>,
@@ -77,7 +126,11 @@ function extractPropertyValue(
   }
 }
 
-
+/**
+ * Toast preview component for successful task creation.
+ * @param props
+ * @returns
+ */
 function TaskToastPreview(props: { title: string; body: string; id: string }) {
   return (
     <BlockLink blockOrFileName="task" id={props.id}>
@@ -86,7 +139,7 @@ function TaskToastPreview(props: { title: string; body: string; id: string }) {
           <EntityIcon targetType="task" />
           <span class="text-base font-medium">{props.title}</span>
         </div>
-        <div class="text-ink-muted text-sm h-fit max-h-18 w-full overflow-ellipsis truncate">
+        <div class="text-ink-muted text-sm h-fit max-h-18 w-full truncate">
           <StaticMarkdown
             markdown={props.body}
             theme={unifiedListMarkdownTheme}
@@ -98,11 +151,19 @@ function TaskToastPreview(props: { title: string; body: string; id: string }) {
   );
 }
 
+export interface ComposeTaskProps {
+  onCreateTask?: (title: string, content: string) => void;
+  onClose?: () => void;
+  initialTitle?: string;
+  initialContent?: string;
+  placeholder?: string;
+}
+
 export function ComposeTask(props: ComposeTaskProps) {
+  const splitPanel = useSplitPanel();
   const [title, setTitle] = createSignal(props.initialTitle ?? '');
   const [content, setContent] = createSignal(props.initialContent ?? '');
   const [bodyEditor, setBodyEditor] = createSignal<LexicalEditor>();
-  const splitPanel = useSplitPanel();
 
   const [propertyValues, setPropertyValues] = createStore<
     Record<string, PropertyApiValues>
@@ -121,14 +182,12 @@ export function ComposeTask(props: ComposeTaskProps) {
       const [, data] = result;
       return data;
     },
-    staleTime: 1000 * 60 * 5,
-    gcTime: 1000 * 60 * 10,
+    staleTime: 1000 * 60 * 10, // TODO (seamus) Ask daniel what might make us wanna refetch this
     retry: 1,
     refetchOnWindowFocus: false,
     refetchOnMount: false,
     refetchOnReconnect: false,
     placeholderData: (prev) => prev,
-    // initialData: [],
   }));
 
   const definitions = () => {
@@ -155,7 +214,7 @@ export function ComposeTask(props: ComposeTaskProps) {
   };
 
   const properties = () => {
-    return filterMap<string, Property>(COMPOSER_PROPERTIES, (id) => {
+    return filterMap(COMPOSER_PROPERTIES, (id) => {
       const definition = definitions().get(id);
       if (!definition) return;
       return {
@@ -179,7 +238,6 @@ export function ComposeTask(props: ComposeTaskProps) {
       return { ok: true, value: undefined };
     },
     saveDate: async (property: Property, date: Date) => {
-      console.log('SAVING DATE PROP', { property, date });
       setPropertyValues(property.propertyDefinitionId, {
         valueType: 'DATE',
         value: date.toISOString(),
@@ -191,75 +249,42 @@ export function ComposeTask(props: ComposeTaskProps) {
   const handleCreateTask = async () => {
     const taskTitle = title().trim();
     const taskContent = content().trim();
+    const properties = structuredClone(Object.entries(unwrap(propertyValues)));
 
-    if (taskTitle || taskContent) {
-      const res = await createMarkdownFile({
-        title: taskTitle,
-        content: taskContent,
-        isTask: true,
-      });
+    createTaskWithProperties(taskTitle, taskContent, properties, definitions());
 
-      if (res) {
-        const propertyRequests: Promise<any>[] = [];
-        for (const [id, value] of Object.entries(propertyValues)) {
-          const isMultiSelect = definitions().get(id)?.is_multi_select ?? false;
-          propertyRequests.push(
-            propertiesServiceClient.setEntityProperty({
-              entity_id: res,
-              entity_type: 'TASK',
-              property_id: id,
-              body: {
-                value: propertyValueToApi(value, isMultiSelect),
-              },
-            })
-          );
-        }
+    setTitle('');
+    setPropertyValues(reconcile({}));
 
-        setTitle('');
-        const ed = bodyEditor();
-        if (ed) initializeEditorEmpty(ed);
-        setPropertyValues(reconcile({}));
+    const ed = bodyEditor();
+    ed && initializeEditorEmpty(ed);
 
-        if (splitPanel?.isPopover) {
-          splitPanel.handle.close();
-        }
-
-        props.onCreateTask?.(taskTitle, taskContent);
-        props.onClose?.();
-        Promise.allSettled(propertyRequests).then(() => {
-          toast.embed(
-            () => (
-              <TaskToastPreview id={res} title={taskTitle} body={content()} />
-            ),
-            {
-              duration: 9000000,
-            }
-          );
-        });
-      } else {
-        toast.failure('Failed to create task');
-      }
+    if (splitPanel?.isPopover) {
+      splitPanel.handle.close();
     }
+
+    props.onCreateTask?.(taskTitle, taskContent);
+    props.onClose?.();
   };
 
   return (
     <div class="flex flex-col gap-2 p-3 relative">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-2">
-          <EntityIcon targetType="task" size="sm" />
-          <span class="text-sm font-medium text-ink-disabled/50">
-            Create Task
-          </span>
-        </div>
+      <div class="flex items-center gap-8">
         <Show when={splitPanel?.isPopover}>
           <IconButton
             icon={XIcon}
             onClick={splitPanel?.handle.close}
             size="sm"
             tabIndex={-1}
-            theme="clear"
+            theme="current"
           />
         </Show>
+        <div class="flex items-center gap-2">
+          <EntityIcon targetType="task" size="sm" />
+          <span class="text-sm font-medium text-ink-disabled/50">
+            Create Task
+          </span>
+        </div>
       </div>
       <div class="flex-shrink-0 flex gap-2 items-center">
         <input
@@ -328,9 +353,9 @@ export function ComposeTask(props: ComposeTaskProps) {
       </Suspense>
 
       <div class="w-full border-b border-edge-muted/50" />
-      {/* Action Button */}
       <div class="flex-shrink-0 flex justify-end">
         <TextButton
+          icon={() => <EntityIcon targetType="task" theme="monochrome" />}
           onClick={handleCreateTask}
           text="Create Task"
           theme="accent"
