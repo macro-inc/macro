@@ -10,31 +10,11 @@ use comms_db_client::entity_mentions::create_entity_mention::{
     CreateEntityMentionOptions, create_entity_mention,
 };
 use model::user::UserContext;
+use models_comms::mentions::{CreateEntityMentionRequest, CreateEntityMentionResponse};
 use secretsmanager_client::LocalOrRemoteSecret;
-use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
-use utoipa::ToSchema;
 
 use super::mentions_middleware::validate_mention_edit_permission;
-
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-pub struct CreateEntityMentionRequest {
-    pub source_entity_type: String,
-    pub source_entity_id: String,
-    pub entity_type: String,
-    pub entity_id: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-pub struct CreateEntityMentionResponse {
-    pub id: String,
-    pub source_entity_type: String,
-    pub source_entity_id: String,
-    pub entity_type: String,
-    pub entity_id: String,
-    pub user_id: Option<String>,
-    pub created_at: chrono::DateTime<chrono::Utc>,
-}
 
 #[utoipa::path(
     post,

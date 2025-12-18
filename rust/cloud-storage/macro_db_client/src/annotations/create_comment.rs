@@ -58,6 +58,7 @@ pub async fn create_document_comment(
                 sqlx::Error::RowNotFound => anyhow::anyhow!(CommentError::ThreadNotFound),
                 e => anyhow::anyhow!(e),
             })?,
+            // TODO we should automatically be setting updatedAt etc
             None => sqlx::query_as!(
                 Thread,
                 r#"

@@ -1,3 +1,4 @@
+use crate::api::extractors::ParticipantAccess;
 use crate::api::{
     activity::post_activity::PostActivityRequest,
     channels::{
@@ -13,14 +14,9 @@ use crate::api::{
         post_typing::PostTypingRequest,
         remove_participants::RemoveParticipantsRequest,
     },
-    mentions::{
-        CreateEntityMentionRequest, CreateEntityMentionResponse, DeleteEntityMentionRequest,
-        DeleteEntityMentionResponse,
-    },
+    mentions::{DeleteEntityMentionRequest, DeleteEntityMentionResponse},
     preview::get_batch_preview::{GetBatchChannelPreviewRequest, GetBatchChannelPreviewResponse},
 };
-
-use crate::api::extractors::ParticipantAccess;
 use comms::inbound::{ApiActivity, ApiChannelWithLatest};
 use comms_db_client::channels::patch_channel::PatchChannelOptions;
 use comms_db_client::model::{
@@ -31,6 +27,7 @@ use model::comms::{
     Channel, ChannelParticipant, ChannelType, ChannelWithParticipants,
     GetMessageWithContextResponse, GetOrCreateAction, LatestMessage, ParticipantRole,
 };
+use models_comms::mentions::{CreateEntityMentionRequest, CreateEntityMentionResponse};
 
 use model::response::{GenericErrorResponse, StringIDResponse};
 use model::version::CommunicationServiceApiVersion;
