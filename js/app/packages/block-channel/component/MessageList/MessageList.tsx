@@ -96,18 +96,13 @@ type MessageListContentContextValues = {
   registerScrollContainer: (el: HTMLElement) => void;
   scrollToIndex: (index: number, alignOpts?: ScrollToIndexOpts) => void;
   scrollToMessage: (messageID: string, index: number, focus?: boolean) => void;
-  createReply: (
-    type: 'thread' | 'message',
-    id: string,
-    focus?: boolean
-  ) => void;
+  createReply: (id: string, focus?: boolean) => void;
   toggleThread: (threadID: string, value?: boolean) => void;
   clearThreadFocus: (threadID: string, expanded?: boolean) => void;
   toggleReplyInputFocus: (threadID: string, value?: boolean) => void;
   getThreadsWithActiveReplies: () => string[];
   registerThreadAppendMountTarget: (threadID: string, el: HTMLElement) => void;
   getThreadState: (threadID: string) => ThreadView | undefined;
-  getThreadDetails: (threadID: string) => MessageWithThreadId;
   orderedMessages: Accessor<Message[]>;
 };
 
@@ -188,17 +183,13 @@ export function MessageList(props: MessageListProps) {
         });
       }
     },
-    createReply: function (
-      type: 'thread' | 'message',
-      id: string,
-      focus = false
-    ): void {
+    createReply: function (id: string, focus = false): void {
       setThreadViewStore(id, (prev) => {
         return {
           ...prev,
           threadExpanded: true,
           hasActiveReply: true,
-          replyInputShouldFocus: false,
+          replyInputShouldFocus: focus,
         };
       });
     },
@@ -244,9 +235,6 @@ export function MessageList(props: MessageListProps) {
     },
     getThreadState: function (threadID: string): ThreadView | undefined {
       return threadViewStore[threadID];
-    },
-    getThreadDetails: function (threadID: string): MessageWithThreadId {
-      throw new Error('Function not implemented.');
     },
     orderedMessages: props.orderedMessages,
   };
@@ -529,7 +517,7 @@ function MessageListImpl(props: MessageListProps) {
       const hasDraft = !!loadDraftMessage(message.channel_id, message.id);
       const threadDetails = listContext.getThreadState(message.id);
       if (hasDraft && threadDetails) {
-        listContext.createReply('thread', message.id);
+        listContext.createReply(message.id);
       }
     }
   });

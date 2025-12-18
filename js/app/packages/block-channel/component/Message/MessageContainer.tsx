@@ -315,14 +315,14 @@ export function MessageContainer(props: MessageProps) {
   const onThreadAppend = () => {
     const threadId = message.thread_id;
     if (!threadId) return;
-    listContext.createReply('thread', threadId, true);
+    listContext.createReply(threadId, true);
     listContext.scrollToIndex(props.index(), {
       align: 'nearest',
     });
   };
 
   const onCreateReply = () => {
-    listContext.createReply('message', message.id, true);
+    listContext.createReply(message.id, true);
     listContext.scrollToIndex(props.index(), {
       align: 'end',
     });
@@ -375,7 +375,7 @@ export function MessageContainer(props: MessageProps) {
         .orderedMessages()
         .findIndex((m) => m.id === message.id);
       if (focusedIndex === -1) return false;
-      listContext.createReply('message', message.id);
+      listContext.createReply(message.id);
       listContext.scrollToIndex(focusedIndex);
       return true;
     },
