@@ -185,217 +185,67 @@ macro_rules! generate_file_types {
     };
 }
 
-/// Write application file association
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct Write;
-/// PDF viewer file association
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct Pdf;
-/// Markdown editor file association
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct Md;
-/// Canvas editor file association
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct Canvas;
-/// Code editor file association
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct Code;
-/// Image viewer file association
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct Image;
-/// Archive file association
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct Archive;
-/// Executable file association
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct Executable;
-/// Audio player file association
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct Audio;
-/// Video player file association
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct Video;
-/// Font viewer file association
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct Font;
-/// Document viewer file association
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct Document;
-/// Database file association
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct Database;
-/// Data file association
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct Data;
-/// Vector graphics file association
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct Vector;
-/// 3D model file association
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct ThreeD;
-/// Virtual machine file association
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct Vm;
-/// Media file association
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct Media;
+macro_rules! define_file_associations {
+    (
+        $(
+            ($struct_name:ident, $display_str:literal, $doc:literal)
+        ),* $(,)?
+    ) => {
+        $(
+            #[doc = $doc]
+            #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+            pub struct $struct_name;
+        )*
 
-/// File association type for routing files to the appropriate application
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FileAssociation {
-    /// Write application
-    Write(Write),
-    /// PDF viewer
-    Pdf(Pdf),
-    /// Markdown editor
-    Md(Md),
-    /// Canvas editor
-    Canvas(Canvas),
-    /// Code editor
-    Code(Code),
-    /// Image viewer
-    Image(Image),
-    /// Archive handler
-    Archive(Archive),
-    /// Executable handler
-    Executable(Executable),
-    /// Audio player
-    Audio(Audio),
-    /// Video player
-    Video(Video),
-    /// Font viewer
-    Font(Font),
-    /// Document viewer
-    Document(Document),
-    /// Database handler
-    Database(Database),
-    /// Data file handler
-    Data(Data),
-    /// Vector graphics viewer
-    Vector(Vector),
-    /// 3D model viewer
-    ThreeD(ThreeD),
-    /// Virtual machine handler
-    Vm(Vm),
-    /// Media handler
-    Media(Media),
-}
-
-impl std::fmt::Display for FileAssociation {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            FileAssociation::Write(_) => write!(f, "write"),
-            FileAssociation::Pdf(_) => write!(f, "pdf"),
-            FileAssociation::Md(_) => write!(f, "md"),
-            FileAssociation::Canvas(_) => write!(f, "canvas"),
-            FileAssociation::Code(_) => write!(f, "code"),
-            FileAssociation::Image(_) => write!(f, "image"),
-            FileAssociation::Archive(_) => write!(f, "archive"),
-            FileAssociation::Executable(_) => write!(f, "executable"),
-            FileAssociation::Audio(_) => write!(f, "audio"),
-            FileAssociation::Video(_) => write!(f, "video"),
-            FileAssociation::Font(_) => write!(f, "font"),
-            FileAssociation::Document(_) => write!(f, "document"),
-            FileAssociation::Database(_) => write!(f, "database"),
-            FileAssociation::Data(_) => write!(f, "data"),
-            FileAssociation::Vector(_) => write!(f, "vector"),
-            FileAssociation::ThreeD(_) => write!(f, "3d"),
-            FileAssociation::Vm(_) => write!(f, "vm"),
-            FileAssociation::Media(_) => write!(f, "media"),
+        /// File association type for routing files to the appropriate application
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        pub enum FileAssociation {
+            $(
+                #[doc = $doc]
+                $struct_name($struct_name),
+            )*
         }
-    }
+
+        impl std::fmt::Display for FileAssociation {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                match self {
+                    $(
+                        FileAssociation::$struct_name(_) => write!(f, $display_str),
+                    )*
+                }
+            }
+        }
+
+        $(
+            impl From<$struct_name> for FileAssociation {
+                fn from(value: $struct_name) -> Self {
+                    FileAssociation::$struct_name(value)
+                }
+            }
+        )*
+    };
 }
 
-impl From<Write> for FileAssociation {
-    fn from(value: Write) -> Self {
-        FileAssociation::Write(value)
-    }
-}
-impl From<Pdf> for FileAssociation {
-    fn from(value: Pdf) -> Self {
-        FileAssociation::Pdf(value)
-    }
-}
-impl From<Md> for FileAssociation {
-    fn from(value: Md) -> Self {
-        FileAssociation::Md(value)
-    }
-}
-impl From<Canvas> for FileAssociation {
-    fn from(value: Canvas) -> Self {
-        FileAssociation::Canvas(value)
-    }
-}
-impl From<Code> for FileAssociation {
-    fn from(value: Code) -> Self {
-        FileAssociation::Code(value)
-    }
-}
-impl From<Image> for FileAssociation {
-    fn from(value: Image) -> Self {
-        FileAssociation::Image(value)
-    }
-}
-impl From<Archive> for FileAssociation {
-    fn from(value: Archive) -> Self {
-        FileAssociation::Archive(value)
-    }
-}
-impl From<Executable> for FileAssociation {
-    fn from(value: Executable) -> Self {
-        FileAssociation::Executable(value)
-    }
-}
-impl From<Audio> for FileAssociation {
-    fn from(value: Audio) -> Self {
-        FileAssociation::Audio(value)
-    }
-}
-impl From<Video> for FileAssociation {
-    fn from(value: Video) -> Self {
-        FileAssociation::Video(value)
-    }
-}
-impl From<Font> for FileAssociation {
-    fn from(value: Font) -> Self {
-        FileAssociation::Font(value)
-    }
-}
-impl From<Document> for FileAssociation {
-    fn from(value: Document) -> Self {
-        FileAssociation::Document(value)
-    }
-}
-impl From<Database> for FileAssociation {
-    fn from(value: Database) -> Self {
-        FileAssociation::Database(value)
-    }
-}
-impl From<Data> for FileAssociation {
-    fn from(value: Data) -> Self {
-        FileAssociation::Data(value)
-    }
-}
-impl From<Vector> for FileAssociation {
-    fn from(value: Vector) -> Self {
-        FileAssociation::Vector(value)
-    }
-}
-impl From<ThreeD> for FileAssociation {
-    fn from(value: ThreeD) -> Self {
-        FileAssociation::ThreeD(value)
-    }
-}
-impl From<Vm> for FileAssociation {
-    fn from(value: Vm) -> Self {
-        FileAssociation::Vm(value)
-    }
-}
-impl From<Media> for FileAssociation {
-    fn from(value: Media) -> Self {
-        FileAssociation::Media(value)
-    }
-}
+define_file_associations!(
+    (Write, "write", "Write application file association"),
+    (Pdf, "pdf", "PDF viewer file association"),
+    (Md, "md", "Markdown editor file association"),
+    (Canvas, "canvas", "Canvas editor file association"),
+    (Code, "code", "Code editor file association"),
+    (Image, "image", "Image viewer file association"),
+    (Archive, "archive", "Archive file association"),
+    (Executable, "executable", "Executable file association"),
+    (Audio, "audio", "Audio player file association"),
+    (Video, "video", "Video player file association"),
+    (Font, "font", "Font viewer file association"),
+    (Document, "document", "Document viewer file association"),
+    (Database, "database", "Database file association"),
+    (Data, "data", "Data file association"),
+    (Vector, "vector", "Vector graphics file association"),
+    (ThreeD, "3d", "3D model file association"),
+    (Vm, "vm", "Virtual machine file association"),
+    (Media, "media", "Media file association"),
+);
 
 generate_file_types!(
     (
