@@ -1,8 +1,8 @@
+import { useMessageListContext } from '@block-channel/component/MessageList/MessageList';
 import { COLLAPSED_THREAD_INDEX_CUTOFF } from '@block-channel/constants';
 import { messageAttachmentsStore } from '@block-channel/signal/attachment';
 import { editMessage } from '@block-channel/signal/channel';
 import { reactToMessage } from '@block-channel/signal/reactions';
-import type { ThreadViewData } from '@block-channel/type/threadView';
 import type { MessageListContext } from '@block-channel/utils/listContext';
 import { scrollIntoViewAndFocus } from '@block-channel/utils/scrollAndFocus';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
@@ -18,7 +18,6 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import {
-  type InputAttachment,
   isStaticAttachmentType,
   STATIC_IMAGE,
   STATIC_VIDEO,
@@ -43,7 +42,6 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import type { SetStoreFunction } from 'solid-js/store';
 import type { VirtualizerHandle } from 'virtua/solid';
 import { TypingIndicator } from '../MessageList/TypingIndicator';
 import {
@@ -56,7 +54,6 @@ import { EditMessageInput } from './EditMessageInput';
 import { MessageAttachments } from './MessageAttachments';
 import { MessageReactions } from './MessageReactions';
 import { ThreadReplyIndicator } from './ThreadReplyIndicator';
-import { useMessageListContext } from '@block-channel/component/MessageList/MessageList';
 
 type MessageFlagProps = {
   text: string;
