@@ -8,7 +8,6 @@ import {
   isStaticAttachmentType,
 } from '@core/store/cacheChannelInput';
 import { isErr } from '@core/util/maybeResult';
-import { invalidateChannelWithID } from '@queries/channel/channel';
 import { useSendMessageMutation } from '@queries/channel/message';
 import { commsServiceClient } from '@service-comms/client';
 import type { Attachment } from '@service-comms/generated/models/attachment';
@@ -297,69 +296,6 @@ export function useSendChannelMessageAction() {
       senderId: userId()!,
     });
   };
-}
-
-export async function sendMessage({
-  content,
-  attachments,
-  threadId,
-  mentions,
-}: SendMessageArgs) {
-  const optimisticSend = createCallback(optimisticChannelMessage);
-  const channelsContext = useChannelsContext();
-  const userId = useUserId();
-  if (!userId) return;
-  if (!isMessageSendable(content, attachments)) return;
-  const channelId = channelStore.get.id;
-  if (!channelId) return;
-
-  let attachmentsToSend = attachments
-    .map((a) => ({
-      entity_id: a.id,
-      entity_type: isStaticAttachmentType(a.blockName)
-        ? a.blockName
-        : blockNameToItemType(a.blockName as BlockName),
-    }))
-    .filter((a) => a.entity_type !== undefined) as {
-    entity_id: string;
-    entity_type: string;
-  }[];
-
-  let result = await commsServiceClient.postMessage({
-    channel_id: channelId,
-    message: {
-      attachments: attachmentsToSend,
-      content: content ?? '',
-      thread_id: threadId,
-      mentions: mentions ?? [],
-    },
-  });
-
-  channelsContext.refetchChannels();
-  invalidateChannelWithID(channelId);
-
-  if (isErr(result)) {
-    console.error('failed to send message', result[0]);
-    toast.failure('Failed to send message');
-    return Promise.reject(result[0] ?? new Error('Failed to send message'));
-  }
-
-  const { id } = result[1]!;
-
-  track(TrackingEvents.BLOCKCHANNEL.MESSAGE.SEND, {
-    channelId,
-    contentLength: content?.length ?? 0,
-    attachmentsLength: attachmentsToSend.length,
-    inThread: threadId !== undefined,
-  });
-
-  optimisticSend({
-    channelId,
-    messageId: id,
-    content: content ?? '',
-    threadId,
-    senderId: userId()!,
-  });
 }
 
 createConnectionBlockWebsocketEffect((msg) => {
