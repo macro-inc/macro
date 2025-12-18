@@ -1,7 +1,7 @@
 import {
   channelStore,
-  useSendChannelMessageAction,
   type SendMessageArgs,
+  useSendChannelMessageAction,
 } from '@block-channel/signal/channel';
 import type { ThreadStoreData } from '@block-channel/signal/threads';
 import { postTypingUpdate } from '@block-channel/signal/typing';
