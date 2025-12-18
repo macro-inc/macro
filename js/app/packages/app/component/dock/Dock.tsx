@@ -272,6 +272,7 @@ export function Dock() {
                 {/*<Show when={hasPaid()}>
                   <Hints />
                 </Show>*/}
+
                 <div class="w-full"/>
 
                 <Show when={ENABLE_DOCK_NOTITIFCATIONS}>
