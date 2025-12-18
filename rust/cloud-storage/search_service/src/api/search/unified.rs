@@ -17,6 +17,7 @@ use models_search::unified::{UnifiedSearchRequest, UnifiedSearchResponse};
 use opensearch_client::search::unified::{
     SplitUnifiedSearchResponse, SplitUnifiedSearchResponseValues,
 };
+use std::cmp::Ordering;
 
 /// Perform a search through all items
 #[utoipa::path(
@@ -102,8 +103,12 @@ pub async fn handler(
     results.extend(enriched_project_results);
     results.extend(enriched_email_results);
 
-    // Sort the results by their average score
-    results.sort_by(|a, b| b.average_score().total_cmp(&a.average_score()));
+    // Sort the results by their updated_at
+    results.sort_by(|a, b| {
+        b.updated_at()
+            .partial_cmp(&a.updated_at())
+            .unwrap_or(Ordering::Equal)
+    });
 
     Ok((StatusCode::OK, Json(UnifiedSearchResponse { results })).into_response())
 }

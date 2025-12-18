@@ -5,7 +5,6 @@ use crate::chat::ChatSearchResponseItemWithMetadata;
 use crate::document::DocumentSearchResponseItemWithMetadata;
 use crate::email::EmailSearchResponseItemWithMetadata;
 use crate::project::ProjectSearchResponseItemWithMetadata;
-use crate::score::calculate_average;
 use crate::{
     MatchType, SearchOn, channel::SimpleChannelSearchReponseBaseItem,
     chat::SimpleChatSearchResponseBaseItem, document::SimpleDocumentSearchResponseBaseItem,
@@ -132,14 +131,30 @@ pub enum UnifiedSearchResponseItem {
 }
 
 impl UnifiedSearchResponseItem {
-    /// Calculate the average score from search_results
-    pub fn average_score(&self) -> f64 {
+    /// Get the updated_at timestamp for each item
+    pub fn updated_at(&self) -> i64 {
         match self {
-            Self::Document(item) => calculate_average(&item.extra.document_search_results),
-            Self::Chat(item) => calculate_average(&item.extra.chat_search_results),
-            Self::Email(item) => calculate_average(&item.extra.email_message_search_results),
-            Self::Channel(item) => calculate_average(&item.extra.channel_message_search_results),
-            Self::Project(item) => calculate_average(&item.extra.project_search_results),
+            Self::Document(item) => item
+                .metadata
+                .as_ref()
+                .map(|m| m.updated_at)
+                .unwrap_or_default(),
+            Self::Chat(item) => item
+                .metadata
+                .as_ref()
+                .map(|m| m.updated_at)
+                .unwrap_or_default(),
+            Self::Email(item) => item.updated_at,
+            Self::Channel(item) => item
+                .metadata
+                .as_ref()
+                .map(|m| m.updated_at)
+                .unwrap_or_default(),
+            Self::Project(item) => item
+                .metadata
+                .as_ref()
+                .map(|m| m.updated_at)
+                .unwrap_or_default(),
         }
     }
 }
