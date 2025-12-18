@@ -243,7 +243,7 @@ export function EmailCompose() {
         </Switch>
 
         <div
-          class="macro-message-width mx-auto w-full max-h-full my-12 overflow-hidden"
+          class="macro-message-width mx-auto w-full max-h-full my-12 overflow-hidden px-4"
           classList={{
             'pointer-events-none opacity-50': hasLinkError(),
           }}
