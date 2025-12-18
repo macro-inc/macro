@@ -181,7 +181,6 @@ pub fn map_attachmentless_db_message_to_service(
     scheduled_res: Option<db::message::ScheduledMessage>,
     labels_res: Vec<db::label::Label>,
 ) -> message::Message {
-    let start = std::time::Instant::now();
     let sender_info = map_db_contact_to_service(sender_res);
     let (to_list, cc_list, bcc_list) = map_db_recipients_to_service(recipients_res);
     let labels_list = labels_res.into_iter().map(Into::into).collect();

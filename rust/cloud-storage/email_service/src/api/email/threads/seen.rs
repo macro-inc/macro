@@ -150,7 +150,7 @@ pub async fn seen_handler(
         Err(e) => {
             tracing::error!(error = ?e, "Transaction failed for thread {}, rolling back.", thread_id);
             if let Err(rollback_err) = tx.rollback().await {
-                tracing::error!(error = ?rollback_err, "Failed to rollback transaction!");
+                tracing::error!(error = ?rollback_err, "Failed to rollback transaction");
             }
             return Err(SeenThreadError::QueryError(e));
         }
@@ -248,7 +248,7 @@ pub async fn seen_handler(
                 Err(e) => {
                     tracing::error!(error = ?e, "Revert failed for thread {}, rolling back", thread_id_clone);
                     if let Err(rollback_err) = revert_tx.rollback().await {
-                        tracing::error!(error = ?rollback_err, "Failed to rollback revert transaction!");
+                        tracing::error!(error = ?rollback_err, "Failed to rollback revert transaction");
                     }
                 }
             }
