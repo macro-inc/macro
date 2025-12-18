@@ -7558,6 +7558,7 @@ dependencies = [
  "macro_uuid",
  "mention_utils",
  "model",
+ "model_file_type",
  "models_opensearch",
  "models_search",
  "nom 8.0.0",

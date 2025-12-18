@@ -6,6 +6,7 @@ use model::document::{
     CONVERTED_DOCUMENT_FILE_NAME, DocumentMetadata, FileType,
     build_cloud_storage_bucket_document_key,
 };
+use model_file_type::FileAssociation;
 use models_search::document::MarkdownParseResult;
 use opensearch_client::{
     OpensearchClient, date_format::EpochSeconds, upsert::document::UpsertDocumentArgs,
@@ -70,8 +71,12 @@ pub async fn update_search_with_raw_document(
 ) -> anyhow::Result<()> {
     // Early exit if we do not support search on the file type
     // TODO: support other documents
-    match search_extractor_message.file_type.macro_app_path().as_str() {
-        "pdf" | "write" | "code" | "canvas" | "md" => {}
+    match search_extractor_message.file_type.macro_app_path() {
+        FileAssociation::Pdf(_)
+        | FileAssociation::Write(_)
+        | FileAssociation::Code(_)
+        | model_file_type::FileAssociation::Canvas(_)
+        | model_file_type::FileAssociation::Md(_) => {}
         _ => {
             tracing::warn!("unsupported file type");
             return Ok(());
@@ -274,8 +279,8 @@ pub async fn update_search_with_sync_document(
     lexical_client: &lexical_client::LexicalClient,
     search_extractor_message: &SearchExtractorMessage,
 ) -> anyhow::Result<()> {
-    match search_extractor_message.file_type.macro_app_path().as_str() {
-        "md" => {}
+    match search_extractor_message.file_type.macro_app_path() {
+        model_file_type::FileAssociation::Md(_) => {}
         _ => {
             tracing::warn!("unsupported file type");
             return Ok(());
