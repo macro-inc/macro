@@ -229,7 +229,6 @@ export function createNavigationEntityListShortcut({
     virtualizerHandleSignal: [virtualizerHandle],
     selectedView,
     setSelectedView,
-    // selectedEntitySignal: [selectedEntity, setSelectedEntity],
     entitiesSignal: [entities],
     actionRegistry,
   } = unifiedListContext;
@@ -688,30 +687,8 @@ export function createNavigationEntityListShortcut({
     displayPriority: 10,
   });
 
-  const openEntity = (entity: EntityData) => {
-    const { type, id } = entity;
-    if (type === 'document') {
-      const { fileType, subType } = entity;
-      splitHandle.replace({
-        type: fileTypeToBlockName(subType ?? fileType),
-        id,
-      });
-    } else {
-      splitHandle.replace({ type, id });
-    }
-  };
-
   const activeHighlightedId = () => {
     return viewData()?.highlightedId;
-  };
-
-  const [jumpedToEnd, setJumpedToEnd] = createSignal(false);
-
-  const getSelectedEntityEl = () => {
-    const entity = selectedEntity();
-    if (!entity) return;
-
-    return entityListRef()?.querySelector(`[data-entity-id="${entity.id}"]`);
   };
 
   const getEntityElAtIndex = (index: number) => {
@@ -854,7 +831,6 @@ export function createNavigationEntityListShortcut({
       axis,
       mode,
     });
-    setJumpedToEnd(false);
 
     setViewDataStore(selectedView(), 'hasUserInteractedEntity', true);
 
@@ -871,8 +847,6 @@ export function createNavigationEntityListShortcut({
       });
 
       if (mode === 'jump') {
-        setJumpedToEnd(true);
-
         await new Promise<true>((resolve) =>
           requestAnimationFrame(() => {
             requestAnimationFrame(() => {
@@ -948,39 +922,6 @@ export function createNavigationEntityListShortcut({
   };
 
   unifiedListContext._setNavigateThroughList(navigateThroughList);
-
-  const scrollToEntityFromId = async () => {
-    const index = getHighlightedEntity()?.index;
-    if (!index) return;
-
-    virtualizerHandle()?.scrollToIndex(index, {
-      align: 'nearest',
-    });
-
-    await new Promise<true>((resolve) =>
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          resolve(true);
-        });
-      })
-    );
-  };
-
-  const addScrollEventToList = () => {
-    const listScrollEl = entityListRef();
-
-    const onListScroll = () => {
-      if (listScrollEl) {
-        setViewDataStore(
-          selectedView(),
-          'scrollOffset',
-          listScrollEl.scrollTop
-        );
-      }
-    };
-
-    listScrollEl?.addEventListener('scroll', onListScroll);
-  };
 
   const isEntitySelected = (entityID: string) => {
     return (
