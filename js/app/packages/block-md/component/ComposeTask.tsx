@@ -69,7 +69,7 @@ async function createTaskWithProperties(
     return null;
   }
 
-  const propReqs = properties.map(([id, value]) => {
+  const propRequests = properties.map(([id, value]) => {
     const isMultiSelect = definitions.get(id)?.is_multi_select ?? false;
     return propertiesServiceClient.setEntityProperty({
       entity_id: res,
@@ -81,7 +81,7 @@ async function createTaskWithProperties(
     });
   });
 
-  await Promise.allSettled(propReqs);
+  await Promise.allSettled(propRequests);
 
   toast.embed(
     () => <TaskToastPreview id={res} title={taskTitle} body={taskContent} />,
@@ -268,8 +268,8 @@ export function ComposeTask(props: ComposeTaskProps) {
   };
 
   return (
-    <div class="flex flex-col gap-2 p-3 relative">
-      <div class="flex items-center gap-8">
+    <div class="flex flex-col relative">
+      <div class="flex items-center gap-1 p-2">
         <Show when={splitPanel?.isPopover}>
           <IconButton
             icon={XIcon}
@@ -280,80 +280,83 @@ export function ComposeTask(props: ComposeTaskProps) {
           />
         </Show>
         <div class="flex items-center gap-2">
-          <EntityIcon targetType="task" size="sm" />
           <span class="text-sm font-medium text-ink-disabled/50">
             Create Task
           </span>
         </div>
       </div>
-      <div class="flex-shrink-0 flex gap-2 items-center">
-        <input
-          type="text"
-          placeholder="Task Title"
-          value={title()}
-          onInput={(e) => setTitle(e.currentTarget.value)}
-          class="w-full py-2 text-xl font-medium placeholder-ink-placeholder/50"
-        />
-      </div>
+      <div class="w-full border-b border-edge-muted/50" />
+      <div class="p-2">
+        <div class="flex-shrink-0 flex p-2 gap-2 items-center">
+          <EntityIcon targetType="task" size="sm" />
+          <input
+            type="text"
+            placeholder="Task Title"
+            value={title()}
+            onInput={(e) => setTitle(e.currentTarget.value)}
+            class="w-full py-2 text-xl font-medium placeholder-ink-placeholder/50"
+          />
+        </div>
 
-      <div class="min-h-0 text-base">
-        <MarkdownTextarea
-          editable={() => true}
-          onChange={(value) => setContent(value)}
-          initialValue={props.initialContent}
-          placeholder={props.placeholder ?? 'Add description...'}
-          captureEditor={setBodyEditor}
-        />
-      </div>
+        <div class="min-h-0 text-base m-2">
+          <MarkdownTextarea
+            editable={() => true}
+            onChange={(value) => setContent(value)}
+            initialValue={props.initialContent}
+            placeholder={props.placeholder ?? 'Add description...'}
+            captureEditor={setBodyEditor}
+          />
+        </div>
 
-      <Suspense>
-        <PropertiesProvider
-          entityType="TASK"
-          canEdit={true}
-          properties={properties}
-          onRefresh={() => {}}
-          onPropertyAdded={() => {}}
-          onPropertyDeleted={() => {}}
-          saveHandler={saveHandler}
-        >
-          <div class="w-full grid grid-cols-2 gap-1 flex-wrap text-xs font-mono text-ink-muted mt-8">
-            <For each={properties()}>
-              {(prop) => {
-                const { openPropertyEditor, openDatePicker } =
-                  usePropertiesContext();
-                const handleValueClick = (
-                  property: Property,
-                  anchor?: HTMLElement
-                ) => {
-                  if (property.valueType === 'DATE') {
-                    openDatePicker(property, anchor);
-                  } else if (
-                    property.valueType === 'SELECT_STRING' ||
-                    property.valueType === 'SELECT_NUMBER' ||
-                    property.valueType === 'ENTITY'
-                  ) {
-                    openPropertyEditor(property, anchor);
-                  }
-                };
-                return (
-                  <div class="grid grid-cols-[8rem_auto] rounded-xs items-center p-1">
-                    <PropertyRow
-                      property={prop}
-                      onValueClick={handleValueClick}
-                      withDelete={false}
-                      withPin={false}
-                    />
-                  </div>
-                );
-              }}
-            </For>
-          </div>
-          <Modals />
-        </PropertiesProvider>
-      </Suspense>
+        <Suspense>
+          <PropertiesProvider
+            entityType="TASK"
+            canEdit={true}
+            properties={properties}
+            onRefresh={() => {}}
+            onPropertyAdded={() => {}}
+            onPropertyDeleted={() => {}}
+            saveHandler={saveHandler}
+          >
+            <div class="w-full grid grid-cols-2 gap-1 flex-wrap text-xs font-mono text-ink-muted mt-8">
+              <For each={properties()}>
+                {(prop) => {
+                  const { openPropertyEditor, openDatePicker } =
+                    usePropertiesContext();
+                  const handleValueClick = (
+                    property: Property,
+                    anchor?: HTMLElement
+                  ) => {
+                    if (property.valueType === 'DATE') {
+                      openDatePicker(property, anchor);
+                    } else if (
+                      property.valueType === 'SELECT_STRING' ||
+                      property.valueType === 'SELECT_NUMBER' ||
+                      property.valueType === 'ENTITY'
+                    ) {
+                      openPropertyEditor(property, anchor);
+                    }
+                  };
+                  return (
+                    <div class="grid grid-cols-[8rem_auto] rounded-xs items-center p-1">
+                      <PropertyRow
+                        property={prop}
+                        onValueClick={handleValueClick}
+                        withDelete={false}
+                        withPin={false}
+                      />
+                    </div>
+                  );
+                }}
+              </For>
+            </div>
+            <Modals />
+          </PropertiesProvider>
+        </Suspense>
+      </div>
 
       <div class="w-full border-b border-edge-muted/50" />
-      <div class="flex-shrink-0 flex justify-end">
+      <div class="flex-shrink-0 flex justify-end p-2">
         <TextButton
           icon={() => <EntityIcon targetType="task" theme="monochrome" />}
           onClick={handleCreateTask}

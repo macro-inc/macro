@@ -3,9 +3,6 @@ import { MARKDOWN_LORO_SCHEMA } from '@block-md/definition';
 import { rawStateToLoroSnapshot } from '@core/collab/utils';
 import { createMarkdownStateFromContent } from '@core/component/LexicalMarkdown/collaboration/utils';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
-import { queryKeys } from '@macro-entity';
-import { queryClient } from '@queries/client';
-import type { MutationCallbacks } from '@queries/utils';
 import { invalidateUserQuota } from '@service-auth/userQuota';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type { CreateChatRequest } from '@service-cognition/generated/schemas';
@@ -14,7 +11,6 @@ import { storageServiceClient } from '@service-storage/client';
 import { postNewHistoryItem } from '@service-storage/history';
 import { uploadToPresignedUrl } from '@service-storage/util/uploadToPresignedUrl';
 import { syncServiceClient } from '@service-sync/client';
-import { useMutation } from '@tanstack/solid-query';
 import { contentHash } from './hash';
 import {
   getExtensionForLanguage,
