@@ -283,7 +283,7 @@ function createToast(
         message={message}
         subtext={subtext}
         action={action}
-        duration={duration}
+        duration={duration ?? THROTTLE_DURATION + 100}
       />
     ),
     { region: 'toast-region' }
