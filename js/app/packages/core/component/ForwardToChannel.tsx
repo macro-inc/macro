@@ -36,7 +36,9 @@ interface ForwardToChannelProps {
   projectId?: string;
   name: string;
   ref?: (ref: {
-    getSelectedOptions: () => WithCustomUserInput<'user' | 'contact' | 'channel'>[];
+    getSelectedOptions: () => WithCustomUserInput<
+      'user' | 'contact' | 'channel'
+    >[];
     setSubmitAccessLevel: (level: AccessLevel | null) => void;
     getSubmitAccessLevel: () => AccessLevel | null;
     handleSubmit: () => void;

@@ -383,7 +383,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
     () => {}
   );
 
-  const selectedLen = () => props.selectedOptions().length;
+  // const selectedLen = () => props.selectedOptions().length;
 
   const onInputChange = (next: string) => {
     setInputValue(next);

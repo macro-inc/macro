@@ -484,10 +484,17 @@ export function ShareModal(props: ShareModalProps) {
 
                   <TextButton
                     onClick={() => {
-                      const selectedOptions = forwardToChannelRef()?.getSelectedOptions();
-                      if(selectedOptions && selectedOptions.length > 0){forwardToChannelRef()?.handleSubmit()}
+                      const selectedOptions =
+                        forwardToChannelRef()?.getSelectedOptions();
+                      if (selectedOptions && selectedOptions.length > 0) {
+                        forwardToChannelRef()?.handleSubmit();
+                      }
                     }}
-                    theme={forwardToChannelRef()?.getSelectedOptions()?.length > 0 ? "accent" : "disabled"}
+                    theme={
+                      forwardToChannelRef()?.getSelectedOptions()?.length > 0
+                        ? 'accent'
+                        : 'disabled'
+                    }
                     icon={PaperPlaneRight}
                     height="h-[22px]"
                     text="Share"
@@ -497,7 +504,8 @@ export function ShareModal(props: ShareModalProps) {
 
               <ForwardToChannel
                 submitPermissionInfo={{
-                  setChannelPermissions: (id, accessLevel) => setChannelPermissions(id, accessLevel, true),
+                  setChannelPermissions: (id, accessLevel) =>
+                    setChannelPermissions(id, accessLevel, true),
                   userPermissions: props.userPermissions,
                   channelSharePermissions: recipients(),
                 }}
@@ -510,7 +518,6 @@ export function ShareModal(props: ShareModalProps) {
               <Show when={recipients() || props.owner}>
                 <div class="border-t-1 border-edge-muted w-full h-fit max-h-[120px] overflow-y-auto">
                   <div class="grid gap-[1px] bg-edge-muted/50 text-ink text-sm select-none">
-
                     <Show when={props.owner}>
                       <div class="contents rounded-md">
                         <div class="flex items-center gap-2 overflow-hidden">
@@ -535,10 +542,16 @@ export function ShareModal(props: ShareModalProps) {
                           <div class="flex justify-between p-2 bg-panel hover:bg-hover hover-transition-bg group">
                             <div
                               class="flex items-center gap-2 overflow-hidden cursor-pointer group-hover:bg-hover"
-                              onClick={() => navigateToChannel(recipient.channel_id)}
+                              onClick={() =>
+                                navigateToChannel(recipient.channel_id)
+                              }
                             >
                               <Switch>
-                                <Match when={channelNameMap().get(recipient.channel_id)}>
+                                <Match
+                                  when={channelNameMap().get(
+                                    recipient.channel_id
+                                  )}
+                                >
                                   <User class="flex-shrink-0 w-4 h-4" />
                                 </Match>
                                 <Match when={true}>
@@ -546,7 +559,8 @@ export function ShareModal(props: ShareModalProps) {
                                 </Match>
                               </Switch>
                               <div class="font-medium truncate">
-                                {channelNameMap().get(recipient.channel_id)?.name || recipient.channel_id}
+                                {channelNameMap().get(recipient.channel_id)
+                                  ?.name || recipient.channel_id}
                               </div>
                             </div>
                             <div class="flex items-center group-hover:bg-hover">
@@ -556,9 +570,13 @@ export function ShareModal(props: ShareModalProps) {
                                   setPermissions={(accessLevel) => {
                                     if (accessLevel === null) {
                                       removeChannelAccess(recipient.channel_id);
-                                    }
-                                    else if(accessLevel !== recipient.access_level){
-                                      setChannelPermissions(recipient.channel_id, accessLevel);
+                                    } else if (
+                                      accessLevel !== recipient.access_level
+                                    ) {
+                                      setChannelPermissions(
+                                        recipient.channel_id,
+                                        accessLevel
+                                      );
                                     }
                                   }}
                                 />

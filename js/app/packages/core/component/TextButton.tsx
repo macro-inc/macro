@@ -146,7 +146,9 @@ export function TextButton(props: TextButtonProps) {
           onClick={props.onClick}
           onMouseDown={props.onMouseDown}
           disabled={props.disabled}
-          style={{gap: !props.noGap && (props.text || props.children) ? '8px' : '0px'}}
+          style={{
+            gap: !props.noGap && (props.text || props.children) ? '8px' : '0px',
+          }}
           tabIndex={props.tabIndex}
           ref={props.buttonRef}
         >
@@ -156,10 +158,16 @@ export function TextButton(props: TextButtonProps) {
             </div>
           )}
           <div class="flex flex-1 justify-between items-center gap-2 min-w-0">
-            <div class={`${props.width ? props.width + ' truncate ' : ''}${props.textSize ?? 'text-xs'} font-mono uppercase flex-1 text-center font-medium leading-5 whitespace-nowrap truncate`}>
+            <div
+              class={`${props.width ? props.width + ' truncate ' : ''}${props.textSize ?? 'text-xs'} font-mono uppercase flex-1 text-center font-medium leading-5 whitespace-nowrap truncate`}
+            >
               {props.text ?? props.children}
             </div>
-            <Show when={!props.hideShortcut && (props.shortcut || props.hotkeyToken)}>
+            <Show
+              when={
+                !props.hideShortcut && (props.shortcut || props.hotkeyToken)
+              }
+            >
               <BasicHotkey
                 token={props.hotkeyToken}
                 shortcut={props.shortcut}
@@ -169,7 +177,9 @@ export function TextButton(props: TextButtonProps) {
           </div>
           {props.showChevron && !hasSecondaryButton() && (
             <div class="flex justify-center items-center h-full">
-              <CaretDown class={`flex w-3 h-3 ${props.rotateChevron ? 'rotate-180' : ''}`}/>
+              <CaretDown
+                class={`flex w-3 h-3 ${props.rotateChevron ? 'rotate-180' : ''}`}
+              />
             </div>
           )}
         </button>
