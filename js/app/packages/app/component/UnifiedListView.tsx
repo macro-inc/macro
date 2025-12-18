@@ -224,7 +224,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     viewsDataStore: viewsData,
     setViewDataStore,
     selectedView,
-    virtualizerHandleSignal: [, setVirtualizerHandle],
+    virtualizerHandleSignal: [virtualizerHandle, setVirtualizerHandle],
     entityListRefSignal: [, setEntityListRef],
     entitiesSignal: [entities_, setEntities],
   } = unifiedListContext;
@@ -239,6 +239,19 @@ export function UnifiedListView(props: UnifiedListViewProps) {
         state.selectedEntity = entity;
       })
     );
+  };
+
+  const entityListResetScroll = () => {
+    setViewDataStore(
+      selectedView(),
+      produce((state) => {
+        if (!state) return;
+        const entity = entities_()?.[0];
+        state.selectedEntity = entity;
+        state.highlightedId = entity?.id;
+      })
+    );
+    virtualizerHandle()?.scrollTo(0);
   };
 
   const rawSearchText = createMemo<string>(() => view()?.searchText ?? '');
@@ -362,6 +375,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   > = (...args: any[]) => {
     // @ts-ignore narrowing set store function is annoying due to function overloading
     setViewDataStore(selectedView(), 'filters', 'typeFilter', ...args);
+    entityListResetScroll();
   };
 
   const fileTypeFilter = createMemo(
@@ -566,7 +580,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const { setFilters: setRequiredFilters, filterFn: requiredFilter } =
     createFilterComposer();
 
-  const toggleFileTypeFilter = (fileType: DocumentTypeFilter) =>
+  const toggleFileTypeFilter = (fileType: DocumentTypeFilter) => {
     batch(() => {
       if (!entityTypeFilter().includes('document'))
         setEntityTypeFilter((prev) => [...prev, 'document']);
@@ -577,6 +591,8 @@ export function UnifiedListView(props: UnifiedListViewProps) {
           : [...prev, fileType]
       );
     });
+    entityListResetScroll();
+  };
 
   const nameFuzzySearchFilter = createMemo(() =>
     rawSearchText()
