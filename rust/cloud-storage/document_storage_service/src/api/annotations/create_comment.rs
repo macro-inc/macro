@@ -13,12 +13,14 @@ use macro_middleware::cloud_storage::ensure_access::document::DocumentAccessExtr
 use model::{
     annotations::{
         AnnotationIncrementalUpdate,
-        create::{CreateCommentRequest, CreateCommentResponse},
+        create::{CreateCommentRequest, CreateCommentResponse, Mentions},
     },
     document::DocumentBasic,
     response::ErrorResponse,
     user::UserContext,
 };
+use model_entity::EntityType;
+use model_notifications::{DocumentMentionMetadata, NotificationQueueMessage};
 use models_permissions::share_permission::access_level::CommentAccessLevel;
 use sqlx::PgPool;
 
@@ -48,6 +50,7 @@ pub struct Params {
 #[axum::debug_handler(state = ApiContext)]
 pub async fn create_comment_handler(
     _access: DocumentAccessExtractor<CommentAccessLevel>,
+    State(macro_notify_client): State<Arc<macro_notify::MacroNotify>>,
     State(db): State<PgPool>,
     State(conn_gateway_client): State<Arc<ConnectionGatewayClient>>,
     user_context: Extension<UserContext>,
@@ -66,21 +69,67 @@ pub async fn create_comment_handler(
     }
     let user_id = user_context.user_id.as_str();
     let document_id = document_id.as_str();
-    match create_document_comment(&db, document_id, user_id, req).await {
+    match create_document_comment(&db, document_id, user_id, &req).await {
         Ok(res) => {
-            let response: CreateCommentResponse = res;
+            if let Some(Mentions { users, mention_id }) = &req.mentions {
+                let notif = build_mention_notif(
+                    &req,
+                    &res,
+                    users,
+                    &document_context,
+                    &user_context,
+                    document_id.to_string(),
+                    mention_id,
+                );
+                _ = macro_notify_client
+                    .send_notification(notif)
+                    .await
+                    .inspect_err(|e| tracing::error!(error =? e, "coundn't send document mention notification"));
+            }
             update_live_comment_state(
                 &conn_gateway_client,
                 document_id,
                 AnnotationIncrementalUpdate::CreateComment {
                     sender: user_id,
                     document_id,
-                    response: &response,
+                    response: &res,
                 },
             )
             .await;
-            Ok((StatusCode::OK, Json(response)).into_response())
+            Ok((StatusCode::OK, Json(res)).into_response())
         }
         Err(e) => comment_error_response(e, "Error creating comment"),
+    }
+}
+
+fn build_mention_notif(
+    req: &CreateCommentRequest,
+    response: &CreateCommentResponse,
+    mentions: &[String],
+    document_context: &DocumentBasic,
+    user_context: &UserContext,
+    document_id: String,
+    mention_id: &str,
+) -> NotificationQueueMessage {
+    let metadata = DocumentMentionMetadata {
+        document_name: document_context.document_name.clone(),
+        owner: document_context.owner.clone(),
+        file_type: document_context.file_type.clone(),
+        metadata: Some(serde_json::json!({
+            "mention_id": mention_id,
+            "location": {
+                r#"type"#: "create-comment",
+                "commentId": response.comment_thread.comments.first(),
+                "threadId": response.comment_thread.thread.thread_id,
+                "text": req.text.clone(),
+            }
+        })),
+    };
+
+    NotificationQueueMessage {
+        notification_entity: EntityType::Document.with_entity_string(document_id),
+        notification_event: metadata.into(),
+        sender_id: Some(user_context.user_id.clone()),
+        recipient_ids: Some(mentions.to_vec()),
     }
 }

@@ -10,23 +10,16 @@ use crate::annotations::CommentError;
 
 use super::{create_anchor::create_comment_anchor, get::get_comment_thread};
 fn map_value_to_option(maybe_value: Option<Value>) -> Option<Value> {
-    match maybe_value {
-        Some(value) => {
-            let empty = match &value {
-                Value::Null => true,
-                Value::String(s) => s.is_empty(),
-                Value::Array(arr) => arr.is_empty(),
-                Value::Object(map) => map.is_empty(),
-                _ => false,
-            };
-
-            match empty {
-                true => None,
-                false => Some(value),
-            }
-        }
-        None => None,
-    }
+    maybe_value.and_then(|value| {
+        (match &value {
+            Value::Null => false,
+            Value::String(s) => !s.is_empty(),
+            Value::Array(arr) => !arr.is_empty(),
+            Value::Object(map) => !map.is_empty(),
+            _ => true,
+        })
+        .then_some(value)
+    })
 }
 
 pub async fn create_document_comment(
@@ -38,7 +31,7 @@ pub async fn create_document_comment(
     let mut transaction = db.begin().await?;
 
     let thread = match req.thread_id {
-        Some(thread_id) => match map_value_to_option(req.thread_metadata) {
+        Some(thread_id) => match map_value_to_option(req.thread_metadata.clone()) {
             Some(thread_metadata) => sqlx::query_as!(
                 Thread,
                 r#"
