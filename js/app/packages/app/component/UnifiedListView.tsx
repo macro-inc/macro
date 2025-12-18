@@ -296,9 +296,9 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
             if (dontFocus()) return;
 
-            const focusElement = localEntityListRef!.querySelector(
+            const focusElement = localEntityListRef?.querySelector(
               `[data-entity-id="${entityId}"]`
-            ) as HTMLElement;
+            );
 
             if (focusElement instanceof HTMLElement) {
               focusElement.focus({ preventScroll: true });
