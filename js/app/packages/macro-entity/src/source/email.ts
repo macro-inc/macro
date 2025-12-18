@@ -57,7 +57,7 @@ export function createEmailSource(
     disabled?: Accessor<boolean>;
   }
 ): EmailSource {
-  const [_store, setStore] = singletonEmailStore;
+  const [store, setStore] = singletonEmailStore;
   const [sortedView, setSortedView] = createStore<EmailBySortedView>({});
   const [queryParams, setQueryParams] =
     createStore<FetchPaginatedEmailsParams>(initialQueryParams);
@@ -68,14 +68,14 @@ export function createEmailSource(
       disabled: options?.disabled,
     });
 
-  const emails = createMemo(() => Object.values(_store));
+  const emails = createMemo(() => Object.values(store));
 
   const getByParams = (params: EmailQueryParams) => {
     const viewKey = getViewKey(params);
     const emailIds = trackStore(sortedView[viewKey]) ?? [];
 
     // Map IDs to actual email entities from the store
-    return emailIds.map((id) => _store[id]).filter((email) => !!email);
+    return emailIds.map((id) => store[id]).filter((email) => !!email);
   };
 
   const isLoading = () => query.isLoading;
@@ -112,7 +112,7 @@ export function createEmailSource(
 
   const archiveEmail = async (id: string, value: boolean) => {
     // Optimistically update
-    const previousValue = _store[id]?.done;
+    const previousValue = store[id]?.done;
     setStore(id, 'done', value);
 
     try {
@@ -130,7 +130,7 @@ export function createEmailSource(
 
   const markAsRead = async (id: string) => {
     // Optimistically update
-    const previousValue = _store[id]?.isRead;
+    const previousValue = store[id]?.isRead;
     setStore(id, 'isRead', true);
 
     try {
@@ -151,8 +151,8 @@ export function createEmailSource(
   };
 
   return {
-    _store,
-    query,
+    _store: store,
+    _query: query,
     emails,
     isLoading,
     setQueryParams,
