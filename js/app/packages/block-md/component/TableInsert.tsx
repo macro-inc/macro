@@ -115,11 +115,11 @@ export function TableInsert(
   const handleInsertTable = createCallback((rows: number, cols: number) => {
     if (rows <= 0 || cols <= 0) return;
 
-    const _cols = Math.min(cols, MAX_NUMBER_OF_COLS);
-    const _rows = Math.min(rows, MAX_NUMBER_OF_ROWS);
+    const clampedCols = Math.min(cols, MAX_NUMBER_OF_COLS);
+    const clampedRows = Math.min(rows, MAX_NUMBER_OF_ROWS);
     editor()?.dispatchCommand(INSERT_TABLE_COMMAND, {
-      columns: `${_cols}`,
-      rows: `${_rows}`,
+      columns: `${clampedCols}`,
+      rows: `${clampedRows}`,
       includeHeaders: false,
     });
     setRows(undefined);

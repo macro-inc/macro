@@ -154,8 +154,10 @@ function ActionMenu({
   });
 
   const initialBackgroundColor = () => {
-    const _editor = editor();
-    return !_editor ? '' : currentCellBackgroundColor(_editor) || '';
+    const currentEditor = editor();
+    return !currentEditor
+      ? ''
+      : currentCellBackgroundColor(currentEditor) || '';
   };
 
   const [_backgroundColor, _setBackgroundColor] = createBlockSignal<string>(
@@ -183,18 +185,18 @@ function ActionMenu({
 
   // Action Functions
   const clearTableSelection = createCallback(() => {
-    const _editor = editor();
-    if (!_editor) return;
+    const currentEditor = editor();
+    if (!currentEditor) return;
 
-    const _tableCellNode = nodeByKey(_editor, tableCellNodeKey());
-    if (!_tableCellNode || !$isTableCellNode(_tableCellNode)) return;
+    const tableCellNode = nodeByKey(currentEditor, tableCellNodeKey());
+    if (!tableCellNode || !$isTableCellNode(tableCellNode)) return;
 
-    _editor.update(() => {
-      if (_tableCellNode.isAttached()) {
-        const tableNode = $getTableNodeFromLexicalNodeOrThrow(_tableCellNode);
+    currentEditor.update(() => {
+      if (tableCellNode.isAttached()) {
+        const tableNode = $getTableNodeFromLexicalNodeOrThrow(tableCellNode);
         const tableElement = getTableElement(
           tableNode,
-          _editor.getElementByKey(tableNode.getKey())
+          currentEditor.getElementByKey(tableNode.getKey())
         );
 
         if (!tableElement) return;
@@ -205,7 +207,7 @@ function ActionMenu({
         }
 
         tableNode.markDirty();
-        setTableCellNodeKey(_tableCellNode.getLatest().getKey());
+        setTableCellNodeKey(tableCellNode.getLatest().getKey());
       }
 
       $setSelection(null);
@@ -330,14 +332,14 @@ function ActionMenu({
   });
 
   const deleteTableAtSelection = createCallback(() => {
-    const _editor = editor();
-    if (!_editor) return;
+    const currentEditor = editor();
+    if (!currentEditor) return;
 
-    const _tableCellNode = nodeByKey(_editor, tableCellNodeKey());
-    if (!_tableCellNode) return;
+    const tableCellNode = nodeByKey(currentEditor, tableCellNodeKey());
+    if (!tableCellNode) return;
 
-    _editor.update(() => {
-      const tableNode = $getTableNodeFromLexicalNodeOrThrow(_tableCellNode);
+    currentEditor.update(() => {
+      const tableNode = $getTableNodeFromLexicalNodeOrThrow(tableCellNode);
       tableNode.remove();
       clearTableSelection();
     });

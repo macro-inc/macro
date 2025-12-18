@@ -596,8 +596,8 @@ export function MarkdownPopup(props: {
   const anchorRefPosition = () => {
     const sel = selection();
     if (!showPopup()) return { left: 0, top: 0, width: 0, height: 0 };
-    const _blockRect = blockRect();
-    if (!_blockRect) return { left: 0, top: 0, width: 0, height: 0 };
+    const currentBlockRect = blockRect();
+    if (!currentBlockRect) return { left: 0, top: 0, width: 0, height: 0 };
 
     // if their is a highlight location then we have a rewrite in progress
     // and should pin to that.
@@ -605,7 +605,7 @@ export function MarkdownPopup(props: {
     const hlRect = highlightRect();
     if (hlLocation && hlRect) {
       return {
-        left: hlRect.left - _blockRect.left,
+        left: hlRect.left - currentBlockRect.left,
         top: hlRect.top - contentTopOffset() + untrack(scrollYOffset),
         width: hlRect.width,
         height: hlRect.height,
@@ -614,7 +614,7 @@ export function MarkdownPopup(props: {
 
     if (!sel) return { left: 0, top: 0, width: 0, height: 0 };
     return {
-      left: sel.rect.left - _blockRect.left,
+      left: sel.rect.left - currentBlockRect.left,
       top: sel.rect.top - contentTopOffset() + untrack(scrollYOffset),
       width: sel.rect.width,
       height: sel.rect.height,

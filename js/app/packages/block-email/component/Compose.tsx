@@ -135,7 +135,7 @@ export function EmailCompose() {
   const onSubmit = (data: ComposeInputData) => {
     setValidationError(null);
 
-    const _link = link();
+    const currentLink = link();
 
     if (!selectedRecipients().length) {
       setValidationError(
@@ -161,7 +161,7 @@ export function EmailCompose() {
       return;
     }
 
-    if (!_link) {
+    if (!currentLink) {
       setValidationError(
         new EmailComposeError('no_link', 'Unable to find linked email account')
       );
@@ -170,7 +170,7 @@ export function EmailCompose() {
 
     sendMutation.mutate({
       message: {
-        link_id: _link.id,
+        link_id: currentLink.id,
         to: convertToContactInfoArray(selectedRecipients()),
         cc:
           ccRecipients().length > 0

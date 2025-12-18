@@ -62,7 +62,7 @@ export function createEmailSource(
   const [queryParams, setQueryParams] =
     createStore<FetchPaginatedEmailsParams>(initialQueryParams);
 
-  const _query =
+  const query =
     maybeQuery ??
     createEmailsInfiniteQuery(() => ({ ...queryParams }), {
       disabled: options?.disabled,
@@ -78,7 +78,7 @@ export function createEmailSource(
     return emailIds.map((id) => _store[id]).filter((email) => !!email);
   };
 
-  const isLoading = () => _query.isLoading;
+  const isLoading = () => query.isLoading;
 
   /** Reconcile new emails into the store and update view */
   const reconcileEmails = (emails: EmailEntity[], viewKey: string) =>
@@ -97,17 +97,17 @@ export function createEmailSource(
 
   // TODO: if something needs emails it needs to be using search query
   const canBackgroundFetch = createDeferred(
-    () => false && _query.isSuccess && _query.hasNextPage && !_query.isFetching
+    () => false && query.isSuccess && query.hasNextPage && !query.isFetching
   );
   createEffect(() => {
     // don't background fetch for all view, there are too many emails to fetch
     if (queryParams.view === 'all') return;
 
-    if (canBackgroundFetch()) _query.fetchNextPage();
+    if (canBackgroundFetch()) query.fetchNextPage();
   });
 
   createEffect(() => {
-    if (_query.isSuccess) reconcileEmails(_query.data, getViewKey(queryParams));
+    if (query.isSuccess) reconcileEmails(query.data, getViewKey(queryParams));
   });
 
   const archiveEmail = async (id: string, value: boolean) => {
@@ -147,12 +147,12 @@ export function createEmailSource(
   };
 
   const refetch = async () => {
-    await _query.refetch();
+    await query.refetch();
   };
 
   return {
     _store,
-    _query,
+    query,
     emails,
     isLoading,
     setQueryParams,

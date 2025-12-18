@@ -195,8 +195,8 @@ export function BaseInput(props: BaseInputProps) {
   } = useChannelMarkdownArea();
 
   createRenderEffect(() => {
-    const _ref = ref();
-    if (_ref) props.domRef?.(_ref);
+    const currentRef = ref();
+    if (currentRef) props.domRef?.(currentRef);
   });
 
   const allMentions: Accessor<SimpleMention[]> = () =>

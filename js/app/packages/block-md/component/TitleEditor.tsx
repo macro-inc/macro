@@ -223,11 +223,11 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
 
   createEffect(() => {
     const docName = mdDocumentName();
-    const _state = untrack(state);
+    const currentState = untrack(state);
     if (
       dataReady() &&
       docName !== undefined &&
-      docName !== _state.trim() &&
+      docName !== currentState.trim() &&
       !selfChangedTitle
     ) {
       forceSetTextContent(editor, docName);
@@ -237,12 +237,12 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
 
   createEffect(() => {
     if (emojiMenuOperations.isOpen()) return;
-    const _state = state();
+    const currentState = state();
     if (!untrack(initialized)) {
       setInitialized(true);
       return;
     }
-    if (_state.trim() !== untrack(mdDocumentName)) {
+    if (currentState.trim() !== untrack(mdDocumentName)) {
       selfChangedTitle = true;
       debouncedRename();
     }
