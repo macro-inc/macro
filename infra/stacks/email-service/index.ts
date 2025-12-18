@@ -34,7 +34,9 @@ const AUDIENCE = aws.secretsmanager
 const ISSUER = config.require(`fusionauth_issuer`);
 const NOTIFICATIONS_ENABLED = config.require(`notifications_enabled`);
 const REDIS_RATE_LIMIT_REQS = config.require(`redis_rate_limit_reqs`);
-const REDIS_RATE_LIMIT_REQS_BACKFILL = config.require(`redis_rate_limit_reqs_backfill`);
+const REDIS_RATE_LIMIT_REQS_BACKFILL = config.require(
+  `redis_rate_limit_reqs_backfill`
+);
 const REDIS_RATE_LIMIT_WINDOW_SECS = config.require(
   `redis_rate_limit_window_secs`
 );
