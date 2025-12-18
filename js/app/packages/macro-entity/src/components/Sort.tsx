@@ -452,14 +452,14 @@ export function createSort<
     );
   };
 
-  const SortComponent: SortComponent = (_props) => (
+  const SortComponent: SortComponent = (props) => (
     <div class="flex flex-col gap-2">
       <span class="text-xs font-medium">Sort</span>
       <SystemSortPills
         sortType={sortType}
         onSelect={(value) => {
           handleSelectSystemSort(value);
-          _props.onSelectSystemSort?.();
+          props.onSelectSystemSort?.();
         }}
         disabled={disabled}
         isSortedByProperty={isSortedByProperty}

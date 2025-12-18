@@ -237,20 +237,13 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       produce((state) => {
         if (!state) return;
         state.selectedEntity = entity;
+        state.highlightedId = entity?.id;
       })
     );
   };
 
   const entityListResetScroll = () => {
-    setViewDataStore(
-      selectedView(),
-      produce((state) => {
-        if (!state) return;
-        const entity = entities_()?.[0];
-        state.selectedEntity = entity;
-        state.highlightedId = entity?.id;
-      })
-    );
+    setSelectedEntity(entities_()?.[0]);
     virtualizerHandle()?.scrollTo(0);
   };
 
