@@ -237,7 +237,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       produce((state) => {
         if (!state) return;
         state.selectedEntity = entity;
-        state.highlightedId = entity?.id;
       })
     );
   };
