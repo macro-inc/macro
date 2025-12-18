@@ -705,9 +705,9 @@ export function createNavigationEntityListShortcut({
     return viewData()?.highlightedId;
   };
 
-  const [jumpedToEnd, setJumpedToEnd] = createSignal(false);
+  const [_jumpedToEnd, setJumpedToEnd] = createSignal(false);
 
-  const getSelectedEntityEl = () => {
+  const _getSelectedEntityEl = () => {
     const entity = selectedEntity();
     if (!entity) return;
 
@@ -949,7 +949,7 @@ export function createNavigationEntityListShortcut({
 
   unifiedListContext._setNavigateThroughList(navigateThroughList);
 
-  const scrollToEntityFromId = async () => {
+  const _scrollToEntityFromId = async () => {
     const index = getHighlightedEntity()?.index;
     if (!index) return;
 
@@ -966,7 +966,7 @@ export function createNavigationEntityListShortcut({
     );
   };
 
-  const addScrollEventToList = () => {
+  const _addScrollEventToList = () => {
     const listScrollEl = entityListRef();
 
     const onListScroll = () => {
