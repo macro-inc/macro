@@ -1487,7 +1487,12 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                     />
                   </section>
                   <section class="p-2">
-                    <SortComponent size="SM" />
+                    <SortComponent
+                      size="SM"
+                      onSelectSystemSort={() => {
+                        entityListResetScroll();
+                      }}
+                    />
                   </section>
                   <Show when={ENABLE_PROPERTY_DISPLAY_CONTROL}>
                     <section class="p-2">
