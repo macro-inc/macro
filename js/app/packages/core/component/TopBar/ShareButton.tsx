@@ -508,67 +508,66 @@ export function ShareModal(props: ShareModalProps) {
               />
 
               <Show when={recipients() || props.owner}>
-                <div class="border-t-1 border-edge-muted">
-                  <div class="w-full h-fit max-h-[120px] overflow-y-auto">
-                    <div class="grid grid-cols-[1fr_auto] gap-0 text-ink text-sm select-none">
-                      <Show when={props.owner}>
-                        <div class="contents rounded-md">
-                          <div class="flex items-center gap-2 overflow-hidden px-2 py-1">
-                            <UserIcon
-                              isDeleted={false}
-                              id={props.owner!}
-                              size="xs"
-                            />
-                            <div class="font-medium truncate">
-                              {formattedOwner()}
-                            </div>
-                          </div>
-                          <div class="flex items-center px-2 py-1">
-                            <div class={MENU_ITEM_CLASS}>Owner</div>
+                <div class="border-t-1 border-edge-muted w-full h-fit max-h-[120px] overflow-y-auto">
+                  <div class="grid gap-[1px] bg-edge-muted/50 text-ink text-sm select-none">
+
+                    <Show when={props.owner}>
+                      <div class="contents rounded-md">
+                        <div class="flex items-center gap-2 overflow-hidden">
+                          <UserIcon
+                            isDeleted={false}
+                            id={props.owner!}
+                            size="xs"
+                          />
+                          <div class="font-medium truncate">
+                            {formattedOwner()}
                           </div>
                         </div>
-                      </Show>
+                        <div class="flex items-center">
+                          <div class={MENU_ITEM_CLASS}>Owner</div>
+                        </div>
+                      </div>
+                    </Show>
 
-                      <Show when={recipients()}>
-                        <For each={recipients()!}>
-                          {(recipient) => (
-                            <div class="contents hover:bg-hover hover-transition-bg group">
-                              <div
-                                class="flex items-center gap-2 overflow-hidden cursor-pointer px-2 py-1 group-hover:bg-hover"
-                                onClick={() => navigateToChannel(recipient.channel_id)}
-                              >
-                                <Switch>
-                                  <Match when={channelNameMap().get(recipient.channel_id)}>
-                                    <User class="flex-shrink-0 w-4 h-4" />
-                                  </Match>
-                                  <Match when={true}>
-                                    <IconUsers class="flex-shrink-0 w-4 h-4" />
-                                  </Match>
-                                </Switch>
-                                <div class="font-medium truncate">
-                                  {channelNameMap().get(recipient.channel_id)?.name || recipient.channel_id}
-                                </div>
-                              </div>
-                              <div class="flex items-center px-2 py-1 group-hover:bg-hover">
-                                <div class="font-medium text-ink-muted text-xs">
-                                  <ShareOptions
-                                    permissions={recipient.access_level}
-                                    setPermissions={(accessLevel) => {
-                                      if (accessLevel === null) {
-                                        removeChannelAccess(recipient.channel_id);
-                                      }
-                                      else if(accessLevel !== recipient.access_level){
-                                        setChannelPermissions(recipient.channel_id, accessLevel);
-                                      }
-                                    }}
-                                  />
-                                </div>
+                    <Show when={recipients()}>
+                      <For each={recipients()!}>
+                        {(recipient) => (
+                          <div class="flex justify-between p-2 bg-panel hover:bg-hover hover-transition-bg group">
+                            <div
+                              class="flex items-center gap-2 overflow-hidden cursor-pointer group-hover:bg-hover"
+                              onClick={() => navigateToChannel(recipient.channel_id)}
+                            >
+                              <Switch>
+                                <Match when={channelNameMap().get(recipient.channel_id)}>
+                                  <User class="flex-shrink-0 w-4 h-4" />
+                                </Match>
+                                <Match when={true}>
+                                  <IconUsers class="flex-shrink-0 w-4 h-4" />
+                                </Match>
+                              </Switch>
+                              <div class="font-medium truncate">
+                                {channelNameMap().get(recipient.channel_id)?.name || recipient.channel_id}
                               </div>
                             </div>
-                          )}
-                        </For>
-                      </Show>
-                    </div>
+                            <div class="flex items-center group-hover:bg-hover">
+                              <div class="font-medium text-ink-muted text-xs">
+                                <ShareOptions
+                                  permissions={recipient.access_level}
+                                  setPermissions={(accessLevel) => {
+                                    if (accessLevel === null) {
+                                      removeChannelAccess(recipient.channel_id);
+                                    }
+                                    else if(accessLevel !== recipient.access_level){
+                                      setChannelPermissions(recipient.channel_id, accessLevel);
+                                    }
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </For>
+                    </Show>
                   </div>
                 </div>
               </Show>
