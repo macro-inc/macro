@@ -9,6 +9,7 @@ import {
 } from '@block-channel/utils/draftMessages';
 import { blockElementSignal } from '@core/signal/blockElement';
 import type { InputAttachment } from '@core/store/cacheChannelInput';
+import { channelParticipantInfo } from '@core/user/util';
 import type { Message } from '@service-comms/generated/models';
 import { createCallback } from '@solid-primitives/rootless';
 import {
@@ -23,7 +24,6 @@ import type { SetStoreFunction } from 'solid-js/store';
 import { Portal } from 'solid-js/web';
 import type { VirtualizerHandle } from 'virtua/solid';
 import { BaseInput } from './BaseInput';
-import { channelParticipantInfo } from '@core/user/util';
 
 export type ReplyInputsPortalerProps = {
   channelId: string;
