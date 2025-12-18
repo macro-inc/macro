@@ -298,7 +298,7 @@ export function createNavigationEntityListShortcut({
       } else {
         const handle = virtualizerHandle();
         if (!handle) return;
-        const firstIndex = handle.findStartIndex();
+        const firstIndex = handle.findItemIndex(handle.scrollOffset);
         if (!firstIndex) return;
         const elem = getEntityElAtIndex(firstIndex);
         if (elem instanceof HTMLElement) elem.focus();
