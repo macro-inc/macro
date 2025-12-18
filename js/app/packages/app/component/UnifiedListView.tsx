@@ -241,7 +241,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   };
 
   const entityListResetScroll = () => {
-    setSelectedEntity(entities_()?.[0]);
+    setSelectedEntity(entities_()?.at(0));
     virtualizerHandle()?.scrollTo(0);
   };
 
