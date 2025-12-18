@@ -29,9 +29,6 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { playSound } from '@app/util/sound';
 import { QuickAccess } from './QuickAccess';
 
-// import { Debug } from './Debug';
-// import Hints from './Hints';
-
 export function Dock() {
   const activeSplitId = createMemo(() => globalSplitManager()?.activeSplitId());
   const [showGlitchEffect, setShowGlitchEffect] = createSignal(false);
@@ -300,6 +297,7 @@ export function Dock() {
               <Show when={isSoupActive()}>
                 <IconButton
                   onClick={() => {
+                    globalSplitManager()?.returnFocus();
                     const showHelp = activeSoupDrawerCommand();
                     if (!showHelp) { return };
                     runCommand(showHelp);
