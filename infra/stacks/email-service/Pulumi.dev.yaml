@@ -10,6 +10,7 @@ config:
   email-service:cf_private_key: email-attachments-private-key-dev
   email-service:notifications_enabled: true
   email-service:redis_rate_limit_reqs: 14000
+  email-service:redis_rate_limit_reqs_backfill: 13000
   email-service:redis_rate_limit_window_secs: 60
   email-service:backfill_queue_workers: 25
   email-service:backfill_queue_max_messages: 1

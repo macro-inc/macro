@@ -52,6 +52,7 @@ pub async fn init_backfill(
         link.id,
         GmailApiOperation::UsersGetProfile,
         true,
+        true,
     )
     .await?;
     // get the total number of threads the user has in their account

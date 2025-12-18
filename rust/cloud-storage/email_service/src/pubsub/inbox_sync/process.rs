@@ -165,7 +165,11 @@ pub async fn check_gmail_rate_limit_inbox_sync(
     operation: GmailApiOperation,
     sync_operation: InboxSyncOperation,
 ) -> result::Result<(), ProcessingError> {
-    if !ctx.redis_client.is_rate_limited(link_id, operation).await {
+    if !ctx
+        .redis_client
+        .is_rate_limited(link_id, operation, false)
+        .await
+    {
         // Not rate limited, continue processing
         return Ok(());
     }

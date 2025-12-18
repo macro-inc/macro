@@ -17,8 +17,12 @@ pub async fn check_gmail_rate_limit(
     link_id: Uuid,
     gmail_operation: GmailApiOperation,
     retryable: bool, // true for backfill, false for inbox sync (avoid thundering herd if there is an issue)
+    is_backfill: bool,
 ) -> Result<(), ProcessingError> {
-    if redis_client.is_rate_limited(link_id, gmail_operation).await {
+    if redis_client
+        .is_rate_limited(link_id, gmail_operation, is_backfill)
+        .await
+    {
         return if retryable {
             Err(ProcessingError::Retryable(DetailedError {
                 reason: FailureReason::GmailApiRateLimited,

@@ -38,6 +38,7 @@ pub async fn list_threads(
         link.id,
         GmailApiOperation::ThreadsList,
         true,
+        true,
     )
     .await?;
     // get batch of thread ids

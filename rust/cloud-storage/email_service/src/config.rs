@@ -80,6 +80,10 @@ pub struct Config {
     /// The number of workers we spawn for sfs uploader
     pub sfs_uploader_workers: i32,
 
+    /// The number of requests we allow per window for backfilling. Less than redis_rate_limit_reqs
+    /// so we have room for normal gmail operations while backfilling is occurring
+    pub redis_rate_limit_reqs_backfill: u32,
+
     /// The number of requests we allow per window.
     pub redis_rate_limit_reqs: u32,
 
@@ -219,7 +223,12 @@ impl Config {
             .unwrap();
 
         let redis_rate_limit_reqs: u32 = std::env::var("REDIS_RATE_LIMIT_REQS")
-            .unwrap_or("1500".to_string())
+            .unwrap_or("14000".to_string())
+            .parse::<u32>()
+            .unwrap();
+
+        let redis_rate_limit_reqs_backfill: u32 = std::env::var("REDIS_RATE_LIMIT_REQS_BACKFILL")
+            .unwrap_or("13000".to_string())
             .parse::<u32>()
             .unwrap();
 
@@ -288,6 +297,7 @@ impl Config {
             inbox_sync_retry_queue_max_messages,
             sfs_uploader_workers,
             redis_rate_limit_reqs,
+            redis_rate_limit_reqs_backfill,
             redis_rate_limit_window_secs,
             environment,
             auth_service_secret_key,

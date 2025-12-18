@@ -49,6 +49,7 @@ pub async fn backfill_thread(
         link.id,
         GmailApiOperation::ThreadsGet,
         true,
+        true,
     )
     .await?;
     // fetch all message_ids of the thread

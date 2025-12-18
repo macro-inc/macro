@@ -23,6 +23,7 @@ pub async fn backfill_message(
         link.id,
         GmailApiOperation::MessagesGet,
         true,
+        true,
     )
     .await?;
 

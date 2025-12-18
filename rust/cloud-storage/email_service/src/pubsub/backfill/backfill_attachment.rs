@@ -1,5 +1,7 @@
 use crate::pubsub::context::PubSubContext;
-use crate::util::upload_attachment::{UploadAttachmentContext, upload_attachment};
+use crate::util::upload_attachment::{
+    UploadAttachmentContext, UploadAttachmentError, upload_attachment,
+};
 use models_email::service::backfill::BackfillAttachmentPayload;
 use models_email::service::link;
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
@@ -41,11 +43,17 @@ pub async fn backfill_attachment(
 
     upload_attachment(ctx_upload, &attachment_args)
         .await
-        .map_err(|e| {
-            ProcessingError::NonRetryable(DetailedError {
+        .map_err(|e| match e {
+            UploadAttachmentError::RateLimitCheckFailed(_) => {
+                ProcessingError::Retryable(DetailedError {
+                    reason: FailureReason::GmailApiRateLimited,
+                    source: anyhow::Error::new(e).context("Failed to upload attachment"),
+                })
+            }
+            _ => ProcessingError::NonRetryable(DetailedError {
                 reason: FailureReason::GmailApiFailed,
-                source: e.context("Failed to upload attachment"),
-            })
+                source: anyhow::Error::new(e).context("Failed to upload attachment"),
+            }),
         })?;
 
     Ok(())

@@ -64,6 +64,7 @@ pub async fn gmail_message(
         // rate limited it's likely because of a large previous inbox update, so let that get
         // fully processed before the next one.
         false,
+        true,
     )
     .await?;
     sync_labels(&ctx.db, &ctx.gmail_client, &gmail_access_token, link.id)
@@ -87,6 +88,7 @@ pub async fn gmail_message(
         // rate limited it's likely because of a large previous inbox update, so let that get
         // fully processed before the next one.
         false,
+        true,
     )
     .await?;
     let inbox_changes = ctx
