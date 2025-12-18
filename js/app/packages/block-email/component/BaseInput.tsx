@@ -7,7 +7,8 @@ import { BrightJoins } from '@core/component/BrightJoins';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { IconButton } from '@core/component/IconButton';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
-import type { UserMentionRecord } from '@core/component/LexicalMarkdown/component/menu/MentionsMenu';
+import { createFilesReadyHandler } from '@core/component/LexicalMarkdown/utils/fileUploadUtils';
+import type { UserMentionRecord } from '@core/component/LexicalMarkdown/utils/mentionsUtils';
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { TextButton } from '@core/component/TextButton';
@@ -18,6 +19,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { trackMention } from '@core/signal/mention';
 import { useDisplayName } from '@core/user';
+import { handleFileFolderDrop } from '@core/util/upload';
 import Spinner from '@icon/bold/spinner-gap-bold.svg';
 import ReplyAll from '@icon/regular/arrow-bend-double-up-left.svg';
 import Reply from '@icon/regular/arrow-bend-up-left.svg';
@@ -846,6 +848,13 @@ export function BaseInput(props: {
             formatState={formatState}
             setFormatState={setFormatState}
             domRef={props.markdownDomRef}
+            onPasteFilesAndDirs={(files, directories) => {
+              handleFileFolderDrop(
+                files,
+                directories,
+                createFilesReadyHandler(editor(), blockId)
+              );
+            }}
           />
         </div>
         <Show when={!form().replyAppended()}>

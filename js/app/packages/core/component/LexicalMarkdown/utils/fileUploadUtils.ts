@@ -144,12 +144,20 @@ export async function onFilesReady(
   }
 }
 
+/**
+ * Creates a handler for files ready event.
+ * @param editor - The editor instance. Can be undefined to support editor capture scenarios.
+ * @param blockId - The block ID.
+ * @param getPosition - An optionalfunction to get the position of the files.
+ * @returns A function to handle files ready event.
+ */
 export function createFilesReadyHandler(
-  editor: LexicalEditor,
+  editor: LexicalEditor | undefined,
   blockId: string,
   getPosition?: () => ReturnType<typeof getDragDropPosition>
 ) {
   return async (uploadEntries: UploadInput[]) => {
+    if (!editor) return;
     const position = getPosition?.();
     await onFilesReady(editor, uploadEntries, blockId, position);
   };
