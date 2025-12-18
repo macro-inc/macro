@@ -76,17 +76,13 @@ pub async fn seen_handler(
     Path(PathParams { id: thread_id }): Path<PathParams>,
 ) -> Result<Response, SeenThreadError> {
     // update viewed_at value in user_history table for thread
-    let start = std::time::Instant::now();
     email_db_client::user_history::upsert_user_history(&ctx.db, link.id, thread_id)
         .await
         .context("Failed to upsert user history")?;
-    println!("upsert_user_history took {:?}", start.elapsed());
 
-    let start = std::time::Instant::now();
     let messages =
         email_db_client::messages::get::fetch_messages_with_labels(&ctx.db, thread_id, link.id)
             .await?;
-    println!("fetch_messages_with_labels took {:?}", start.elapsed());
 
     if messages.is_empty() {
         return Err(SeenThreadError::ThreadNotFound);
@@ -113,22 +109,17 @@ pub async fn seen_handler(
         .map(|m| m.provider_id.clone().unwrap_or_default())
         .collect();
 
-    let start = std::time::Instant::now();
     let mut tx = ctx.db.begin().await?;
-    println!("begin transaction took {:?}", start.elapsed());
 
     let transaction_result = async {
         // Update thread read status
-        let start = std::time::Instant::now();
         email_db_client::threads::update::update_thread_read_status(
             &mut *tx, thread_id, link.id, true,
         )
         .await
         .context("Failed to update thread read status")?;
-        println!("update_thread_read_status took {:?}", start.elapsed());
 
         // Update messages read status
-        let start = std::time::Instant::now();
         email_db_client::messages::update::update_message_read_status_batch(
             &mut *tx,
             message_db_ids.clone(),
@@ -137,13 +128,8 @@ pub async fn seen_handler(
         )
         .await
         .context("Failed to update message read status")?;
-        println!(
-            "update_message_read_status_batch took {:?}",
-            start.elapsed()
-        );
 
         // Remove UNREAD label from messages in DB
-        let start = std::time::Instant::now();
         email_db_client::labels::delete::delete_message_labels_batch(
             &mut *tx,
             &message_db_ids,
@@ -152,7 +138,6 @@ pub async fn seen_handler(
         )
         .await
         .context("Failed to remove 'UNREAD' label from messages")?;
-        println!("delete_message_labels_batch took {:?}", start.elapsed());
 
         anyhow::Ok(())
     }
@@ -160,9 +145,7 @@ pub async fn seen_handler(
 
     match transaction_result {
         Ok(_) => {
-            let start = std::time::Instant::now();
             tx.commit().await?;
-            println!("commit transaction took {:?}", start.elapsed());
         }
         Err(e) => {
             tracing::error!(error = ?e, "Transaction failed for thread {}, rolling back.", thread_id);
@@ -208,7 +191,6 @@ pub async fn seen_handler(
                 "Gmail API failed to modify labels for some messages, reverting database changes"
             );
 
-            let start = std::time::Instant::now();
             let mut revert_tx = match db_clone.begin().await {
                 Ok(tx) => tx,
                 Err(e) => {
@@ -216,12 +198,10 @@ pub async fn seen_handler(
                     return;
                 }
             };
-            println!("begin revert transaction took {:?}", start.elapsed());
 
             // revert the changes we made in the previous transaction
             let revert_result = async {
                 // Revert thread read status to unread
-                let start = std::time::Instant::now();
                 email_db_client::threads::update::update_thread_read_status(
                     &mut *revert_tx,
                     thread_id_clone,
@@ -230,13 +210,8 @@ pub async fn seen_handler(
                 )
                 .await
                 .context("Failed to revert thread read status")?;
-                println!(
-                    "revert update_thread_read_status took {:?}",
-                    start.elapsed()
-                );
 
                 // Revert messages read status to unread
-                let start = std::time::Instant::now();
                 email_db_client::messages::update::update_message_read_status_batch(
                     &mut *revert_tx,
                     message_db_ids_clone.clone(),
@@ -245,13 +220,8 @@ pub async fn seen_handler(
                 )
                 .await
                 .context("Failed to revert message read status")?;
-                println!(
-                    "revert update_message_read_status_batch took {:?}",
-                    start.elapsed()
-                );
 
                 // Revert: Add UNREAD label back to messages
-                let start = std::time::Instant::now();
                 email_db_client::labels::insert::insert_message_labels_batch(
                     &mut *revert_tx,
                     &message_db_ids_clone,
@@ -260,10 +230,6 @@ pub async fn seen_handler(
                 )
                 .await
                 .context("Failed to revert adding 'UNREAD' label to messages")?;
-                println!(
-                    "revert insert_message_labels_batch took {:?}",
-                    start.elapsed()
-                );
 
                 anyhow::Ok(())
             }
@@ -271,11 +237,9 @@ pub async fn seen_handler(
 
             match revert_result {
                 Ok(_) => {
-                    let start = std::time::Instant::now();
                     if let Err(e) = revert_tx.commit().await {
                         tracing::error!(error = ?e, "Unable to commit transaction for revert");
                     } else {
-                        println!("commit revert transaction took {:?}", start.elapsed());
                         tracing::info!(
                             "Successfully reverted database changes after Gmail API failure"
                         );
