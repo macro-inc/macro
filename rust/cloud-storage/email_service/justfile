@@ -29,7 +29,7 @@ create-queues:
     AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs create-queue \
         --queue-name my-test-inbox-sync-retry-queue --attributes VisibilityTimeout=60
     AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs create-queue \
-    	--queue-name my-test-refresh-queue
+    	--queue-name my-test-link-manager-queue
     AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs create-queue \
         --queue-name my-test-scheduled-queue.fifo \
         --attributes FifoQueue=true,ContentBasedDeduplication=true
@@ -53,7 +53,7 @@ purge-queues:
     AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs purge-queue \
         --queue-url http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/my-test-inbox-sync-retry-queue
     AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs purge-queue \
-        --queue-url http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/my-test-refresh-queue
+        --queue-url http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/my-test-link-manager-queue
     AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs purge-queue \
             --queue-url http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/my-test-scheduled-queue.fifo
     AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs purge-queue \

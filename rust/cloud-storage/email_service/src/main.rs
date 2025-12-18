@@ -112,9 +112,9 @@ async fn main() -> anyhow::Result<()> {
     )
     .await;
 
-    let refresh_worker = sqs_worker::SQSWorker::new(
+    let link_manager_worker = sqs_worker::SQSWorker::new(
         aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
-        config.email_refresh_queue.clone(),
+        config.link_manager_queue.clone(),
         config.queue_max_messages,
         config.queue_wait_time_seconds,
     );
@@ -323,20 +323,20 @@ async fn main() -> anyhow::Result<()> {
         "backfill workers started"
     );
 
-    let db_refresh = db.clone();
-    let gmail_client_refresh = gmail_client.clone();
-    let auth_service_client_refresh = auth_service_client.clone();
-    let redis_client_refresh = redis_client.clone();
-    let sqs_client_refresh = sqs_client.clone();
-    // daily refresh operations for user contacts and inbox subscriptions
+    let db_link_manager = db.clone();
+    let gmail_client_link_manager = gmail_client.clone();
+    let auth_service_client_link_manager = auth_service_client.clone();
+    let redis_client_link_manager = redis_client.clone();
+    let sqs_client_link_manager = sqs_client.clone();
+    // daily link_manager operations for user contacts and inbox subscriptions
     tokio::spawn(async move {
-        pubsub::refresh::worker::run_worker(
-            refresh_worker,
-            db_refresh,
-            gmail_client_refresh,
-            auth_service_client_refresh,
-            redis_client_refresh,
-            sqs_client_refresh,
+        pubsub::link_manager::worker::run_worker(
+            link_manager_worker,
+            db_link_manager,
+            gmail_client_link_manager,
+            auth_service_client_link_manager,
+            redis_client_link_manager,
+            sqs_client_link_manager,
         )
         .await;
     });

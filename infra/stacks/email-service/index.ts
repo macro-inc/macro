@@ -140,12 +140,12 @@ const inbox_sync_retry_queue = new Queue('email-service-gmail-webhook-retry', {
 export const inboxSyncRetryQueueArn = pulumi.interpolate`${inbox_sync_retry_queue.queue.arn}`;
 export const inboxSyncRetryQueueName = pulumi.interpolate`${inbox_sync_retry_queue.queue.name}`;
 
-const refresh_queue = new Queue('email-service-refresh', {
+const link_manager_queue = new Queue('email-service-refresh', {
   tags,
 });
 
-export const refreshQueueArn = pulumi.interpolate`${refresh_queue.queue.arn}`;
-export const refreshQueueName = pulumi.interpolate`${refresh_queue.queue.name}`;
+export const linkManagerQueueArn = pulumi.interpolate`${link_manager_queue.queue.arn}`;
+export const linkManagerQueueName = pulumi.interpolate`${link_manager_queue.queue.name}`;
 
 const scheduled_queue = new Queue('email-service-scheduled', {
   tags,
@@ -229,7 +229,7 @@ const queueArns = [
   notificationQueueArn,
   inboxSyncQueueArn,
   inboxSyncRetryQueueArn,
-  refreshQueueArn,
+  linkManagerQueueArn,
   scheduledQueueArn,
   searchEventQueueArn,
   insightContextQueueArn,
@@ -268,8 +268,8 @@ const emailService = new EmailService('email-service', {
       value: pulumi.interpolate`redis://${emailServiceRedis.endpoint}`,
     },
     {
-      name: 'EMAIL_REFRESH_QUEUE',
-      value: refreshQueueName,
+      name: 'LINK_MANAGER_QUEUE',
+      value: linkManagerQueueName,
     },
     {
       name: 'EMAIL_SCHEDULED_QUEUE',
@@ -409,11 +409,11 @@ const emailService = new EmailService('email-service', {
 export const emailServiceUrl = pulumi.interpolate`${emailService.domain}`;
 
 const emailRefreshHandler = new EmailRefreshHandler('email-refresh-handler', {
-  queueArns: [refreshQueueArn],
+  queueArns: [linkManagerQueueArn],
   vpc: coparse_api_vpc,
   envVars: {
     DATABASE_URL: pulumi.interpolate`${MACRO_DB_URL}`,
-    EMAIL_REFRESH_QUEUE: pulumi.interpolate`${refreshQueueName}`,
+    EMAIL_LINK_MANAGER_QUEUE: pulumi.interpolate`${linkManagerQueueName}`,
     ENVIRONMENT: stack,
     RUST_LOG: 'email_refresh_handler=info',
   },

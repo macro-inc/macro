@@ -1,5 +1,5 @@
-use crate::pubsub::refresh::context::RefreshContext;
-use crate::pubsub::refresh::process;
+use crate::pubsub::link_manager::context::LinkManagerContext;
+use crate::pubsub::link_manager::process;
 use crate::util::redis::RedisClient;
 use authentication_service_client::AuthServiceClient;
 use futures::StreamExt;
@@ -15,7 +15,7 @@ pub async fn run_worker(
     redis_client: RedisClient,
     sqs_client: SQS,
 ) {
-    let ctx = RefreshContext {
+    let ctx = LinkManagerContext {
         db,
         sqs_worker: worker.clone(),
         gmail_client,

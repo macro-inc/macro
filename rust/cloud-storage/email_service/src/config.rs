@@ -15,8 +15,8 @@ pub struct Config {
     pub redis_uri: String,
 
     /// The SQS queue name that email_refresh_handler publishes messages to for refreshing
-    /// inbox sync subscriptions.
-    pub email_refresh_queue: String,
+    /// inbox sync subscriptions, and we will publish delete link messages to.
+    pub link_manager_queue: String,
 
     /// The SQS queue name that email_scheduled_handler publishes messages to for sending
     /// scheduled messages.
@@ -136,8 +136,8 @@ impl Config {
 
         let redis_uri = std::env::var("REDIS_URI").context("REDIS_URI must be provided")?;
 
-        let email_refresh_queue =
-            std::env::var("EMAIL_REFRESH_QUEUE").context("EMAIL_REFRESH_QUEUE must be provided")?;
+        let link_manager_queue =
+            std::env::var("LINK_MANAGER_QUEUE").context("LINK_MANAGER_QUEUE must be provided")?;
 
         let email_scheduled_queue = std::env::var("EMAIL_SCHEDULED_QUEUE")
             .context("EMAIL_SCHEDULED_QUEUE must be provided")?;
@@ -265,7 +265,7 @@ impl Config {
             macro_db_url: database_url,
             port,
             redis_uri,
-            email_refresh_queue,
+            link_manager_queue,
             email_scheduled_queue,
             gmail_inbox_sync_queue,
             gmail_inbox_sync_retry_queue,

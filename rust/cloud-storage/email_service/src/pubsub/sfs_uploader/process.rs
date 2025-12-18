@@ -8,7 +8,7 @@ use std::collections::HashMap;
 
 // upload user photo_url to SFS and add url to database
 pub async fn process_message(ctx: SFSUploaderContext, message: &Message) -> anyhow::Result<()> {
-    let sfs_message = extract_refresh_notification(message)?;
+    let sfs_message = extract_sfs_upload_notification(message)?;
 
     let mut contact = sfs_message.contact;
     let original_photo_url = contact
@@ -45,12 +45,12 @@ pub async fn process_message(ctx: SFSUploaderContext, message: &Message) -> anyh
     Ok(())
 }
 
-/// Deserializes the SQS message body into a RefreshMessage struct.
+/// Deserializes the SQS message body into a SfsUploaderMessage struct.
 #[tracing::instrument(skip(message))]
-fn extract_refresh_notification(
+fn extract_sfs_upload_notification(
     message: &aws_sdk_sqs::types::Message,
 ) -> anyhow::Result<SFSUploaderMessage> {
-    tracing::debug!("Extracting refresh notification from message");
+    tracing::debug!("Extracting sfs upload notification from message");
     let message_body = message.body().context("message body not found")?;
 
     serde_json::from_str(message_body)

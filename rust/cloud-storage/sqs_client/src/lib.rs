@@ -79,7 +79,7 @@ pub struct SQS {
     #[cfg(feature = "gmail")]
     gmail_inbox_sync_retry_queue: Option<String>,
     #[cfg(feature = "email")]
-    email_refresh_queue: Option<String>,
+    link_manager_queue: Option<String>,
     #[cfg(feature = "email")]
     email_scheduled_queue: Option<String>,
     #[cfg(feature = "email")]
@@ -115,7 +115,7 @@ impl SQS {
             #[cfg(feature = "gmail")]
             gmail_inbox_sync_retry_queue: None,
             #[cfg(feature = "email")]
-            email_refresh_queue: None,
+            link_manager_queue: None,
             #[cfg(feature = "email")]
             email_scheduled_queue: None,
             #[cfg(feature = "email")]

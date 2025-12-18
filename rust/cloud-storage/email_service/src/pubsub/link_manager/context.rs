@@ -5,7 +5,7 @@ use sqlx::PgPool;
 use sqs_client::SQS;
 
 #[derive(Clone)]
-pub struct RefreshContext {
+pub struct LinkManagerContext {
     pub db: PgPool,
     pub sqs_worker: sqs_worker::SQSWorker,
     pub gmail_client: GmailClient,
