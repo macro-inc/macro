@@ -610,7 +610,6 @@ function MessageListImpl(props: MessageListProps) {
   const [dismissUnviewedMessages, setDismissUnviewedMessages] =
     createSignal(false);
   const [dismissJumpToLatest, setDismissJumpToLatest] = createSignal(false);
-  const [newMessageIndex, setNewMessageIndex] = createSignal<number>();
 
   // Record new unviewed messages
   // TODO: show new reply state for threads with new messages
@@ -644,19 +643,6 @@ function MessageListImpl(props: MessageListProps) {
           ]);
           setDismissUnviewedMessages(false);
         }
-      }
-    })
-  );
-
-  // Record the index of the first unviewed message, to set a new new message indicator
-  createEffect(
-    on([unviewedMessages], () => {
-      if (unviewedMessages()?.length) {
-        setNewMessageIndex(
-          props
-            .orderedMessages()
-            ?.findIndex((m) => m.id === unviewedMessages()?.[0]?.id)
-        );
       }
     })
   );
