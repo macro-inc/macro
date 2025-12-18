@@ -192,6 +192,7 @@ mod tests {
             thread_metadata: Some(json!({"test": "test"})),
             anchor: None,
             metadata: None,
+            mentions: None,
         };
 
         let CreateCommentResponse { comment_thread, .. } =

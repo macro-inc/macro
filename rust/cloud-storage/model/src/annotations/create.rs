@@ -14,6 +14,14 @@ pub struct CreateCommentRequest {
     pub anchor: Option<AnchorRequest>,
     pub text: String,
     pub metadata: Option<Value>,
+    pub mentions: Option<Mentions>,
+}
+
+#[derive(Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct Mentions {
+    pub users: Vec<String>,
+    pub mention_id: String,
 }
 
 #[derive(Deserialize, PartialEq, Debug, Clone, ToSchema)]
