@@ -701,11 +701,11 @@ export function createNavigationEntityListShortcut({
     }
   };
 
-  const activeHighlightedId = () => {
+  const _activeHighlightedId = () => {
     return viewData()?.highlightedId;
   };
 
-  const [_jumpedToEnd, setJumpedToEnd] = createSignal(false);
+  const [_jumpedToEnd, _setJumpedToEnd] = createSignal(false);
 
   const _getSelectedEntityEl = () => {
     const entity = selectedEntity();
