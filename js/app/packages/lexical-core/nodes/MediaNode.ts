@@ -134,6 +134,7 @@ export abstract class MediaNode<
   }
 
   exportDOM() {
+    const wrapper = document.createElement('div');
     const element = this.getDOMElement();
     element.setAttribute('src', this.__url);
     element.setAttribute('width', this.__width.toString());
@@ -141,7 +142,8 @@ export abstract class MediaNode<
     element.setAttribute('data-src-type', this.__srcType);
     element.setAttribute(`data-${this.getMediaType()}-id`, this.__id);
     element.setAttribute('data-scale', this.__scale.toString());
-    return { element };
+    wrapper.appendChild(element);
+    return { element: wrapper };
   }
 
   decorate(): DecoratorComponent<MediaInfo & T> | undefined {

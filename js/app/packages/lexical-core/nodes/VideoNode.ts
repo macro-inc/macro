@@ -119,10 +119,9 @@ export class VideoNode extends MediaNode<{ controls: boolean }> {
   exportDOM() {
     const result = super.exportDOM();
     if (result && result.element) {
-      (result.element as HTMLVideoElement).setAttribute(
-        'controls',
-        this.__controls.toString()
-      );
+      result.element
+        .querySelector('video')
+        ?.setAttribute('controls', this.__controls.toString());
     }
     return result;
   }
@@ -153,6 +152,37 @@ export class VideoNode extends MediaNode<{ controls: boolean }> {
               return { node };
             },
             priority: 1,
+          };
+        }
+        return null;
+      },
+      div: (domNode: HTMLDivElement) => {
+        const video = domNode.querySelector('video');
+        if (!video) return null;
+
+        const src = video.getAttribute('src');
+        const controls = video.hasAttribute('controls');
+        const width = video.getAttribute('width');
+        const height = video.getAttribute('height');
+        const scale = video.getAttribute('data-scale');
+        const srcType = video.getAttribute('data-src-type');
+        const id = video.getAttribute('data-video-id');
+
+        if (src && id && srcType) {
+          return {
+            conversion: () => {
+              const node = $createVideoNode({
+                srcType: srcType,
+                id,
+                url: src,
+                controls: controls,
+                width: width ? parseInt(width, 10) : 0,
+                height: height ? parseInt(height, 10) : 0,
+                scale: scale ? parseFloat(scale) : 1,
+              });
+              return { node };
+            },
+            priority: 2, // Higher priority for our wrapped format
           };
         }
         return null;

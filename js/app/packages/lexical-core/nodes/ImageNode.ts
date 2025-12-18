@@ -117,7 +117,7 @@ export class ImageNode extends MediaNode<{ alt: string }> {
   exportDOM() {
     const result = super.exportDOM();
     if (result && result.element) {
-      (result.element as HTMLImageElement).setAttribute('alt', this.__alt);
+      result.element.querySelector('img')?.setAttribute('alt', this.__alt);
     }
     return result;
   }
@@ -148,6 +148,37 @@ export class ImageNode extends MediaNode<{ alt: string }> {
               return { node };
             },
             priority: 1,
+          };
+        }
+        return null;
+      },
+      div: (domNode: HTMLDivElement) => {
+        const img = domNode.querySelector('img');
+        if (!img) return null;
+
+        const src = img.getAttribute('src');
+        const alt = img.getAttribute('alt');
+        const width = img.getAttribute('width');
+        const height = img.getAttribute('height');
+        const scale = img.getAttribute('data-scale');
+        const srcType = img.getAttribute('data-src-type');
+        const id = img.getAttribute('data-image-id');
+
+        if (src && id && srcType) {
+          return {
+            conversion: () => {
+              const node = $createImageNode({
+                srcType: srcType,
+                id,
+                url: src,
+                alt: alt || '',
+                width: width ? parseInt(width, 10) : 0,
+                height: height ? parseInt(height, 10) : 0,
+                scale: scale ? parseFloat(scale) : 1,
+              });
+              return { node };
+            },
+            priority: 2, // Higher priority for our wrapped format
           };
         }
         return null;
