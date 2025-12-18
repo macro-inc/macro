@@ -156,9 +156,8 @@ export function MessageContainer(props: MessageProps) {
 
   // Scroll message to have editing input visible
   createEffect(() => {
-    if (editing() && props.virtualHandle) {
-      const handle = props.virtualHandle!;
-
+    const handle = props.virtualHandle;
+    if (editing() && handle) {
       requestAnimationFrame(() => {
         const messageBounds = messageContainerRef.getBoundingClientRect();
         const containerBounds = props.container?.getBoundingClientRect();
@@ -688,8 +687,8 @@ export function MessageContainer(props: MessageProps) {
                       users={threadReplyUsers()}
                       onClick={handleThreadToggle}
                       isThreadOpen={
-                        props.threadViewStore[message.thread_id!]
-                          ?.threadExpanded
+                        !!message.thread_id &&
+                        props.threadViewStore[message.thread_id]?.threadExpanded
                       }
                     />
                   </div>
