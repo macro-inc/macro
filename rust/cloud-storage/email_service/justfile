@@ -25,9 +25,9 @@ start-localstack:
 
 create-queues:
     AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs create-queue \
-    	--queue-name my-test-webhook-queue --attributes VisibilityTimeout=60
+    	--queue-name my-test-inbox-sync-queue --attributes VisibilityTimeout=60
     AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs create-queue \
-        --queue-name my-test-webhook-retry-queue --attributes VisibilityTimeout=60
+        --queue-name my-test-inbox-sync-retry-queue --attributes VisibilityTimeout=60
     AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs create-queue \
     	--queue-name my-test-refresh-queue
     AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs create-queue \
@@ -49,9 +49,9 @@ purge-queues:
     AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs purge-queue \
     	--queue-url http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/backfill-queue
     AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs purge-queue \
-        --queue-url http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/my-test-webhook-queue
+        --queue-url http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/my-test-inbox-sync-queue
     AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs purge-queue \
-        --queue-url http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/my-test-webhook-retry-queue
+        --queue-url http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/my-test-inbox-sync-retry-queue
     AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs purge-queue \
         --queue-url http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/my-test-refresh-queue
     AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs purge-queue \

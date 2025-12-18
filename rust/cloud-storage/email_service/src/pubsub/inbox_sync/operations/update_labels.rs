@@ -1,16 +1,16 @@
 use crate::pubsub::context::PubSubContext;
+use crate::pubsub::inbox_sync::operations::shared::notify_search;
+use crate::pubsub::inbox_sync::process;
+use crate::pubsub::inbox_sync::process::check_gmail_rate_limit_inbox_sync;
 use crate::pubsub::util::{cg_refresh_email, complete_transaction_with_processing_error};
-use crate::pubsub::webhook::operations::shared::notify_search;
-use crate::pubsub::webhook::process;
-use crate::pubsub::webhook::process::check_gmail_rate_limit_webhook;
 use email_db_client::labels::delete::delete_db_message_labels;
 use email_db_client::labels::insert;
 use email_db_client::threads::update::update_thread_metadata;
 use models_email::email::service::link;
-use models_email::gmail::operations::GmailApiOperation;
-use models_email::gmail::webhook::{
-    UpdateLabelsPayload, UpsertMessagePayload, WebhookOperation, WebhookPubsubMessage,
+use models_email::gmail::inbox_sync::{
+    InboxSyncOperation, InboxSyncPubsubMessage, UpdateLabelsPayload, UpsertMessagePayload,
 };
+use models_email::gmail::operations::GmailApiOperation;
 use models_email::service;
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use sqlx::PgPool;
@@ -47,9 +47,9 @@ pub async fn update_labels(
         None => {
             // if message exists in gmail but not in db, we should try to upsert it
             ctx.sqs_client
-                .enqueue_gmail_webhook_notification(WebhookPubsubMessage {
+                .enqueue_gmail_inbox_sync_notification(InboxSyncPubsubMessage {
                     link_id: link.id,
-                    operation: WebhookOperation::UpsertMessage(UpsertMessagePayload {
+                    operation: InboxSyncOperation::UpsertMessage(UpsertMessagePayload {
                         provider_message_id: provider_message_id.clone(),
                     }),
                 })
@@ -85,11 +85,11 @@ pub async fn update_labels(
             })?;
 
     // get the message labels from gmail
-    check_gmail_rate_limit_webhook(
+    check_gmail_rate_limit_inbox_sync(
         ctx,
         link.id,
         GmailApiOperation::MessagesGet,
-        WebhookOperation::UpdateLabels(payload.clone()),
+        InboxSyncOperation::UpdateLabels(payload.clone()),
     )
     .await?;
 

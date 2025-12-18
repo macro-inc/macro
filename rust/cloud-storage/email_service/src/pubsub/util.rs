@@ -16,7 +16,7 @@ pub async fn check_gmail_rate_limit(
     redis_client: &RedisClient,
     link_id: Uuid,
     gmail_operation: GmailApiOperation,
-    retryable: bool, // true for backfill, false for webhook (avoid thundering herd if there is an issue)
+    retryable: bool, // true for backfill, false for inbox sync (avoid thundering herd if there is an issue)
 ) -> Result<(), ProcessingError> {
     if redis_client.is_rate_limited(link_id, gmail_operation).await {
         return if retryable {

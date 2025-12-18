@@ -1,8 +1,8 @@
 use crate::pubsub::context::PubSubContext;
+use crate::pubsub::inbox_sync::operations::shared::notify_search;
+use crate::pubsub::inbox_sync::process;
+use crate::pubsub::inbox_sync::process::check_gmail_rate_limit_inbox_sync;
 use crate::pubsub::util::cg_refresh_email;
-use crate::pubsub::webhook::operations::shared::notify_search;
-use crate::pubsub::webhook::process;
-use crate::pubsub::webhook::process::check_gmail_rate_limit_webhook;
 use crate::util::process_pre_insert::{process_message_pre_insert, process_threads_pre_insert};
 use crate::util::upload_attachment::{UploadAttachmentContext, upload_attachment};
 use anyhow::Context;
@@ -21,8 +21,8 @@ use models_email::db::address::EmailRecipientType;
 use models_email::email::service;
 use models_email::email::service::link;
 use models_email::email::service::message::SimpleMessage;
+use models_email::gmail::inbox_sync::{InboxSyncOperation, UpsertMessagePayload};
 use models_email::gmail::operations::GmailApiOperation;
-use models_email::gmail::webhook::{UpsertMessagePayload, WebhookOperation};
 use models_email::service::attachment::{AttachmentUploadArgs, AttachmentUploadDestination};
 use models_email::service::message::Message;
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
@@ -43,11 +43,11 @@ pub async fn upsert_message(
     let gmail_access_token = process::fetch_pubsub_gmail_token(ctx, link).await?;
 
     // we have to fetch the message to get its provider thread id
-    check_gmail_rate_limit_webhook(
+    check_gmail_rate_limit_inbox_sync(
         ctx,
         link.id,
         GmailApiOperation::MessagesGet,
-        WebhookOperation::UpsertMessage(payload.clone()),
+        InboxSyncOperation::UpsertMessage(payload.clone()),
     )
     .await?;
 
@@ -426,11 +426,11 @@ async fn fetch_and_insert_thread(
     provider_thread_id: &str,
 ) -> anyhow::Result<()> {
     // fetch threads
-    check_gmail_rate_limit_webhook(
+    check_gmail_rate_limit_inbox_sync(
         ctx,
         link_id,
         GmailApiOperation::ThreadsGet,
-        WebhookOperation::UpsertMessage(payload.clone()),
+        InboxSyncOperation::UpsertMessage(payload.clone()),
     )
     .await
     .map_err(anyhow::Error::from)?;

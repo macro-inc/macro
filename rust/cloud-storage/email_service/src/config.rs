@@ -22,12 +22,12 @@ pub struct Config {
     /// scheduled messages.
     pub email_scheduled_queue: String,
 
-    /// The SQS queue name we process history updates from.
-    pub gmail_webhook_queue: String,
+    /// The SQS queue name we process inbox updates from.
+    pub gmail_inbox_sync_queue: String,
 
-    /// The SQS queue name we process history update retries from. Separate from the main queue
+    /// The SQS queue name we process inbox update retries from. Separate from the main queue
     /// to avoid backups for large inbox update operations
-    pub gmail_webhook_retry_queue: String,
+    pub gmail_inbox_sync_retry_queue: String,
 
     /// The SQS queue name for search event
     pub search_event_queue: String,
@@ -65,17 +65,17 @@ pub struct Config {
     /// The queue max messages per poll for backfill
     pub backfill_queue_max_messages: i32,
 
-    /// The number of workers we spawn for gmail webhook
-    pub webhook_queue_workers: i32,
+    /// The number of workers we spawn for gmail inbox sync
+    pub inbox_sync_queue_workers: i32,
 
-    /// The queue max messages per poll for gmail webhook
-    pub webhook_queue_max_messages: i32,
+    /// The queue max messages per poll for gmail inbox sync
+    pub inbox_sync_queue_max_messages: i32,
 
-    /// The number of workers we spawn for gmail retry webhook
-    pub webhook_retry_queue_workers: i32,
+    /// The number of workers we spawn for gmail retry inbox sync
+    pub inbox_sync_retry_queue_workers: i32,
 
-    /// The queue max messages per poll for gmail retry webhook
-    pub webhook_retry_queue_max_messages: i32,
+    /// The queue max messages per poll for gmail retry inbox sync
+    pub inbox_sync_retry_queue_max_messages: i32,
 
     /// The number of workers we spawn for sfs uploader
     pub sfs_uploader_workers: i32,
@@ -142,11 +142,11 @@ impl Config {
         let email_scheduled_queue = std::env::var("EMAIL_SCHEDULED_QUEUE")
             .context("EMAIL_SCHEDULED_QUEUE must be provided")?;
 
-        let gmail_webhook_queue =
-            std::env::var("GMAIL_WEBHOOK_QUEUE").context("GMAIL_WEBHOOK_QUEUE must be provided")?;
+        let gmail_inbox_sync_queue = std::env::var("GMAIL_INBOX_SYNC_QUEUE")
+            .context("GMAIL_INBOX_SYNC_QUEUE must be provided")?;
 
-        let gmail_webhook_retry_queue = std::env::var("GMAIL_WEBHOOK_RETRY_QUEUE")
-            .context("GMAIL_WEBHOOK_RETRY_QUEUE must be provided")?;
+        let gmail_inbox_sync_retry_queue = std::env::var("GMAIL_INBOX_SYNC_RETRY_QUEUE")
+            .context("GMAIL_INBOX_SYNC_RETRY_QUEUE must be provided")?;
 
         let search_event_queue =
             std::env::var("SEARCH_EVENT_QUEUE").context("SEARCH_EVENT_QUEUE must be provided")?;
@@ -192,23 +192,23 @@ impl Config {
             .parse::<i32>()
             .unwrap();
 
-        let webhook_queue_workers: i32 = std::env::var("WEBHOOK_QUEUE_WORKERS")
+        let inbox_sync_queue_workers: i32 = std::env::var("INBOX_SYNC_QUEUE_WORKERS")
             .unwrap_or("10".to_string())
             .parse::<i32>()
             .unwrap();
 
-        let webhook_queue_max_messages: i32 = std::env::var("WEBHOOK_QUEUE_MAX_MESSAGES")
+        let inbox_sync_queue_max_messages: i32 = std::env::var("INBOX_SYNC_QUEUE_MAX_MESSAGES")
             .unwrap_or("1".to_string())
             .parse::<i32>()
             .unwrap();
 
-        let webhook_retry_queue_workers: i32 = std::env::var("WEBHOOK_RETRY_QUEUE_WORKERS")
+        let inbox_sync_retry_queue_workers: i32 = std::env::var("INBOX_SYNC_RETRY_QUEUE_WORKERS")
             .unwrap_or("10".to_string())
             .parse::<i32>()
             .unwrap();
 
-        let webhook_retry_queue_max_messages: i32 =
-            std::env::var("WEBHOOK_RETRY_QUEUE_MAX_MESSAGES")
+        let inbox_sync_retry_queue_max_messages: i32 =
+            std::env::var("INBOX_SYNC_RETRY_QUEUE_MAX_MESSAGES")
                 .unwrap_or("1".to_string())
                 .parse::<i32>()
                 .unwrap();
@@ -267,8 +267,8 @@ impl Config {
             redis_uri,
             email_refresh_queue,
             email_scheduled_queue,
-            gmail_webhook_queue,
-            gmail_webhook_retry_queue,
+            gmail_inbox_sync_queue,
+            gmail_inbox_sync_retry_queue,
             search_event_queue,
             insight_context_queue,
             gmail_gcp_queue,
@@ -282,10 +282,10 @@ impl Config {
             queue_wait_time_seconds,
             backfill_queue_workers,
             backfill_queue_max_messages,
-            webhook_queue_workers,
-            webhook_queue_max_messages,
-            webhook_retry_queue_workers,
-            webhook_retry_queue_max_messages,
+            inbox_sync_queue_workers,
+            inbox_sync_queue_max_messages,
+            inbox_sync_retry_queue_workers,
+            inbox_sync_retry_queue_max_messages,
             sfs_uploader_workers,
             redis_rate_limit_reqs,
             redis_rate_limit_window_secs,
