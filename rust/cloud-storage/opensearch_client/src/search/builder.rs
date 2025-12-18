@@ -58,6 +58,25 @@ pub(crate) fn create_highlight_field<'a>(
         .number_of_fragments(number_of_fragments)
 }
 
+/// Creates sort vec to sort by the updated_at with a fallback to score sort
+pub(crate) fn updated_at_sort<'a>() -> Vec<SortType<'a>> {
+    vec![
+        SortType::ScriptSort(ScriptSort::new(
+            Script::new(
+                r#"if (doc.containsKey('sent_at_seconds') && doc['sent_at_seconds'].size() > 0) {
+                    return doc['sent_at_seconds'].value.toInstant().toEpochMilli();
+                } else if (doc.containsKey('updated_at_seconds') && doc['updated_at_seconds'].size() > 0) {
+                    return doc['updated_at_seconds'].value.toInstant().toEpochMilli();
+                } else {
+                    return 0L;  // Or Long.MAX_VALUE to push to end
+                }"#,
+            ),
+            ScriptSortType::Number,
+            SortOrder::Desc,
+        )),
+        SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
+    ]
+}
 pub trait SearchQueryConfig {
     /// Key for item id
     const ID_KEY: &'static str = "entity_id";
@@ -73,10 +92,9 @@ pub trait SearchQueryConfig {
     /// Returns the default sort types that are used on the search query.
     /// Override this method if you need custom sort logic
     fn default_sort_types<'a>() -> Vec<SortType<'a>> {
-        vec![
-            SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
-            SortType::Field(FieldSort::new(Self::ID_KEY, SortOrder::Asc)),
-        ]
+        println!("CALLED");
+        // Use the updated_at_sort by default
+        updated_at_sort()
     }
 
     /// Override this method if you need custom highlight logic

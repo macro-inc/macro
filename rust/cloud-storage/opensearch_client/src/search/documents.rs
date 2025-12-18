@@ -27,14 +27,6 @@ impl SearchQueryConfig for DocumentSearchConfig {
     const TITLE_KEY: &'static str = "name";
     const ENTITY_INDEX: SearchEntityType = SearchEntityType::Documents;
 
-    fn default_sort_types<'a>() -> Vec<SortType<'a>> {
-        vec![
-            SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
-            SortType::Field(FieldSort::new(Self::ID_KEY, SortOrder::Asc)),
-            SortType::Field(FieldSort::new("node_id", SortOrder::Asc)),
-        ]
-    }
-
     fn append_owner_highlights<'a>(
         highlight: opensearch_query_builder::Highlight<'a>,
     ) -> opensearch_query_builder::Highlight<'a> {

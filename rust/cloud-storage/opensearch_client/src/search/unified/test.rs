@@ -858,14 +858,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
         }
       },
       "size": 20,
-      "sort": [
-        {
-          "_score": "desc"
-        },
-        {
-          "entity_id": "desc"
-        }
-      ]
+      "sort": updated_at_sort().iter().map(|s| s.to_json()).collect::<Vec<_>>(),
     });
 
     assert_eq!(result.to_json(), expected);
@@ -924,202 +917,193 @@ fn test_build_unified_search_request_name() -> anyhow::Result<()> {
 
     let result = build_unified_search_request(&unified_search_args)?;
 
-    let expected = serde_json::json!(
-          {
-      "collapse": {
-        "field": "entity_id"
-      },
-      "from": 20,
-      "highlight": {
-        "fields": {
-          "name": {
-            "number_of_fragments": 1,
-            "post_tags": ["</macro_em>"],
-            "pre_tags": ["<macro_em>"],
-            "type": "plain"
-          },
-          "project_name": {
-            "number_of_fragments": 1,
-            "post_tags": ["</macro_em>"],
-            "pre_tags": ["<macro_em>"],
-            "type": "plain"
-          }
-        },
-        "require_field_match": true
-      },
-      "query": {
-        "bool": {
-          "minimum_should_match": 1,
-          "should": [
-            {
-              "bool": {
-                "filter": [
-                  {
-                    "bool": {
-                      "minimum_should_match": 1,
-                      "should": [
-                        {
-                          "terms": {
-                            "entity_id": ["id1", "id2"]
-                          }
-                        },
-                        {
-                          "term": {
-                            "user_id": "user"
-                          }
-                        }
-                      ]
-                    }
-                  },
-                  {
-                    "term": {
-                      "_index": "names"
-                    }
-                  },
-                  {
-                    "term": {
-                      "entity_type": "documents"
-                    }
-                  }
-                ],
-                "must": [
-                  {
-                    "match_phrase": {
-                      "name": "test"
-                    }
-                  }
-                ]
-              }
-            },
-            {
-              "bool": {
-                "filter": [
-                  {
-                    "bool": {
-                      "minimum_should_match": 1,
-                      "should": [
-                        {
-                          "terms": {
-                            "entity_id": ["id1", "id2"]
-                          }
-                        },
-                        {
-                          "term": {
-                            "user_id": "user"
-                          }
-                        }
-                      ]
-                    }
-                  },
-                  {
-                    "term": {
-                      "_index": "names"
-                    }
-                  },
-                  {
-                    "term": {
-                      "entity_type": "emails"
-                    }
-                  }
-                ],
-                "must": [
-                  {
-                    "match_phrase": {
-                      "name": "test"
-                    }
-                  }
-                ]
-              }
-            },
-            {
-              "bool": {
-                "filter": [
-                  {
-                    "bool": {
-                      "minimum_should_match": 1,
-                      "should": [
-                        {
-                          "terms": {
-                            "entity_id": ["id1", "id2"]
-                          }
-                        },
-                        {
-                          "term": {
-                            "user_id": "user"
-                          }
-                        }
-                      ]
-                    }
-                  },
-                  {
-                    "term": {
-                      "_index": "names"
-                    }
-                  },
-                  {
-                    "term": {
-                      "entity_type": "chats"
-                    }
-                  }
-                ],
-                "must": [
-                  {
-                    "match_phrase": {
-                      "name": "test"
-                    }
-                  }
-                ]
-              }
-            },
-            {
-              "bool": {
-                "filter": [
-                  {
-                    "bool": {
-                      "minimum_should_match": 1,
-                      "should": [
-                        {
-                          "terms": {
-                            "entity_id": ["id1", "id2"]
-                          }
-                        },
-                        {
-                          "term": {
-                            "user_id": "user"
-                          }
-                        }
-                      ]
-                    }
-                  },
-                  {
-                    "term": {
-                      "_index": "projects"
-                    }
-                  }
-                ],
-                "must": [
-                  {
-                    "match_phrase": {
-                      "project_name": "test"
-                    }
-                  }
-                ]
-              }
-            }
-          ]
-        }
-      },
-      "size": 20,
-      "sort": [
-        {
-          "_score": "desc"
-        },
-        {
-          "entity_id": "desc"
-        }
-      ]
-    }
-        );
+    let expected = serde_json::json!({
+     "collapse": {
+       "field": "entity_id"
+     },
+     "from": 20,
+     "highlight": {
+       "fields": {
+         "name": {
+           "number_of_fragments": 1,
+           "post_tags": ["</macro_em>"],
+           "pre_tags": ["<macro_em>"],
+           "type": "plain"
+         },
+         "project_name": {
+           "number_of_fragments": 1,
+           "post_tags": ["</macro_em>"],
+           "pre_tags": ["<macro_em>"],
+           "type": "plain"
+         }
+       },
+       "require_field_match": true
+     },
+     "query": {
+       "bool": {
+         "minimum_should_match": 1,
+         "should": [
+           {
+             "bool": {
+               "filter": [
+                 {
+                   "bool": {
+                     "minimum_should_match": 1,
+                     "should": [
+                       {
+                         "terms": {
+                           "entity_id": ["id1", "id2"]
+                         }
+                       },
+                       {
+                         "term": {
+                           "user_id": "user"
+                         }
+                       }
+                     ]
+                   }
+                 },
+                 {
+                   "term": {
+                     "_index": "names"
+                   }
+                 },
+                 {
+                   "term": {
+                     "entity_type": "documents"
+                   }
+                 }
+               ],
+               "must": [
+                 {
+                   "match_phrase": {
+                     "name": "test"
+                   }
+                 }
+               ]
+             }
+           },
+           {
+             "bool": {
+               "filter": [
+                 {
+                   "bool": {
+                     "minimum_should_match": 1,
+                     "should": [
+                       {
+                         "terms": {
+                           "entity_id": ["id1", "id2"]
+                         }
+                       },
+                       {
+                         "term": {
+                           "user_id": "user"
+                         }
+                       }
+                     ]
+                   }
+                 },
+                 {
+                   "term": {
+                     "_index": "names"
+                   }
+                 },
+                 {
+                   "term": {
+                     "entity_type": "emails"
+                   }
+                 }
+               ],
+               "must": [
+                 {
+                   "match_phrase": {
+                     "name": "test"
+                   }
+                 }
+               ]
+             }
+           },
+           {
+             "bool": {
+               "filter": [
+                 {
+                   "bool": {
+                     "minimum_should_match": 1,
+                     "should": [
+                       {
+                         "terms": {
+                           "entity_id": ["id1", "id2"]
+                         }
+                       },
+                       {
+                         "term": {
+                           "user_id": "user"
+                         }
+                       }
+                     ]
+                   }
+                 },
+                 {
+                   "term": {
+                     "_index": "names"
+                   }
+                 },
+                 {
+                   "term": {
+                     "entity_type": "chats"
+                   }
+                 }
+               ],
+               "must": [
+                 {
+                   "match_phrase": {
+                     "name": "test"
+                   }
+                 }
+               ]
+             }
+           },
+           {
+             "bool": {
+               "filter": [
+                 {
+                   "bool": {
+                     "minimum_should_match": 1,
+                     "should": [
+                       {
+                         "terms": {
+                           "entity_id": ["id1", "id2"]
+                         }
+                       },
+                       {
+                         "term": {
+                           "user_id": "user"
+                         }
+                       }
+                     ]
+                   }
+                 },
+                 {
+                   "term": {
+                     "_index": "projects"
+                   }
+                 }
+               ],
+               "must": [
+                 {
+                   "match_phrase": {
+                     "project_name": "test"
+                   }
+                 }
+               ]
+             }
+           }
+         ]
+       }
+     },
+     "size": 20,
+     "sort": updated_at_sort().iter().map(|s| s.to_json()).collect::<Vec<_>>(),
+    });
 
     assert_eq!(result.to_json(), expected);
 
@@ -1867,14 +1851,7 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
         }
       },
       "size": 20,
-      "sort": [
-        {
-          "_score": "desc"
-        },
-        {
-          "entity_id": "desc"
-        }
-      ]
+      "sort": updated_at_sort().iter().map(|s| s.to_json()).collect::<Vec<_>>(),
     });
 
     assert_eq!(result.to_json(), expected);
@@ -2002,16 +1979,8 @@ fn test_build_unified_search_request_single_index() -> anyhow::Result<()> {
         }
       },
       "size": 20,
-      "sort": [
-        {
-          "_score": "desc"
-        },
-        {
-          "entity_id": "desc"
-        }
-      ]
-    }
-        );
+      "sort": updated_at_sort().iter().map(|s| s.to_json()).collect::<Vec<_>>(),
+    });
 
     assert_eq!(result.to_json(), expected);
 

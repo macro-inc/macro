@@ -4,7 +4,7 @@ use crate::{
     Result,
     error::{OpensearchClientError, ResponseExt},
     search::{
-        builder::{SearchQueryConfig, create_highlight_field},
+        builder::{SearchQueryConfig, create_highlight_field, updated_at_sort},
         channels::{
             ChannelMessageIndex, ChannelMessageQueryBuilder, ChannelMessageSearchArgs,
             ChannelMessageSearchConfig,
@@ -460,10 +460,7 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
     }
 
     // Build sort
-    let sort = vec![
-        SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
-        SortType::Field(FieldSort::new("entity_id", SortOrder::Desc)),
-    ];
+    let sort = updated_at_sort();
 
     for sort in sort {
         search_request_builder.add_sort(sort);

@@ -138,14 +138,7 @@ fn test_build_search_request() -> anyhow::Result<()> {
         "collapse": {
             "field": "entity_id"
         },
-        "sort": [
-            {
-                "_score": "desc"
-            },
-            {
-                "entity_id": "asc"
-            }
-        ],
+       "sort": TestSearchConfig::default_sort_types().iter().map(|s| s.to_json()).collect::<Vec<_>>(),
         "highlight": {
             "require_field_match": false,
             "fields": {
@@ -213,14 +206,7 @@ fn test_build_search_request() -> anyhow::Result<()> {
         "collapse": {
             "field": "entity_id"
         },
-        "sort": [
-            {
-                "_score": "desc"
-            },
-            {
-                "entity_id": "asc"
-            }
-        ],
+        "sort": TestSearchConfig::default_sort_types().iter().map(|s| s.to_json()).collect::<Vec<_>>(),
         "highlight": {
             "require_field_match": false,
             "fields": {
