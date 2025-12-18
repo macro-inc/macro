@@ -145,8 +145,11 @@ pub async fn handler(
                     .into_response()
             })?
             .into_iter()
-            .filter(|p| p.user_id != req.user_id.0.as_ref() && p.left_at.is_none())
-            .map(|p| p.user_id)
+            .filter_map(|p| match p.left_at {
+                // If the user left we should not update their user item access
+                Some(_) => None,
+                None => Some(p.user_id)
+            })
             .collect::<Vec<_>>();
 
 

@@ -87,3 +87,97 @@ fn it_expands_filters() {
 
     assert_eq!(json, exp);
 }
+
+#[test]
+fn it_expands_file_associations() {
+    let f = EntityFilters {
+        document_filters: DocumentFilters {
+            file_types: vec!["assoc:vector".to_string()],
+            document_ids: vec![],
+            project_ids: vec![],
+            owners: vec![],
+        },
+        ..Default::default()
+    };
+
+    let ast = Arc::into_inner(
+        EntityFilterAst::new_from_filters(f)
+            .unwrap()
+            .unwrap()
+            .document_filter
+            .unwrap(),
+    )
+    .unwrap();
+
+    let json = serde_json::to_value(ast).unwrap();
+    println!("{}", serde_json::to_string_pretty(&json).unwrap());
+
+    let exp = serde_json::json!({
+      "Or": [
+        {
+          "Or": [
+            {
+              "Or": [
+                {
+                  "Or": [
+                    {
+                      "Literal": {
+                        "FileType": "ai"
+                      }
+                    },
+                    {
+                      "Literal": {
+                        "FileType": "eps"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "Literal": {
+                    "FileType": "ps"
+                  }
+                }
+              ]
+            },
+            {
+              "Literal": {
+                "FileType": "dxf"
+              }
+            }
+          ]
+        },
+        {
+          "Literal": {
+            "FileType": "dwg"
+          }
+        }
+      ]
+    });
+    assert_eq!(json, exp);
+}
+
+#[test]
+fn it_expands_other_association() {
+    let f = EntityFilters {
+        document_filters: DocumentFilters {
+            file_types: vec!["assoc:other".to_string()],
+            document_ids: vec![],
+            project_ids: vec![],
+            owners: vec![],
+        },
+        ..Default::default()
+    };
+
+    let ast = Arc::into_inner(
+        EntityFilterAst::new_from_filters(f)
+            .unwrap()
+            .unwrap()
+            .document_filter
+            .unwrap(),
+    )
+    .unwrap();
+
+    let json = serde_json::to_string(&ast).unwrap();
+
+    assert_eq!(json.trim(), include_str!("tests/other.json").trim());
+}

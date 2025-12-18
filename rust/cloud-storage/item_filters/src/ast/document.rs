@@ -1,9 +1,17 @@
 use crate::{DocumentFilters, ast::ExpandErr};
+use either::Either;
 use filter_ast::{ExpandFrame, Expr, FoldTree, TryExpandNode};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
-use model_file_type::FileType;
+use model_file_type::{
+    Archive, Audio, Canvas, Code, Data, Database, Document, Executable, FileAssociation, FileType,
+    Font, Image, Md, Media, Pdf, ThreeD, ValueError, Vector, Video, Vm, Write,
+};
+use nom::{
+    IResult, Parser, branch::alt, bytes::complete::tag, combinator::eof, sequence::separated_pair,
+};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
+use strum::IntoEnumIterator;
 use uuid::Uuid;
 
 /// the literal type that can appear in the item filter ast
@@ -17,6 +25,94 @@ pub enum DocumentLiteral {
     ProjectId(Uuid),
     /// this node value filters by document owner
     Owner(MacroUserIdStr<'static>),
+}
+
+fn prefix(s: &str) -> IResult<&str, &str> {
+    tag("assoc").parse(s)
+}
+
+fn assotiation<T: Default>(t: &'static str) -> impl Fn(&str) -> IResult<&str, T> {
+    move |s| tag(t).and(eof).map(|(_, _)| T::default()).parse(s)
+}
+
+fn file_association(s: &str) -> IResult<&str, FileAssociation> {
+    alt((
+        assotiation::<Write>("write").map(FileAssociation::from),
+        assotiation::<Pdf>("pdf").map(FileAssociation::from),
+        assotiation::<Md>("md").map(FileAssociation::from),
+        assotiation::<Canvas>("canvas").map(FileAssociation::from),
+        assotiation::<Code>("code").map(FileAssociation::from),
+        assotiation::<Image>("image").map(FileAssociation::from),
+        assotiation::<Archive>("archive").map(FileAssociation::from),
+        assotiation::<Executable>("executable").map(FileAssociation::from),
+        assotiation::<Audio>("audio").map(FileAssociation::from),
+        assotiation::<Video>("video").map(FileAssociation::from),
+        assotiation::<Font>("font").map(FileAssociation::from),
+        assotiation::<Document>("document").map(FileAssociation::from),
+        assotiation::<Database>("database").map(FileAssociation::from),
+        assotiation::<Data>("data").map(FileAssociation::from),
+        assotiation::<Vector>("vector").map(FileAssociation::from),
+        assotiation::<ThreeD>("3d").map(FileAssociation::from),
+        assotiation::<Vm>("vm").map(FileAssociation::from),
+        assotiation::<Media>("media").map(FileAssociation::from),
+    ))
+    .parse(s)
+}
+
+fn expand_file_association(association: FileAssociation) -> impl Iterator<Item = FileType> {
+    FileType::iter().filter(move |ty| ty.macro_app_path().eq(&association))
+}
+
+/// other is defined as
+/// not write,
+/// not pdf,
+/// not md,
+/// not canvas,
+/// not code
+/// yes this is kinda weird
+fn other(s: &str) -> IResult<&str, impl Iterator<Item = FileType>> {
+    tag("other")
+        .map(|_| {
+            FileType::iter().filter(|ty| {
+                let association = ty.macro_app_path();
+                !matches!(
+                    association,
+                    FileAssociation::Write(_)
+                        | FileAssociation::Pdf(_)
+                        | FileAssociation::Md(_)
+                        | FileAssociation::Canvas(_)
+                        | FileAssociation::Code(_)
+                )
+            })
+        })
+        .parse(s)
+}
+
+fn format(s: &str) -> IResult<&str, impl Iterator<Item = FileType>> {
+    let (rest, (_, out)) = separated_pair(
+        prefix,
+        tag(":"),
+        alt((
+            file_association
+                .map(expand_file_association)
+                .map(Either::Left),
+            other.map(Either::Right),
+        )),
+    )
+    .parse(s)?;
+    Ok((rest, out))
+}
+
+fn create_file_iter(s: &str) -> impl Iterator<Item = Result<FileType, ValueError<FileType>>> {
+    match FileType::from_str(s) {
+        Ok(f) => Either::Left(Some(Ok(f)).into_iter()),
+        Err(e) => {
+            let Ok((_, file_types)) = format(s) else {
+                return Either::Left(Some(Err(e)).into_iter());
+            };
+            Either::Right(file_types.map(Result::Ok))
+        }
+    }
 }
 
 impl ExpandFrame<DocumentLiteral> for DocumentFilters {
@@ -33,7 +129,7 @@ impl ExpandFrame<DocumentLiteral> for DocumentFilters {
 
         let file_types_node = file_types
             .iter()
-            .map(|s| FileType::from_str(s))
+            .flat_map(|s| create_file_iter(s))
             .try_expand(|r| r.map(DocumentLiteral::FileType), Expr::or)?;
 
         let document_id_nodes = document_ids

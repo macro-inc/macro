@@ -1,7 +1,6 @@
 import { useMessageListContext } from '@block-channel/component/MessageList/MessageList';
 import { COLLAPSED_THREAD_INDEX_CUTOFF } from '@block-channel/constants';
 import { messageAttachmentsStore } from '@block-channel/signal/attachment';
-import { editMessage } from '@block-channel/signal/channel';
 import { reactToMessage } from '@block-channel/signal/reactions';
 import type { MessageListContext } from '@block-channel/utils/listContext';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
@@ -24,6 +23,7 @@ import {
 import { useDisplayName } from '@core/user';
 import { formatRelativeDate, isSameDay } from '@core/util/time';
 import { ContextMenu } from '@kobalte/core/context-menu';
+import { usePatchMessageMutation } from '@queries/channel/message';
 import type { Message as MessageType } from '@service-comms/generated/models/message';
 import { useUserId } from '@service-gql/client';
 import { createCallback } from '@solid-primitives/rootless';
@@ -136,7 +136,17 @@ export function MessageContainer(props: MessageProps) {
     }
     return undefined;
   }) satisfies typeof setMessageBodyRefInner;
-  const editMessage_ = createCallback(editMessage);
+
+  const editMessageMutation = usePatchMessageMutation();
+
+  const editMessage = (content: string) => {
+    if (content.trim().length === 0) return;
+    editMessageMutation.mutate({
+      channelID: message.channel_id,
+      messageID: message.id,
+      content,
+    });
+  };
 
   const userId = useUserId();
   const [currentUserName] = useDisplayName(userId());
@@ -329,6 +339,7 @@ export function MessageContainer(props: MessageProps) {
   };
 
   const actions = createMessageActions({
+    channelId: message.channel_id,
     messageId: message.id,
     messageContent: message.content ?? '',
     threadId: message.thread_id ?? undefined,
@@ -585,9 +596,7 @@ export function MessageContainer(props: MessageProps) {
                     <EditMessageInput
                       content={props.message?.content ?? ''}
                       setEditing={setEditing}
-                      save={(input) =>
-                        editMessage_(props.message?.id ?? '', input)
-                      }
+                      save={editMessage}
                     />
                   }
                 >

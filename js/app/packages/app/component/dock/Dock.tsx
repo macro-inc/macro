@@ -1,7 +1,7 @@
+import { ENABLE_DOCK_NOTITIFCATIONS, ENABLE_JACK_IN } from '@core/constant/featureFlags';
 import { GlobalNotificationBell } from '@core/component/GlobalNotificationBell';
 import { createMemo, createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { isRightPanelOpen, useToggleRightPanel } from '@core/signal/layout';
-import { ENABLE_DOCK_NOTITIFCATIONS, ENABLE_JACK_IN } from '@core/constant/featureFlags';
 import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useGlobalNotificationSource } from '../GlobalAppState';
@@ -24,13 +24,13 @@ import { runCommand } from '@core/hotkey/hotkeys';
 import { Hotkey } from '@core/component/Hotkey';
 import { setCreateMenuOpen } from '../Launcher';
 import { useHasPaidAccess } from '@core/auth';
+import { isTauri } from '@core/util/platform';
 import { TOKENS } from '@core/hotkey/tokens';
 import { playSound } from '@app/util/sound';
 import { QuickAccess } from './QuickAccess';
 
 // import { Debug } from './Debug';
-import Hints from './Hints';
-import { isTauri } from '@core/util/platform';
+// import Hints from './Hints';
 
 export function Dock() {
   const activeSplitId = createMemo(() => globalSplitManager()?.activeSplitId());
@@ -270,9 +270,11 @@ export function Dock() {
                   <BasicTierLimit />
                 </Show>
 
-                <Show when={hasPaid()}>
+                {/*<Show when={hasPaid()}>
                   <Hints />
-                </Show>
+                </Show>*/}
+
+                <div class="w-full"/>
 
                 <Show when={ENABLE_DOCK_NOTITIFCATIONS}>
                   <QuickAccess />

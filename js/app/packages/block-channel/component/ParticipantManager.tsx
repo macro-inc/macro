@@ -7,6 +7,7 @@ import {
   useRemoveParticipantsFromChannel,
 } from '@block-channel/signal/participants';
 import { ClippedPanel } from '@core/component/ClippedPanel';
+import { DialogWrapper } from '@core/component/DialogWrapper';
 import { IconButton } from '@core/component/IconButton';
 import { getDestinationFromOptions } from '@core/component/NewMessage';
 import { RecipientSelector } from '@core/component/RecipientSelector';
@@ -28,6 +29,7 @@ import { ChannelType } from '@service-comms/generated/models/channelType';
 import { useUserId } from '@service-gql/client';
 import { createMemo, createSignal, Show } from 'solid-js';
 import { VList } from 'virtua/solid';
+import { beveledCorners } from '../../block-theme/signals/themeSignals';
 import { UserItem } from './UserItem';
 
 export function ParticipantManager(props: { participantCount: number }) {
@@ -84,10 +86,10 @@ export function ParticipantManager(props: { participantCount: number }) {
       </Dialog.Trigger>
 
       <Dialog.Portal>
-        <Dialog.Overlay class="fixed flex inset-0 z-modal bg-modal-overlay pattern-edge-muted pattern-diagonal-4 items-center justify-content" />
-        <div class="fixed inset-0 z-modal w-screen h-screen flex items-center justify-center bg-transparent">
-          <Dialog.Content class="w-[512px]">
-            <ClippedPanel tl>
+        <Dialog.Overlay class="fixed inset-0 z-modal bg-transparent" />
+        <DialogWrapper>
+          <Dialog.Content>
+            <ClippedPanel tl={!beveledCorners()} active>
               <div class="flex flex-row items-center px-2 h-[40px] gap-2 border-b-1 border-b-edge-muted">
                 <Dialog.CloseButton>
                   <IconButton
@@ -135,7 +137,7 @@ export function ParticipantManager(props: { participantCount: number }) {
               </div>
             </ClippedPanel>
           </Dialog.Content>
-        </div>
+        </DialogWrapper>
       </Dialog.Portal>
     </Dialog>
   );

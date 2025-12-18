@@ -4515,9 +4515,11 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "cool_asserts",
+ "either",
  "filter_ast",
  "macro_user_id",
  "model_file_type",
+ "nom 8.0.0",
  "non_empty",
  "schemars",
  "serde",
@@ -5445,6 +5447,7 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+ "strum",
  "thiserror 2.0.17",
  "utoipa",
 ]
@@ -7555,6 +7558,7 @@ dependencies = [
  "macro_uuid",
  "mention_utils",
  "model",
+ "model_file_type",
  "models_opensearch",
  "models_search",
  "nom 8.0.0",

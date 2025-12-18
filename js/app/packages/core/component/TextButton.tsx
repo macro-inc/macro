@@ -20,6 +20,7 @@ type TextButton = {
   icon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
   iconColor?: string;
   width?: string;
+  height?: string;
   textSize?: string;
   onClick?: JSX.EventHandler<HTMLButtonElement, MouseEvent>;
   onMouseDown?: JSX.EventHandler<HTMLButtonElement, MouseEvent>;
@@ -95,6 +96,7 @@ type TextButtonProps = TextButton &
  * @param props.secondaryTooltip - An optional tooltip to display on the secondary button
  * @param props.icon - An optional SVG icon to display on the left side of the text
  * @param props.width - An optional width for the button, if set to 'min-w-0' button will take up the full width of the parent container. The text will be truncated.
+ * @param props.height - An optional height for the button, defaults to 'h-8' if not specified
  * @param props.onClick - An optional handler for the button's onmousedown event
  * @param props.onOptionClick - An optional handler for the secondary button's onmousedown event
  * @param props.showChevron - Whether to show the chevron icon
@@ -132,13 +134,13 @@ export function TextButton(props: TextButtonProps) {
 
   return (
     <div
-      class={`${themeColors[props.theme]} flex flex-row h-8 max-w-full justify-start items-center gap-0 cursor-default ${props.class ?? ''}`}
+      class={`${themeColors[props.theme]} flex flex-row ${props.height ?? 'h-8'} max-w-full justify-start items-center gap-0 cursor-default ${props.class ?? ''}`}
       ref={props.ref}
       id={props.id}
     >
       <Wrapper tooltip={props.tooltip}>
         <button
-          class={`${themeStyles[props.theme]} flex flex-row h-8 px-2 $
+          class={`${themeStyles[props.theme]} flex flex-row ${props.height ?? 'h-8'} px-2 $
               ${props.outline ? 'border-1 border-edge' : ''}
               justify-center items-center w-full ${props.disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
           onClick={props.onClick}
@@ -157,7 +159,7 @@ export function TextButton(props: TextButtonProps) {
           )}
           <div class="flex flex-1 justify-between items-center gap-2 min-w-0">
             <div
-              class={`${props.width ? props.width + ' truncate ' : ''}${props.textSize ?? 'text-sm'} flex-1 text-center font-medium leading-5 whitespace-nowrap truncate`}
+              class={`${props.width ? props.width + ' truncate ' : ''}${props.textSize ?? 'text-xs'} font-mono uppercase flex-1 text-center font-medium leading-5 whitespace-nowrap truncate`}
             >
               {props.text ?? props.children}
             </div>
@@ -212,7 +214,7 @@ export function EditingTextButton(
   const [_, setIsRenaming] = useContext(EditingContext);
   return (
     <div
-      class={`${themeColors[props.theme]} flex flex-row h-8 justify-start items-center gap-0
+      class={`${themeColors[props.theme]} flex flex-row ${props.height ?? 'h-8'} justify-start items-center gap-0
         cursor-default border shadow-inner border-edge bg-input`}
       ref={props.ref}
     >

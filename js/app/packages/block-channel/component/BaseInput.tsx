@@ -2,7 +2,7 @@ import {
   isDraggingOverChannelSignal,
   isValidChannelDragSignal,
 } from '@block-channel/signal/attachment';
-import type { sendMessage } from '@block-channel/signal/channel';
+import type { SendMessageArgs } from '@block-channel/signal/channel';
 import { handleFileUpload } from '@block-channel/utils/inputAttachments';
 import { isInBlock } from '@core/block';
 import { BrightJoins } from '@core/component/BrightJoins';
@@ -66,7 +66,7 @@ type InputAttachmentsStore = {
 type BaseInputProps = {
   /** callback to be executed when the user clicks the send button
    * or presses enter */
-  onSend: (args: Parameters<typeof sendMessage>[0]) => Promise<void>;
+  onSend: (args: SendMessageArgs) => Promise<void>;
   /** callback to be executed when the user changes the input */
   onChange: (content: string) => void;
   /** initial value of the input */
