@@ -202,7 +202,7 @@ export function MessageList(props: MessageListProps) {
       setThreadViewStore(threadID, (prev) => {
         return {
           ...prev,
-          threadExpanded: (value ?? prev) ? !prev.threadExpanded : true,
+          threadExpanded: value ?? (prev ? !prev.threadExpanded : true),
         };
       });
     },
@@ -219,7 +219,8 @@ export function MessageList(props: MessageListProps) {
       setThreadViewStore(threadID, (prev) => {
         return {
           ...prev,
-          replyInputShouldFocus: (value ?? prev) ? !prev.threadExpanded : true,
+          replyInputShouldFocus:
+            value ?? (prev ? !prev.replyInputShouldFocus : true),
         };
       });
     },

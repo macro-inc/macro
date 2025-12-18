@@ -261,7 +261,7 @@ export function MessageContainer(props: MessageProps) {
   });
 
   const shouldShowThreadAppendInput = createMemo(() => {
-    return threadState()?.hasActiveReply;
+    return threadState()?.hasActiveReply === true;
   });
 
   const shouldShowFirstReply = createMemo(() => {
