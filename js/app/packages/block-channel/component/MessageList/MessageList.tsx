@@ -761,7 +761,8 @@ function MessageListImpl(props: MessageListProps) {
                 setVirtualHandle(handle);
               }}
               style={{
-                height: `${listHeight()}px`,
+                'max-height': `${listHeight()}px`,
+                height: 'fit-content',
                 contain: 'none',
                 'overflow-x': 'hidden',
                 'overflow-y': 'scroll',
