@@ -13,10 +13,7 @@ use crate::{
 
 use crate::SearchOn;
 use models_opensearch::{SearchEntityType, SearchIndex};
-use opensearch_query_builder::{
-    BoolQueryBuilder, FieldSort, ScoreWithOrderSort, SearchRequest, SortOrder, SortType,
-    ToOpenSearchJson,
-};
+use opensearch_query_builder::{BoolQueryBuilder, SearchRequest, ToOpenSearchJson};
 use serde_json::Value;
 
 #[derive(Clone)]

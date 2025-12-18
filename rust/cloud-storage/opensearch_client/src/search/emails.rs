@@ -11,10 +11,7 @@ use crate::{
 
 use crate::SearchOn;
 use models_opensearch::{SearchEntityType, SearchIndex};
-use opensearch_query_builder::{
-    BoolQueryBuilder, FieldSort, QueryType, ScoreWithOrderSort, SearchRequest, SortOrder, SortType,
-    ToOpenSearchJson,
-};
+use opensearch_query_builder::{BoolQueryBuilder, QueryType, SearchRequest, ToOpenSearchJson};
 
 use crate::search::model::DefaultSearchResponse;
 use serde_json::Value;
