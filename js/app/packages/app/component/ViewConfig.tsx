@@ -30,13 +30,12 @@ export type ViewData = {
   id: ViewId;
   view: ViewLabel;
   viewType?: ViewType;
-  highlightedId: string | undefined;
   selectedEntity: EntityData | undefined;
   scrollOffset: number | undefined;
   initialConfig: string | undefined;
   hasUserInteractedEntity: boolean;
   searchText: string | undefined;
-  selectedEntities: EntityData[];
+  multiSelectEntities: EntityData[];
 } & ViewConfigBase;
 
 /** maps view id to view data */
