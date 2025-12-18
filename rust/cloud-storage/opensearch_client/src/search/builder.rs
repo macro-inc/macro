@@ -201,7 +201,7 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
     /// access to/has requested.
     /// This could either be a single term/terms query for ids_only or just user_id
     /// Or a bool query that contains both of these items
-    fn build_filter_bool_query<'a>(&'a self, user_id_key: &str) -> Result<QueryType<'a>> {
+    fn build_filter_query<'a>(&'a self, user_id_key: &str) -> Result<QueryType<'a>> {
         if self.ids_only {
             // We only need to search over the entity ids provided
             if self.ids.is_empty() {
@@ -341,7 +341,7 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
                 access_bool_query.must(inner_bool_query.build().into());
 
                 // Filter over only items you have access to
-                let filter_bool_query = self.build_filter_bool_query(T::USER_ID_KEY)?;
+                let filter_bool_query = self.build_filter_query(T::USER_ID_KEY)?;
                 access_bool_query.filter(filter_bool_query);
 
                 // Only search on the provided index
@@ -367,12 +367,13 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
 
                 // Filter over only items you have access to
                 // For name index queries we want to always use user_id as the user id key
-                let filter_bool_query = self.build_filter_bool_query("user_id")?;
+                let filter_bool_query = self.build_filter_query("user_id")?;
                 bool_query.filter(filter_bool_query);
 
                 match T::ENTITY_INDEX {
                     SearchEntityType::Projects => {
-                        bool_query.filter(QueryType::term("_index", SearchIndex::Projects.as_ref()));
+                        bool_query
+                            .filter(QueryType::term("_index", SearchIndex::Projects.as_ref()));
                     }
                     _ => {
                         bool_query.filter(QueryType::term("_index", SearchIndex::Names.as_ref()));

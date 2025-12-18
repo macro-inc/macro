@@ -12,10 +12,74 @@ impl SearchQueryConfig for TestSearchConfig {
     fn append_owner_highlights<'a>(
         highlight: opensearch_query_builder::Highlight<'a>,
     ) -> opensearch_query_builder::Highlight<'a> {
-        let highlight = highlight.field("test_user_id", create_highlight_field("plain", 1));
-
-        highlight
+        highlight.field("test_user_id", create_highlight_field("plain", 1))
     }
+}
+
+#[test]
+fn test_build_filter_query() -> anyhow::Result<()> {
+    // Test ids only
+    let ids = vec!["id1".to_string(), "id2".to_string()];
+    let builder = SearchQueryBuilder::<TestSearchConfig>::new(vec!["test".to_string()])
+        .user_id("user123")
+        .ids(ids.clone())
+        .ids_only(true);
+
+    let result = builder.build_filter_query(TestSearchConfig::USER_ID_KEY)?;
+
+    let expected = serde_json::json!({
+        "terms": {
+            "entity_id": ["id1", "id2"]
+        }
+    });
+
+    assert_eq!(result.to_json(), expected);
+
+    // Test !ids_only with no ids
+    let builder = SearchQueryBuilder::<TestSearchConfig>::new(vec!["test".to_string()])
+        .user_id("user123")
+        .ids(vec![])
+        .ids_only(false);
+
+    let result = builder.build_filter_query(TestSearchConfig::USER_ID_KEY)?;
+
+    let expected = serde_json::json!({
+        "term": {
+            "test_user_id": "user123"
+        }
+    });
+
+    assert_eq!(result.to_json(), expected);
+
+    // Test !ids_only with ids
+    let builder = SearchQueryBuilder::<TestSearchConfig>::new(vec!["test".to_string()])
+        .user_id("user123")
+        .ids(ids.clone())
+        .ids_only(false);
+
+    let result = builder.build_filter_query(TestSearchConfig::USER_ID_KEY)?;
+
+    let expected = serde_json::json!({
+        "bool": {
+            "minimum_should_match": 1,
+            "should": [
+                {
+                    "terms": {
+                        "entity_id": ["id1", "id2"]
+                    }
+                },
+                {
+                    "term": {
+                        "test_user_id": "user123"
+                    }
+                }
+            ]
+        }
+    });
+
+    assert_eq!(result.to_json(), expected);
+
+    Ok(())
 }
 
 #[test]
@@ -275,21 +339,19 @@ fn test_build_bool_query() -> anyhow::Result<()> {
                     ],
                 }
             },
-                {"term": {"_index": "documents"}},
             ],
-            "should": [
-                {
-                    "terms": {
-                        "entity_id": ["id1", "id2"]
-                    }
-                },
-                {
-                    "term": {
-                        "test_user_id": "user123"
-                    }
-                }
-            ],
-            "minimum_should_match": 1,
+            "filter": [
+              {
+              "bool": {
+              "minimum_should_match": 1,
+              "should": [
+                {"terms": {"entity_id": ["id1", "id2"]}},
+                {"term": {"test_user_id": "user123"}}
+              ]
+            }
+          },
+          {"term": {"_index": "documents"}}
+        ]
         }
     });
 
@@ -332,17 +394,12 @@ fn test_build_bool_query() -> anyhow::Result<()> {
                     ],
                 }
             },
-                {"term": {"_index": "documents"}},
             ],
-            "should": [
-                {
-                    "terms": {
-                        "entity_id": ["id1", "id2"]
-                    }
-                },
-            ],
-            "minimum_should_match": 1,
-        }
+            "filter": [
+                {"terms": {"entity_id": ["id1", "id2"]}},
+                {"term": {"_index": "documents"}}
+        ]
+    }
     });
 
     assert_eq!(query.build().to_json(), expected);
@@ -364,7 +421,6 @@ fn test_build_bool_query() -> anyhow::Result<()> {
       "should": [
         {
           "bool": {
-            "minimum_should_match": 1,
             "must": [
               {
                 "bool": {
@@ -389,24 +445,23 @@ fn test_build_bool_query() -> anyhow::Result<()> {
                   ]
                 }
               },
-              {
-                "term": {
-                  "_index": "documents"
-                }
-              }
             ],
-            "should": [
+            "filter": [
               {
                 "terms": {
                   "entity_id": ["id1", "id2"]
                 }
+              },
+              {
+                  "term": {
+                      "_index": "documents",
+                  }
               }
             ]
           }
         },
         {
           "bool": {
-            "minimum_should_match": 1,
             "must": [
               {
                 "match_phrase_prefix": {
@@ -415,25 +470,25 @@ fn test_build_bool_query() -> anyhow::Result<()> {
                   }
                 }
               },
-              {
-                "term": {
-                  "_index": "names"
-                }
-              },
-              {
-                "term": {
-                  "entity_type": "documents"
-                }
-              }
-            ],
-            "should": [
+           ],
+           "filter": [
               {
                 "terms": {
                   "entity_id": ["id1", "id2"]
                 }
+              },
+              {
+                  "term": {
+                      "_index": "names",
+                  }
+              },
+              {
+                  "term": {
+                      "entity_type": "documents"
+                  }
               }
             ]
-          }
+         }
         }
       ]
     }

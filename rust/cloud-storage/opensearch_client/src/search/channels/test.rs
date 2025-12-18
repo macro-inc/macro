@@ -25,7 +25,6 @@ fn test_build_search_request() -> anyhow::Result<()> {
       "highlight": ChannelMessageSearchConfig::append_owner_highlights(ChannelMessageSearchConfig::default_highlight()).to_json(),
       "query": {
         "bool": {
-          "minimum_should_match": 1,
           "must": [
             {
               "bool": {
@@ -48,12 +47,19 @@ fn test_build_search_request() -> anyhow::Result<()> {
                 ]
               }
             },
-            {
-              "term": {
-                "_index": "channels"
-              }
-            },
-            {
+          ],
+           "filter": [
+              {
+              "bool": {
+              "minimum_should_match": 1,
+              "should": [
+                {"terms": {"entity_id": ["id1", "id2"]}},
+                {"term": {"sender_id": "user123"}}
+              ]
+            }
+          },
+          {"term": {"_index": "channels"}},
+          {
               "terms": {
                 "thread_id": ["thread1", "thread2"]
               }
@@ -66,18 +72,6 @@ fn test_build_search_request() -> anyhow::Result<()> {
             {
               "terms": {
                 "sender_id": ["sender1", "sender2"]
-              }
-            }
-          ],
-          "should": [
-            {
-              "terms": {
-                "entity_id": ["id1", "id2"]
-              }
-            },
-            {
-              "term": {
-                "sender_id": "user123"
               }
             }
           ]
