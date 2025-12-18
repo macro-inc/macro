@@ -51,3 +51,36 @@ export function useSendMessageMutation(
     ),
   }));
 }
+
+type DeleteMessageParams = { channelID: string; messageID: string };
+
+/**
+ * Mutation to delete a channel message
+ */
+export function useDeleteMessageMutation(
+  callbacks?: MutationCallbacks<void, Error, DeleteMessageParams>
+) {
+  return useMutation(() => ({
+    mutationFn: async (vars: DeleteMessageParams) => {
+      await throwOnErr(
+        async () =>
+          await commsServiceClient.deleteMessage({
+            channel_id: vars.channelID,
+            message_id: vars.messageID,
+          })
+      );
+    },
+    ...withCallbacks<void, Error, DeleteMessageParams>(
+      {
+        onError(error) {
+          console.error('failed to delete message', error);
+          toast.failure('Failed to delete message');
+        },
+        onSettled: (_data, _error, variables) => {
+          invalidateChannelWithID(variables.channelID);
+        },
+      },
+      callbacks
+    ),
+  }));
+}
