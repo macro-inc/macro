@@ -17,10 +17,10 @@ export const EntityActionsMenuItems = (props: EntityActionsMenuItemsProps) => {
   const { actionRegistry, viewsDataStore, selectedView } = unifiedListContext;
 
   const entities = () => {
-    const { selectedEntities } = viewsDataStore[selectedView()];
-    if (selectedEntities.length > 0) {
-      if (selectedEntities.some((e) => e.id === props.entity.id)) {
-        return selectedEntities;
+    const { multiselectedEntities } = viewsDataStore[selectedView()];
+    if (multiselectedEntities.length > 0) {
+      if (multiselectedEntities.some((e) => e.id === props.entity.id)) {
+        return multiselectedEntities;
       }
     }
     return [props.entity];
@@ -40,7 +40,7 @@ export const EntityActionsMenuItems = (props: EntityActionsMenuItemsProps) => {
   const setSelection: Setter<EntityData[]> = (entities) => {
     return unifiedListContext.setViewDataStore(
       selectedView(),
-      'selectedEntities',
+      'multiselectedEntities',
       entities
     );
   };
