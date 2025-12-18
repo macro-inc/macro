@@ -245,6 +245,15 @@ export function useSendChannelMessageAction() {
     onSettled() {
       channelsContext.refetchChannels();
     },
+    onSuccess(_, variables) {
+      const message = variables.message;
+      track(TrackingEvents.BLOCKCHANNEL.MESSAGE.SEND, {
+        channelId: variables.channelID,
+        contentLength: message.content?.length ?? 0,
+        attachmentsLength: message.attachments.length,
+        inThread: message.thread_id !== undefined,
+      });
+    },
   });
 
   return async ({
