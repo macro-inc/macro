@@ -10,6 +10,8 @@ index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2
 diff --git a/node_modules/virtua/.bun-tag-eeedd702ea82f0a5 b/.bun-tag-eeedd702ea82f0a5
 new file mode 100644
 index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+=======
+>>>>>>> 37a2487dd5f6dec4ad4a0aa297dc057159d90255
 diff --git a/lib/solid/index.jsx b/lib/solid/index.jsx
 index 84788e713100b0e5a746bae3411a789002b42b8d..a62faf6f759e654aea303717fd18f9767428f7be 100644
 --- a/lib/solid/index.jsx

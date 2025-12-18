@@ -111,7 +111,7 @@ export const gqlServiceClient = {
         organizationId: String(result.organizationId),
         organizationName: result.organizationName,
       };
-    } catch (error) {
+    } catch (_error) {
       return {
         organizationId: undefined,
         organizationName: undefined,

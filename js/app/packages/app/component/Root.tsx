@@ -49,7 +49,6 @@ import {
   onMount,
   type ParentProps,
   Show,
-  Suspense,
 } from 'solid-js';
 import { currentThemeId } from '../../block-theme/signals/themeSignals';
 import {
@@ -67,6 +66,7 @@ import { GlobalAppStateProvider } from './GlobalAppState';
 import { Layout } from './Layout';
 import MacroJump from './MacroJump';
 import Onboarding from './Onboarding';
+import { SuspenseContextComp } from './SuspenseContext';
 import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
 
 const { track, identify, TrackingEvents } = withAnalytics();
@@ -348,6 +348,24 @@ export function Root() {
   const tabTitle = () => formatTabTitle(tabInfo());
   const routerBase = isTauri() ? '/' : '/app';
 
+  let runRootWarningLog = false;
+  const RootSuspenseFallback = () => {
+    const runWarningLog = () => {
+      if (!runRootWarningLog) {
+        setTimeout(() => {
+          runRootWarningLog = true;
+        });
+        return;
+      }
+
+      console.warn('Root Suspsense Triggered');
+    };
+
+    runWarningLog();
+
+    return '';
+  };
+
   return (
     <MaybeTauriProvider>
       <MetaProvider>
@@ -356,7 +374,7 @@ export function Root() {
             <ChannelsContextProvider>
               <Title>{tabTitle()}</Title>
               <MacroJump />
-              <Suspense fallback={''}>
+              <SuspenseContextComp fallback={<RootSuspenseFallback />}>
                 <IsomorphicRouter
                   transformUrl={transformShortIdInUrlPathname}
                   root={Layout}
@@ -369,7 +387,7 @@ export function Root() {
                     children: ROUTES,
                   }}
                 </IsomorphicRouter>
-              </Suspense>
+              </SuspenseContextComp>
               <ToastRegion />
               <Show when={ENABLE_WEBSOCKET_DEBUGGER}>
                 <WebsocketDebugger />

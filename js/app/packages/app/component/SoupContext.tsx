@@ -229,7 +229,6 @@ export function createNavigationEntityListShortcut({
     virtualizerHandleSignal: [virtualizerHandle],
     selectedView,
     setSelectedView,
-    // selectedEntitySignal: [selectedEntity, setSelectedEntity],
     entitiesSignal: [entities],
     actionRegistry,
   } = unifiedListContext;
@@ -303,7 +302,9 @@ export function createNavigationEntityListShortcut({
           }
         });
       } else {
-        const firstIndex = virtualizerHandle()?.findStartIndex();
+        const handle = virtualizerHandle();
+        if (!handle) return;
+        const firstIndex = handle.findItemIndex(handle.scrollOffset);
         if (!firstIndex) return;
         const elem = getEntityElAtIndex(firstIndex);
         if (elem instanceof HTMLElement) elem.focus();
@@ -703,15 +704,6 @@ export function createNavigationEntityListShortcut({
     return viewData()?.highlightedId;
   };
 
-  const [jumpedToEnd, setJumpedToEnd] = createSignal(false);
-
-  const getSelectedEntityEl = () => {
-    const entity = selectedEntity();
-    if (!entity) return;
-
-    return entityListRef()?.querySelector(`[data-entity-id="${entity.id}"]`);
-  };
-
   const getEntityElAtIndex = (index: number) => {
     const entity = entities()?.at(index);
     if (!entity) return;
@@ -852,7 +844,6 @@ export function createNavigationEntityListShortcut({
       axis,
       mode,
     });
-    setJumpedToEnd(false);
 
     setViewDataStore(selectedView(), 'hasUserInteractedEntity', true);
 
@@ -863,14 +854,12 @@ export function createNavigationEntityListShortcut({
       virtualizerHandle()?.scrollToIndex(index, {
         // align: mode === 'jump' && axis === 'end' ? 'end' : undefined,
         // align: align(),
-        // align: index() < virtuaRef()!.findStartIndex() ? 'start' : 'end',
+        // align: index() < virtuaRef()!.findItemIndex(virtuaRef()!.scrollOffset) ? 'start' : 'end',
         align: 'nearest',
         // offset: 50,
       });
 
       if (mode === 'jump') {
-        setJumpedToEnd(true);
-
         await new Promise<true>((resolve) =>
           requestAnimationFrame(() => {
             requestAnimationFrame(() => {
@@ -947,39 +936,6 @@ export function createNavigationEntityListShortcut({
 
   unifiedListContext._setNavigateThroughList(navigateThroughList);
 
-  const scrollToEntityFromId = async () => {
-    const index = getHighlightedEntity()?.index;
-    if (!index) return;
-
-    virtualizerHandle()?.scrollToIndex(index, {
-      align: 'nearest',
-    });
-
-    await new Promise<true>((resolve) =>
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          resolve(true);
-        });
-      })
-    );
-  };
-
-  const addScrollEventToList = () => {
-    const listScrollEl = entityListRef();
-
-    const onListScroll = () => {
-      if (listScrollEl) {
-        setViewDataStore(
-          selectedView(),
-          'scrollOffset',
-          listScrollEl.scrollTop
-        );
-      }
-    };
-
-    listScrollEl?.addEventListener('scroll', onListScroll);
-  };
-
   const isEntitySelected = (entityID: string) => {
     return (
       viewData()?.selectedEntities.find((e) => e.id === entityID) !== undefined
@@ -1043,64 +999,6 @@ export function createNavigationEntityListShortcut({
 
     return true;
   };
-
-  let virtuaMount = true;
-  createEffect(
-    on(virtualizerHandle, (virtuaRef) => {
-      if (!virtuaRef) return;
-
-      // reselect entity on mount
-      if (!jumpedToEnd() && activeHighlightedId()) {
-        if (!virtuaMount) return;
-
-        virtuaMount = false;
-        scrollToEntityFromId();
-        const scrollOffset = viewData()?.scrollOffset;
-        // restore scroll overrides scroll to id
-        const offset = scrollOffset;
-        if (offset) virtuaRef.scrollTo(offset);
-
-        // only add scroll event after virtua is done scrolling to scrollTop/index
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            addScrollEventToList();
-          });
-        });
-      } else {
-        addScrollEventToList();
-      }
-    })
-  );
-
-  createEffect(
-    on([entities, virtualizerHandle] as const, ([curr, virtuaRef], _prev) => {
-      const prev = _prev?.[0];
-      if (!curr || !prev || !virtuaRef) return;
-
-      const newIndex = getHighlightedEntity()?.index;
-
-      // ReSelectEntity
-      // ScrollTo and Select correct Entity after EntityList fetches new page, since list shuffles items
-      if (newIndex && curr[newIndex]?.id !== prev[newIndex]?.id) {
-        scrollToEntityFromId().then(() => {
-          const entityEl = getSelectedEntityEl();
-
-          if (jumpedToEnd()) {
-            // only refocus when navigation hotkey is activated before
-
-            if (entityEl instanceof HTMLElement) {
-              entityEl.focus();
-              setTimeout(() => {
-                entityEl.focus();
-                setJumpedToEnd(false);
-              });
-              return true;
-            }
-          }
-        });
-      }
-    })
-  );
 
   registerHotkey({
     scopeId: splitHotkeyScope,

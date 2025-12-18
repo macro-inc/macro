@@ -467,7 +467,9 @@ export function MessageList(props: MessageListProps) {
     on(filteredTopLevelMessages, (newFilteredMessages, oldFilteredMessages) => {
       const handle = virtualHandle();
       if (!handle) return;
-      const lastIndexInView = handle.findItemIndex(handle.scrollOffset);
+      const lastIndexInView = handle.findItemIndex(
+        handle.scrollOffset + handle.viewportSize
+      );
       const lastItemOffset = handle.getItemOffset(
         (oldFilteredMessages?.length ?? 0) - 1
       );
@@ -551,8 +553,10 @@ export function MessageList(props: MessageListProps) {
       if (
         firstUnviewedIndex !== undefined &&
         firstUnviewedIndex >= 0 &&
-        (virtualHandle()?.findItemIndex(virtualHandle()?.scrollOffset ?? 0) ??
-          0) >= firstUnviewedIndex
+        (virtualHandle()?.findItemIndex(
+          (virtualHandle()?.scrollOffset ?? 0) +
+            (virtualHandle()?.viewportSize ?? 0)
+        ) ?? 0) >= firstUnviewedIndex
       ) {
         setUnviewedMessages(undefined);
       }

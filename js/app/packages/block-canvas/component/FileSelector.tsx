@@ -113,7 +113,7 @@ export function FileSelector() {
                 <VList
                   data={userFiles()}
                   style={{ height: '320px', 'overflow-x': 'hidden' }}
-                  bufferSize={500}
+                  bufferSize={10 * 40}
                 >
                   {(item) => (
                     <DropdownMenu.Item>

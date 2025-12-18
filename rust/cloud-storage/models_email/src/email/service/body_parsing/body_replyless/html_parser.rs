@@ -18,11 +18,7 @@ pub fn extract_reply_html(subject: Option<&str>, html_content: &str) -> String {
         get_html_before_element(splitter_element)
     } else {
         // No splitter found, so assume the entire body is the reply.
-        document
-            .select(&BODY_SELECTOR)
-            .next()
-            .map(|body| body.inner_html())
-            .unwrap_or_else(|| document.root_element().inner_html())
+        html_content.to_string()
     }
 }
 
