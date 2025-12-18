@@ -14,7 +14,7 @@ type WithChannelID<T> = T & { channelID: string };
 type SendMessageParams = WithChannelID<{ message: PostMessageRequest }>;
 
 /**
- * Mutation to send an email message.
+ * Mutation to send an channel message.
  */
 export function useSendMessageMutation(
   callbacks?: MutationCallbacks<IdResponse, Error, SendMessageParams>
