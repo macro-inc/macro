@@ -285,7 +285,7 @@ export function MessageContainer(props: MessageContainerProps) {
             threadDepth={1}
             isFirstInThread
             isLastInThread
-            shouldShowThreadAppendInput={createSignal(true)[0]}
+            shouldShowThreadAppendInput
             setThreadAppendMountTarget={(el) => setThreadAppendMountTarget(el)}
           >
             <Message.TopBar name={currentUserName()} />
