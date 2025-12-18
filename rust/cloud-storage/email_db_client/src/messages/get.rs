@@ -258,9 +258,11 @@ pub async fn fetch_messages_with_labels(
     }
 
     let message_ids: Vec<Uuid> = db_messages.iter().map(|m| m.id).collect();
+
     let labels_map = get::fetch_message_labels_in_bulk(conn, &message_ids)
         .await
         .context("Failed to fetch message labels in bulk")?;
+
     let mut processed_messages = Vec::with_capacity(db_messages.len());
     for message in db_messages {
         let labels = labels_map.get(&message.id).cloned().unwrap_or_default();

@@ -82,7 +82,7 @@ pub async fn update_inbox_visible_status(
     Ok(())
 }
 
-#[tracing::instrument(skip(executor), level = "info")]
+#[tracing::instrument(skip(executor), err)]
 pub async fn update_thread_read_status<'e, E>(
     executor: E,
     thread_id: Uuid,
@@ -107,11 +107,7 @@ where
         link_id,
     )
     .execute(executor)
-    .await
-    .context(format!(
-        "Failed to update read status to {} for thread ID {} with link_id {}",
-        is_read, thread_id, link_id
-    ))?;
+    .await?;
 
     Ok(())
 }
