@@ -192,8 +192,11 @@ export function MessageContainer(props: MessageProps) {
       : undefined;
   });
 
-  const previousNonThreadMessage = () =>
-    props.listContext?.previousNonThreadedMessage;
+  const newDayPreviousNonThreadMessage = createMemo(() => {
+    const prev = props.listContext?.previousNonThreadedMessage;
+    if (!prev) return false;
+    return !isSameDay(new Date(message.created_at), new Date(prev.created_at));
+  });
 
   // We consider a message consecutive if it's from the same user and the same day and has the same thread id.
   const isConsecutive = createMemo(() => {
@@ -531,11 +534,7 @@ export function MessageContainer(props: MessageProps) {
             (props.index() === 0 ||
               (props.index() > 0 &&
                 !message.thread_id &&
-                previousNonThreadMessage() &&
-                !isSameDay(
-                  new Date(message.created_at),
-                  new Date(previousNonThreadMessage()!.created_at)
-                )))
+                newDayPreviousNonThreadMessage()))
           }
         >
           <MessageFlag text={formatRelativeDate(message.created_at)} />
