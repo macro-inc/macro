@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+use macro_user_id::{cowlike::CowLike, error::ParseErr, user_id::MacroUserIdStr};
 use model_entity::EntityType;
 use model_notifications::RawUserNotification;
 use models_pagination::{CreatedAt, Query};
@@ -61,7 +62,13 @@ pub async fn get_all_user_notifications(
             viewed_at: row.viewed_at,
             deleted_at: row.deleted_at,
             notification_metadata: row.notification_metadata,
-            sender_id: row.sender_id,
+            sender_id: row
+                .sender_id
+                .map(|s| {
+                    Result::<_, ParseErr>::Ok(MacroUserIdStr::parse_from_str(&s)?.into_owned())
+                })
+                .transpose()
+                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
             updated_at: row.updated_at,
         })
     })
@@ -133,7 +140,13 @@ pub async fn get_all_user_notifications_by_event_item_ids(
             viewed_at: row.viewed_at,
             deleted_at: row.deleted_at,
             notification_metadata: row.notification_metadata,
-            sender_id: row.sender_id,
+            sender_id: row
+                .sender_id
+                .map(|s| {
+                    Result::<_, ParseErr>::Ok(MacroUserIdStr::parse_from_str(&s)?.into_owned())
+                })
+                .transpose()
+                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
             updated_at: row.updated_at,
         })
     })

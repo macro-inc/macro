@@ -1,4 +1,5 @@
 use anyhow::Context;
+use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use model_notifications::{
     ItemSharedMetadata, ItemSharedOrganizationMetadata, NotificationEvent, NotificationQueueMessage,
@@ -16,10 +17,10 @@ pub struct ItemShareNotifications {
 /// Generates a share notification event to be sent to notification queue
 /// Returns two notifcaitons (<individual_user_notification>, <organization_notification>)
 pub fn create_notifications_from_item_shared(
-    item_id: &str,             // The id of the item that was shared
-    item_type: &str,           // The type of the item that was shared
-    item_name: Option<String>, // The name/title of the shared item
-    user_id: &str,             // The user id that performed the edit
+    item_id: &str,                    // The id of the item that was shared
+    item_type: &str,                  // The type of the item that was shared
+    item_name: Option<String>,        // The name/title of the shared item
+    user_id: MacroUserIdStr<'static>, // The user id that performed the edit
     // The user ids that were added to the share permission
     user_ids: &[String],
     // The user ids that were added to the organization share permission
@@ -33,7 +34,7 @@ pub fn create_notifications_from_item_shared(
             NotificationQueueMessage {
                 notification_entity: entity_type.with_entity_string(item_id.to_string()),
                 notification_event: event_type,
-                sender_id: Some(user_id.to_string()),
+                sender_id: Some(user_id.clone()),
                 recipient_ids: Some(recipients.to_vec()),
             }
         };
@@ -44,7 +45,7 @@ pub fn create_notifications_from_item_shared(
             item_type: entity_type,
             item_id: item_id.to_string(),
             item_name: item_name.clone(),
-            shared_by: user_id.to_string(),
+            shared_by: user_id.clone(),
             permission_level: permission_level.clone(),
         };
 
@@ -62,7 +63,7 @@ pub fn create_notifications_from_item_shared(
             item_type: entity_type,
             item_id: item_id.to_string(),
             item_name,
-            shared_by: user_id.to_string(),
+            shared_by: user_id.clone(),
             permission_level,
         };
         Some(build_message(

@@ -9,6 +9,7 @@ version = "0.1.0"
 anyhow = { workspace = true }
 comms_service_client = { path = "../comms_service_client" }
 macro_db_client = { path = "../macro_db_client" }
+macro_user_id = { path = "../macro_user_id" }
 model = { path = "../model" }
 model-entity = { path = "../model-entity" }
 model_notifications = { path = "../model_notifications" }

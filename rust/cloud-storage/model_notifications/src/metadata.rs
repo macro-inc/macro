@@ -1,10 +1,9 @@
 use crate::NotificationEventType;
+use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use models_comms::ChannelType;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use utoipa::ToSchema;
-
-type UserId = String;
 
 /// Common metadata for notifications on channels
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
@@ -24,7 +23,8 @@ pub struct CommonChannelMetadata {
 #[serde(rename_all = "camelCase")]
 pub struct ChannelInviteMetadata {
     #[serde(alias = "invited_by")]
-    pub invited_by: UserId,
+    #[schema(value_type = String)]
+    pub invited_by: MacroUserIdStr<'static>,
     #[serde(flatten)]
     pub common: CommonChannelMetadata,
 }
@@ -35,7 +35,8 @@ pub struct ChannelMessageSendMetadata {
     /// The user who sent the message
     #[serde(alias = "invited_by")]
     #[serde(alias = "invitedBy")]
-    pub sender: UserId,
+    #[schema(value_type = String)]
+    pub sender: MacroUserIdStr<'static>,
     /// The content of the message
     #[serde(default)]
     #[serde(alias = "message_content")]
@@ -64,7 +65,8 @@ pub struct ItemSharedMetadata {
     #[serde(alias = "item_name")]
     pub item_name: Option<String>,
     #[serde(alias = "shared_by")]
-    pub shared_by: UserId,
+    #[schema(value_type = String)]
+    pub shared_by: MacroUserIdStr<'static>,
     /// Permission level granted (read, write, admin, etc.)
     #[serde(alias = "permission_level")]
     pub permission_level: Option<String>,
@@ -88,7 +90,8 @@ pub struct ItemSharedOrganizationMetadata {
     pub item_name: Option<String>,
     /// The user who shared the item
     #[serde(alias = "shared_by")]
-    pub shared_by: UserId,
+    #[schema(value_type = String)]
+    pub shared_by: MacroUserIdStr<'static>,
     /// Permission level granted (read, write, admin, etc.)
     #[serde(alias = "permission_level")]
     pub permission_level: Option<String>,
@@ -105,7 +108,8 @@ pub struct InviteToTeamMetadata {
     pub team_id: String,
     /// The user who sent the invitation
     #[serde(alias = "invited_by")]
-    pub invited_by: UserId,
+    #[schema(value_type = String)]
+    pub invited_by: MacroUserIdStr<'static>,
     /// Role/permission level in the team
     pub role: Option<String>,
 }
@@ -138,7 +142,8 @@ pub struct ChannelReplyMetadata {
     pub message_id: String,
     /// The sender id of the reply
     #[serde(alias = "user_id")]
-    pub user_id: String,
+    #[schema(value_type = String)]
+    pub user_id: MacroUserIdStr<'static>,
     /// The message content
     #[serde(alias = "message_content")]
     pub message_content: String,
@@ -153,7 +158,8 @@ pub struct DocumentMentionMetadata {
     #[serde(alias = "document_name")]
     pub document_name: String,
     /// The owner of the document
-    pub owner: UserId,
+    #[schema(value_type = String)]
+    pub owner: MacroUserIdStr<'static>,
     /// The file type of the document
     #[serde(alias = "file_type")]
     pub file_type: Option<String>,

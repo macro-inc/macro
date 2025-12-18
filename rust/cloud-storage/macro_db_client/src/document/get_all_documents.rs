@@ -1,4 +1,5 @@
 use document_sub_type::DocumentSubType;
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model::document::DocumentMetadata;
 use sqlx::{Pool, Postgres};
 
@@ -24,8 +25,7 @@ pub async fn get_all_documents(
         return Ok((vec![], 0));
     }
 
-    let documents = sqlx::query_as!(
-        DocumentMetadata,
+    let documents = sqlx::query!(
         r#"
         SELECT
             d.id as document_id,
@@ -105,6 +105,28 @@ pub async fn get_all_documents(
         limit,
         offset
     )
+    .try_map(|row| {
+        Ok(DocumentMetadata {
+            document_id: row.document_id,
+            document_version_id: row.document_version_id,
+            owner: MacroUserIdStr::parse_from_str(&row.owner)
+                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
+                .into_owned(),
+            document_name: row.document_name,
+            file_type: row.file_type,
+            sha: row.sha,
+            project_id: row.project_id,
+            project_name: row.project_name,
+            branched_from_id: row.branched_from_id,
+            branched_from_version_id: row.branched_from_version_id,
+            document_family_id: row.document_family_id,
+            document_bom: row.document_bom,
+            modification_data: row.modification_data,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            sub_type: row.sub_type,
+        })
+    })
     .fetch_all(db)
     .await?;
 

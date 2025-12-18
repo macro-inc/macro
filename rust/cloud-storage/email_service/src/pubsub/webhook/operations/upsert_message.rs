@@ -570,9 +570,8 @@ async fn send_notifications(
             .unwrap_or_else(|| contact.email.clone())
     });
 
-    let sender_id = sender_contact
-        .and_then(|contact| MacroUserIdStr::try_from_email(&contact.email).ok())
-        .map(|id| id.to_string());
+    let sender_id =
+        sender_contact.and_then(|contact| MacroUserIdStr::try_from_email(&contact.email).ok());
 
     let notification_metadata = NewEmailMetadata {
         sender,

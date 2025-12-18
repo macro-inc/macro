@@ -1,6 +1,6 @@
 //! Contains the domain logic for teams
 
-use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserId};
+use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr};
 
 use crate::domain::model::{
     CreateTeamError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError, RemoveTeamInviteError,
@@ -13,7 +13,7 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
     /// Gets the stripe customer id for a user
     fn get_stripe_customer_id(
         &self,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Option<stripe::CustomerId>, TeamError>> + Send;
 
     /// Gets the subscription id for a team
@@ -25,7 +25,7 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
     /// Creates a new team
     fn create_team(
         &self,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: &MacroUserIdStr<'_>,
         team_name: &str,
     ) -> impl Future<Output = Result<Team, CreateTeamError>> + Send;
 
@@ -35,7 +35,7 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
     fn invite_users_to_team(
         &self,
         team_id: &uuid::Uuid,
-        invited_by: &MacroUserId<Lowercase<'_>>,
+        invited_by: &MacroUserIdStr<'_>,
         emails: non_empty::NonEmpty<&[Email<Lowercase<'_>>]>,
     ) -> impl Future<Output = Result<Vec<TeamInvite<'_>>, InviteUsersToTeamError>> + Send;
 
@@ -43,7 +43,7 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
     fn remove_user_from_team(
         &self,
         team_id: &uuid::Uuid,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<(), RemoveUserFromTeamError>> + Send;
 
     ///Gets a team invite by id
@@ -82,13 +82,13 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
     fn accept_team_invite(
         &self,
         team_invite_id: &uuid::Uuid,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<TeamMember<'static>, TeamError>> + Send;
 
     /// Checks if a user is a member (not owner) of any team
     fn is_user_member_of_team(
         &self,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<bool, TeamError>> + Send;
 
     /// Gets the members of the team.
@@ -104,8 +104,8 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
     fn bulk_is_member_of_other_team(
         &self,
         ignore_team_ids: non_empty::NonEmpty<&[uuid::Uuid]>,
-        users: non_empty::NonEmpty<&[MacroUserId<Lowercase<'_>>]>,
-    ) -> impl Future<Output = Result<Vec<MacroUserId<Lowercase<'_>>>, TeamError>> + Send;
+        users: non_empty::NonEmpty<&[MacroUserIdStr<'_>]>,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'_>>, TeamError>> + Send;
 }
 
 /// The TeamService defines a set of actions to perform on the teams
@@ -113,7 +113,7 @@ pub trait TeamService: Clone + Send + Sync + 'static {
     /// Creates a new team
     fn create_team(
         &self,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: &MacroUserIdStr<'_>,
         team_name: &str,
     ) -> impl Future<Output = Result<Team, CreateTeamError>> + Send;
 
@@ -123,7 +123,7 @@ pub trait TeamService: Clone + Send + Sync + 'static {
     fn invite_users_to_team(
         &self,
         team_id: &uuid::Uuid,
-        invited_by: &MacroUserId<Lowercase<'_>>,
+        invited_by: &MacroUserIdStr<'_>,
         emails: non_empty::NonEmpty<&[Email<Lowercase<'_>>]>,
     ) -> impl Future<Output = Result<Vec<TeamInvite<'_>>, InviteUsersToTeamError>> + Send;
 
@@ -131,13 +131,13 @@ pub trait TeamService: Clone + Send + Sync + 'static {
     fn remove_user_from_team(
         &self,
         team_id: &uuid::Uuid,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<(), RemoveUserFromTeamError>> + Send;
 
     /// Rejects an invitation to join a team.
     fn reject_invitation(
         &self,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: &MacroUserIdStr<'_>,
         team_invite_id: &uuid::Uuid,
     ) -> impl Future<Output = Result<(), RemoveTeamInviteError>> + Send;
 
@@ -158,7 +158,7 @@ pub trait TeamService: Clone + Send + Sync + 'static {
     fn join_team(
         &self,
         team_invite_id: &uuid::Uuid,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<TeamMember<'_>, JoinTeamError>> + Send;
 
     /// Revokes permissions for all team members (not owner)

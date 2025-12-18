@@ -2,6 +2,7 @@ use crate::{
     document::document_bom::create_bom_parts, share_permission::create::create_document_permission,
 };
 use document_sub_type::DocumentSubType;
+use macro_user_id::user_id::MacroUserIdStr;
 use model::document::{
     BomPart, DocumentMetadata, FileType, IDWithTimeStamps, VersionIDWithTimeStamps,
     VersionIDWithTimeStampsNoSha,
@@ -16,7 +17,7 @@ pub mod copy_pdf_parts;
 pub async fn copy_document(
     db: Pool<Postgres>,
     original_document: &DocumentMetadata,
-    user_id: &str,
+    user_id: MacroUserIdStr<'static>,
     new_document_name: &str,
     file_type: &FileType,
     document_share_permissions: &SharePermissionV2,
@@ -67,7 +68,7 @@ pub async fn copy_document(
 pub(in crate::document) async fn copy_docx_document(
     transaction: &mut Transaction<'_, Postgres>,
     original_document: &DocumentMetadata,
-    user_id: &str,
+    user_id: MacroUserIdStr<'static>,
     new_document_name: &str,
 ) -> anyhow::Result<DocumentMetadata> {
     let original_document_id = &original_document.document_id;
@@ -80,7 +81,7 @@ pub(in crate::document) async fn copy_docx_document(
                 VALUES ($1, $2, $3, $4, $5, $6, $7)
                 RETURNING id, "createdAt"::timestamptz as created_at, "updatedAt"::timestamptz as updated_at;
             "#,
-        &user_id,
+        user_id.as_ref(),
         &new_document_name,
         original_document.file_type,
         original_document.document_family_id,
@@ -129,7 +130,7 @@ pub(in crate::document) async fn copy_docx_document(
 
     Ok(DocumentMetadata {
         document_id: document.id.clone(),
-        owner: user_id.to_string(),
+        owner: user_id,
         document_name: new_document_name.to_string(),
         file_type: original_document.file_type.clone(),
         sha: None,
@@ -152,7 +153,7 @@ pub(in crate::document) async fn copy_docx_document(
 pub(in crate::document) async fn copy_non_docx_document(
     transaction: &mut Transaction<'_, Postgres>,
     original_document: &DocumentMetadata,
-    user_id: &str,
+    user_id: MacroUserIdStr<'static>,
     new_document_name: &str,
 ) -> anyhow::Result<DocumentMetadata> {
     let original_document_id = &original_document.document_id;
@@ -173,7 +174,7 @@ pub(in crate::document) async fn copy_non_docx_document(
                 VALUES ($1, $2, $3, $4, $5, $6, $7)
                 RETURNING id, "createdAt"::timestamptz as created_at, "updatedAt"::timestamptz as updated_at;
             "#,
-        &user_id,
+        user_id.as_ref(),
         &new_document_name,
         original_document.file_type,
         original_document.document_family_id,
@@ -250,7 +251,7 @@ pub(in crate::document) async fn copy_non_docx_document(
 
     Ok(DocumentMetadata {
         document_id: document.id.clone(),
-        owner: user_id.to_string(),
+        owner: user_id,
         document_name: new_document_name.to_string(),
         file_type: original_document.file_type.clone(),
         sha: Some(document_instance.sha),
@@ -282,7 +283,7 @@ mod tests {
             &DocumentMetadata::new_document(
                 "document-one",
                 1,
-                "macro|user@user.com",
+                MacroUserIdStr::parse_from_str("macro|user@user.com").unwrap(),
                 "name",
                 Some(FileType::Txt),
                 "sha",
@@ -295,7 +296,7 @@ mod tests {
                 None,
                 None,
             ),
-            "macro|user@user.com",
+            MacroUserIdStr::parse_from_str("macro|user@user.com").unwrap(),
             "new name",
         )
         .await?;
@@ -307,7 +308,7 @@ mod tests {
         assert!(!document_metadata.document_id.is_empty());
         assert_eq!(document_metadata.sha.unwrap(), "sha");
         assert_eq!(document_metadata.document_name, "new name".to_string());
-        assert_eq!(document_metadata.owner, "macro|user@user.com".to_string());
+        assert_eq!(document_metadata.owner.as_ref(), "macro|user@user.com");
         assert_eq!(document_metadata.branched_from_id.unwrap(), "document-one");
         assert_eq!(document_metadata.branched_from_version_id.unwrap(), 1);
         assert_eq!(
@@ -325,7 +326,7 @@ mod tests {
             &DocumentMetadata::new_docx(
                 "document-one",
                 1,
-                "macro|user@user.com",
+                MacroUserIdStr::parse_from_str("macro|user@user.com").unwrap(),
                 "name",
                 "docx",
                 None,
@@ -336,7 +337,7 @@ mod tests {
                 None,
                 None,
             ),
-            "macro|user@user.com",
+            MacroUserIdStr::parse_from_str("macro|user@user.com").unwrap(),
             "new name",
             &FileType::Docx,
             &SharePermissionV2::new_document_share_permission(Some(FileType::Docx)),
@@ -346,7 +347,7 @@ mod tests {
         assert!(!document_metadata.document_id.is_empty());
         assert!(document_metadata.sha.is_none());
         assert_eq!(document_metadata.document_name, "new name".to_string());
-        assert_eq!(document_metadata.owner, "macro|user@user.com".to_string());
+        assert_eq!(document_metadata.owner.as_ref(), "macro|user@user.com");
         assert_eq!(document_metadata.branched_from_id.unwrap(), "document-one");
         assert_eq!(document_metadata.branched_from_version_id.unwrap(), 1);
 
@@ -361,7 +362,7 @@ mod tests {
             &DocumentMetadata::new_docx(
                 "document-one",
                 1,
-                "macro|user@user.com",
+                MacroUserIdStr::parse_from_str("macro|user@user.com").unwrap(),
                 "name",
                 "docx",
                 None,
@@ -372,7 +373,7 @@ mod tests {
                 None,
                 None,
             ),
-            "macro|user@user.com",
+            MacroUserIdStr::parse_from_str("macro|user@user.com").unwrap(),
             "new name",
         )
         .await?;
@@ -384,7 +385,7 @@ mod tests {
         assert!(!document_metadata.document_id.is_empty());
         assert!(document_metadata.sha.is_none());
         assert_eq!(document_metadata.document_name, "new name".to_string());
-        assert_eq!(document_metadata.owner, "macro|user@user.com".to_string());
+        assert_eq!(document_metadata.owner.as_ref(), "macro|user@user.com");
         assert_eq!(document_metadata.branched_from_id.unwrap(), "document-one");
         assert_eq!(document_metadata.branched_from_version_id.unwrap(), 1);
 

@@ -74,12 +74,13 @@ mockall = { workspace = true }
 model = { path = "../model" }
 model-entity = { path = "../model-entity" }
 model_notifications = { path = "../model_notifications" }
+model_user = { path = "../model_user", features = ["axum"] }
 models_bulk_upload = { path = "../models_bulk_upload" }
 models_opensearch = { path = "../models_opensearch" }
 models_pagination = { path = "../models_pagination", features = ["axum"] }
 models_permissions = { path = "../models_permissions" }
-properties = { path = "../properties" }
 models_soup = { path = "../models_soup", features = ["schema"] }
+properties = { path = "../properties" }
 rayon = "1.10.0"
 redis = { workspace = true, features = [
   "aio",

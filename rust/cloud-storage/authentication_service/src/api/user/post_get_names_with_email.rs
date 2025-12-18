@@ -36,18 +36,13 @@ pub async fn handler(
     user_context: Extension<UserContext>,
     extract::Json(req): extract::Json<GetNamesWithEmailRequestBody>,
 ) -> Result<Json<UserNames>, (StatusCode, String)> {
-    let user_profile_ids: NonEmpty<Vec<MacroUserId<Lowercase>>> = NonEmpty::new(
-        req.user_ids
-            .into_iter()
-            .map(|id| id.0.lowercase())
-            .collect(),
-    )
-    .map_err(|_| {
-        (
-            StatusCode::BAD_REQUEST,
-            "user_ids cannot be empty".to_string(),
-        )
-    })?;
+    let user_profile_ids: NonEmpty<Vec<MacroUserId<Lowercase>>> =
+        NonEmpty::new(req.user_ids.into_iter().map(|id| id.0).collect()).map_err(|_| {
+            (
+                StatusCode::BAD_REQUEST,
+                "user_ids cannot be empty".to_string(),
+            )
+        })?;
 
     let user_names = get_user_names_with_email(&ctx.db, &user_context.user_id, user_profile_ids)
         .await

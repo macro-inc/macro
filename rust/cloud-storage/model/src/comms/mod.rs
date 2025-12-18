@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use sqlx::Type;
 use std::collections::HashMap;
@@ -163,7 +164,8 @@ pub struct Message {
     pub id: Uuid,
     pub channel_id: Uuid,
     pub thread_id: Option<Uuid>,
-    pub sender_id: String,
+    #[schema(value_type = String)]
+    pub sender_id: MacroUserIdStr<'static>,
     pub content: String,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub updated_at: chrono::DateTime<chrono::Utc>,

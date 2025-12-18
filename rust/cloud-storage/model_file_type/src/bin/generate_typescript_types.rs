@@ -1,4 +1,4 @@
-use model::document::FileType;
+use model_file_type::FileType;
 use std::{fs::File, io::Write};
 
 fn main() -> std::io::Result<()> {

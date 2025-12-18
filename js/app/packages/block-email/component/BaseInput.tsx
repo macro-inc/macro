@@ -450,17 +450,17 @@ export function BaseInput(props: {
       linkId = linksData.links[0].id;
     }
 
-    const _editor = editor();
+    const currentEditor = editor();
 
     // We handle cleaning up the signature after we've sent the request because
     // otherwise the `bodyMacro` signal would update after the clean up call and
     // not contain the signature in the request data
     const cleanupWatermark = $appendWatermarkNodeToLast(
-      _editor,
+      currentEditor,
       !hasPaidAccess() ? MACRO_EMAIL_SIGNATURE : undefined
     );
 
-    const prepared = prepareEmailBody(_editor, {
+    const prepared = prepareEmailBody(currentEditor, {
       replyType: effectiveReplyType(),
       replyingTo: props.replyingTo(),
     });

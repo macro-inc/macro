@@ -161,11 +161,11 @@ function registerTableActionMenuPlugin(
     }
 
     const enabled = !tableObserver || !tableObserver.isSelecting;
-    const _anchorElem = props.anchorElem();
+    const anchorElem = props.anchorElem();
 
     if (
       enabled &&
-      _anchorElem &&
+      anchorElem &&
       tableCellParentNodeDOM &&
       tableCellNodeFromSelection
     ) {
@@ -182,7 +182,7 @@ function registerTableActionMenuPlugin(
 
       // Calculate position
       const tableCellRect = tableCellParentNodeDOM.getBoundingClientRect();
-      const anchorRect = _anchorElem.getBoundingClientRect();
+      const anchorRect = anchorElem.getBoundingClientRect();
       const top = tableCellRect.top - anchorRect.top;
       const left = tableCellRect.right - anchorRect.left;
       const offsetX = -35;
