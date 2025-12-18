@@ -687,6 +687,19 @@ export function createNavigationEntityListShortcut({
     displayPriority: 10,
   });
 
+  const openEntity = (entity: EntityData) => {
+    const { type, id } = entity;
+    if (type === 'document') {
+      const { fileType, subType } = entity;
+      splitHandle.replace({
+        type: fileTypeToBlockName(subType ?? fileType),
+        id,
+      });
+    } else {
+      splitHandle.replace({ type, id });
+    }
+  };
+
   const activeHighlightedId = () => {
     return viewData()?.highlightedId;
   };
