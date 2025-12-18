@@ -3,7 +3,11 @@ import { toast } from '@core/component/Toast/Toast';
 import { throwOnErr } from '@core/util/maybeResult';
 import { invalidateChannelWithID } from '@queries/channel/channel';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
-import { commsServiceClient, type IdResponse } from '@service-comms/client';
+import {
+  commsServiceClient,
+  type IdResponse,
+  type MessageResponse,
+} from '@service-comms/client';
 import type { PostMessageRequest } from '@service-comms/generated/models';
 import { useMutation } from '@tanstack/solid-query';
 
@@ -75,6 +79,44 @@ export function useDeleteMessageMutation(
         onError(error) {
           console.error('failed to delete message', error);
           toast.failure('Failed to delete message');
+        },
+        onSettled: (_data, _error, variables) => {
+          invalidateChannelWithID(variables.channelID);
+        },
+      },
+      callbacks
+    ),
+  }));
+}
+
+type PatchMessageParams = {
+  channelID: string;
+  messageID: string;
+  content: string;
+};
+
+/**
+ * Mutation to patch a channel message
+ */
+export function usePatchMessageMutation(
+  callbacks?: MutationCallbacks<MessageResponse, Error, PatchMessageParams>
+) {
+  return useMutation(() => ({
+    mutationFn: async (vars: PatchMessageParams) => {
+      return await throwOnErr(
+        async () =>
+          await commsServiceClient.patchMessage({
+            channel_id: vars.channelID,
+            message_id: vars.messageID,
+            content: vars.content,
+          })
+      );
+    },
+    ...withCallbacks<MessageResponse, Error, PatchMessageParams>(
+      {
+        onError(error) {
+          console.error('failed to update message', error);
+          toast.failure('Failed to update message');
         },
         onSettled: (_data, _error, variables) => {
           invalidateChannelWithID(variables.channelID);
