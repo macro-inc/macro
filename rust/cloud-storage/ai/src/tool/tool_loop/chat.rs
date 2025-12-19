@@ -3,13 +3,14 @@ use crate::tool::types::{AsyncToolSet, PartialToolCall, StreamPart, ToolCall, To
 use crate::tool::types::{ChatCompletionStream, ToolResponse};
 
 use crate::types::openai::message::convert_message;
+use crate::types::traits::{ExtendedOpenAIStream, ExtendedOpenAIStreamItem};
 use crate::types::{ChatCompletionRequest, ChatMessage, ChatMessages};
-use crate::types::{Client, RequestExtensions, Result};
+use crate::types::{ExtendedClient, Result};
 use async_openai::types::{
     ChatCompletionMessageToolCall, ChatCompletionRequestAssistantMessage,
     ChatCompletionRequestAssistantMessageContent, ChatCompletionRequestMessage,
-    ChatCompletionRequestToolMessage, ChatCompletionResponseStream, ChatCompletionStreamOptions,
-    CreateChatCompletionRequest, FinishReason, FunctionCall,
+    ChatCompletionRequestToolMessage, ChatCompletionStreamOptions, CreateChatCompletionRequest,
+    FinishReason, FunctionCall,
 };
 use async_stream::stream;
 use futures::stream::StreamExt;
@@ -23,7 +24,7 @@ struct ProcessedStream {
 
 pub struct Chat<I, T, R>
 where
-    I: Client + Send + Sync,
+    I: ExtendedClient + Send + Sync,
     T: Clone + Send + Sync + 'static,
     R: Send + Sync + 'static,
 {
@@ -35,15 +36,21 @@ where
     initial_message_count: usize,
     tool_call_id_name_mapping: HashMap<String, String>, // tool_call_id -> tool_name
     user_id: String,
+    extensions: I::RequestExtension,
 }
 
 impl<I, T, R> Chat<I, T, R>
 where
-    I: Client + Send + Sync,
+    I: ExtendedClient + Send + Sync,
     T: Clone + Send + Sync,
     R: Clone + Send + Sync,
 {
-    pub fn new(client: I, toolset: Arc<AsyncToolSet<T, R>>, context: T) -> Chat<I, T, R> {
+    pub fn new(
+        client: I,
+        toolset: Arc<AsyncToolSet<T, R>>,
+        context: T,
+        extensions: I::RequestExtension,
+    ) -> Chat<I, T, R> {
         Chat {
             inner: client,
             toolset,
@@ -53,6 +60,7 @@ where
             initial_message_count: 0,
             tool_call_id_name_mapping: HashMap::new(),
             user_id: "Uninitialized".into(),
+            extensions,
         }
     }
 
@@ -88,11 +96,7 @@ where
         let item_stream = stream!({
             let mut stream_parts = vec![];
             for _ in 0..MAX_RECURSIONS {
-                let mut stream = match self
-                    .make_openai_chat_completion_stream()
-                    .await
-                    .map(Self::map_stream)
-                {
+                let stream = match self.make_openai_chat_completion_stream().await {
                     Ok(stream) => stream,
                     Err(err) => {
                         yield Err(err);
@@ -100,16 +104,19 @@ where
                     }
                 };
 
-                // consume stream
-                // accumulate to stream_parts
-                while let Some(item) = stream.next().await {
-                    if item.is_err() {
-                        yield item;
-                        break;
+                {
+                    let mut stream = Self::map_stream(&self.inner, stream, &mut self.request);
+                    // consume stream
+                    // accumulate to stream_parts
+                    while let Some(item) = stream.next().await {
+                        if item.is_err() {
+                            yield item;
+                            break;
+                        }
+                        let stream_part = item.unwrap();
+                        yield Ok(stream_part.clone());
+                        stream_parts.push(stream_part);
                     }
-                    let stream_part = item.unwrap();
-                    yield Ok(stream_part.clone());
-                    stream_parts.push(stream_part);
                 }
                 // call tools, aggregate response to a new request
                 let mut processed = self
@@ -264,12 +271,16 @@ where
         }
     }
 
-    fn map_stream<'a>(mut stream: ChatCompletionResponseStream) -> ChatCompletionStream<'a> {
+    fn map_stream<'a>(
+        client: &'a I,
+        mut stream: ExtendedOpenAIStream<I::ResponseExtension>,
+        request: &'a mut CreateChatCompletionRequest,
+    ) -> ChatCompletionStream<'a> {
         Box::pin(stream!({
             let mut tool_calls: HashMap<u32, PartialToolCall> = HashMap::new();
-            while let Some(part) = stream.next().await {
-                match part {
-                    Ok(part) => {
+            while let Some(item) = stream.next().await {
+                match item {
+                    Ok(ExtendedOpenAIStreamItem::Response(part)) => {
                         if let Some(usage) = &part.usage {
                             yield Ok(StreamPart::Usage(usage.clone().into()))
                         }
@@ -323,13 +334,21 @@ where
                             tool_calls = HashMap::new();
                         }
                     }
+                    Ok(ExtendedOpenAIStreamItem::Extension(ext)) => {
+                        // Handle provider-specific extension items (Anthropic server tools)
+                        if let Some(stream_part) = client.handle_extension_item(request, ext) {
+                            yield Ok(stream_part);
+                        }
+                    }
                     Err(error) => yield Err(error.into()),
                 }
             }
         }))
     }
 
-    async fn make_openai_chat_completion_stream(&mut self) -> Result<ChatCompletionResponseStream> {
+    async fn make_openai_chat_completion_stream(
+        &mut self,
+    ) -> Result<ExtendedOpenAIStream<I::ResponseExtension>> {
         self.request.messages = self.messages.clone();
         self.request.tools = Some(self.toolset.openai_chatcompletion_toolset());
         self.request.stream = Some(true);
@@ -337,15 +356,8 @@ where
             include_usage: true,
         });
 
-        let extensions = RequestExtensions::new(serde_json::json!(
-            {
-                "user": self.user_id.clone()
-            }
-        ))
-        .expect("invalid request extensions");
-
         self.inner
-            .chat_stream(self.request.clone(), Some(extensions))
+            .chat_stream(self.request.clone(), &self.extensions)
             .await
     }
 }
@@ -366,7 +378,7 @@ mod tests {
     fn create_mock_chat() -> Chat<NoOpClient, String, String> {
         let client = NoOpClient;
         let toolset = Arc::new(AsyncToolSet::new());
-        Chat::new(client, toolset, "test_context".to_string())
+        Chat::new(client, toolset, "test_context".to_string(), ())
     }
 
     #[test]
