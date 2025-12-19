@@ -23,6 +23,7 @@ import { useUserId } from '@service-gql/client';
 import { blockNameToItemType } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { toast } from 'core/component/Toast/Toast';
+import type { Accessor } from 'solid-js';
 import { updateActivityOnMessageReceived } from './activity';
 import { initializeAttachments, messageAttachmentsStore } from './attachment';
 import { messageToReactionStore } from './reactions';
@@ -32,7 +33,6 @@ import {
   threadsStore,
   upsertInThread,
 } from './threads';
-import type { Accessor } from 'solid-js';
 
 const { track } = withAnalytics();
 
