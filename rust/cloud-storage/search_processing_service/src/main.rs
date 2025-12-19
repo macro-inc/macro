@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     api::context::ApiContext,
-    process::{context::SearchProcessingContext, worker::run_search_processing_workers},
+    process::{Processor, Receiver, context::SearchProcessingContext},
 };
 use anyhow::Context;
 use config::{Config, Environment};
@@ -101,6 +101,8 @@ async fn main() -> anyhow::Result<()> {
     {
         use std::sync::Arc;
 
+        use pollux::{WorkerPool, WorkerPoolConfig};
+
         let sync_service_auth_key = match config.environment {
             Environment::Local => config.sync_service_auth_key.clone(),
             _ => secretsmanager_client
@@ -125,15 +127,8 @@ async fn main() -> anyhow::Result<()> {
             config.comms_service_url.clone(),
         );
 
-        let worker = sqs_worker::SQSWorker::new(
-            aws_sdk_sqs::Client::new(&aws_config),
-            config.search_event_queue.clone(),
-            config.queue_max_messages,
-            config.queue_wait_time_seconds,
-        );
         let ctx = SearchProcessingContext {
             db: db.clone(),
-            worker: Arc::new(worker.clone()),
             document_storage_bucket: config.document_storage_bucket.clone(),
             s3_client: Arc::new(s3_client),
             opensearch_client: Arc::new(opensearch_client.clone()),
@@ -141,7 +136,27 @@ async fn main() -> anyhow::Result<()> {
             lexical_client: Arc::new(lexical_client),
             email_client: email_service_client.into(),
         };
-        run_search_processing_workers(ctx, config.worker_count);
+
+        let receiver = Receiver {
+            client: aws_sdk_sqs::Client::new(&aws_config),
+            queue_url: config.search_event_queue.clone(),
+            max_messages: config.queue_max_messages,
+            wait_time_seconds: config.queue_wait_time_seconds,
+        };
+
+        let worker_pool_config = WorkerPoolConfig {
+            receiver_count: 3,  // 3 receiver loops fetching from queue
+            max_in_flight: 100, // Up to 100 messages being processed concurrently
+            processing_timeout: std::time::Duration::from_secs(120),
+            heartbeat_interval: std::time::Duration::from_secs(30),
+            restart_delay: std::time::Duration::from_secs(2),
+        };
+
+        let processor = Processor { ctx: Arc::new(ctx) };
+
+        let worker_pool = WorkerPool::new(receiver, processor, worker_pool_config);
+
+        worker_pool.spawn_workers();
     }
 
     api::setup_and_serve(ApiContext {

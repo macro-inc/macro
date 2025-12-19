@@ -6478,6 +6478,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "pollux"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e5fd4b491a761ec844702b5af8970d4254df6358c961cc711abd586b0840c49"
+dependencies = [
+ "futures",
+ "serde",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "powerfmt"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7564,6 +7577,7 @@ dependencies = [
  "nom 8.0.0",
  "opensearch_client",
  "pdfium-render",
+ "pollux",
  "rust-embed",
  "s3_client",
  "secretsmanager_client",
