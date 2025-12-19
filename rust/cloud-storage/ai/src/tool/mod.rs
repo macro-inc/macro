@@ -1,8 +1,8 @@
-pub mod client;
 pub mod completion;
+pub mod tool_loop;
 pub mod types;
 
-pub use client::ai_client::AiClient;
+pub use tool_loop::ai_client::ToolLoop;
 pub use types::AsyncTool;
 pub use types::AsyncToolSet;
 pub use types::Tool;
