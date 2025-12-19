@@ -145,9 +145,6 @@
       "@block-ai/*": [
         "./packages/block-ai/*"
       ],
-      "@block-contact/*": [
-        "./packages/block-contact/*"
-      ],
       "@macro-entity": [
         "./packages/macro-entity/src/index.tsx"
       ],
@@ -218,9 +215,6 @@
     },
     {
       "path": "./packages/block-pdf"
-    },
-    {
-      "path": "./packages/block-contact"
     },
     {
       "path": "./packages/observability"

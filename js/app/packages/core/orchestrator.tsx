@@ -13,6 +13,7 @@ import { createStore } from 'solid-js/store';
 import {
   type BlockAliasContext,
   Block as BlockComponent,
+  type BlockComponentProps,
   type BlockName,
   type NestedState,
   ValidNestingCombinations,
@@ -84,10 +85,11 @@ type BlockInstance = {
   handle: OwnedBlockHandle<any>;
 };
 
-export type CreateBlockOptions = {
+export type CreateBlockOptions<Name extends BlockName = BlockName> = {
+  params?: BlockComponentProps[Name];
   location?: Location;
   nested?: NestedState<any>;
-  sourceResolver?: (type: BlockName, id: string, location?: Location) => Source;
+  sourceResolver?: (type: Name, id: string, location?: Location) => Source;
   aliasContext?: BlockAliasContext;
 };
 
@@ -177,7 +179,14 @@ function createBlockElement({
   return () => {
     onMount(() => {
       onElementMount?.();
-      console.log('mounting block with id:', id, 'type:', type);
+      console.log(
+        'mounting block with id:',
+        id,
+        'type:',
+        type,
+        'params:',
+        opts?.params
+      );
     });
 
     onCleanup(() => {
@@ -199,7 +208,7 @@ function createBlockElement({
           handle={ownedHandle}
         />
         <Suspense>
-          <definition.component {...(opts?.nested?.initArgs ?? {})} />
+          <definition.component {...(opts?.params ?? {})} />
         </Suspense>
         <BlockEffectRunner />
       </BlockComponent>

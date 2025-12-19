@@ -1,3 +1,4 @@
+use crate::notification::send::push::PushNotificationData;
 use model::{
     response::{EmptyResponse, ErrorResponse},
     version::NotificationServiceApiVersion,
@@ -6,7 +7,7 @@ use model_notifications::{
     ChannelInviteMetadata, ChannelMentionMetadata, ChannelMessageSendMetadata,
     ChannelReplyMetadata, CommonChannelMetadata, DeviceType, DocumentMentionMetadata,
     InviteToTeamMetadata, ItemSharedMetadata, NewEmailMetadata, Notification, NotificationEvent,
-    NotificationEventType, PushNotificationData, UserNotification, UserUnsubscribe,
+    NotificationEventType, UserNotification, UserUnsubscribe,
 };
 use utoipa::OpenApi;
 

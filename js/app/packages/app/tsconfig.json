@@ -7,6 +7,7 @@
     "declaration": true,
     "composite": true,
     "noUnusedLocals": false,
-    "noUnusedParameters": false
+    "noUnusedParameters": false,
+    "allowImportingTsExtensions": true
   },
 }

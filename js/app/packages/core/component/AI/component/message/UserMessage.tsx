@@ -92,7 +92,6 @@ export function UserMessage(props: {
               <ImagePreview
                 image={{ id: attachment.attachmentId }}
                 variant="small"
-                isCurrentUser={true}
                 isDss={isDssImage(attachment)}
               />
             )}

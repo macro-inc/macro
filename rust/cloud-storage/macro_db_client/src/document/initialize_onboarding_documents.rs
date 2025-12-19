@@ -1,6 +1,8 @@
 use super::insert_bom_parts;
 use crate::history::upsert_user_history;
 use crate::share_permission::create::{create_document_permission, create_project_permission};
+use macro_user_id::cowlike::CowLike;
+use macro_user_id::user_id::MacroUserIdStr;
 use model::document::{BasicDocument, FileType};
 use model::document::{ID, SaveBomPart, VersionID};
 use model::project::Project;
@@ -12,7 +14,7 @@ use sqlx::{Postgres, Transaction};
 #[tracing::instrument(skip(transaction))]
 pub async fn create_project_transaction(
     transaction: &mut Transaction<'_, Postgres>,
-    user_id: &str,
+    user_id: MacroUserIdStr<'_>,
     project_name: &str,
     parent_id: Option<String>,
     share_permission: &SharePermissionV2,
@@ -26,7 +28,7 @@ pub async fn create_project_transaction(
         "updatedAt"::timestamptz as updated_at, "parentId" as parent_id
         "#,
         project_name,
-        user_id,
+        user_id.as_ref(),
         parent_id,
     )
     .fetch_one(transaction.as_mut())
@@ -34,7 +36,7 @@ pub async fn create_project_transaction(
 
     // Create share permission
     create_project_permission(transaction, &project.id, share_permission).await?;
-    upsert_user_history(transaction, user_id, &project.id, "project").await?;
+    upsert_user_history(transaction, user_id.copied(), &project.id, "project").await?;
 
     crate::item_access::insert::insert_user_item_access(
         transaction,
@@ -54,7 +56,7 @@ pub async fn create_project_transaction(
 #[tracing::instrument(skip(transaction, document_names))]
 pub async fn create_onboarding_documents(
     transaction: &mut Transaction<'_, Postgres>,
-    user_id: &str,
+    user_id: MacroUserIdStr<'static>,
     project_id: &str,
     share_permission: &SharePermissionV2,
     document_names: Vec<(String, String)>,
@@ -144,7 +146,7 @@ pub async fn create_onboarding_documents(
             documents.push(BasicDocument {
                 document_id: document_id.to_string(),
                 document_version_id: *document_version_id,
-                owner: user_id.to_string(),
+                owner: user_id.clone(),
                 document_name: document_names.0.to_string(),
                 file_type: Some(document_names.1.to_string()),
                 sha: None,
@@ -166,7 +168,7 @@ pub async fn create_onboarding_documents(
 #[tracing::instrument(skip(transaction))]
 pub async fn create_onboarding_docx(
     transaction: &mut Transaction<'_, Postgres>,
-    user_id: &str,
+    user_id: MacroUserIdStr<'static>,
     project_id: &str,
     share_permission: &SharePermissionV2,
     document_name: &str,
@@ -179,7 +181,7 @@ pub async fn create_onboarding_docx(
             VALUES ($1, $2, $3, $4)
             RETURNING id;
         "#,
-        user_id,
+        user_id.as_ref(),
         document_name,
         "docx", // hard coded file type as it's create blank docx
         project_id,
@@ -203,12 +205,12 @@ pub async fn create_onboarding_docx(
     insert_bom_parts(transaction, &document.id, document_bom.id, bom_parts).await?;
 
     // Add item to user history for creator
-    upsert_user_history(transaction, user_id, &document.id, "document").await?;
+    upsert_user_history(transaction, user_id.copied(), &document.id, "document").await?;
 
     Ok(BasicDocument {
         document_id: document.id,
         document_version_id: document_bom.id,
-        owner: user_id.to_string(),
+        owner: user_id,
         document_name: document_name.to_string(),
         file_type: Some(FileType::Docx.as_str().to_string()),
         sha: None,

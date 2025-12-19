@@ -5,7 +5,6 @@ import {
 } from '@app/component/split-layout/components/SplitHeader';
 import { SplitLabel } from '@app/component/split-layout/components/SplitLabel';
 import { SplitToolbarRight } from '@app/component/split-layout/components/SplitToolbar';
-import { channelStore } from '@block-channel/signal/channel';
 import { useBlockId } from '@core/block';
 import { useChannelName } from '@core/component/ChannelsProvider';
 import { IconButton } from '@core/component/IconButton';
@@ -16,6 +15,7 @@ import { UserIcon } from '@core/component/UserIcon';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import HashIcon from '@icon/regular/hash.svg';
 import LinkIcon from '@icon/regular/link.svg';
+import { useChannelQuery } from '@queries/channel/channel';
 import type { ChannelParticipant } from '@service-comms/generated/models/channelParticipant';
 import type { ChannelType } from '@service-comms/generated/models/channelType';
 import { useUserId } from '@service-gql/client';
@@ -48,11 +48,12 @@ function TopIcon(props: TopIconProps) {
   );
 }
 
-export function Top() {
-  const channel = channelStore.get;
-  const channelType = () => channel?.channel?.channel_type ?? 'private';
-  const participantCount = () => channel?.participants.length ?? 0;
-  const participants = () => channel?.participants ?? [];
+export function Top(props: { channelID: string }) {
+  const channel = useChannelQuery(() => props.channelID);
+
+  const channelType = () => channel.data?.channel?.channel_type ?? 'private';
+  const participantCount = () => channel.data?.participants.length ?? 0;
+  const participants = () => channel.data?.participants ?? [];
   const blockId = useBlockId();
   const notificationSource = useGlobalNotificationSource();
 
@@ -68,10 +69,14 @@ export function Top() {
     );
     toast.success('Link copied to clipboard');
   }
-  const channelName = useChannelName(
+  const _channelName = useChannelName(
     blockId,
-    channel?.channel?.name ?? 'New Channel'
+    channel.data?.channel?.name ?? 'New Channel'
   );
+
+  const channelName = () => {
+    return channel.data?.channel?.name ?? _channelName() ?? 'New Channel';
+  };
 
   return (
     <>
@@ -83,8 +88,8 @@ export function Top() {
               participants={participants()}
             />
             <SplitLabel
-              label={channelName() ?? 'New Channel'}
-              id={channel.id}
+              label={channelName()}
+              id={channel.data?.channel.id}
               itemType="channel"
             />
           </div>

@@ -1,8 +1,8 @@
-use sqlx::{Pool, Postgres};
-
 use super::get_sub_items;
+use macro_user_id::user_id::MacroUserIdStr;
 use model::item::{Item, ItemWithUserAccessLevel};
 use models_permissions::share_permission::access_level::AccessLevel;
+use sqlx::{Pool, Postgres};
 
 /// Gets the content of a project to a depth of 1.
 /// This includes the projects sub-projects as well as the documents/chats in the project.
@@ -12,7 +12,7 @@ use models_permissions::share_permission::access_level::AccessLevel;
 pub async fn get_project_content_v2(
     db: &Pool<Postgres>,
     project_id: &str,
-    user_id: &str,
+    user_id: MacroUserIdStr<'_>,
     project_user_access_level: AccessLevel,
 ) -> anyhow::Result<Vec<ItemWithUserAccessLevel>> {
     let mut transaction = db.begin().await?;
@@ -21,7 +21,7 @@ pub async fn get_project_content_v2(
     let sub_projects: Vec<ItemWithUserAccessLevel> = sub_projects
         .into_iter()
         .map(|p| {
-            let user_access_level = match p.user_id == user_id {
+            let user_access_level = match p.user_id == user_id.as_ref() {
                 true => AccessLevel::Owner,
                 false => project_user_access_level,
             };
@@ -51,7 +51,7 @@ pub async fn get_project_content_v2(
     let sub_chats: Vec<ItemWithUserAccessLevel> = sub_chats
         .into_iter()
         .map(|c| {
-            let user_access_level = match c.user_id == user_id {
+            let user_access_level = match c.user_id == user_id.as_ref() {
                 true => AccessLevel::Owner,
                 false => project_user_access_level,
             };
@@ -82,8 +82,13 @@ mod tests {
         scripts("users", "projects", "documents", "chats")
     ))]
     async fn test_get_project_content_v2(pool: Pool<Postgres>) -> anyhow::Result<()> {
-        let result =
-            get_project_content_v2(&pool, "p1", "macro|user@user.com", AccessLevel::View).await?;
+        let result = get_project_content_v2(
+            &pool,
+            "p1",
+            MacroUserIdStr::parse_from_str("macro|user@user.com").unwrap(),
+            AccessLevel::View,
+        )
+        .await?;
 
         let mapped_result: Vec<(String, String)> = result
             .into_iter()

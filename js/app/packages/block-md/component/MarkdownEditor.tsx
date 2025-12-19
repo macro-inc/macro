@@ -159,6 +159,7 @@ import {
   $isElementNode,
   type EditorState,
 } from 'lexical';
+
 import {
   type Accessor,
   createEffect,

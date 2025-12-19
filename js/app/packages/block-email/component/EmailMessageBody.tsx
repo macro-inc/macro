@@ -2,9 +2,8 @@ import { IconButton } from '@core/component/IconButton';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
-import { isErr } from '@core/util/maybeResult';
+import { SERVER_HOSTS } from '@core/constant/servers';
 import DotsThree from '@icon/regular/dots-three.svg';
-import { emailClient } from '@service-email/client';
 import type { MessageWithBodyReplyless } from '@service-email/generated/schemas';
 import { useEmail } from '@service-gql/client';
 import {
@@ -28,6 +27,7 @@ interface EmailMessageBodyProps {
   isBodyExpanded: Accessor<boolean>;
   setExpandedMessageBody: (id: string) => void;
   setFocusedMessageId: Setter<string | undefined>;
+  threadMessageIndex: number;
 }
 
 export function EmailMessageBody(props: EmailMessageBodyProps) {
@@ -42,49 +42,70 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
   }
 
   // If we don't have body replyless, it may be because it hasn't been generated yet. For instance, this is the case immediately after a message is sent. We can use the HTML to parse the message correctly.
-  let bodyReplyless = props.message.body_replyless;
-  if (!props.message.body_replyless) {
-    if (props.message.body_html_sanitized) {
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(
-        props.message.body_html_sanitized.toString(),
-        'text/html'
-      );
-      const quoted = doc.body.querySelector('.macro_quote');
-      if (quoted) {
-        quoted?.remove();
-        bodyReplyless = doc.body.innerHTML;
+  const bodyReplyless = createMemo(() => {
+    let replyless = props.message.body_replyless ?? '';
+    if (!replyless) {
+      if (props.message.body_html_sanitized) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(
+          props.message.body_html_sanitized.toString(),
+          'text/html'
+        );
+        const styleTags = Array.from(doc.head?.querySelectorAll('style') ?? [])
+          .map((style) => style.outerHTML)
+          .join('\n');
+        const quoted = doc.body.querySelector('.macro_quote');
+        if (quoted) {
+          quoted?.remove();
+          return styleTags
+            ? `${styleTags}\n${doc.body.innerHTML}`
+            : doc.body.innerHTML;
+        }
       }
     }
-  }
-
-  const isPlaintext = !props.message.body_html_sanitized;
-
-  const parsedHTML = createMemo(() => {
-    const source = showFullHTML()
-      ? props.message.body_html_sanitized
-      : (bodyReplyless ?? props.message.body_html_sanitized);
-    if (!source) return { mainContent: '', signature: null, hasTable: false };
-    return parseEmailContent(source, !showFullHTML(), !showFullHTML());
+    return replyless;
   });
 
-  const hasHiddenReplyStructure = createMemo(() => {
+  const isPlaintext = () => !props.message.body_html_sanitized;
+
+  const parsedBodyHtml = createMemo(() => {
+    return props.message.body_html_sanitized
+      ? parseEmailContent(
+          props.message.body_html_sanitized,
+          !showFullHTML(),
+          !showFullHTML()
+        )
+      : undefined;
+  });
+
+  const parsedBodyReplyless = createMemo(() => {
+    const processed = bodyReplyless();
+    return processed ? parseEmailContent(processed) : undefined;
+  });
+
+  const source = () => {
+    return showFullHTML() || props.threadMessageIndex === 0
+      ? parsedBodyHtml()
+      : parsedBodyReplyless();
+  };
+
+  const hasHiddenReplyStructure = () => {
     return (
-      !isPlaintext &&
-      ((bodyReplyless &&
-        bodyReplyless?.toString().replace(/\s+/g, '').length !==
+      !isPlaintext() &&
+      ((bodyReplyless() &&
+        bodyReplyless().toString().replace(/\s+/g, '').length !==
           props.message.body_html_sanitized?.toString().replace(/\s+/g, '')
             .length) ||
-        parsedHTML().signature)
+        source()?.signature)
     );
-  });
+  };
 
-  // TODO it would be nice to do some additional checks here, e.g. check if this message was sent from a user that the user has sent a message to before.
+  // TODO it might be nice to do some additional checks here, e.g. check if this message was sent from a user that the user has sent a message to before.
   const isPersonal = createMemo(() => {
     return (
       (props.message.from?.email === userEmail() ||
         props.message.labels.some((l) => l.name === 'CATEGORY_PERSONAL')) &&
-      !parsedHTML().hasTable
+      !parsedBodyHtml()?.hasTable
     );
   });
 
@@ -97,7 +118,7 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
     styleEl.textContent = `img{display: var(--macro-email-img-display, initial);}`;
     shadow.appendChild(styleEl);
     const messageDiv = document.createElement('div');
-    messageDiv.innerHTML = parsedHTML().mainContent;
+    messageDiv.innerHTML = source()?.mainContent ?? '';
     messageDiv.style.userSelect = 'text';
     messageDiv.style.cursor = 'var(--cursor-auto)';
     messageDiv.style.overflow = 'auto';
@@ -105,55 +126,49 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
     return hostContainer;
   });
 
-  // Get the attachment URLs for inline images that reference attachments via cid: URLs
+  // Resolve inline images that reference attachments via cid: URLs
   createEffect(() => {
     const root = host().shadowRoot;
     if (root) {
-      // Resolve inline images that reference attachments via cid: URLs
-      queueMicrotask(async () => {
-        // Build a map from normalized content-id => attachment db_id
-        const contentIdToDbId = new Map<string, string>();
+      queueMicrotask(() => {
+        // Build a map from normalized content-id => sfs_id
+        const contentIdToSfsId = new Map<string, string>();
         for (const att of props.message.attachments ?? []) {
           const contentId = att.content_id;
-          const dbId = att.db_id;
-          if (!contentId || !dbId) continue;
+          const sfsId = att.sfs_id;
+          if (!contentId || !sfsId) continue;
           const normalized = contentId.replace(/[<>]/g, '');
-          contentIdToDbId.set(normalized, dbId);
+          contentIdToSfsId.set(normalized, sfsId);
         }
 
         const images = root.querySelectorAll('img[src^="cid:"]');
-        await Promise.all(
-          Array.from(images).map(async (img) => {
-            if (!(img instanceof HTMLImageElement)) return;
-            if (img.dataset.cidResolved === 'true') return;
-            const src = img.getAttribute('src');
-            if (!src?.startsWith('cid:')) return;
-            const rawCid = src.slice(4);
-            const normalizedCid = rawCid.replace(/[<>]/g, '');
-            const dbId = contentIdToDbId.get(normalizedCid);
-            if (!dbId) return;
-            const res = await emailClient.getAttachmentUrl({ id: dbId });
-            if (isErr(res)) return;
-            const dataUrl = res[1].attachment.data_url;
-            if (!dataUrl) return;
-            img.src = dataUrl;
-            img.dataset.cidResolved = 'true';
-          })
-        );
+        for (const img of images) {
+          if (!(img instanceof HTMLImageElement)) continue;
+          if (img.dataset.cidResolved === 'true') continue;
+          const src = img.getAttribute('src');
+          if (!src?.startsWith('cid:')) continue;
+          const rawCid = src.slice(4);
+          const normalizedCid = rawCid.replace(/[<>]/g, '');
+          const sfsId = contentIdToSfsId.get(normalizedCid);
+          if (!sfsId) continue;
+          img.src = `${SERVER_HOSTS['static-file']}/file/${sfsId}`;
+          img.dataset.cidResolved = 'true';
+        }
       });
     }
   });
 
-  // Process the email colors when theme changes
+  // Process the email colors when: the theme changes, or the source HTML changes.
   createEffect(() => {
     themeUpdate();
+    showFullHTML();
     const root = host().shadowRoot;
     if (root) {
       if (isPersonal()) {
         queueMicrotask(() => {
           untrack(() => processEmailColors(root));
         });
-      } else if (parsedHTML().hasTable) {
+      } else if (source()?.hasTable) {
         const contentWrapper = root.querySelector('div');
         if (contentWrapper instanceof HTMLElement) {
           contentWrapper.style.setProperty(
@@ -210,7 +225,7 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
               );
             }}
           </Match>
-          <Match when={isPlaintext}>
+          <Match when={isPlaintext()}>
             <StaticMarkdown
               markdown={props.message.body_text!}
               theme={channelTheme}

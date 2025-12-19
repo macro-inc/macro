@@ -34,7 +34,11 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
     filteredProperties,
     fetchAvailableProperties,
     togglePropertySelection,
-  } = usePropertySelection(props.existingPropertyIds, () => searchQuery());
+  } = usePropertySelection(
+    props.existingPropertyIds,
+    () => searchQuery(),
+    entityType
+  );
 
   const handleAddProperties = async () => {
     const selected = state().selectedPropertyIds;

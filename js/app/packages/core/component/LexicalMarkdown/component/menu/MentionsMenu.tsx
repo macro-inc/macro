@@ -227,6 +227,7 @@ async function handleUserMention(
     dependencies;
   let mentionId: string | undefined;
 
+  console.log({ blockName, blockId });
   if (blockName !== 'channel') {
     if (blockId) {
       const record: UserMentionRecord = {

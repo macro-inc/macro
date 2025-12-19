@@ -2,12 +2,13 @@ import { makePersisted } from '@solid-primitives/storage';
 import { createSignal } from 'solid-js';
 import type { HotkeyToken } from './tokens';
 import type { HotkeyCommand, ScopeNode, ValidHotkey } from './types';
+import { updateActiveScopeBranch } from './utils';
 
 const initialTree = new Map<string, ScopeNode>([
   [
     'global',
     {
-      id: 'global',
+      scopeId: 'global',
       type: 'dom',
       element: document.body,
       childScopeIds: [],
@@ -20,7 +21,15 @@ const initialTree = new Map<string, ScopeNode>([
 
 export const hotkeyScopeTree = initialTree;
 
-export const [activeScope, setActiveScope] = createSignal<string>('global');
+export const [activeScope, setActiveScopeInner] =
+  createSignal<string>('global');
+
+export function setActiveScope(
+  ...params: Parameters<typeof setActiveScopeInner>
+) {
+  const scopeId = setActiveScopeInner(...params);
+  updateActiveScopeBranch(scopeId);
+}
 
 export const [pressedKeys, setPressedKeys] = createSignal<Set<string>>(
   new Set()
@@ -33,6 +42,9 @@ export const [executedTokens, setExecutedTokens] = makePersisted(
   }
 );
 
+export const [lastExecutedCommand, setLastExecutedCommand] =
+  createSignal<HotkeyCommand>();
+
 // Tracks hotkeys that need their keyUp handlers called
 export const hotkeysAwaitingKeyUp: {
   hotkey: ValidHotkey;
@@ -40,6 +52,10 @@ export const hotkeysAwaitingKeyUp: {
   command: () => void;
 }[] = [];
 
+export const [activeScopeBranch, setActiveScopeBranch] = createSignal<
+  Set<string>
+>(new Set());
+
 export const [hotkeyTokenMap, setHotkeyTokenMap] = createSignal<
-  Map<HotkeyToken, HotkeyCommand>
+  Map<HotkeyToken, HotkeyCommand[]>
 >(new Map());

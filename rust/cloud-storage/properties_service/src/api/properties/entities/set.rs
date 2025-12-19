@@ -9,7 +9,12 @@ use system_properties::SystemPropertyKey;
 use thiserror::Error;
 use uuid::Uuid;
 
-use crate::api::{context::ApiContext, properties::entities::types::SetEntityPropertyRequest};
+use crate::api::{
+    context::ApiContext,
+    properties::{
+        definitions::list::is_property_applicable_to, entities::types::SetEntityPropertyRequest,
+    },
+};
 use model::user::UserContext;
 use models_properties::service::property_value::PropertyValue;
 use models_properties::{EntityReference, EntityType, api::SetPropertyValue};
@@ -162,10 +167,17 @@ pub async fn set_entity_property(
 
     tracing::debug!(has_value = has_value, "setting property in database");
 
+    // Check if this property can be attached to the given entity type
+    if !is_property_applicable_to(property_uuid, entity_type) {
+        return Err(SetEntityPropertyErr::InvalidRequest(
+            "This property cannot be attached to this entity type".to_string(),
+        ));
+    }
+
     // Handle bidirectional linking for task Parent Task / Subtasks properties
-    if entity_type == EntityType::Task
-        && (property_uuid == SystemPropertyKey::PARENT_TASK_UUID
-            || property_uuid == SystemPropertyKey::SUBTASKS_UUID)
+    // (if is_parent_or_subtask_property is true, entity_type is guaranteed to be Task by the earlier check)
+    if property_uuid == SystemPropertyKey::PARENT_TASK_UUID
+        || property_uuid == SystemPropertyKey::SUBTASKS_UUID
     {
         let task_id = Uuid::parse_str(&entity_id)
             .map_err(|_| SetEntityPropertyErr::InvalidRequest("Invalid task ID".to_string()))?;

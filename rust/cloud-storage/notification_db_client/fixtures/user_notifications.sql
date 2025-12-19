@@ -13,7 +13,7 @@ VALUES
     '0193b1ea-a542-7589-893b-2b4a509c1e76',
     'test',
     'test',
-    'test',
+    'document',
     'test',
     NULL,
     'macro|user2@user.com'
@@ -34,7 +34,7 @@ VALUES
     '0193b1ea-a542-7589-893b-2b4a509c1e75',
     'test',
     'test',
-    'test',
+    'document',
     'test',
     NULL,
     NULL
@@ -55,7 +55,7 @@ VALUES
     '0193b1ea-a542-7589-893b-2b4a509c1e74',
     'test',
     'test',
-    'test',
+    'document',
     'test',
     NULL,
     NULL

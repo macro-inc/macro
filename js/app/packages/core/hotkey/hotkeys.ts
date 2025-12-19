@@ -4,7 +4,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { isEditableInput } from '@core/util/isEditableInput';
 import { logger } from '@observability';
-import { createMemo, onCleanup, onMount, untrack } from 'solid-js';
+import { onCleanup, onMount, untrack } from 'solid-js';
 import {
   EVENT_MODIFIER_KEYS,
   EVENT_MODIFIER_NAME_MAP,
@@ -20,18 +20,16 @@ import {
   hotkeyTokenMap,
   pressedKeys,
   setActiveScope,
-  setExecutedTokens,
   setHotkeyTokenMap,
   setPressedKeys,
 } from './state';
-import type { HotkeyToken } from './tokens';
 import {
   type HotkeyCommand,
   type HotkeyRegistrationOptions,
   isBaseKeyboardValue,
+  type KeypressContext,
   type RegisterHotkeyReturn,
   type ScopeNode,
-  type ValidHotkey,
 } from './types';
 import {
   activateClosestDOMScope,
@@ -40,9 +38,9 @@ import {
   getKeyString,
   getScopeId,
   normalizeEventKeyPress,
-  prettyPrintHotkeyString,
   registerScope,
   removeScope,
+  runCommand,
 } from './utils';
 
 /**
@@ -65,7 +63,7 @@ import {
  * that displays based on this condition will be reactively updated.
  * @param args.scopeId - The scopeId where this hotkey is active.
  * @param args.description - Human readable description of what the hotkey
- * does. Keep it short (around three words).
+ * does. Keep it short (around three words). Can be either a string or a callback that returns a string.
  * @param args.keyDownHandler - Function called when the hotkey is pressed. If
  * it returns true, the event will prevent default and stop propagation.
  * @param args.keyUpHandler - Optional function called when the hotkey is
@@ -79,7 +77,8 @@ import {
  * @param args.displayPriority - The priority of the command for ordering
  * hotkey display UI. 1 is the lowest priority, 10 is the highest.
  * @param args.hide - If true, hotkey command can be hidden from the UI. It
- * will still run, but may not be displayed.
+ * will still run, but may not be displayed. Can be either a boolean or a
+ * function that returns a boolean for reactive behavior.
  * @param args.icon - Optional icon to display in the command palette.
  * @param args.tags - Optional tags for categorizing in the command palette.
  * @returns An object with a dispose function to clean up the hotkey
@@ -142,18 +141,17 @@ export function registerHotkey(
   // Convert single hotkey to array for consistent handling
   const hotkeys = hotkey && !Array.isArray(hotkey) ? [hotkey] : hotkey;
 
-  // Check for duplicate hotkeyToken
+  // Check for existing duplicate hotkeyToken for non-identical command
   const existingCommand = hotkeyToken
-    ? untrack(() => hotkeyTokenMap().get(hotkeyToken))
+    ? untrack(() => hotkeyTokenMap().get(hotkeyToken)?.at(0))
     : undefined;
-  if (existingCommand) {
-    const existingHotkeys = new Set(existingCommand.hotkeys);
-    const newHotkeys = new Set(hotkeys);
-
-    // We don't warn if all of the existing hotkeys are in the new hotkeys, on the assumption that the developer has a good reason for specifying "the same" hotkey in multiple places.
+  if (existingCommand && hotkeys && existingCommand.hotkeys) {
+    // Yes, you should be able to register multiple hotkeys with the same token. But if you do this, they should be "the same" hotkey.
+    // Here we check if the existing hotkey strings are the same as the new hotkey strings. This probably isn't exactly what you'd want to check (it especially won't be right if the commmands do not have hotkey strings), but is close enough for now.
+    const existingHotkeys = existingCommand.hotkeys;
     if (
-      existingHotkeys.size !== newHotkeys.size ||
-      ![...existingHotkeys].every((h) => newHotkeys.has(h))
+      existingHotkeys.length !== hotkeys?.length ||
+      !existingHotkeys.every((el, i) => el === hotkeys[i])
     ) {
       logger.log(
         `Hotkey token "${hotkeyToken}" is already registered with a different command. ` +
@@ -172,15 +170,18 @@ export function registerHotkey(
   let commandScopeId: string | undefined;
   if (activateCommandScope) {
     commandScopeId = getScopeId('command-scope-' + scopeId);
+    // When a command scope is registered, its parent scope is set as the scopeId of the registered hotkey. It will be registered as a child of that scope. When the command scope is activated, its parent scope will get set to whatever scope is active where it was called, so that when the command scope is deactivated, it willl return to the correct scope.
     registerScope({
       parentScopeId: scopeId,
       scopeId: commandScopeId,
       type: 'command',
+      activationKeys: hotkeys,
     });
   }
 
   const command: HotkeyCommand = {
     hotkeyToken,
+    scopeId,
     hotkeys,
     condition,
     description,
@@ -207,10 +208,11 @@ export function registerHotkey(
     }
   });
 
-  if (hotkeyToken && !existingCommand) {
+  if (hotkeyToken) {
     setHotkeyTokenMap((prev) => {
       const newMap = new Map(prev);
-      newMap.set(hotkeyToken, command);
+      const existingCommands = newMap.get(hotkeyToken) || [];
+      newMap.set(hotkeyToken, [...existingCommands, command]);
       return newMap;
     });
   }
@@ -233,7 +235,15 @@ export function registerHotkey(
       if (hotkeyToken) {
         setHotkeyTokenMap((prev) => {
           const newMap = new Map(prev);
-          newMap.delete(hotkeyToken);
+          const existingCommands = newMap.get(hotkeyToken) || [];
+          const newCommands = existingCommands.filter(
+            (c) => c.scopeId !== scopeId
+          );
+          if (newCommands.length > 0) {
+            newMap.set(hotkeyToken, newCommands);
+          } else {
+            newMap.delete(hotkeyToken);
+          }
           return newMap;
         });
       }
@@ -320,7 +330,7 @@ export function useHotkeyDOMScope(
   const repairScopeBranch = (scopeNode: ScopeNode, scopeDOM: Element) => {
     let currentScope = scopeNode;
     let currentDOM: Element | null | undefined = scopeDOM;
-    while (currentScope.id !== 'global' && currentDOM) {
+    while (currentScope.scopeId !== 'global' && currentDOM) {
       // If the scope is detached, we can stop.
       if (currentScope.detached) {
         break;
@@ -328,7 +338,7 @@ export function useHotkeyDOMScope(
       const parentScopeId = findClosestParentScopeId(currentDOM);
       const parentScope = hotkeyScopeTree.get(parentScopeId);
       if (!parentScope) break;
-      parentScope.childScopeIds.push(currentScope.id);
+      parentScope.childScopeIds.push(currentScope.scopeId);
       if (currentScope.type === 'dom') {
         currentScope.parentScopeId = parentScopeId;
       }
@@ -407,10 +417,16 @@ export function attachGlobalDOMScope(el: Element) {
   });
 }
 
+/**
+ * Attaches global hotkey handlers to the document element.
+ * @returns A function to subscribe to keypress events with full context information.
+ */
 export function useHotKeyRoot() {
   if (isNativeMobilePlatform() || (isMobileWidth() && isTouchDevice)) {
     return;
   }
+
+  let onKeypress: ((context: KeypressContext) => void)[] = [];
 
   const handleKeyDown = (e: KeyboardEvent) => {
     document.documentElement.dataset.modality = 'keyboard';
@@ -504,66 +520,20 @@ export function useHotKeyRoot() {
     const pressedKeysString = getKeyString(currentPressedKeys);
 
     let scopeNode = scopeTree.get(currentScopeId);
-    let transitionOrCommandFound = false;
+    let commandCaptured: HotkeyCommand | undefined;
+    let commandScopeActivated = false;
 
     while (scopeNode) {
       const command = scopeNode.hotkeyCommands.get(pressedKeysString);
-      if (
-        command &&
-        (command.runWithInputFocused || !isEditableFocused) &&
-        (!command.condition || command.condition())
-      ) {
-        if (command.activateCommandScopeId) {
-          const newScope = hotkeyScopeTree.get(command.activateCommandScopeId);
-          if (newScope) {
-            setPressedKeys(new Set<string>());
-            setActiveScope(newScope.id);
-            if (!transitionOrCommandFound) {
-              setExecutedTokens((prev) => {
-                if (command.hotkeyToken) {
-                  return prev.includes(command.hotkeyToken)
-                    ? prev
-                    : [...prev, command.hotkeyToken];
-                }
-                return prev;
-              });
-            }
-            transitionOrCommandFound = true;
-            e.preventDefault();
-            e.stopPropagation();
-          }
-        }
-        const captured = command.keyDownHandler?.(e);
-        if (captured) {
-          setPressedKeys(new Set<string>());
-          if (!transitionOrCommandFound) {
-            setExecutedTokens((prev) => {
-              if (command.hotkeyToken) {
-                return prev.includes(command.hotkeyToken)
-                  ? prev
-                  : [...prev, command.hotkeyToken];
-              }
-              return prev;
-            });
-          }
-          transitionOrCommandFound = true;
-          e.preventDefault();
-          e.stopPropagation();
-        }
-
-        if (
-          command.keyUpHandler &&
-          e.type === 'keydown' &&
-          !hotkeysAwaitingKeyUp.some(
-            (h) => h.hotkey === pressedKeysString && h.scopeId === scopeNode?.id
-          )
-        ) {
-          hotkeysAwaitingKeyUp.push({
-            hotkey: pressedKeysString as ValidHotkey,
-            scopeId: scopeNode.id,
-            command: () => command.keyUpHandler?.(e),
-          });
-        }
+      if (command && (command.runWithInputFocused || !isEditableFocused)) {
+        const result = runCommand(
+          command,
+          e,
+          pressedKeysString,
+          scopeNode.scopeId
+        );
+        commandCaptured = result.commandCaptured;
+        commandScopeActivated = result.commandScopeActivated;
       }
 
       if (
@@ -576,7 +546,7 @@ export function useHotKeyRoot() {
         activateClosestDOMScope();
       }
 
-      if (transitionOrCommandFound) {
+      if (commandCaptured || commandScopeActivated) {
         break;
       }
 
@@ -598,65 +568,57 @@ export function useHotKeyRoot() {
         }
       });
     }
+
+    // Build context object with all relevant information
+    const context: KeypressContext = {
+      pressedKeysString,
+      pressedKeys: currentPressedKeys,
+      event: e,
+      activeScopeId: currentScopeId ?? null,
+      isEditableFocused: isEditableFocused ?? false,
+      commandScopeActivated,
+      commandFound: !!commandCaptured,
+      commandCaptured: commandCaptured,
+      eventType: e.type as 'keydown' | 'keyup',
+      isNonModifierKeypress: ![...currentPressedKeys].every((key) =>
+        ['cmd', 'ctrl', 'opt', 'shift'].includes(key)
+      ),
+    };
+
+    // Notify all subscribers with the context
+    onKeypress.forEach((callback) => callback(context));
   };
-}
 
-// Runs the given hotkey command.
-export function runCommand({
-  keyDownHandler,
-  activateCommandScopeId,
-}: {
-  keyDownHandler?: (e?: KeyboardEvent) => boolean;
-  activateCommandScopeId?: string;
-}) {
-  if (keyDownHandler) {
-    keyDownHandler();
-  }
-  if (activateCommandScopeId) {
-    const newScope = hotkeyScopeTree.get(activateCommandScopeId);
-    if (newScope) {
-      setActiveScope(newScope.id);
-    }
-  }
-}
-
-export function runCommandByToken(token: HotkeyToken) {
-  const command = useHotkeyCommandByToken(token)();
-  if (command) {
-    if (command.keyDownHandler) {
-      command.keyDownHandler();
-    }
-    if (command.activateCommandScopeId) {
-      const newScope = hotkeyScopeTree.get(command.activateCommandScopeId);
-      if (newScope) {
-        setActiveScope(newScope.id);
-      }
-    }
-  }
-}
-
-/**
- * Returns the hotkey command for a given hotkey token.
- * @param token - The hotkey token to look up.
- * @returns The hotkey command, or undefined if the token is not found.
- */
-export function useHotkeyCommandByToken(token: HotkeyToken) {
-  return createMemo(() => {
-    if (!token) return undefined;
-    const map = hotkeyTokenMap();
-    const command = map.get(token);
-    return command;
-  });
-}
-
-// Helper function to get the first hotkey for display purposes
-export function useTokenToHotkeyString(token: HotkeyToken) {
-  return createMemo(() => {
-    if (!token) return undefined;
-    const map = hotkeyTokenMap();
-    const command = map.get(token);
-    return prettyPrintHotkeyString(command?.hotkeys?.[0]);
-  });
+  return {
+    /**
+     * Subscribe to keypress events with full context information.
+     * Subscribers receive a context object containing all relevant information.
+     *
+     * @param callback - Function called on every keypress.
+     * @returns A cleanup function to unsubscribe from the keypress events.
+     *
+     * @example
+     * ```ts
+     * subscribeToKeypress((context) => {
+     *   // Only handle non-modifier keys without scope activation
+     *   if (
+     *     !context.commandScopeActivated &&
+     *     ![...context.pressedKeys].every((key) =>
+     *       ['cmd', 'ctrl', 'opt', 'shift'].includes(key)
+     *     )
+     *   ) {
+     *     // Handle the keypress
+     *   }
+     * });
+     * ```
+     */
+    subscribeToKeypress: (callback: (context: KeypressContext) => void) => {
+      onKeypress.push(callback);
+      return () => {
+        onKeypress = onKeypress.filter((c) => c !== callback);
+      };
+    },
+  };
 }
 
 // =========================================================================

@@ -1,3 +1,4 @@
+import { globalSplitManager } from '@app/signal/splitLayout';
 import type { BlockAlias, BlockName } from '@core/block';
 import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
 import type { ViewId } from '@core/types/view';
@@ -98,6 +99,30 @@ export function globalRemoveFromSplitHistory(
     const handle = manager.getSplit(split.id);
     handle?.removeFromHistory(predicate);
   }
+}
+
+export function focusAdjacentSplit(direction: 'left' | 'right') {
+  const splitManager = globalSplitManager();
+  if (!splitManager) return;
+  const activeSplitId = splitManager.activeSplitId();
+  if (!activeSplitId) return;
+  const currentSplitIds = splitManager.splits().map((s) => s.id);
+  const currentSplitIndex = currentSplitIds.indexOf(activeSplitId);
+  const getAdjacentSplitId = () => {
+    if (direction === 'left') {
+      if (currentSplitIndex === 0)
+        return currentSplitIds[currentSplitIds.length - 1];
+      return currentSplitIds[currentSplitIndex - 1];
+    } else {
+      if (currentSplitIndex === currentSplitIds.length - 1)
+        return currentSplitIds[0];
+      return currentSplitIds[currentSplitIndex + 1];
+    }
+  };
+  const adjacentSplitId = getAdjacentSplitId();
+  if (!adjacentSplitId) return;
+  splitManager.activateSplit(adjacentSplitId);
+  splitManager.returnFocus();
 }
 
 /**

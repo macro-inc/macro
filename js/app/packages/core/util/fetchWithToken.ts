@@ -5,7 +5,6 @@ import { fetchWithAuth } from '@service-auth/fetch';
 import {
   err,
   isErr,
-  isOk,
   type MaybeError,
   type MaybeResult,
   type ObjectLike,
@@ -16,7 +15,7 @@ import {
   safeFetch,
 } from './safeFetch';
 
-export type FetchWithTokenErrorCode = BaseFetchErrorCode | 'GRAPHQL_ERROR';
+export type FetchWithTokenErrorCode = BaseFetchErrorCode;
 
 function fetchWithCredentials<T extends ObjectLike>(
   input: RequestInfo,
@@ -103,17 +102,7 @@ export async function fetchWithToken<T extends ObjectLike>(
 
   let result = await fetchWithCredentials<T>(input, init);
 
-  // GraphQL will throw unauthorized without the proper response code
-  const graphql_unauthed =
-    isOk(result) &&
-    typeof input === 'string' &&
-    input.endsWith('/graphql/') &&
-    (result[1]?.errors?.[0]?.message?.startsWith('Not authorized') ||
-      result[1]?.errors?.[0]?.message?.startsWith(
-        'unable to validate access token'
-      ));
-
-  if (isErr(result, 'UNAUTHORIZED') || graphql_unauthed) {
+  if (isErr(result, 'UNAUTHORIZED')) {
     // Unset the token promise on UNAUTHORIZED error
     tokenPromise = null;
 

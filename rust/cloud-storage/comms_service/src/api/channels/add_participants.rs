@@ -9,6 +9,8 @@ use axum::extract::Json;
 use axum::{extract::State, http::StatusCode};
 use axum_extra::extract::Cached;
 use comms_db_client::participants::add_participant::{AddParticipantOptions, add_participant};
+use macro_user_id::cowlike::CowLike;
+use macro_user_id::user_id::MacroUserIdStr;
 use model::comms::{ChannelType, ParticipantRole};
 use model::document_storage_service_internal::UpdateUserChannelPermissionsRequest;
 use model_notifications::CommonChannelMetadata;
@@ -102,7 +104,9 @@ pub async fn handler(
         comms_notification::dispatch_notifications_for_invite(
             &ctx,
             &channel_id,
-            channel_admin.context.user_id.as_str(),
+            &MacroUserIdStr::parse_from_str(&channel_admin.context.user_id)
+                .map_err(|_e| (StatusCode::BAD_REQUEST, "Invalid macro user id".to_string()))?
+                .into_owned(),
             req.participants.clone(),
             metadata.clone(),
         )

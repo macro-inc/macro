@@ -51,7 +51,7 @@ export const SegmentedControl: ParentComponent<
 
   return (
     <KSegmentedControl
-      class="flex gap-3 text-sm"
+      class="flex gap-2 text-sm"
       classList={{
         [`justify-between`]: !!props.label,
         'flex-row-reverse': props.labelPlacement === 'right',

@@ -10,6 +10,7 @@ use model::project::response::{
 };
 use model::response::{ErrorResponse, GenericErrorResponse, GenericResponse};
 use model::user::UserContext;
+use model::user::axum_extractor::MacroUserExtractor;
 use models_permissions::share_permission::access_level::ViewAccessLevel;
 use sqlx::PgPool;
 
@@ -33,17 +34,17 @@ pub struct Params {
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(db, user_context, id), fields(user_id=?user_context.user_id, project_id=?id))]
+#[tracing::instrument(skip(db, user_context, id), fields(user_id=?user_context.macro_user_id, project_id=?id))]
 pub async fn get_project_content_handler(
     ProjectAccessLevelExtractor { access_level, .. }: ProjectAccessLevelExtractor<ViewAccessLevel>,
     State(db): State<PgPool>,
-    user_context: Extension<UserContext>,
+    user_context: MacroUserExtractor,
     Path(Params { id }): Path<Params>,
 ) -> Result<Response, Response> {
     let content = macro_db_client::projects::get_project::get_project_content_v2(
         &db,
         id.as_str(),
-        user_context.user_id.as_str(),
+        user_context.macro_user_id,
         access_level,
     )
     .await

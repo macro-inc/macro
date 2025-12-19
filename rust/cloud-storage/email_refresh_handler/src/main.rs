@@ -31,7 +31,7 @@ async fn main() -> Result<(), Error> {
             .load()
             .await,
     ))
-    .email_refresh_queue(&config.email_refresh_queue);
+    .email_link_manager_queue(&config.link_manager_queue);
 
     let ctx = context::Context {
         db,

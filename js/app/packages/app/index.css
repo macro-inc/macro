@@ -102,7 +102,8 @@
   --theme-task:      oklch(from var(--a0) l c 150deg);
 
   --gutter-size: 8px;
-  --transition: 0.2s;
+  --transition: 0.s;
+  /*--transition: 0.15s;*/
 
 /* Semantic Color names, use these when writing tailwind */
 
@@ -228,8 +229,10 @@
   --color-accent-330: oklch(var(--a0l) var(--a0c) calc(var(--a0h) + 330deg));
 }
 
-@source inline("{data-highlighted:}text-{comment,note,canvas,html,folder,email,code,pdf,image,write,chat,video,rss,contact,default}");
+@source inline("{data-highlighted:}text-{comment,note,canvas,html,folder,email,code,pdf,image,write,chat,video,rss,contact,default},{tauri-ios:}{hidden}");
 
+@custom-variant tauri (&:where(.tauri *));
+@custom-variant ios (&:where(.tauri-ios *));
 
 :root {
   --color-focus: var(--color-accent);

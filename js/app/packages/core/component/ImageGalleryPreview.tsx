@@ -13,7 +13,6 @@ import XIcon from '@icon/regular/x.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import Panzoom, { type PanzoomObject } from '@panzoom/panzoom';
-import { commsServiceClient } from '@service-comms/client';
 import {
   type Component,
   createEffect,
@@ -39,11 +38,8 @@ export type ImageGalleryPreviewProps = {
   variant: 'small' | 'dynamic';
   square?: boolean;
   wrapperClass?: string;
-  channelId?: string;
-  messageId?: string;
   attachmentIds: string[];
-  isCurrentUser: boolean;
-  content?: string;
+  onDelete?: (attachmentId: string) => void;
   isContext?: boolean;
 };
 
@@ -430,14 +426,8 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
     panzoomInstance()?.reset({ animate: false });
   });
 
-  const handleDeleteMedia = async (attachmentId: string) => {
-    if (!props.channelId || !props.messageId) return;
-    await commsServiceClient.patchMessage({
-      channel_id: props.channelId,
-      message_id: props.messageId,
-      attachment_ids_to_delete: [attachmentId],
-      content: props.content,
-    });
+  const handleDelete = (attachmentId: string) => {
+    props.onDelete?.(attachmentId);
   };
 
   return (
@@ -484,13 +474,13 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
                             icon={DownloadIcon}
                             onClick={() => downloadImageById(image.id)}
                           />
-                          <Show when={props.isCurrentUser}>
+                          <Show when={props.onDelete}>
                             <MenuSeparator />
                             <MenuItem
                               text="Delete image"
                               icon={TrashIcon}
                               onClick={() =>
-                                handleDeleteMedia(props.attachmentIds[index()])
+                                handleDelete(props.attachmentIds[index()])
                               }
                             />
                           </Show>

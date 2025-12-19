@@ -58,6 +58,15 @@ export function useSplitLayout() {
     return splitManager.createNewSplit(content, true);
   }
 
+  function popoverSplit(content: SplitContent) {
+    const splitManager = globalSplitManager();
+    if (!splitManager) {
+      console.error('no split manager found');
+      return;
+    }
+    return splitManager.createPopoverSplit({ content: content });
+  }
+
   function resetSplit() {
     if (!splitPanelContext) {
       console.error('No split panel context found');
@@ -67,10 +76,20 @@ export function useSplitLayout() {
     splitPanelContext.handle.reset();
   }
 
+  function getSplitCount() {
+    const splitManager = globalSplitManager();
+    if (!splitManager) {
+      return 0;
+    }
+    return splitManager.splits().length;
+  }
+
   return {
-    replaceOrInsertSplit: replaceOrInsertSplit,
-    replaceSplit: replaceSplit,
-    insertSplit: insertSplit,
-    resetSplit: resetSplit,
+    getSplitCount,
+    replaceOrInsertSplit,
+    replaceSplit,
+    insertSplit,
+    resetSplit,
+    popoverSplit,
   };
 }

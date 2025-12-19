@@ -48,7 +48,7 @@ export const startServer = (
     rejectAfter(timeout, 'failed to start server').catch((err) => reject(err));
     const wss = new WebSocketServer({ port });
     wss.on('listening', () => resolve(wss));
-    wss.on('error', (err) => reject(err));
+    wss.on('error', (err: Error) => reject(err));
   });
 
 /**
@@ -63,7 +63,7 @@ export const stopServer = (
   new Promise<void>((resolve, reject) => {
     if (wss === undefined) return resolve();
     rejectAfter(timeout, 'failed to stop server').catch((err) => reject(err));
-    wss.clients.forEach((c) => c.terminate());
+    wss.clients.forEach((c: WebSocket) => c.terminate());
     wss.addListener('close', resolve);
     wss.close();
   });
@@ -83,7 +83,7 @@ export const waitForClientToConnectToServer = (
     rejectAfter(timeout, 'failed to wait for client to connect').catch((err) =>
       reject(err)
     );
-    wss.on('connection', (client) => resolve(client));
+    wss.on('connection', (client: WebSocket) => resolve(client));
   });
 
 /**
@@ -134,7 +134,7 @@ export const onStringMessageReceived =
  */
 export const closeServer = (wss: WebSocketServer | undefined) => {
   if (wss === undefined) return;
-  wss.clients.forEach((client) => client.terminate());
+  wss.clients.forEach((client: WebSocket) => client.terminate());
   wss.close();
 };
 
@@ -157,8 +157,8 @@ export const startServerWithHeartbeat = (
 
     let respondToPings = true;
 
-    wss.on('connection', (ws) => {
-      ws.on('message', (message) => {
+    wss.on('connection', (ws: WebSocket) => {
+      ws.on('message', (message: Buffer) => {
         if (message.toString() === 'ping' && respondToPings) {
           ws.send('pong');
         }
@@ -170,5 +170,5 @@ export const startServerWithHeartbeat = (
     };
 
     wss.on('listening', () => resolve(wss as any));
-    wss.on('error', (err) => reject(err));
+    wss.on('error', (err: Error) => reject(err));
   });

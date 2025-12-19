@@ -1,5 +1,6 @@
 import { ImageGalleryPreview } from '@core/component/ImageGalleryPreview';
 import { ImagePreview } from '@core/component/ImagePreview';
+import { commsServiceClient } from '@service-comms/client';
 import { Match, Switch } from 'solid-js';
 
 type ImageData = {
@@ -20,6 +21,16 @@ type DynamicImageListProps = {
 
 // TODO: wip
 export function DynamicImageList(props: DynamicImageListProps) {
+  const handleDelete = async (attachmentId: string) => {
+    if (!props.isCurrentUser || !props.channelId || !props.messageId) return;
+    await commsServiceClient.patchMessage({
+      channel_id: props.channelId,
+      message_id: props.messageId,
+      content: props.content,
+      attachment_ids_to_delete: [attachmentId],
+    });
+  };
+
   return (
     <Switch>
       <Match when={props.images.length === 1}>
@@ -27,13 +38,11 @@ export function DynamicImageList(props: DynamicImageListProps) {
           <ImagePreview
             image={props.images[0]}
             variant="dynamic"
-            isCurrentUser={props.isCurrentUser}
-            channelId={props.isCurrentUser ? props.channelId : undefined}
-            messageId={props.isCurrentUser ? props.messageId : undefined}
-            attachmentId={
-              props.isCurrentUser ? props.attachmentIds[0] : undefined
+            onDelete={
+              props.isCurrentUser
+                ? () => handleDelete(props.attachmentIds[0])
+                : undefined
             }
-            content={props.content}
             isContext={props.isContext}
           />
         </div>
@@ -44,11 +53,8 @@ export function DynamicImageList(props: DynamicImageListProps) {
           <ImageGalleryPreview
             images={props.images}
             variant="dynamic"
-            isCurrentUser={props.isCurrentUser}
-            channelId={props.isCurrentUser ? props.channelId : undefined}
-            messageId={props.isCurrentUser ? props.messageId : undefined}
-            attachmentIds={props.isCurrentUser ? props.attachmentIds : []}
-            content={props.content}
+            attachmentIds={props.attachmentIds}
+            onDelete={props.isCurrentUser ? handleDelete : undefined}
             isContext={props.isContext}
           />
         </div>

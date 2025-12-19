@@ -130,7 +130,7 @@ type SuccessResponse = { data: Success };
 
 export type ItemType = CloudStorageItemType | 'channel' | 'email';
 
-const _itemTypeSet = new Set([
+const itemTypeSet = new Set([
   'document',
   'channel',
   'email',
@@ -139,7 +139,7 @@ const _itemTypeSet = new Set([
 ]);
 
 export function isItemType(str: string): str is ItemType {
-  return _itemTypeSet.has(str);
+  return itemTypeSet.has(str);
 }
 
 const mapMetadataDocumentName = (

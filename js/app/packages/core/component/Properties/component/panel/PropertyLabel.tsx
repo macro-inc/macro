@@ -1,4 +1,4 @@
-import { useBlockAliasedName } from '@core/block';
+import { useMaybeBlockAliasedName } from '@core/block';
 import { IconButton } from '@core/component/IconButton';
 import DeleteIcon from '@icon/bold/x-bold.svg';
 import PinIcon from '@icon/regular/push-pin.svg';
@@ -17,6 +17,8 @@ import { PropertyDataTypeIcon } from '../../utils';
 
 type PropertyLabelProps = {
   property: Property;
+  withPin?: boolean;
+  withDelete?: boolean;
 };
 
 export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
@@ -28,13 +30,17 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
     onPropertyUnpinned,
     pinnedPropertyIds,
   } = usePropertiesContext();
-  const blockName = useBlockAliasedName();
-  const isBuiltin = getBuiltinPropertyIds(blockName).includes(
-    props.property.propertyDefinitionId
-  );
-  const isDefaultPinned = getDefaultPinnedProperties(blockName).includes(
-    props.property.propertyDefinitionId
-  );
+  const blockName = useMaybeBlockAliasedName();
+  const isBuiltin =
+    blockName &&
+    getBuiltinPropertyIds(blockName).includes(
+      props.property.propertyDefinitionId
+    );
+  const isDefaultPinned =
+    blockName &&
+    getDefaultPinnedProperties(blockName).includes(
+      props.property.propertyDefinitionId
+    );
 
   const isPinned = createMemo(
     () => pinnedPropertyIds?.()?.includes(props.property.propertyId) ?? false
@@ -94,7 +100,12 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
           fallback={<div class="w-3 h-3 flex-shrink-0" />}
         >
           <Show
-            when={onPropertyPinned && onPropertyUnpinned && !isDefaultPinned}
+            when={
+              onPropertyPinned &&
+              onPropertyUnpinned &&
+              !isDefaultPinned &&
+              props.withPin
+            }
           >
             <div
               class={`flex-shrink-0 transition-opacity ${
@@ -113,7 +124,7 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
             </div>
           </Show>
 
-          <Show when={!isBuiltin}>
+          <Show when={!isBuiltin && props.withDelete}>
             <div
               class={`flex-shrink-0 transition-opacity ${
                 isHovered() ? 'opacity-100' : 'opacity-0'
