@@ -1,4 +1,3 @@
-import { deleteMessage } from '@block-channel/signal/channel';
 import { getUrlToMessage } from '@block-channel/state/link';
 import { useBlockId } from '@core/block';
 import { logger } from '@observability';
@@ -7,8 +6,8 @@ import CopyIcon from '@phosphor-icons/core/regular/copy.svg?component-solid';
 import LinkIcon from '@phosphor-icons/core/regular/link.svg?component-solid';
 import Pencil from '@phosphor-icons/core/regular/pencil.svg?component-solid';
 import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
+import { useDeleteMessageMutation } from '@queries/channel/message';
 import { useUserId } from '@service-gql/client';
-import { createCallback } from '@solid-primitives/rootless';
 import { toast } from 'core/component/Toast/Toast';
 import type { Accessor, Component } from 'solid-js';
 import { createMemo } from 'solid-js';
@@ -22,6 +21,7 @@ export type MessageAction = {
 };
 
 export function createMessageActions(params: {
+  channelId: string;
   messageId: string;
   messageContent: string;
   threadId?: string;
@@ -32,7 +32,14 @@ export function createMessageActions(params: {
   const blockId = useBlockId();
   const userId = useUserId();
 
-  const deleteMessage_ = createCallback(() => deleteMessage(params.messageId));
+  const deleteMessageMutation = useDeleteMessageMutation();
+
+  const deleteMessage = () => {
+    deleteMessageMutation.mutate({
+      channelID: params.channelId,
+      messageID: params.messageId,
+    });
+  };
 
   function copyLinkToMessage() {
     const normalizedThreadId =
@@ -85,7 +92,7 @@ export function createMessageActions(params: {
     },
     {
       text: 'Delete Message',
-      onClick: deleteMessage_,
+      onClick: deleteMessage,
       enabled: userId() === params.senderId,
       icon: Trash,
     },

@@ -16,7 +16,7 @@ pub async fn check_gmail_rate_limit(
     redis_client: &RedisClient,
     link_id: Uuid,
     gmail_operation: GmailApiOperation,
-    retryable: bool, // true for backfill, false for webhook (avoid thundering herd if there is an issue)
+    retryable: bool, // true for backfill, false for inbox sync (avoid thundering herd if there is an issue)
 ) -> Result<(), ProcessingError> {
     if redis_client.is_rate_limited(link_id, gmail_operation).await {
         return if retryable {
@@ -105,12 +105,12 @@ pub async fn fetch_link(db: &PgPool, link_id: Uuid) -> anyhow::Result<Link> {
     email_db_client::links::get::fetch_link_by_id(db, link_id)
         .await
         .map_err(|e| {
-            let error_message = "Unable to fetch link from DB for refresh notification";
+            let error_message = "Unable to fetch link from DB";
             tracing::error!(error = ?e, link_id = %link_id, error_message);
             anyhow!(error_message)
         })?
         .ok_or_else(|| {
-            let error_message = "Link not found for refresh notification";
+            let error_message = "Link not found";
             tracing::error!(link_id = %link_id, error_message);
             anyhow!(error_message)
         })

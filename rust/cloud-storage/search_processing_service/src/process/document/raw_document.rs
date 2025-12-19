@@ -6,6 +6,7 @@ use model::document::{
     CONVERTED_DOCUMENT_FILE_NAME, DocumentMetadata, FileType,
     build_cloud_storage_bucket_document_key,
 };
+use model_file_type::FileAssociation;
 use models_search::document::MarkdownParseResult;
 use opensearch_client::{
     OpensearchClient, date_format::EpochSeconds, upsert::document::UpsertDocumentArgs,
@@ -70,8 +71,12 @@ pub async fn update_search_with_raw_document(
 ) -> anyhow::Result<()> {
     // Early exit if we do not support search on the file type
     // TODO: support other documents
-    match search_extractor_message.file_type.macro_app_path().as_str() {
-        "pdf" | "write" | "code" | "canvas" | "md" => {}
+    match search_extractor_message.file_type.macro_app_path() {
+        FileAssociation::Pdf(_)
+        | FileAssociation::Write(_)
+        | FileAssociation::Code(_)
+        | model_file_type::FileAssociation::Canvas(_)
+        | model_file_type::FileAssociation::Md(_) => {}
         _ => {
             tracing::warn!("unsupported file type");
             return Ok(());
@@ -254,7 +259,7 @@ fn generate_upserts(
             raw_content: Some(result.raw_content),
             document_name: document_name.clone(),
             content: result.content,
-            owner_id: document_info.owner.clone(),
+            owner_id: document_info.owner.to_string(),
             file_type: file_type.to_string(),
             updated_at_seconds: updated_at,
         })
@@ -274,8 +279,8 @@ pub async fn update_search_with_sync_document(
     lexical_client: &lexical_client::LexicalClient,
     search_extractor_message: &SearchExtractorMessage,
 ) -> anyhow::Result<()> {
-    match search_extractor_message.file_type.macro_app_path().as_str() {
-        "md" => {}
+    match search_extractor_message.file_type.macro_app_path() {
+        model_file_type::FileAssociation::Md(_) => {}
         _ => {
             tracing::warn!("unsupported file type");
             return Ok(());
@@ -320,6 +325,8 @@ pub async fn update_search_with_sync_document(
 
 #[cfg(test)]
 mod tests {
+    use macro_user_id::user_id::MacroUserIdStr;
+
     use super::*;
 
     #[tokio::test]
@@ -327,10 +334,20 @@ mod tests {
         let document_info = DocumentMetadata {
             document_id: "AAA".to_string(),
             document_version_id: 0,
-            owner: "fake|nobody@macro.com".to_string(),
+            owner: MacroUserIdStr::parse_from_str("macro|nobody@macro.com").unwrap(),
             document_name: "test_document".to_string(),
             file_type: Some("md".to_string()),
-            ..Default::default()
+            sha: None,
+            project_id: None,
+            project_name: None,
+            branched_from_id: None,
+            branched_from_version_id: None,
+            document_family_id: None,
+            document_bom: None,
+            modification_data: None,
+            created_at: None,
+            updated_at: None,
+            sub_type: None,
         };
 
         let markdown_result = vec![

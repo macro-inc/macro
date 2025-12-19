@@ -84,14 +84,16 @@ export function TableCellResizer() {
 
   // Update handlers
   const updateRowHeight = createCallback((heightChange: number) => {
-    const _activeCell = activeCell();
-    if (!_activeCell) {
+    const currentActiveCell = activeCell();
+    if (!currentActiveCell) {
       throw new Error('TableCellResizer: Expected active cell.');
     }
 
     editor()?.update(
       () => {
-        const tableCellNode = $getNearestNodeFromDOMNode(_activeCell.elem);
+        const tableCellNode = $getNearestNodeFromDOMNode(
+          currentActiveCell.elem
+        );
         if (!$isTableCellNode(tableCellNode)) {
           throw new Error('TableCellResizer: Table cell node not found.');
         }
@@ -134,14 +136,16 @@ export function TableCellResizer() {
   });
 
   const updateColumnWidth = createCallback((widthChange: number) => {
-    const _activeCell = activeCell();
-    if (!_activeCell) {
+    const currentActiveCell = activeCell();
+    if (!currentActiveCell) {
       throw new Error('TableCellResizer: Expected active cell.');
     }
 
     editor()?.update(
       () => {
-        const tableCellNode = $getNearestNodeFromDOMNode(_activeCell.elem);
+        const tableCellNode = $getNearestNodeFromDOMNode(
+          currentActiveCell.elem
+        );
         if (!$isTableCellNode(tableCellNode)) {
           throw new Error('TableCellResizer: Table cell node not found.');
         }
@@ -180,14 +184,14 @@ export function TableCellResizer() {
         event.preventDefault();
         event.stopPropagation();
 
-        const _activeCell = activeCell();
-        if (!_activeCell) {
+        const currentActiveCell = activeCell();
+        if (!currentActiveCell) {
           throw new Error('TableCellResizer: Expected active cell.');
         }
 
         if (pointerStartPosRef) {
           const { x, y } = pointerStartPosRef;
-          if (!_activeCell) {
+          if (!currentActiveCell) {
             return;
           }
 
@@ -214,8 +218,8 @@ export function TableCellResizer() {
         event.preventDefault();
         event.stopPropagation();
 
-        const _activeCell = activeCell();
-        if (!_activeCell) {
+        const currentActiveCell = activeCell();
+        if (!currentActiveCell) {
           throw new Error('TableCellResizer: Expected active cell.');
         }
 
@@ -319,15 +323,15 @@ export function TableCellResizer() {
 
   // UI related
   const getResizers = createMemo(() => {
-    const _activeCell = activeCell();
+    const currentActiveCell = activeCell();
     editorWidth(); // Make this memo reactive on editor width change.
     const rootEl = editor()?.getRootElement();
     // let rootRect = rootEl ? containedClientRect(rootEl!) : null;
     // let containerRect = rootEl ? getContainerRect(rootEl) : null;
     let rootRect = rootEl ? rootEl.getBoundingClientRect() : null;
-    if (_activeCell) {
-      // const cellRect = containedClientRect(_activeCell.elem);
-      const cellRect = _activeCell.elem.getBoundingClientRect();
+    if (currentActiveCell) {
+      // const cellRect = containedClientRect(currentActiveCell.elem);
+      const cellRect = currentActiveCell.elem.getBoundingClientRect();
       const zoneWidth = 5; // Pixel width of the zone where you can drag the edge
 
       const styles: Record<string, JSX.CSSProperties> = {
@@ -352,35 +356,35 @@ export function TableCellResizer() {
       };
 
       const tableRect = tableRectRef;
-      const _draggingDirection = draggingDirection();
-      const _pointerCurrentPos = pointerCurrentPos();
+      const currentDraggingDirection = draggingDirection();
+      const currentPointerPos = pointerCurrentPos();
 
-      if (_draggingDirection && _pointerCurrentPos && tableRect) {
+      if (currentDraggingDirection && currentPointerPos && tableRect) {
         const compensatedMousePos = {
-          x: _pointerCurrentPos.x,
-          y: _pointerCurrentPos.y,
+          x: currentPointerPos.x,
+          y: currentPointerPos.y,
         };
-        if (isHeightChanging(_draggingDirection)) {
-          styles[_draggingDirection].left = `${tableRect.left}px`;
-          styles[_draggingDirection].top = `${compensatedMousePos.y}px`;
-          styles[_draggingDirection].height = '3px';
-          styles[_draggingDirection].width = `${tableRect.width}px`;
+        if (isHeightChanging(currentDraggingDirection)) {
+          styles[currentDraggingDirection].left = `${tableRect.left}px`;
+          styles[currentDraggingDirection].top = `${compensatedMousePos.y}px`;
+          styles[currentDraggingDirection].height = '3px';
+          styles[currentDraggingDirection].width = `${tableRect.width}px`;
 
           // Do not let the resizer go outside of the root element;
           if (rootRect) {
-            styles[_draggingDirection].left =
+            styles[currentDraggingDirection].left =
               `${Math.max(rootRect.left, tableRect.left)}px`;
-            styles[_draggingDirection].width =
+            styles[currentDraggingDirection].width =
               `${Math.min(rootRect.width, tableRect.width)}px`;
           }
         } else {
-          styles[_draggingDirection].top = `${tableRect.top}px`;
-          styles[_draggingDirection].left = `${compensatedMousePos.x}px`;
-          styles[_draggingDirection].width = '3px';
-          styles[_draggingDirection].height = `${tableRect.height}px`;
+          styles[currentDraggingDirection].top = `${tableRect.top}px`;
+          styles[currentDraggingDirection].left = `${compensatedMousePos.x}px`;
+          styles[currentDraggingDirection].width = '3px';
+          styles[currentDraggingDirection].height = `${tableRect.height}px`;
         }
 
-        styles[_draggingDirection]['background-color'] =
+        styles[currentDraggingDirection]['background-color'] =
           'var(--color-accent-bg)';
       }
 

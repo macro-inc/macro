@@ -119,11 +119,11 @@ export function MarkdownImage(props: ImageDecoratorProps) {
   };
 
   const clickImageHandler = () => {
-    const _editor = editor();
-    if (_editor === undefined) return;
-    if (!_editor.isEditable()) return;
+    const currentEditor = editor();
+    if (currentEditor === undefined) return;
+    if (!currentEditor.isEditable()) return;
     if (isSelectedAsNode()) return;
-    _editor.update(() => {
+    currentEditor.update(() => {
       const sel = $createNodeSelection();
       sel.add(props.key);
       $setSelection(sel);
@@ -131,9 +131,9 @@ export function MarkdownImage(props: ImageDecoratorProps) {
   };
 
   const deleteImage = () => {
-    const _editor = editor();
-    if (_editor === undefined) return;
-    _editor.update(() => {
+    const currentEditor = editor();
+    if (currentEditor === undefined) return;
+    currentEditor.update(() => {
       let node = $getNodeByKey(props.key);
       if (!node) return;
       const nextSibling = node.getNextSibling();

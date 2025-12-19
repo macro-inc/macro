@@ -1,4 +1,7 @@
+import { useSuspenseContext } from '@app/component/SuspenseContext';
+import { EmptyState } from '@app/component/UnifiedListEmptyState';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
+import type { ViewId } from '@core/types/view';
 import Fragment from '@core/util/Fragment';
 import { onElementConnect } from '@solid-primitives/lifecycle';
 import { debounce } from '@solid-primitives/scheduled';
@@ -9,7 +12,6 @@ import {
   createMemo,
   createRenderEffect,
   createSignal,
-  type JSX,
   Match,
   on,
   onCleanup,
@@ -38,6 +40,14 @@ import type {
 } from '../types/entity';
 import type { WithSearch } from '../types/search';
 import { Entity } from './Entity';
+
+const cacheMap = new Map<
+  string,
+  {
+    offset: number;
+    cache?: any; // TBD
+  }
+>();
 
 /**
  * Merges search data from two entities, preferring service source with local as fallback.
@@ -193,6 +203,7 @@ const getOperations = <T extends Partial<EntityQueryOperations>>(
 };
 
 interface UnifiedInfiniteListContext<T extends EntityData> {
+  id: string;
   entityInfiniteQueries: Array<
     EntityQueryWithOperations<
       EntityData | WithSearch<EntityData>,
@@ -210,6 +221,7 @@ interface UnifiedInfiniteListContext<T extends EntityData> {
 }
 
 export function createUnifiedInfiniteList<T extends EntityData>({
+  id,
   entityInfiniteQueries,
   entityQueries,
   entityMapper = (entity: EntityData) => entity as T,
@@ -365,29 +377,6 @@ export function createUnifiedInfiniteList<T extends EntityData>({
     });
   });
 
-  const [showNoResults, setShowNoResults] = createSignal(false);
-  let noResultsTimeoutId: ReturnType<typeof setTimeout> | undefined;
-  createEffect(
-    on(
-      [() => sortedEntities().length, debouncedIsLoading],
-      ([entitiesLength, loading]) => {
-        if (noResultsTimeoutId) clearTimeout(noResultsTimeoutId);
-
-        if (!loading && entitiesLength === 0) {
-          noResultsTimeoutId = setTimeout(() => {
-            setShowNoResults(true);
-          }, DEBOUNCE_LOADING_STATE_MS + 50);
-        } else if (entitiesLength > 0) {
-          setShowNoResults(false);
-        }
-      }
-    )
-  );
-
-  onCleanup(() => {
-    if (noResultsTimeoutId) clearTimeout(noResultsTimeoutId);
-  });
-
   let isFetchingMore = false;
   const fetchMoreData = async () => {
     if (disableFetchMore?.() || isFetchingMore) return;
@@ -415,8 +404,9 @@ export function createUnifiedInfiniteList<T extends EntityData>({
     children?: EntityRenderer<T>;
     entityListRef?: (ref: HTMLDivElement | undefined) => void;
     virtualizerHandle?: Setter<VirtualizerHandle | undefined>;
-    emptyState?: JSX.Element;
-    hasRefinementsFromBase?: Accessor<boolean>;
+    hasRefinementsFromBase?: boolean;
+    viewId?: ViewId;
+    searchText?: string;
   }) => {
     const [listRef, setListRef] = createSignal<HTMLDivElement>();
     let containerSizeObserver: ResizeObserver | null = null;
@@ -474,22 +464,101 @@ export function createUnifiedInfiniteList<T extends EntityData>({
 
     onCleanup(() => debouncedFetchMore.clear());
 
+    const [virtualizerHandle, setVirtualizerHandle] =
+      createSignal<VirtualizerHandle>();
+    // const cacheKey = createMemo(() => (id ? `list-cache-${id}` : null));
+    const cacheKey = `list-cache-${id}`;
+
+    // Restore scroll position on mount
+    const restoreScrollPosition = () => {
+      const handle = virtualizerHandle();
+      const { offset: cachedOffset } = cacheMap.get(cacheKey) || { offset: 0 };
+      if (handle && cachedOffset) {
+        handle.scrollTo(cachedOffset);
+      }
+    };
+
+    createEffect(
+      on(virtualizerHandle, (virtualizerHandle, prev) => {
+        if (virtualizerHandle && prev == null) {
+          restoreScrollPosition();
+        }
+      })
+    );
+
+    const cacheVirtualizerHandle = () => {
+      const handle = virtualizerHandle();
+      const key = cacheKey;
+
+      if (handle && key) {
+        const { scrollOffset } = handle;
+        cacheMap.set(key, { offset: scrollOffset });
+      }
+    };
+    const { isPending } = useSuspenseContext();
+
+    // Save scroll position and cache on cleanup
+    onCleanup(() => {
+      cacheVirtualizerHandle();
+    });
+
+    createEffect(
+      on(
+        isPending,
+        (isPending, prevIsPending) => {
+          if (isPending) {
+            cacheVirtualizerHandle();
+          }
+          if (isPending === false && prevIsPending === true) {
+            restoreScrollPosition();
+          }
+        },
+        { defer: true }
+      )
+    );
+
+    // stable empty state
+    const entityCount = createMemo(() => sortedEntities().length);
+    const [showEmptyState, setShowEmptyState] = createSignal<boolean>(false);
+    const [loadFinished, setLoadFinished] = createSignal<boolean>(false);
+    createEffect(() => {
+      if (entityCount() === 0) {
+        setLoadFinished(false);
+        let count = 0;
+        const timeoutId = setInterval(() => {
+          const countExceeded = ++count > 10;
+          if (countExceeded) {
+            console.warn('Too many interval iterations');
+          }
+
+          if (loadFinished() || countExceeded) clearInterval(timeoutId);
+          if (entityCount() === 0 && !debouncedIsLoading()) {
+            setLoadFinished(true);
+          }
+        }, 500);
+      }
+    });
+    createEffect(() => {
+      if (hasFinishedInitialLoad() && !debouncedIsLoading()) {
+        setLoadFinished(true);
+      }
+    });
+    createEffect(() => {
+      if (entityCount() > 0) {
+        setShowEmptyState(false);
+        return;
+      }
+      setShowEmptyState(loadFinished());
+    });
+
     return (
       <Switch>
-        <Match
-          when={
-            hasFinishedInitialLoad() &&
-            !props.hasRefinementsFromBase?.() &&
-            sortedEntities().length === 0
-          }
-        >
-          {props.emptyState}
-        </Match>
-        <Match when={showNoResults() && props.hasRefinementsFromBase?.()}>
-          <div class="flex size-full p-4">
-            <span class="font-mono text-ink-muted">No results found</span>
-          </div>
-          {/* TODO: Filtered Empty State */}
+        <Match when={showEmptyState()}>
+          <EmptyState
+            viewId={props.viewId}
+            search={!!props.searchText}
+            hasRefinementsFromBase={props.hasRefinementsFromBase}
+          />
         </Match>
         <Match when={true}>
           <div class="flex size-full relative" ref={setListRef}>
@@ -502,11 +571,18 @@ export function createUnifiedInfiniteList<T extends EntityData>({
                 }}
               >
                 <VList
-                  ref={props.virtualizerHandle}
+                  ref={(ref) => {
+                    // runs before onCleanup
+                    // prevent ref from being set to null on cleanup otherwise the scroll position will be lost in onCleanup saving the cache
+                    if (ref) {
+                      setVirtualizerHandle(ref);
+                    }
+                    props.virtualizerHandle?.(ref);
+                  }}
                   data={sortedEntitiesStore}
                   class={`${LIST_WRAPPER} scrollbar-hidden`}
                   data-unified-entity-list
-                  overscan={computedOverscan()}
+                  bufferSize={computedOverscan() * 50}
                 >
                   {(entity, index) => {
                     if (

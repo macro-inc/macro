@@ -29,6 +29,7 @@ import {
   Suspense,
   Switch,
 } from 'solid-js';
+import { beveledCorners } from '../../block-theme/signals/themeSignals';
 import { ComposeEmailInput, type ComposeInputData } from './ComposeEmailInput';
 
 type EmailComposeErrors =
@@ -135,7 +136,7 @@ export function EmailCompose() {
   const onSubmit = (data: ComposeInputData) => {
     setValidationError(null);
 
-    const _link = link();
+    const currentLink = link();
 
     if (!selectedRecipients().length) {
       setValidationError(
@@ -161,7 +162,7 @@ export function EmailCompose() {
       return;
     }
 
-    if (!_link) {
+    if (!currentLink) {
       setValidationError(
         new EmailComposeError('no_link', 'Unable to find linked email account')
       );
@@ -170,7 +171,7 @@ export function EmailCompose() {
 
     sendMutation.mutate({
       message: {
-        link_id: _link.id,
+        link_id: currentLink.id,
         to: convertToContactInfoArray(selectedRecipients()),
         cc:
           ccRecipients().length > 0
@@ -243,12 +244,12 @@ export function EmailCompose() {
         </Switch>
 
         <div
-          class="macro-message-width mx-auto w-full max-h-full my-12 overflow-hidden"
+          class="macro-message-width mx-auto w-full max-h-full my-12 overflow-hidden px-4"
           classList={{
             'pointer-events-none opacity-50': hasLinkError(),
           }}
         >
-          <ClippedPanel tl tr>
+          <ClippedPanel tl={!beveledCorners()}>
             <div
               class="w-full p-4 bg-input max-h-full overflow-hidden flex flex-col min-h-0"
               classList={{

@@ -35,7 +35,7 @@ pub async fn handle(
             )?;
 
         let shared_document = document.clone();
-        user_id = Some(shared_document.owner);
+        user_id = Some(shared_document.owner.to_string());
 
         tracing::trace!(document_id=%document_id, user_id=?user_id, file_type=?document.file_type, "retrieved document");
 

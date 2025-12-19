@@ -15,54 +15,64 @@ fn test_build_search_request() -> anyhow::Result<()> {
     let result = builder.build_search_request()?;
 
     let expected = serde_json::json!({
-        "from": 20,
-        "size": 20,
-        "collapse": {
-            "field": "entity_id"
-        },
-        "sort": DocumentSearchConfig::default_sort_types().iter().map(|s| s.to_json()).collect::<Vec<_>>(),
-        "highlight": DocumentSearchConfig::append_owner_highlights(DocumentSearchConfig::default_highlight()).to_json(),
-        "query": {
-            "bool": {
-                "must": [
-                    {
-                        "bool": {
-                            "minimum_should_match": 1,
-                            "should": [
-                                {
-                                    "wildcard": {
-                                        "owner_id": {
-                                        "value": "macro|test*",
-                                        "case_insensitive": true,
-                                        "boost": 5000.0
-                                        }
-                                    }
-                                },
-                                {
-                                    "match_phrase": {
-                                        "content": "test"
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    {"term": {"_index": "documents"}},
-                ],
-                "should": [
-                    {
-                        "terms": {
-                            "entity_id": ["doc1", "doc2"]
-                        }
-                    },
-                    {
-                        "term": {
-                            "owner_id": "user123"
-                        }
-                    }
-                ],
-                "minimum_should_match": 1,
-            }
-        }
+           "from": 20,
+           "size": 20,
+           "collapse": {
+               "field": "entity_id"
+           },
+           "sort": DocumentSearchConfig::default_sort_types().iter().map(|s| s.to_json()).collect::<Vec<_>>(),
+           "highlight": DocumentSearchConfig::append_owner_highlights(DocumentSearchConfig::default_highlight()).to_json(),
+    "query": {
+       "bool": {
+         "filter": [
+           {
+             "bool": {
+               "minimum_should_match": 1,
+               "should": [
+                 {
+                   "terms": {
+                     "entity_id": ["doc1", "doc2"]
+                   }
+                 },
+                 {
+                   "term": {
+                     "owner_id": "user123"
+                   }
+                 }
+               ]
+             }
+           },
+           {
+             "term": {
+               "_index": "documents"
+             }
+           }
+         ],
+         "must": [
+           {
+             "bool": {
+               "minimum_should_match": 1,
+               "should": [
+                 {
+                   "wildcard": {
+                     "owner_id": {
+                       "boost": 5000.0,
+                       "case_insensitive": true,
+                       "value": "macro|test*"
+                     }
+                   }
+                 },
+                 {
+                   "match_phrase": {
+                     "content": "test"
+                   }
+                 }
+               ]
+             }
+           }
+         ]
+       }
+     },
     });
 
     assert_eq!(result.to_json(), expected);

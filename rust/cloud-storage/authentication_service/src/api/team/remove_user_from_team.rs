@@ -1,22 +1,19 @@
+use crate::api::{
+    context::ApiContext,
+    middleware::team_access::{OwnerRole, TeamAccessRoleExtractor},
+};
 use axum::{
     Extension, Json,
     extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use macro_user_id::user_id::MacroUserId;
-use teams::domain::{model::RemoveUserFromTeamError, team_repo::TeamService};
-
-use crate::api::{
-    context::ApiContext,
-    middleware::team_access::{OwnerRole, TeamAccessRoleExtractor},
-};
-
 use model::{
     response::{EmptyResponse, ErrorResponse},
     tracking::IPContext,
-    user::UserContext,
 };
+use model_user::axum_extractor::MacroUserExtractor;
+use teams::domain::{model::RemoveUserFromTeamError, team_repo::TeamService};
 
 #[derive(serde::Deserialize)]
 pub struct Param {
@@ -28,8 +25,6 @@ pub struct Param {
 pub enum RemoveFromTeamError {
     #[error("unable to remove user from team")]
     RemoveUserFromTeamError(#[from] RemoveUserFromTeamError),
-    #[error("unable to parse user id")]
-    InvalidMacroUserId,
 }
 
 impl IntoResponse for RemoveFromTeamError {
@@ -75,12 +70,6 @@ impl IntoResponse for RemoveFromTeamError {
                     }),
                 ),
             },
-            RemoveFromTeamError::InvalidMacroUserId => (
-                StatusCode::BAD_REQUEST,
-                Json(ErrorResponse {
-                    message: "invalid user id",
-                }),
-            ),
         }
         .into_response()
     }
@@ -103,12 +92,12 @@ impl IntoResponse for RemoveFromTeamError {
             (status = 500, body=ErrorResponse),
         ),
     )]
-#[tracing::instrument(skip(ctx, ip_context, user_context), fields(client_ip=%ip_context.client_ip, user_id=%user_context.user_id, fusion_user_id=%user_context.fusion_user_id))]
+#[tracing::instrument(skip(ctx, ip_context, user_context), fields(client_ip=%ip_context.client_ip, user_id=%user_context.macro_user_id, fusion_user_id=%user_context.user_context.fusion_user_id))]
 pub async fn handler(
     access: TeamAccessRoleExtractor<OwnerRole>,
     State(ctx): State<ApiContext>,
     ip_context: Extension<IPContext>,
-    user_context: Extension<UserContext>,
+    user_context: MacroUserExtractor,
     Path(Param {
         team_id,
         remove_user_id,
@@ -116,12 +105,8 @@ pub async fn handler(
 ) -> Result<(StatusCode, Json<EmptyResponse>), RemoveFromTeamError> {
     tracing::info!("remove_user_from_team");
 
-    let remove_user_id = MacroUserId::parse_from_str(&remove_user_id)
-        .map_err(|_| RemoveFromTeamError::InvalidMacroUserId)?
-        .lowercase();
-
     ctx.teams_service
-        .remove_user_from_team(&team_id, &remove_user_id)
+        .remove_user_from_team(&team_id, &user_context.macro_user_id)
         .await?;
 
     Ok((StatusCode::OK, Json(EmptyResponse::default())))

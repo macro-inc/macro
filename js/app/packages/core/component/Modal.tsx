@@ -63,10 +63,10 @@ export function Content(props: ComponentProps<typeof Dialog.Content<'div'>>) {
   });
 
   const positionStyle = createMemo(() => {
-    const _rect = rect();
-    if (_rect) {
-      const centerX = _rect.left + _rect.width / 2;
-      const centerY = _rect.top + _rect.height / 2;
+    const currentRect = rect();
+    if (currentRect) {
+      const centerX = currentRect.left + currentRect.width / 2;
+      const centerY = currentRect.top + currentRect.height / 2;
 
       return {
         position: 'absolute',

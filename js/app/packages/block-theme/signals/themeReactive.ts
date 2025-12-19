@@ -45,7 +45,8 @@ function jamTransition(): void {
     document.documentElement.style.setProperty('--transition', '0s');
 
     setTimeout(() => {
-      document.documentElement.style.setProperty('--transition', '0.5s');
+      document.documentElement.style.setProperty('--transition', '0.0s');
+      // document.documentElement.style.setProperty('--transition', '0.15s');
       transitionState = false;
     }, 100);
   }
