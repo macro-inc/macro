@@ -117,88 +117,88 @@ export function EmailCompose() {
     const container = refs().containerRef;
     if (!container) return;
     attachComposeHotkeys(container);
+  });
 
-    registerHotkey({
-      hotkey: 'shift+cmd+o',
-      scopeId: composeHotkeyScope,
-      description: 'Edit "To" recipients',
-      keyDownHandler: () => {
-        refs()?.directRecipientsSelector?.focus();
+  registerHotkey({
+    hotkey: 'shift+cmd+o',
+    scopeId: composeHotkeyScope,
+    description: 'Edit "To" recipients',
+    keyDownHandler: () => {
+      refs()?.directRecipientsSelector?.focus();
+      return true;
+    },
+    runWithInputFocused: true,
+    hide: true,
+    hotkeyToken: TOKENS.email.compose.edit.recipients,
+  });
+
+  registerHotkey({
+    hotkey: 'shift+cmd+c',
+    scopeId: composeHotkeyScope,
+    description: 'Edit "Cc" recipients',
+    keyDownHandler: () => {
+      const visible = showCc();
+      if (!visible) {
+        setShowCc(true);
+        queueMicrotask(() => refs()?.ccRecipientsSelector?.focus());
         return true;
-      },
-      runWithInputFocused: true,
-      hide: true,
-      hotkeyToken: TOKENS.email.compose.edit.recipients,
-    });
+      }
 
-    registerHotkey({
-      hotkey: 'shift+cmd+c',
-      scopeId: composeHotkeyScope,
-      description: 'Edit "Cc" recipients',
-      keyDownHandler: () => {
-        const visible = showCc();
-        if (!visible) {
-          setShowCc(true);
-          queueMicrotask(() => refs()?.ccRecipientsSelector?.focus());
-          return true;
-        }
+      refs()?.ccRecipientsSelector?.focus();
 
-        refs()?.ccRecipientsSelector?.focus();
+      return true;
+    },
+    runWithInputFocused: true,
+    hide: true,
+    hotkeyToken: TOKENS.email.compose.edit.ccRecipients,
+  });
 
+  registerHotkey({
+    hotkey: 'shift+cmd+b',
+    scopeId: composeHotkeyScope,
+    description: 'Edit "Bcc" recipients',
+    keyDownHandler: () => {
+      const visible = showBcc();
+      if (!visible) {
+        setShowBcc(true);
+        queueMicrotask(() => refs()?.bccRecipientsSelector?.focus());
         return true;
-      },
-      runWithInputFocused: true,
-      hide: true,
-      hotkeyToken: TOKENS.email.compose.edit.ccRecipients,
-    });
+      }
 
-    registerHotkey({
-      hotkey: 'shift+cmd+b',
-      scopeId: composeHotkeyScope,
-      description: 'Edit "Bcc" recipients',
-      keyDownHandler: () => {
-        const visible = showBcc();
-        if (!visible) {
-          setShowBcc(true);
-          queueMicrotask(() => refs()?.bccRecipientsSelector?.focus());
-          return true;
-        }
+      refs()?.bccRecipientsSelector?.focus();
 
-        refs()?.bccRecipientsSelector?.focus();
+      return true;
+    },
+    runWithInputFocused: true,
+    hide: true,
+    hotkeyToken: TOKENS.email.compose.edit.bccRecipients,
+  });
 
-        return true;
-      },
-      runWithInputFocused: true,
-      hide: true,
-      hotkeyToken: TOKENS.email.compose.edit.bccRecipients,
-    });
+  registerHotkey({
+    hotkey: 'shift+cmd+s',
+    scopeId: composeHotkeyScope,
+    description: 'Edit subject',
+    keyDownHandler: () => {
+      refs()?.subjectInput?.focus();
+      return true;
+    },
+    runWithInputFocused: true,
+    hide: true,
+    hotkeyToken: TOKENS.email.compose.edit.subject,
+  });
 
-    registerHotkey({
-      hotkey: 'shift+cmd+s',
-      scopeId: composeHotkeyScope,
-      description: 'Edit subject',
-      keyDownHandler: () => {
-        refs()?.subjectInput?.focus();
-        return true;
-      },
-      runWithInputFocused: true,
-      hide: true,
-      hotkeyToken: TOKENS.email.compose.edit.subject,
-    });
-
-    registerHotkey({
-      hotkey: 'shift+cmd+m',
-      scopeId: composeHotkeyScope,
-      description: 'Edit message',
-      keyDownHandler: () => {
-        console.log(refs().messageInput);
-        refs()?.messageInput?.focus();
-        return true;
-      },
-      runWithInputFocused: true,
-      hide: true,
-      hotkeyToken: TOKENS.email.compose.edit.message,
-    });
+  registerHotkey({
+    hotkey: 'shift+cmd+m',
+    scopeId: composeHotkeyScope,
+    description: 'Edit message',
+    keyDownHandler: () => {
+      console.log(refs().messageInput);
+      refs()?.messageInput?.focus();
+      return true;
+    },
+    runWithInputFocused: true,
+    hide: true,
+    hotkeyToken: TOKENS.email.compose.edit.message,
   });
 
   const [triedToSubmit, _setTriedToSubmit] = createSignal(false);
