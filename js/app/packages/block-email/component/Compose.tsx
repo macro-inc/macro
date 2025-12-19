@@ -192,7 +192,6 @@ export function EmailCompose() {
     scopeId: composeHotkeyScope,
     description: 'Edit message',
     keyDownHandler: () => {
-      console.log(refs().messageInput);
       refs()?.messageInput?.focus();
       return true;
     },
