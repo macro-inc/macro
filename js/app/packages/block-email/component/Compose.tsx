@@ -22,6 +22,7 @@ import Caution from '@icon/regular/warning.svg';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { useSendMessageMutation } from '@queries/email/thread';
 import {
+  Accessor,
   createMemo,
   createSignal,
   Match,
@@ -45,6 +46,15 @@ class EmailComposeError {
   ) {}
 }
 
+type EmailComposeElementRefs = {
+  directRecipientsSelector: HTMLElement | undefined;
+  ccRecipientsSelector: HTMLElement | undefined;
+  bccRecipientsSelector: HTMLElement | undefined;
+  containerRef: HTMLElement | undefined;
+  subjectInput: HTMLElement | undefined;
+  messageInput: HTMLElement | undefined;
+};
+
 export function EmailCompose() {
   const hasPaidAccess = useHasPaidAccess();
   const { showPaywall } = usePaywallState();
@@ -52,6 +62,22 @@ export function EmailCompose() {
   const [subject, setSubject] = createSignal<string>('');
 
   const emailLinksQuery = useEmailLinksQuery();
+
+  const [refs, setRefs] = createSignal<EmailComposeElementRefs>({
+    directRecipientsSelector: undefined,
+    ccRecipientsSelector: undefined,
+    bccRecipientsSelector: undefined,
+    containerRef: undefined,
+    subjectInput: undefined,
+    messageInput: undefined,
+  });
+
+  const registerRef = (name: keyof EmailComposeElementRefs) => {
+    return (el: HTMLElement) => {
+      setRefs((p) => ({ ...p, [name]: el }));
+    };
+  };
+
 
   const link = createMemo(() => {
     const data = emailLinksQuery.data;
@@ -207,7 +233,10 @@ export function EmailCompose() {
           ]}
         />
       </SplitHeaderLeft>
-      <div class="relative flex flex-col w-full h-full panel min-h-0 overflow-hidden">
+      <div
+        ref={registerRef('containerRef')}
+        class="relative flex flex-col w-full h-full panel min-h-0 overflow-hidden"
+      >
         <Switch>
           <Match when={hasLinkError()}>
             <div class="w-full bg-alert-bg border-b border-t border-alert/20 text-alert-ink p-2">
@@ -307,6 +336,7 @@ export function EmailCompose() {
                     </div>
                     <div class="flex-1">
                       <RecipientSelector<'user' | 'contact'>
+                        inputRef={registerRef('directRecipientsSelector')}
                         options={destinationOptions}
                         selectedOptions={selectedRecipients}
                         setSelectedOptions={setSelectedRecipients}
@@ -334,6 +364,7 @@ export function EmailCompose() {
                       </div>
                       <div class="flex-1">
                         <RecipientSelector<'user' | 'contact'>
+                          inputRef={registerRef('ccRecipientsSelector')}
                           options={destinationOptions}
                           selectedOptions={ccRecipients}
                           setSelectedOptions={setCcRecipients}
@@ -354,6 +385,7 @@ export function EmailCompose() {
                       </div>
                       <div class="flex-1">
                         <RecipientSelector<'user' | 'contact'>
+                          inputRef={registerRef('bccRecipientsSelector')}
                           options={destinationOptions}
                           selectedOptions={bccRecipients}
                           setSelectedOptions={setBccRecipients}
@@ -374,6 +406,7 @@ export function EmailCompose() {
 
                     <div class="flex-1">
                       <input
+                        ref={registerRef('subjectInput')}
                         type="text"
                         value={subject()}
                         placeholder="Subject"
@@ -403,6 +436,7 @@ export function EmailCompose() {
                 }}
               >
                 <ComposeEmailInput
+                  inputRef={registerRef('messageInput')}
                   onSubmit={onSubmit}
                   isSubmitting={sendMutation.isPending}
                   disabled={hasLinkError()}
