@@ -8,6 +8,7 @@ import { useIsAuthenticated } from '@core/auth';
 import type { BlockAliasContext } from '@core/block';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { Button } from '@core/component/FormControls/Button';
+import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { ContextMenuContent, MenuItem } from '@core/component/Menu';
 import { fileTypeToResolvedBlockName } from '@core/constant/allBlocks';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
@@ -55,6 +56,7 @@ import { HelpDrawer } from './HelpDrawer';
 import { SuspenseContextComp } from './SuspenseContext';
 import { SplitHeaderLeft } from './split-layout/components/SplitHeader';
 import { SplitTabs } from './split-layout/components/SplitTabs';
+import { SplitToolbarRight } from './split-layout/components/SplitToolbar';
 import type { SplitPanelContextType } from './split-layout/context';
 import { SplitPanelContext } from './split-layout/context';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
@@ -64,8 +66,6 @@ import {
   VIEWCONFIG_DEFAULTS_IDS,
   type ViewConfigBase,
 } from './ViewConfig';
-import { SplitToolbarRight } from './split-layout/components/SplitToolbar';
-import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 
 false && fileFolderDrop;
 

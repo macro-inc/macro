@@ -1,5 +1,4 @@
 import { useOpenInstructionsMd } from '@core/component/AI/util/instructions';
-import { ENABLE_SEARCH_SERVICE } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
@@ -25,7 +24,6 @@ import { playSound } from '../util/sound';
 import {
   konsoleOpen,
   resetKonsoleMode,
-  setKonsoleMode,
   toggleKonsoleVisibility,
 } from './command/state';
 import { CREATABLE_BLOCKS, setCreateMenuOpen } from './Launcher';
@@ -48,12 +46,6 @@ export default function GlobalShortcuts() {
     if (!wasOpen) {
       playSound('Kick - Struct - Tight Minimal 4');
     }
-    return;
-  };
-
-  const handleSearchMenu = () => {
-    setKonsoleMode('FULL_TEXT_SEARCH');
-    toggleKonsoleVisibility();
     return;
   };
 
@@ -162,21 +154,6 @@ export default function GlobalShortcuts() {
     icon: AiInstructionsIcon,
     runWithInputFocused: true,
   });
-
-  if (ENABLE_SEARCH_SERVICE) {
-    registerHotkey({
-      hotkeyToken: TOKENS.global.searchMenu,
-      hotkey: 'cmd+p',
-      scopeId: 'global',
-      description: 'Full text search',
-      keyDownHandler: () => {
-        handleSearchMenu();
-        return true;
-      },
-      runWithInputFocused: true,
-      displayPriority: 9,
-    });
-  }
 
   const setThemeScope = registerHotkey({
     scopeId: 'global',

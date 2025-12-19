@@ -1197,6 +1197,7 @@ export function createNavigationEntityListShortcut({
     hotkeyToken: TOKENS.entity.open,
     scopeId: splitHotkeyScope,
     description: 'Open',
+    hide: true,
     keyDownHandler: () => {
       const entity = getSelectedEntity()?.entity;
       if (!entity) return false;
@@ -1286,7 +1287,7 @@ export function createNavigationEntityListShortcut({
     canExecuteKeyDownHandler: () => isViewingList(),
     displayPriority: 10,
   });
-  
+
   const clearMultiCondition: () => boolean = () =>
     isViewingList() && viewData().multiSelectEntities.length > 0;
   const closeSpotlightCondition = () => splitHandle.isSpotLight();

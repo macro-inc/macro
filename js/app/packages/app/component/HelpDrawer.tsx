@@ -139,7 +139,10 @@ export function HelpDrawer(props: { viewId?: ViewId }) {
               ],
             },
             {
-              hotkeyTokenSequence: [TOKENS.split.goCommand, TOKENS.split.go.toggleRightPanel],
+              hotkeyTokenSequence: [
+                TOKENS.split.goCommand,
+                TOKENS.split.go.toggleRightPanel,
+              ],
             },
           ]}
         />
