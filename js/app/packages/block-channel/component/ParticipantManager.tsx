@@ -109,7 +109,7 @@ export function ParticipantManager(props: { participantCount: number }) {
                   isChannelAdminOrOwnerMemo()
                 }
               >
-                <div class="flex flex-row justify-between gap-2 h-[40px] text-ink-muted border-b border-edge-muted/50 px-2 items-center">
+                <div class="flex flex-row justify-between gap-2 min-h-[40px] text-ink-muted border-b border-edge-muted/50 p-2 items-center">
                   <RecipientSelector<'user'>
                     setSelectedOptions={setUsersToInvite}
                     selectedOptions={usersToInvite}
@@ -122,7 +122,11 @@ export function ParticipantManager(props: { participantCount: number }) {
                     disabled={usersToInvite().length === 0}
                     onClick={handleAddParticipants}
                     icon={InvitedIcon}
-                    text="Add Participant"
+                    text={
+                      usersToInvite().length > 1
+                        ? 'Add Participants'
+                        : 'Add Participant'
+                    }
                     theme="accent"
                   />
                 </div>
