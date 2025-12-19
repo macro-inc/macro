@@ -1,6 +1,6 @@
 import { useIsAuthenticated } from '@core/auth';
 import { useNavigate } from '@solidjs/router';
-import { DeprecatedButton } from '../FormControls/DeprecatedButton';
+import { Button } from '../FormControls/Button';
 
 export function openLoginModal() {
   const isAuthenticated = useIsAuthenticated();
@@ -13,9 +13,9 @@ export function LoginButton() {
   const navigate = useNavigate();
   return (
     <div class="flex gap-2 justify-center w-max items-baseline font-mono">
-      <DeprecatedButton onClick={() => navigate('/login')}>Login</DeprecatedButton>
+      <Button onClick={() => navigate('/login')}>Login</Button>
       <span class="italic">or</span>
-      <DeprecatedButton onClick={() => navigate('/signup')}>Sign Up</DeprecatedButton>
+      <Button onClick={() => navigate('/signup')}>Sign Up</Button>
     </div>
   );
 }

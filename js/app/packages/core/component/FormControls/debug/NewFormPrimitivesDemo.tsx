@@ -1,6 +1,6 @@
 import { createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import { DeprecatedButton } from '../DeprecatedButton';
+import { Button } from '../Button';
 import DropdownMenu from '../DropdownMenu';
 import { SegmentedControl } from '../SegmentControls';
 import { ToggleButton } from '../ToggleButton';
@@ -37,9 +37,9 @@ const NewFormPrimitivesDemo = () => {
         />
         <ToggleButton size="SM">Select Btn</ToggleButton>
 
-        <DeprecatedButton size="SM" hotkeyShortcut="cmd+k">
+        <Button size="SM" hotkeyShortcut="cmd+k">
           Console
-        </DeprecatedButton>
+        </Button>
 
         <DropdownMenu
           size="SM"
@@ -79,7 +79,7 @@ const NewFormPrimitivesDemo = () => {
               </section>
             </div>
             <div class="grid grid-flow-col w-full border-edge border-t-[2px]">
-              <DeprecatedButton
+              <Button
                 size="SM"
                 theme="secondary"
                 border={false}
@@ -89,8 +89,8 @@ const NewFormPrimitivesDemo = () => {
                 }}
               >
                 Reset
-              </DeprecatedButton>
-              <DeprecatedButton
+              </Button>
+              <Button
                 size="SM"
                 theme="primary"
                 border={false}
@@ -100,7 +100,7 @@ const NewFormPrimitivesDemo = () => {
                 }}
               >
                 Submit
-              </DeprecatedButton>
+              </Button>
             </div>
           </div>
         </DropdownMenu>
@@ -154,7 +154,7 @@ const NewFormPrimitivesDemo = () => {
               </section>
             </div>
             <div class="grid grid-flow-col w-full border-edge border-t-[2px]">
-              <DeprecatedButton
+              <Button
                 size="SM"
                 theme="secondary"
                 border={false}
@@ -164,8 +164,8 @@ const NewFormPrimitivesDemo = () => {
                 }}
               >
                 Reset
-              </DeprecatedButton>
-              <DeprecatedButton
+              </Button>
+              <Button
                 size="SM"
                 theme="primary"
                 border={false}
@@ -175,14 +175,14 @@ const NewFormPrimitivesDemo = () => {
                 }}
               >
                 Submit
-              </DeprecatedButton>
+              </Button>
             </div>
           </div>
         </DropdownMenu>
         <ToggleButton size="Base">Select Btn</ToggleButton>
-        <DeprecatedButton size="Base" hotkeyShortcut="cmd+k">
+        <Button size="Base" hotkeyShortcut="cmd+k">
           Console
-        </DeprecatedButton>
+        </Button>
       </div>
       <hr class="my-4" />
       <h2>Misc</h2>

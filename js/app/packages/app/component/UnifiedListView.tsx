@@ -7,7 +7,7 @@ import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { URL_PARAMS as EMAIL_PARAMS } from '@block-email/constants';
 import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/signal/location';
-import { DeprecatedButton } from 'core/component/FormControls/DeprecatedButton';
+import { Button } from 'core/component/FormControls/Button';
 import DropdownMenu from '@core/component/FormControls/DropdownMenu';
 import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { ToggleButton } from '@core/component/FormControls/ToggleButton';
@@ -1275,7 +1275,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                   triggerLabel={<span class="font-extrabold">⋮</span>}
                 >
                   <div class="flex flex-col gap-2 p-2">
-                    <DeprecatedButton
+                    <Button
                       size="SM"
                       classList={{
                         '!border-ink/25 !text-ink !bg-panel hover:!text-ink font-normal': true,
@@ -1283,8 +1283,8 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       onClick={onClickResetViewConfigChanges}
                     >
                       CLEAR
-                    </DeprecatedButton>
-                    <DeprecatedButton
+                    </Button>
+                    <Button
                       size="SM"
                       classList={{
                         '!border-ink/25 !text-ink !bg-panel hover:!text-ink font-normal': true,
@@ -1292,12 +1292,12 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       onClick={onClickSaveViewConfigChanges}
                     >
                       SAVE CHANGES
-                    </DeprecatedButton>
+                    </Button>
                   </div>
                 </DropdownMenu>
               </Show>
               <Show when={!preview()}>
-                <DeprecatedButton
+                <Button
                   size="SM"
                   classList={{
                     '!border-ink/25 !text-ink !bg-panel hover:!text-ink ml-1.5 font-normal': true,
@@ -1305,8 +1305,8 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                   onClick={onClickResetViewConfigChanges}
                 >
                   CLEAR
-                </DeprecatedButton>
-                <DeprecatedButton
+                </Button>
+                <Button
                   size="SM"
                   classList={{
                     '!border-ink/25 !text-ink !bg-panel hover:!text-ink mx-1.5 font-normal': true,
@@ -1314,7 +1314,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                   onClick={onClickSaveViewConfigChanges}
                 >
                   SAVE CHANGES
-                </DeprecatedButton>
+                </Button>
               </Show>
             </Show>
             <DropdownMenu

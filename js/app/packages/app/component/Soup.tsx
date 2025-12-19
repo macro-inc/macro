@@ -7,7 +7,7 @@ import { playSound } from '@app/util/sound';
 import { useIsAuthenticated } from '@core/auth';
 import type { BlockAliasContext } from '@core/block';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
-import { DeprecatedButton } from 'core/component/FormControls/DeprecatedButton';
+import { Button } from 'core/component/FormControls/Button';
 import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { ContextMenuContent, MenuItem } from '@core/component/Menu';
 import { fileTypeToResolvedBlockName } from '@core/constant/allBlocks';
@@ -417,7 +417,7 @@ export function Soup() {
                 )}
                 newButton={
                   <div class="flex items-center px-2 h-full">
-                    <DeprecatedButton
+                    <Button
                       size="Base"
                       classList={{
                         '!border-transparent hover:!border-ink/50 px-1 !text-ink !bg-panel font-medium': true,
@@ -430,7 +430,7 @@ export function Soup() {
                       }}
                     >
                       +
-                    </DeprecatedButton>
+                    </Button>
                   </div>
                 }
               />
