@@ -105,7 +105,10 @@
   --transition: 0.s;
   /*--transition: 0.15s;*/
 
-/* Semantic Color names, use these when writing tailwind */
+
+  --color-*: initial; /* Disable default tailwind color palette */
+
+  /* Semantic Color names, use these when writing tailwind */
 
   /* text */
   --color-ink: var(--c0);
