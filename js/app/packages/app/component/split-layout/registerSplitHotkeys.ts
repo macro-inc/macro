@@ -1,32 +1,10 @@
 import { TOKENS } from '@core/hotkey/tokens';
-import {
-  isRightPanelOpen,
-  useBigChat,
-  useToggleRightPanel,
-} from '@core/signal/layout';
 import type { ViewId } from '@core/types/view';
 import { registerHotkey } from 'core/hotkey/hotkeys';
-import { globalSplitManager } from '../../signal/splitLayout';
-import { fireMacroJump } from '../MacroJump';
 import type { SplitContent } from './layoutManager';
 import { focusAdjacentSplit } from './layoutUtils';
-import { canSpotlight } from './utils/canSpotlight';
 
-export function registerSplitHotkeys({
-  splitHotkeyScope,
-  insertSplit,
-  closeSplit,
-  toggleSpotlight,
-  canGoBack,
-  goBack,
-  canGoForward,
-  goForward,
-  setSelectedView,
-  replaceSplit,
-  splitName,
-  getSplitCount,
-  isNotUnifiedList,
-}: {
+export function registerSplitHotkeys(args: {
   splitHotkeyScope: string;
   insertSplit: (content: SplitContent) => void;
   closeSplit: () => void;
@@ -41,10 +19,8 @@ export function registerSplitHotkeys({
   getSplitCount: () => number;
   isNotUnifiedList: () => boolean;
 }) {
-  const splitManager = globalSplitManager();
-  const canFit = () =>
-    splitManager?.resizeContext()?.canFit({ minSize: 400 }) ?? true;
-
+  const { splitHotkeyScope, closeSplit, replaceSplit, getSplitCount, isNotUnifiedList } =
+    args;
   registerHotkey({
     scopeId: splitHotkeyScope,
     hotkey: 'cmd+escape',
@@ -93,9 +69,6 @@ export function registerSplitHotkeys({
       return true;
     },
   });
-
-  const [bigChatOpen, _] = useBigChat();
-  const toggleRightPanel = useToggleRightPanel();
 
   return {};
 }

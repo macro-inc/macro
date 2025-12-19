@@ -1,7 +1,6 @@
 import { useOpenInstructionsMd } from '@core/component/AI/util/instructions';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { TOKENS } from '@core/hotkey/tokens';
-import type { ValidHotkey } from '@core/hotkey/types';
 import { useBigChat } from '@core/signal/layout';
 import { AiInstructionsIcon } from '@service-storage/instructionsMd';
 import { registerHotkey } from 'core/hotkey/hotkeys';
@@ -26,7 +25,7 @@ import {
   resetKonsoleMode,
   toggleKonsoleVisibility,
 } from './command/state';
-import { CREATABLE_BLOCKS, setCreateMenuOpen } from './Launcher';
+import { setCreateMenuOpen } from './Launcher';
 import { useSplitLayout } from './split-layout/layout';
 import { fireVisor, resetVisor } from './Visor';
 import { openWhichKey, setOpenWhichKey } from './WhichKey';
