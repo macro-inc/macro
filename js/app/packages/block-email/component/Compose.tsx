@@ -128,7 +128,6 @@ export function EmailCompose() {
       return true;
     },
     runWithInputFocused: true,
-    hide: true,
     hotkeyToken: TOKENS.email.compose.edit.recipients,
   });
 
@@ -149,7 +148,6 @@ export function EmailCompose() {
       return true;
     },
     runWithInputFocused: true,
-    hide: true,
     hotkeyToken: TOKENS.email.compose.edit.ccRecipients,
   });
 
@@ -170,7 +168,6 @@ export function EmailCompose() {
       return true;
     },
     runWithInputFocused: true,
-    hide: true,
     hotkeyToken: TOKENS.email.compose.edit.bccRecipients,
   });
 
@@ -183,7 +180,6 @@ export function EmailCompose() {
       return true;
     },
     runWithInputFocused: true,
-    hide: true,
     hotkeyToken: TOKENS.email.compose.edit.subject,
   });
 
@@ -196,7 +192,6 @@ export function EmailCompose() {
       return true;
     },
     runWithInputFocused: true,
-    hide: true,
     hotkeyToken: TOKENS.email.compose.edit.message,
   });
 
