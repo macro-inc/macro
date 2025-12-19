@@ -34,7 +34,6 @@ export type SplitPanelContextType = {
     toolbarLeft?: HTMLDivElement;
     toolbarRight?: HTMLDivElement;
   };
-  isPopover?: boolean;
 };
 
 export const SplitPanelContext = createContext<SplitPanelContextType>();

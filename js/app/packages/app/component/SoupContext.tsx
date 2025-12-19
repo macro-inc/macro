@@ -15,7 +15,7 @@ import { getScrollParent } from '@core/util/scrollParent';
 import { waitForFrames } from '@core/util/sleep';
 import { type EntityData, isTaskEntity } from '@macro-entity';
 import { entityHasUnreadNotifications } from '@notifications';
-import type { PreviewViewStandardLabel } from '@service-email/generated/schemas';
+import { PreviewViewStandardLabel } from '@service-email/generated/schemas';
 import { useTutorialCompleted } from '@service-gql/client';
 import {
   type PropertiesEntityType,
@@ -99,6 +99,28 @@ export type UnifiedListContext = {
   // this is a private method that should be registered once by createNavigationEntityListShortcut
   _setNavigateThroughList: (fn: NavigateListFn) => void;
 };
+
+export function createStubSoupContext(): UnifiedListContext {
+  return {
+    viewsDataStore: createStore({})[0],
+    setViewDataStore: () => {},
+    selectedView: () => '',
+    setSelectedView: () => {},
+    virtualizerHandleSignal: createSignal(),
+    entityListRefSignal: createSignal(),
+    entitiesSignal: createSignal(),
+    emailViewSignal: createSignal<PreviewViewStandardLabel>('all'),
+    showHelpDrawer: () => new Set(),
+    setShowHelpDrawer: () => {},
+    actionRegistry: createEntityActionRegistry(),
+    navigateThroughList: async () => ({
+      success: false,
+      type: '',
+      entity: undefined,
+    }),
+    _setNavigateThroughList: () => {},
+  };
+}
 
 const DEFAULT_VIEW_ID: DefaultView = 'signal';
 

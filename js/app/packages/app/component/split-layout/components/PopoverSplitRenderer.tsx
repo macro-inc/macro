@@ -1,11 +1,12 @@
 import { ClippedPanel } from '@core/component/ClippedPanel';
-import { ScopedPortal } from '@core/component/ScopedPortal';
+import { DialogWrapper } from '@core/component/DialogWrapper';
 import clickOutside from '@core/directive/clickOutside';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { Dialog } from '@kobalte/core/dialog';
 import { createMemo, createSignal, For, Show } from 'solid-js';
-import { createSoupContext } from '../../SoupContext';
-import { SplitPanelContext } from '../context';
+import { Dynamic } from 'solid-js/web';
+import { createStubSoupContext } from '../../SoupContext';
+import { SplitPanelContext, type SplitPanelContextType } from '../context';
 import type {
   PopoverSplitOptions,
   SplitContent,
@@ -33,10 +34,9 @@ export function PopoverSplitRenderer(props: {
   );
   return (
     <For each={activePopovers()}>
-      {(popover, index) => (
+      {(popover) => (
         <PopoverSplitModal
           popover={popover}
-          zIndex={1000 + index() * 10}
           onClose={() => props.onClosePopover?.(popover.id)}
         />
       )}
@@ -46,13 +46,11 @@ export function PopoverSplitRenderer(props: {
 
 function PopoverSplitModal(props: {
   popover: PopoverSplitData;
-  zIndex: number;
   onClose: () => void;
 }) {
   const [panelRef, setPanelRef] = createSignal<HTMLElement | null>(null);
   const [contentOffsetTop, setContentOffsetTop] = createSignal(0);
   const [previewState, setPreviewState] = createSignal(false);
-  const unifiedListContext = createSoupContext();
 
   const stubHandle: SplitHandle = {
     id: props.popover.id as SplitId,
@@ -71,6 +69,7 @@ function PopoverSplitModal(props: {
     setDisplayName: () => {},
     toggleSpotlight: () => {},
     isSpotLight: () => false,
+    isPopover: () => true,
     replace: () => {},
     removeFromHistory: () => {},
     registerContentChangeListener: () => {},
@@ -87,11 +86,11 @@ function PopoverSplitModal(props: {
         : undefined,
   };
 
-  const stubPanelContext = {
+  const stubPanelContext: SplitPanelContextType = {
     handle: stubHandle,
     splitHotkeyScope: `popover-${props.popover.id}`,
-    unifiedListContext,
     isPanelActive: () => true,
+    unifiedListContext: createStubSoupContext(),
     panelRef,
     panelSize: { width: null, height: null },
     contentOffsetTop,
@@ -101,23 +100,6 @@ function PopoverSplitModal(props: {
       typeof setPreviewState,
     ],
     layoutRefs: {},
-    isPopover: true,
-  };
-
-  const getPositionClass = () => {
-    const position = props.popover.options.style?.position ?? 'center';
-    switch (position) {
-      case 'top':
-        return 'items-start justify-center pt-16';
-      case 'bottom':
-        return 'items-end justify-center pb-16';
-      case 'left':
-        return 'items-center justify-start pl-16';
-      case 'right':
-        return 'items-center justify-end pr-16';
-      default:
-        return 'justify-center items-start pt-48';
-    }
   };
 
   const [bindHotKeyDom, scopeId] = useHotkeyDOMScope(
@@ -144,31 +126,27 @@ function PopoverSplitModal(props: {
       }}
       modal={true}
     >
-      <ScopedPortal scope="global">
-        <Dialog.Overlay
-          class="fixed inset-0 z-modal bg-modal-overlay pattern-diagonal-4 pattern-edge-muted"
-          on:click={() => props.onClose()}
-        />
-        <div
-          class={`fixed inset-0 z-modal flex ${getPositionClass()} pointer-events-none isolate`}
+      <Dialog.Overlay class="fixed inset-0 z-modal-overlay bg-transparent" />
+      <div class={`fixed inset-0 z-modal flex pointer-events-none isolate`}>
+        <Dialog.Content
+          use:clickOutside={() => props.onClose()}
+          ref={(r) => {
+            bindHotKeyDom(r);
+          }}
         >
-          <Dialog.Content
-            class="w-4xl h-xl portal-scope"
-            use:clickOutside={() => props.onClose()}
-            ref={(r) => {
-              bindHotKeyDom(r);
-            }}
-          >
-            <ClippedPanel tl ref={setPanelRef}>
-              <SplitPanelContext.Provider value={stubPanelContext}>
-                <Show when={props.popover.mount}>
-                  {props.popover.mount.element()}
-                </Show>
-              </SplitPanelContext.Provider>
-            </ClippedPanel>
-          </Dialog.Content>
-        </div>
-      </ScopedPortal>
+          <DialogWrapper>
+            <Dialog.Content>
+              <ClippedPanel active tl ref={setPanelRef}>
+                <SplitPanelContext.Provider value={stubPanelContext}>
+                  <Show when={props.popover.mount}>
+                    <Dynamic component={props.popover.mount.element} />
+                  </Show>
+                </SplitPanelContext.Provider>
+              </ClippedPanel>
+            </Dialog.Content>
+          </DialogWrapper>
+        </Dialog.Content>
+      </div>
     </Dialog>
   );
 }

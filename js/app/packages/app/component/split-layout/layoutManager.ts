@@ -267,6 +267,7 @@ export type SplitHandle<TMeta extends ComponentMeta = ComponentMeta> = {
   canGoForward: () => boolean;
   content: () => SplitContent;
   isSpotLight: () => boolean;
+  isPopover: () => boolean;
   displayName: () => string;
   canGoBack: () => boolean;
   isActive: () => boolean;
@@ -643,6 +644,7 @@ export function createSplitLayout(
       isLast: () => state.splits.at(-1)?.id === id,
       isActive: () => currentSplit.id === state.activeSplitId,
       isSpotLight: () => state.spotlightId === currentSplit.id,
+      isPopover: () => state.popovers.has(currentSplit.id),
       toggleSpotlight: (force?: boolean) => {
         toggleSpotlightSplit(currentSplit.id, force);
       },

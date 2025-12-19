@@ -1,6 +1,5 @@
 import {
   $applyNodeReplacement,
-  LexicalEditor,
   type DOMConversionMap,
   type LexicalNode,
   type NodeKey,
@@ -115,7 +114,7 @@ export class ImageNode extends MediaNode<{ alt: string }> {
     };
   }
 
-  exportDOM(editor: LexicalEditor) {
+  exportDOM() {
     const result = super.exportDOM();
     if (result && result.element) {
       (result.element as HTMLImageElement).setAttribute('alt', this.__alt);

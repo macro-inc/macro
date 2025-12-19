@@ -25,6 +25,7 @@ import type {
 } from '@core/component/Properties/types';
 import { TextButton } from '@core/component/TextButton';
 import { toast } from '@core/component/Toast/Toast';
+import { itemToSafeName } from '@core/constant/allBlocks';
 import { createMarkdownFile } from '@core/util/create';
 import { filterMap } from '@core/util/list';
 import { isErr } from '@core/util/maybeResult';
@@ -138,7 +139,10 @@ function TaskToastPreview(props: { title: string; body: string; id: string }) {
       <div class="text-ink size-full">
         <div class="flex row items-center gap-2 mb-4">
           <EntityIcon targetType="task" />
-          <span class="text-base font-medium">{props.title}</span>
+          <span class="text-base font-medium">
+            {props.title ||
+              itemToSafeName({ type: 'document', subType: 'task' })}
+          </span>
         </div>
         <div class="text-ink-muted text-sm h-fit max-h-18 w-full truncate">
           <StaticMarkdown
@@ -166,7 +170,6 @@ export function ComposeTask(props: ComposeTaskProps) {
   const [content, setContent] = createSignal(props.initialContent ?? '');
   const [bodyEditor, setBodyEditor] = createSignal<LexicalEditor>();
   const [containerRef, setContainerRef] = createSignal<HTMLDivElement>();
-  const [titleInputRef, setTitleInputRef] = createSignal<HTMLInputElement>();
 
   const [propertyValues, setPropertyValues] = createStore<
     Record<string, PropertyApiValues>
@@ -262,7 +265,7 @@ export function ComposeTask(props: ComposeTaskProps) {
     const ed = bodyEditor();
     ed && initializeEditorEmpty(ed);
 
-    if (splitPanel?.isPopover) {
+    if (splitPanel?.handle.isPopover()) {
       splitPanel.handle.close();
     }
 
@@ -270,10 +273,20 @@ export function ComposeTask(props: ComposeTaskProps) {
     props.onClose?.();
   };
 
-  const editorFocusChange = (e: FocusEvent) => {
-    const root =
-  }
-
+  const editorFocusChange = (e: KeyboardEvent, dir: 1 | -1) => {
+    const root = bodyEditor()?.getRootElement();
+    const container = containerRef();
+    if (!(root && container)) return;
+    const tabbables = tabbable(container);
+    const ndx = tabbables.indexOf(root);
+    const next = (ndx + dir + tabbables.length) % tabbables.length;
+    const elem = tabbables.at(next);
+    if (elem) {
+      elem.focus();
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  };
 
   return (
     <div
@@ -282,7 +295,7 @@ export function ComposeTask(props: ComposeTaskProps) {
       ref={setContainerRef}
     >
       <div class="flex items-center gap-1 p-2">
-        <Show when={splitPanel?.isPopover}>
+        <Show when={splitPanel?.handle.isPopover()}>
           <IconButton
             icon={XIcon}
             onClick={splitPanel?.handle.close}
@@ -305,7 +318,6 @@ export function ComposeTask(props: ComposeTaskProps) {
             type="text"
             placeholder="Task Title"
             value={title()}
-            ref={setTitleInputRef}
             onInput={(e) => setTitle(e.currentTarget.value)}
             class="w-full py-2 text-xl font-medium placeholder-ink-placeholder/50"
             on:keydown={(e) => {
@@ -340,25 +352,8 @@ export function ComposeTask(props: ComposeTaskProps) {
               containerRef()?.focus();
               return true;
             }}
-            onFocusLeaveStart={(e) => {
-              const input = titleInputRef();
-              if (input) {
-                input.focus();
-                e.preventDefault();
-                e.stopPropagation();
-              }
-            }}
-            onFocusLeaveEnd={(e) => {
-              const container = containerRef();
-              const root = bodyEditor()?.getRootElement();
-              if (container && root) {
-                const tabbables = tabbable(container);
-                const nextInx = tabbables.indexOf(root) + 1;
-                tabbables.at(nextInx % tabbables.length)?.focus();
-                e.preventDefault();
-                e.stopPropagation();
-              }
-            }}
+            onFocusLeaveStart={(e) => editorFocusChange(e, -1)}
+            onFocusLeaveEnd={(e) => editorFocusChange(e, +1)}
           />
         </div>
 
