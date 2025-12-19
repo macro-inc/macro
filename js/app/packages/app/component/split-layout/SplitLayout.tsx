@@ -362,7 +362,7 @@ function SplitPanel(props: SplitPanelProps) {
   const [previewState, setPreviewState] = createSignal(false);
 
   const splitLayoutHelpers = useSplitLayout();
-  const { goScope } = registerSplitHotkeys({
+  registerSplitHotkeys({
     splitHotkeyScope,
     insertSplit: splitLayoutHelpers.insertSplit,
     closeSplit: () => props.handle.close(),
@@ -384,8 +384,8 @@ function SplitPanel(props: SplitPanelProps) {
     splitHandle: props.handle,
     splitHotkeyScope,
     unifiedListContext,
-    goScopeId: goScope.commandScopeId,
     previewState: [previewState, setPreviewState],
+    getSplitCount: () => splitLayoutHelpers.getSplitCount(),
   });
 
   return (

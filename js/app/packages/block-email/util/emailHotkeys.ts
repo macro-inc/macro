@@ -78,8 +78,9 @@ export function registerEmailHotkeys(
     scopeId: scopeId,
     description: 'Cancel reply',
     keyDownHandler: () => {
-      // handlers.setShowReply(false);
-      return true;
+      // Cancel reply isn't currently wired up here. If we always return true,
+      // we prevent split-level escape behavior like "go home".
+      return false;
     },
     hotkeyToken: TOKENS.email.cancelReply,
   });
