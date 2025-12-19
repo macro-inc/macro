@@ -15,7 +15,7 @@ import { getScrollParent } from '@core/util/scrollParent';
 import { waitForFrames } from '@core/util/sleep';
 import { type EntityData, isTaskEntity } from '@macro-entity';
 import { entityHasUnreadNotifications } from '@notifications';
-import { PreviewViewStandardLabel } from '@service-email/generated/schemas';
+import type { PreviewViewStandardLabel } from '@service-email/generated/schemas';
 import { useTutorialCompleted } from '@service-gql/client';
 import {
   type PropertiesEntityType,
