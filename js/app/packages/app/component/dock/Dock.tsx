@@ -210,7 +210,7 @@ export function Dock() {
                 }}>
                   <Hotkey token={TOKENS.global.createCommand}/>
                 </div>*/}
-                <div class="**:border-none! flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1.5 py-0.25">
+                <div class="ios:hidden **:border-none! flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1.5 py-0.25">
                   <Hotkey shortcut="cmd+k" class="flex gap-1" />
                 </div>
               </div>

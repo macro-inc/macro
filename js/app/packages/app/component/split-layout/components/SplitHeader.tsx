@@ -128,7 +128,9 @@ function SplitPreviewToggle() {
 function SplitControlButtons() {
   return (
     <div class="flex flex-row items-center px-2 h-full shrink-0">
-      <div class="ios:hidden"><SplitCloseButton /></div>
+      <div class="ios:hidden">
+        <SplitCloseButton />
+      </div>
       <SplitBackButton />
       <SplitForwardButton />
     </div>
