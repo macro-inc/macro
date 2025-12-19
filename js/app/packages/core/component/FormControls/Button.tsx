@@ -7,9 +7,9 @@ type ExclusiveVariant<T extends string> = {
 
 type ButtonVariant = ExclusiveVariant<'primary' | 'secondary' | 'tertiary' | 'destructive'>;
 
-type DeprecatedButtonProps = ButtonVariant & JSX.ButtonHTMLAttributes<HTMLButtonElement>;
+type ButtonProps = ButtonVariant & JSX.ButtonHTMLAttributes<HTMLButtonElement>;
 
-export const Button: ParentComponent<DeprecatedButtonProps> = (props) => {
+export const Button: ParentComponent<ButtonProps> = (props) => {
   const [local, ...rest] = splitProps(props, [
     'primary',
     'secondary',
