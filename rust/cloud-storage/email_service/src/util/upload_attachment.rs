@@ -1,4 +1,5 @@
 use crate::util::redis::RedisClient;
+use crate::util::redis::rate_limit::RateLimitArgs;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use document_storage_service_client::DocumentStorageServiceClient;
@@ -41,8 +42,10 @@ pub enum UploadAttachmentError {
     #[error("Attachment filename is missing")]
     FilenameMissing,
 
-    #[error("Failed to determine file extension from mime type ({0}) or filename ({1})")]
-    FileExtensionDeterminationFailed(String, String),
+    #[error(
+        "Failed to determine file extension from mime type ({mime_type}) or filename ({filename})"
+    )]
+    FileExtensionDeterminationFailed { mime_type: String, filename: String },
 
     #[error("Failed to create document record in DSS: {0}")]
     DssCreateFailed(String),
@@ -50,8 +53,8 @@ pub enum UploadAttachmentError {
     #[error("DSS response did not include a presigned URL")]
     PresignedUrlMissing,
 
-    #[error("Failed to upload attachment to presigned URL: {0}")]
-    PresignedUrlUploadFailed(String),
+    #[error("Failed to upload attachment to presigned URL. Status: {0}, Body: {1}")]
+    PresignedUrlUploadFailed(reqwest::StatusCode, String),
 
     #[error("Failed to set email attachment properties: {0}")]
     SystemPropertiesSetFailed(String),
@@ -79,11 +82,11 @@ pub async fn upload_attachment(
     // 1. Check rate limits before making a Gmail API call.
     if ctx
         .redis_client
-        .is_rate_limited(
-            ctx.link.id,
-            GmailApiOperation::MessagesAttachmentsGet,
-            args.backfill,
-        )
+        .is_rate_limited(RateLimitArgs {
+            user_id: ctx.link.id,
+            operation: GmailApiOperation::MessagesAttachmentsGet,
+            is_backfill: args.backfill,
+        })
         .await
     {
         return Err(UploadAttachmentError::RateLimitCheckFailed(
@@ -249,11 +252,9 @@ fn determine_file_metadata(
                     .filter(|ext| !ext.is_empty())
                     .map(|ext| ext.to_string())
             })
-            .ok_or_else(|| {
-                UploadAttachmentError::FileExtensionDeterminationFailed(
-                    p.mime_type.clone(),
-                    original_file_name.to_string(),
-                )
+            .ok_or_else(|| UploadAttachmentError::FileExtensionDeterminationFailed {
+                mime_type: p.mime_type.clone(),
+                filename: original_file_name.to_string(),
             })?,
     };
 
@@ -317,15 +318,19 @@ async fn upload_data_to_presigned_url(
         .body(attachment_data)
         .send()
         .await
-        .map_err(|e| UploadAttachmentError::PresignedUrlUploadFailed(e.to_string()))?;
+        .map_err(|e| {
+            UploadAttachmentError::PresignedUrlUploadFailed(
+                reqwest::StatusCode::INTERNAL_SERVER_ERROR,
+                e.to_string(),
+            )
+        })?;
 
     if !response.status().is_success() {
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
-        return Err(UploadAttachmentError::PresignedUrlUploadFailed(format!(
-            "{} {}",
-            status, body
-        )));
+        return Err(UploadAttachmentError::PresignedUrlUploadFailed(
+            status, body,
+        ));
     }
 
     Ok(())

@@ -1,6 +1,6 @@
 use crate::pubsub::backfill::increment_counters;
 use crate::pubsub::context::PubSubContext;
-use crate::pubsub::util::check_gmail_rate_limit;
+use crate::pubsub::util::{check_gmail_rate_limit, CheckGmailRateLimitArgs};
 use crate::util::process_pre_insert::process_message_pre_insert;
 use models_email::email::service::backfill::{BackfillMessagePayload, BackfillPubsubMessage};
 use models_email::email::service::link;
@@ -18,13 +18,13 @@ pub async fn backfill_message(
     link: &link::Link,
     p: &BackfillMessagePayload,
 ) -> Result<(), ProcessingError> {
-    check_gmail_rate_limit(
-        &ctx.redis_client,
-        link.id,
-        GmailApiOperation::MessagesGet,
-        true,
-        true,
-    )
+    check_gmail_rate_limit(CheckGmailRateLimitArgs {
+        redis_client: &ctx.redis_client,
+        link_id: link.id,
+        gmail_operation: GmailApiOperation::MessagesGet,
+        retryable: true,
+        is_backfill: true,
+    })
     .await?;
 
     // get message from gmail
