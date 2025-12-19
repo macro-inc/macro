@@ -830,7 +830,8 @@ export function BaseInput(props: {
                       makeAttachmentPublic(itemId);
                     });
                     scheduleDraftSave();
-                  }
+                  },
+                  { width: 542, height: 542 }
                 )
               );
             },
@@ -876,7 +877,8 @@ export function BaseInput(props: {
                     uploadedItemIds.forEach((itemId) => {
                       makeAttachmentPublic(itemId);
                     });
-                  }
+                  },
+                  { width: 542, height: 542 }
                 )
               );
             }}

@@ -8,6 +8,7 @@ import XIcon from '@icon/regular/x.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { mergeRegister } from '@lexical/utils';
 import { $isImageNode, type ImageDecoratorProps } from '@lexical-core';
+import { calculateEffectiveDimensions } from '@lexical-core/utils/media';
 import { debounce } from '@solid-primitives/scheduled';
 import {
   $createNodeSelection,
@@ -18,6 +19,7 @@ import {
 } from 'lexical';
 import {
   createEffect,
+  createMemo,
   createSignal,
   onCleanup,
   onMount,
@@ -76,6 +78,17 @@ export function MarkdownImage(props: ImageDecoratorProps) {
   const [imageError, setImageError] = createSignal<ImageError | undefined>();
 
   const [scale, setScale] = createSignal(props.scale);
+
+  // Calculate effective dimensions from props
+  const effectiveDims = createMemo(() => {
+    const dims = calculateEffectiveDimensions(
+      imageDims()[0],
+      imageDims()[1],
+      props.constrainedWidth,
+      props.constrainedHeight
+    );
+    return [dims.width, dims.height] as [number, number];
+  });
 
   createEffect(() => {
     if (props.srcType === 'local') {
@@ -248,16 +261,18 @@ export function MarkdownImage(props: ImageDecoratorProps) {
     <Dialog open={viewerOpen()} onOpenChange={setViewerOpen}>
       <div
         ref={containerRef}
-        class="relative max-w-full my-4 grid place-items-center mx-auto"
+        class="relative max-w-full my-4 grid place-items-center"
         classList={{
           'bracket-offset-4 bracket': isSelectedAsNode(),
           'media-error min-h-44': state() === 'error',
+          // If there are no constrained dimensions, center the image
+          'mx-auto': !props.constrainedWidth && !props.constrainedHeight,
         }}
         style={{
-          'max-height': `${imageDims() ? imageDims()[1] * scale() : 640}px`,
+          'max-width': `${effectiveDims()[0] ? effectiveDims()[0] * scale() : 640}px`,
           'aspect-ratio':
-            imageDims()[0] && imageDims()[1]
-              ? `${imageDims()[0] / imageDims()[1]}`
+            effectiveDims()[0] && effectiveDims()[1]
+              ? `${effectiveDims()[0] / effectiveDims()[1]}`
               : 'auto',
         }}
         onClick={(e: MouseEvent) => {
@@ -276,7 +291,14 @@ export function MarkdownImage(props: ImageDecoratorProps) {
           setImageHover(false);
         }}
       >
-        <Show when={state() === 'ok' && editor()?.isEditable()}>
+        <Show
+          when={
+            state() === 'ok' &&
+            editor()?.isEditable() &&
+            !props.constrainedWidth &&
+            !props.constrainedHeight
+          }
+        >
           <ResizeHandle
             scale={scale}
             setScale={setScale}
@@ -302,7 +324,9 @@ export function MarkdownImage(props: ImageDecoratorProps) {
           ref={imageRef}
           src={imageUrl()}
           style={{
-            width: `${imageDims()[0] ? imageDims()[0] * scale() : 'auto'}px`,
+            width: effectiveDims()[0]
+              ? `${effectiveDims()[0] * scale()}px`
+              : 'auto',
           }}
         />
 

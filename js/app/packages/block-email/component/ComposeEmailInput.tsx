@@ -217,7 +217,8 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
                       makeAttachmentPublic(itemId);
                     });
                     // TODO: schedule draft save, when implemented
-                  }
+                  },
+                  { width: 542, height: 542 }
                 )
               );
             },
@@ -257,7 +258,8 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
                     uploadedItemIds.forEach((itemId) => {
                       makeAttachmentPublic(itemId);
                     });
-                  }
+                  },
+                  { width: 542, height: 542 }
                 )
               );
             }}

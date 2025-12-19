@@ -63,6 +63,7 @@ export type MediaSourceType = MediaSource['type'];
 export type MediaCreationPayload = Exclude<MediaSource, 'file'> & {
   alt?: string;
   mediaType: MediaType;
+  constrainedMediaDimensions?: { width: number; height: number };
 };
 
 export const INSERT_MEDIA_COMMAND: LexicalCommand<MediaCreationPayload> =
@@ -95,7 +96,8 @@ export function validateMediaFile(file: File, mediaType: MediaType): boolean {
 export async function addMediaFromFile(
   editor: LexicalEditor,
   file: File,
-  mediaType: MediaType
+  mediaType: MediaType,
+  constrainedMediaDimensions?: { width: number; height: number }
 ) {
   const processedFile = await processFile(file);
   if (!validateMediaFile(processedFile, mediaType)) return { success: false };
@@ -104,6 +106,7 @@ export async function addMediaFromFile(
     url: URL.createObjectURL(processedFile),
     file: processedFile,
     mediaType,
+    constrainedMediaDimensions,
   });
   return { success: true };
 }
@@ -361,10 +364,14 @@ function registerMediaPlugin(editor: LexicalEditor) {
                   srcType: payload.type,
                   url: payload.url,
                   alt: payload.alt,
+                  constrainedWidth: payload.constrainedMediaDimensions?.width,
+                  constrainedHeight: payload.constrainedMediaDimensions?.height,
                 })
               : $createVideoNode({
                   srcType: payload.type,
                   url: payload.url,
+                  constrainedWidth: payload.constrainedMediaDimensions?.width,
+                  constrainedHeight: payload.constrainedMediaDimensions?.height,
                 });
           $safeInsertMediaNode(node);
           return true;
@@ -377,10 +384,14 @@ function registerMediaPlugin(editor: LexicalEditor) {
                   srcType: payload.type,
                   url: payload.url,
                   alt: payload.alt,
+                  constrainedWidth: payload.constrainedMediaDimensions?.width,
+                  constrainedHeight: payload.constrainedMediaDimensions?.height,
                 })
               : $createVideoNode({
                   srcType: payload.type,
                   url: payload.url,
+                  constrainedWidth: payload.constrainedMediaDimensions?.width,
+                  constrainedHeight: payload.constrainedMediaDimensions?.height,
                 });
 
           $safeInsertMediaNode(node);
@@ -396,10 +407,14 @@ function registerMediaPlugin(editor: LexicalEditor) {
                   srcType: payload.type,
                   id: payload.id,
                   alt: payload.alt,
+                  constrainedWidth: payload.constrainedMediaDimensions?.width,
+                  constrainedHeight: payload.constrainedMediaDimensions?.height,
                 })
               : $createVideoNode({
                   srcType: payload.type,
                   id: payload.id,
+                  constrainedWidth: payload.constrainedMediaDimensions?.width,
+                  constrainedHeight: payload.constrainedMediaDimensions?.height,
                 });
           $safeInsertMediaNode(node);
         }

@@ -27,18 +27,32 @@ const getImageExtensionsHeic = () => [
 ];
 const getVideoExtensions = () => blockNameToFileExtensions.video;
 
-async function processInlineMediaFiles(editor: LexicalEditor, files: File[]) {
+async function processInlineMediaFiles(
+  editor: LexicalEditor,
+  files: File[],
+  constrainedMediaDimensions?: { width: number; height: number }
+) {
   const IMAGE_EXTENSIONS_HEIC = getImageExtensionsHeic();
   const VIDEO_EXTENSIONS = getVideoExtensions();
   for (const file of files) {
     const ext = fileExtension(file.name);
     if (ext != null && IMAGE_EXTENSIONS_HEIC.includes(ext)) {
-      const res = await addMediaFromFile(editor, file, 'image');
+      const res = await addMediaFromFile(
+        editor,
+        file,
+        'image',
+        constrainedMediaDimensions
+      );
       if (!res.success) {
         toast.failure('Invalid media attachment file(s)');
       }
     } else if (ext != null && VIDEO_EXTENSIONS.includes(ext)) {
-      const res = await addMediaFromFile(editor, file, 'video');
+      const res = await addMediaFromFile(
+        editor,
+        file,
+        'video',
+        constrainedMediaDimensions
+      );
       if (!res.success) {
         toast.failure('Invalid media attachment file(s)');
       }
@@ -66,7 +80,8 @@ export async function onFilesReady(
   blockId?: string,
   parentBlockName?: BlockName,
   position?: ReturnType<typeof getDragDropPosition>,
-  afterFileUpload?: (uploadedItemIds: string[]) => void
+  afterFileUpload?: (uploadedItemIds: string[]) => void,
+  constrainedMediaDimensions?: { width: number; height: number }
 ): Promise<void> {
   const IMAGE_EXTENSIONS_HEIC = getImageExtensionsHeic();
   const VIDEO_EXTENSIONS = getVideoExtensions();
@@ -97,7 +112,7 @@ export async function onFilesReady(
     }
   }
 
-  await processInlineMediaFiles(editor, mediaFiles);
+  await processInlineMediaFiles(editor, mediaFiles, constrainedMediaDimensions);
 
   if (filesToUpload.length === 0) return;
 
@@ -165,7 +180,8 @@ export function createFilesReadyHandler(
   blockId?: string,
   parentBlockName?: BlockName,
   getPosition?: () => ReturnType<typeof getDragDropPosition>,
-  afterFileUpload?: (uploadedItemIds: string[]) => void
+  afterFileUpload?: (uploadedItemIds: string[]) => void,
+  constrainedMediaDimensions?: { width: number; height: number }
 ) {
   return async (uploadEntries: UploadInput[]) => {
     if (!editor) return;
@@ -176,7 +192,8 @@ export function createFilesReadyHandler(
       blockId,
       parentBlockName,
       position,
-      afterFileUpload
+      afterFileUpload,
+      constrainedMediaDimensions
     );
   };
 }

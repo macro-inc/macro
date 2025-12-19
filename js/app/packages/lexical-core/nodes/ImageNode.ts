@@ -35,10 +35,22 @@ export class ImageNode extends MediaNode<{ alt: string }> {
     alt: string,
     width: number,
     height: number,
+    constrainedWidth?: number,
+    constrainedHeight?: number,
     scale?: number,
     key?: NodeKey
   ) {
-    super(srcType, id, url, width, height, scale, key);
+    super(
+      srcType,
+      id,
+      url,
+      width,
+      height,
+      constrainedWidth,
+      constrainedHeight,
+      scale,
+      key
+    );
     this.__alt = alt;
   }
 
@@ -85,6 +97,8 @@ export class ImageNode extends MediaNode<{ alt: string }> {
       node.__alt,
       node.__width,
       node.__height,
+      node.__constrainedWidth,
+      node.__constrainedHeight,
       node.__scale,
       node.__key
     );
@@ -220,6 +234,8 @@ export class ImageNode extends MediaNode<{ alt: string }> {
       alt: this.__alt,
       key: this.__key,
       scale: this.__scale,
+      constrainedWidth: this.__constrainedWidth,
+      constrainedHeight: this.__constrainedHeight,
     };
   }
 }
@@ -231,6 +247,8 @@ export function $createImageNode(params: {
   alt?: string;
   width?: number;
   height?: number;
+  constrainedWidth?: number;
+  constrainedHeight?: number;
   scale?: number;
 }) {
   return $applyNodeReplacement(
@@ -241,6 +259,8 @@ export function $createImageNode(params: {
       params.alt ?? '',
       params.width ?? 0,
       params.height ?? 0,
+      params.constrainedWidth,
+      params.constrainedHeight,
       params.scale ?? 1
     )
   );

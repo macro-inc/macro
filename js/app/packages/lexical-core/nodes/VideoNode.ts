@@ -35,10 +35,22 @@ export class VideoNode extends MediaNode<{ controls: boolean }> {
     controls: boolean,
     width: number,
     height: number,
+    constrainedWidth?: number,
+    constrainedHeight?: number,
     scale?: number,
     key?: NodeKey
   ) {
-    super(srcType, id, url, width, height, scale, key);
+    super(
+      srcType,
+      id,
+      url,
+      width,
+      height,
+      constrainedWidth,
+      constrainedHeight,
+      scale,
+      key
+    );
     this.__controls = controls;
   }
 
@@ -87,6 +99,8 @@ export class VideoNode extends MediaNode<{ controls: boolean }> {
       node.__controls,
       node.__width,
       node.__height,
+      node.__constrainedWidth,
+      node.__constrainedHeight,
       node.__scale,
       node.__key
     );
@@ -228,6 +242,8 @@ export class VideoNode extends MediaNode<{ controls: boolean }> {
       controls: this.__controls,
       scale: this.__scale || 1,
       key: this.__key,
+      constrainedWidth: this.__constrainedWidth,
+      constrainedHeight: this.__constrainedHeight,
     };
   }
 }
@@ -239,6 +255,8 @@ export function $createVideoNode(params: {
   controls?: boolean;
   width?: number;
   height?: number;
+  constrainedWidth?: number;
+  constrainedHeight?: number;
   scale?: number;
 }) {
   return $applyNodeReplacement(
@@ -249,6 +267,8 @@ export function $createVideoNode(params: {
       params.controls ?? true,
       params.width ?? 0,
       params.height ?? 0,
+      params.constrainedWidth,
+      params.constrainedHeight,
       params.scale ?? 1
     )
   );
