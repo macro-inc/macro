@@ -25,7 +25,7 @@ import {
   resetKonsoleMode,
   toggleKonsoleVisibility,
 } from './command/state';
-import { setCreateMenuOpen } from './Launcher';
+import { CREATABLE_BLOCKS, setCreateMenuOpen } from './Launcher';
 import { useSplitLayout } from './split-layout/layout';
 
 export default function GlobalShortcuts() {
@@ -58,6 +58,37 @@ export default function GlobalShortcuts() {
     displayPriority: 10,
   });
 
+  // Create commands for the command menu (command scope drill-in)
+  const createCommandScope = registerHotkey({
+    scopeId: 'global',
+    description: 'Create',
+    keyDownHandler: () => true,
+    activateCommandScope: true,
+    displayPriority: 10,
+  });
+
+  for (const block of CREATABLE_BLOCKS) {
+    registerHotkey({
+      hotkeyToken: block.hotkeyToken,
+      scopeId: createCommandScope.commandScopeId,
+      description: block.description,
+      keyDownHandler: () => {
+        block.keyDownHandler();
+        return true;
+      },
+    });
+
+    registerHotkey({
+      hotkeyToken: block.altHotkeyToken,
+      scopeId: createCommandScope.commandScopeId,
+      description: `${block.description} in new split`,
+      keyDownHandler: () => {
+        block.keyDownHandler();
+        return true;
+      },
+    });
+  }
+
   registerHotkey({
     hotkeyToken: TOKENS.global.commandMenu,
     hotkey: 'cmd+k',
@@ -87,10 +118,6 @@ export default function GlobalShortcuts() {
   });
 
   const { insertSplit } = useSplitLayout();
-
-  // New split:
-  // - `cmd+\` should work even when typing (runWithInputFocused)
-  // - `\` should work only when NOT typing
   registerHotkey({
     hotkeyToken: TOKENS.global.createNewSplit,
     hotkey: 'cmd+\\',

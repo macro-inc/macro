@@ -1,4 +1,3 @@
-import { useSubscribeToKeypress } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useChannelsContext } from '@core/component/ChannelsProvider';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
@@ -273,31 +272,38 @@ export function createNavigationEntityListShortcut({
     return splitHandle.content().id === 'unified-list';
   });
 
-  // Restore legacy `gg` behavior for unified list: jump to top of list.
-  // This is implemented as a simple double-press detector (no command-scope nesting),
-  // and only triggers when:
-  // - this split is active
-  // - the unified list is the current split content
-  // - no editable input is focused
-  // - the keypress wasn't already captured by a hotkey
-  let lastGKeydownAt = 0;
-  useSubscribeToKeypress((context) => {
-    if (context.eventType !== 'keydown') return;
-    if (context.pressedKeysString !== 'g') return;
-    if (context.isEditableFocused) return;
-    if (!splitHandle.isActive()) return;
-    if (!isViewingList()) return;
-    if (context.commandScopeActivated || context.commandFound) return;
+  // `gg` to jump to top of list (legacy behavior) via command-scope hotkeys.
+  const goScope = registerHotkey({
+    scopeId: splitHotkeyScope,
+    hotkey: 'g',
+    description: 'Go',
+    keyDownHandler: () => true,
+    activateCommandScope: true,
+    hide: true,
+  });
 
-    const now = Date.now();
-    if (now - lastGKeydownAt < 350) {
-      lastGKeydownAt = 0;
-      context.event.preventDefault();
-      context.event.stopPropagation();
+  registerHotkey({
+    hotkey: ['g'],
+    scopeId: goScope.commandScopeId,
+    description: 'Go to top of list',
+    condition: isViewingList,
+    keyDownHandler: () => {
       navigateThroughList({ axis: 'start', mode: 'jump' });
-      return;
-    }
-    lastGKeydownAt = now;
+      return true;
+    },
+    hide: true,
+  });
+
+  registerHotkey({
+    hotkey: ['shift+g', 'end'],
+    scopeId: goScope.commandScopeId,
+    description: 'Go to bottom of list',
+    condition: isViewingList,
+    keyDownHandler: () => {
+      navigateThroughList({ axis: 'end', mode: 'jump' });
+      return true;
+    },
+    hide: true,
   });
 
   /**
