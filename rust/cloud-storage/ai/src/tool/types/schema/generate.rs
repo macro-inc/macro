@@ -1,7 +1,8 @@
 use crate::tool::AsyncToolSet;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ToolSchema {
     pub name: String,
@@ -9,7 +10,7 @@ pub struct ToolSchema {
     pub output_schema: serde_json::Value,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ToolSchemas {
     pub schemas: Vec<ToolSchema>,

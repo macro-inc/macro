@@ -207,8 +207,8 @@ use utoipa::OpenApi;
                 GetCompletionResponse,
 
                 // Tools
-                tools::ToolSchemasResponse,
-                tools::ToolSchema
+                ai::tool::schema::ToolSchema,
+                ai::tool::schema::ToolSchemas,
             ),
         ),
         tags(

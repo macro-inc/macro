@@ -1,4 +1,5 @@
 use ai::tool::AsyncToolSet;
+use ai::tool::schema::ToolSchemaGenerator;
 pub mod list;
 pub mod prompts;
 pub mod read;
@@ -18,6 +19,12 @@ pub struct ToolSetWithPrompt {
     pub prompt: &'static str,
 }
 
+impl ToolSchemaGenerator for ToolSetWithPrompt {
+    fn generate_schemas(&self) -> ai::tool::schema::ToolSchemas {
+        self.toolset.generate_schemas()
+    }
+}
+
 pub fn all_tools() -> ToolSetWithPrompt {
     let toolset = AsyncToolSet::new()
         .add_toolset(search_toolset())
@@ -30,6 +37,10 @@ pub fn all_tools() -> ToolSetWithPrompt {
         .expect("markdown revision tool");
     let prompt = prompts::TOOLS_PROMPT;
     ToolSetWithPrompt { toolset, prompt }
+}
+
+pub fn all_tool_schemas() -> Box<dyn ToolSchemaGenerator> {
+    Box::new(all_tools())
 }
 
 pub fn no_tools() -> ToolSetWithPrompt {
