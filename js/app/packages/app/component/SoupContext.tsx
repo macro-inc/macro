@@ -1210,6 +1210,10 @@ export function createNavigationEntityListShortcut({
       if (keyboardEvent) {
         const target = getActualTarget(keyboardEvent);
 
+        if (entityListRef()?.contains(target)) {
+          return true;
+        }
+
         if (isInteractiveElement(target)) {
           return false;
         }
