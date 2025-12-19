@@ -1,5 +1,5 @@
 use crate::pubsub::context::PubSubContext;
-use crate::pubsub::util::{check_gmail_rate_limit, CheckGmailRateLimitArgs};
+use crate::pubsub::util::{CheckGmailRateLimitArgs, check_gmail_rate_limit};
 use crate::util::process_pre_insert::sync_labels::sync_labels;
 use crate::util::sync_contacts::sync_contacts;
 use models_email::email::service::backfill::{

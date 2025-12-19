@@ -1,6 +1,6 @@
 use crate::pubsub::backfill::increment_counters::incr_completed_threads;
 use crate::pubsub::context::PubSubContext;
-use crate::pubsub::util::{check_gmail_rate_limit, CheckGmailRateLimitArgs};
+use crate::pubsub::util::{CheckGmailRateLimitArgs, check_gmail_rate_limit};
 use models_email::email::service::backfill::{
     BackfillMessagePayload, BackfillOperation, BackfillPubsubMessage, BackfillThreadPayload,
 };

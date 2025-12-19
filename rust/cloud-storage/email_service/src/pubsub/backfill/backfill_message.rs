@@ -1,12 +1,11 @@
 use crate::pubsub::backfill::increment_counters;
 use crate::pubsub::context::PubSubContext;
-use crate::pubsub::util::{check_gmail_rate_limit, CheckGmailRateLimitArgs};
+use crate::pubsub::util::{CheckGmailRateLimitArgs, check_gmail_rate_limit};
 use crate::util::process_pre_insert::process_message_pre_insert;
 use models_email::email::service::backfill::{BackfillMessagePayload, BackfillPubsubMessage};
 use models_email::email::service::link;
 use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use models_email::gmail::operations::GmailApiOperation;
-
 /// This step is invoked by BackfillThread once for each message in the thread.
 /// Creates a message object in the database. If the message is the last message in
 /// the thread to be processed, it sends an UpdateThreadMetadata message for the thread.
