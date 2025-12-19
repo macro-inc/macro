@@ -82,7 +82,7 @@ function SplitCloseButton() {
       iconSize={16}
       icon={CloseIcon}
       theme="current"
-      tooltip={{ label: 'Close', hotkeyToken: TOKENS.split.close }}
+      tooltip={{ label: 'Close', hotkeyToken: TOKENS.window.close }}
       onClick={context.handle.close}
     />
   );
