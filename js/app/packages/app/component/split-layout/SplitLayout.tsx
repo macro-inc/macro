@@ -15,6 +15,8 @@ import {
   on,
   onCleanup,
   type Setter,
+  Show,
+  Suspense,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { gutterSize } from '../../../block-theme/signals/themeSignals';
@@ -309,14 +311,20 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
       >
         <For each={ids()}>
           {(id, index) => (
-            <Resize.Panel id={id} minSize={400} index={index()}>
-              <SplitPanel
-                split={splits()[index()]!}
-                handle={splitManager.getSplit(id)!}
-                active={activeSplitSelector(id)}
-                setPanelRef={(panelRef) => panelRefs.set(id, panelRef)}
-              />
-            </Resize.Panel>
+            <Show when={splitManager.getSplit(id)}>
+              {(handle) => (
+                <Suspense>
+                  <Resize.Panel id={id} minSize={400} index={index()}>
+                    <SplitPanel
+                      split={splits()[index()]!}
+                      handle={handle()}
+                      active={activeSplitSelector(id)}
+                      setPanelRef={(panelRef) => panelRefs.set(id, panelRef)}
+                    />
+                  </Resize.Panel>
+                </Suspense>
+              )}
+            </Show>
           )}
         </For>
       </Resize.Zone>
@@ -394,7 +402,9 @@ function SplitPanel(props: SplitPanelProps) {
           attachHotKeys(ref);
         }}
       >
-        <Dynamic component={props.split.mount.element} />
+        <Suspense>
+          <Dynamic component={props.split.mount.element} />
+        </Suspense>
       </SplitContainer>
     </SplitPanelContext.Provider>
   );
