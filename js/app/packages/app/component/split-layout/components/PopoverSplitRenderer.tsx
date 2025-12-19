@@ -135,7 +135,7 @@ function PopoverSplitModal(props: {
           }}
         >
           <DialogWrapper>
-            <Dialog.Content>
+            <Dialog.Content class="portal-scope">
               <ClippedPanel active tl ref={setPanelRef}>
                 <SplitPanelContext.Provider value={stubPanelContext}>
                   <Show when={props.popover.mount}>
