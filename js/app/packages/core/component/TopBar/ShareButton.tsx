@@ -8,7 +8,7 @@ import {
   useBlockName,
 } from '@core/block';
 import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
-import { TextButton } from '@core/component/TextButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { UserIcon } from '@core/component/UserIcon';
 import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
 import clickOutside from '@core/directive/clickOutside';
@@ -60,7 +60,7 @@ import { beveledCorners } from '../../../block-theme/signals/themeSignals';
 import { ClippedPanel } from '../ClippedPanel';
 import { DialogWrapper } from '../DialogWrapper';
 import { ForwardToChannel } from '../ForwardToChannel';
-import { IconButton } from '../IconButton';
+import { DeprecatedIconButton } from '../DeprecatedIconButton';
 import { MENU_ITEM_CLASS } from '../Menu';
 import { Permissions } from '../SharePermissions';
 import { toast } from '../Toast/Toast';
@@ -456,7 +456,7 @@ export function ShareModal(props: ShareModalProps) {
               <div class="flex flex-row items-center justify-between px-2 h-[40px] gap-2 border-b-1 border-b-edge-muted">
                 <div class="flex flex-row items-center gap-2">
                   <Dialog.CloseButton>
-                    <IconButton
+                    <DeprecatedIconButton
                       tooltip={{ label: 'Close' }}
                       icon={CloseIcon}
                       iconSize={16}
@@ -482,7 +482,7 @@ export function ShareModal(props: ShareModalProps) {
                     />
                   </Show>
 
-                  <TextButton
+                  <DeprecatedTextButton
                     onClick={() => {
                       const selectedOptions =
                         forwardToChannelRef()?.getSelectedOptions();
@@ -733,7 +733,7 @@ export function ShareButton(props: ShareButtonProps) {
 
         <div class="h-[24px] w-[1px] bg-edge-muted" />
 
-        <IconButton
+        <DeprecatedIconButton
           tooltip={{ label: 'Copy Share Link' }}
           onClick={ShareLinkAction().action}
           icon={ShareLinkAction().icon}

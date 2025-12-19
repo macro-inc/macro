@@ -10,7 +10,7 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { ClippedPanel } from '@core/component/ClippedPanel';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { PresentModeGlitch } from './PresentModeGlitch';
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
 import IconQuestion from '@icon/regular/question.svg';
 import { withAnalytics } from '@coparse/analytics';
 import SplitIcon from '@macro-icons/new-split.svg';
@@ -278,7 +278,7 @@ export function Dock() {
               'gap': '4px'
             }}>
               <Show when={isSoupActive()}>
-                <IconButton
+                <DeprecatedIconButton
                   onClick={() => {
                     globalSplitManager()?.returnFocus();
                     const showHelp = getActiveCommandByToken(TOKENS.split.showHelpDrawer);
@@ -295,7 +295,7 @@ export function Dock() {
                 />
               </Show>
 
-              <IconButton
+              <DeprecatedIconButton
                 onClick={() => {
                   if (isRightPanelCollapsed()) { track(TrackingEvents.RIGHTBAR.OPEN) }
                   else { track(TrackingEvents.RIGHTBAR.CLOSE) }
@@ -311,7 +311,7 @@ export function Dock() {
               />
 
               <div class="ios:hidden">
-                <IconButton
+                <DeprecatedIconButton
                   tooltip={{
                     hotkeyToken: TOKENS.global.createNewSplit,
                     label: 'Create New Split'
@@ -335,7 +335,7 @@ export function Dock() {
               </div>
 
               <Show when={ENABLE_JACK_IN && !isTauri()}>
-                <IconButton
+                <DeprecatedIconButton
                   tooltip={{
                     label: isPresentMode() ? 'Exit Present Mode' : 'Enter Present Mode'
                   }}
@@ -346,7 +346,7 @@ export function Dock() {
                 />
               </Show>
 
-              <IconButton
+              <DeprecatedIconButton
                 tooltip={{
                   label: settingsOpen() ? 'Close Settings' : 'Open Settings',
                   hotkeyToken: TOKENS.global.toggleSettings,

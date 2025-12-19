@@ -20,7 +20,7 @@ import {
   EntityIcon,
   type EntityWithValidIcon,
 } from './EntityIcon';
-import { IconButton } from './IconButton';
+import { DeprecatedIconButton } from './DeprecatedIconButton';
 import { UserIcon } from './UserIcon';
 
 false && observedSize;
@@ -363,7 +363,7 @@ const Root: Component<MessageRootProps> = (props) => {
                   }}
                   onMouseEnter={() => setHover(false)}
                 >
-                  <IconButton
+                  <DeprecatedIconButton
                     icon={IconPlus}
                     theme="base"
                     iconSize={16}

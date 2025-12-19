@@ -1,7 +1,7 @@
 import { SplitDrawer } from '@app/component/split-layout/components/SplitDrawer';
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import type { BlockName } from '@core/block';
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { PropertiesView } from '@core/component/Properties/PropertiesView';
 import { useCanEdit } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
@@ -21,7 +21,7 @@ export function DocumentPropertiesModal(props: {
 
   return (
     <>
-      <IconButton
+      <DeprecatedIconButton
         icon={TagIcon}
         theme={drawerControl.isOpen() ? 'accent' : 'clear'}
         size={props.buttonSize ?? 'base'}

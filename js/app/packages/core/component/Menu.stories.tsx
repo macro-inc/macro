@@ -4,7 +4,7 @@ import IconGear from '@macro-icons/macro-gear.svg';
 import { createSignal } from 'solid-js';
 import type { Meta, StoryObj } from 'storybook-solidjs-vite';
 import { DropdownMenuContent, MenuItem, MenuSeparator } from './Menu';
-import { TextButton } from './TextButton';
+import { DeprecatedTextButton } from './DeprecatedTextButton';
 
 const meta = {
   title: 'Menu',
@@ -30,7 +30,7 @@ export const Default: Story = {
     return (
       <DropdownMenu placement="bottom-start">
         <DropdownMenu.Trigger>
-          <TextButton text="Open Menu" theme="base" />
+          <DeprecatedTextButton text="Open Menu" theme="base" />
         </DropdownMenu.Trigger>
         <DropdownMenuContent>
           <MenuItem

@@ -8,7 +8,7 @@ import {
   useNotificationsForEntity,
 } from '@notifications';
 import { createMemo, Show, Suspense } from 'solid-js';
-import { IconButton } from './IconButton';
+import { DeprecatedIconButton } from './DeprecatedIconButton';
 import { Notifications } from './Notifications';
 
 false && clickOutside;
@@ -45,7 +45,7 @@ export function NotificationsModal(props: NotificationsModalProps) {
   return (
     <>
       <div class="relative" tabIndex={-1}>
-        <IconButton
+        <DeprecatedIconButton
           icon={Bell}
           theme={drawerControl.isOpen() ? 'accent' : 'clear'}
           size={props.buttonSize ?? 'base'}

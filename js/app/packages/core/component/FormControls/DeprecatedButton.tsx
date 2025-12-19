@@ -21,7 +21,7 @@ const themeClass: Record<Theme, string> = {
   secondary: 'text-ink',
 };
 
-export const Button: ParentComponent<{
+export const DeprecatedButton: ParentComponent<{
   size?: Size;
   theme?: Theme;
   active?: boolean;

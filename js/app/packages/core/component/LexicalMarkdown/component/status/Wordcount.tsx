@@ -1,4 +1,4 @@
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import CaretUp from '@icon/regular/caret-up.svg';
 import Stats from '@icon/regular/chart-bar.svg';
 import { Popover } from '@kobalte/core/popover';
@@ -53,7 +53,7 @@ export function Wordcount(props: { stats: Store<WordcountStats> }) {
         classList={{ 'bg-active': menuOpen() }}
       >
         <Popover.Anchor>
-          <IconButton
+          <DeprecatedIconButton
             icon={() => <Stats class=" size-5 opacity-50" />}
             tooltip={{ label: 'Wordcount' }}
             theme="clear"

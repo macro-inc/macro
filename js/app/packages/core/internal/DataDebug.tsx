@@ -1,4 +1,4 @@
-import { TextButton } from '@core/component/TextButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { Bar } from '@core/component/TopBar/Bar';
 import { useContacts } from '@core/user';
 import Refresh from '@phosphor-icons/core/regular/arrow-clockwise.svg?component-solid';
@@ -88,7 +88,7 @@ const DataDebug: Component = () => {
           </div>
         }
         center={
-          <TextButton
+          <DeprecatedTextButton
             theme="base"
             text="Refresh"
             icon={Refresh}

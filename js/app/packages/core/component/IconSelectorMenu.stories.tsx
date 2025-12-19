@@ -3,7 +3,7 @@ import { createSignal } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import type { Meta, StoryObj } from 'storybook-solidjs-vite';
 import { IconSelectorMenu } from './IconSelectorMenu';
-import { TextButton } from './TextButton';
+import { DeprecatedTextButton } from './DeprecatedTextButton';
 
 const meta = {
   title: 'IconSelectorMenu',
@@ -31,7 +31,7 @@ export const Default: Story = {
     return (
       <div class="p-4">
         <div class="mb-4 flex items-center gap-4">
-          <TextButton
+          <DeprecatedTextButton
             text={show() ? 'Close Icon Selector' : 'Open Icon Selector'}
             theme="base"
             onClick={() => setShow(!show())}
@@ -68,7 +68,7 @@ export const WithColor: Story = {
     return (
       <div class="p-4">
         <div class="mb-4 flex items-center gap-4">
-          <TextButton
+          <DeprecatedTextButton
             text={show() ? 'Close' : 'Open'}
             theme="base"
             onClick={() => setShow(!show())}

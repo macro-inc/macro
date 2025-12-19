@@ -28,7 +28,7 @@ export type SmallTextButtonProps = SmallTextButton;
  * @param props.ref - An optional ref to the div wrapper of the button
  * @param props.index - An optional number to reference buttons within a group
  */
-export function SmallTextButton(props: SmallTextButtonProps) {
+export function DeprecatedSmallTextButton(props: SmallTextButtonProps) {
   const [local, rest] = splitProps(props, [
     'text',
     'theme',

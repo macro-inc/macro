@@ -4,7 +4,7 @@ import {
   type FilteredTailwindColors,
   TailwindColorPicker,
 } from './TailwindColorPicker';
-import { TextButton } from './TextButton';
+import { DeprecatedTextButton } from './DeprecatedTextButton';
 
 const meta = {
   title: 'TailwindColorPicker',
@@ -29,7 +29,7 @@ export const Default: Story = {
 
     return (
       <div>
-        <TextButton
+        <DeprecatedTextButton
           text={`Selected: ${selectedColor()}`}
           theme="base"
           onClick={() => setShow(!show())}

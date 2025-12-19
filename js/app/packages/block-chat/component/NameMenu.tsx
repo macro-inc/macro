@@ -10,7 +10,7 @@ import {
   MenuItemRenameTrigger,
   MenuSeparator,
 } from '@core/component/Menu';
-import { EditingTextButton, TextButton } from '@core/component/TextButton';
+import { DeprecatedEditingTextButton, DeprecatedTextButton } from 'core/component/DeprecatedTextButton';
 import { BarContext } from '@core/component/TopBar/Bar';
 import { setCachedInputStore } from '@core/store/cacheChatInput';
 import { isErr } from '@core/util/maybeResult';
@@ -126,7 +126,7 @@ export function ChatNameMenu(props: Props) {
   return (
     <EditableProvider
       editingComponent={
-        <EditingTextButton
+        <DeprecatedEditingTextButton
           handleSubmitEdit={(new_name) => {
             renameChat({ chat_id: props.data.chat.id, new_name });
           }}
@@ -143,9 +143,9 @@ export function ChatNameMenu(props: Props) {
         sameWidth
       >
         <DropdownMenu.Trigger>
-          <TextButton theme="clear" showChevron tabIndex={-1}>
+          <DeprecatedTextButton theme="clear" showChevron tabIndex={-1}>
             {truncatedName()}
-          </TextButton>
+          </DeprecatedTextButton>
         </DropdownMenu.Trigger>
 
         <DropdownMenu.Portal>

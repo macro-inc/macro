@@ -13,7 +13,7 @@ import PaperPlaneIcon from '@phosphor-icons/core/regular/paper-plane-tilt.svg?co
 import type { SimpleMention } from '@service-comms/generated/models/simpleMention';
 import { createSignal, type JSXElement, Show, type Signal } from 'solid-js';
 import type { ItemMention } from './LexicalMarkdown/plugins';
-import { TextButton } from './TextButton';
+import { DeprecatedTextButton } from './DeprecatedTextButton';
 import { toast } from './Toast/Toast';
 
 type NewMessageProps = {
@@ -61,7 +61,7 @@ function CopyLinkButton() {
     toast.success('Link copied to clipboard');
   }
 
-  return <TextButton text="Copy Link" theme="base" onClick={handleCopyLink} />;
+  return <DeprecatedTextButton text="Copy Link" theme="base" onClick={handleCopyLink} />;
 }
 
 export function getDestinationFromOptions<T extends CombinedRecipientItem>(
@@ -245,7 +245,7 @@ export function NewMessage(props: NewMessageProps) {
                 <CopyLinkButton />
               </Show>
               <div class="flex flex-row gap-2 items-center">
-                <TextButton
+                <DeprecatedTextButton
                   disabled={markdownState().trim().length === 0}
                   text="Send"
                   theme="accent"
@@ -286,7 +286,7 @@ export function ForwardButton() {
     <NewMessage
       source="block"
       trigger={
-        <TextButton
+        <DeprecatedTextButton
           icon={PaperPlaneIcon}
           theme={'base'}
           text={undefined}

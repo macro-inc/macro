@@ -1,9 +1,9 @@
 import type { Meta, StoryObj } from 'storybook-solidjs-vite';
-import { SmallTextButton } from './SmallTextButton';
+import { DeprecatedSmallTextButton } from './DeprecatedSmallTextButton';
 
 const meta = {
   title: 'SmallTextButton',
-  component: SmallTextButton,
+  component: DeprecatedSmallTextButton,
   argTypes: {
     theme: {
       control: { type: 'select' },
@@ -34,7 +34,7 @@ const meta = {
       control: { type: 'boolean' },
     },
   },
-} satisfies Meta<typeof SmallTextButton>;
+} satisfies Meta<typeof DeprecatedSmallTextButton>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;

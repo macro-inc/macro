@@ -1,4 +1,4 @@
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
 import { Tooltip } from '@core/component/Tooltip';
 import { formatDate } from '@core/util/date';
 import CaretDown from '@icon/regular/caret-down.svg';
@@ -147,7 +147,7 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
                 </For>
               </div>
               {/* Expand Header Button */}
-              <IconButton
+              <DeprecatedIconButton
                 theme="clear"
                 icon={CaretDown}
                 onclick={() => {
@@ -189,7 +189,7 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
                     props.message.bcc.length === 0
                   }
                 >
-                  <IconButton
+                  <DeprecatedIconButton
                     theme="clear"
                     icon={CaretUp}
                     onclick={() => {
@@ -227,7 +227,7 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
                 {/* Expand Header Button */}
 
                 <Show when={props.message.bcc.length === 0}>
-                  <IconButton
+                  <DeprecatedIconButton
                     theme="clear"
                     icon={CaretUp}
                     onclick={() => {
@@ -264,7 +264,7 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
                 </For>
                 {/* Expand Header Button */}
 
-                <IconButton
+                <DeprecatedIconButton
                   theme="clear"
                   icon={CaretUp}
                   onclick={() => {

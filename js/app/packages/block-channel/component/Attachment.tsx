@@ -1,7 +1,7 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { ImagePreview } from '@core/component/ImagePreview';
-import { TextButton } from '@core/component/TextButton';
+import { DeprecatedTextButton } from 'core/component/DeprecatedTextButton';
 import { VideoPreview } from '@core/component/VideoPreview';
 import {
   blockNameToDefaultFile,
@@ -83,7 +83,7 @@ export function Attachment(props: AttachmentProps) {
           )}
         >
           {(blockName) => (
-            <TextButton
+            <DeprecatedTextButton
               theme="base"
               disabled={props.attachment.pending}
               icon={() =>

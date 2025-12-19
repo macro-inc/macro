@@ -5,12 +5,12 @@ import { useHasPaidAccess } from '@core/auth';
 import { useBlockId } from '@core/block';
 import { BrightJoins } from '@core/component/BrightJoins';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import type { UserMentionRecord } from '@core/component/LexicalMarkdown/component/menu/MentionsMenu';
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { RecipientSelector } from '@core/component/RecipientSelector';
-import { TextButton } from '@core/component/TextButton';
+import { DeprecatedTextButton } from 'core/component/DeprecatedTextButton';
 import { toast } from '@core/component/Toast/Toast';
 import { Tooltip } from '@core/component/Tooltip';
 import { fileDrop } from '@core/directive/fileDrop';
@@ -602,11 +602,11 @@ export function BaseInput(props: {
 
   const ReplyIcon = createMemo(() => {
     if (effectiveReplyType() === 'reply') {
-      return <IconButton icon={Reply} showChevron />;
+      return <DeprecatedIconButton icon={Reply} showChevron />;
     } else if (effectiveReplyType() === 'reply-all') {
-      return <IconButton icon={ReplyAll} showChevron />;
+      return <DeprecatedIconButton icon={ReplyAll} showChevron />;
     } else {
-      return <IconButton icon={Forward} showChevron />;
+      return <DeprecatedIconButton icon={Forward} showChevron />;
     }
   });
 
@@ -850,7 +850,7 @@ export function BaseInput(props: {
         </div>
         <Show when={!form().replyAppended()}>
           <div class="px-2 flex flex-row items-center space-x-2">
-            <IconButton
+            <DeprecatedIconButton
               theme="clear"
               icon={DotsThree}
               onclick={() => {
@@ -869,7 +869,7 @@ export function BaseInput(props: {
         <div class="flex flex-row w-full h-8 justify-between items-center py-2 px-2 mb-2 space-x-2 allow-css-brackets">
           <div class="flex flex-row items-center gap-2">
             <div class="relative" ref={attachButtonRef}>
-              <IconButton
+              <DeprecatedIconButton
                 theme="base"
                 icon={Plus}
                 tooltip={{ label: 'Attach' }}
@@ -885,7 +885,7 @@ export function BaseInput(props: {
                 setIsPending={setIsPendingUpload}
               />
             </div>
-            <IconButton
+            <DeprecatedIconButton
               theme="base"
               icon={TextAa}
               onclick={() => {
@@ -893,7 +893,7 @@ export function BaseInput(props: {
               }}
             />
             <Show when={savedDraftId()}>
-              <IconButton
+              <DeprecatedIconButton
                 theme="base"
                 icon={Trash}
                 onclick={deleteDraftAndReset}
@@ -902,7 +902,7 @@ export function BaseInput(props: {
             </Show>
           </div>
           <div class="flex flex-row items-center">
-            <TextButton
+            <DeprecatedTextButton
               theme="base"
               disabled={isPendingUpload() || sendMutation.isPending}
               onClick={() => {
@@ -924,7 +924,7 @@ export function BaseInput(props: {
                   <CheckIcon class="size-4" />
                 </div>
               </Show>
-            </TextButton>
+            </DeprecatedTextButton>
             <DropdownMenu>
               <DropdownMenu.Trigger>
                 <div class="w-8 min-h-8 flex justify-center items-center h-full border-r border-t border-b border-ink hover:bg-hover">

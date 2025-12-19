@@ -4,7 +4,7 @@ import {
   useMaybeBlockName,
 } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import {
   DropdownMenuContent,
   MenuItem,
@@ -367,7 +367,7 @@ export function DocumentCard(props: DocumentCardDecoratorProps) {
           </div>
           <DropdownMenu open={dropdownOpen()} onOpenChange={setDropdownOpen}>
             <DropdownMenu.Trigger>
-              <IconButton theme="clear" icon={DotsThree} tabIndex={-1} />
+              <DeprecatedIconButton theme="clear" icon={DotsThree} tabIndex={-1} />
             </DropdownMenu.Trigger>
             <ScopedPortal scope="block">
               <DropdownMenuContent class="z-action-menu">

@@ -4,7 +4,7 @@ import { MacroSignatureButton } from '@block-email/component/MacroSignatureButto
 import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
 import { useHasPaidAccess } from '@core/auth';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import { fileDrop } from '@core/directive/fileDrop';
 import TextAa from '@icon/regular/text-aa.svg';
@@ -234,7 +234,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
       <div class="flex flex-row w-full h-8 justify-between items-center space-x-2 allow-css-brackets mt-2">
         <div class="flex flex-row items-center gap-2">
           <div class="relative" ref={attachButtonRef}>
-            <IconButton
+            <DeprecatedIconButton
               theme="base"
               icon={PaperclipIcon}
               tooltip={{ label: 'Attach' }}
@@ -251,7 +251,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
               setIsPending={setIsPendingUpload}
             />
           </div>
-          <IconButton
+          <DeprecatedIconButton
             theme="base"
             icon={TextAa}
             disabled={props.disabled}

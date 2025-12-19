@@ -31,7 +31,7 @@ import {
   MenuSeparator,
   SubTrigger,
 } from '../Menu';
-import { TextButton } from '../TextButton';
+import { DeprecatedTextButton } from '../DeprecatedTextButton';
 
 const SUPPORTED_LANGUAGES = [
   'English',
@@ -399,7 +399,7 @@ export function AskAi(props: {
         onOpenChange={setOpen}
         getAnchorRect={() => triggerRef()?.getBoundingClientRect()}
       >
-        <TextButton
+        <DeprecatedTextButton
           theme="clear"
           icon={actionIcon()}
           onClick={executeDefaultAction}

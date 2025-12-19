@@ -27,7 +27,7 @@ import {
   REMOVE_HIGHLIGHT_SELECTED_NODES,
 } from '@core/component/LexicalMarkdown/plugins/popup/popupPlugin';
 import { ScopedPortal } from '@core/component/ScopedPortal';
-import { TextButton } from '@core/component/TextButton';
+import { DeprecatedTextButton } from 'core/component/DeprecatedTextButton';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { blockElementSignal } from '@core/signal/blockElement';
@@ -407,7 +407,7 @@ export function MarkdownPopup(props: {
           >
             <FormatTools withinPopup />
           </Show>
-          <TextButton
+          <DeprecatedTextButton
             width={'w-12'}
             theme="clear"
             icon={

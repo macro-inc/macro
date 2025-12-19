@@ -104,7 +104,7 @@ type TextButtonProps = TextButton &
  * @param props.showSeparator - Whether to show the separator and enable the secondary button
  * @param props.ref - An optional ref to the div wrapper of the TextButton and the secondary button if enabled
  */
-export function TextButton(props: TextButtonProps) {
+export function DeprecatedTextButton(props: TextButtonProps) {
   const hasSecondaryButton = () =>
     !!props.onOptionClick || !!props.showSeparator;
 
@@ -209,7 +209,7 @@ export function TextButton(props: TextButtonProps) {
   );
 }
 
-export function EditingTextButton(
+export function DeprecatedEditingTextButton(
   props: Omit<TextButtonProps, 'text' | 'children'> & EditableLabelProps
 ) {
   const [_, setIsRenaming] = useContext(EditingContext);

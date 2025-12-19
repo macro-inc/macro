@@ -1,4 +1,4 @@
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import DeleteIcon from '@icon/bold/x-bold.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { Component } from 'solid-js';
@@ -88,7 +88,7 @@ export const SelectValue: Component<SelectValueProps> = (props) => {
               </div>
               <Show when={!isReadOnly() && isHovered() && !isSaving()}>
                 <div class="absolute right-1 inset-y-0 flex items-center">
-                  <IconButton
+                  <DeprecatedIconButton
                     icon={DeleteIcon}
                     theme="clear"
                     size="xs"

@@ -1,10 +1,10 @@
 import IconGear from '@macro-icons/macro-gear.svg';
 import type { Meta, StoryObj } from 'storybook-solidjs-vite';
-import { TextButton } from './TextButton';
+import { DeprecatedTextButton } from './DeprecatedTextButton';
 
 const meta = {
   title: 'TextButton',
-  component: TextButton,
+  component: DeprecatedTextButton,
   argTypes: {
     theme: {
       control: { type: 'select' },
@@ -41,7 +41,7 @@ const meta = {
       control: { type: 'boolean' },
     },
   },
-} satisfies Meta<typeof TextButton>;
+} satisfies Meta<typeof DeprecatedTextButton>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;

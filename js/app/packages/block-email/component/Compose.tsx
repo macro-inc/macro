@@ -8,7 +8,7 @@ import { useHasPaidAccess } from '@core/auth';
 import { CircleSpinner } from '@core/component/CircleSpinner';
 import { ClippedPanel } from '@core/component/ClippedPanel';
 import { RecipientSelector } from '@core/component/RecipientSelector';
-import { TextButton } from '@core/component/TextButton';
+import { DeprecatedTextButton } from 'core/component/DeprecatedTextButton';
 import { toast } from '@core/component/Toast/Toast';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { useEmailLinks } from '@core/email-link';
@@ -217,7 +217,7 @@ export function EmailCompose() {
                   You have not connected an email account.
                 </span>
                 <span class="grow" />
-                <TextButton
+                <DeprecatedTextButton
                   theme="base"
                   text="Connect Email"
                   onClick={connectEmail}
@@ -231,7 +231,7 @@ export function EmailCompose() {
                 <Caution class="size-4" />
                 <span class="text-sm">You must upgrade to send email.</span>
                 <span class="grow" />
-                <TextButton
+                <DeprecatedTextButton
                   theme="base"
                   text="Upgrade"
                   onClick={() => {

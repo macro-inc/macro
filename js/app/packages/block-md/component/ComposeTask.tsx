@@ -1,6 +1,6 @@
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { EntityIcon } from '@core/component/EntityIcon';
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
 import { BlockLink } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
@@ -23,7 +23,7 @@ import type {
   PropertyApiValues,
   PropertyOption,
 } from '@core/component/Properties/types';
-import { TextButton } from '@core/component/TextButton';
+import { DeprecatedTextButton } from 'core/component/DeprecatedTextButton';
 import { toast } from '@core/component/Toast/Toast';
 import { itemToSafeName } from '@core/constant/allBlocks';
 import { createMarkdownFile } from '@core/util/create';
@@ -296,7 +296,7 @@ export function ComposeTask(props: ComposeTaskProps) {
     >
       <div class="flex items-center gap-1 p-2">
         <Show when={splitPanel?.handle.isPopover()}>
-          <IconButton
+          <DeprecatedIconButton
             icon={XIcon}
             onClick={splitPanel?.handle.close}
             size="sm"
@@ -406,7 +406,7 @@ export function ComposeTask(props: ComposeTaskProps) {
 
       <div class="w-full border-b border-edge-muted/50" />
       <div class="flex-shrink-0 flex justify-end p-2">
-        <TextButton
+        <DeprecatedTextButton
           icon={() => <EntityIcon targetType="task" theme="monochrome" />}
           onClick={handleCreateTask}
           text="Create Task"

@@ -1,5 +1,5 @@
 import EntityNavigationIndicator from '@app/component/EntityNavigationIndicator';
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
 import { ENABLE_PREVIEW } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
 import CollapseIcon from '@icon/regular/arrows-in.svg';
@@ -25,7 +25,7 @@ function SplitBackButton() {
   const context = useContext(SplitPanelContext);
   if (!context) return null;
   return (
-    <IconButton
+    <DeprecatedIconButton
       size="sm"
       icon={CaretLeft}
       tooltip={{ label: 'Go Back', hotkeyToken: TOKENS.split.go.back }}
@@ -40,7 +40,7 @@ function SplitForwardButton() {
   const context = useContext(SplitPanelContext);
   if (!context) return '';
   return (
-    <IconButton
+    <DeprecatedIconButton
       size="sm"
       icon={CaretRight}
       tooltip={{ label: 'Go Forward', hotkeyToken: TOKENS.split.go.forward }}
@@ -57,7 +57,7 @@ function SplitSpotlightButton() {
   if (!context || !layout) return '';
   return (
     <Show when={canSpotlight(layout.manager)}>
-      <IconButton
+      <DeprecatedIconButton
         size="sm"
         icon={context.handle.isSpotLight() ? CollapseIcon : ExpandIcon}
         theme="current"
@@ -77,7 +77,7 @@ function SplitCloseButton() {
   const context = useContext(SplitPanelContext);
   if (!context) return null;
   return (
-    <IconButton
+    <DeprecatedIconButton
       size="sm"
       iconSize={16}
       icon={CloseIcon}
@@ -103,7 +103,7 @@ function SplitPreviewToggle() {
   return (
     <Show when={isUnifiedList()}>
       <div class="max-sm:rotate-90">
-        <IconButton
+        <DeprecatedIconButton
           size="sm"
           icon={SplitIcon}
           theme={preview() ? 'accent' : 'current'}

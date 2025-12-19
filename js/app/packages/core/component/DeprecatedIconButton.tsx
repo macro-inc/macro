@@ -66,7 +66,7 @@ export type IconButtonProps = IconButton;
  * @param props.showShortcut - Whether to show the shortcut key on the actual button itself. Defaults to false and
  *     you only need to pass if you also pass a tooltip with a shortcut key.
  */
-export function IconButton(props: IconButtonProps) {
+export function DeprecatedIconButton(props: IconButtonProps) {
   const [local, rest] = splitProps(props, [
     'icon',
     'theme',

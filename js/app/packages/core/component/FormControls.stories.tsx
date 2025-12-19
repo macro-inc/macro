@@ -1,6 +1,6 @@
 import { createSignal } from 'solid-js';
 import type { Meta, StoryObj } from 'storybook-solidjs-vite';
-import { Button } from './FormControls/Button';
+import { DeprecatedButton } from './FormControls/DeprecatedButton';
 import { SegmentedControl } from './FormControls/SegmentControls';
 import { ToggleButton } from './FormControls/ToggleButton';
 import { ToggleSwitch } from './FormControls/ToggleSwitch';
@@ -23,9 +23,9 @@ type Story = StoryObj<typeof meta>;
 export const ButtonDefault: Story = {
   name: 'Button - Default',
   render: () => (
-    <Button size="Base" theme="primary">
+    <DeprecatedButton size="Base" theme="primary">
       Button
-    </Button>
+    </DeprecatedButton>
   ),
 };
 
@@ -34,33 +34,33 @@ export const ButtonVariations: Story = {
   render: () => (
     <div class="space-y-4">
       <div class="space-x-2">
-        <Button size="Base" theme="primary">
+        <DeprecatedButton size="Base" theme="primary">
           Primary
-        </Button>
-        <Button size="Base" theme="secondary">
+        </DeprecatedButton>
+        <DeprecatedButton size="Base" theme="secondary">
           Secondary
-        </Button>
+        </DeprecatedButton>
       </div>
       <div class="space-x-2">
-        <Button size="SM" theme="primary">
+        <DeprecatedButton size="SM" theme="primary">
           Small Primary
-        </Button>
-        <Button size="SM" theme="secondary">
+        </DeprecatedButton>
+        <DeprecatedButton size="SM" theme="secondary">
           Small Secondary
-        </Button>
+        </DeprecatedButton>
       </div>
       <div class="space-x-2">
-        <Button size="Base" theme="primary" disabled>
+        <DeprecatedButton size="Base" theme="primary" disabled>
           Disabled Primary
-        </Button>
-        <Button size="Base" theme="secondary" disabled>
+        </DeprecatedButton>
+        <DeprecatedButton size="Base" theme="secondary" disabled>
           Disabled Secondary
-        </Button>
+        </DeprecatedButton>
       </div>
       <div class="space-x-2">
-        <Button size="Base" theme="primary" hotkeyShortcut="⌘+S">
+        <DeprecatedButton size="Base" theme="primary" hotkeyShortcut="⌘+S">
           With Shortcut
-        </Button>
+        </DeprecatedButton>
       </div>
     </div>
   ),
@@ -230,15 +230,15 @@ export const AllFormControls: Story = {
         <div class="space-y-2">
           <h3 class="text-sm font-semibold">Buttons</h3>
           <div class="space-x-2">
-            <Button size="Base" theme="primary">
+            <DeprecatedButton size="Base" theme="primary">
               Primary Action
-            </Button>
-            <Button size="Base" theme="secondary">
+            </DeprecatedButton>
+            <DeprecatedButton size="Base" theme="secondary">
               Secondary
-            </Button>
-            <Button size="SM" theme="primary" hotkeyShortcut="⌘+Enter">
+            </DeprecatedButton>
+            <DeprecatedButton size="SM" theme="primary" hotkeyShortcut="⌘+Enter">
               Save
-            </Button>
+            </DeprecatedButton>
           </div>
         </div>
 
