@@ -1,11 +1,5 @@
 import type { HotkeyToken } from '@core/hotkey/tokens';
-import { Polymorphic, type PolymorphicProps } from '@kobalte/core';
-import {
-  type JSX,
-  type ParentComponent,
-  Show,
-  type ValidComponent,
-} from 'solid-js';
+import { type JSX, type ParentComponent, Show } from 'solid-js';
 import { Hotkey } from '../Hotkey';
 
 type Size = 'SM' | 'Base' | 'XS';
@@ -27,18 +21,17 @@ export const DeprecatedButton: ParentComponent<{
   active?: boolean;
   hotkeyToken?: HotkeyToken;
   hotkeyShortcut?: string;
-  onClick?: PolymorphicProps<'button'>['onClick'];
-  onMouseDown?: PolymorphicProps<'button'>['onMouseDown'];
+  onClick?: JSX.EventHandler<HTMLButtonElement, MouseEvent>;
+  onMouseDown?: JSX.EventHandler<HTMLButtonElement, MouseEvent>;
   disabled?: boolean;
   border?: boolean;
   tabIndex?: number;
   classList?: JSX.CustomAttributes<HTMLButtonElement>['classList'];
-  as?: ValidComponent;
   ref?: (ref: HTMLButtonElement) => void | HTMLButtonElement;
 }> = (props) => {
   const hasHotkey = () => !!(props.hotkeyShortcut || props.hotkeyToken);
   return (
-    <Polymorphic
+    <button
       class="relative flex items-stretch hover:opacity-80 disabled:opacity-50 [&:focus]:[--focus-border-inset:-4px] font-mono font-medium uppercase leading-none disabled:cursor-not-allowed"
       classList={{
         [`${sizeClass[props.size || 'Base']}`]: !hasHotkey(),
@@ -54,8 +47,6 @@ export const DeprecatedButton: ParentComponent<{
       onMouseDown={props.onMouseDown}
       disabled={props.disabled}
       tabIndex={props.tabIndex}
-      as={props.as ?? 'button'}
-      // as={'button'}
       ref={props.ref}
     >
       <Show
@@ -95,6 +86,6 @@ export const DeprecatedButton: ParentComponent<{
           </div>
         </div>
       </Show>
-    </Polymorphic>
+    </button>
   );
 };
