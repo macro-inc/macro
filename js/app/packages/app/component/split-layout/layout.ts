@@ -52,7 +52,7 @@ export function useSplitLayout() {
   function insertSplit(content: SplitContent) {
     const splitManager = globalSplitManager();
     if (!splitManager) {
-      console.error('no split manager found');
+      console.error('No split manager found');
       return;
     }
     return splitManager.createNewSplit(content, true);
@@ -76,7 +76,16 @@ export function useSplitLayout() {
     splitPanelContext.handle.reset();
   }
 
+  function getSplitCount() {
+    const splitManager = globalSplitManager();
+    if (!splitManager) {
+      return 0;
+    }
+    return splitManager.splits().length;
+  }
+
   return {
+    getSplitCount,
     replaceOrInsertSplit,
     replaceSplit,
     insertSplit,

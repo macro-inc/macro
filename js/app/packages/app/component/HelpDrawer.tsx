@@ -23,7 +23,9 @@ export function HelpDrawer(props: { viewId?: ViewId }) {
     <Switch>
       <Match
         when={
-          (props.viewId === 'noise' || props.viewId === 'signal') &&
+          (props.viewId === 'noise' ||
+            props.viewId === 'signal' ||
+            props.viewId === 'email') &&
           !emailActive()
         }
       >
@@ -75,7 +77,7 @@ export function HelpDrawer(props: { viewId?: ViewId }) {
               ],
             },
             {
-              hotkeyTokenSequence: [TOKENS.global.toggleRightPanel],
+              hotkeyTokenSequence: [TOKENS.split.go.toggleRightPanel],
             },
           ]}
         />
@@ -108,6 +110,41 @@ export function HelpDrawer(props: { viewId?: ViewId }) {
                 }
               : undefined
           }
+        />
+      </Match>
+      <Match when={props.viewId === 'email'}>
+        <HelpDrawerInner
+          title={'Email is better with Macro.'}
+          subtitle={
+            <span>
+              Use{' '}
+              <span class="font-mono bg-edge/20 rounded-xs md-inline-code p-0.3">
+                @mentions
+              </span>{' '}
+              to give email recipients access to anything in Macro. Ask AI to
+              search your emails.
+            </span>
+          }
+          hotkeyExamples={[
+            {
+              hotkeyTokenSequence: [
+                TOKENS.global.createCommand,
+                TOKENS.create.email,
+              ],
+            },
+            {
+              hotkeyTokenSequence: [
+                TOKENS.global.createCommand,
+                TOKENS.create.message,
+              ],
+            },
+            {
+              hotkeyTokenSequence: [
+                TOKENS.split.goCommand,
+                TOKENS.split.go.toggleRightPanel,
+              ],
+            },
+          ]}
         />
       </Match>
       <Match when={props.viewId === 'comms'}>
@@ -207,7 +244,7 @@ export function HelpDrawer(props: { viewId?: ViewId }) {
               hotkeyTokenSequence: [TOKENS.global.createNewSplit],
             },
             {
-              hotkeyTokenSequence: [TOKENS.global.toggleRightPanel],
+              hotkeyTokenSequence: [TOKENS.split.go.toggleRightPanel],
             },
             {
               hotkeyTokenSequence: [TOKENS.global.createCommand],

@@ -4,6 +4,8 @@ import type { HotkeyToken } from './tokens';
 export interface HotkeyCommand {
   // Used to identify the hotkey in UI elements. Needs to be unique to a particular scope.
   hotkeyToken?: HotkeyToken;
+  // What scope does this hotkey belong to
+  scopeId: string;
   // The hotkey strings, e.g. ['cmd+j', 'ctrl+j']
   hotkeys?: ValidHotkey[];
   // Condition to check if the hotkey command should run. This is checked on keydown/keyup. If this is fed a reactive value, any hotkey UI that displays hotkeys based on this condition will be reactively updated.
@@ -21,7 +23,7 @@ export interface HotkeyCommand {
   // The priority of the command for ordering hotkey display lists. Note: registerHotkey only accepts number 1-10, but here we allow any number, so that we can sort as needed.
   displayPriority?: number;
   // If true, hotkey command can be hidden from the UI. It will still run, but will not be displayed.
-  hide?: boolean;
+  hide?: boolean | (() => boolean);
   // Optional icon to display in the command palette.
   icon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
   // Optional tags for categorizing in the command palette.
@@ -95,8 +97,9 @@ export interface HotkeyRegistrationOptions {
   displayPriority?: CommandDisplayPriority;
   /**
    * If true, hotkey command can be hidden from the UI. It will still run, but may not be displayed.
+   * Can be either a boolean or a function that returns a boolean for reactive behavior.
    */
-  hide?: boolean;
+  hide?: boolean | (() => boolean);
   /**
    * Optional icon to display in the command palette.
    */
@@ -113,7 +116,7 @@ export type RegisterHotkeyReturn = {
 };
 
 export type ScopeNodeBase = {
-  id: string;
+  scopeId: string;
   description?: string;
   parentScopeId?: string;
   childScopeIds: string[];
@@ -132,6 +135,9 @@ export type DOMScopeNode = {
 
 export type CommandScopeNode = {
   type: 'command';
+  // The keys that activate this command scope, from the original parent scope.
+  activationKeys?: ValidHotkey[];
+  originalParentScopeId: string;
 };
 
 export type ScopeNode = ScopeNodeBase & (DOMScopeNode | CommandScopeNode);
@@ -279,3 +285,31 @@ export type ValidHotkey =
   | `cmd+${BaseKeyboardValue}`
   | `ctrl+opt+shift+${BaseKeyboardValue}`
   | `opt+shift+cmd+${BaseKeyboardValue}`;
+
+/**
+ * Context object passed to keypress subscribers containing all relevant
+ * information about the current keypress event. Subscribers can use this
+ * information to implement their own filtering logic.
+ */
+export interface KeypressContext {
+  /** The normalized hotkey string (e.g., 'cmd+j', 'j') */
+  pressedKeysString: ValidHotkey;
+  /** Set of currently pressed keys */
+  pressedKeys: Set<string>;
+  /** The raw keyboard event */
+  event: KeyboardEvent;
+  /** The currently active scope ID, or null if none */
+  activeScopeId: string | null;
+  /** Whether an editable input element is currently focused */
+  isEditableFocused: boolean;
+  /** Whether a command scope was activated by this keypress */
+  commandScopeActivated: boolean;
+  /** Whether a command was found and executed */
+  commandFound: boolean;
+  /** The command that was executed */
+  commandCaptured: HotkeyCommand | undefined;
+  /** The event type ('keydown' or 'keyup') */
+  eventType: 'keydown' | 'keyup';
+  /** Whether the keypress includes a non-modifier key */
+  isNonModifierKeypress: boolean;
+}

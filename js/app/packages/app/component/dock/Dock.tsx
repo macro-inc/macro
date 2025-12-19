@@ -2,7 +2,6 @@ import { ENABLE_DOCK_NOTITIFCATIONS, ENABLE_JACK_IN } from '@core/constant/featu
 import { GlobalNotificationBell } from '@core/component/GlobalNotificationBell';
 import { createMemo, createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { isRightPanelOpen, useToggleRightPanel } from '@core/signal/layout';
-import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useGlobalNotificationSource } from '../GlobalAppState';
 import IconPower from '@phosphor-icons/core/regular/power.svg';
@@ -20,7 +19,7 @@ import IconGear from '@macro-icons/macro-gear.svg';
 import IconLogo from '@macro-icons/macro-logo.svg';
 import { BasicTierLimit } from './BasicTierLimit';
 import { setKonsoleOpen } from '../command/state';
-import { runCommand } from '@core/hotkey/hotkeys';
+import { getActiveCommandByToken, runCommand } from '@core/hotkey/utils';
 import { Hotkey } from '@core/component/Hotkey';
 import { setCreateMenuOpen } from '../Launcher';
 import { useHasPaidAccess } from '@core/auth';
@@ -48,24 +47,6 @@ export function Dock() {
     if (!split) { return false };
     return split.content().id === 'unified-list';
   });
-
-  // This method of opening the correct help drawer is disgusting,
-  // but it works and doesn't require changing anything else.
-  function activeSoupDrawerCommand() {
-    const currentActiveScope = activeScope();
-    if (!currentActiveScope) { return undefined };
-    let activeScopeNode = hotkeyScopeTree.get(currentActiveScope);
-    if (!activeScopeNode) { return undefined };
-    if (activeScopeNode?.type !== 'dom') { return };
-    const dom = activeScopeNode.element;
-    const closestSplitScope = dom.closest('[data-hotkey-scope^="split"]');
-    if (!closestSplitScope || !(closestSplitScope instanceof HTMLElement)) { return };
-    const scopeId = closestSplitScope.dataset.hotkeyScope;
-    if (!scopeId) { return undefined };
-    const splitNode = hotkeyScopeTree.get(scopeId);
-    if (!splitNode) { return undefined };
-    return splitNode.hotkeyCommands.get('shift+/');
-  };
 
   async function enterPresentMode() {
     try {
@@ -192,6 +173,7 @@ export function Dock() {
                 }}
                 onClick={() => { setKonsoleOpen(true) }}
                 class="dock-button-hover"
+                data-hotkey-token={TOKENS.global.commandMenu}
               >
                 <IconLogo
                   style={{
@@ -230,6 +212,7 @@ export function Dock() {
                 }}
                 onClick={() => { setCreateMenuOpen(true) }}
                 class="dock-button-hover"
+                data-hotkey-token={TOKENS.global.createCommand}
               >
                 <MacroCreateIcon
                   style={{
@@ -298,7 +281,7 @@ export function Dock() {
                 <IconButton
                   onClick={() => {
                     globalSplitManager()?.returnFocus();
-                    const showHelp = activeSoupDrawerCommand();
+                    const showHelp = getActiveCommandByToken(TOKENS.split.showHelpDrawer);
                     if (!showHelp) { return };
                     runCommand(showHelp);
                   }}
@@ -320,7 +303,7 @@ export function Dock() {
                 }}
                 theme={isRightPanelCollapsed() ? 'clear' : 'accent'}
                 tooltip={{
-                  hotkeyToken: TOKENS.global.toggleRightPanel,
+                  hotkeyToken: TOKENS.split.go.toggleRightPanel,
                   label: 'Toggle AI Panel',
                 }}
                 icon={IconAtom}

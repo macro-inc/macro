@@ -1,4 +1,5 @@
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
+import { setHotkeyRoot, useSubscribeToKeypress } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { withAnalytics } from '@coparse/analytics';
 import { useIsAuthenticated } from '@core/auth';
@@ -68,6 +69,8 @@ import MacroJump from './MacroJump';
 import Onboarding from './Onboarding';
 import { SuspenseContextComp } from './SuspenseContext';
 import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
+import Visor from './Visor';
+import { setOpenWhichKey, WhichKey } from './WhichKey';
 
 const { track, identify, TrackingEvents } = withAnalytics();
 
@@ -295,7 +298,14 @@ const clearBodyInlineStyleColor = () => {
 
 export function Root() {
   const isAuthenticated = useIsAuthenticated();
-  useHotKeyRoot();
+  setHotkeyRoot(useHotKeyRoot());
+
+  useSubscribeToKeypress((context) => {
+    if (context.commandScopeActivated) {
+      setOpenWhichKey(true);
+    }
+  });
+
   useSoundHover();
 
   clearBodyInlineStyleColor();
@@ -374,6 +384,8 @@ export function Root() {
             <ChannelsContextProvider>
               <Title>{tabTitle()}</Title>
               <MacroJump />
+              <Visor />
+              <WhichKey />
               <SuspenseContextComp fallback={<RootSuspenseFallback />}>
                 <IsomorphicRouter
                   transformUrl={transformShortIdInUrlPathname}
