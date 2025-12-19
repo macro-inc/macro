@@ -64,6 +64,8 @@ import {
   VIEWCONFIG_DEFAULTS_IDS,
   type ViewConfigBase,
 } from './ViewConfig';
+import { SplitToolbarRight } from './split-layout/components/SplitToolbar';
+import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 
 false && fileFolderDrop;
 
@@ -85,13 +87,13 @@ const ViewWithSearch: Component<{
   return (
     <ViewTab viewId={props.viewId}>
       <Switch>
-        {/* <Match
-          when={props.viewId === 'emails' && DEFAULT_VIEWS.includes('emails')}
+        <Match
+          when={props.viewId === 'email' && DEFAULT_VIEWS.includes('email')}
         >
           <Suspense>
             <EmailView />
           </Suspense>
-        </Match> */}
+        </Match>
         <Match when={props.viewId === 'all' && DEFAULT_VIEWS.includes('all')}>
           <Suspense>
             <AllView />
@@ -457,32 +459,32 @@ function AllView() {
   return <UnifiedListView />;
 }
 
-// function EmailView() {
-//   const {
-//     emailViewSignal: [emailView, setEmailView],
-//     viewsDataStore,
-//     selectedView,
-//   } = useSplitPanelOrThrow().unifiedListContext;
-//   const viewData = createMemo(() => viewsDataStore[selectedView()]);
+function EmailView() {
+  const {
+    emailViewSignal: [emailView, setEmailView],
+    viewsDataStore,
+    selectedView,
+  } = useSplitPanelOrThrow().unifiedListContext;
+  const viewData = createMemo(() => viewsDataStore[selectedView()]);
 
-//   return (
-//     <>
-//       <UnifiedListView />
-//       <SplitToolbarRight>
-//         <div class="flex flex-row items-center pr-2">
-//           <SegmentedControl
-//             disabled={!!viewData().searchText}
-//             size="SM"
-//             label="View"
-//             list={['inbox', 'sent', 'drafts']}
-//             value={emailView()}
-//             onChange={setEmailView}
-//           />
-//         </div>
-//       </SplitToolbarRight>
-//     </>
-//   );
-// }
+  return (
+    <>
+      <UnifiedListView />
+      <SplitToolbarRight>
+        <div class="flex flex-row items-center pr-2">
+          <SegmentedControl
+            disabled={!!viewData().searchText}
+            size="SM"
+            label="View"
+            list={['inbox', 'sent', 'drafts']}
+            value={emailView()}
+            onChange={setEmailView}
+          />
+        </div>
+      </SplitToolbarRight>
+    </>
+  );
+}
 
 export const useUpsertSavedViewMutation = () => {
   const queryClient = useQueryClient();

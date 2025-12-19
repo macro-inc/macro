@@ -175,7 +175,7 @@ export function registerSplitHotkeys({
     description: 'Go to email',
     keyDownHandler: () => {
       replaceSplit({ type: 'component', id: 'unified-list' });
-      setSelectedView('emails');
+      setSelectedView('email');
       return true;
     },
     hotkeyToken: TOKENS.split.go.email,
@@ -183,11 +183,11 @@ export function registerSplitHotkeys({
 
   registerHotkey({
     scopeId: goScopeId,
-    hotkey: 'i',
-    description: 'Go to inbox',
+    hotkey: 's',
+    description: 'Go to signal',
     keyDownHandler: () => {
       replaceSplit({ type: 'component', id: 'unified-list' });
-      setSelectedView('inbox');
+      setSelectedView('signal');
       return true;
     },
     hotkeyToken: TOKENS.split.go.inbox,
@@ -223,7 +223,7 @@ export function registerSplitHotkeys({
     hotkey: 'r',
     scopeId: goScopeId,
     description: () => {
-      return isRightPanelOpen() ? 'Close AI panel' : 'Go AI panel';
+      return isRightPanelOpen() ? 'Close AI panel' : 'Open AI panel';
     },
     keyDownHandler: () => {
       toggleRightPanel();
