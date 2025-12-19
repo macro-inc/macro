@@ -1,5 +1,5 @@
-import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSubscribeToKeypress } from '@app/signal/hotkeyRoot';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { useChannelsContext } from '@core/component/ChannelsProvider';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { ENABLE_PROPERTIES_METADATA } from '@core/constant/featureFlags';

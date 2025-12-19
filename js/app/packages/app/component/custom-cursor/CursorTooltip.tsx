@@ -1,14 +1,14 @@
-import { TOKENS } from '@core/hotkey/tokens';
 import { Hotkey } from '@core/component/Hotkey';
+import { TOKENS } from '@core/hotkey/tokens';
 import { cornerClip } from '@core/util/clipPath';
 import {
   createEffect,
   createSignal,
   For,
+  type JSX,
   onCleanup,
   onMount,
   Show,
-  type JSX,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
 
@@ -53,7 +53,9 @@ function ActionButton(props: { label: string; children: JSX.Element }) {
 export function CursorTooltip() {
   const [isOptionHeld, setIsOptionHeld] = createSignal(false);
   const [isOverLink, setIsOverLink] = createSignal(false);
-  const [hoveredEntity, setHoveredEntity] = createSignal<EntityInfo | null>(null);
+  const [hoveredEntity, setHoveredEntity] = createSignal<EntityInfo | null>(
+    null
+  );
 
   // Refs for direct DOM manipulation (more performant than reactive state)
   let containerRef: HTMLDivElement | undefined;
@@ -105,7 +107,7 @@ export function CursorTooltip() {
       setHoveredEntity(null);
       return;
     }
-    
+
     // Check for entity first
     const entityElement = element.closest('[data-entity]');
     if (entityElement) {
@@ -115,44 +117,54 @@ export function CursorTooltip() {
         const currentEntity = hoveredEntity();
         if (!currentEntity || currentEntity.id !== entityId) {
           // Get entity type
-          const type = entityElement.getAttribute('data-entity-type') || 'entity';
-          
+          const type =
+            entityElement.getAttribute('data-entity-type') || 'entity';
+
           let name = 'Entity';
           let description = '';
           let messages: ChannelMessage[] | undefined;
-          
+
           if (type === 'channel') {
             // For channels, the structure is:
             // - Channel name in span.font-semibold.truncate
             // - Sender name in span.font-medium.shrink-0.truncate (NOT the channel name)
             // - Message in div.opacity-60
-            const channelNameEl = entityElement.querySelector('span.font-semibold.truncate');
+            const channelNameEl = entityElement.querySelector(
+              'span.font-semibold.truncate'
+            );
             name = channelNameEl?.textContent?.trim() || 'Channel';
-            
+
             // Find sender - it's in a span with font-medium shrink-0 truncate, but NOT the channel name container
-            const senderEl = entityElement.querySelector('span.font-medium.shrink-0.truncate');
-            const messageEl = entityElement.querySelector('[class*="opacity-60"]');
-            
+            const senderEl = entityElement.querySelector(
+              'span.font-medium.shrink-0.truncate'
+            );
+            const messageEl = entityElement.querySelector(
+              '[class*="opacity-60"]'
+            );
+
             const sender = senderEl?.textContent?.trim() || '';
             const content = messageEl?.textContent?.trim() || '';
-            
+
             if (sender || content) {
               messages = [{ sender: sender || 'Unknown', content }];
             }
           } else {
             // For non-channels, extract name and description normally
-            const nameElement = entityElement.querySelector('span.truncate.font-medium') ||
-                              entityElement.querySelector('[class*="truncate"][class*="font-medium"]');
+            const nameElement =
+              entityElement.querySelector('span.truncate.font-medium') ||
+              entityElement.querySelector(
+                '[class*="truncate"][class*="font-medium"]'
+              );
             name = nameElement?.textContent?.trim() || 'Entity';
-            
+
             // Extract description text
-            const descriptionElement = 
+            const descriptionElement =
               entityElement.querySelector('[class*="opacity-60"]') ||
               entityElement.querySelector('[class*="text-ink-muted"]') ||
               entityElement.querySelector('[class*="line-clamp"]');
             description = descriptionElement?.textContent?.trim() || '';
           }
-          
+
           setHoveredEntity({
             id: entityId,
             name,
@@ -165,15 +177,16 @@ export function CursorTooltip() {
         return;
       }
     }
-    
+
     if (hoveredEntity() !== null) {
       setHoveredEntity(null);
     }
-    
+
     // Check for link in multiple ways
-    const link = element.closest('a[href]') || 
-                 (element.tagName === 'A' && element.hasAttribute('href')) ||
-                 element.closest('[role="link"]');
+    const link =
+      element.closest('a[href]') ||
+      (element.tagName === 'A' && element.hasAttribute('href')) ||
+      element.closest('[role="link"]');
     const newIsOverLink = !!link;
     if (isOverLink() !== newIsOverLink) {
       setIsOverLink(newIsOverLink);
@@ -350,7 +363,12 @@ export function CursorTooltip() {
                   {/* Body content */}
                   <div class="px-3 py-2">
                     {/* Channel messages */}
-                    <Show when={hoveredEntity()?.type === 'channel' && hoveredEntity()?.messages?.length}>
+                    <Show
+                      when={
+                        hoveredEntity()?.type === 'channel' &&
+                        hoveredEntity()?.messages?.length
+                      }
+                    >
                       <div class="flex flex-col gap-2 mb-3">
                         <For each={hoveredEntity()?.messages}>
                           {(msg) => (
@@ -374,7 +392,12 @@ export function CursorTooltip() {
                     </Show>
 
                     {/* Entity description (non-channel) */}
-                    <Show when={hoveredEntity()?.type !== 'channel' && hoveredEntity()?.description}>
+                    <Show
+                      when={
+                        hoveredEntity()?.type !== 'channel' &&
+                        hoveredEntity()?.description
+                      }
+                    >
                       <div
                         class="text-[0.625rem] mb-3 line-clamp-2"
                         style={{ color: 'var(--color-ink-muted)' }}
@@ -395,14 +418,20 @@ export function CursorTooltip() {
                     {/* Action buttons row */}
                     <div class="flex items-start gap-3">
                       <ActionButton label="Done">
-                        <Hotkey token={TOKENS.entity.action.markDone} class="flex gap-0.5" />
+                        <Hotkey
+                          token={TOKENS.entity.action.markDone}
+                          class="flex gap-0.5"
+                        />
                       </ActionButton>
                       <ActionButton label="New tab">
                         <Hotkey shortcut="opt" class="flex gap-0.5" />
                         <span class="ml-0.5">Click</span>
                       </ActionButton>
                       <ActionButton label="Preview">
-                        <Hotkey token={TOKENS.unifiedList.togglePreview} class="flex gap-0.5" />
+                        <Hotkey
+                          token={TOKENS.unifiedList.togglePreview}
+                          class="flex gap-0.5"
+                        />
                       </ActionButton>
                     </div>
                   </div>

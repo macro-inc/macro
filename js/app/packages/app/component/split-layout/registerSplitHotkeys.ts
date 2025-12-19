@@ -19,8 +19,13 @@ export function registerSplitHotkeys(args: {
   getSplitCount: () => number;
   isNotUnifiedList: () => boolean;
 }) {
-  const { splitHotkeyScope, closeSplit, replaceSplit, getSplitCount, isNotUnifiedList } =
-    args;
+  const {
+    splitHotkeyScope,
+    closeSplit,
+    replaceSplit,
+    getSplitCount,
+    isNotUnifiedList,
+  } = args;
   registerHotkey({
     scopeId: splitHotkeyScope,
     hotkey: 'cmd+escape',
