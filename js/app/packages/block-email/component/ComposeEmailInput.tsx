@@ -156,19 +156,19 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
     const container = composeContainerRef();
     if (!container) return;
     attachComposeHotkeys(container);
+  });
 
-    registerHotkey({
-      hotkey: 'cmd+enter',
-      scopeId: composeHotkeyScope,
-      description: 'Send email',
-      keyDownHandler: () => {
-        handleSend();
-        return true;
-      },
-      runWithInputFocused: true,
-      hotkeyToken: 'email.send',
-      displayPriority: 10,
-    });
+  registerHotkey({
+    hotkey: 'cmd+enter',
+    scopeId: composeHotkeyScope,
+    description: 'Send email',
+    keyDownHandler: () => {
+      handleSend();
+      return true;
+    },
+    runWithInputFocused: true,
+    hotkeyToken: 'email.send',
+    displayPriority: 10,
   });
 
   return (
