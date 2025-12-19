@@ -1,5 +1,8 @@
-use super::response::MessageResponse;
-use super::response::Usage;
+use crate::prelude::ServerToolUse;
+
+use super::web_search::WebSearchResponse;
+
+use super::{MessageResponse, Usage};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -51,6 +54,7 @@ pub enum ContentDeltaEvent {
         name: String,
         input: serde_json::Value,
     },
+    ServerToolUse(ServerToolUse),
     /// partial json for a tool call
     InputJsonDelta {
         partial_json: String,
@@ -61,6 +65,20 @@ pub enum ContentDeltaEvent {
     SignatureDelta {
         signature: String,
     },
+    CitationsDelta {
+        citation: Citation,
+    },
+    WebSearchToolResult(WebSearchResponse),
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct Citation {
+    pub r#type: String,
+    pub cited_text: Option<String>,
+    pub document_title: Option<String>,
+    pub document_index: Option<u32>,
+    pub start_char_index: Option<u32>,
+    pub end_char_index: Option<u32>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]

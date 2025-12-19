@@ -28,6 +28,6 @@ impl Client for AnthropicClient {
         if extensions.is_some() {
             tracing::warn!("extensions are not yet supported");
         }
-        Ok(self.inner.chat().create_stream_openai(request).await)
+        Ok(self.inner.chat().create_stream_openai_lossy(request).await)
     }
 }

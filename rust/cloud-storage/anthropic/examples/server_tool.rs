@@ -1,3 +1,4 @@
+use anthropic::prelude::WEB_SEARCH_TOOL;
 use std::io::Write;
 use std::process::exit;
 
@@ -14,9 +15,10 @@ async fn main() {
     let mut request = CreateMessageRequestBody::default();
     request.max_tokens = 1000;
     request.system = Some(SystemPrompt::Text(
-        "You are donkey boy. You are to refer to yourself only as donkey boy".into(),
+        "You are a helpful AI assistant in a CLI based demo. Use web search tool eagerly".into(),
     ));
     request.model = "claude-haiku-4-5".into();
+    request.tools = Some(vec![WEB_SEARCH_TOOL.clone().into()]);
     let mut out = std::io::stdout();
 
     loop {
@@ -34,7 +36,18 @@ async fn main() {
         let mut stream = chat.create_stream(request.clone()).await;
         let mut assistant_message = String::new();
 
+        // let mut out = OpenOptions::new()
+        //     .write(true)
+        //     .create(true)
+        //     .open("stream.json")
+        //     .unwrap();
+
         while let Some(event) = stream.next().await {
+            // if let Ok(e) = event {
+            //     write!(out, "\n{}\n", serde_json::to_string_pretty(&e).unwrap());
+            // } else {
+            //     write!(out, "{:#?}", event.unwrap_err());
+            // }
             if let Err(error) = event {
                 match error {
                     other => {
@@ -56,14 +69,27 @@ async fn main() {
                         ContentDeltaEvent::StartTextDelta { text } => text,
                         ContentDeltaEvent::TextDelta { text } => text,
                         ContentDeltaEvent::ThinkingDelta { thinking } => thinking,
-                        _ => "other-block-delta\n".into(),
+                        ContentDeltaEvent::CitationsDelta { .. } => "[Citation]".into(),
+                        ContentDeltaEvent::WebSearchToolResult(web_search_result) => {
+                            format!("{:#?}", web_search_result)
+                        }
+
+                        ContentDeltaEvent::ServerToolUse(tool) => {
+                            format!("{:#?}", tool)
+                        }
+                        _ => "".into(),
                     },
-                    StreamEvent::ContentBlockStart { .. } => "content-block-start\n".into(),
-                    StreamEvent::ContentBlockStop { .. } => "\ncontent-block-stop\n".into(),
-                    StreamEvent::Ping => "".into(),
-                    StreamEvent::MessageStart { .. } => "message-start\n".into(),
-                    StreamEvent::MessageStop { .. } => "message-stop\n".into(),
                     StreamEvent::Error { error } => format!("error: {:?}", error),
+                    StreamEvent::ContentBlockStart { content_block, .. } => match content_block {
+                        ContentDeltaEvent::ServerToolUse(tool) => {
+                            format!("{:#?}", tool)
+                        }
+                        ContentDeltaEvent::WebSearchToolResult(web_search_result) => {
+                            format!("{:#?}", web_search_result)
+                        }
+                        _ => "".into(),
+                    },
+                    _ => "".into(),
                 };
                 write!(out, "{}", response_text).expect("io");
                 assistant_message.push_str(&response_text);

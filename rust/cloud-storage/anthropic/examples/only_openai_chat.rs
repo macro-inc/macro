@@ -19,7 +19,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     println!("{:#?}", request);
 
     let client = anthropic::client::Client::dangerously_try_from_env();
-    let mut stream = client.chat().create_stream_openai(request).await;
+    let mut stream = client.chat().create_stream_openai_lossy(request).await;
 
     let mut lock = stdout().lock();
     while let Some(result) = stream.next().await {

@@ -52,7 +52,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build()?;
 
     let client = anthropic::client::Client::dangerously_try_from_env();
-    let mut stream = client.chat().create_stream_openai(request).await;
+    let mut stream = client.chat().create_stream_openai_lossy(request).await;
 
     let tool_call_states: Arc<Mutex<HashMap<(u32, u32), ChatCompletionMessageToolCall>>> =
         Arc::new(Mutex::new(HashMap::new()));
@@ -181,7 +181,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 .build()
                                 .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
 
-                            let mut stream = client.chat().create_stream_openai(request).await;
+                            let mut stream =
+                                client.chat().create_stream_openai_lossy(request).await;
 
                             let mut response_content = String::new();
                             let mut lock = stdout().lock();

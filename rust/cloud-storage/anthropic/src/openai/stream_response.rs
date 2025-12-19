@@ -1,8 +1,9 @@
+use super::request::AnthropicRequestExtensions;
+use super::stream_extension::{ExtendedAnthropicStreamItem, ExtendedStream};
 use crate::client::chat::MessageCompletionResponseStream;
 use crate::error::AnthropicError;
-use crate::types::response::StopReason;
-use crate::types::response::Usage;
-use crate::types::stream_response::{ContentDeltaEvent, StreamEvent};
+use crate::openai::stream_extension::AnthropicResponseExtension;
+use crate::types::response::{ContentDeltaEvent, StopReason, StreamEvent, Usage};
 use crate::{client::chat::Chat, prelude::CreateMessageRequestBody};
 use async_openai::error::{ApiError, OpenAIError};
 use async_openai::types::{
@@ -107,7 +108,7 @@ fn map_stop_reason(stop_reason: StopReason) -> FinishReason {
     }
 }
 
-pub fn map_stream(mut stream: MessageCompletionResponseStream) -> ChatCompletionResponseStream {
+fn map_stream_extended(mut stream: MessageCompletionResponseStream) -> ExtendedStream {
     Box::pin(stream! {
         let mut message_id: Option<String> = None;
         let mut model: Option<String> = None;
@@ -145,7 +146,7 @@ pub fn map_stream(mut stream: MessageCompletionResponseStream) -> ChatCompletion
                             create_role_delta(Role::Assistant),
                             None,
                             None,
-                        ))
+                        ).into())
                     }
                     StreamEvent::ContentBlockStart { content_block, ..} => {
                         if let ContentDeltaEvent::ToolUse { name, id, .. } = content_block {
@@ -157,6 +158,14 @@ pub fn map_stream(mut stream: MessageCompletionResponseStream) -> ChatCompletion
                     }
                     StreamEvent::ContentBlockDelta { index, delta } => {
                         match delta {
+                            ContentDeltaEvent::CitationsDelta { citation } => {
+                                Ok(
+                                    AnthropicResponseExtension::Citation(citation).into()
+                                )
+                            }
+                            ContentDeltaEvent::WebSearchToolResult(web_search_response) => {
+                                Ok(AnthropicResponseExtension::WebSearchToolResponse(web_search_response).into())
+                            }
                             ContentDeltaEvent::TextDelta { text } | ContentDeltaEvent::StartTextDelta { text } => {
                                 Ok(create_response(
                                     &message_id.clone().unwrap_or_default(),
@@ -166,7 +175,7 @@ pub fn map_stream(mut stream: MessageCompletionResponseStream) -> ChatCompletion
                                     create_content_delta(text),
                                     None,
                                     None,
-                                ))
+                                ).into())
                             }
                             ContentDeltaEvent::ThinkingDelta { thinking } => {
                                 // OpenAI doesn't have thinking blocks, skip or include as content
@@ -178,7 +187,7 @@ pub fn map_stream(mut stream: MessageCompletionResponseStream) -> ChatCompletion
                                     create_content_delta(format!("[Thinking] {}", thinking)),
                                     None,
                                     None,
-                                ))
+                                ).into())
                             }
                             ContentDeltaEvent::ToolUse { id, name, input } => {
                                 // Map to OpenAI tool call
@@ -196,7 +205,10 @@ pub fn map_stream(mut stream: MessageCompletionResponseStream) -> ChatCompletion
                                     ),
                                     None,
                                     None,
-                                ))
+                                ).into())
+                            }
+                            ContentDeltaEvent::ServerToolUse(server_tool_use) => {
+                                Ok(AnthropicResponseExtension::ServerToolUse(server_tool_use).into())
                             }
                             ContentDeltaEvent::InputJsonDelta { partial_json } => {
                                 // Stream partial JSON for tool call arguments
@@ -214,8 +226,9 @@ pub fn map_stream(mut stream: MessageCompletionResponseStream) -> ChatCompletion
                                     ),
                                     None,
                                     None,
-                                ))
+                                ).into())
                             }
+
                             ContentDeltaEvent::SignatureDelta { .. } => {
                                 // Skip signature deltas as OpenAI doesn't have an equivalent
                                 continue;
@@ -237,7 +250,7 @@ pub fn map_stream(mut stream: MessageCompletionResponseStream) -> ChatCompletion
                             create_empty_delta(),
                             finish_reason,
                             usage.map(Into::into),
-                        ))
+                        ).into())
                     }
                     StreamEvent::MessageStop => {
                         Ok(create_response(
@@ -248,7 +261,7 @@ pub fn map_stream(mut stream: MessageCompletionResponseStream) -> ChatCompletion
                             create_empty_delta(),
                             Some(FinishReason::Stop),
                             None,
-                        ))
+                        ).into())
                     }
                     StreamEvent::Ping => {
                         // Skip ping events
@@ -269,6 +282,17 @@ pub fn map_stream(mut stream: MessageCompletionResponseStream) -> ChatCompletion
     })
 }
 
+/// Discard items that are unsupported by openai
+fn map_stream_lossy(stream: MessageCompletionResponseStream) -> ChatCompletionResponseStream {
+    Box::pin(map_stream_extended(stream).filter_map(|item| async move {
+        match item {
+            Err(e) => Some(Err(e)),
+            Ok(ExtendedAnthropicStreamItem::OpenAI(item)) => Some(Ok(item)),
+            Ok(_) => None,
+        }
+    }))
+}
+
 impl From<Usage> for async_openai::types::CompletionUsage {
     fn from(value: Usage) -> async_openai::types::CompletionUsage {
         Self {
@@ -282,7 +306,8 @@ impl From<Usage> for async_openai::types::CompletionUsage {
 }
 
 impl<'c> Chat<'c> {
-    pub async fn create_stream_openai<I>(&self, request: I) -> ChatCompletionResponseStream
+    /// create an openai/completions/v1 compatible stream discarding events that are unsupported
+    pub async fn create_stream_openai_lossy<I>(&self, request: I) -> ChatCompletionResponseStream
     where
         I: Into<CreateMessageRequestBody>,
     {
@@ -291,13 +316,35 @@ impl<'c> Chat<'c> {
         self.create_stream_openai_unchecked(request).await
     }
 
-    pub async fn create_stream_openai_unchecked<I>(
+    /// create an openai/completion/v1 compatible stream wrapping items in [`ExtendedAnthropicStreamItem`]
+    pub async fn create_stream_openai_extended<I>(
+        &self,
+        request: I,
+        extensions: &AnthropicRequestExtensions,
+    ) -> ExtendedStream
+    where
+        I: Into<CreateMessageRequestBody>,
+    {
+        let mut request = request.into();
+        request.stream = Some(true);
+        let request = extensions.extend_request(request);
+        self.create_stream_extended_unchecked(request).await
+    }
+
+    pub(crate) async fn create_stream_extended_unchecked<I>(&self, request: I) -> ExtendedStream
+    where
+        I: Serialize + std::fmt::Debug,
+    {
+        map_stream_extended(self.inner.post_stream("/v1/messages", request).await)
+    }
+
+    pub(crate) async fn create_stream_openai_unchecked<I>(
         &self,
         request: I,
     ) -> ChatCompletionResponseStream
     where
         I: Serialize + std::fmt::Debug,
     {
-        map_stream(self.inner.post_stream("/v1/messages", request).await)
+        map_stream_lossy(self.inner.post_stream("/v1/messages", request).await)
     }
 }
