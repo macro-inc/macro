@@ -64,15 +64,7 @@ export function useSplitLayout() {
       console.error('no split manager found');
       return;
     }
-    return splitManager.createPopoverSplit({
-      content: content,
-      style: {
-        maxWidth: '600px',
-        maxHeight: '600px',
-        position: 'center',
-        className: 'w-xl',
-      },
-    });
+    return splitManager.createPopoverSplit({ content: content });
   }
 
   function resetSplit() {

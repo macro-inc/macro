@@ -84,12 +84,6 @@ export type SplitMount = BlockMount | ComponentMount;
 
 export type PopoverSplitOptions = {
   content: SplitContent;
-  style?: {
-    maxWidth?: string;
-    maxHeight?: string;
-    position?: 'center' | 'top' | 'bottom' | 'left' | 'right';
-    className?: string;
-  };
   onClose?: () => void;
 };
 
