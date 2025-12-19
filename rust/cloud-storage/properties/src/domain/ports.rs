@@ -25,6 +25,17 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         value: Option<PropertyValue>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// Upsert an entity property value (insert or update).
+    /// If the property doesn't exist, it will be created and attached to the entity.
+    /// If it exists, the value will be updated.
+    fn upsert_entity_property(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        property_definition_id: Uuid,
+        value: Option<PropertyValue>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// Atomically link or unlink a task's parent (for Parent Task property).
     ///
     /// When `parent_task_id` is `Some(parent)`:

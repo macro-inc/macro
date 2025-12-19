@@ -42,6 +42,24 @@ impl PropertiesRepo for PropertiesPgRepo {
         .await
     }
 
+    #[tracing::instrument(skip(self, value))]
+    async fn upsert_entity_property(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        property_definition_id: Uuid,
+        value: Option<PropertyValue>,
+    ) -> Result<(), Self::Err> {
+        entity_property_queries::upsert_entity_property(
+            &self.pool,
+            entity_id,
+            entity_type,
+            property_definition_id,
+            value,
+        )
+        .await
+    }
+
     #[tracing::instrument(skip(self))]
     async fn link_parent_task(
         &self,
