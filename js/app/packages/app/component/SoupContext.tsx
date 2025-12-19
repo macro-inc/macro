@@ -1,4 +1,5 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { useSubscribeToKeypress } from '@app/signal/hotkeyRoot';
 import { useChannelsContext } from '@core/component/ChannelsProvider';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { ENABLE_PROPERTIES_METADATA } from '@core/constant/featureFlags';
@@ -270,6 +271,33 @@ export function createNavigationEntityListShortcut({
 
   const isViewingList = createMemo(() => {
     return splitHandle.content().id === 'unified-list';
+  });
+
+  // Restore legacy `gg` behavior for unified list: jump to top of list.
+  // This is implemented as a simple double-press detector (no command-scope nesting),
+  // and only triggers when:
+  // - this split is active
+  // - the unified list is the current split content
+  // - no editable input is focused
+  // - the keypress wasn't already captured by a hotkey
+  let lastGKeydownAt = 0;
+  useSubscribeToKeypress((context) => {
+    if (context.eventType !== 'keydown') return;
+    if (context.pressedKeysString !== 'g') return;
+    if (context.isEditableFocused) return;
+    if (!splitHandle.isActive()) return;
+    if (!isViewingList()) return;
+    if (context.commandScopeActivated || context.commandFound) return;
+
+    const now = Date.now();
+    if (now - lastGKeydownAt < 350) {
+      lastGKeydownAt = 0;
+      context.event.preventDefault();
+      context.event.stopPropagation();
+      navigateThroughList({ axis: 'start', mode: 'jump' });
+      return;
+    }
+    lastGKeydownAt = now;
   });
 
   /**
