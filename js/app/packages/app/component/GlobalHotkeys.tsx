@@ -27,8 +27,6 @@ import {
 } from './command/state';
 import { setCreateMenuOpen } from './Launcher';
 import { useSplitLayout } from './split-layout/layout';
-import { fireVisor, resetVisor } from './Visor';
-import { openWhichKey, setOpenWhichKey } from './WhichKey';
 
 export default function GlobalShortcuts() {
   const [_, setBigChatOpen] = useBigChat();
@@ -89,6 +87,10 @@ export default function GlobalShortcuts() {
   });
 
   const { insertSplit } = useSplitLayout();
+
+  // New split:
+  // - `cmd+\` should work even when typing (runWithInputFocused)
+  // - `\` should work only when NOT typing
   registerHotkey({
     hotkeyToken: TOKENS.global.createNewSplit,
     hotkey: 'cmd+\\',
@@ -100,6 +102,17 @@ export default function GlobalShortcuts() {
       return true;
     },
     runWithInputFocused: true,
+  });
+
+  registerHotkey({
+    hotkey: '\\',
+    scopeId: 'global',
+    description: 'Create new split',
+    condition: canFit,
+    keyDownHandler: () => {
+      insertSplit({ type: 'component', id: 'unified-list' });
+      return true;
+    },
   });
 
   registerHotkey({
@@ -213,25 +226,6 @@ export default function GlobalShortcuts() {
     keyDownHandler: () => {
       setMonochromeIcons(!monochromeIcons());
       return true;
-    },
-    runWithInputFocused: true,
-  });
-
-  registerHotkey({
-    hotkeyToken: TOKENS.global.toggleVisor,
-    scopeId: 'global',
-    hotkey: ['escape'],
-    description: 'Toggle visor',
-    keyDownHandler: () => {
-      if (!openWhichKey()) {
-        fireVisor();
-        setOpenWhichKey(true);
-        return false;
-      } else {
-        resetVisor();
-        setOpenWhichKey(false);
-        return false;
-      }
     },
     runWithInputFocused: true,
   });

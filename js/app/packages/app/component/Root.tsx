@@ -10,6 +10,7 @@ import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import { WebsocketDebugger } from '@core/component/WebsocketDebugger';
 import {
   ENABLE_WEBSOCKET_DEBUGGER,
+  ENABLE_WHICHKEY_OVERLAY,
   PROD_MODE_ENV,
 } from '@core/constant/featureFlags';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
@@ -301,7 +302,7 @@ export function Root() {
   setHotkeyRoot(useHotKeyRoot());
 
   useSubscribeToKeypress((context) => {
-    if (context.commandScopeActivated) {
+    if (ENABLE_WHICHKEY_OVERLAY && context.commandScopeActivated) {
       setOpenWhichKey(true);
     }
   });
@@ -385,7 +386,9 @@ export function Root() {
               <Title>{tabTitle()}</Title>
               <MacroJump />
               <Visor />
-              <WhichKey />
+              <Show when={ENABLE_WHICHKEY_OVERLAY}>
+                <WhichKey />
+              </Show>
               <SuspenseContextComp fallback={<RootSuspenseFallback />}>
                 <IsomorphicRouter
                   transformUrl={transformShortIdInUrlPathname}

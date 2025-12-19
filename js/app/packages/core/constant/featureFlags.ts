@@ -125,6 +125,10 @@ export const ENABLE_TTFT = DEV_MODE_ENV;
 export const ENABLE_SOUND = false;
 export const ENABLE_JACK_IN = false;
 
+// Disables the bottom-right WhichKey overlay (suggested shortcuts).
+// We keep this off by default now that the command system is simplified.
+export const ENABLE_WHICHKEY_OVERLAY = false;
+
 // pure css based custom cursor
 export const ENABLE_CUSTOM_CURSOR = false;
 // uses javascript to detect selectable text to switch to "text" cursor type (ibeam)
