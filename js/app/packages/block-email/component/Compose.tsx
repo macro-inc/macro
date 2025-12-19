@@ -12,6 +12,8 @@ import { TextButton } from '@core/component/TextButton';
 import { toast } from '@core/component/Toast/Toast';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { useEmailLinks } from '@core/email-link';
+import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import {
   type ContactInfo,
@@ -22,7 +24,6 @@ import Caution from '@icon/regular/warning.svg';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { useSendMessageMutation } from '@queries/email/thread';
 import {
-  Accessor,
   createMemo,
   createSignal,
   Match,
@@ -33,8 +34,6 @@ import {
 } from 'solid-js';
 import { beveledCorners } from '../../block-theme/signals/themeSignals';
 import { ComposeEmailInput, type ComposeInputData } from './ComposeEmailInput';
-import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import { TOKENS } from '@core/hotkey/tokens';
 
 type EmailComposeErrors =
   | 'no_recipient'
