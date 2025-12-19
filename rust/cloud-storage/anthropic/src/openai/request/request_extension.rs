@@ -37,7 +37,7 @@ impl AnthropicRequestExtension {
             Self::WebSearchTool => {
                 if let Some(ref mut tools) = request.tools {
                     let search = WEB_SEARCH_TOOL.clone().into();
-                    if tools.iter().find(|t| *t == &search).is_none() {
+                    if !tools.iter().any(|t| t == &search) {
                         tools.push(search);
                     }
                 } else {

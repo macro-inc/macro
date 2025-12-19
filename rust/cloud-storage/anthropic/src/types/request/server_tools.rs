@@ -1,4 +1,4 @@
-use super::request::ServerTool;
+use super::types::ServerTool;
 use lazy_static::lazy_static;
 use serde_json::Value;
 

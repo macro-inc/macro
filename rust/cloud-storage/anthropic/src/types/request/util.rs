@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use super::request::*;
+use super::types::*;
 
 impl RequestContentKind {
     pub fn text(text: String) -> Self {
@@ -98,7 +98,6 @@ impl CreateMessageRequestBody {
                     .map(|t| (t.name().to_owned(), t))
                     .collect::<BTreeMap<_, _>>()
                     .into_values()
-                    .into_iter()
                     .collect::<Vec<_>>();
                 self.tools = Some(deduped);
             }
