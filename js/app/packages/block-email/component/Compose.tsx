@@ -129,6 +129,7 @@ export function EmailCompose() {
     },
     runWithInputFocused: true,
     hotkeyToken: TOKENS.email.compose.edit.recipients,
+    shouldReturnFocusOnClose: false,
   });
 
   registerHotkey({
@@ -149,6 +150,7 @@ export function EmailCompose() {
     },
     runWithInputFocused: true,
     hotkeyToken: TOKENS.email.compose.edit.ccRecipients,
+    shouldReturnFocusOnClose: false,
   });
 
   registerHotkey({
@@ -169,6 +171,7 @@ export function EmailCompose() {
     },
     runWithInputFocused: true,
     hotkeyToken: TOKENS.email.compose.edit.bccRecipients,
+    shouldReturnFocusOnClose: false,
   });
 
   registerHotkey({
@@ -181,6 +184,7 @@ export function EmailCompose() {
     },
     runWithInputFocused: true,
     hotkeyToken: TOKENS.email.compose.edit.subject,
+    shouldReturnFocusOnClose: false,
   });
 
   registerHotkey({
@@ -193,6 +197,7 @@ export function EmailCompose() {
     },
     runWithInputFocused: true,
     hotkeyToken: TOKENS.email.compose.edit.message,
+    shouldReturnFocusOnClose: false,
   });
 
   const [triedToSubmit, _setTriedToSubmit] = createSignal(false);
