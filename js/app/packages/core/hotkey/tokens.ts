@@ -83,6 +83,15 @@ export const TOKENS = {
     previousMessage: 'email.previousMessage',
     nextMessage: 'email.nextMessage',
     cancelReply: 'email.cancelReply',
+    compose: {
+      edit: {
+        recipients: 'email.compose.edit.recipients',
+        ccRecipients: 'email.compose.edit.ccRecipients',
+        bccRecipients: 'email.compose.edit.bccRecipients',
+        subject: 'email.compose.edit.subject',
+        message: 'email.compose.edit.message',
+      },
+    },
   },
 
   // split
