@@ -1,6 +1,7 @@
 import { useOpenInstructionsMd } from '@core/component/AI/util/instructions';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { TOKENS } from '@core/hotkey/tokens';
+import type { ValidHotkey } from '@core/hotkey/types';
 import { useBigChat } from '@core/signal/layout';
 import { AiInstructionsIcon } from '@service-storage/instructionsMd';
 import { registerHotkey } from 'core/hotkey/hotkeys';
@@ -46,7 +47,7 @@ export default function GlobalShortcuts() {
     return;
   };
 
-  registerHotkey({
+  const createCommandScope = registerHotkey({
     hotkeyToken: TOKENS.global.createCommand,
     hotkey: 'c',
     scopeId: 'global',
@@ -56,37 +57,35 @@ export default function GlobalShortcuts() {
       return true;
     },
     displayPriority: 10,
-  });
-
-  // Create commands for the command menu (command scope drill-in)
-  const createCommandScope = registerHotkey({
-    scopeId: 'global',
-    description: 'Create',
-    keyDownHandler: () => true,
     activateCommandScope: true,
-    displayPriority: 10,
   });
 
   for (const block of CREATABLE_BLOCKS) {
     registerHotkey({
       hotkeyToken: block.hotkeyToken,
+      hotkey: block.hotkey,
       scopeId: createCommandScope.commandScopeId,
       description: block.description,
+      runWithInputFocused: true,
       keyDownHandler: () => {
         block.keyDownHandler();
         return true;
       },
     });
 
-    registerHotkey({
-      hotkeyToken: block.altHotkeyToken,
-      scopeId: createCommandScope.commandScopeId,
-      description: `${block.description} in new split`,
-      keyDownHandler: () => {
-        block.keyDownHandler();
-        return true;
-      },
-    });
+    if (block.altHotkeyToken) {
+      registerHotkey({
+        hotkeyToken: block.altHotkeyToken,
+        hotkey: `opt+${block.hotkey}` as ValidHotkey,
+        scopeId: createCommandScope.commandScopeId,
+        description: `${block.description} in new split`,
+        runWithInputFocused: true,
+        keyDownHandler: () => {
+          block.keyDownHandler();
+          return true;
+        },
+      });
+    }
   }
 
   registerHotkey({

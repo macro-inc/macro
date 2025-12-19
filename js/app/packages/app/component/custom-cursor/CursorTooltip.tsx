@@ -11,5 +11,3 @@
 export function CursorTooltip() {
   return null;
 }
-
-
