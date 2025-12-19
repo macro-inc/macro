@@ -1,4 +1,5 @@
 use super::channel_permission::create::create_channel_share_permissions;
+use macro_user_id::user_id::MacroUserIdStr;
 use model::thread::EmailThreadPermission;
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::AccessLevel;
@@ -148,7 +149,7 @@ pub async fn create_macro_permission(
 #[tracing::instrument(skip(transaction))]
 pub async fn create_thread_permission(
     transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    user_id: &str,
+    user_id: MacroUserIdStr<'_>,
     thread_id: &str,
     share_permission: &SharePermissionV2,
 ) -> anyhow::Result<EmailThreadPermission> {
@@ -161,7 +162,7 @@ pub async fn create_thread_permission(
         "#,
         thread_id,
         updated_share_permission.id,
-        user_id,
+        user_id.as_ref(),
     )
     .execute(transaction.as_mut())
     .await

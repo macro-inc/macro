@@ -10,7 +10,7 @@ use model::user::UserContext;
 use models_email::email::service::cache::TokenCacheKey;
 use models_email::email::service::link::Link;
 use models_email::email::service::link::UserProvider;
-use models_email::gmail::webhook::KeyMap;
+use models_email::gmail::inbox_sync::KeyMap;
 use std::sync::Arc;
 
 pub async fn fetch_gmail_token_usercontext_response(

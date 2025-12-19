@@ -6,13 +6,19 @@ import { PropertyLabel } from './PropertyLabel';
 interface PropertyRowProps {
   property: Property;
   onValueClick: (property: Property, anchor?: HTMLElement) => void;
+  withDelete?: boolean;
+  withPin?: boolean;
 }
 
 export const PropertyRow: Component<PropertyRowProps> = (props) => {
   return (
     <>
       <div class="flex items-start min-w-0">
-        <PropertyLabel property={props.property} />
+        <PropertyLabel
+          property={props.property}
+          withDelete={props.withDelete}
+          withPin={props.withPin}
+        />
       </div>
       <div class="flex items-start min-w-0">
         <PropertyValue property={props.property} onEdit={props.onValueClick} />

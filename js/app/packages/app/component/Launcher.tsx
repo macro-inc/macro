@@ -15,7 +15,6 @@ import {
   createChat,
   createCodeFileFromText,
   createMarkdownFile,
-  createTask,
 } from '@core/util/create';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import { isErr, ok } from '@core/util/maybeResult';
@@ -70,9 +69,14 @@ const createBlock = async (spec: {
 const createComponent = async (spec: {
   componentId: string;
   shouldInsert?: boolean;
+  asPopover?: boolean;
 }) => {
   setCreateMenuOpen(false, false);
-  const { replaceSplit, insertSplit } = useSplitLayout();
+  const { replaceSplit, insertSplit, popoverSplit } = useSplitLayout();
+  if (spec.asPopover) {
+    popoverSplit({ type: 'component', id: spec.componentId });
+    return;
+  }
   if (spec.shouldInsert) {
     insertSplit({ type: 'component', id: spec.componentId });
   } else {
@@ -121,16 +125,9 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
           altHotkeyToken: TOKENS.create.taskNewSplit,
           hotkey: 't' as const,
           keyDownHandler: () => {
-            createBlock({
-              blockName: 'task',
-              loading: true,
-              createFn: () =>
-                createTask({
-                  title: '',
-                  content: '',
-                  projectId: undefined,
-                }),
-              shouldInsert: pressedKeys().has('opt'),
+            createComponent({
+              componentId: 'task-compose',
+              asPopover: true,
             });
             return true;
           },

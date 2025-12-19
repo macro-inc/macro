@@ -1,15 +1,15 @@
 use crate::api::context::ApiContext;
 use axum::{
-    Extension,
     extract::State,
     response::{IntoResponse, Json, Response},
 };
 use futures::StreamExt;
+use macro_user_id::cowlike::CowLike;
 use model::{
     document::{BasicDocument, build_cloud_storage_bucket_document_key},
     response::{ErrorResponse, GenericErrorResponse, GenericSuccessResponse},
-    user::UserContext,
 };
+use model_user::axum_extractor::MacroUserExtractor;
 use models_permissions::share_permission::SharePermissionV2;
 use reqwest::StatusCode;
 
@@ -31,14 +31,13 @@ const CANVAS_TEMPLATE: &str = include_str!("./template/canvas_template.canvas");
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(state, user_context), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(state, user_context), fields(user_id=?user_context.macro_user_id))]
 pub async fn handler(
     State(state): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    user_context: MacroUserExtractor,
 ) -> Result<Response, Response> {
     tracing::info!("initialize user documents");
     let start_time = std::time::Instant::now();
-    let user_id = user_context.user_id.as_str();
     tracing::debug!("initializing user documents");
 
     // Contains all documents that will be referenced in the markdown file
@@ -81,7 +80,7 @@ pub async fn handler(
     let project =
         macro_db_client::document::initialize_onboarding_documents::create_project_transaction(
             &mut transaction,
-            user_id,
+            user_context.macro_user_id.copied(),
             PROJECT_NAME,
             None,
             &share_permission,
@@ -104,7 +103,7 @@ pub async fn handler(
     let db_documents =
         macro_db_client::document::initialize_onboarding_documents::create_onboarding_documents(
             &mut transaction,
-            user_id,
+            user_context.macro_user_id.clone(),
             &project.id,
             &share_permission,
             documents,
@@ -159,6 +158,7 @@ pub async fn handler(
             let s3_client = shared_s3_client.clone(); // Clone the client for parallel usage
             let markdown_template = shared_markdown_template.clone();
             let canvas_template = shared_canvas_template.clone();
+            let user_id = user_context.macro_user_id.clone();
             async move {
                 let uri_document_name = urlencoding::encode(document.document_name.as_str());
                 let deref_file_type = document.file_type.as_deref();
@@ -169,7 +169,7 @@ pub async fn handler(
                 };
 
                 let target_key = build_cloud_storage_bucket_document_key(
-                    user_id,
+                    user_id.as_ref(),
                     &document.document_id,
                     document.document_version_id,
                     deref_file_type,
@@ -215,18 +215,21 @@ pub async fn handler(
     tracing::trace!(elapsed_time=?start_time.elapsed(), "copied documents");
 
     // Set the onboarding status to true so we don't do this again
-    macro_db_client::user::onboarding_status::set_onboarding_status(&mut transaction, user_id)
-        .await
-        .map_err(|e| {
-            tracing::error!(error=?e, "failed to set onboarding status");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    message: "failed to set onboarding status",
-                }),
-            )
-                .into_response()
-        })?;
+    macro_db_client::user::onboarding_status::set_onboarding_status(
+        &mut transaction,
+        user_context.macro_user_id.as_ref(),
+    )
+    .await
+    .map_err(|e| {
+        tracing::error!(error=?e, "failed to set onboarding status");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                message: "failed to set onboarding status",
+            }),
+        )
+            .into_response()
+    })?;
 
     transaction.commit().await.map_err(|e| {
         tracing::error!(error=?e, "failed to commit transaction");

@@ -1,4 +1,5 @@
 use crate::{history::upsert_user_history, share_permission};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model::project::Project;
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::AccessLevel;
@@ -7,7 +8,7 @@ use sqlx::{Pool, Postgres};
 #[tracing::instrument(skip(db))]
 pub async fn create_project_v2(
     db: Pool<Postgres>,
-    user_id: &str,
+    user_id: MacroUserIdStr<'_>,
     project_name: &str,
     parent_id: Option<String>,
     share_permission: &SharePermissionV2,
@@ -22,7 +23,7 @@ pub async fn create_project_v2(
         "updatedAt"::timestamptz as updated_at, "parentId" as parent_id
         "#,
         project_name,
-        user_id,
+        user_id.as_ref(),
         parent_id,
     )
     .fetch_one(transaction.as_mut())
@@ -36,7 +37,7 @@ pub async fn create_project_v2(
     )
     .await?;
 
-    upsert_user_history(&mut transaction, user_id, &project.id, "project").await?;
+    upsert_user_history(&mut transaction, user_id.copied(), &project.id, "project").await?;
 
     crate::item_access::insert::insert_user_item_access(
         &mut transaction,

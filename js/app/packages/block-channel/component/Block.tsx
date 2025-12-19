@@ -27,7 +27,12 @@ export type BlockChannelProps = {
 export default function BlockChannel(props: BlockChannelProps) {
   const channelId = useBlockId();
 
-  const channel = useChannelQuery(() => channelId);
+  const channel = useChannelQuery(
+    () => channelId,
+    () => ({
+      placeholderData: (p) => p,
+    })
+  );
   const userId = useUserId();
 
   const [error] = createSignal<string>();

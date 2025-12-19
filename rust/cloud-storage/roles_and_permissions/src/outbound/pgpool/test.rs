@@ -42,13 +42,13 @@ async fn test_add_roles_to_user(pool: Pool<Postgres>) -> anyhow::Result<()> {
 
     macro_db
         .add_roles_to_user(
-            &MacroUserId::parse_from_str("macro|user2@user.com")?.lowercase(),
+            &MacroUserIdStr::parse_from_str("macro|user2@user.com")?,
             &roles,
         )
         .await?;
 
     let permissions = macro_db
-        .get_user_permissions(&MacroUserId::parse_from_str("macro|user2@user.com")?.lowercase())
+        .get_user_permissions(&MacroUserIdStr::parse_from_str("macro|user2@user.com")?)
         .await?;
 
     let permissions = permissions
@@ -62,13 +62,13 @@ async fn test_add_roles_to_user(pool: Pool<Postgres>) -> anyhow::Result<()> {
     // add role to user that already has role
     macro_db
         .add_roles_to_user(
-            &MacroUserId::parse_from_str("macro|user@user.com")?.lowercase(),
+            &MacroUserIdStr::parse_from_str("macro|user@user.com")?,
             &roles,
         )
         .await?;
 
     let permissions = macro_db
-        .get_user_permissions(&MacroUserId::parse_from_str("macro|user@user.com")?.lowercase())
+        .get_user_permissions(&MacroUserIdStr::parse_from_str("macro|user@user.com")?)
         .await?;
 
     let permissions = permissions
@@ -81,7 +81,7 @@ async fn test_add_roles_to_user(pool: Pool<Postgres>) -> anyhow::Result<()> {
     // add role to user that doesn't exist
     let err = macro_db
         .add_roles_to_user(
-            &MacroUserId::parse_from_str("macro|user3@user.com")?.lowercase(),
+            &MacroUserIdStr::parse_from_str("macro|user3@user.com")?,
             &roles,
         )
         .await
@@ -105,13 +105,13 @@ async fn test_remove_roles_from_user(pool: Pool<Postgres>) -> anyhow::Result<()>
     // Remove role
     macro_db
         .remove_roles_from_user(
-            &MacroUserId::parse_from_str("macro|user@user.com")?.lowercase(),
+            &MacroUserIdStr::parse_from_str("macro|user@user.com")?,
             &roles,
         )
         .await?;
 
     let permissions = macro_db
-        .get_user_permissions(&MacroUserId::parse_from_str("macro|user@user.com")?.lowercase())
+        .get_user_permissions(&MacroUserIdStr::parse_from_str("macro|user@user.com")?)
         .await?;
 
     let permissions = permissions
@@ -125,13 +125,13 @@ async fn test_remove_roles_from_user(pool: Pool<Postgres>) -> anyhow::Result<()>
     // Remove role that doesn't exist
     macro_db
         .remove_roles_from_user(
-            &MacroUserId::parse_from_str("macro|user2@user.com")?.lowercase(),
+            &MacroUserIdStr::parse_from_str("macro|user2@user.com")?,
             &roles,
         )
         .await?;
 
     let permissions = macro_db
-        .get_user_permissions(&MacroUserId::parse_from_str("macro|user2@user.com")?.lowercase())
+        .get_user_permissions(&MacroUserIdStr::parse_from_str("macro|user2@user.com")?)
         .await?;
 
     let permissions = permissions

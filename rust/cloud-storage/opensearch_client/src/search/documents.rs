@@ -13,10 +13,7 @@ use crate::{
 
 use crate::SearchOn;
 use models_opensearch::{SearchEntityType, SearchIndex};
-use opensearch_query_builder::{
-    BoolQueryBuilder, FieldSort, ScoreWithOrderSort, SearchRequest, SortOrder, SortType,
-    ToOpenSearchJson,
-};
+use opensearch_query_builder::{BoolQueryBuilder, SearchRequest, ToOpenSearchJson};
 use serde_json::Value;
 
 #[derive(Clone)]
@@ -26,14 +23,6 @@ impl SearchQueryConfig for DocumentSearchConfig {
     const USER_ID_KEY: &'static str = "owner_id";
     const TITLE_KEY: &'static str = "name";
     const ENTITY_INDEX: SearchEntityType = SearchEntityType::Documents;
-
-    fn default_sort_types<'a>() -> Vec<SortType<'a>> {
-        vec![
-            SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
-            SortType::Field(FieldSort::new(Self::ID_KEY, SortOrder::Asc)),
-            SortType::Field(FieldSort::new("node_id", SortOrder::Asc)),
-        ]
-    }
 
     fn append_owner_highlights<'a>(
         highlight: opensearch_query_builder::Highlight<'a>,

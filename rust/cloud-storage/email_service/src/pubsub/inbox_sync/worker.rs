@@ -1,5 +1,5 @@
 use crate::pubsub::context::PubSubContext;
-use crate::pubsub::webhook::process;
+use crate::pubsub::inbox_sync::process;
 use crate::util::redis::RedisClient;
 use authentication_service_client::AuthServiceClient;
 use connection_gateway_client::client::ConnectionGatewayClient;

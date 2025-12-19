@@ -2,6 +2,7 @@ mod location;
 
 use document_sub_type::DocumentSubType;
 pub use location::*;
+use macro_user_id::user_id::MacroUserIdStr;
 use std::str::FromStr;
 
 use crate::document::{BomPart, FileType};
@@ -92,7 +93,8 @@ pub struct DocumentResponseMetadata {
     /// the file type
     pub document_version_id: i64,
     /// The owner of the document
-    pub owner: String,
+    #[schema(value_type = String)]
+    pub owner: MacroUserIdStr<'static>,
     /// The name of the document
     pub document_name: String,
     /// The file type of the document

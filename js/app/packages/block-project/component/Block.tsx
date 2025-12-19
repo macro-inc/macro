@@ -96,7 +96,7 @@ const Block: Component = () => {
       ...PROJECT_VIEWCONFIG_BASE,
       id: projectId,
       view: name() ?? 'folder',
-      selectedEntities: [],
+      multiSelectEntities: [],
       filters: {
         ...PROJECT_VIEWCONFIG_BASE.filters,
         projectFilter: projectId,

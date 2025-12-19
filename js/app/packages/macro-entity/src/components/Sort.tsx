@@ -233,7 +233,10 @@ type InferSortFn<Options extends SortOption<any, string>[]> =
     ? EntityComparator<U>
     : never;
 
-type SortComponent = (props: { size?: 'SM' | 'Base' }) => JSX.Element;
+type SortComponent = (props: {
+  size?: 'SM' | 'Base';
+  onSelectSystemSort?: () => void;
+}) => JSX.Element;
 
 export function createSort(): {
   sortFn: Accessor<EntityComparator<WithNotification<EntityData>>>;
@@ -449,12 +452,15 @@ export function createSort<
     );
   };
 
-  const SortComponent: SortComponent = (_props) => (
+  const SortComponent: SortComponent = (props) => (
     <div class="flex flex-col gap-2">
       <span class="text-xs font-medium">Sort</span>
       <SystemSortPills
         sortType={sortType}
-        onSelect={handleSelectSystemSort}
+        onSelect={(value) => {
+          handleSelectSystemSort(value);
+          props.onSelectSystemSort?.();
+        }}
         disabled={disabled}
         isSortedByProperty={isSortedByProperty}
       />

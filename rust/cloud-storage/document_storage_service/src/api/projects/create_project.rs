@@ -1,6 +1,5 @@
 use crate::api::context::ApiContext;
 use axum::{
-    Extension,
     extract::State,
     http::StatusCode,
     response::{IntoResponse, Json, Response},
@@ -9,7 +8,7 @@ use macro_middleware::cloud_storage::ensure_access::project::ProjectBodyAccessLe
 use model::{
     project::{Project, request::CreateProjectRequest, response::CreateProjectResponse},
     response::{GenericErrorResponse, GenericResponse},
-    user::UserContext,
+    user::axum_extractor::MacroUserExtractor,
 };
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::EditAccessLevel;
@@ -29,10 +28,10 @@ use tracing::Instrument;
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, user_context, project), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(ctx, user_context, project), fields(user_id=?user_context.macro_user_id))]
 pub async fn create_project_handler(
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    user_context: MacroUserExtractor,
     project: ProjectBodyAccessLevelExtractor<EditAccessLevel, CreateProjectRequest>,
 ) -> Result<Response, Response> {
     let req = project.into_inner();
@@ -59,14 +58,14 @@ pub async fn create_project_handler(
 
 async fn create_project_v2(
     ctx: ApiContext,
-    user_context: Extension<UserContext>,
+    user_context: MacroUserExtractor,
     req: CreateProjectRequest,
 ) -> Result<Project, (StatusCode, String)> {
     let share_permission = SharePermissionV2::new_project_share_permission();
 
     let project = match macro_db_client::projects::create_project_v2(
         ctx.db.clone(),
-        &user_context.user_id,
+        user_context.macro_user_id.clone(),
         &req.name,
         req.project_parent_id.clone(),
         &share_permission,
@@ -89,7 +88,7 @@ async fn create_project_v2(
             macro_project_utils::ProjectModifiedArgs {
                 project_id: None,
                 old_project_id: Some(project_id.to_string()),
-                user_id: user_context.user_id.clone(),
+                user_id: user_context.user_context.user_id.clone(),
             },
         )
         .await;
@@ -99,7 +98,7 @@ async fn create_project_v2(
     tokio::spawn({
         let sqs_client = ctx.sqs_client.clone();
         let project_id = project.id.clone();
-        let macro_user_id = user_context.user_id.clone();
+        let macro_user_id = user_context.user_context.user_id.clone();
         async move {
             tracing::trace!("sending message to search extractor queue");
             let _ = sqs_client

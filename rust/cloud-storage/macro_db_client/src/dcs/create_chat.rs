@@ -1,6 +1,7 @@
 use super::append_attachment_to_chat::append_attachment_to_chat;
 use crate::history::{upsert_item_last_accessed, upsert_user_history};
 use ai::types::Model;
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model::{IDWithTimeStamps, chat::NewChatAttachment};
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::AccessLevel;
@@ -11,7 +12,7 @@ use sqlx::{Pool, Postgres};
 #[expect(clippy::too_many_arguments, reason = "too annoying to fix")]
 pub async fn create_chat_v2(
     db: &Pool<Postgres>,
-    user_id: &str,
+    user_id: MacroUserIdStr<'static>,
     name: &str,
     model: Model,
     project_id: Option<&str>,
@@ -30,7 +31,7 @@ pub async fn create_chat_v2(
                 VALUES ($1, $2, $3, $4, $5)
                 RETURNING id, "createdAt"::timestamptz as created_at, "updatedAt"::timestamptz as updated_at;
             "#,
-        &user_id,
+        user_id.as_ref(),
         &name,
         model.to_string(),
         project_id,
@@ -57,7 +58,7 @@ pub async fn create_chat_v2(
     .await?;
 
     // tracking
-    upsert_user_history(&mut transaction, user_id, &chat.id, "chat").await?;
+    upsert_user_history(&mut transaction, user_id.copied(), &chat.id, "chat").await?;
     upsert_item_last_accessed(&mut transaction, &chat.id, "chat").await?;
 
     // add attachment rows
@@ -67,7 +68,7 @@ pub async fn create_chat_v2(
 
     crate::item_access::insert::insert_user_item_access(
         &mut transaction,
-        user_id,
+        user_id.copied(),
         &chat.id,
         "chat",
         AccessLevel::Owner,

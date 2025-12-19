@@ -15,7 +15,6 @@ import { StaticMarkdown } from 'core/component/LexicalMarkdown/component/core/St
 import { unifiedListMarkdownTheme } from 'core/component/LexicalMarkdown/theme';
 import { UserIcon } from 'core/component/UserIcon';
 import { emailToId, useDisplayName } from 'core/user';
-import { onKeyDownClick, onKeyUpClick } from 'core/util/click';
 import type { ParentProps, Ref } from 'solid-js';
 import {
   createDeferred,
@@ -392,6 +391,8 @@ interface EntityProps<T extends WithNotification<EntityData>>
   checked?: boolean;
 }
 
+const [hoveredEntityId, setHoveredEntityId] = createSignal<string | null>(null);
+
 export function EntityWithEverything(
   props: EntityProps<WithNotification<EntityData | WithSearch<EntityData>>>
 ) {
@@ -459,7 +460,7 @@ export function EntityWithEverything(
       const isLikelyEmail = (value?: string) =>
         typeof value === 'string' && value.includes('@');
 
-      const combinedParticipantFirstNames = createMemo(() => {
+      const combinedParticipantNames = createMemo(() => {
         if (props.entity.type !== 'email') return [];
         const me = userEmail();
         if (
@@ -476,15 +477,14 @@ export function EntityWithEverything(
           const macroDisplayName = useDisplayName(
             emailToId(participant.email)
           )[0]?.();
-          const macroFirstName = macroDisplayName?.split(' ')[0];
-          const participantFirstName = participant.name?.split(' ')[0] ?? '';
-          if (macroFirstName && !isLikelyEmail(macroFirstName)) {
-            namesSet.add(macroFirstName);
+          const participantFullName = participant.name ?? '';
+          if (macroDisplayName && !isLikelyEmail(macroDisplayName)) {
+            namesSet.add(macroDisplayName);
           } else if (
-            participantFirstName &&
-            !isLikelyEmail(participantFirstName)
+            participantFullName &&
+            !isLikelyEmail(participantFullName)
           ) {
-            namesSet.add(participantFirstName);
+            namesSet.add(participantFullName);
           } else {
             const emailName = participant.email.split('@')[0];
             namesSet.add(emailName);
@@ -494,10 +494,13 @@ export function EntityWithEverything(
       });
 
       const displayedNames = () => {
-        const names = combinedParticipantFirstNames();
+        const names = combinedParticipantNames();
         if (!names || names.length === 0) return undefined;
-        if (names.length <= 3) return names.join(', ');
-        return `${names[0]} .. ${names[names.length - 2]}, ${names[names.length - 1]}`;
+        if (names.length === 1) return names[0];
+        // For multiple participants, use first names only
+        const firstNames = names.map((name) => name.split(' ')[0]);
+        if (firstNames.length <= 3) return firstNames.join(', ');
+        return `${firstNames[0]} .. ${firstNames[firstNames.length - 2]}, ${firstNames[firstNames.length - 1]}`;
       };
 
       const isSearch = () => isSearchEntity(props.entity);
@@ -804,10 +807,12 @@ export function EntityWithEverything(
       use:draggable
       use:droppable
       data-checked={props.checked}
-      class="everything-entity relative group/entity"
+      class="everything-entity relative group/entity hover:bg-hover/30"
       classList={{
-        'bg-hover/30': !isTouchDevice && props.highlighted && !props.checked,
-        'bg-accent/5': props.checked,
+        'outline outline-accent/20 outline-offset-[-1px]':
+          !isTouchDevice && props.selected && !props.checked,
+        '!bg-accent/5 outline outline-accent/20 outline-offset-[-1px]':
+          props.checked,
         'bracket outline outline-accent/20 outline-offset-[-1px]':
           !isTouchDevice && props.selected,
         'active:bracket active:outline active:outline-accent/20 active:outline-offset-[-1px]':
@@ -818,6 +823,7 @@ export function EntityWithEverything(
         if (!didCursorMove(e)) {
           return;
         }
+        setHoveredEntityId(props.entity.id);
         props.onMouseOver?.();
       }}
       onContextMenu={() => {
@@ -849,10 +855,6 @@ export function EntityWithEverything(
 
           actionButtonRef()?.focus();
         }}
-        onKeyDown={onKeyDownClick((e) =>
-          props.onClick?.(props.entity, e as any)
-        )}
-        onKeyUp={onKeyUpClick((e) => props.onClick?.(props.entity, e as any))}
         role="button"
         tabIndex={0}
         ref={mergeRefs(setEntityDivRef, props.ref)}
@@ -868,8 +870,8 @@ export function EntityWithEverything(
           <div
             class="size-4 p-0.5 flex items-center justify-center rounded-xs group-hover/button:border-accent group-hover/button:border pointer-events-none"
             classList={{
-              'ring ring-edge-muted': props.selected,
-              'bg-panel': !props.checked && props.selected,
+              'ring ring-edge-muted': props.highlighted,
+              'bg-panel': !props.checked && props.highlighted,
               'bg-accent border border-accent': props.checked,
             }}
           >
@@ -981,8 +983,13 @@ export function EntityWithEverything(
                 );
               }}
             </Show>
-            <Show when={props.highlighted && props.onClickRowAction}>
-              <div class="absolute top-1 right-1 items-center flex @max-md/split:hidden">
+            <Show
+              when={
+                (props.selected || hoveredEntityId() === props.entity.id) &&
+                props.onClickRowAction
+              }
+            >
+              <div class="absolute top-1 right-1 items-center flex @max-sm/split:hidden">
                 <Tooltip
                   tooltip={
                     <LabelAndHotKey

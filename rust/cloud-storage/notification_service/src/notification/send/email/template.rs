@@ -5,6 +5,7 @@ use crate::{
 };
 use anyhow::Context;
 use macro_env::{Environment, ext::frontend_url::FrontendUrl};
+use macro_user_id::email::ReadEmailParts;
 use model_entity::EntityType;
 use model_notifications::{
     ChannelInviteMetadata, ChannelMessageSendMetadata, NotificationEventType,
@@ -56,12 +57,6 @@ pub fn fill_email_template(
             let mut item_name =
                 metadata_utils::get_metadata_value::<String>(notification, "item_name")?;
 
-            let sender = notification
-                .inner
-                .sender_id
-                .clone()
-                .context("notification does not have sender id")?;
-
             let item_url = get_item_share_url(notification).context("unable to create item url")?;
 
             if matches!(
@@ -74,7 +69,14 @@ pub fn fill_email_template(
                 item_name = format!("{}.{}", item_name, file_type);
             }
 
-            let sender = sender.replace("macro|", "");
+            let sender = notification
+                .inner
+                .sender_id
+                .as_ref()
+                .context("notification does not have sender id")?
+                .email_part()
+                .email_str()
+                .to_string();
 
             Ok(item_share::fill_item_share_template(
                 &item_url,

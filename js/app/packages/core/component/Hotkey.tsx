@@ -1,6 +1,6 @@
 import { IS_MAC } from '@core/constant/isMac';
-import { useTokenToHotkeyString } from '@core/hotkey/hotkeys';
 import type { HotkeyToken } from '@core/hotkey/tokens';
+import { getPrettyHotkeyStringByToken } from '@core/hotkey/utils';
 import { createMemo, For, type JSX, Show, splitProps } from 'solid-js';
 import type { Theme } from './Themes';
 
@@ -84,7 +84,9 @@ export const hotkeyStyles: Record<Theme, { label: string; hotkey: string }> = {
 };
 
 const getSymbol = (key: string) =>
-  key in symbolMap ? symbolMap[key as keyof typeof symbolMap] : key;
+  key.toUpperCase() in symbolMap
+    ? symbolMap[key.toUpperCase() as keyof typeof symbolMap]
+    : key;
 
 const modifierKeys = Object.keys(modifierMap);
 
@@ -123,19 +125,18 @@ export const Hotkey = (props: HotkeyProps) => {
     'lowercase',
   ]);
   const tokenShortcut = local.token
-    ? useTokenToHotkeyString(local.token)
-    : () => undefined;
+    ? getPrettyHotkeyStringByToken(local.token)
+    : undefined;
 
   const hotkey = createMemo(() => {
-    const tokenShortcut_ = tokenShortcut();
     // fallback for when we specify a shortcut directly instead of a hotkey token
-    if (local.shortcut && !tokenShortcut_) {
+    if (local.shortcut && !tokenShortcut) {
       return breakApartHotkeyString(local.shortcut);
     }
-    if (!tokenShortcut_) {
+    if (!tokenShortcut) {
       return { key: '', modifiers: [] };
     }
-    return breakApartHotkeyString(tokenShortcut_);
+    return breakApartHotkeyString(tokenShortcut);
   });
 
   const normalizedKey = () => {

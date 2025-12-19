@@ -366,8 +366,8 @@ const ListItem: RenderableElement<ListItemNode> = {
     const checked = props.node.__checked;
 
     // Get the parent list node
-    const _children = props.node.getChildren();
-    const nested = _children.some((child) => child.__type === 'list');
+    const children = props.node.getChildren();
+    const nested = children.some((child) => child.__type === 'list');
 
     // Build class names
     const classes = [

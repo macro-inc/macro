@@ -1,5 +1,3 @@
-use std::{str::FromStr, sync::Arc};
-
 use crate::{
     api::context::{ApiContext, InternalFlag},
     service::{self},
@@ -11,7 +9,7 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
-
+use macro_user_id::user_id::MacroUserIdStr;
 use model::{
     document::{
         ContentType, DocumentMetadata, FileType, build_cloud_storage_bucket_document_key,
@@ -22,7 +20,7 @@ use model::{
         UploadFolderResponseData, UploadFolderWithIdsResponse,
     },
     response::{GenericErrorResponse, GenericResponse, PresignedUrl, TypedSuccessResponse},
-    user::UserContext,
+    user::{UserContext, axum_extractor::MacroUserExtractor},
 };
 use models_bulk_upload::{
     MarkProjectUploadedRequest, MarkProjectUploadedResponse, S3ObjectInfo,
@@ -30,6 +28,7 @@ use models_bulk_upload::{
 };
 use models_permissions::share_permission::SharePermissionV2;
 use sqlx::{Pool, Postgres};
+use std::{str::FromStr, sync::Arc};
 use uuid::Uuid;
 
 type UploadExtractFolderResponse = TypedSuccessResponse<UploadExtractFolderResponseData>;
@@ -120,19 +119,18 @@ pub async fn upload_extract_folder_handler(
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, user_context, req), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(ctx, user_context, req), fields(user_id=%user_context.macro_user_id))]
 pub async fn upload_folder_handler(
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    user_context: MacroUserExtractor,
     internal_context: Option<Extension<InternalFlag>>,
     extract::Json(req): extract::Json<UploadFolderRequest>,
 ) -> impl IntoResponse {
-    let user_id = user_context.user_id.as_str();
     let internal = internal_context.is_some_and(|state| state.internal);
     upload_folder_handler_inner(
         ctx.s3_client.clone(),
         ctx.db.clone(),
-        user_id,
+        user_context.macro_user_id,
         internal,
         req,
     )
@@ -145,7 +143,7 @@ pub async fn upload_folder_handler(
 async fn upload_folder_handler_inner(
     s3_client: Arc<service::s3::S3>,
     db: Pool<Postgres>,
-    user_id: &str,
+    user_id: MacroUserIdStr<'static>,
     internal: bool,
     req: UploadFolderRequest,
 ) -> impl IntoResponse + use<> {
@@ -189,7 +187,7 @@ async fn upload_folder_handler_inner(
         documents,
     } = match macro_db_client::projects::upload_folder::upload_folder_with_ids(
         &mut transaction,
-        user_id,
+        user_id.clone(),
         &share_permission,
         root_folder,
         &req.root_folder_name,
@@ -216,7 +214,7 @@ async fn upload_folder_handler_inner(
             tracing::error!(error=?err, "error building s3 destination map");
             cleanup(
                 db.clone(),
-                user_id,
+                user_id.as_ref(),
                 &project_ids,
                 &documents
                     .iter()
@@ -237,7 +235,7 @@ async fn upload_folder_handler_inner(
         tracing::error!(error=?e, "error committing transaction");
         cleanup(
             db.clone(),
-            user_id,
+            user_id.as_ref(),
             &project_ids,
             &documents
                 .iter()
@@ -276,7 +274,7 @@ async fn build_documents(
         let sha = document.sha.clone().context("document needs a sha")?;
         if file_type != Some(FileType::Docx) {
             let key = build_cloud_storage_bucket_document_key(
-                &document.owner,
+                document.owner.as_ref(),
                 &document.document_id,
                 document.document_version_id,
                 file_type.as_ref().map(|s| s.as_str()),
@@ -318,7 +316,7 @@ async fn build_documents(
             }
 
             let key = build_docx_staging_bucket_document_key(
-                &document.owner,
+                document.owner.as_ref(),
                 &document.document_id,
                 document.document_version_id,
             );

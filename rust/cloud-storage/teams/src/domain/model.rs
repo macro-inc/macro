@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserId};
+use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr};
 use roles_and_permissions::domain::model::UserRolesAndPermissionsError;
 
 #[derive(Eq, PartialEq, Debug, Clone, PartialOrd, sqlx::Type, Copy, std::cmp::Ord)]
@@ -31,7 +31,7 @@ impl std::fmt::Display for TeamRole {
 #[derive(Debug, Clone)]
 pub struct TeamMember<'a> {
     /// The user id of the team member
-    pub user_id: MacroUserId<Lowercase<'a>>,
+    pub user_id: MacroUserIdStr<'a>,
     /// The role of the team member
     pub role: TeamRole,
 }

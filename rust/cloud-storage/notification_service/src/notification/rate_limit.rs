@@ -1,5 +1,6 @@
 use anyhow::Context;
 use macro_cache_client::MacroCache;
+use macro_user_id::email::ReadEmailParts;
 use model_notifications::{Notification, NotificationEventType};
 
 /// Performs a basic rate limit check on the notification
@@ -18,23 +19,23 @@ pub async fn rate_limit(
                 .as_ref()
                 .context("expected sender id to be present in channel invite notification")?;
 
-            let email = sender_id.replace("macro|", "");
+            let email = sender_id.email_part();
 
             let channel_invite_rate_limit = macro_cache_client
-                .get_channel_invite_rate_limit(&email)
+                .get_channel_invite_rate_limit(email.email_str())
                 .await
                 .context("unable to get channel invite rate limit")?;
 
             if let Some(channel_invite_rate_limit) = channel_invite_rate_limit
                 && channel_invite_rate_limit >= 10
             {
-                tracing::error!(email=%email, "rate limit channel invite exceeded");
+                tracing::error!(email=%email.email_str(), "rate limit channel invite exceeded");
                 return Ok(true);
             }
 
             tracing::trace!("incrementing channel invite rate limit");
             macro_cache_client
-                .increment_channel_invite_rate_limit(&email, 3600) // 1 hour
+                .increment_channel_invite_rate_limit(email.email_str(), 3600) // 1 hour
                 .await
                 .context("unable to increment channel invite rate limit")?;
 
@@ -48,23 +49,23 @@ pub async fn rate_limit(
                 .as_ref()
                 .context("expected sender id to be present in invite to team notification")?;
 
-            let email = sender_id.replace("macro|", "");
+            let email = sender_id.email_part();
 
             let invite_to_team_rate_limit = macro_cache_client
-                .get_invite_to_team_rate_limit(&email)
+                .get_invite_to_team_rate_limit(email.email_str())
                 .await
                 .context("unable to get invite to team rate limit")?;
 
             if let Some(invite_to_team_rate_limit) = invite_to_team_rate_limit
                 && invite_to_team_rate_limit >= 5
             {
-                tracing::error!(email=%email, "rate limit invite to team exceeded");
+                tracing::error!(email=%email.email_str(), "rate limit invite to team exceeded");
                 return Ok(true);
             }
 
             tracing::trace!("incrementing invite to team rate limit");
             macro_cache_client
-                .increment_invite_to_team_rate_limit(&email, 3600) // 1 hour
+                .increment_invite_to_team_rate_limit(email.email_str(), 3600) // 1 hour
                 .await
                 .context("unable to increment invite to team rate limit")?;
 

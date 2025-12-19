@@ -46,10 +46,7 @@ export function useCommandItems() {
         data: {
           id: description.replaceAll(' ', '-'),
           name: description,
-          hotkeys: command.hotkeys ?? [],
-          handler: command.keyDownHandler ?? (() => false),
-          activateCommandScopeId: command.activateCommandScopeId,
-          tags: command.tags ?? [],
+          command: command,
         },
         updatedAt: 0,
       };

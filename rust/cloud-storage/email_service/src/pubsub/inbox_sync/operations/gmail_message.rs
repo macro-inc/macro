@@ -1,13 +1,13 @@
 use crate::pubsub::context::PubSubContext;
+use crate::pubsub::inbox_sync::process::fetch_pubsub_gmail_token;
 use crate::pubsub::util::check_gmail_rate_limit;
-use crate::pubsub::webhook::process::fetch_pubsub_gmail_token;
 use crate::util::process_pre_insert::sync_labels::sync_labels;
 use models_email::gmail::history::InboxChanges;
-use models_email::gmail::operations::GmailApiOperation;
-use models_email::gmail::webhook::{
-    DeleteMessagePayload, GmailMessagePayload, UpdateLabelsPayload, UpsertMessagePayload,
-    WebhookOperation, WebhookPubsubMessage,
+use models_email::gmail::inbox_sync::{
+    DeleteMessagePayload, GmailMessagePayload, InboxSyncOperation, InboxSyncPubsubMessage,
+    UpdateLabelsPayload, UpsertMessagePayload,
 };
+use models_email::gmail::operations::GmailApiOperation;
 use models_email::service::link::{Link, UserProvider};
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use std::result;
@@ -102,7 +102,7 @@ pub async fn gmail_message(
 
     // Update the history_id in the database immediately to prevent duplicate processing.
     // The db history_id is used to determine which inbox changes need processing when
-    // handling GmailMessage WebhookOperations. By updating it before processing the
+    // handling GmailMessage InboxSyncOperations. By updating it before processing the
     // current changes, we ensure that any new GmailMessage notifications that arrive
     // will use the latest history_id for comparison. This prevents duplicate processing
     // that could occur if we updated the history_id after processing the changes.
@@ -126,7 +126,7 @@ pub async fn gmail_message(
     for ps_message in pubsub_messages {
         let message_for_error = ps_message.clone();
         ctx.sqs_client
-            .enqueue_gmail_webhook_notification(ps_message)
+            .enqueue_gmail_inbox_sync_notification(ps_message)
             .await
             .map_err(|e| {
                 ProcessingError::NonRetryable(DetailedError {
@@ -141,14 +141,17 @@ pub async fn gmail_message(
 
 /// Builds pubsub messages from history data
 #[tracing::instrument]
-fn build_pubsub_messages(link_id: Uuid, inbox_changes: InboxChanges) -> Vec<WebhookPubsubMessage> {
+fn build_pubsub_messages(
+    link_id: Uuid,
+    inbox_changes: InboxChanges,
+) -> Vec<InboxSyncPubsubMessage> {
     let mut pubsub_messages = Vec::new();
 
     // Process messages to upsert
     for message_id in inbox_changes.message_ids_to_upsert {
-        pubsub_messages.push(WebhookPubsubMessage {
+        pubsub_messages.push(InboxSyncPubsubMessage {
             link_id,
-            operation: WebhookOperation::UpsertMessage(UpsertMessagePayload {
+            operation: InboxSyncOperation::UpsertMessage(UpsertMessagePayload {
                 provider_message_id: message_id,
             }),
         });
@@ -156,18 +159,18 @@ fn build_pubsub_messages(link_id: Uuid, inbox_changes: InboxChanges) -> Vec<Webh
 
     // Process messages to delete
     for message_id in inbox_changes.message_ids_to_delete {
-        pubsub_messages.push(WebhookPubsubMessage {
+        pubsub_messages.push(InboxSyncPubsubMessage {
             link_id,
-            operation: WebhookOperation::DeleteMessage(DeleteMessagePayload {
+            operation: InboxSyncOperation::DeleteMessage(DeleteMessagePayload {
                 provider_message_id: message_id,
             }),
         });
     }
 
     for message_id in inbox_changes.labels_to_update {
-        pubsub_messages.push(WebhookPubsubMessage {
+        pubsub_messages.push(InboxSyncPubsubMessage {
             link_id,
-            operation: WebhookOperation::UpdateLabels(UpdateLabelsPayload {
+            operation: InboxSyncOperation::UpdateLabels(UpdateLabelsPayload {
                 provider_message_id: message_id,
             }),
         });

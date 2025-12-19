@@ -1,7 +1,7 @@
 use crate::pubsub::context::PubSubContext;
 use crate::pubsub::util::{cg_refresh_email, complete_transaction_with_processing_error};
 use models_email::email::service::link;
-use models_email::gmail::webhook::DeleteMessagePayload;
+use models_email::gmail::inbox_sync::DeleteMessagePayload;
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use models_opensearch::SearchEntityType;
 use sqs_client::search::SearchQueueMessage;

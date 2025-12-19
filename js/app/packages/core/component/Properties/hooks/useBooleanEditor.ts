@@ -1,7 +1,5 @@
-import { useBlockId } from '@core/block';
-import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { type Accessor, createMemo, createSignal } from 'solid-js';
-import { saveEntityProperty } from '../api';
+import { usePropertiesContext } from '../context/PropertiesContext';
 import type { Property } from '../types';
 import { ERROR_MESSAGES, handlePropertyError } from '../utils/errorHandling';
 
@@ -14,14 +12,13 @@ import { ERROR_MESSAGES, handlePropertyError } from '../utils/errorHandling';
  */
 export function useBooleanEditor(
   property: Property & { valueType: 'BOOLEAN' },
-  entityType: EntityType,
   onSaved?: () => void
 ): {
   value: Accessor<boolean | null>;
   isSaving: Accessor<boolean>;
   toggle: () => Promise<void>;
 } {
-  const blockId = useBlockId();
+  const { saveHandler } = usePropertiesContext();
   const [isSaving, setIsSaving] = createSignal(false);
 
   const currentValue = createMemo(() => {
@@ -40,7 +37,7 @@ export function useBooleanEditor(
       // Otherwise toggle between true and false
       const newValue = actualValue === null ? true : !actualValue;
 
-      const result = await saveEntityProperty(blockId, entityType, property, {
+      const result = await saveHandler.saveProperty(property, {
         valueType: 'BOOLEAN',
         value: newValue,
       });

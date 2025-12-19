@@ -225,7 +225,7 @@ export function MediaSelector() {
                 <VList
                   data={userMediaFiles()}
                   style={{ height: '256px' }}
-                  overscan={10}
+                  bufferSize={500}
                 >
                   {(media) => (
                     <DropdownMenu.Item closeOnSelect={true} class="w-full">

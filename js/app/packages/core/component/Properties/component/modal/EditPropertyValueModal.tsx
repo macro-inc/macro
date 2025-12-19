@@ -1,5 +1,5 @@
-import { useBlockId } from '@core/block';
 import { IconButton } from '@core/component/IconButton';
+import { ScopedPortal } from '@core/component/ScopedPortal';
 import {
   constrainModalToViewport,
   MODAL_VIEWPORT_CLASSES,
@@ -13,9 +13,8 @@ import {
   onMount,
   Show,
 } from 'solid-js';
-import { Portal } from 'solid-js/web';
-import { saveEntityProperty } from '../../api';
 import { MODAL_DIMENSIONS } from '../../constants';
+import { usePropertiesContext } from '../../context/PropertiesContext';
 import { usePropertyEditor } from '../../hooks/usePropertyEditor';
 import type { PropertyApiValues, PropertyEditorProps } from '../../types';
 import { getValueTypeDisplay } from '../../utils';
@@ -28,12 +27,12 @@ import { PropertyOptionSelector } from './shared/PropertyOptionSelector';
 
 // Common CSS classes
 const MODAL_BASE =
-  'absolute bg-dialog border-3 border-edge shadow-xl z-modal max-h-96 overflow-hidden flex flex-col w-full max-w-md';
+  'absolute bg-dialog border-3 border-edge shadow-xl max-h-96 overflow-hidden flex flex-col w-full max-w-md';
 const HEADER_CLASSES = 'flex items-center justify-between pt-3 pb-2 px-4';
 const CONTENT_CLASSES = 'flex-1 max-h-64 pt-2 px-4 pb-4';
 
 export function EditPropertyValueModal(props: PropertyEditorProps) {
-  const blockId = useBlockId();
+  const { saveHandler } = usePropertiesContext();
 
   const [selectedEntityRefs, setSelectedEntityRefs] = createSignal<
     EntityReference[]
@@ -85,19 +84,15 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
             `Invalid property type for modal editor: ${props.property.valueType}`
           )
         );
+        props.onClose();
         return;
     }
 
-    // saveEntityProperty already handles error logging and user feedback
-    const result = await saveEntityProperty(
-      blockId,
-      props.entityType,
-      props.property,
-      apiValues
-    );
-
-    if (result.ok) {
+    try {
+      await saveHandler.saveProperty(props.property, apiValues);
       props.onSaved();
+    } catch (error) {
+      console.error('Failed to save property:', error);
     }
 
     props.onClose();
@@ -163,11 +158,8 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
   });
 
   return (
-    <Portal>
-      <div
-        class="fixed inset-0 bg-overlay z-modal-overlay"
-        onClick={handleClose}
-      >
+    <ScopedPortal scope="local">
+      <div class="fixed inset-0 z-modal" onClick={handleClose}>
         <div
           ref={modalRef}
           class={`${MODAL_BASE} ${MODAL_VIEWPORT_CLASSES}`}
@@ -258,6 +250,6 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
           </div>
         </div>
       </div>
-    </Portal>
+    </ScopedPortal>
   );
 }

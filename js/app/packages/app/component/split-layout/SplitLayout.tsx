@@ -1,11 +1,10 @@
 import { useGlobalBlockOrchestrator } from '@app/component/GlobalAppState';
 import { activeElement } from '@app/signal/focus';
 import { Resize } from '@core/component/Resize';
-import { TOKENS } from '@core/hotkey/tokens';
 import { tabTitleSignal } from '@core/signal/tabTitle';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { useNavigate } from '@solidjs/router';
-import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
+import { useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
   type Accessor,
   createEffect,
@@ -23,8 +22,10 @@ import {
   createNavigationEntityListShortcut,
   createSoupContext,
 } from '../SoupContext';
+import { PopoverSplitRenderer } from './components/PopoverSplitRenderer';
 import { SplitContainer } from './components/SplitContainer';
 import { SplitLayoutContext, SplitPanelContext } from './context';
+import { useSplitLayout } from './layout';
 import {
   createSplitLayout,
   type SplitContent,
@@ -36,6 +37,7 @@ import {
   type SplitState,
 } from './layoutManager';
 import { decodePairs } from './layoutUtils';
+import { registerSplitHotkeys } from './registerSplitHotkeys';
 
 type SplitLayoutContainerProps = {
   pairs: string[];
@@ -44,7 +46,8 @@ type SplitLayoutContainerProps = {
 
 function getParentSplitId(element: Element | null) {
   if (!element || !element.isConnected) return null;
-  const splitParent = element.closest('[data-split-container]');
+  // Checking the parent element here so that we don't get the split container itself.
+  const splitParent = element.parentElement?.closest('[data-split-container]');
   if (!splitParent) return null;
   const splitId = splitParent.getAttribute('data-split-id');
   if (!splitId) return null;
@@ -134,7 +137,11 @@ function createSplitFocusTracker(props: {
     }
 
     // return if panel has a child already with focus.
-    if (splitPanelRef.contains(document.activeElement)) return;
+    if (
+      splitPanelRef.contains(document.activeElement) &&
+      splitPanelRef !== document.activeElement
+    )
+      return;
 
     // look for a child to return focus to.
     const child = lastFocusedChildBySplitId.get(id);
@@ -284,20 +291,6 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
 
   onCleanup(() => props.setManager(undefined));
 
-  registerHotkey({
-    hotkeyToken: TOKENS.global.createNewSplit,
-    hotkey: 'cmd+\\',
-    scopeId: 'global',
-    description: 'Create new split',
-    keyDownHandler: () => {
-      const canFit =
-        splitManager.resizeContext()?.canFit({ minSize: 400 }) ?? true;
-      if (canFit) splitManager.createNewSplit();
-      return true;
-    },
-    runWithInputFocused: true,
-  });
-
   createEffect(() => {
     setTabTitle(splitManager.tabTitle());
   });
@@ -328,6 +321,14 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
           )}
         </For>
       </Resize.Zone>
+      <PopoverSplitRenderer
+        popovers={splitManager.popovers}
+        onClosePopover={(id) => {
+          const activePopovers = splitManager.getActivePopovers();
+          const popover = activePopovers.find((p) => p.id === id);
+          popover?.close();
+        }}
+      />
     </SplitLayoutContext.Provider>
   );
 }
@@ -348,85 +349,34 @@ function SplitPanel(props: SplitPanelProps) {
   const panelSize = createElementSize(panelRef);
   const [contentOffsetTop, setContentOffsetTop] = createSignal(0);
 
-  const splitName = createMemo(() => {
-    const { type, id } = props.split.content;
-    if (type === 'component') return id;
-
-    return type;
-  });
-
-  registerHotkey({
-    scopeId: splitHotkeyScope,
-    hotkey: 'cmd+escape',
-    description: `Close ${splitName()}`,
-    keyDownHandler: () => {
-      props.handle.close();
-      return true;
-    },
-    runWithInputFocused: true,
-    hotkeyToken: TOKENS.split.close,
-  });
-
-  registerHotkey({
-    scopeId: splitHotkeyScope,
-    hotkey: 'shift+escape',
-    hotkeyToken: TOKENS.split.spotlight.toggle,
-    description: `Spotlight ${splitName()}`,
-    keyDownHandler: () => {
-      props.handle.toggleSpotlight();
-      return true;
-    },
-    runWithInputFocused: true,
-  });
-
-  registerHotkey({
-    scopeId: splitHotkeyScope,
-    hotkey: 'escape',
-    hotkeyToken: TOKENS.split.spotlight.close,
-    condition: () => props.handle.isSpotLight(),
-    description: `Spotlight ${splitName()}`,
-    keyDownHandler: () => {
-      props.handle.toggleSpotlight();
-      return true;
-    },
-    runWithInputFocused: true,
-  });
-
-  registerHotkey({
-    scopeId: splitHotkeyScope,
-    hotkey: 'opt+[',
-    hotkeyToken: TOKENS.split.back,
-    condition: () => props.handle.canGoBack(),
-    description: `Go back in split`,
-    keyDownHandler: () => {
-      props.handle.goBack();
-      return true;
-    },
-    runWithInputFocused: false,
-  });
-
-  registerHotkey({
-    scopeId: splitHotkeyScope,
-    hotkey: 'opt+]',
-    hotkeyToken: TOKENS.split.forward,
-    condition: () => props.handle.canGoForward(),
-    description: `Go back in split`,
-    keyDownHandler: () => {
-      props.handle.goForward();
-      return true;
-    },
-    runWithInputFocused: false,
-  });
-
   const unifiedListContext = createSoupContext();
 
   const [previewState, setPreviewState] = createSignal(false);
 
+  const splitLayoutHelpers = useSplitLayout();
+  const { goScope } = registerSplitHotkeys({
+    splitHotkeyScope,
+    insertSplit: splitLayoutHelpers.insertSplit,
+    closeSplit: () => props.handle.close(),
+    toggleSpotlight: () => props.handle.toggleSpotlight(),
+    canGoBack: () => props.handle.canGoBack(),
+    goBack: () => props.handle.goBack(),
+    canGoForward: () => props.handle.canGoForward(),
+    goForward: () => props.handle.goForward(),
+    setSelectedView: (view) => unifiedListContext.setSelectedView(view),
+    replaceSplit: splitLayoutHelpers.replaceSplit,
+    splitName: () => props.handle.displayName(),
+    getSplitCount: () => splitLayoutHelpers.getSplitCount(),
+    isNotUnifiedList: () => {
+      const content = props.handle.content();
+      return !(content.type === 'component' && content.id === 'unified-list');
+    },
+  });
   createNavigationEntityListShortcut({
-    splitName,
     splitHandle: props.handle,
     splitHotkeyScope,
     unifiedListContext,
+    goScopeId: goScope.commandScopeId,
     previewState: [previewState, setPreviewState],
   });
 
