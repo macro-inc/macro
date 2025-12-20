@@ -1,4 +1,6 @@
-use crate::types::response::{Citation, ServerToolUse, WebSearchResponse};
+use crate::prelude::ServerToolUse;
+use crate::types::response::Citation;
+use crate::types::response::web_search::WebSearchResponse;
 use async_openai::error::OpenAIError;
 use async_openai::types::CreateChatCompletionStreamResponse;
 use futures::Stream;
@@ -7,9 +9,9 @@ use std::pin::Pin;
 /// Items that are returned in an Anthropic stream but not supported by OpenAI
 #[derive(Clone, Debug, PartialEq)]
 pub enum AnthropicResponseExtension {
-    ServerToolUse(ServerToolUse),
     Citation(Citation),
     WebSearchToolResponse(WebSearchResponse),
+    ServerToolUse(ServerToolUse),
 }
 
 /// A standard OpenAI response item or an item only sent by Anthropic

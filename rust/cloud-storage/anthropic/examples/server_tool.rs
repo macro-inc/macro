@@ -1,3 +1,4 @@
+
 use anthropic::prelude::WEB_SEARCH_TOOL;
 use std::io::Write;
 use std::process::exit;
@@ -8,6 +9,9 @@ use anthropic::types::request::{
 };
 use anthropic::types::response::{ContentDeltaEvent, StreamEvent};
 use futures::StreamExt;
+use std::fs::OpenOptions;
+
+const LOG_MODE: bool = false;
 
 #[tokio::main]
 async fn main() {
@@ -36,18 +40,21 @@ async fn main() {
         let mut stream = chat.create_stream(request.clone()).await;
         let mut assistant_message = String::new();
 
-        // let mut out = OpenOptions::new()
-        //     .write(true)
-        //     .create(true)
-        //     .open("stream.json")
-        //     .unwrap();
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create(LOG_MODE)
+            .open("stream.json")
+            .unwrap();
 
         while let Some(event) = stream.next().await {
-            // if let Ok(e) = event {
-            //     write!(out, "\n{}\n", serde_json::to_string_pretty(&e).unwrap());
-            // } else {
-            //     write!(out, "{:#?}", event.unwrap_err());
-            // }
+            if LOG_MODE {
+                if let Ok(e) = event {
+                    write!(out, "\n{}\n", serde_json::to_string_pretty(&e).unwrap());
+                } else {
+                    write!(out, "{:#?}", event.unwrap_err());
+                }
+                continue;
+            }
             if let Err(error) = event {
                 match error {
                     other => {
