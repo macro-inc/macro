@@ -12,7 +12,7 @@ use axum::{Router, http::StatusCode, response::Json, routing::get};
     tag = "tools"
 )]
 pub async fn get_tool_schemas() -> Result<Json<ToolSchemas>, StatusCode> {
-    let schemas = ai_tools::all_tool_schemas().generate_schemas();
+    let schemas = ai_tools::all_tool_schemas();
     Ok(Json(schemas))
 }
 

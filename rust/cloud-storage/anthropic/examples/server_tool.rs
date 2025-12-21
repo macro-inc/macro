@@ -1,4 +1,3 @@
-
 use anthropic::prelude::WEB_SEARCH_TOOL;
 use std::io::Write;
 use std::process::exit;
@@ -44,14 +43,16 @@ async fn main() {
             .write(true)
             .create(LOG_MODE)
             .open("stream.json")
-            .unwrap();
+            .ok();
 
         while let Some(event) = stream.next().await {
             if LOG_MODE {
-                if let Ok(e) = event {
-                    write!(out, "\n{}\n", serde_json::to_string_pretty(&e).unwrap());
-                } else {
-                    write!(out, "{:#?}", event.unwrap_err());
+                if let Some(ref mut file) = file {
+                    if let Ok(e) = event {
+                        write!(file, "\n{}\n", serde_json::to_string_pretty(&e).unwrap()).unwrap();
+                    } else {
+                        write!(file, "{:#?}", event.unwrap_err()).unwrap();
+                    }
                 }
                 continue;
             }

@@ -38,5 +38,7 @@ tracing.workspace = true
 utoipa.workspace = true
 uuid.workspace = true
 
+anthropic = { path = "../anthropic"}
+
 [dev-dependencies]
 cool_asserts = "2"

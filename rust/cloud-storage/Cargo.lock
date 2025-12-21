@@ -81,6 +81,7 @@ name = "ai_tools"
 version = "0.1.0"
 dependencies = [
  "ai",
+ "anthropic",
  "anyhow",
  "async-trait",
  "chrono",

@@ -183,7 +183,7 @@ fn map_stream_extended(mut stream: MessageCompletionResponseStream) -> ExtendedS
                     }
                     StreamEvent::ContentBlockStart { content_block, index } => {
                         match content_block {
-                            ContentDeltaEvent::ToolUse { name, id, input } => {
+                            ContentDeltaEvent::ToolUse { name, id, .. } => {
                                 yield Ok(create_response(
                                         &message_id.clone().unwrap_or_default(),
                                         &model.clone().unwrap_or_default(),
@@ -203,6 +203,9 @@ fn map_stream_extended(mut stream: MessageCompletionResponseStream) -> ExtendedS
                             }
                             ContentDeltaEvent::ServerToolUse(server_tool) => {
                                 tool_state = ToolState::StreamingServerTool(server_tool.into())
+                            }
+                            ContentDeltaEvent::WebSearchToolResult(web_search_response) => {
+                                yield Ok(AnthropicResponseExtension::WebSearchToolResponse(web_search_response).into());
                             }
                             _ => {}
                         }

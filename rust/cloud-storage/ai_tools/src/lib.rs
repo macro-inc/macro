@@ -1,11 +1,12 @@
 use ai::tool::AsyncToolSet;
-use ai::tool::schema::ToolSchemaGenerator;
+use ai::tool::schema::{ToolSchemaGenerator, ToolSchemas};
 pub mod list;
 pub mod prompts;
 pub mod read;
 pub mod rewrite;
 pub mod search;
 mod tool_context;
+use search::anthropic_web_search::anthropic_web_search_tool;
 
 pub use search::search_toolset;
 pub use tool_context::*;
@@ -39,8 +40,10 @@ pub fn all_tools() -> ToolSetWithPrompt {
     ToolSetWithPrompt { toolset, prompt }
 }
 
-pub fn all_tool_schemas() -> Box<dyn ToolSchemaGenerator> {
-    Box::new(all_tools())
+pub fn all_tool_schemas() -> ToolSchemas {
+    all_tools()
+        .merge(&*anthropic_web_search_tool)
+        .generate_schemas()
 }
 
 pub fn no_tools() -> ToolSetWithPrompt {
