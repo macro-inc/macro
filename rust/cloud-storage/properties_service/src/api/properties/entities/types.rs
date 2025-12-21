@@ -29,7 +29,7 @@ pub struct SetEntityPropertyRequest {
 pub struct BulkEntityPropertiesRequest {
     /// Array of entity references (entity_id and entity_type pairs)
     pub entities: Vec<EntityReference>,
-    /// Optional: only return properties with these definition IDs. If empty/None, returns all.
+    /// Optional: only return properties with these definition IDs. If empty, returns all.
     #[serde(default)]
-    pub property_ids: Option<Vec<Uuid>>,
+    pub property_ids: Vec<Uuid>,
 }

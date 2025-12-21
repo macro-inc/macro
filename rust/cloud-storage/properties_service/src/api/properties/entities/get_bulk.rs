@@ -61,20 +61,19 @@ async fn get_bulk_entity_properties_impl(
 
     tracing::info!("retrieving bulk entity properties");
 
-    // Use filtered query if property_ids specified, otherwise fetch all
-    let bulk_properties = match request.property_ids {
-        Some(property_ids) => {
-            entity_properties_get::get_bulk_entity_properties_values_filtered(
-                &context.db,
-                &request.entities,
-                property_ids,
-            )
+    // Use filtered query if property_ids specified, otherwise fetch all.
+    // Note: the public endpoint requires property_ids, but internal callers can
+    // pass an empty vec to fetch all properties for the given entities.
+    let bulk_properties = if request.property_ids.is_empty() {
+        entity_properties_get::get_bulk_entity_properties_values(&context.db, &request.entities)
             .await
-        }
-        None => {
-            entity_properties_get::get_bulk_entity_properties_values(&context.db, &request.entities)
-                .await
-        }
+    } else {
+        entity_properties_get::get_bulk_entity_properties_values_filtered(
+            &context.db,
+            &request.entities,
+            request.property_ids,
+        )
+        .await
     }
     .inspect_err(|e| {
         tracing::error!(
@@ -146,13 +145,9 @@ pub async fn get_bulk_entity_properties(
     Extension(user_context): Extension<UserContext>,
     Json(request): Json<BulkEntityPropertiesRequest>,
 ) -> Result<Json<HashMap<String, EntityPropertiesResponse>>, GetBulkEntityPropertiesErr> {
-    if request.entities.is_empty()
-        || request.property_ids.is_none()
-        || request
-            .property_ids
-            .as_ref()
-            .is_some_and(|ids| ids.is_empty())
-    {
+    // Unlike the internal endpoint, the public endpoint requires explicit property IDs.
+    // An empty property_ids means "no properties requested", so return early with empty result.
+    if request.entities.is_empty() || request.property_ids.is_empty() {
         return Ok(Json(HashMap::new()));
     }
 
@@ -189,7 +184,7 @@ pub async fn get_bulk_entity_properties(
 
     let filtered_request = BulkEntityPropertiesRequest {
         entities: permitted_entities,
-        property_ids: request.property_ids,
+        property_ids: request.property_ids.clone(),
     };
 
     get_bulk_entity_properties_impl(&context, filtered_request)
