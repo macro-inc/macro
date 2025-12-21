@@ -1,5 +1,5 @@
 use super::traits::{ExtendedClient, ExtendedOpenAIStream};
-use crate::tool::types::StreamPart;
+use crate::tool::StreamPart;
 use crate::types::AiError;
 use anyhow::anyhow;
 
@@ -10,22 +10,16 @@ pub struct NoOpClient;
 pub enum NoOpExtension {}
 
 impl ExtendedClient for NoOpClient {
-    type RequestExtension = ();
     type ResponseExtension = NoOpExtension;
 
     async fn chat_stream(
         &self,
         _: async_openai::types::CreateChatCompletionRequest,
-        _: &Self::RequestExtension,
     ) -> Result<ExtendedOpenAIStream<Self::ResponseExtension>, AiError> {
         Err(anyhow!("noop").into())
     }
 
-    fn handle_extension_item(
-        &self,
-        _: &mut async_openai::types::CreateChatCompletionRequest,
-        _: Self::ResponseExtension,
-    ) -> Option<StreamPart> {
+    fn handle_extension_item(&self, _: Self::ResponseExtension) -> Option<StreamPart> {
         None
     }
 }
