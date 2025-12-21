@@ -23,7 +23,6 @@ use crate::{
         },
         models::get_models,
         preview::get_batch_preview,
-        tools,
         ws::{self},
     },
     model::{
@@ -109,7 +108,6 @@ use utoipa::OpenApi;
             revert_delete_chat::handler,
             chat_history::get_chat_history_handler,
             chat_history_batch_messages::get_chat_history_batch_messages_handler,
-            tools::get_tool_schemas,
         ),
         components(
             schemas(

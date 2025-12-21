@@ -27,7 +27,6 @@ mod attachments;
 mod chats;
 mod macros;
 mod notification;
-pub mod tools;
 
 #[tracing::instrument(err, skip(state))]
 pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
@@ -86,7 +85,6 @@ fn api_router(api_context: ApiContext) -> Router {
         .nest("/citations", citations::router())
         .nest("/preview", preview::router())
         .with_state(api_context.clone())
-        .nest("/tools", tools::router())
         .nest("/completions", completions::router())
         .nest("/models", models::router())
         .layer(
