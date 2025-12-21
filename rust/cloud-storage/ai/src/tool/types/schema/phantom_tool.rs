@@ -1,9 +1,9 @@
-/// A tool that is not sent to AI but may be called by ai (built in tools)
-/// Generate schemas for these tools for the frontend
 use super::generate::{ToolSchema, ToolSchemaGenerator, ToolSchemas};
 use schemars::{JsonSchema, schema_for};
 use std::marker::PhantomData;
 
+/// A tool that is not sent to AI but may be called by ai (built in tools)
+/// Generate schemas for these tools for the frontend
 pub struct PhantomTool<I, O> {
     i: PhantomData<I>,
     o: PhantomData<O>,

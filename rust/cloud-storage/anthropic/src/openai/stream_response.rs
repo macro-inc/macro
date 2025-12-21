@@ -194,7 +194,7 @@ fn map_stream_extended(mut stream: MessageCompletionResponseStream) -> ExtendedS
                                             Some(id.clone()),
                                             Some(ChatCompletionToolType::Function),
                                             Some(name.clone()),
-                                            Some(input.to_string()),
+                                            Some(String::new()),
                                         ),
                                         None,
                                         None,

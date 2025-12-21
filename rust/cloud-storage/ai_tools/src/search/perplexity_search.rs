@@ -42,13 +42,13 @@ const WEB_SEARCH_SYSTEM_PROMPT: &str = concat!(
 #[schemars(
     description = WEB_SEARCH_DESCRIPTION
 )]
-pub struct WebSearch {
+pub struct PerplexitySearch {
     #[schemars(description = "The search string to search for. Should be long / descriptive")]
     pub query: String,
 }
 
 #[async_trait]
-impl AsyncTool<ToolServiceContext, RequestContext> for WebSearch {
+impl AsyncTool<ToolServiceContext, RequestContext> for PerplexitySearch {
     type Output = SearchResults;
 
     #[tracing::instrument(skip_all, fields(user_id=?_request_context.user_id), err)]
@@ -57,8 +57,6 @@ impl AsyncTool<ToolServiceContext, RequestContext> for WebSearch {
         _service_context: ToolServiceContext,
         _request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
-        tracing::info!(self=?self, "Web search params");
-
         let client = ai::web_search::PerplexityClient::from_env().map_err(|err| ToolCallError {
             description: "Search failed due to an internal error. Do not try to search again."
                 .to_string(),
