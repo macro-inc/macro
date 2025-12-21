@@ -5,8 +5,9 @@ use models_properties::service::property_value::PropertyValue;
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
-use super::{entity_property_queries, task_property_queries};
+use super::{entity_property_queries, property_definition_queries, task_property_queries};
 use crate::domain::ports::PropertiesRepo;
+use models_properties::service::property_definition::PropertyDefinition;
 
 /// PostgreSQL implementation of PropertiesRepo.
 #[derive(Debug, Clone)]
@@ -23,6 +24,15 @@ impl PropertiesPgRepo {
 
 impl PropertiesRepo for PropertiesPgRepo {
     type Err = anyhow::Error;
+
+    #[tracing::instrument(skip(self))]
+    async fn get_property_definition(
+        &self,
+        property_definition_id: Uuid,
+    ) -> Result<Option<PropertyDefinition>, Self::Err> {
+        property_definition_queries::get_property_definition(&self.pool, property_definition_id)
+            .await
+    }
 
     #[tracing::instrument(skip(self, value))]
     async fn update_entity_property_value_if_exists(

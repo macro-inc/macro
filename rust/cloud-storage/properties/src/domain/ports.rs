@@ -4,6 +4,7 @@
 //! Implementations live in the outbound module.
 
 use models_properties::EntityType;
+use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_value::PropertyValue;
 use uuid::Uuid;
 
@@ -14,6 +15,13 @@ use uuid::Uuid;
 #[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
 pub trait PropertiesRepo: Send + Sync + 'static {
     type Err;
+
+    /// Get a property definition by ID.
+    /// Returns `None` if the property definition doesn't exist.
+    fn get_property_definition(
+        &self,
+        property_definition_id: Uuid,
+    ) -> impl Future<Output = Result<Option<PropertyDefinition>, Self::Err>> + Send;
 
     /// Atomically update a property value if the property is attached to the entity.
     /// No-op if the property is not attached.
