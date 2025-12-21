@@ -12,7 +12,7 @@
 /**
  * List documents the user has access to with optional filtering and pagination. Only applies to documents, not emails, AI conversations, chat/slack threads, projects aka folders. This tool returns document metadata including access levels and supports filtering by file type, minimum access level, and pagination. Use this tool to discover and browse documents before using the Read tool to access their content. Prefer using the search tool to search on a specific matching string within the content or the name of the entity.
  */
-export interface ListDocumentsInput {
+export interface ListDocuments {
   /**
    * Exhaustive search to get all results. Defaults to false. Set to true when you need all matching documents, ignoring pagination limits.
    */
@@ -43,7 +43,7 @@ export interface ListDocumentsInput {
  * and run json-schema-to-typescript to regenerate this file.
  */
 
-export interface ListDocumentsOutput {
+export interface ListDocumentsResponse {
   /**
    * The list results (truncated to `results_returned` limit if applicable)
    */
@@ -106,7 +106,7 @@ export interface ListDocumentsOutput {
 /**
  * List the emails the user has access to. Use this tool to discover and browse emails before using the Read tool to access their content. Prefer using the search tool to search on a specific matching string within the content or the name of the entity.
  */
-export interface ListEmailsInput {
+export interface ListEmails {
   /**
    * A preview response will tell you what the next cursor id is.
    *         If expected emails are not in the current response and it gives you a cursor id, use this field to list the next page of emails. If no cursor id is provided you've reached the end
@@ -143,7 +143,7 @@ export interface ListEmailsInput {
  * and run json-schema-to-typescript to regenerate this file.
  */
 
-export interface ListEmailsOutput {
+export interface ApiPaginatedThreadCursor {
   items: {
     attachments: {
       contentId?: string | null;
@@ -229,7 +229,7 @@ export interface ListEmailsOutput {
  * Instruct an agent to edit a markdown file identified by an id.
  *     This tool should be used when the user include a markdown file in context and requests a revision or edit to that file
  */
-export interface MarkdownRewriteInput {
+export interface MarkdownRewrite {
   /**
    * Instructions for the revision agent to follow to edit the markdown. These instructions will be provided by the user.
    */
@@ -248,7 +248,7 @@ export interface MarkdownRewriteInput {
  * and run json-schema-to-typescript to regenerate this file.
  */
 
-export interface MarkdownRewriteOutput {
+export interface AIDiffResponse {
   diffs: {
     markdown_text: string;
     node_key: string;
@@ -268,7 +268,7 @@ export interface MarkdownRewriteOutput {
  * Read content by ID(s). Supports reading documents, channels, chats, and emails by their respective IDs. Use this tool when you need to retrieve the full content of a specific item(s).
  *     Channel transcripts only include 300 messages. Use 'messages_since' to see messages in a different time window.
  */
-export interface ReadInput {
+export interface Read {
   /**
    * The type of content to read. Choose based on the type of content you want to retrieve.
    */
@@ -299,7 +299,7 @@ export interface ReadInput {
  * and run json-schema-to-typescript to regenerate this file.
  */
 
-export interface ReadOutput {
+export interface ReadResponse {
   content:
     | {
         documents: {
@@ -379,7 +379,7 @@ export interface ReadOutput {
 /**
  * Universal search across all content types (documents, emails, AI conversations, chat/slack threads/channels, projects aka folders). This tool will return broad metadata from successful results and/or content matches. Use the Read tool next to read the results from those matches. Only ever refer to documents by name or with a document mention. Never state the id of the document in plaintext. User's are presented with the results of this tool as a UI element so there is no need to enumerate the information found from this tool.
  */
-export interface UnifiedSearchInput {
+export interface UnifiedSearch {
   /**
    * Exhaustive search across all results matching the query. Defaults to true. Use false when the user only requires a limitied subset of results to answer the question
    */
@@ -530,7 +530,7 @@ export interface UnifiedSearchInput {
  * and run json-schema-to-typescript to regenerate this file.
  */
 
-export interface UnifiedSearchOutput {
+export interface UnifiedSearchResponseOutput {
   /**
    * The search results
    */
@@ -557,6 +557,14 @@ export interface UnifiedSearchOutput {
            */
           highlight: {
             /**
+             * The highlight match on the bcc (email only)
+             */
+            bcc?: string[];
+            /**
+             * The highlight match on the cc (email only)
+             */
+            cc?: string[];
+            /**
              * The highlight match on the content field
              */
             content?: string[];
@@ -564,6 +572,18 @@ export interface UnifiedSearchOutput {
              * The highlight match on the name field
              */
             name?: string | null;
+            /**
+             * The highlight match on the recipients (email only)
+             */
+            recipients?: string[];
+            /**
+             * The highlight match on the sender (email only)
+             */
+            sender?: string | null;
+            /**
+             * The highlight match on the user (owner) of the entity
+             */
+            user_id?: string | null;
           };
           /**
            * The node id
@@ -597,6 +617,14 @@ export interface UnifiedSearchOutput {
            */
           highlight: {
             /**
+             * The highlight match on the bcc (email only)
+             */
+            bcc?: string[];
+            /**
+             * The highlight match on the cc (email only)
+             */
+            cc?: string[];
+            /**
              * The highlight match on the content field
              */
             content?: string[];
@@ -604,6 +632,18 @@ export interface UnifiedSearchOutput {
              * The highlight match on the name field
              */
             name?: string | null;
+            /**
+             * The highlight match on the recipients (email only)
+             */
+            recipients?: string[];
+            /**
+             * The highlight match on the sender (email only)
+             */
+            sender?: string | null;
+            /**
+             * The highlight match on the user (owner) of the entity
+             */
+            user_id?: string | null;
           };
           /**
            * The role
@@ -637,6 +677,14 @@ export interface UnifiedSearchOutput {
            */
           highlight: {
             /**
+             * The highlight match on the bcc (email only)
+             */
+            bcc?: string[];
+            /**
+             * The highlight match on the cc (email only)
+             */
+            cc?: string[];
+            /**
              * The highlight match on the content field
              */
             content?: string[];
@@ -644,6 +692,18 @@ export interface UnifiedSearchOutput {
              * The highlight match on the name field
              */
             name?: string | null;
+            /**
+             * The highlight match on the recipients (email only)
+             */
+            recipients?: string[];
+            /**
+             * The highlight match on the sender (email only)
+             */
+            sender?: string | null;
+            /**
+             * The highlight match on the user (owner) of the entity
+             */
+            user_id?: string | null;
           };
           /**
            * The labels
@@ -705,6 +765,14 @@ export interface UnifiedSearchOutput {
            */
           highlight: {
             /**
+             * The highlight match on the bcc (email only)
+             */
+            bcc?: string[];
+            /**
+             * The highlight match on the cc (email only)
+             */
+            cc?: string[];
+            /**
              * The highlight match on the content field
              */
             content?: string[];
@@ -712,6 +780,18 @@ export interface UnifiedSearchOutput {
              * The highlight match on the name field
              */
             name?: string | null;
+            /**
+             * The highlight match on the recipients (email only)
+             */
+            recipients?: string[];
+            /**
+             * The highlight match on the sender (email only)
+             */
+            sender?: string | null;
+            /**
+             * The highlight match on the user (owner) of the entity
+             */
+            user_id?: string | null;
           };
           /**
            * The mentions
@@ -749,6 +829,14 @@ export interface UnifiedSearchOutput {
            */
           highlight: {
             /**
+             * The highlight match on the bcc (email only)
+             */
+            bcc?: string[];
+            /**
+             * The highlight match on the cc (email only)
+             */
+            cc?: string[];
+            /**
              * The highlight match on the content field
              */
             content?: string[];
@@ -756,6 +844,18 @@ export interface UnifiedSearchOutput {
              * The highlight match on the name field
              */
             name?: string | null;
+            /**
+             * The highlight match on the recipients (email only)
+             */
+            recipients?: string[];
+            /**
+             * The highlight match on the sender (email only)
+             */
+            sender?: string | null;
+            /**
+             * The highlight match on the user (owner) of the entity
+             */
+            user_id?: string | null;
           };
           /**
            * The project id
@@ -802,17 +902,9 @@ export interface UnifiedSearchOutput {
  */
 
 /**
- * Trigger an intelligent internet search tool with a search query. Phrase the query as a natural language question. The search tool only has the information passed into the query string to include any relevant context from the conversation. Use this tool when the user specifically requests a web search, asks for resources, asks for links, asks you to read documentationWhen referencing links returned by search remember to use github markdown notation to format them like this [description](https://example.com)Our CEO describes when to use web search like this: I think some important criteria for choosing to search the web are",
- *     if the user is asking for time-sensitive information (sports scores, news, current happenings, etc) that would have changed since the knowledge cutoff date
- *         Specific questions that reference external sources, eg contain a hyperlink in the user message or explicitly say “use webmd” or “check arxiv”
- *         do not use web search for things that are likely to find SEO slop content; this will make it worse than if it didn’t do it
- *         the LLM is be allowed to guess an answer and then use the web search tool to check AFTER providing the answer, if it feels it’s necessary. E.g. user asks “when was Caesar stabbed” -> llm gives answer -> if needed use web to double check"
- *     do not use this tool many times in a single response, you think the user may need more information ask them before calling web search again. You should always sharethe results of your search with the user even if you are not sure if they are useful
+ * This is the expected shape of the streamed json following a `server_tool_use` in content_block_start event
  */
-export interface WebSearchInput {
-  /**
-   * The search string to search for. Should be long / descriptive
-   */
+export interface WebSearchToolCall {
   query: string;
 }
 
@@ -824,11 +916,24 @@ export interface WebSearchInput {
  * and run json-schema-to-typescript to regenerate this file.
  */
 
-export interface WebSearchOutput {
-  content: string;
-  results: {
-    name: string;
-    url: string;
-  }[];
+/**
+ * A single search result from web search
+ */
+export type SearchResult = {
+  title: string;
+  type: 'web_search_result';
+  url: string;
+};
+
+/**
+ * Web search response content returned by Claude when using the web_search tool
+ */
+export interface WebSearchResponse {
+  /**
+   * The search query that was executed
+   * Array of search results
+   */
+  content: SearchResult[];
+  tool_use_id: string;
 }
 
