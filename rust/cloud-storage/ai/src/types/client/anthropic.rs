@@ -1,6 +1,6 @@
 use super::{ExtendedClient, ExtendedOpenAIStreamItem};
 use crate::{
-    tool::types::{StreamPart, ToolCall, ToolResponse},
+    tool::{StreamPart, ToolResponse, types::ToolCall},
     types::AiError,
 };
 use anthropic::openai::{
@@ -12,18 +12,22 @@ use futures::StreamExt;
 #[derive(Clone, Debug)]
 pub struct AnthropicClient {
     inner: anthropic::client::Client,
+    extensions: AnthropicRequestExtensions,
 }
 
 impl AnthropicClient {
-    pub fn new() -> Self {
+    pub fn new(extensions: AnthropicRequestExtensions) -> Self {
         let client = anthropic::client::Client::dangerously_try_from_env();
-        Self { inner: client }
+        Self {
+            inner: client,
+            extensions,
+        }
     }
 }
 
 impl Default for AnthropicClient {
     fn default() -> Self {
-        Self::new()
+        Self::new(AnthropicRequestExtensions(vec![]))
     }
 }
 
@@ -37,45 +41,38 @@ impl From<ExtendedAnthropicStreamItem> for ExtendedOpenAIStreamItem<AnthropicRes
 }
 
 impl ExtendedClient for AnthropicClient {
-    type RequestExtension = AnthropicRequestExtensions;
     type ResponseExtension = AnthropicResponseExtension;
-
     async fn chat_stream(
         &self,
         request: async_openai::types::CreateChatCompletionRequest,
-        extensions: &Self::RequestExtension,
     ) -> anyhow::Result<super::traits::ExtendedOpenAIStream<Self::ResponseExtension>, AiError> {
         Ok(Box::pin(
             self.inner
                 .chat()
-                .create_stream_openai_extended(request, extensions)
+                .create_stream_openai_extended(request, &self.extensions)
                 .await
                 .map(|f| f.map(ExtendedOpenAIStreamItem::from)),
         ))
     }
 
-    // TODO: this is incomplete
-    // The request must be updated to record the call / response to correctly save / load chat
-    // This won't be hit until extensions are enabled in the next pr
-    fn handle_extension_item(
-        &self,
-        _: &mut async_openai::types::CreateChatCompletionRequest,
-        item: Self::ResponseExtension,
-    ) -> Option<crate::tool::types::StreamPart> {
+    fn handle_extension_item(&self, item: Self::ResponseExtension) -> Option<StreamPart> {
         match item {
             AnthropicResponseExtension::Citation(_) => None,
             AnthropicResponseExtension::ServerToolUse(tool_call) => {
                 Some(StreamPart::ToolCall(ToolCall {
                     id: tool_call.id,
-                    json: serde_json::Value::Null,
+                    json: tool_call.input,
                     name: tool_call.name,
                 }))
             }
             AnthropicResponseExtension::WebSearchToolResponse(response) => {
+                let id = response.tool_use_id.clone();
+                let json = serde_json::to_value(&response).ok()?;
+
                 Some(StreamPart::ToolResponse(ToolResponse::Json {
-                    id: "searchington".into(),
-                    json: serde_json::to_value(&response.content).unwrap(),
-                    name: "web-search".into(),
+                    id,
+                    json,
+                    name: "web_search".into(),
                 }))
             }
         }

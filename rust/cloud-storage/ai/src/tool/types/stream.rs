@@ -1,10 +1,18 @@
 use crate::types::{AiError, Usage};
 use futures::stream::Stream;
 use serde::Serialize;
+use std::fmt::Debug;
 use std::pin::Pin;
 
-pub type ChatCompletionStream<'a> =
-    Pin<Box<dyn Stream<Item = Result<StreamPart, AiError>> + Send + 'a>>;
+pub type AiStream<'a, T> = Pin<Box<dyn Stream<Item = Result<T, AiError>> + Send + 'a>>;
+pub type ChatCompletionStream<'a> = AiStream<'a, StreamPart>;
+pub(crate) type ExtendedPartStream<'a, T> = AiStream<'a, PartOrExt<T>>;
+
+#[derive(Debug, Clone)]
+pub(crate) enum PartOrExt<T: Debug> {
+    Part(StreamPart),
+    Ext(T),
+}
 
 #[derive(Debug, Clone)]
 pub enum StreamPart {

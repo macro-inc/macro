@@ -1,4 +1,5 @@
 use super::config::OpenRouterConfig;
+use crate::tool::types::StreamPart;
 use crate::types::client::traits::ExtendedClient;
 use crate::types::{
     AiError, ExtendedOpenAIStream, ExtendedOpenAIStreamItem, Model, ModelWithMetadataAndProvider,
@@ -48,13 +49,11 @@ impl OpenRouterClient {
 
 impl ExtendedClient for OpenRouterClient {
     // not yet implemented
-    type RequestExtension = ();
     type ResponseExtension = ();
 
     async fn chat_stream(
         &self,
         request: CreateChatCompletionRequest,
-        _: &Self::RequestExtension,
     ) -> anyhow::Result<ExtendedOpenAIStream<Self::ResponseExtension>, AiError> {
         let request = self.preprocess_request(request);
         self.inner
@@ -70,11 +69,7 @@ impl ExtendedClient for OpenRouterClient {
     }
 
     // extensions are not yet supported so this will never be called
-    fn handle_extension_item(
-        &self,
-        _: &mut CreateChatCompletionRequest,
-        _: Self::ResponseExtension,
-    ) -> Option<crate::tool::types::StreamPart> {
+    fn handle_extension_item(&self, _: Self::ResponseExtension) -> Option<StreamPart> {
         None
     }
 }

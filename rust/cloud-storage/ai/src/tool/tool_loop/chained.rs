@@ -1,14 +1,3 @@
-/// The chained API is identical to the chat API
-///
-/// This loop doesn't send tool JSON schema to the selected model.
-/// Instead this client sends (name, description) data of each tool,
-/// then gives the primary model a tool to call a tool with
-/// (name, instructions). This tool call is then used to send a single
-/// tool to a secondary model that makes the tool call.
-///
-/// This is done transparently so the calls to the `ChainedTool` are not
-/// persisted to the database or presented to the frontend. This is
-/// intended to be a drop-in replacement for the `Chat` client
 use crate::generate_tool_input_schema;
 use crate::tool::completion::tool_completion;
 use crate::tool::tool_loop::constant::{MAX_RECURSIONS, TOOL_GENERATOR};
@@ -51,6 +40,17 @@ struct ChainedTool {
     pub instructions: String,
 }
 
+// The chained API is identical to the chat API
+///
+/// This loop doesn't send tool JSON schema to the selected model.
+/// Instead this client sends (name, description) data of each tool,
+/// then gives the primary model a tool to call a tool with
+/// (name, instructions). This tool call is then used to send a single
+/// tool to a secondary model that makes the tool call.
+///
+/// This is done transparently so the calls to the `ChainedTool` are not
+/// persisted to the database or presented to the frontend. This is
+/// intended to be a drop-in replacement for the `Chat` client
 impl ChainedTool {
     pub fn as_openai_tool() -> ChatCompletionTool {
         let schema = generate_tool_input_schema!(ChainedTool);
@@ -99,7 +99,6 @@ where
     initial_message_count: usize,
     tool_call_id_name_mapping: HashMap<String, String>, // tool_call_id -> tool_name
     tool_call_count: usize,
-    extensions: I::RequestExtension,
 }
 
 impl<I, T, R> Chained<I, T, R>
@@ -108,12 +107,7 @@ where
     T: Clone + Send + Sync,
     R: Clone + Send + Sync,
 {
-    pub fn new(
-        client: I,
-        toolset: Arc<AsyncToolSet<T, R>>,
-        context: T,
-        extensions: I::RequestExtension,
-    ) -> Chained<I, T, R> {
+    pub fn new(client: I, toolset: Arc<AsyncToolSet<T, R>>, context: T) -> Chained<I, T, R> {
         Self {
             inner: client,
             toolset,
@@ -123,7 +117,6 @@ where
             initial_message_count: 0,
             tool_call_id_name_mapping: HashMap::new(),
             tool_call_count: 0,
-            extensions,
         }
     }
 
@@ -207,7 +200,7 @@ where
                 };
 
                 {
-                    let mut stream = Self::map_stream(&self.inner, stream, &mut self.request);
+                    let mut stream = Self::map_stream(&self.inner, stream);
 
                     // consume stream
                     // accumulate to stream_parts
@@ -359,7 +352,6 @@ where
     fn map_stream<'a>(
         client: &'a I,
         mut stream: ExtendedOpenAIStream<I::ResponseExtension>,
-        request: &'a mut CreateChatCompletionRequest,
     ) -> ChatCompletionStream<'a> {
         Box::pin(stream!({
             let mut tool_calls: HashMap<u32, PartialToolCall> = HashMap::new();
@@ -421,7 +413,7 @@ where
                     }
                     Ok(ExtendedOpenAIStreamItem::Extension(ext)) => {
                         // Handle provider-specific extension items (Anthropic server tools)
-                        if let Some(stream_part) = client.handle_extension_item(request, ext) {
+                        if let Some(stream_part) = client.handle_extension_item(ext) {
                             yield Ok(stream_part);
                         }
                     }
@@ -444,8 +436,6 @@ where
 
         tracing::trace!("{:#?}", self.request);
 
-        self.inner
-            .chat_stream(self.request.clone(), &self.extensions)
-            .await
+        self.inner.chat_stream(self.request.clone()).await
     }
 }

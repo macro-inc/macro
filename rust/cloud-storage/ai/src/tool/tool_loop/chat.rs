@@ -1,7 +1,6 @@
 use super::constant::MAX_RECURSIONS;
 use crate::tool::types::{AsyncToolSet, PartialToolCall, StreamPart, ToolCall, ToolResult};
-use crate::tool::types::{ChatCompletionStream, ToolResponse};
-
+use crate::tool::types::{ChatCompletionStream, ExtendedPartStream, PartOrExt, ToolResponse};
 use crate::types::openai::message::convert_message;
 use crate::types::traits::{ExtendedOpenAIStream, ExtendedOpenAIStreamItem};
 use crate::types::{ChatCompletionRequest, ChatMessage, ChatMessages};
@@ -28,7 +27,7 @@ where
     T: Clone + Send + Sync + 'static,
     R: Send + Sync + 'static,
 {
-    inner: I,
+    client: I,
     toolset: Arc<AsyncToolSet<T, R>>,
     request: CreateChatCompletionRequest,
     messages: Vec<ChatCompletionRequestMessage>,
@@ -36,7 +35,6 @@ where
     initial_message_count: usize,
     tool_call_id_name_mapping: HashMap<String, String>, // tool_call_id -> tool_name
     user_id: String,
-    extensions: I::RequestExtension,
 }
 
 impl<I, T, R> Chat<I, T, R>
@@ -45,14 +43,9 @@ where
     T: Clone + Send + Sync,
     R: Clone + Send + Sync,
 {
-    pub fn new(
-        client: I,
-        toolset: Arc<AsyncToolSet<T, R>>,
-        context: T,
-        extensions: I::RequestExtension,
-    ) -> Chat<I, T, R> {
+    pub fn new(client: I, toolset: Arc<AsyncToolSet<T, R>>, context: T) -> Chat<I, T, R> {
         Chat {
-            inner: client,
+            client,
             toolset,
             messages: vec![],
             context,
@@ -60,7 +53,6 @@ where
             initial_message_count: 0,
             tool_call_id_name_mapping: HashMap::new(),
             user_id: "Uninitialized".into(),
-            extensions,
         }
     }
 
@@ -103,19 +95,29 @@ where
                         break;
                     }
                 };
-
                 {
-                    let mut stream = Self::map_stream(&self.inner, stream, &mut self.request);
+                    let mut stream = Self::map_stream(stream);
                     // consume stream
                     // accumulate to stream_parts
                     while let Some(item) = stream.next().await {
-                        if item.is_err() {
-                            yield item;
+                        if let Err(e) = item {
+                            yield Err(e);
                             break;
                         }
-                        let stream_part = item.unwrap();
-                        yield Ok(stream_part.clone());
-                        stream_parts.push(stream_part);
+
+                        let part_or_ext = item.unwrap();
+                        match part_or_ext {
+                            ref part @ PartOrExt::Part(ref p) => {
+                                yield Ok(p.to_owned());
+                                stream_parts.push(part.to_owned());
+                            }
+                            ref part @ PartOrExt::Ext(ref e) => {
+                                if let Some(p) = self.client.handle_extension_item(e.to_owned()) {
+                                    yield Ok(p);
+                                }
+                                stream_parts.push(part.to_owned());
+                            }
+                        }
                     }
                 }
                 // call tools, aggregate response to a new request
@@ -140,71 +142,112 @@ where
 
     async fn process_stream_parts(
         &mut self,
-        stream_parts: Vec<StreamPart>,
+        stream_parts: Vec<PartOrExt<I::ResponseExtension>>,
         request_context: R,
     ) -> ProcessedStream {
         // list of all tool calls
         let mut tool_calls = vec![];
         // list of all tool responses as openai items
         let mut tool_responses = vec![];
+        // list of tool responses as openai items that are not returned / yielded
+        let mut non_yielding_responses = vec![];
         // aggregated response string
         let mut response = String::new();
         // list of tool responses as stream parts (send these to frontend)
         let mut tool_stream_parts = vec![];
         for item in stream_parts {
             match item {
-                StreamPart::ToolCall(call) => {
-                    // Store the tool call ID -> name mapping for later use in message conversion
-                    self.tool_call_id_name_mapping
-                        .insert(call.id.clone(), call.name.clone());
-
-                    match self
-                        .toolset
-                        .try_tool_call(
-                            self.context.clone(),
-                            request_context.clone(),
-                            &call.name,
-                            &call.json,
-                        )
-                        .await
-                    {
-                        Ok(response) => {
-                            tool_calls.push(ChatCompletionMessageToolCall {
-                                id: call.id.clone(),
-                                r#type: async_openai::types::ChatCompletionToolType::Function,
-                                function: FunctionCall {
-                                    arguments: call.json.to_string(),
-                                    name: call.name.clone(),
-                                },
-                            });
-                            if let ToolResult::Ok(tool_output) = response {
-                                let content_text = serde_json::to_string_pretty(&tool_output)
-                                    .unwrap_or_else(|_| {
-                                        "internal error formatting response".to_string()
-                                    });
-                                tool_stream_parts.push(ToolResponse::Json {
+                PartOrExt::Ext(ext) => {
+                    if let Some(item) = self.client.handle_extension_item(ext) {
+                        match item {
+                            StreamPart::ToolCall(call) => {
+                                // Store the tool call ID -> name mapping for later use in message conversion
+                                self.tool_call_id_name_mapping
+                                    .insert(call.id.clone(), call.name.clone());
+                                tool_calls.push(ChatCompletionMessageToolCall {
                                     id: call.id.clone(),
-                                    json: tool_output,
-                                    name: call.name.clone(),
+                                    r#type: async_openai::types::ChatCompletionToolType::Function,
+                                    function: FunctionCall {
+                                        arguments: call.json.to_string(),
+                                        name: call.name.clone(),
+                                    },
                                 });
-                                let content =
+                            }
+                            StreamPart::Content(text) => response.push_str(text.as_str()),
+                            StreamPart::Usage { .. } => (),
+                            StreamPart::ToolResponse(response) => {
+                                if let ToolResponse::Json { id, json, .. } = response {
+                                    let content_text = serde_json::to_string_pretty(&json)
+                                        .unwrap_or_else(|_| "internal error parsing".into());
+                                    let content = async_openai::types::ChatCompletionRequestToolMessageContent::Text(
+                                                       content_text,
+                                                   );
+                                    non_yielding_responses.push(
+                                        ChatCompletionRequestMessage::Tool(
+                                            ChatCompletionRequestToolMessage {
+                                                content,
+                                                tool_call_id: id,
+                                            },
+                                        ),
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+                PartOrExt::Part(part) => match part {
+                    StreamPart::ToolCall(call) => {
+                        // Store the tool call ID -> name mapping for later use in message conversion
+                        self.tool_call_id_name_mapping
+                            .insert(call.id.clone(), call.name.clone());
+
+                        match self
+                            .toolset
+                            .try_tool_call(
+                                self.context.clone(),
+                                request_context.clone(),
+                                &call.name,
+                                &call.json,
+                            )
+                            .await
+                        {
+                            Ok(response) => {
+                                tool_calls.push(ChatCompletionMessageToolCall {
+                                    id: call.id.clone(),
+                                    r#type: async_openai::types::ChatCompletionToolType::Function,
+                                    function: FunctionCall {
+                                        arguments: call.json.to_string(),
+                                        name: call.name.clone(),
+                                    },
+                                });
+                                if let ToolResult::Ok(tool_output) = response {
+                                    let content_text = serde_json::to_string_pretty(&tool_output)
+                                        .unwrap_or_else(|_| {
+                                            "internal error formatting response".to_string()
+                                        });
+                                    tool_stream_parts.push(ToolResponse::Json {
+                                        id: call.id.clone(),
+                                        json: tool_output,
+                                        name: call.name.clone(),
+                                    });
+                                    let content =
                                     async_openai::types::ChatCompletionRequestToolMessageContent::Text(
                                         content_text,
                                     );
-                                tool_responses.push(ChatCompletionRequestMessage::Tool(
-                                    ChatCompletionRequestToolMessage {
-                                        content,
-                                        tool_call_id: call.id,
-                                    },
-                                ));
-                            } else {
-                                let fail = response.unwrap_err();
-                                tool_stream_parts.push(ToolResponse::Err {
-                                    id: call.id.clone(),
-                                    description: fail.description.clone(),
-                                    name: call.name.clone(),
-                                });
-                                tool_responses.push(ChatCompletionRequestMessage::Tool(
+                                    tool_responses.push(ChatCompletionRequestMessage::Tool(
+                                        ChatCompletionRequestToolMessage {
+                                            content,
+                                            tool_call_id: call.id,
+                                        },
+                                    ));
+                                } else {
+                                    let fail = response.unwrap_err();
+                                    tool_stream_parts.push(ToolResponse::Err {
+                                        id: call.id.clone(),
+                                        description: fail.description.clone(),
+                                        name: call.name.clone(),
+                                    });
+                                    tool_responses.push(ChatCompletionRequestMessage::Tool(
                                     ChatCompletionRequestToolMessage {
                                       content: async_openai::types::ChatCompletionRequestToolMessageContent::Text(
                                           fail.description
@@ -212,27 +255,27 @@ where
                                       tool_call_id: call.id
                                     },
                                 ));
+                                }
                             }
-                        }
-                        Err(err) => {
-                            tracing::error!(error=?err, "error calling tool");
-                            // Still add the tool call so the LLM knows we tried
-                            tool_calls.push(ChatCompletionMessageToolCall {
-                                id: call.id.clone(),
-                                r#type: async_openai::types::ChatCompletionToolType::Function,
-                                function: FunctionCall {
-                                    arguments: call.json.to_string(),
+                            Err(err) => {
+                                tracing::error!(error=?err, "error calling tool");
+                                // Still add the tool call so the LLM knows we tried
+                                tool_calls.push(ChatCompletionMessageToolCall {
+                                    id: call.id.clone(),
+                                    r#type: async_openai::types::ChatCompletionToolType::Function,
+                                    function: FunctionCall {
+                                        arguments: call.json.to_string(),
+                                        name: call.name.clone(),
+                                    },
+                                });
+                                // Send error response to both frontend and LLM
+                                let error_description = format!("Error calling tool: {}", err);
+                                tool_stream_parts.push(ToolResponse::Err {
+                                    id: call.id.clone(),
+                                    description: error_description.clone(),
                                     name: call.name.clone(),
-                                },
-                            });
-                            // Send error response to both frontend and LLM
-                            let error_description = format!("Error calling tool: {}", err);
-                            tool_stream_parts.push(ToolResponse::Err {
-                                id: call.id.clone(),
-                                description: error_description.clone(),
-                                name: call.name.clone(),
-                            });
-                            tool_responses.push(ChatCompletionRequestMessage::Tool(
+                                });
+                                tool_responses.push(ChatCompletionRequestMessage::Tool(
                                 ChatCompletionRequestToolMessage {
                                     content: async_openai::types::ChatCompletionRequestToolMessageContent::Text(
                                         error_description
@@ -240,13 +283,14 @@ where
                                     tool_call_id: call.id
                                 },
                             ));
+                            }
                         }
                     }
-                }
-                StreamPart::Content(text) => response.push_str(text.as_str()),
-                StreamPart::Usage { .. } => (),
-                StreamPart::ToolResponse(_) => (),
-            };
+                    StreamPart::Content(text) => response.push_str(text.as_str()),
+                    StreamPart::Usage { .. } => (),
+                    StreamPart::ToolResponse(_) => (),
+                },
+            }
         }
 
         let assistant_response =
@@ -265,6 +309,7 @@ where
             });
         let mut messages = vec![assistant_response];
         messages.append(&mut tool_responses);
+        messages.append(&mut non_yielding_responses);
         ProcessedStream {
             new_messages: messages,
             tool_responses: tool_stream_parts,
@@ -272,17 +317,15 @@ where
     }
 
     fn map_stream<'a>(
-        client: &'a I,
         mut stream: ExtendedOpenAIStream<I::ResponseExtension>,
-        request: &'a mut CreateChatCompletionRequest,
-    ) -> ChatCompletionStream<'a> {
-        Box::pin(stream!({
+    ) -> ExtendedPartStream<'a, I::ResponseExtension> {
+        let stream = stream!({
             let mut tool_calls: HashMap<u32, PartialToolCall> = HashMap::new();
             while let Some(item) = stream.next().await {
                 match item {
                     Ok(ExtendedOpenAIStreamItem::Response(part)) => {
                         if let Some(usage) = &part.usage {
-                            yield Ok(StreamPart::Usage(usage.clone().into()))
+                            yield Ok(PartOrExt::Part(StreamPart::Usage(usage.clone().into())))
                         }
                         let first = part.choices.first();
                         if first.is_none() {
@@ -290,7 +333,7 @@ where
                         }
                         let first = first.unwrap();
                         if let Some(content) = &first.delta.content {
-                            yield Ok(StreamPart::Content(content.clone()));
+                            yield Ok(PartOrExt::Part(StreamPart::Content(content.clone())));
                         }
 
                         if let Some(calls) = &first.delta.tool_calls {
@@ -328,7 +371,9 @@ where
                         if let Some(FinishReason::ToolCalls) = first.finish_reason {
                             for call in tool_calls.into_values() {
                                 if let Ok(call) = ToolCall::try_from(call) {
-                                    yield Ok(StreamPart::ToolCall(call));
+                                    yield Ok(PartOrExt::Part(StreamPart::ToolCall(call)));
+                                } else {
+                                    panic!("Failed to try from")
                                 }
                             }
                             tool_calls = HashMap::new();
@@ -336,14 +381,13 @@ where
                     }
                     Ok(ExtendedOpenAIStreamItem::Extension(ext)) => {
                         // Handle provider-specific extension items (Anthropic server tools)
-                        if let Some(stream_part) = client.handle_extension_item(request, ext) {
-                            yield Ok(stream_part);
-                        }
+                        yield Ok(PartOrExt::Ext(ext));
                     }
                     Err(error) => yield Err(error.into()),
                 }
             }
-        }))
+        });
+        Box::pin(stream)
     }
 
     async fn make_openai_chat_completion_stream(
@@ -356,9 +400,7 @@ where
             include_usage: true,
         });
 
-        self.inner
-            .chat_stream(self.request.clone(), &self.extensions)
-            .await
+        self.client.chat_stream(self.request.clone()).await
     }
 }
 
@@ -378,7 +420,7 @@ mod tests {
     fn create_mock_chat() -> Chat<NoOpClient, String, String> {
         let client = NoOpClient;
         let toolset = Arc::new(AsyncToolSet::new());
-        Chat::new(client, toolset, "test_context".to_string(), ())
+        Chat::new(client, toolset, "test_context".to_string())
     }
 
     #[test]

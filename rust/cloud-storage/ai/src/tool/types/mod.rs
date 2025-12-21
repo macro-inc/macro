@@ -1,6 +1,7 @@
+pub mod schema;
 mod stream;
-pub mod tool;
-pub mod toolset;
+mod tool;
+mod toolset;
 
 pub use stream::*;
 pub use tool::*;

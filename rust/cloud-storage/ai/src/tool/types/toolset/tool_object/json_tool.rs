@@ -1,4 +1,5 @@
-use crate::tool::{AsyncTool, Tool, ToolCallError, ToolResult};
+use crate::tool::types::ToolCallError;
+use crate::tool::{AsyncTool, Tool, ToolResult};
 
 pub struct JsonTool<Sc, Rc, O>(Box<dyn Tool<Sc, Rc, Output = O>>);
 

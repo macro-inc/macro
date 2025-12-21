@@ -1,13 +1,15 @@
-use crate::tool::types::StreamPart;
+use crate::tool::StreamPart;
 use crate::types::AiError;
 use anyhow::Result;
 use async_openai::error::OpenAIError;
 use async_openai::types::{CreateChatCompletionRequest, CreateChatCompletionStreamResponse};
 use futures::Stream;
+use std::fmt::Debug;
 use std::future::Future;
 use std::pin::Pin;
 
-pub enum ExtendedOpenAIStreamItem<T: Send> {
+#[derive(Debug, Clone)]
+pub enum ExtendedOpenAIStreamItem<T: Send + Debug> {
     /// A standard OpenAI compatible item
     Response(CreateChatCompletionStreamResponse),
     /// A client-defined item
@@ -20,17 +22,11 @@ pub type ExtendedOpenAIStream<T> =
 /// A client that is openai compatible may implement this trait.
 /// Extension items may be used to support non-openai compatible featuture (ie server tools)
 pub trait ExtendedClient {
-    type RequestExtension: Send;
-    type ResponseExtension: Send;
+    type ResponseExtension: Send + Sync + Clone + Debug + 'static;
     fn chat_stream(
         &self,
         request: CreateChatCompletionRequest,
-        extensions: &Self::RequestExtension,
     ) -> impl Future<Output = Result<ExtendedOpenAIStream<Self::ResponseExtension>, AiError>> + Send;
 
-    fn handle_extension_item(
-        &self,
-        request: &mut CreateChatCompletionRequest,
-        item: Self::ResponseExtension,
-    ) -> Option<StreamPart>;
+    fn handle_extension_item<'a>(&self, item: Self::ResponseExtension) -> Option<StreamPart>;
 }
