@@ -9,25 +9,25 @@ use std::marker::PhantomData;
 pub struct PhantomTool<I: Clone + Debug, O: Clone + Debug> {
     i: PhantomData<I>,
     o: PhantomData<O>,
-    pub name: String,
+    pub name: &'static str,
 }
 
 impl<I: Clone + Debug, O: Clone + Debug> PhantomTool<I, O> {
-    pub fn new(name: &str) -> Self {
+    pub fn new(name: &'static str) -> Self {
         PhantomTool {
             i: PhantomData,
             o: PhantomData,
-            name: name.into(),
+            name,
         }
     }
 }
 
 impl PhantomTool<(), ()> {
-    pub fn builder(name: &str) -> Self {
+    pub fn builder(name: &'static str) -> Self {
         PhantomTool {
             i: PhantomData,
             o: PhantomData,
-            name: name.into(),
+            name,
         }
     }
 }
@@ -70,7 +70,7 @@ where
         let output_schema_json = serde_json::to_value(&output_schema).expect("output schema");
         ToolSchemas {
             schemas: vec![ToolSchema {
-                name: self.name.clone(),
+                name: self.name.to_owned(),
                 input_schema: input_schema_json,
                 output_schema: output_schema_json,
             }],
