@@ -10,7 +10,6 @@ import { serializedStateFromBlob } from '@core/component/LexicalMarkdown/collabo
 import { ENABLE_MARKDOWN_LIVE_COLLABORATION } from '@core/constant/featureFlags';
 import { isErr, ok } from '@core/util/maybeResult';
 import { type SchemaType, schema } from '@loro-mirror/packages/core/src';
-import type { MarkdownRewriteOutput } from '@service-cognition/generated/tools/types';
 import { storageServiceClient } from '@service-storage/client';
 import { fetchBinary } from '@service-storage/util/fetchBinary';
 import { makeFileFromBlob } from '@service-storage/util/makeFileFromBlob';
@@ -19,6 +18,7 @@ import { createSyncServiceSource } from '@service-sync/source';
 import { untrack } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import MarkdownBlock from './component/Block';
+import type { MarkdownRewriteOutput } from './signal/rewriteSignal';
 
 const nodeSchema = schema.LoroMap({
   $: schema.LoroMap({} as any, {

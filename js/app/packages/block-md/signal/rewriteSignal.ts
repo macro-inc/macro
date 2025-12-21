@@ -1,5 +1,10 @@
 import { createBlockSignal } from '@core/block';
-import type { MarkdownRewriteOutput } from '@service-cognition/generated/tools/types';
+import type { NamedTool } from '@service-cognition/generated/tools/tool';
+
+export type MarkdownRewriteOutput = NamedTool<
+  'MarkdownRewrite',
+  'response'
+>['data'];
 
 export const rewriteSignal = createBlockSignal<boolean>(false);
 export const isRewritingSignal = createBlockSignal<boolean>(false);

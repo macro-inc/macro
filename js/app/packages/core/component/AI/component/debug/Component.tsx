@@ -276,7 +276,7 @@ function ToolCallResponseRender() {
         {
           type: 'toolCall',
           tool: {
-            name: 'WebSearch',
+            name: 'web_search',
             data: {
               query: 'most important headlines today',
             },
@@ -285,10 +285,16 @@ function ToolCallResponseRender() {
         {
           type: 'toolResponse',
           tool: {
-            name: 'WebSearch',
+            name: 'web_search',
             data: {
-              results: [{ name: 'news.com', url: 'www.news.com' }],
-              content: 'I read the results and there is news!!!',
+              content: [
+                {
+                  type: 'web_search_result',
+                  title: 'news.com',
+                  url: 'www.news.com',
+                },
+              ],
+              tool_use_id: 'I read the results and there is news!!!',
             },
           },
         },

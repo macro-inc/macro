@@ -4,7 +4,7 @@ import { BaseTool } from './BaseTool';
 import { createToolRenderer } from './ToolRenderer';
 
 const handler = createToolRenderer({
-  name: 'WebSearch',
+  name: 'web_search',
   renderCall: (ctx) => (
     <BaseTool
       icon={Globe}
@@ -23,8 +23,8 @@ const handler = createToolRenderer({
       type="response"
     >
       <UnfurledLinkCollection
-        links={ctx.tool.data.results.map((result) => ({
-          title: result.name,
+        links={ctx.tool.data.content.map((result) => ({
+          title: result.title,
           url: result.url,
         }))}
       />

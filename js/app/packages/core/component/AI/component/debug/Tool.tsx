@@ -25,7 +25,7 @@ function ToolCall() {
     {
       type: 'toolCall',
       tool: {
-        name: 'WebSearch',
+        name: 'web_search',
         data: {
           query: 'Weather in nyc now',
         },
@@ -48,7 +48,7 @@ function ToolResponse() {
     {
       type: 'toolCall',
       tool: {
-        name: 'WebSearch',
+        name: 'web_search',
         data: {
           query: 'Weather in nyc now',
         },
@@ -58,15 +58,16 @@ function ToolResponse() {
       type: 'toolResponse',
       tool: {
         data: {
-          content: 'it is sunny',
-          results: [
+          tool_use_id: 'hehexd',
+          content: [
             {
-              name: 'weather.com',
+              title: 'its sunny',
+              type: 'web_search_result',
               url: 'https://weather.com',
             },
           ],
         },
-        name: 'WebSearch',
+        name: 'web_search',
       },
     },
     {
@@ -90,7 +91,7 @@ function ToolResponsStreamEnd() {
     {
       type: 'toolCall',
       tool: {
-        name: 'WebSearch',
+        name: 'web_search',
         data: {
           query: 'Weather in nyc now',
         },
@@ -100,15 +101,16 @@ function ToolResponsStreamEnd() {
       type: 'toolResponse',
       tool: {
         data: {
-          content: 'it is sunny',
-          results: [
+          tool_use_id: 'hehexd',
+          content: [
             {
-              name: 'weather.com',
+              title: 'its sunny',
+              type: 'web_search_result',
               url: 'https://weather.com',
             },
           ],
         },
-        name: 'WebSearch',
+        name: 'web_search',
       },
     },
     {

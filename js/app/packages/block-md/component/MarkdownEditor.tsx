@@ -139,7 +139,6 @@ import {
   type PeerIdValidator,
   peerIdPlugin,
 } from '@lexical-core';
-import type { MarkdownRewriteOutput } from '@service-cognition/generated/tools/types';
 import { waitBulkUploadStatus } from '@service-connection/bulkUpload';
 import { fileExtension } from '@service-storage/util/filename';
 import { createCallback } from '@solid-primitives/rootless';
@@ -159,7 +158,6 @@ import {
   $isElementNode,
   type EditorState,
 } from 'lexical';
-
 import {
   type Accessor,
   createEffect,
@@ -179,6 +177,7 @@ import {
   isGeneratingSignal,
 } from '../signal/generateSignal';
 import { blockDataSignal, mdStore } from '../signal/markdownBlockData';
+import type { MarkdownRewriteOutput } from '../signal/rewriteSignal';
 import { useBlockSave, useSaveMarkdownDocument } from '../signal/save';
 import { MarkdownCollabProvider } from './MarkdownCollabProvider';
 import { MarkdownPopup } from './MarkdownPopup';
