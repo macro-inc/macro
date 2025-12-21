@@ -231,7 +231,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   } = unifiedListContext;
 
   // Properties for task entities
-  const [taskPropertiesStore] = useTaskProperties(_entities);
+  const [taskPropertiesStore] = useTaskProperties(entities_);
 
   const view = createMemo(() => viewsData[selectedView()]);
   const selectedEntity = createMemo(() => view()?.selectedEntity);
