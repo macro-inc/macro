@@ -132,7 +132,6 @@ pub async fn stream_chat_response(
     let mut usage_reqs = vec![];
     let mut is_first_token = false;
     while let Some(response) = stream.next().await {
-        tracing::info!("{:#?}", response);
         tracing::trace!("{:#?}", response);
         if !is_first_token {
             is_first_token = true;
