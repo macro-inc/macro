@@ -22,7 +22,6 @@ import {
 } from '@block-md/comments/commentStore';
 import { useDownloadDocumentAsMarkdownText } from '@block-md/signal/save';
 import { useBlockId, useBlockName } from '@core/block';
-import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import { NotificationsModal } from '@core/component/NotificationsModal';
 import { ReferencesModal } from '@core/component/ReferencesModal';
@@ -39,6 +38,7 @@ import ShowComments from '@icon/regular/chat-circle-dots.svg';
 import HideComments from '@icon/regular/chat-circle-slash.svg';
 import Download from '@icon/regular/download.svg';
 import { blockNameToItemType } from '@service-storage/client';
+import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
 import { Show } from 'solid-js';
 import { HistoryModal } from './History';
 import { MarkdownPropertiesModal } from './MarkdownPropertiesModal';

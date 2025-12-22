@@ -15,12 +15,12 @@ import {
   useContext,
 } from 'solid-js';
 import { BozzyBracket } from './BozzyBracket';
+import { DeprecatedIconButton } from './DeprecatedIconButton';
 import {
   CustomEntityIcon,
   EntityIcon,
   type EntityWithValidIcon,
 } from './EntityIcon';
-import { DeprecatedIconButton } from './DeprecatedIconButton';
 import { UserIcon } from './UserIcon';
 
 false && observedSize;

@@ -10,7 +10,6 @@ import {
   MenuItemRenameTrigger,
   MenuSeparator,
 } from '@core/component/Menu';
-import { DeprecatedEditingTextButton, DeprecatedTextButton } from 'core/component/DeprecatedTextButton';
 import { BarContext } from '@core/component/TopBar/Bar';
 import { setCachedInputStore } from '@core/store/cacheChatInput';
 import { isErr } from '@core/util/maybeResult';
@@ -37,6 +36,10 @@ import { refetchResources } from '@service-storage/util/refetchResources';
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
 import { useSplitPanelOrThrow } from 'app/component/split-layout/layoutUtils';
+import {
+  DeprecatedEditingTextButton,
+  DeprecatedTextButton,
+} from 'core/component/DeprecatedTextButton';
 import { toast } from 'core/component/Toast/Toast';
 import { createMemo, createSignal, Show, useContext } from 'solid-js';
 

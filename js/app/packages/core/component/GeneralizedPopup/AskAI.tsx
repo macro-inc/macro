@@ -25,13 +25,13 @@ import {
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { CircleSpinner } from '../CircleSpinner';
+import { DeprecatedTextButton } from '../DeprecatedTextButton';
 import {
   DropdownMenuContent,
   MenuItem,
   MenuSeparator,
   SubTrigger,
 } from '../Menu';
-import { DeprecatedTextButton } from '../DeprecatedTextButton';
 
 const SUPPORTED_LANGUAGES = [
   'English',

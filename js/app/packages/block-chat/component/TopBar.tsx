@@ -13,7 +13,6 @@ import {
 } from '@app/component/split-layout/components/SplitToolbar';
 import { DEFAULT_CHAT_NAME } from '@block-chat/definition';
 import { useBlockId } from '@core/block';
-import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
 import { ReferencesModal } from '@core/component/ReferencesModal';
 import { ShareButton } from '@core/component/TopBar/ShareButton';
 import { useGetPermissions } from '@core/signal/permissions';
@@ -22,6 +21,7 @@ import Notepad from '@icon/regular/notepad.svg';
 import { createCognitionWebsocketEffect } from '@service-cognition/websocket';
 import { refetchHistory } from '@service-storage/history';
 import { useOpenInstructionsMd } from 'core/component/AI/util/instructions';
+import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
 import { onCleanup, onMount } from 'solid-js';
 
 export function TopBar() {

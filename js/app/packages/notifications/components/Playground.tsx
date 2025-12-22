@@ -1,8 +1,8 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useChannelMarkdownArea } from '@block-channel/component/MarkdownArea';
 import { NotificationRenderer } from '@core/component/NotificationRenderer';
-import { DeprecatedTextButton } from 'core/component/DeprecatedTextButton';
 import { formatDate } from '@core/util/date';
+import { DeprecatedTextButton } from 'core/component/DeprecatedTextButton';
 import {
   type Component,
   createEffect,

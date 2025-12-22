@@ -27,7 +27,6 @@ import {
   REMOVE_HIGHLIGHT_SELECTED_NODES,
 } from '@core/component/LexicalMarkdown/plugins/popup/popupPlugin';
 import { ScopedPortal } from '@core/component/ScopedPortal';
-import { DeprecatedTextButton } from 'core/component/DeprecatedTextButton';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { blockElementSignal } from '@core/signal/blockElement';
@@ -47,6 +46,7 @@ import LinkIcon from '@phosphor-icons/core/regular/link.svg?component-solid';
 import PencilIcon from '@phosphor-icons/core/regular/pencil.svg?component-solid';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import { createCallback } from '@solid-primitives/rootless';
+import { DeprecatedTextButton } from 'core/component/DeprecatedTextButton';
 import {
   $getLocationUrl,
   $getSelectionLocation,

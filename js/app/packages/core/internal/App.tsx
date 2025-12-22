@@ -9,10 +9,10 @@ import Subtract from '@phosphor-icons/core/regular/subtract.svg?component-solid'
 import TrashSimple from '@phosphor-icons/core/regular/trash-simple.svg?component-solid';
 import { type Component, createSignal, For, Index } from 'solid-js';
 import { DeprecatedIconButton } from '../component/DeprecatedIconButton';
+import { DeprecatedTextButton } from '../component/DeprecatedTextButton';
 import { ItemPreview } from '../component/ItemPreview';
 import { DropdownMenuContent, MenuItem } from '../component/Menu';
 import { Permissions } from '../component/SharePermissions';
-import { DeprecatedTextButton } from '../component/DeprecatedTextButton';
 import { Bar } from '../component/TopBar/Bar';
 import { Center } from '../component/TopBar/Center';
 
@@ -113,13 +113,20 @@ const App: Component = () => {
       </div>
       <div class="flex flex-row flex-wrap justify-center gap-4">
         <Index each={ThemesWithSeparator}>
-          {(theme) => <DeprecatedIconButton theme={theme()} icon={Acorn} showChevron />}
+          {(theme) => (
+            <DeprecatedIconButton theme={theme()} icon={Acorn} showChevron />
+          )}
         </Index>
       </div>
       <div class="flex flex-row flex-wrap justify-center gap-4">
         <Index each={ThemesWithSeparator}>
           {(theme) => (
-            <DeprecatedIconButton theme={theme()} icon={Acorn} showChevron border />
+            <DeprecatedIconButton
+              theme={theme()}
+              icon={Acorn}
+              showChevron
+              border
+            />
           )}
         </Index>
       </div>

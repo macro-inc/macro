@@ -18,7 +18,6 @@ import {
   getChatInputStoredState,
   storeChatState,
 } from '@core/component/AI/util/storage';
-import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { ReferencesModal } from '@core/component/ReferencesModal';
 import { Resize } from '@core/component/Resize';
@@ -50,6 +49,7 @@ import {
 import { createCognitionWebsocketEffect } from '@service-cognition/websocket';
 import { refetchHistory, useHistory } from '@service-storage/history';
 import { useOpenInstructionsMd } from 'core/component/AI/util/instructions';
+import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
 import type { LexicalEditor } from 'lexical';
 import {
   type Accessor,

@@ -35,7 +35,6 @@ import {
 } from '@core/component/LexicalMarkdown/utils';
 import { getDestinationFromOptions } from '@core/component/NewMessage';
 import { RecipientSelector } from '@core/component/RecipientSelector';
-import { DeprecatedTextButton } from 'core/component/DeprecatedTextButton';
 import { toast } from '@core/component/Toast/Toast';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import { IS_MAC } from '@core/constant/isMac';
@@ -65,6 +64,7 @@ import { useEmailLinksQuery } from '@queries/email/link';
 import type { SimpleMention } from '@service-comms/generated/models/simpleMention';
 import { emailClient } from '@service-email/client';
 import type { MessageToSend } from '@service-email/generated/schemas/messageToSend';
+import { DeprecatedTextButton } from 'core/component/DeprecatedTextButton';
 import { normalizeEnterPlugin } from 'core/component/LexicalMarkdown/plugins/normalize-enter';
 import {
   $getRoot,
@@ -717,7 +717,11 @@ export function QuickCreateMenuInner(props: QuickCreateMenuProps) {
           <span>to create & open</span>
         </div>
         <div class="flex w-32 justify-between font-mono">
-          <Dialog.CloseButton as={DeprecatedTextButton} text="Cancel" theme="clear" />
+          <Dialog.CloseButton
+            as={DeprecatedTextButton}
+            text="Cancel"
+            theme="clear"
+          />
           <DeprecatedTextButton
             text={selectedType() === 'note' ? 'CREATE' : 'SEND'}
             theme="accentFill"

@@ -6,8 +6,6 @@ import { structuredOutputCompletion } from '@core/client/structuredOutput';
 import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMessageMarkdown';
 import { AskAi } from '@core/component/GeneralizedPopup/AskAI';
 import { GeneralizedPopup } from '@core/component/GeneralizedPopup/Popup';
-import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
-import { DeprecatedTextButton } from 'core/component/DeprecatedTextButton';
 import { blockElementSignal } from '@core/signal/blockElement';
 import { blockMetadataSignal } from '@core/signal/load';
 import { createFromMarkdownText } from '@core/util/md';
@@ -20,6 +18,8 @@ import PasteIcon from '@phosphor-icons/core/regular/clipboard-text.svg?component
 import LinkIcon from '@phosphor-icons/core/regular/link.svg?component-solid';
 import TrashIcon from '@phosphor-icons/core/regular/trash.svg?component-solid';
 import { createCallback } from '@solid-primitives/rootless';
+import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
+import { DeprecatedTextButton } from 'core/component/DeprecatedTextButton';
 import {
   createEffect,
   createMemo,

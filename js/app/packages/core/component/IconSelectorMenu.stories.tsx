@@ -2,8 +2,8 @@ import type { Component } from 'solid-js';
 import { createSignal } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import type { Meta, StoryObj } from 'storybook-solidjs-vite';
-import { IconSelectorMenu } from './IconSelectorMenu';
 import { DeprecatedTextButton } from './DeprecatedTextButton';
+import { IconSelectorMenu } from './IconSelectorMenu';
 
 const meta = {
   title: 'IconSelectorMenu',

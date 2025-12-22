@@ -23,12 +23,12 @@ import {
 import { Match, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { useSplitLayout } from '../../app/component/split-layout/layout';
+import { DeprecatedTextButton } from './DeprecatedTextButton';
 import {
   ENTITY_ICON_CONFIGS,
   EntityIcon,
   ICON_SIZE_CLASSES,
 } from './EntityIcon';
-import { DeprecatedTextButton } from './DeprecatedTextButton';
 
 type ItemPreviewProps = {
   itemId: string;

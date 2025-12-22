@@ -5,12 +5,10 @@ import { useHasPaidAccess } from '@core/auth';
 import { useBlockId } from '@core/block';
 import { BrightJoins } from '@core/component/BrightJoins';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
-import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import type { UserMentionRecord } from '@core/component/LexicalMarkdown/component/menu/MentionsMenu';
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { RecipientSelector } from '@core/component/RecipientSelector';
-import { DeprecatedTextButton } from 'core/component/DeprecatedTextButton';
 import { toast } from '@core/component/Toast/Toast';
 import { Tooltip } from '@core/component/Tooltip';
 import { fileDrop } from '@core/directive/fileDrop';
@@ -46,6 +44,8 @@ import type {
 import { useEmail, useUserId } from '@service-gql/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import type { Item } from '@service-storage/generated/schemas/item';
+import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
+import { DeprecatedTextButton } from 'core/component/DeprecatedTextButton';
 import {
   defaultSelectionData,
   lazyRegister,

@@ -5,8 +5,8 @@
 
 import { isInBlock, useIsNestedBlock } from '@core/block';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
-import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
+import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_SVG_PREVIEW } from '@core/constant/featureFlags';
 import Braces from '@icon/regular/brackets-curly.svg';

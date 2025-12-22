@@ -7,7 +7,6 @@ import {
   type GroupingConfig,
   getDocumentHistory,
 } from '@core/collab/time-travel';
-import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
 import {
   createLexicalWrapper,
   type LexicalWrapper,
@@ -20,7 +19,6 @@ import {
   tablePlugin,
 } from '@core/component/LexicalMarkdown/plugins';
 import { initializeEditorWithState } from '@core/component/LexicalMarkdown/utils';
-import { DeprecatedTextButton } from 'core/component/DeprecatedTextButton';
 import { toast } from '@core/component/Toast/Toast';
 import { UserIcon } from '@core/component/UserIcon';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -36,6 +34,8 @@ import {
 import { storageServiceClient } from '@service-storage/client';
 import type { SyncServiceVersionID } from '@service-storage/generated/schemas/syncServiceVersionID';
 import { syncServiceClient } from '@service-sync/client';
+import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
+import { DeprecatedTextButton } from 'core/component/DeprecatedTextButton';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import type { SerializedEditorState } from 'lexical';
 import { LoroDoc } from 'loro-crdt';

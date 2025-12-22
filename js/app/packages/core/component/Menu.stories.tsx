@@ -3,8 +3,8 @@ import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import IconGear from '@macro-icons/macro-gear.svg';
 import { createSignal } from 'solid-js';
 import type { Meta, StoryObj } from 'storybook-solidjs-vite';
-import { DropdownMenuContent, MenuItem, MenuSeparator } from './Menu';
 import { DeprecatedTextButton } from './DeprecatedTextButton';
+import { DropdownMenuContent, MenuItem, MenuSeparator } from './Menu';
 
 const meta = {
   title: 'Menu',

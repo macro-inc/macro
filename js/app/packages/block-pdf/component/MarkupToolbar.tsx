@@ -5,7 +5,6 @@ import {
   showTabBarSignal,
 } from '@block-pdf/signal/placeables';
 import { isThreadPlaceable } from '@block-pdf/store/comments/freeComments';
-import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
 import { Tooltip } from '@core/component/Tooltip';
 import {
   useCanComment,
@@ -18,6 +17,7 @@ import Tabs from '@icon/regular/tabs.svg';
 import Textbox from '@icon/regular/textbox.svg';
 import Trash from '@icon/regular/trash-simple.svg';
 import Cancel from '@icon/regular/x.svg';
+import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
 import { createMemo, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { placeableIdMap, useDeletePlaceable } from '../store/placeables';

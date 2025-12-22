@@ -1,7 +1,7 @@
-import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
-import { DebugSlider } from '@core/component/Slider';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
+import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
+import { DebugSlider } from '@core/component/Slider';
 import { Bar } from '@core/component/TopBar/Bar';
 import clickOutside from '@core/directive/clickOutside';
 import Rotate from '@icon/regular/arrow-counter-clockwise.svg';
@@ -796,7 +796,11 @@ function GlyphEditor(props: GlyphEditorProps) {
         >
           <div class="p-2 border-b border-edge flex items-center justify-between">
             <h2 class="font-mono text-xs">Editor</h2>
-            <DeprecatedIconButton icon={X} onClick={props.onClose} theme="clear" />
+            <DeprecatedIconButton
+              icon={X}
+              onClick={props.onClose}
+              theme="clear"
+            />
           </div>
 
           <div class="flex flex-1 overflow-hidden">
@@ -960,7 +964,11 @@ function GlyphEditor(props: GlyphEditorProps) {
                     onClick={props.onClose}
                     theme="muted"
                   />
-                  <DeprecatedTextButton text="Save" onClick={handleSave} theme="accent" />
+                  <DeprecatedTextButton
+                    text="Save"
+                    onClick={handleSave}
+                    theme="accent"
+                  />
                 </div>
               </div>
             </div>

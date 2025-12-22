@@ -12,8 +12,8 @@ import type { PointerDownOutsideEvent } from '@kobalte/core/primitives/create-in
 import PaperPlaneIcon from '@phosphor-icons/core/regular/paper-plane-tilt.svg?component-solid';
 import type { SimpleMention } from '@service-comms/generated/models/simpleMention';
 import { createSignal, type JSXElement, Show, type Signal } from 'solid-js';
-import type { ItemMention } from './LexicalMarkdown/plugins';
 import { DeprecatedTextButton } from './DeprecatedTextButton';
+import type { ItemMention } from './LexicalMarkdown/plugins';
 import { toast } from './Toast/Toast';
 
 type NewMessageProps = {
@@ -61,7 +61,13 @@ function CopyLinkButton() {
     toast.success('Link copied to clipboard');
   }
 
-  return <DeprecatedTextButton text="Copy Link" theme="base" onClick={handleCopyLink} />;
+  return (
+    <DeprecatedTextButton
+      text="Copy Link"
+      theme="base"
+      onClick={handleCopyLink}
+    />
+  );
 }
 
 export function getDestinationFromOptions<T extends CombinedRecipientItem>(

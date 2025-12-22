@@ -2,11 +2,11 @@ import {
   activePlaceableIdSignal,
   newPlaceableSignal,
 } from '@block-pdf/signal/placeables';
-import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
 import { Content, Modal, Overlay } from '@core/component/Modal';
 import Check from '@icon/regular/check.svg';
 import Trash from '@icon/regular/trash-simple.svg';
 import { createCallback } from '@solid-primitives/rootless';
+import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
 import SignaturePad from 'signature_pad';
 import { onCleanup, onMount, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';

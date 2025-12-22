@@ -1,12 +1,12 @@
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import FileIcon from '@phosphor-icons/core/assets/regular/file-magnifying-glass.svg';
 import FunnelClearIcon from '@phosphor-icons/core/assets/regular/funnel-simple-x.svg';
+import { DeprecatedTextButton } from 'core/component/DeprecatedTextButton';
 import {
   DropdownMenuContent,
   MenuItem,
   MenuSeparator,
 } from 'core/component/Menu';
-import { DeprecatedTextButton } from 'core/component/DeprecatedTextButton';
 import { createMemo, createSelector, createSignal, For } from 'solid-js';
 import { useFilterContext } from '../../contexts/filter';
 import { containsAllSameValues } from '../../utils/arrayCompare';

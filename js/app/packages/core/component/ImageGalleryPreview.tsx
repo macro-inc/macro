@@ -448,7 +448,10 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
                     </Dialog.Trigger>
                     <DropdownMenu>
                       <DropdownMenu.Trigger disabled={props.isContext}>
-                        <DeprecatedIconButton icon={ThreeDotsIcon} theme="clear" />
+                        <DeprecatedIconButton
+                          icon={ThreeDotsIcon}
+                          theme="clear"
+                        />
                       </DropdownMenu.Trigger>
                       <DropdownMenu.Portal>
                         <div class="fixed inset-0 z-modal-overlay bg-transparent" />

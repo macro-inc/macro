@@ -8,7 +8,6 @@ import { useHasPaidAccess } from '@core/auth';
 import { CircleSpinner } from '@core/component/CircleSpinner';
 import { ClippedPanel } from '@core/component/ClippedPanel';
 import { RecipientSelector } from '@core/component/RecipientSelector';
-import { DeprecatedTextButton } from 'core/component/DeprecatedTextButton';
 import { toast } from '@core/component/Toast/Toast';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { useEmailLinks } from '@core/email-link';
@@ -21,6 +20,7 @@ import {
 import Caution from '@icon/regular/warning.svg';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { useSendMessageMutation } from '@queries/email/thread';
+import { DeprecatedTextButton } from 'core/component/DeprecatedTextButton';
 import {
   createMemo,
   createSignal,

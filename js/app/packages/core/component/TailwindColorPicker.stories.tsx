@@ -1,10 +1,10 @@
 import { createSignal } from 'solid-js';
 import type { Meta, StoryObj } from 'storybook-solidjs-vite';
+import { DeprecatedTextButton } from './DeprecatedTextButton';
 import {
   type FilteredTailwindColors,
   TailwindColorPicker,
 } from './TailwindColorPicker';
-import { DeprecatedTextButton } from './DeprecatedTextButton';
 
 const meta = {
   title: 'TailwindColorPicker',

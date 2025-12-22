@@ -1,4 +1,3 @@
-import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
@@ -6,6 +5,7 @@ import { SERVER_HOSTS } from '@core/constant/servers';
 import DotsThree from '@icon/regular/dots-three.svg';
 import type { MessageWithBodyReplyless } from '@service-email/generated/schemas';
 import { useEmail } from '@service-gql/client';
+import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
 import {
   type Accessor,
   createEffect,

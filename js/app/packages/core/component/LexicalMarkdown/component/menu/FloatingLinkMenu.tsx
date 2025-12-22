@@ -1,7 +1,7 @@
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { UnfurlLink } from '@core/component/Link';
 import { ScopedPortal } from '@core/component/ScopedPortal';
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { toast } from '@core/component/Toast/Toast';
 import { Tooltip } from '@core/component/Tooltip';
 import clickOutside from '@core/directive/clickOutside';

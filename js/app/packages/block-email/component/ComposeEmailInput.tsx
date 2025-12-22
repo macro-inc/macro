@@ -4,7 +4,6 @@ import { MacroSignatureButton } from '@block-email/component/MacroSignatureButto
 import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
 import { useHasPaidAccess } from '@core/auth';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
-import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import { fileDrop } from '@core/directive/fileDrop';
 import TextAa from '@icon/regular/text-aa.svg';
@@ -18,6 +17,7 @@ import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-
 import { useUserId } from '@service-gql/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import type { Item } from '@service-storage/generated/schemas/item';
+import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
 import { defaultSelectionData } from 'core/component/LexicalMarkdown/plugins';
 import {
   NODE_TRANSFORM,

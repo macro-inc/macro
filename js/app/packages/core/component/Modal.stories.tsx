@@ -1,8 +1,8 @@
 import { createSignal } from 'solid-js';
 import type { Meta, StoryObj } from 'storybook-solidjs-vite';
-import { Button } from './FormControls/Button';
-import { ButtonBar, Content, Header, Message, Modal, Overlay } from './Modal';
 import { DeprecatedTextButton } from './DeprecatedTextButton';
+import { DeprecatedButton } from './FormControls/DeprecatedButton';
+import { ButtonBar, Content, Header, Message, Modal, Overlay } from './Modal';
 
 const meta = {
   title: 'Modal',
@@ -39,20 +39,20 @@ export const Default: Story = {
                 pattern with overlay, header, message, and action buttons.
               </Message>
               <ButtonBar>
-                <Button
+                <DeprecatedButton
                   size="Base"
                   theme="secondary"
                   onClick={() => setOpen(false)}
                 >
                   Cancel
-                </Button>
-                <Button
+                </DeprecatedButton>
+                <DeprecatedButton
                   size="Base"
                   theme="primary"
                   onClick={() => setOpen(false)}
                 >
                   Confirm
-                </Button>
+                </DeprecatedButton>
               </ButtonBar>
             </Content>
           </Overlay>

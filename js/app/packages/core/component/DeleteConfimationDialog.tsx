@@ -25,7 +25,11 @@ export function DeleteConfimationDialog(props: DeleteConfimationDialogProps) {
             <Dialog.CloseButton>
               <DeprecatedTextButton text="Cancel" theme="clear" />
             </Dialog.CloseButton>
-            <DeprecatedTextButton text="Delete" theme="red" onClick={props.onDelete} />
+            <DeprecatedTextButton
+              text="Delete"
+              theme="red"
+              onClick={props.onDelete}
+            />
           </div>
         </Dialog.Content>
       </Dialog.Portal>
