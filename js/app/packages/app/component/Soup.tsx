@@ -41,12 +41,9 @@ import {
   createRenderEffect,
   createSignal,
   For,
-  Match,
   onCleanup,
   type ParentComponent,
   Show,
-  Suspense,
-  Switch,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { EntityModal } from './EntityModal/EntityModal';
@@ -78,30 +75,32 @@ const ViewTab: ParentComponent<{
   );
 };
 
+let runSuspenseWarningLog = false;
+const SuspenseUnifiedListFallback = () => {
+  const runWarningLog = () => {
+    if (!runSuspenseWarningLog) {
+      setTimeout(() => {
+        runSuspenseWarningLog = true;
+      });
+      return;
+    }
+
+    console.warn('UnifiedList Suspsense Triggered');
+  };
+
+  runWarningLog();
+
+  return null;
+};
+
 const ViewWithSearch: Component<{
   viewId: ViewId;
 }> = (props) => {
   return (
     <ViewTab viewId={props.viewId}>
-      <Switch>
-        {/* <Match
-          when={props.viewId === 'emails' && DEFAULT_VIEWS.includes('emails')}
-        >
-          <Suspense>
-            <EmailView />
-          </Suspense>
-        </Match> */}
-        <Match when={props.viewId === 'all' && DEFAULT_VIEWS.includes('all')}>
-          <Suspense>
-            <AllView />
-          </Suspense>
-        </Match>
-        <Match when={true}>
-          <SuspenseContextComp fallback={''}>
-            <UnifiedListView />
-          </SuspenseContextComp>
-        </Match>
-      </Switch>
+      <SuspenseContextComp fallback={<SuspenseUnifiedListFallback />}>
+        <UnifiedListView />
+      </SuspenseContextComp>
     </ViewTab>
   );
 };
@@ -441,37 +440,6 @@ export function Soup() {
     </div>
   );
 }
-
-function AllView() {
-  return <UnifiedListView />;
-}
-
-// function EmailView() {
-//   const {
-//     emailViewSignal: [emailView, setEmailView],
-//     viewsDataStore,
-//     selectedView,
-//   } = useSplitPanelOrThrow().unifiedListContext;
-//   const viewData = createMemo(() => viewsDataStore[selectedView()]);
-
-//   return (
-//     <>
-//       <UnifiedListView />
-//       <SplitToolbarRight>
-//         <div class="flex flex-row items-center pr-2">
-//           <SegmentedControl
-//             disabled={!!viewData().searchText}
-//             size="SM"
-//             label="View"
-//             list={['inbox', 'sent', 'drafts']}
-//             value={emailView()}
-//             onChange={setEmailView}
-//           />
-//         </div>
-//       </SplitToolbarRight>
-//     </>
-//   );
-// }
 
 export const useUpsertSavedViewMutation = () => {
   const queryClient = useQueryClient();

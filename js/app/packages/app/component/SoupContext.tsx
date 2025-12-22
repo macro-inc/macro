@@ -24,6 +24,7 @@ import {
 import { storageServiceClient } from '@service-storage/client';
 import { createLazyMemo } from '@solid-primitives/memo';
 import { useQuery } from '@tanstack/solid-query';
+import { type Virtualizer } from '@tanstack/solid-virtual';
 import {
   registerHotkey,
   runCommand,
@@ -47,7 +48,6 @@ import {
   type SetStoreFunction,
   type Store,
 } from 'solid-js/store';
-import type { VirtualizerHandle } from 'virtua/solid';
 import { useUserId } from '../../macro-entity/src/queries/auth';
 import { createBulkCopyDssEntityMutation } from '../../macro-entity/src/queries/dss';
 import { playSound } from '../util/sound';
@@ -88,7 +88,7 @@ export type UnifiedListContext = {
   setViewDataStore: SetStoreFunction<Partial<ViewDataMap>>;
   selectedView: Accessor<ViewId>;
   setSelectedView: Setter<ViewId>;
-  virtualizerHandleSignal: Signal<VirtualizerHandle | undefined>;
+  virtualizerHandleSignal: Signal<Virtualizer<Element, Element> | undefined>;
   entityListRefSignal: Signal<HTMLDivElement | undefined>;
   entitiesSignal: Signal<EntityData[] | undefined>;
   emailViewSignal: Signal<PreviewViewStandardLabel>;
@@ -109,7 +109,7 @@ export function createSoupContext(): UnifiedListContext {
   const [viewsDataStore, setViewDataStore] = useAllViews({
     selectedViewSignal: [selectedView, setSelectedView],
   });
-  const virtualizerHandleSignal = createSignal<VirtualizerHandle>();
+  const virtualizerHandleSignal = createSignal<Virtualizer<Element, Element>>();
   const entityListRefSignal = createSignal<HTMLDivElement>();
   const entitiesSignal = createSignal<EntityData[]>();
   const emailViewSignal = createSignal<PreviewViewStandardLabel>('inbox');
@@ -280,6 +280,8 @@ export function createNavigationEntityListShortcut({
     entity: EntityData | null | undefined,
     clearSelection?: boolean
   ) => {
+    const virtualizer = virtualizerHandle();
+    const virtualItems = virtualizer?.getVirtualItems() || [];
     if (clearSelection) {
       setViewDataStore(selectedView(), 'multiSelectEntities', []);
     }
@@ -287,9 +289,14 @@ export function createNavigationEntityListShortcut({
       setSelectedEntity(entity);
       const nextIndex = entities()?.findIndex(({ id }) => id === entity.id);
       if (nextIndex !== undefined && nextIndex > -1) {
-        virtualizerHandle()?.scrollToIndex(nextIndex, {
-          align: 'nearest',
-        });
+        const start = virtualItems[0]?.index;
+        const end = virtualItems.at(-1)?.index ?? 0;
+
+        if (nextIndex < start) {
+          virtualizer?.scrollToIndex(nextIndex, { align: 'start' });
+        } else if (nextIndex > end) {
+          virtualizer?.scrollToIndex(nextIndex, { align: 'end' });
+        }
         waitForFrames(2).then(() => {
           const elem = getEntityElAtIndex(nextIndex);
           if (elem instanceof HTMLElement) {
@@ -299,9 +306,7 @@ export function createNavigationEntityListShortcut({
           }
         });
       } else {
-        const handle = virtualizerHandle();
-        if (!handle) return;
-        const firstIndex = handle.findItemIndex(handle.scrollOffset);
+        const firstIndex = virtualItems.at(0)?.index;
         if (!firstIndex) return;
         const elem = getEntityElAtIndex(firstIndex);
         if (elem instanceof HTMLElement) elem.focus();
@@ -848,15 +853,17 @@ export function createNavigationEntityListShortcut({
 
     const entityEl = entityListRef()?.querySelector('[data-entity]');
     const scrollParent = getScrollParent(entityEl);
-
     const getAdjecentEl = async () => {
-      virtualizerHandle()?.scrollToIndex(index, {
-        // align: mode === 'jump' && axis === 'end' ? 'end' : undefined,
-        // align: align(),
-        // align: index() < virtuaRef()!.findItemIndex(virtuaRef()!.scrollOffset) ? 'start' : 'end',
-        align: 'nearest',
-        // offset: 50,
-      });
+      const virtualizer = virtualizerHandle();
+      const virtualItems = virtualizer?.getVirtualItems() || [];
+      const start = virtualItems[0]?.index;
+      const end = virtualItems.at(-1)?.index ?? 0;
+
+      if (index < start) {
+        virtualizer?.scrollToIndex(index, { align: 'start' });
+      } else if (index > end) {
+        virtualizer?.scrollToIndex(index, { align: 'end' });
+      }
 
       if (mode === 'jump') {
         await new Promise<true>((resolve) =>
