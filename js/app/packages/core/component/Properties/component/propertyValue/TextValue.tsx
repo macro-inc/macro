@@ -17,11 +17,7 @@ type TextValueProps = {
  * Display component for string properties with inline editing
  */
 export const TextValue: Component<TextValueProps> = (props) => {
-  const editor = useInlineEditor(
-    props.property,
-    props.entityType,
-    props.onRefresh
-  );
+  const editor = useInlineEditor(props.property, props.onRefresh);
 
   const supportsInline = () =>
     props.canEdit &&

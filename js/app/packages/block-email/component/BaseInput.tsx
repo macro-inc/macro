@@ -1,4 +1,7 @@
 import { FormatRibbon } from '@block-channel/component/FormatRibbon';
+import { MacroSignatureButton } from '@block-email/component/MacroSignatureButton';
+import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
+import { useHasPaidAccess } from '@core/auth';
 import { useBlockId } from '@core/block';
 import { BrightJoins } from '@core/component/BrightJoins';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
@@ -15,7 +18,6 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { trackMention } from '@core/signal/mention';
 import { useDisplayName } from '@core/user';
-import { isErr } from '@core/util/maybeResult';
 import Spinner from '@icon/bold/spinner-gap-bold.svg';
 import ReplyAll from '@icon/regular/arrow-bend-double-up-left.svg';
 import Reply from '@icon/regular/arrow-bend-up-left.svg';
@@ -27,10 +29,14 @@ import Plus from '@icon/regular/plus.svg';
 import TextAa from '@icon/regular/text-aa.svg';
 import Trash from '@icon/regular/trash.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import type { DocumentMentionInfo } from '@lexical-core';
+import {
+  $appendWatermarkNodeToLast,
+  $removeAllWatermarkNodes,
+  type DocumentMentionInfo,
+} from '@lexical-core';
 import { logger } from '@observability';
+import { useEmailLinksQuery } from '@queries/email/link';
 import { useSendMessageMutation } from '@queries/email/thread';
-import { emailClient } from '@service-email/client';
 import type {
   AttachmentMacro,
   MessageToSend,
@@ -78,6 +84,7 @@ import {
   appendItemsAsMacroMentions,
   clearEmailBody,
   prepareEmailBody,
+  prepareMacroBody,
   registerAppendPreviousEmail,
 } from '../util/prepareEmailBody';
 import { convertEmailRecipientToContactInfo } from '../util/recipientConversion';
@@ -134,7 +141,7 @@ export function BaseInput(props: {
   preloadedHtml?: string;
   preloadedAttachments?: AttachmentMacro[];
   sideEffectOnSend?: (newMessageId: MessageToSendDbId | null) => void;
-  onSendAndMarkDone?: () => void;
+  onMarkDone?: () => void;
   setShowReply?: Setter<boolean>;
   markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
 }) {
@@ -143,6 +150,7 @@ export function BaseInput(props: {
     getOrInitEmailFormContext(props.replyingTo().db_id!)()
   );
   const blockId = useBlockId();
+  const emailLinksQuery = useEmailLinksQuery();
 
   const [bodyMacro, setBodyMacro] = createSignal<string>('');
   const [expandedRecipientsRef, setExpandedRecipientsRef] =
@@ -174,17 +182,16 @@ export function BaseInput(props: {
     createSignal(false);
 
   const sendMutation = useSendMessageMutation({
-    onSuccess: ({ message }) => {
+    onSuccess: async ({ message }) => {
       toast.success('Email sent');
       pendingMentions.forEach((mention) => {
         trackMention(blockId, 'document', mention.documentId);
       });
       pendingMentions = [];
-      clearEmailBody(editor());
-      resetState();
+      await deleteDraftAndReset();
       props.sideEffectOnSend?.(message.db_id ?? null);
       if (shouldMarkDoneOnSuccess()) {
-        props.onSendAndMarkDone?.();
+        props.onMarkDone?.();
         setShouldMarkDoneOnSuccess(false);
       }
     },
@@ -237,11 +244,16 @@ export function BaseInput(props: {
   const DRAFT_DEBOUNCE_MS = 1000;
 
   function collectDraft(): Omit<MessageToSend, 'link_id'> | null {
+    $removeAllWatermarkNodes(editor());
     const prepared = prepareEmailBody(editor());
     if (!prepared) {
       logger.error(
         new Error('Unable to prepare email body for draft collection.')
       );
+      return null;
+    }
+    // Fail if no body text
+    if (prepared.bodyText.trim() === '') {
       return null;
     }
     // We attach the drafts entirely using bodyHTML (because this is how the appended reply parsing works) so we are not including bodyMacro or bodyText
@@ -263,11 +275,12 @@ export function BaseInput(props: {
     }
     const draftToSave = collectDraft();
     if (!draftToSave) {
-      // If there's no content, we should delete the draft
-      // TODO this endpoint does not exist.
-      return logger.error(
-        new Error('Unable to collect email draft for saving.')
-      );
+      const draftId = savedDraftId();
+      if (draftId) {
+        await deleteEmailDraft(draftId);
+      }
+      setSavedDraftId(undefined);
+      return;
     }
     const currentThread = ctx.threadData();
     const newMessage = props.newMessage ?? false;
@@ -288,15 +301,23 @@ export function BaseInput(props: {
 
     let linkId: string | undefined = currentThread?.link_id;
     if (newMessage || !linkId) {
-      const maybeFallbackLinks = await emailClient.getLinks();
-      if (
-        isErr(maybeFallbackLinks) ||
-        maybeFallbackLinks[1].links.length === 0
-      ) {
+      if (emailLinksQuery.isPending) {
+        return false;
+      }
+
+      if (emailLinksQuery.isError) {
+        logger.error(
+          new Error('Failed to save email draft: could not load email links')
+        );
+        return false;
+      }
+
+      const linksData = emailLinksQuery.data;
+      if (!linksData || linksData.links.length === 0) {
         logger.error(new Error('Failed to save email draft: no links found'));
         return false;
       }
-      linkId = maybeFallbackLinks[1].links[0].id;
+      linkId = linksData.links[0].id;
     }
 
     const draftResponse = await saveEmailDraft({
@@ -373,6 +394,8 @@ export function BaseInput(props: {
     });
   });
 
+  const hasPaidAccess = useHasPaidAccess();
+
   // Set up hotkey scope for the compose message component
   const [attachComposeHotkeys, composeHotkeyScope] =
     useHotkeyDOMScope('compose-message');
@@ -407,16 +430,37 @@ export function BaseInput(props: {
 
     let linkId: string | undefined = currentThread?.link_id;
     if (newMessage || !linkId) {
-      const maybeFallbackLinks = await emailClient.getLinks();
-      if (isErr(maybeFallbackLinks) || maybeFallbackLinks[1].links.length < 1) {
-        toast.failure('Email failed to send');
+      if (emailLinksQuery.isPending) {
+        toast.alert('Loading email accounts...');
+        return;
+      }
+
+      if (emailLinksQuery.isError) {
+        toast.failure('Email failed to send: Could not load email accounts');
+        logger.error('Failed to load email links');
+        return;
+      }
+
+      const linksData = emailLinksQuery.data;
+      if (!linksData || linksData.links.length < 1) {
+        toast.failure('Email failed to send: No email account connected');
         logger.error('No links found');
         return;
       }
-      linkId = maybeFallbackLinks[1].links[0].id;
+      linkId = linksData.links[0].id;
     }
 
-    const prepared = prepareEmailBody(editor(), {
+    const currentEditor = editor();
+
+    // We handle cleaning up the signature after we've sent the request because
+    // otherwise the `bodyMacro` signal would update after the clean up call and
+    // not contain the signature in the request data
+    const cleanupWatermark = $appendWatermarkNodeToLast(
+      currentEditor,
+      !hasPaidAccess() ? MACRO_EMAIL_SIGNATURE : undefined
+    );
+
+    const prepared = prepareEmailBody(currentEditor, {
       replyType: effectiveReplyType(),
       replyingTo: props.replyingTo(),
     });
@@ -427,11 +471,13 @@ export function BaseInput(props: {
     pendingMentions = prepared.mentions;
     setShouldMarkDoneOnSuccess(markDone);
 
+    const processedMacroBody = prepareMacroBody(bodyMacro());
+
     sendMutation.mutate({
       message: {
         bcc,
         body_html: prepared.bodyHtml,
-        body_macro: bodyMacro(),
+        body_macro: processedMacroBody,
         body_text: prepared.bodyText,
         cc,
         provider_id: props.draft?.provider_id,
@@ -443,36 +489,32 @@ export function BaseInput(props: {
         link_id: linkId!,
       },
     });
+
+    cleanupWatermark();
   };
 
   const resetState = () => {
+    clearEmailBody(editor());
     setBodyMacro('');
     setSavedDraftId(undefined);
     form().reset();
   };
 
-  const handleDeleteDraft = () => {
+  const deleteDraftAndReset = async () => {
     const draftId = savedDraftId();
-    if (!draftId) {
-      return console.error('No draft to delete');
+    if (draftId) {
+      await deleteEmailDraft(draftId);
     }
-    deleteEmailDraft(draftId).then((success) => {
-      if (success) {
-        if (props.replyingTo()?.db_id) {
-          ctx.setMessageDbIdToDraftChildren(
-            produce((state) => {
-              // @ts-expect-error - we know the draft id is valid, but TS doesn't (why?)
-              delete state[props.replyingTo.db_id];
-            })
-          );
-        }
-        clearEmailBody(editor());
-        resetState();
-        props.setShowReply?.(false);
-      } else {
-        toast.failure('Failed to delete draft');
-      }
-    });
+    const replyingToId = props.replyingTo()?.db_id;
+    if (replyingToId) {
+      ctx.setMessageDbIdToDraftChildren(
+        produce((state) => {
+          delete state[replyingToId];
+        })
+      );
+    }
+    resetState();
+    props.setShowReply?.(false);
   };
 
   const handleUserMention = (mention: UserMentionRecord) => {
@@ -573,13 +615,15 @@ export function BaseInput(props: {
       ref={(el) => {
         composeContainerRef = el;
       }}
-      class="relative flex flex-col flex-1 bg-input border-t border-x border-edge-muted rounded-t-[5px] -mb-[7px]"
+      class="relative flex flex-col flex-1 bg-input border-t border-x border-edge-muted rounded-t-[5px] -mb-[7px] max-w-full"
     >
       <BrightJoins dots={[false, false, true, true]} />
       {/* Top Bar */}
       <div class="flex items-start gap-2 p-2">
         <DropdownMenu>
-          <DropdownMenu.Trigger>{ReplyIcon()}</DropdownMenu.Trigger>
+          <DropdownMenu.Trigger>
+            <div class="px-1">{ReplyIcon()}</div>
+          </DropdownMenu.Trigger>
           <DropdownMenu.Portal>
             <DropdownMenuContent>
               <MenuItem
@@ -612,7 +656,7 @@ export function BaseInput(props: {
           when={showExpandedRecipients()}
           fallback={
             <div
-              class="flex items-center text-sm font-mono truncate overflow-hidden mt-1"
+              class="flex flex-wrap items-center text-sm font-mono truncate overflow-hidden mt-1"
               onclick={() => setShowExpandedRecipients(true)}
             >
               <Show
@@ -736,7 +780,7 @@ export function BaseInput(props: {
         <div class="text-xs min-w-16">Subject</div>
         <input
           type="text"
-          class="flex-1 text-sm bg-transparent outline-none border-0 px-2 py-1"
+          class="flex-1 text-sm bg-transparent outline-none border-0 px-3 py-1"
           value={form().subject()}
           onInput={(e) => {
             form().setSubject(e.currentTarget.value);
@@ -757,7 +801,7 @@ export function BaseInput(props: {
           />
         </Show>
         <div
-          class="min-h-20 max-h-80 overflow-y-scroll w-full flex flex-col cursor-text placeholder:text-ink-placeholder placeholder:opacity-50 px-3 pt-2 sm:pb-4"
+          class="max-h-80 overflow-y-scroll w-full flex flex-col cursor-text placeholder:text-ink-placeholder placeholder:opacity-50 px-3"
           ref={bodyDiv}
           onclick={() => {
             editor()?.focus();
@@ -792,6 +836,7 @@ export function BaseInput(props: {
             initialValue={props.preloadedBody}
             initialHtml={props.preloadedHtml}
             placeholder="Reply — @mention to share or cc people"
+            watermark={!hasPaidAccess() ? <MacroSignatureButton /> : undefined}
             onChange={handleChange}
             onDocumentMention={(item) => {
               makeAttachmentPublic(item.id);
@@ -804,7 +849,7 @@ export function BaseInput(props: {
           />
         </div>
         <Show when={!form().replyAppended()}>
-          <div class="p-2 flex flex-row items-center space-x-2">
+          <div class="px-2 flex flex-row items-center space-x-2">
             <IconButton
               theme="clear"
               icon={DotsThree}
@@ -821,7 +866,7 @@ export function BaseInput(props: {
             />
           </div>
         </Show>
-        <div class="flex flex-row w-full h-8 justify-between items-center p-2 mb-2 space-x-2 allow-css-brackets">
+        <div class="flex flex-row w-full h-8 justify-between items-center py-2 px-2 mb-2 space-x-2 allow-css-brackets">
           <div class="flex flex-row items-center gap-2">
             <div class="relative" ref={attachButtonRef}>
               <IconButton
@@ -851,7 +896,7 @@ export function BaseInput(props: {
               <IconButton
                 theme="base"
                 icon={Trash}
-                onclick={handleDeleteDraft}
+                onclick={deleteDraftAndReset}
                 tooltip={{ label: 'Delete draft' }}
               />
             </Show>
@@ -874,16 +919,16 @@ export function BaseInput(props: {
                   <Spinner class="w-5 h-5 animate-spin cursor-disabled" />
                 }
               >
-                <div class="flex flex-row items-center gap-0.5">
-                  <span>Send + </span>
-                  <CheckIcon class="size-[1lh]" />
+                <div class="flex fles-row items-center gap-0.5">
+                  <span>Send +</span>
+                  <CheckIcon class="size-4" />
                 </div>
               </Show>
             </TextButton>
             <DropdownMenu>
               <DropdownMenu.Trigger>
-                <div class="w-8 min-h-8 flex justify-center items-center h-full border-r border-t border-b border-edge">
-                  <CaretDown class="size-4 text-edge" />
+                <div class="w-8 min-h-8 flex justify-center items-center h-full border-r border-t border-b border-ink hover:bg-hover">
+                  <CaretDown class="size-4 text-ink transition-transform [[data-expanded]_&]:scale-y-[-1]" />
                 </div>
               </DropdownMenu.Trigger>
               <DropdownMenuContent>
@@ -892,6 +937,7 @@ export function BaseInput(props: {
                   onClick={() => {
                     sendEmail();
                   }}
+                  hotkeyToken={TOKENS.email.send}
                 />
               </DropdownMenuContent>
             </DropdownMenu>

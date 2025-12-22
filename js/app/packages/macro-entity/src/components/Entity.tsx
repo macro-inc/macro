@@ -6,6 +6,7 @@ import { children, createMemo, Show, Suspense } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { createProfilePictureQuery } from '../queries/auth';
 import type { EntityData } from '../types/entity';
+import type { SearchLocation } from '../types/search';
 
 export type EntityClickEvent = Parameters<
   JSX.EventHandler<HTMLDivElement, MouseEvent>
@@ -13,6 +14,7 @@ export type EntityClickEvent = Parameters<
 export type EntityClickHandler<T extends EntityData> = (
   entity: T,
   event: EntityClickEvent,
+  location?: SearchLocation,
   options?: { ignorePreview?: boolean }
 ) => void;
 interface EntityProps<T extends EntityData> extends ParentProps {

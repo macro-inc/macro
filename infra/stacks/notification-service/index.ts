@@ -1,8 +1,8 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { Database, Queue } from '@resources';
-import { config, getMacroApiToken, stack } from '@shared';
-import { get_coparse_api_vpc } from '@vpc';
+import { Database, Queue } from '../../packages/resources';
+import { config, getMacroApiToken, stack } from '../../packages/shared';
+import { get_coparse_api_vpc } from '../../packages/vpc';
 import { PushNotificationEventHandler } from './push';
 import { NotificationService } from './service';
 
@@ -133,7 +133,7 @@ const notificationApnsPlatform = new aws.sns.PlatformApplication(
   'notification-apns-platform',
   {
     name: `notification-apns-platform-${stack}`,
-    platform: 'APNS',
+    platform: stack === 'prod' ? 'APNS' : 'APNS_SANDBOX', // use sandbox for dev
     applePlatformTeamId: APPLE_TEAM_ID,
     applePlatformBundleId: APPLE_BUNDLE_ID,
     platformPrincipal: APNS_KEY_ID,

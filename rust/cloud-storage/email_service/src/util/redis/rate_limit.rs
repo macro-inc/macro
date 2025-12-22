@@ -4,6 +4,12 @@ use redis::Script;
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
+pub struct RateLimitArgs {
+    pub user_id: Uuid,
+    pub operation: GmailApiOperation,
+    pub is_backfill: bool,
+}
+
 impl RedisClient {
     /// Checks if a Gmail API operation is rate-limited and returns the status.
     /// Uses a 60-second sliding window implemented via a Lua script for efficiency and atomicity.
@@ -18,7 +24,20 @@ impl RedisClient {
     /// # Returns
     /// Returns `true` if the operation should be rate limited (blocked), `false` otherwise.
     ///
-    pub async fn is_rate_limited(&self, user_id: Uuid, operation: GmailApiOperation) -> bool {
+    pub async fn is_rate_limited(&self, args: RateLimitArgs) -> bool {
+        let RateLimitArgs {
+            user_id,
+            operation,
+            is_backfill,
+        } = args;
+        // If we're backfilling, use a lower rate limit than if we are not. This is to allow some room
+        // for normal inbox operations while backfill is occurring.
+        let rate_limit_units = if is_backfill {
+            self.rate_limit_units_backfill
+        } else {
+            self.rate_limit_units
+        };
+
         let cost = operation.cost();
         let mut con = match self.inner.get_multiplexed_async_connection().await {
             Ok(conn) => conn,
@@ -45,7 +64,7 @@ impl RedisClient {
 
         let (is_limited, _current_units): (i32, u32) = match script
             .key(&redis_key)
-            .arg(self.rate_limit_units)
+            .arg(rate_limit_units)
             .arg(self.rate_limit_secs * 1_000_000)
             .arg(now_micros)
             .arg(cost)

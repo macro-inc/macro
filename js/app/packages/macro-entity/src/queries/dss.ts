@@ -5,6 +5,7 @@ import {
   renameItem,
 } from '@core/component/FileList/itemOperations';
 import { itemToSafeName } from '@core/constant/allBlocks';
+import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import type { ItemType } from '@service-storage/client';
 import type {
   PostItemsSoupParams,
@@ -73,10 +74,12 @@ const fetchPaginatedDocumentsPost = async ({
   apiToken,
   params,
   requestBody,
+  signal,
 }: {
   apiToken?: string;
   requestBody?: PostSoupRequest;
   params?: PostItemsSoupParams;
+  signal?: AbortSignal;
 }) => {
   if (!apiToken) throw new Error('No API token provided');
   const Authorization = `Bearer ${apiToken}`;
@@ -92,6 +95,7 @@ const fetchPaginatedDocumentsPost = async ({
     headers: { Authorization, 'Content-Type': 'application/json' },
     method: 'POST',
     body: requestBody ? JSON.stringify(requestBody) : undefined,
+    signal,
   });
   if (!response.ok)
     throw new Error('Failed to fetch documents', { cause: response });
@@ -101,25 +105,28 @@ const fetchPaginatedDocumentsPost = async ({
 };
 
 export function createDssInfiniteQuery(
-  _params?: Accessor<PostItemsSoupParams>,
+  initialParams?: Accessor<PostItemsSoupParams>,
+  getRequestBody?: Accessor<PostSoupRequest>,
   options?: {
     disabled?: Accessor<boolean>;
-    requestBody?: Accessor<PostSoupRequest>;
   }
 ) {
   const params = () => {
-    const argParams = _params?.();
+    const argParams = initialParams?.();
     let limit = 100;
     let sort_method;
-    const requestBody = options?.requestBody;
+    let emailView;
 
-    if (requestBody) {
-      const body = requestBody();
+    if (getRequestBody) {
+      const body = getRequestBody();
       if (body?.limit) {
         limit = body.limit;
       }
       if (body?.sort_method) {
         sort_method = body.sort_method;
+      }
+      if (body?.emailView) {
+        emailView = body.emailView;
       }
     }
 
@@ -127,6 +134,7 @@ export function createDssInfiniteQuery(
       ...argParams,
       limit,
       sort_method,
+      emailView,
     };
   };
 
@@ -134,7 +142,7 @@ export function createDssInfiniteQuery(
   const instructionsIdQuery = useInstructionsMdIdQuery();
 
   return useInfiniteQuery(() => {
-    const requestBody = options?.requestBody?.();
+    const requestBody = getRequestBody?.();
     // Include all filters in query key so query refetches when any filter changes
     const documentFilters = requestBody?.document_filters;
     const projectFilters = requestBody?.project_filters;
@@ -160,12 +168,13 @@ export function createDssInfiniteQuery(
 
     return {
       queryKey,
-      queryHash: hashKey(queryKey),
-      queryFn: ({ pageParam }) => {
+      queryKeyHashFn: hashKey,
+      queryFn: ({ pageParam, signal }) => {
         return fetchPaginatedDocumentsPost({
           apiToken: authQuery.data,
-          requestBody: requestBody,
+          requestBody,
           params: { cursor: pageParam.cursor },
+          signal,
         });
       },
       initialPageParam: params(),
@@ -222,7 +231,7 @@ const selectData: (
               ownerId: item.data.ownerId,
               frecencyScore: item.frecency_score,
               viewedAt: item.data.viewedAt ?? undefined,
-              parentId: item.data.parentId ?? undefined,
+              projectId: item.data.parentId ?? undefined,
               type: item.tag,
               name: item.data.name || 'New Project',
             };
@@ -461,81 +470,96 @@ export function createBulkDeleteDssItemsMutation() {
   }));
 }
 
-export function createRenameDssEntityMutation() {
+type RenameDssEntityMutationVariables = {
+  entity: EntityData & { name: string };
+  newName: string;
+};
+
+type RenameDssEntityMutationData = {
+  success: boolean;
+};
+
+const isEntityRenameSupported = (entity: EntityData) => {
+  const type = entity.type;
+  if (entity.type === 'channel') {
+    return entity.channelType !== 'direct_message';
+  }
+  return type !== 'email';
+};
+
+/**
+ * Mutation to mark a thread as seen.
+ */
+export function createRenameDssEntityMutation(
+  callbacks?: MutationCallbacks<
+    RenameDssEntityMutationData,
+    Error,
+    RenameDssEntityMutationVariables
+  >
+) {
   return useMutation(() => ({
-    mutationFn: async ({
-      entity: { id, type },
-      newName,
-    }: {
-      entity: EntityData & { name: string };
-      newName: string;
-    }) => {
+    mutationFn: async (params: RenameDssEntityMutationVariables) => {
+      if (!isEntityRenameSupported(params.entity)) {
+        throw new Error('Unsupported entity type provided');
+      }
+
       const success = await renameItem({
-        itemType: type as ItemType,
-        id,
-        newName,
+        id: params.entity.id,
+        itemType: params.entity.type,
+        newName: params.newName,
       });
 
       return { success };
     },
-    onMutate: async ({
-      entity: { id },
-      newName,
-    }: {
-      entity: EntityData & { name: string };
-      newName: string;
-    }) => {
-      queryClient.cancelQueries({
-        queryKey: queryKeys.dss({ infinite: true }),
-      });
-      function updateEntityNameInQueryData(
-        prev: { pages: { items: EntityData[] }[] } | undefined,
-        id: string,
-        newName: string
-      ): { pages: { items: EntityData[] }[] } | undefined {
-        if (!prev) return prev;
-        const pages = prev.pages.map((page) => ({
-          ...page,
-          items: page.items.map((item) =>
-            item.id === id ? { ...item, name: newName } : item
-          ),
-        }));
-        return {
-          ...prev,
-          pages,
-        };
-      }
+    ...withCallbacks<
+      RenameDssEntityMutationData,
+      Error,
+      RenameDssEntityMutationVariables
+    >(
+      {
+        onMutate: async ({ entity: { id }, newName }) => {
+          queryClient.cancelQueries({
+            queryKey: queryKeys.dss({ infinite: true }),
+          });
+          function updateEntityNameInQueryData(
+            prev: { pages: { items: EntityData[] }[] } | undefined,
+            id: string,
+            newName: string
+          ) {
+            if (!prev) return prev;
+            const pages = prev.pages.map((page) => ({
+              ...page,
+              items: page.items.map((item) =>
+                item.id === id ? { ...item, name: newName } : item
+              ),
+            }));
+            return {
+              ...prev,
+              pages,
+            };
+          }
 
-      queryClient.setQueriesData(
-        { queryKey: queryKeys.dss({ infinite: true }) },
-        (prev) =>
-          updateEntityNameInQueryData(
-            prev as { pages: { items: EntityData[] }[] } | undefined,
-            id,
-            newName
-          )
-      );
-    },
-    onSettled: (data, error, { entity: { id } }) => {
-      if (data?.success === false || error)
-        console.error(`Failed to rename dss item ${id}`, data, error);
+          queryClient.setQueriesData(
+            { queryKey: queryKeys.dss({ infinite: true }) },
+            (prev: { pages: { items: EntityData[] }[] } | undefined) =>
+              updateEntityNameInQueryData(prev, id, newName)
+          );
+        },
+        onSettled: (data, error, { entity: { id } }) => {
+          if (data?.success === false || error)
+            console.error(`Failed to rename dss item ${id}`, data, error);
 
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.dss({ infinite: true }),
-      });
-    },
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.dss({ infinite: true }),
+          });
+        },
+      },
+      callbacks
+    ),
   }));
 }
 
 export function createBulkRenameDssEntityMutation() {
-  const isUnsupportedEntity = (entity: EntityData) => {
-    const type = entity.type;
-    if (entity.type === 'channel') {
-      return entity.channelType === 'direct_message';
-    }
-    return type === 'email';
-  };
-
   return useMutation(() => ({
     mutationFn: async ({
       entities,
@@ -544,7 +568,7 @@ export function createBulkRenameDssEntityMutation() {
       entities: (EntityData & { name: string })[];
       name: (oldName: string) => string | string;
     }) => {
-      if (entities.some(isUnsupportedEntity)) {
+      if (entities.every(isEntityRenameSupported)) {
         throw new Error(`Unsupported entity type provided`);
       }
       return await Promise.all(

@@ -18,11 +18,7 @@ type NumberValueProps = {
  * Numbers are formatted to 4 decimal places
  */
 export const NumberValue: Component<NumberValueProps> = (props) => {
-  const editor = useInlineEditor(
-    props.property,
-    props.entityType,
-    props.onRefresh
-  );
+  const editor = useInlineEditor(props.property, props.onRefresh);
 
   const supportsInline = () =>
     props.canEdit &&

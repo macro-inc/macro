@@ -95,22 +95,26 @@ pub async fn get_user_names_with_email(
         )
         SELECT DISTINCT ON (user_profile_id)
             user_profile_id as "user_profile_id!",
-            -- user's name in macro takes precedence over email contact name
-            COALESCE(
-                NULLIF(mui_first_name, 'N/A'),
-                -- first word in email contact name is approximation of first name
-                SPLIT_PART(contact_name, ' ', 1)
-            ) as "first_name",
-            -- user's name in macro takes precedence over email contact name
-            COALESCE(
-                NULLIF(mui_last_name, 'N/A'),
                 CASE
-                    -- if there is a space in the email contact name, the rest is the last name
+                    -- If Macro has either first or last name (non-"N/A"), use Macro for BOTH fields.
+                    WHEN NULLIF(mui_first_name, 'N/A') IS NOT NULL
+                      OR NULLIF(mui_last_name, 'N/A') IS NOT NULL
+                    THEN NULLIF(mui_first_name, 'N/A')
+                    -- Otherwise fall back to email contact name parsing.
+                    ELSE SPLIT_PART(contact_name, ' ', 1)
+                END as "first_name",
+                CASE
+                    -- If Macro has either first or last name (non-"N/A"), use Macro for BOTH fields.
+                    WHEN NULLIF(mui_first_name, 'N/A') IS NOT NULL
+                      OR NULLIF(mui_last_name, 'N/A') IS NOT NULL
+                    THEN NULLIF(mui_last_name, 'N/A')
+                    -- Otherwise fall back to email contact name parsing.
+                    ELSE CASE
                     WHEN POSITION(' ' IN contact_name) > 0
                     THEN NULLIF(TRIM(SUBSTRING(contact_name FROM POSITION(' ' IN contact_name) + 1)), '')
                     ELSE NULL
                 END
-            ) as "last_name"
+                END as "last_name"
         FROM (
             -- Users in User table with contact fallback (in case user hasn't set name in Macro)
             SELECT

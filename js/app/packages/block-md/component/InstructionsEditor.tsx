@@ -54,6 +54,7 @@ import {
   peerIdPlugin,
 } from '@lexical-core';
 import type { MarkdownRewriteOutput } from '@service-cognition/generated/tools/types';
+import { onElementConnect } from '@solid-primitives/lifecycle';
 import { debounce } from '@solid-primitives/scheduled';
 import { createMethodRegistration } from 'core/orchestrator';
 import type { EditorState } from 'lexical';
@@ -63,7 +64,6 @@ import {
   createMemo,
   createSignal,
   onCleanup,
-  onMount,
   Show,
 } from 'solid-js';
 import { blockDataSignal, mdStore } from '../signal/markdownBlockData';
@@ -111,7 +111,6 @@ export function InstructionsEditor() {
     return blockSave_;
   }, undefined);
 
-  let mountRef!: HTMLDivElement;
   let editorContainerRef!: HTMLDivElement;
 
   const [clickTargetHeight, setClickTargetHeight] = createSignal(0);
@@ -205,9 +204,9 @@ export function InstructionsEditor() {
     );
   }
 
-  onMount(() => {
+  const onConnect = (el: HTMLDivElement) => {
     setMdStore('selection', lexicalWrapper.selection);
-    editor.setRootElement(mountRef);
+    editor.setRootElement(el);
 
     // watch the height of the content editable to set the height of
     // the focus target
@@ -220,16 +219,15 @@ export function InstructionsEditor() {
       const blockBottom =
         blockEl?.getBoundingClientRect().bottom ?? window.innerHeight;
 
-      const targetHeight =
-        blockBottom - mountRef.getBoundingClientRect().bottom - 40;
+      const targetHeight = blockBottom - el.getBoundingClientRect().bottom - 40;
       setClickTargetHeight(Math.max(targetHeight, EDITOR_PADDING_BOTTOM));
     });
 
-    editorRefObserver.observe(mountRef);
+    editorRefObserver.observe(el);
     onCleanup(() => {
       editorRefObserver.disconnect();
     });
-  });
+  };
 
   const additionalCleanups: Array<() => void> = [];
 
@@ -366,7 +364,11 @@ export function InstructionsEditor() {
       </Show>
       <div class="relative" ref={editorContainerRef}>
         <div
-          ref={mountRef}
+          ref={(el) => {
+            onElementConnect(el, () => {
+              onConnect(el);
+            });
+          }}
           contentEditable={isContentEditable()}
           class="w-full max-w-full"
           classList={{

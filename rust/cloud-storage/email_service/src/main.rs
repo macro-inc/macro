@@ -86,7 +86,7 @@ async fn main() -> anyhow::Result<()> {
     let gmail_queue_aws_config = if cfg!(feature = "local_queue") {
         aws_config::defaults(aws_config::BehaviorVersion::latest())
             .region("us-east-1")
-            .endpoint_url(&config.gmail_webhook_queue)
+            .endpoint_url(&config.gmail_inbox_sync_queue)
             .load()
             .await
     } else {
@@ -97,8 +97,8 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&gmail_queue_aws_config))
-        .gmail_webhook_queue(&config.gmail_webhook_queue)
-        .gmail_webhook_retry_queue(&config.gmail_webhook_retry_queue)
+        .gmail_inbox_sync_queue(&config.gmail_inbox_sync_queue)
+        .gmail_inbox_sync_retry_queue(&config.gmail_inbox_sync_retry_queue)
         .search_event_queue(&config.search_event_queue)
         .insight_context_queue(&config.insight_context_queue)
         .email_backfill_queue(&config.backfill_queue)
@@ -112,9 +112,9 @@ async fn main() -> anyhow::Result<()> {
     )
     .await;
 
-    let refresh_worker = sqs_worker::SQSWorker::new(
+    let link_manager_worker = sqs_worker::SQSWorker::new(
         aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
-        config.email_refresh_queue.clone(),
+        config.link_manager_queue.clone(),
         config.queue_max_messages,
         config.queue_wait_time_seconds,
     );
@@ -148,23 +148,23 @@ async fn main() -> anyhow::Result<()> {
         })
         .collect::<Vec<_>>();
 
-    let webhook_workers = (0..config.webhook_queue_workers)
+    let inbox_sync_workers = (0..config.inbox_sync_queue_workers)
         .map(|_| {
             sqs_worker::SQSWorker::new(
                 aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
-                config.gmail_webhook_queue.clone(),
-                config.webhook_queue_max_messages,
+                config.gmail_inbox_sync_queue.clone(),
+                config.inbox_sync_queue_max_messages,
                 config.queue_wait_time_seconds,
             )
         })
         .collect::<Vec<_>>();
 
-    let webhook_retry_workers = (0..config.webhook_retry_queue_workers)
+    let inbox_sync_retry_workers = (0..config.inbox_sync_retry_queue_workers)
         .map(|_| {
             sqs_worker::SQSWorker::new(
                 aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
-                config.gmail_webhook_retry_queue.clone(),
-                config.webhook_retry_queue_max_messages,
+                config.gmail_inbox_sync_retry_queue.clone(),
+                config.inbox_sync_retry_queue_max_messages,
                 config.queue_wait_time_seconds,
             )
         })
@@ -192,6 +192,7 @@ async fn main() -> anyhow::Result<()> {
     let redis_client = util::redis::RedisClient::new(
         redis_inner_client,
         config.redis_rate_limit_reqs,
+        config.redis_rate_limit_reqs_backfill,
         config.redis_rate_limit_window_secs,
     );
 
@@ -216,31 +217,31 @@ async fn main() -> anyhow::Result<()> {
         PgSystemPropertiesRepository::new(db.clone()),
     ));
 
-    // process user inbox updates from gmail webhook queue, triggered by update pubsub messages from Google
-    for worker in webhook_workers {
-        let db_webhook = db.clone();
-        let sqs_client_webhook = sqs_client.clone();
-        let gmail_client_webhook = gmail_client.clone();
-        let auth_service_client_webhook = auth_service_client.clone();
-        let redis_client_webhook = redis_client.clone();
-        let macro_notify_client_webhook = macro_notify_client.clone();
-        let sfs_client_webhook = sfs_client.clone();
-        let connection_gateway_client_webhook = connection_gateway_client.clone();
-        let dss_client_webhook = dss_client.clone();
-        let system_properties_service_webhook = system_properties_service.clone();
+    // process user inbox updates from gmail inbox_sync queue, triggered by update pubsub messages from Google
+    for worker in inbox_sync_workers {
+        let db_inbox_sync = db.clone();
+        let sqs_client_inbox_sync = sqs_client.clone();
+        let gmail_client_inbox_sync = gmail_client.clone();
+        let auth_service_client_inbox_sync = auth_service_client.clone();
+        let redis_client_inbox_sync = redis_client.clone();
+        let macro_notify_client_inbox_sync = macro_notify_client.clone();
+        let sfs_client_inbox_sync = sfs_client.clone();
+        let connection_gateway_client_inbox_sync = connection_gateway_client.clone();
+        let dss_client_inbox_sync = dss_client.clone();
+        let system_properties_service_inbox_sync = system_properties_service.clone();
         tokio::spawn(async move {
-            pubsub::webhook::worker::run_worker(
-                db_webhook,
+            pubsub::inbox_sync::worker::run_worker(
+                db_inbox_sync,
                 worker,
-                sqs_client_webhook,
-                gmail_client_webhook,
-                auth_service_client_webhook,
-                redis_client_webhook,
-                macro_notify_client_webhook,
-                sfs_client_webhook,
-                connection_gateway_client_webhook,
-                dss_client_webhook,
-                system_properties_service_webhook,
+                sqs_client_inbox_sync,
+                gmail_client_inbox_sync,
+                auth_service_client_inbox_sync,
+                redis_client_inbox_sync,
+                macro_notify_client_inbox_sync,
+                sfs_client_inbox_sync,
+                connection_gateway_client_inbox_sync,
+                dss_client_inbox_sync,
+                system_properties_service_inbox_sync,
                 config.notifications_enabled,
                 false,
             )
@@ -248,35 +249,35 @@ async fn main() -> anyhow::Result<()> {
         });
     }
     tracing::info!(
-        num_workers = config.webhook_queue_workers,
-        "webhook workers started"
+        num_workers = config.inbox_sync_queue_workers,
+        "inbox_sync workers started"
     );
 
     // separate queue for retries to avoid backups for large inbox updates that hit gmail api rate limit
-    for worker in webhook_retry_workers {
-        let db_webhook = db.clone();
-        let sqs_client_webhook = sqs_client.clone();
-        let gmail_client_webhook = gmail_client.clone();
-        let auth_service_client_webhook = auth_service_client.clone();
-        let redis_client_webhook = redis_client.clone();
-        let macro_notify_client_webhook = macro_notify_client.clone();
-        let sfs_client_webhook = sfs_client.clone();
-        let connection_gateway_client_webhook = connection_gateway_client.clone();
-        let dss_client_webhook = dss_client.clone();
-        let system_properties_service_webhook = system_properties_service.clone();
+    for worker in inbox_sync_retry_workers {
+        let db_inbox_sync = db.clone();
+        let sqs_client_inbox_sync = sqs_client.clone();
+        let gmail_client_inbox_sync = gmail_client.clone();
+        let auth_service_client_inbox_sync = auth_service_client.clone();
+        let redis_client_inbox_sync = redis_client.clone();
+        let macro_notify_client_inbox_sync = macro_notify_client.clone();
+        let sfs_client_inbox_sync = sfs_client.clone();
+        let connection_gateway_client_inbox_sync = connection_gateway_client.clone();
+        let dss_client_inbox_sync = dss_client.clone();
+        let system_properties_service_inbox_sync = system_properties_service.clone();
         tokio::spawn(async move {
-            pubsub::webhook::worker::run_worker(
-                db_webhook,
+            pubsub::inbox_sync::worker::run_worker(
+                db_inbox_sync,
                 worker,
-                sqs_client_webhook,
-                gmail_client_webhook,
-                auth_service_client_webhook,
-                redis_client_webhook,
-                macro_notify_client_webhook,
-                sfs_client_webhook,
-                connection_gateway_client_webhook,
-                dss_client_webhook,
-                system_properties_service_webhook,
+                sqs_client_inbox_sync,
+                gmail_client_inbox_sync,
+                auth_service_client_inbox_sync,
+                redis_client_inbox_sync,
+                macro_notify_client_inbox_sync,
+                sfs_client_inbox_sync,
+                connection_gateway_client_inbox_sync,
+                dss_client_inbox_sync,
+                system_properties_service_inbox_sync,
                 config.notifications_enabled,
                 true,
             )
@@ -284,8 +285,8 @@ async fn main() -> anyhow::Result<()> {
         });
     }
     tracing::info!(
-        num_workers = config.webhook_queue_workers,
-        "webhook workers started"
+        num_workers = config.inbox_sync_queue_workers,
+        "inbox_sync workers started"
     );
 
     // backfill user emails upon signup
@@ -323,20 +324,20 @@ async fn main() -> anyhow::Result<()> {
         "backfill workers started"
     );
 
-    let db_refresh = db.clone();
-    let gmail_client_refresh = gmail_client.clone();
-    let auth_service_client_refresh = auth_service_client.clone();
-    let redis_client_refresh = redis_client.clone();
-    let sqs_client_refresh = sqs_client.clone();
-    // daily refresh operations for user contacts and inbox subscriptions
+    let db_link_manager = db.clone();
+    let gmail_client_link_manager = gmail_client.clone();
+    let auth_service_client_link_manager = auth_service_client.clone();
+    let redis_client_link_manager = redis_client.clone();
+    let sqs_client_link_manager = sqs_client.clone();
+    // daily link_manager operations for user contacts and inbox subscriptions
     tokio::spawn(async move {
-        pubsub::refresh::worker::run_worker(
-            refresh_worker,
-            db_refresh,
-            gmail_client_refresh,
-            auth_service_client_refresh,
-            redis_client_refresh,
-            sqs_client_refresh,
+        pubsub::link_manager::worker::run_worker(
+            link_manager_worker,
+            db_link_manager,
+            gmail_client_link_manager,
+            auth_service_client_link_manager,
+            redis_client_link_manager,
+            sqs_client_link_manager,
         )
         .await;
     });

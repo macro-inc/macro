@@ -2,6 +2,7 @@ import { EntityIcon } from '@core/component/EntityIcon';
 import type { Property } from '@core/component/Properties/types';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import { TOKENS } from '@core/hotkey/tokens';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { matches } from '@core/util/match';
 import CheckIcon from '@icon/regular/check.svg';
 import { tryToTypedNotification } from '@notifications';
@@ -14,7 +15,6 @@ import { StaticMarkdown } from 'core/component/LexicalMarkdown/component/core/St
 import { unifiedListMarkdownTheme } from 'core/component/LexicalMarkdown/theme';
 import { UserIcon } from 'core/component/UserIcon';
 import { emailToId, useDisplayName } from 'core/user';
-import { onKeyDownClick, onKeyUpClick } from 'core/util/click';
 import type { ParentProps, Ref } from 'solid-js';
 import {
   createDeferred,
@@ -28,7 +28,6 @@ import {
   Suspense,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { createProfilePictureQuery } from '../queries/auth';
 import {
   createProjectQuery,
   isProjectContainedEntity,
@@ -44,6 +43,7 @@ import type { Notification, WithNotification } from '../types/notification';
 import type {
   ChannelContentHitData,
   ContentHitData,
+  SearchLocation,
   WithSearch,
 } from '../types/search';
 import type { EntityClickEvent, EntityClickHandler } from './Entity';
@@ -118,6 +118,237 @@ function ChannelMessageContentHit(props: { data: ChannelContentHitData }) {
   );
 }
 
+function ThreadBorder() {
+  return (
+    <div
+      class="absolute left-[calc(0.5rem+1px)] w-[1px] border-l border-edge-muted -top-0.75"
+      style={{ height: '6px' }}
+    />
+  );
+}
+
+function CollapsibleListRow(
+  props: ParentProps<{
+    onClick?: (e: EntityClickEvent) => void;
+    classList?: Record<string, boolean>;
+    enableHover?: boolean;
+    showThreadBorder?: boolean;
+    blockNavigation?: boolean;
+  }>
+) {
+  return (
+    <div
+      class="relative flex gap-1 items-center min-w-0 h-8 transition-all"
+      classList={{
+        'hover:bg-hover/50 hover:opacity-85':
+          props.enableHover ?? !!props.onClick,
+        ...props.classList,
+      }}
+      onClick={(e) => {
+        if (props.onClick) {
+          if (props.blockNavigation) {
+            e.stopPropagation();
+          }
+          props.onClick(e);
+        }
+      }}
+      data-blocks-navigation={props.blockNavigation}
+    >
+      <Show when={props.showThreadBorder}>
+        <ThreadBorder />
+      </Show>
+      {props.children}
+    </div>
+  );
+}
+
+function CollapsibleList<T>(props: {
+  items: T[];
+  visibleCount?: number;
+  children: (item: T, index?: number, count?: number) => any;
+  threadBorder?: boolean;
+}) {
+  const [showAll, setShowAll] = createSignal(false);
+  const visibleCount = () => props.visibleCount ?? 3;
+
+  const visibleItems = () => {
+    if (props.items.length <= visibleCount() || showAll()) {
+      return props.items;
+    }
+    return props.items.slice(0, visibleCount());
+  };
+
+  const count = () => props.items.length;
+  const hasMore = () => props.items.length > visibleCount();
+
+  return (
+    <>
+      <For each={visibleItems()}>
+        {(child, index) => props.children(child, index(), count())}
+      </For>
+      <Show when={hasMore()}>
+        <div class="h-5">
+          <Show when={props.threadBorder}>
+            <ThreadBorder />
+          </Show>
+          <button
+            class="block w-fit px-2 py-0.5 text-[10px] border border-edge uppercase font-mono hover:font-medium"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowAll((prev) => !prev);
+            }}
+            data-blocks-navigation
+          >
+            <Show when={!showAll()} fallback={<>Collapse</>}>
+              + {props.items.length - visibleCount()} More
+            </Show>
+          </button>
+        </div>
+      </Show>
+    </>
+  );
+}
+
+function NotificationRow(props: {
+  notification: Notification;
+  onClick?: NotificationClickHandler;
+  entity: EntityData;
+}) {
+  const [userName] = useDisplayName(props.notification.senderId);
+  const formattedDate = createFormattedDate(props.notification.createdAt);
+
+  const ActionContent = () => {
+    if (
+      props.notification.notificationEventType === 'document_mention' ||
+      props.notification.notificationEventType === 'channel_message_document'
+    ) {
+      return 'shared';
+    }
+
+    const metadata = tryToTypedNotification(
+      props.notification
+    )?.notificationMetadata;
+    if (!metadata || !('messageContent' in metadata)) return '';
+
+    return 'message';
+  };
+
+  const MessageContent = () => {
+    if (
+      props.notification.notificationEventType === 'document_mention' ||
+      props.notification.notificationEventType === 'channel_message_document'
+    ) {
+      return '';
+    }
+
+    const metadata = tryToTypedNotification(
+      props.notification
+    )?.notificationMetadata;
+    if (
+      !metadata ||
+      !('messageContent' in metadata) ||
+      metadata.messageContent === undefined
+    )
+      return '';
+
+    return (
+      <Show
+        when={metadata.messageContent.trim()}
+        fallback={<span class="italic text-ink-disabled">Attached items</span>}
+      >
+        {(content) => (
+          <StaticMarkdown
+            markdown={content()}
+            theme={unifiedListMarkdownTheme}
+            singleLine={true}
+          />
+        )}
+      </Show>
+    );
+  };
+
+  return (
+    <CollapsibleListRow
+      showThreadBorder
+      onClick={
+        props.onClick
+          ? (e) => {
+              props.onClick?.(
+                {
+                  ...props.entity,
+                  notification: props.notification,
+                },
+                e
+              );
+            }
+          : undefined
+      }
+      classList={{
+        'opacity-70': props.notification.viewedAt !== null,
+      }}
+    >
+      <div class="flex size-5 shrink-0 items-center justify-center mr-1">
+        <UserIcon id={props.notification.senderId!} size="xs" />
+      </div>
+      <div class="flex gap-1 text-sm w-full min-w-0 overflow-hidden items-baseline">
+        <div class="text-sm w-[20cqw] shrink-0 truncate min-w-0">
+          {userName()}{' '}
+          <span class="opacity-70 uppercase font-mono text-[0.625rem] ml-2">
+            {ActionContent()}
+          </span>
+        </div>
+        <MessageContent />
+      </div>
+      <div class="shrink-0 font-mono text-xs uppercase text-ink-extra-muted ml-2">
+        {formattedDate()}
+      </div>
+    </CollapsibleListRow>
+  );
+}
+
+function ContentHitRow(props: {
+  data: ContentHitData;
+  onClick: (e: EntityClickEvent, location?: SearchLocation) => void;
+  index?: number;
+  count?: number;
+}) {
+  const match = (): [number, number] | undefined => {
+    if (props.index !== undefined && props.count !== undefined)
+      return [props.index, props.count];
+  };
+
+  return (
+    <CollapsibleListRow
+      blockNavigation
+      onClick={(e) => props.onClick(e, props.data.location)}
+      showThreadBorder={props.data.type === 'channel'}
+    >
+      <Show
+        when={props.data.type === 'channel' && props.data}
+        fallback={
+          <div class="flex gap-2 items-center min-w-0 w-full">
+            <div class="flex size-5 shrink-0 items-center justify-center">
+              <div class="h-4/5 border-l border-b w-2 border-edge-muted -translate-y-2 translate-x-[calc(0.25em-1px)]"></div>
+            </div>
+            <Show when={match()}>
+              {(match) => {
+                return (
+                  <span class="font-mono text-xs text-ink-disabled/50">
+                    {match()[0] + 1}/{match()[1]}
+                  </span>
+                );
+              }}
+            </Show>
+            <GenericContentHit data={props.data} />
+          </div>
+        }
+      >
+        {(data) => <ChannelMessageContentHit data={data()} />}
+      </Show>
+    </CollapsibleListRow>
+  );
+}
+
 // function ImportantBadge(props: { active?: boolean }) {
 //   return (
 //     <Show when={props.active}>
@@ -128,6 +359,10 @@ function ChannelMessageContentHit(props: { data: ChannelContentHitData }) {
 //     </Show>
 //   );
 // }
+//
+
+type NotificationClickHandler<T extends EntityData = EntityData> =
+  EntityClickHandler<T & { notification: Notification }>;
 
 interface EntityProps<T extends WithNotification<EntityData>>
   extends ParentProps {
@@ -136,7 +371,7 @@ interface EntityProps<T extends WithNotification<EntityData>>
   timestamp?: number;
   onClick?: EntityClickHandler<T>;
   onClickRowAction?: (entity: T, type: 'done') => void;
-  onClickNotification?: EntityClickHandler<T & { notification: Notification }>;
+  onClickNotification?: NotificationClickHandler<T>;
   onMouseOver?: () => void;
   onMouseLeave?: () => void;
   onFocusIn?: () => void;
@@ -156,6 +391,8 @@ interface EntityProps<T extends WithNotification<EntityData>>
   checked?: boolean;
 }
 
+const [hoveredEntityId, setHoveredEntityId] = createSignal<string | null>(null);
+
 export function EntityWithEverything(
   props: EntityProps<WithNotification<EntityData | WithSearch<EntityData>>>
 ) {
@@ -164,8 +401,6 @@ export function EntityWithEverything(
   const [entityDivRef, setEntityDivRef] = createSignal<HTMLDivElement | null>(
     null
   );
-  const [showRestOfNotifications, setShowRestOfNotifications] =
-    createSignal(false);
 
   const { keydownDataDuringTask } = trackKeydownDuringTask();
   const userEmail = useEmail();
@@ -197,22 +432,9 @@ export function EntityWithEverything(
   const hasNotifications = () =>
     !!props.entity.notifications && props.entity.notifications().length > 0;
 
-  const threadGap = 6;
-  const ThreadBorder = () => (
-    <div
-      class="absolute left-[calc(0.5rem+1px)] w-[1px] border-l border-edge-muted -top-0.75"
-      style={{ height: `${threadGap}px` }}
-    />
-  );
-
   const notDoneNotifications = () => {
-    let notifications = props.entity.notifications?.();
+    const notifications = props.entity.notifications?.();
     if (!notifications) return [];
-
-    if (!showRestOfNotifications()) {
-      notifications = notifications.slice(0, 3);
-    }
-
     return notifications.filter(({ done }) => !done);
   };
 
@@ -238,7 +460,7 @@ export function EntityWithEverything(
       const isLikelyEmail = (value?: string) =>
         typeof value === 'string' && value.includes('@');
 
-      const combinedParticipantFirstNames = createMemo(() => {
+      const combinedParticipantNames = createMemo(() => {
         if (props.entity.type !== 'email') return [];
         const me = userEmail();
         if (
@@ -255,15 +477,14 @@ export function EntityWithEverything(
           const macroDisplayName = useDisplayName(
             emailToId(participant.email)
           )[0]?.();
-          const macroFirstName = macroDisplayName?.split(' ')[0];
-          const participantFirstName = participant.name?.split(' ')[0] ?? '';
-          if (macroFirstName && !isLikelyEmail(macroFirstName)) {
-            namesSet.add(macroFirstName);
+          const participantFullName = participant.name ?? '';
+          if (macroDisplayName && !isLikelyEmail(macroDisplayName)) {
+            namesSet.add(macroDisplayName);
           } else if (
-            participantFirstName &&
-            !isLikelyEmail(participantFirstName)
+            participantFullName &&
+            !isLikelyEmail(participantFullName)
           ) {
-            namesSet.add(participantFirstName);
+            namesSet.add(participantFullName);
           } else {
             const emailName = participant.email.split('@')[0];
             namesSet.add(emailName);
@@ -273,18 +494,67 @@ export function EntityWithEverything(
       });
 
       const displayedNames = () => {
-        const names = combinedParticipantFirstNames();
+        const names = combinedParticipantNames();
         if (!names || names.length === 0) return undefined;
-        if (names.length <= 3) return names.join(', ');
-        return `${names[0]} .. ${names[names.length - 2]}, ${names[names.length - 1]}`;
+        if (names.length === 1) return names[0];
+        // For multiple participants, use first names only
+        const firstNames = names.map((name) => name.split(' ')[0]);
+        if (firstNames.length <= 3) return firstNames.join(', ');
+        return `${firstNames[0]} .. ${firstNames[firstNames.length - 2]}, ${firstNames[firstNames.length - 1]}`;
       };
 
+      const isSearch = () => isSearchEntity(props.entity);
+
       return (
-        <div class="flex gap-1 items-center text-sm min-w-0 w-full truncate overflow-hidden">
+        <div class="flex gap-1 items-center text-sm min-w-0 w-full truncate overflow-hidden @max-md/split:flex-col @max-md/split:items-start @max-md/split:gap-1 @max-md/split:truncate-none">
           {/* sometimes senderName and senderEmail are the same */}
-          <div class="flex w-[20cqw] gap-2 font-semibold shrink-0">
+          <div
+            class="flex gap-2 items-center font-semibold shrink-0 @max-md/split:w-full @max-md/split:truncate"
+            classList={{
+              'w-[20cqw]': !isSearch(),
+            }}
+          >
+            {/* Icon inline with sender in narrow mode */}
+            <div class="hidden @max-md/split:flex size-[1em] shrink-0 items-center justify-center relative group/icon-checkbox">
+              {/* Checkbox for narrow mode - shown on hover or when checked */}
+              <button
+                type="button"
+                class="absolute inset-0 flex items-center justify-center opacity-0 group-hover/icon-checkbox:opacity-100 transition-opacity"
+                classList={{
+                  'opacity-100': props.checked,
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  props.onChecked?.(!props.checked, e.shiftKey);
+                }}
+                data-blocks-navigation
+              >
+                <div
+                  class="size-[0.875em] flex items-center justify-center rounded-xs border border-edge-muted pointer-events-none"
+                  classList={{
+                    'bg-accent border-accent': props.checked,
+                  }}
+                >
+                  <Show when={props.checked}>
+                    <CheckIcon class="w-full h-full text-panel" />
+                  </Show>
+                </div>
+              </button>
+              {/* Icon - hidden on hover in narrow mode when not checked */}
+              <div
+                class="flex items-center justify-center group-hover/icon-checkbox:opacity-0 transition-opacity"
+                classList={{
+                  'opacity-0': props.checked,
+                }}
+              >
+                <Dynamic
+                  component={getIcon().icon}
+                  class={`flex size-full ${getIcon().foreground}`}
+                />
+              </div>
+            </div>
             {/* Sender Name */}
-            <div class="truncate">
+            <div class="truncate @max-md/split:min-w-0">
               {displayedNames() ??
                 props.entity.senderName ??
                 props.entity.senderEmail?.split('@')[0]}
@@ -302,20 +572,46 @@ export function EntityWithEverything(
           </div>
           {/* Subject */}
           {/*<ImportantBadge active={props.importantIndicatorActive} />*/}
-          <div class="flex items-center w-full gap-4 flex-1 min-w-0">
-            <div class="font-medium shrink-0 truncate">
-              <Show when={searchHighlightName()} fallback={props.entity.name}>
-                {(name) => (
-                  <StaticMarkdown
-                    markdown={name()}
-                    theme={unifiedListMarkdownTheme}
-                    singleLine={true}
-                  />
-                )}
+          <div class="flex items-center w-full gap-2 flex-1 min-w-0 @max-md/split:flex-col @max-md/split:items-start @max-md/split:w-full @max-md/split:gap-1">
+            <div class="flex items-center gap-2 flex-1 min-w-0 @max-md/split:w-full @max-md/split:justify-between @max-md/split:min-w-0">
+              <div
+                class="shrink-0 truncate @max-md/split:min-w-0 @max-md/split:flex-1"
+                classList={{
+                  'font-regular text-ink-disabled': isSearch(),
+                  'font-medium': !isSearch(),
+                }}
+              >
+                <Show when={isSearch()}>
+                  <span class="@max-md/split:hidden"> – </span>
+                </Show>
+                <Show when={searchHighlightName()} fallback={props.entity.name}>
+                  {(name) => (
+                    <StaticMarkdown
+                      markdown={name()}
+                      theme={unifiedListMarkdownTheme}
+                      singleLine={true}
+                    />
+                  )}
+                </Show>
+              </div>
+              {/* Body snippet - inline in wide mode */}
+              <div class="truncate shrink grow opacity-60 @max-md/split:hidden">
+                {props.entity.snippet}
+              </div>
+              {/* Timestamp inline with subject in narrow mode */}
+              <Show when={props.timestamp ?? props.entity.updatedAt}>
+                {(date) => {
+                  const formattedDate = createFormattedDate(date());
+                  return (
+                    <span class="hidden @max-md/split:inline shrink-0 whitespace-nowrap text-xs font-mono uppercase text-ink-extra-muted">
+                      {formattedDate()}
+                    </span>
+                  );
+                }}
               </Show>
             </div>
-            {/* Body  */}
-            <div class="truncate shrink grow opacity-60">
+            {/* Body snippet - below subject in narrow mode */}
+            <div class="hidden @max-md/split:block truncate w-full text-xs opacity-60">
               {props.entity.snippet}
             </div>
           </div>
@@ -327,9 +623,7 @@ export function EntityWithEverything(
       props.entity.type === 'channel' ? props.entity : null
     );
 
-    const latestMessageContent = createMemo(
-      () => channelEntity()?.latestMessage?.content
-    );
+    const latestMessage = createMemo(() => channelEntity()?.latestMessage);
 
     const userNameFromSender = createMemo(() => {
       const senderId = channelEntity()?.latestMessage?.senderId;
@@ -342,49 +636,122 @@ export function EntityWithEverything(
       return (
         !props.showUnrollNotifications &&
         props.entity.type === 'channel' &&
-        !isSearchEntity(props.entity) &&
-        !!props.entity.latestMessage?.content
+        !isSearchEntity(props.entity)
       );
     };
 
     return (
-      <div class="flex gap-2 items-center min-w-0 w-fit max-w-full overflow-hidden">
-        <span class="flex gap-1 truncate font-medium text-sm shrink-0 items-center">
-          <span
-            class="font-semibold truncate"
-            classList={{
-              'w-[20cqw]': !props.showUnrollNotifications,
-            }}
-          >
-            <Show when={searchHighlightName()} fallback={props.entity.name}>
-              {(name) => (
-                <StaticMarkdown
-                  markdown={name()}
-                  theme={unifiedListMarkdownTheme}
-                  singleLine={true}
-                />
-              )}
-            </Show>
-          </span>
-
-          <Show when={showLatestMessageInfo()}>
-            <div class="flex items-center gap-1">
-              {/*<ImportantBadge active={props.importantIndicatorActive} />*/}
-              <span class="font-medium shrink-0 truncate">
-                {userNameFromSender()}
-              </span>
+      <div class="flex gap-2 items-center min-w-0 w-fit max-w-full overflow-hidden @max-md/split:flex-col @max-md/split:items-start @max-md/split:w-full @max-md/split:gap-1">
+        <span class="flex gap-1 truncate font-medium text-sm shrink-0 items-center @max-md/split:w-full @max-md/split:flex-col @max-md/split:items-start @max-md/split:gap-1">
+          <div class="flex items-center gap-2 w-full @max-md/split:justify-between @max-md/split:min-w-0">
+            {/* Icon inline with title in narrow mode */}
+            <div class="hidden @max-md/split:flex size-[1em] shrink-0 items-center justify-center relative group/icon-checkbox-nonemail">
+              {/* Checkbox for narrow mode - shown on hover or when checked */}
+              <button
+                type="button"
+                class="absolute inset-0 flex items-center justify-center opacity-0 group-hover/icon-checkbox-nonemail:opacity-100 transition-opacity"
+                classList={{
+                  'opacity-100': props.checked,
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  props.onChecked?.(!props.checked, e.shiftKey);
+                }}
+                data-blocks-navigation
+              >
+                <div
+                  class="size-[0.875em] flex items-center justify-center rounded-xs border border-edge-muted pointer-events-none"
+                  classList={{
+                    'bg-accent border-accent': props.checked,
+                  }}
+                >
+                  <Show when={props.checked}>
+                    <CheckIcon class="w-full h-full text-panel" />
+                  </Show>
+                </div>
+              </button>
+              {/* Icon - hidden on hover in narrow mode when not checked */}
+              <div
+                class="flex items-center justify-center group-hover/icon-checkbox-nonemail:opacity-0 transition-opacity"
+                classList={{
+                  'opacity-0': props.checked,
+                }}
+              >
+                <Show
+                  when={
+                    props.entity.type === 'channel' &&
+                    props.entity.channelType === 'direct_message'
+                  }
+                  fallback={
+                    <Dynamic
+                      component={getIcon().icon}
+                      class={`flex size-full ${getIcon().foreground}`}
+                    />
+                  }
+                >
+                  <DirectMessageIcon entity={props.entity} />
+                </Show>
+              </div>
             </div>
-            <Show when={latestMessageContent()}>
-              {(lastMessageContent) => (
-                <div class="truncate shrink grow opacity-60 flex items-center">
+            <span
+              class="font-semibold truncate @max-md/split:min-w-0 @max-md/split:flex-1"
+              classList={{
+                'w-[20cqw]': !props.showUnrollNotifications,
+              }}
+            >
+              <Show when={searchHighlightName()} fallback={props.entity.name}>
+                {(name) => (
                   <StaticMarkdown
-                    markdown={lastMessageContent().trim()}
+                    markdown={name()}
                     theme={unifiedListMarkdownTheme}
                     singleLine={true}
                   />
-                </div>
-              )}
+                )}
+              </Show>
+            </span>
+            {/* Timestamp inline with title in narrow mode */}
+            <Show when={props.timestamp ?? props.entity.updatedAt}>
+              {(date) => {
+                const formattedDate = createFormattedDate(date());
+                return (
+                  <span class="hidden @max-md/split:inline shrink-0 whitespace-nowrap text-xs font-mono uppercase text-ink-extra-muted">
+                    {formattedDate()}
+                  </span>
+                );
+              }}
             </Show>
+          </div>
+
+          <Show when={showLatestMessageInfo()}>
+            <div class="flex items-center gap-1 @max-md/split:w-full @max-md/split:flex-col @max-md/split:items-start @max-md/split:gap-1">
+              {/*<ImportantBadge active={props.importantIndicatorActive} />*/}
+              <span class="font-medium shrink-0 truncate @max-md/split:w-full">
+                {userNameFromSender()}
+              </span>
+              <Show when={latestMessage()}>
+                {(lastMessage) => (
+                  <div class="truncate shrink grow opacity-60 flex items-center @max-md/split:w-full @max-md/split:text-xs">
+                    {/* TODO (seamus): Channels endpoint does not return any information about attachments. If we have an empty message, assume it's attachments.*/}
+                    <Show
+                      when={lastMessage().content.trim()}
+                      fallback={
+                        <span class="italic text-ink-disabled">
+                          Attached items
+                        </span>
+                      }
+                    >
+                      {(content) => (
+                        <StaticMarkdown
+                          markdown={content()}
+                          theme={unifiedListMarkdownTheme}
+                          singleLine={true}
+                        />
+                      )}
+                    </Show>
+                  </div>
+                )}
+              </Show>
+            </div>
           </Show>
         </span>
       </div>
@@ -440,17 +807,23 @@ export function EntityWithEverything(
       use:draggable
       use:droppable
       data-checked={props.checked}
-      class="everything-entity relative group/entity"
+      class="everything-entity relative group/entity hover:bg-hover/30"
       classList={{
-        'bg-hover/30': props.highlighted && !props.checked,
-        'bg-accent/5': props.checked,
+        'outline outline-accent/20 outline-offset-[-1px]':
+          !isTouchDevice && props.selected && !props.checked,
+        '!bg-accent/5 outline outline-accent/20 outline-offset-[-1px]':
+          props.checked,
         'bracket outline outline-accent/20 outline-offset-[-1px]':
-          props.selected,
+          !isTouchDevice && props.selected,
+        'active:bracket active:outline active:outline-accent/20 active:outline-offset-[-1px]':
+          isTouchDevice && !props.checked,
       }}
       onMouseOver={(e) => {
+        if (isTouchDevice) return;
         if (!didCursorMove(e)) {
           return;
         }
+        setHoveredEntityId(props.entity.id);
         props.onMouseOver?.();
       }}
       onContextMenu={() => {
@@ -460,7 +833,7 @@ export function EntityWithEverything(
       <div
         data-entity
         data-entity-id={props.entity.id}
-        class="w-full min-w-0 grid flex-1 items-center suppress-css-bracket grid-cols-[2rem_1fr_auto] pr-2"
+        class="w-full min-w-0 grid flex-1 items-center suppress-css-bracket grid-cols-[2rem_1fr_auto] @max-md/split:flex @max-md/split:flex-col pr-2 @max-md/split:px-2 @max-md/split:py-2"
         onClick={(e) => {
           if (blocksNavigation(e)) return;
           props.onClick?.(props.entity, e);
@@ -482,17 +855,13 @@ export function EntityWithEverything(
 
           actionButtonRef()?.focus();
         }}
-        onKeyDown={onKeyDownClick((e) =>
-          props.onClick?.(props.entity, e as any)
-        )}
-        onKeyUp={onKeyUpClick((e) => props.onClick?.(props.entity, e as any))}
         role="button"
         tabIndex={0}
         ref={mergeRefs(setEntityDivRef, props.ref)}
       >
         <button
           type="button"
-          class="col-1 size-full relative group/button flex items-center justify-center bracket-never"
+          class="col-1 size-full relative group/button flex items-center justify-center bracket-never @max-md/split:hidden"
           onClick={(e) => {
             props.onChecked?.(!props.checked, e.shiftKey);
           }}
@@ -501,8 +870,8 @@ export function EntityWithEverything(
           <div
             class="size-4 p-0.5 flex items-center justify-center rounded-xs group-hover/button:border-accent group-hover/button:border pointer-events-none"
             classList={{
-              'ring ring-edge-muted': props.selected,
-              'bg-panel': !props.checked && props.selected,
+              'ring ring-edge-muted': props.highlighted,
+              'bg-panel': !props.checked && props.highlighted,
               'bg-accent border border-accent': props.checked,
             }}
           >
@@ -511,7 +880,7 @@ export function EntityWithEverything(
             </Show>
           </div>
           <Show when={props.showLeftColumnIndicator && !props.checked}>
-            <div class="absolute inset-0 flex items-center justify-center -z-1">
+            <div class="absolute inset-0 flex items-center justify-center -z-1 @max-md/split:hidden">
               <UnreadIndicator active={props.unreadIndicatorActive} />
             </div>
           </Show>
@@ -519,38 +888,72 @@ export function EntityWithEverything(
         {/* Left Column Indicator(s) */}
         {/* Icon and name - top left on mobile, first item on desktop */}
         <div
-          class="min-h-10 min-w-[50px] flex flex-row items-center gap-2 col-2"
+          class="min-h-10 min-w-[50px] flex flex-row items-center gap-2 col-2 @max-md/split:col-auto @max-md/split:w-full @max-md/split:min-h-0 @max-md/split:items-start"
           classList={{
             grow: props.contentPlacement === 'bottom-row',
             'opacity-70': props.fadeIfRead && !props.unreadIndicatorActive,
           }}
         >
-          <div class="flex size-5 shrink-0 items-center justify-center">
-            <Show
-              when={
-                props.entity.type === 'channel' &&
-                props.entity.channelType === 'direct_message'
-              }
-              fallback={
-                <Dynamic
-                  component={getIcon().icon}
-                  class={`flex size-full ${getIcon().foreground}`}
-                />
-              }
+          {/* Icon/Checkbox container - in narrow mode, shows icon by default, checkbox on hover */}
+          {/* For emails, icon is inline with sender, so hide this container in narrow mode */}
+          <div class="flex size-5 shrink-0 items-center justify-center relative group/icon-checkbox @max-md/split:hidden">
+            {/* Checkbox for narrow mode - shown on hover or when checked, hidden at larger widths */}
+            <button
+              type="button"
+              class="hidden @max-md/split:flex @min-md/split:hidden absolute inset-0 items-center justify-center opacity-0 group-hover/icon-checkbox:opacity-100 transition-opacity"
+              classList={{
+                'opacity-100': props.checked,
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                props.onChecked?.(!props.checked, e.shiftKey);
+              }}
+              data-blocks-navigation
             >
-              <DirectMessageIcon entity={props.entity} />
-            </Show>
+              <div
+                class="size-4 p-0.5 flex items-center justify-center rounded-xs border border-edge-muted pointer-events-none"
+                classList={{
+                  'bg-accent border-accent': props.checked,
+                }}
+              >
+                <Show when={props.checked}>
+                  <CheckIcon class="w-full h-full text-panel" />
+                </Show>
+              </div>
+            </button>
+            {/* Icon - hidden on hover in narrow mode when not checked */}
+            <div
+              class="flex items-center justify-center @max-md/split:group-hover/icon-checkbox:opacity-0 @max-md/split:transition-opacity"
+              classList={{
+                '@max-md/split:opacity-0': props.checked,
+              }}
+            >
+              <Show
+                when={
+                  props.entity.type === 'channel' &&
+                  props.entity.channelType === 'direct_message'
+                }
+                fallback={
+                  <Dynamic
+                    component={getIcon().icon}
+                    class={`flex size-full ${getIcon().foreground}`}
+                  />
+                }
+              >
+                <DirectMessageIcon entity={props.entity} />
+              </Show>
+            </div>
           </div>
           <EntityTitle />
         </div>
         {/* Date and user - top right on mobile, end on desktop  */}
         <div
-          class="row-1 ml-2 @md:ml-4 self-center min-w-0 col-3"
+          class="row-1 ml-2 @md:ml-4 self-center min-w-0 col-3 @max-md/split:col-auto @max-md/split:row-auto @max-md/split:ml-0 @max-md/split:mt-1 @max-md/split:self-start @max-md/split:w-full"
           classList={{
             'opacity-50': props.fadeIfRead && !props.unreadIndicatorActive,
           }}
         >
-          <div class="flex flex-row items-center justify-end gap-2 min-w-0">
+          <div class="flex flex-row items-center justify-end gap-2 min-w-0 @max-md/split:justify-start @max-md/split:flex-wrap">
             <Show when={properties().length > 0}>
               <div class="pr-2 overflow-hidden shrink min-w-0">
                 <PropertyPills properties={properties()} />
@@ -574,14 +977,19 @@ export function EntityWithEverything(
               {(date) => {
                 const formattedDate = createFormattedDate(date());
                 return (
-                  <span class="shrink-0 whitespace-nowrap text-xs font-mono uppercase text-ink-extra-muted">
+                  <span class="shrink-0 whitespace-nowrap text-xs font-mono uppercase text-ink-extra-muted @max-md/split:hidden">
                     {formattedDate()}
                   </span>
                 );
               }}
             </Show>
-            <Show when={props.highlighted && props.onClickRowAction}>
-              <div class="absolute top-1 right-1 items-center flex">
+            <Show
+              when={
+                (props.selected || hoveredEntityId() === props.entity.id) &&
+                props.onClickRowAction
+              }
+            >
+              <div class="absolute top-1 right-1 items-center flex @max-sm/split:hidden">
                 <Tooltip
                   tooltip={
                     <LabelAndHotKey
@@ -608,17 +1016,19 @@ export function EntityWithEverything(
         </div>
         {/* Content Hits from Search */}
         <Show when={contentHitData().length > 0}>
-          <div class="relative row-2 grid gap-2 col-2 col-end-4 pb-2">
-            <For each={contentHitData()}>
-              {(data) => (
-                <Show
-                  when={data.type === 'channel' && data}
-                  fallback={<GenericContentHit data={data} />}
-                >
-                  {(data) => <ChannelMessageContentHit data={data()} />}
-                </Show>
+          <div class="relative row-2 col-2 col-end-4 pb-2 @max-md/split:row-auto @max-md/split:col-auto @max-md/split:w-full @max-md/split:mt-1">
+            <CollapsibleList items={contentHitData()} threadBorder>
+              {(data, index, count) => (
+                <ContentHitRow
+                  data={data}
+                  onClick={(e, location) => {
+                    props.onClick?.(props.entity, e, location);
+                  }}
+                  index={index}
+                  count={count}
+                />
               )}
-            </For>
+            </CollapsibleList>
           </div>
         </Show>
         {/* Notifications */}
@@ -629,140 +1039,16 @@ export function EntityWithEverything(
             contentHitData().length === 0
           }
         >
-          <div class="relative col-2 col-end-4 200 pb-2 gap-2">
-            <For each={notDoneNotifications()}>
-              {(notification) => {
-                const [userName] = useDisplayName(notification.senderId);
-
-                const formattedDate = createFormattedDate(
-                  notification.createdAt
-                );
-
-                const ActionContent = () => {
-                  if (
-                    notification.notificationEventType === 'document_mention' ||
-                    notification.notificationEventType ===
-                      'channel_message_document'
-                  ) {
-                    return 'shared';
-                  }
-
-                  const metadata =
-                    tryToTypedNotification(notification)?.notificationMetadata;
-                  if (
-                    !metadata ||
-                    !('messageContent' in metadata) ||
-                    !metadata.messageContent
-                  )
-                    return '';
-
-                  return 'message';
-                };
-
-                const MessageContent = () => {
-                  if (
-                    notification.notificationEventType === 'document_mention' ||
-                    notification.notificationEventType ===
-                      'channel_message_document'
-                  ) {
-                    return '';
-                  }
-
-                  const metadata =
-                    tryToTypedNotification(notification)?.notificationMetadata;
-                  if (
-                    !metadata ||
-                    !('messageContent' in metadata) ||
-                    !metadata.messageContent
-                  )
-                    return '';
-
-                  return (
-                    <StaticMarkdown
-                      markdown={metadata.messageContent.trim()}
-                      theme={unifiedListMarkdownTheme}
-                      singleLine={true}
-                    />
-                  );
-                };
-
-                return (
-                  <div
-                    class="relative flex gap-1 items-center min-w-0 h-8"
-                    classList={{
-                      'hover:bg-hover/20 hover:opacity-70':
-                        !!props.onClickNotification,
-                      'opacity-70': notification.viewedAt !== null,
-                    }}
-                    onClick={
-                      props.onClickNotification
-                        ? [
-                            props.onClickNotification,
-                            {
-                              ...props.entity,
-                              notification,
-                            },
-                          ]
-                        : undefined
-                    }
-                  >
-                    <ThreadBorder />
-                    <div class="flex size-5 shrink-0 items-center justify-center mr-1">
-                      <NotificationUserIcon id={notification.senderId!} />
-                    </div>
-                    <div class="flex gap-2 text-sm w-full min-w-0 overflow-hidden items-baseline">
-                      <div class="text-sm w-[20cqw] shrink-0 truncate min-w-0">
-                        {userName()}{' '}
-                        <span class="opacity-70 uppercase font-mono text-[0.625rem] mx-2">
-                          {ActionContent()}
-                        </span>
-                      </div>
-                      {/*<ImportantBadge
-                        active={
-                          notification.viewedAt === null &&
-                          notification.isImportantV0
-                        }
-                      />*/}
-                      <MessageContent />
-                    </div>
-                    <div class="shrink-0 font-mono text-xs uppercase text-ink-extra-muted ml-2">
-                      {formattedDate()}
-                    </div>
-                  </div>
-                );
-              }}
-            </For>
-            <Show
-              when={
-                hasNotifications() &&
-                (props.entity.notifications?.().length ?? 0) > 3
-              }
-            >
-              <div class="relative h-5">
-                <ThreadBorder />
-                <button
-                  class="block w-fit px-2 py-0.5 text-[10px] border border-edge uppercase font-mono hover:font-medium"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowRestOfNotifications((prev) => !prev);
-                  }}
-                  data-blocks-navigation
-                >
-                  <Show
-                    when={!showRestOfNotifications()}
-                    fallback={<>Collapse</>}
-                  >
-                    + {(props.entity.notifications?.().length ?? 0) - 3} More
-                  </Show>
-                </button>
-              </div>
-            </Show>
-            {/* <div class="relative h-4">
-            <ThreadBorder />
-            <button class="block p-1 py-0 text-[10px] h-4 border border-edge uppercase font-mono">
-              + 6 more
-            </button>
-          </div> */}
+          <div class="relative col-2 col-end-4 pb-2 @max-md/split:col-auto @max-md/split:w-full @max-md/split:mt-1">
+            <CollapsibleList items={notDoneNotifications()} threadBorder>
+              {(notification) => (
+                <NotificationRow
+                  notification={notification}
+                  onClick={props.onClickNotification}
+                  entity={props.entity}
+                />
+              )}
+            </CollapsibleList>
           </div>
         </Show>
       </div>
@@ -774,7 +1060,9 @@ function DirectMessageIcon(props: { entity: EntityData }) {
   const userId = useUserId();
   const participantId = () =>
     props.entity.type === 'channel'
-      ? (props.entity.particpantIds ?? []).filter((id) => id !== userId()).at(0)
+      ? (props.entity.participantIds ?? [])
+          .filter((id) => id !== userId())
+          .at(0)
       : undefined;
 
   const Fallback = () => <EntityIcon targetType="directMessage" />;
@@ -785,31 +1073,6 @@ function DirectMessageIcon(props: { entity: EntityData }) {
         {(id) => <UserIcon id={id()} isDeleted={false} size="xs" />}
       </Show>
     </div>
-  );
-}
-
-function NotificationUserIcon(props: { id: string; name?: string }) {
-  const fallbackName = () => props.name || props.id.replace('macro|', '');
-  const Fallback = () => (
-    <span class="flex size-4 items-center justify-center rounded-full bg-ink-extra-muted">
-      <span class="font-medium text-[7px] text-white">
-        {fallbackName().charAt(0).toUpperCase()}
-      </span>
-    </span>
-  );
-
-  if (!props.id.startsWith('macro|')) return <Fallback />;
-
-  const profilePicQuery = createProfilePictureQuery(props.id);
-  const Loading = () => (
-    <div class="flex size-4 animate-pulse rounded-full bg-ink-extra-muted" />
-  );
-  return (
-    <Suspense fallback={<Loading />}>
-      <Show when={profilePicQuery.data?.url} fallback={<Fallback />}>
-        {(url) => <img src={url()} class="inline-block size-4 rounded-full" />}
-      </Show>
-    </Suspense>
   );
 }
 
@@ -871,7 +1134,7 @@ function EntityProject(props: {
   entity: ProjectContainedEntity;
   onClick?: EntityClickHandler<ProjectEntity>;
 }) {
-  const projectQuery = createProjectQuery(props.entity);
+  const projectQuery = createProjectQuery(props.entity.projectId);
   let projectIconRef!: HTMLDivElement;
 
   createEffect(() => {
@@ -888,7 +1151,7 @@ function EntityProject(props: {
         ownerId: data.owner,
         updatedAt: data.updatedAt,
       };
-      click(projectEntity, e, { ignorePreview: true });
+      click(projectEntity, e, undefined, { ignorePreview: true });
     };
 
     projectIconRef.classList.add('hover:text-accent');
@@ -969,26 +1232,36 @@ const trackKeydownDuringTask = () => {
   return { keydownDataDuringTask };
 };
 
+const startOfDay = (d: Date) =>
+  new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+
 const createFormattedDate = (timestamp: number) =>
   createMemo(() => {
-    if (timestamp < 1e12) {
-      timestamp *= 1000;
-    }
-    const date = new Date(timestamp);
-    const currentDate = new Date();
-    if (date.getDate() === currentDate.getDate()) {
+    const ts = timestamp < 1e12 ? timestamp * 1000 : timestamp;
+
+    const date = new Date(ts);
+    const now = new Date();
+
+    const dateDay = startOfDay(date);
+    const todayDay = startOfDay(now);
+
+    // Today → show time
+    if (dateDay === todayDay) {
       return date.toLocaleTimeString('en-US', {
         hour: '2-digit',
         minute: '2-digit',
       });
     }
-    if (date.getFullYear() === currentDate.getFullYear()) {
+
+    // Same year → show Month Day
+    if (date.getFullYear() === now.getFullYear()) {
       return date.toLocaleDateString('en-US', {
         month: 'short',
         day: 'numeric',
       });
     }
 
+    // Older → show numeric date
     return date.toLocaleDateString('en-US', {
       month: 'numeric',
       day: 'numeric',

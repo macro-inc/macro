@@ -71,6 +71,7 @@ export async function handleFileUpload(
       name: file.name,
       blockName: initialAttachmentType || 'unknown',
       pending: true,
+      file,
     };
 
     const existingAttachments = inputAttachmentsStore.store[key] ?? [];
@@ -93,6 +94,7 @@ export async function handleFileUpload(
             name: file.name,
             blockName: initialAttachmentType || 'unknown',
             pending: false,
+            file,
           };
         } else if (result.destination === 'dss' && result.type === 'document') {
           finalAttachment = {

@@ -1,6 +1,6 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { stack } from '@shared';
+import { stack } from '../../packages/shared';
 
 export function setupReplicationBucket() {
   const replicationRegion = new aws.Provider(`replica-${stack}`, {

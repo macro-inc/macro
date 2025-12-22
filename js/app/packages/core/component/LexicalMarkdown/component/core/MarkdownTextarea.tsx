@@ -1,6 +1,7 @@
 import type { PortalScope } from '@core/component/ScopedPortal';
 import type { EditorType } from '@lexical-core';
 import type { Item } from '@service-storage/generated/schemas/item';
+import { onElementConnect } from '@solid-primitives/lifecycle';
 import {
   COMMAND_PRIORITY_CRITICAL,
   COMMAND_PRIORITY_HIGH,
@@ -13,8 +14,8 @@ import {
   type Accessor,
   createEffect,
   createSignal,
+  type JSX,
   onCleanup,
-  onMount,
   Show,
 } from 'solid-js';
 import type { SetStoreFunction } from 'solid-js/store';
@@ -32,11 +33,11 @@ import {
   type ItemMention,
   keyboardFocusPlugin,
   mentionsPlugin,
-  registerRootEventListener,
   type SelectionData,
   selectionDataPlugin,
   tabIndentationPlugin,
 } from '../../plugins';
+import { restoreFocusPlugin } from '../../plugins/restore-focus';
 import { createMenuOperations } from '../../shared/inlineMenu';
 import {
   editorIsEmpty,
@@ -68,6 +69,7 @@ export interface MarkdownTextareaProps {
   initialValue?: string;
   initialHtml?: string;
   placeholder?: string;
+  watermark?: JSX.Element;
   type?: EditorType;
   onEnter?: (e: KeyboardEvent, value: string) => boolean;
   focusOnMount?: boolean;
@@ -110,7 +112,7 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
 
   const [markdownState, setMarkdownState] = createSignal<string>('');
 
-  onMount(() => {
+  const onConnect = () => {
     if (props.focusOnMount) {
       setTimeout(() => {
         mountRef.focus();
@@ -122,15 +124,7 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
     } else if (props.initialValue) {
       setEditorStateFromMarkdown(editor, props.initialValue);
     }
-  });
-
-  // better focus in handling. preserves selection on regain focus!
-  autoRegister(
-    registerRootEventListener(editor, 'focusin', (e) => {
-      e.preventDefault();
-      editor.focus();
-    })
-  );
+  };
 
   createEffect(() => {
     editor.setEditable(props.editable());
@@ -160,6 +154,7 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
     .delete()
     .state<string>(setMarkdownState, 'markdown')
     .history(400)
+    .use(restoreFocusPlugin())
     .use(
       props.formatState && props.setFormatState
         ? customSelectionDataPlugin(
@@ -186,16 +181,19 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
     })
   );
 
-  if (props.onFocusLeaveEnd && props.onFocusLeaveStart) {
-    plugins.use(
-      keyboardFocusPlugin({
-        onFocusLeaveStart: props.onFocusLeaveStart,
-        onFocusLeaveEnd: props.onFocusLeaveEnd,
-        ignoreKeys: () =>
-          mentionsMenuOperations.isOpen() || emojisMenuOperations.isOpen(),
-      })
-    );
-  }
+  plugins.useReactive(
+    [() => props.onFocusLeaveEnd, () => props.onFocusLeaveStart],
+    () => {
+      if (props.onFocusLeaveEnd && props.onFocusLeaveStart) {
+        return keyboardFocusPlugin({
+          onFocusLeaveStart: props.onFocusLeaveStart,
+          onFocusLeaveEnd: props.onFocusLeaveEnd,
+          ignoreKeys: () =>
+            mentionsMenuOperations.isOpen() || emojisMenuOperations.isOpen(),
+        });
+      }
+    }
+  );
 
   let cleanupEnterListener: () => void = () => {};
   createEffect(() => {
@@ -227,11 +225,6 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
       // Run at HIGH here so that the mentions menu can run at CRITICAL
       COMMAND_PRIORITY_HIGH
     );
-  });
-
-  onMount(() => {
-    editor.setRootElement(mountRef);
-    props.domRef?.(mountRef);
   });
 
   onCleanup(() => {
@@ -275,16 +268,31 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
           e.stopPropagation();
         }}
       >
-        <div ref={mountRef} contentEditable={props.editable()} />
+        <div
+          ref={(el) => {
+            onElementConnect(el, () => {
+              editor.setRootElement(el);
+              onConnect();
+            });
+          }}
+          contentEditable={props.editable()}
+        />
+
         <DecoratorRenderer editor={editor} />
         <NodeAccessoryRenderer editor={editor} store={accessoryStore} />
         <Show when={showPlaceholder()}>
-          <div class="pointer-events-none text-ink-extra-muted absolute top-0">
+          <div class="pointer-events-none text-ink-placeholder/50 absolute top-0">
             <p class="my-1.5 pointer-events-none">
               {props.placeholder ?? '...'}
             </p>
           </div>
         </Show>
+        <Show when={props.watermark}>
+          <div class="text-ink/50 mt-[1lh]" data-watermark>
+            {props.watermark}
+          </div>
+        </Show>
+
         <MentionsMenu
           editor={editor}
           menu={mentionsMenuOperations}

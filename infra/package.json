@@ -7,7 +7,8 @@
   ],
   "scripts": {
     "lint": "biome check .",
-    "format": "biome check --write ."
+    "format": "biome check --write .",
+    "check": "tsc --noEmit"
   },
   "devDependencies": {
     "@biomejs/biome": "2.2.2",

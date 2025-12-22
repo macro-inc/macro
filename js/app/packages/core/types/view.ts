@@ -2,6 +2,7 @@ export const DEFAULT_VIEWS = [
   'signal',
   'noise',
   'people',
+  'email',
   'files',
   'tasks',
   'folders',

@@ -1,6 +1,6 @@
 import type { Entity } from '@core/types';
-import { useUserNotificationsQuery } from '@macro-entity';
 import {
+  useUserNotificationsQuery,
   useMarkNotificationsAsDoneMutation,
   useMarkNotificationsAsSeenMutation,
 } from '@queries/notification/user-notifications';

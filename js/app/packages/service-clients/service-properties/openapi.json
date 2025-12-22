@@ -27,6 +27,13 @@
             "description": "Whether to include property options in the response",
             "required": false,
             "schema": { "type": "boolean" }
+          },
+          {
+            "name": "for_entity_type",
+            "in": "query",
+            "description": "Filter properties applicable to a specific entity type",
+            "required": false,
+            "schema": { "$ref": "#/components/schemas/EntityType" }
           }
         ],
         "responses": {
@@ -309,6 +316,9 @@
         ],
         "responses": {
           "204": { "description": "Entity property removed successfully" },
+          "403": {
+            "description": "Property is required and cannot be removed"
+          },
           "404": { "description": "Entity property not found" },
           "500": { "description": "Internal server error" }
         }
@@ -502,10 +512,15 @@
       "EntityReference": {
         "type": "object",
         "description": "Entity reference for entity-type property values.",
-        "required": ["entity_type", "entity_id"],
+        "required": ["entity_id", "entity_type"],
         "properties": {
           "entity_id": { "type": "string" },
-          "entity_type": { "$ref": "#/components/schemas/EntityType" }
+          "entity_type": { "$ref": "#/components/schemas/EntityType" },
+          "specific_message_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread/channel/chat."
+          }
         }
       },
       "EntityType": {
@@ -527,6 +542,15 @@
         "description": "Query parameters for listing properties",
         "required": ["scope"],
         "properties": {
+          "for_entity_type": {
+            "oneOf": [
+              { "type": "null" },
+              {
+                "$ref": "#/components/schemas/EntityType",
+                "description": "Filter properties applicable to a specific entity type.\nWhen provided, excludes properties that cannot be attached to this entity type\n(e.g., Parent Task and Subtasks are excluded for non-task entities)."
+              }
+            ]
+          },
           "include_options": {
             "type": "boolean",
             "description": "Whether to include property options in the response"

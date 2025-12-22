@@ -1,12 +1,11 @@
 use crate::pubsub::backfill::increment_counters;
 use crate::pubsub::context::PubSubContext;
-use crate::pubsub::util::check_gmail_rate_limit;
+use crate::pubsub::util::{CheckGmailRateLimitArgs, check_gmail_rate_limit};
 use crate::util::process_pre_insert::process_message_pre_insert;
 use models_email::email::service::backfill::{BackfillMessagePayload, BackfillPubsubMessage};
 use models_email::email::service::link;
 use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use models_email::gmail::operations::GmailApiOperation;
-
 /// This step is invoked by BackfillThread once for each message in the thread.
 /// Creates a message object in the database. If the message is the last message in
 /// the thread to be processed, it sends an UpdateThreadMetadata message for the thread.
@@ -18,12 +17,13 @@ pub async fn backfill_message(
     link: &link::Link,
     p: &BackfillMessagePayload,
 ) -> Result<(), ProcessingError> {
-    check_gmail_rate_limit(
-        &ctx.redis_client,
-        link.id,
-        GmailApiOperation::MessagesGet,
-        true,
-    )
+    check_gmail_rate_limit(CheckGmailRateLimitArgs {
+        redis_client: &ctx.redis_client,
+        link_id: link.id,
+        gmail_operation: GmailApiOperation::MessagesGet,
+        retryable: true,
+        is_backfill: true,
+    })
     .await?;
 
     // get message from gmail

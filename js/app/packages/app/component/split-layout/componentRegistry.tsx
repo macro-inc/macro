@@ -1,4 +1,5 @@
 import { ChannelCompose } from '@block-channel/component/Compose';
+import { ComposeTask } from '@block-md/component/ComposeTask';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { DEV_MODE_ENV, LOCAL_ONLY } from '@core/constant/featureFlags';
 import type { ViewId } from '@core/types/view';
@@ -56,6 +57,7 @@ registerComponent('unified-list', () => <Soup />, { viewId: 'signal' });
 registerComponent('loading', () => <LoadingBlock />);
 registerComponent('channel-compose', () => <ChannelCompose />);
 registerComponent('email-compose', () => <EmailCompose />);
+registerComponent('task-compose', () => <ComposeTask />);
 
 if (LOCAL_ONLY) {
   registerComponent(

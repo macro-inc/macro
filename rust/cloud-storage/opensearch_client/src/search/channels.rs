@@ -2,7 +2,7 @@ use crate::{
     Result, delegate_methods,
     error::{OpensearchClientError, ResponseExt},
     search::{
-        builder::{SearchQueryBuilder, SearchQueryConfig},
+        builder::{SearchQueryBuilder, SearchQueryConfig, create_highlight_field},
         model::{
             DefaultSearchResponse, NameIndex, SearchGotoChannel, SearchGotoContent, SearchHit,
             parse_highlight_hit,
@@ -13,19 +13,16 @@ use crate::{
 
 use crate::SearchOn;
 use models_opensearch::{SearchEntityType, SearchIndex};
-use opensearch_query_builder::{
-    BoolQueryBuilder, FieldSort, QueryType, ScoreWithOrderSort, SearchRequest, SortOrder, SortType,
-    ToOpenSearchJson,
-};
+use opensearch_query_builder::{BoolQueryBuilder, QueryType, SearchRequest, ToOpenSearchJson};
 use serde_json::Value;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub(crate) struct ChannelMessageIndex {
-    pub entity_id: String,
+    pub entity_id: uuid::Uuid,
     pub channel_type: String,
     pub org_id: Option<i64>,
-    pub message_id: String,
-    pub thread_id: Option<String>,
+    pub message_id: uuid::Uuid,
+    pub thread_id: Option<uuid::Uuid>,
     pub sender_id: String,
     pub mentions: Vec<String>,
     pub content: String,
@@ -48,12 +45,10 @@ impl SearchQueryConfig for ChannelMessageSearchConfig {
     const TITLE_KEY: &'static str = "name";
     const ENTITY_INDEX: SearchEntityType = SearchEntityType::Channels;
 
-    fn default_sort_types<'a>() -> Vec<SortType<'a>> {
-        vec![
-            SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
-            SortType::Field(FieldSort::new(Self::ID_KEY, SortOrder::Asc)),
-            SortType::Field(FieldSort::new("message_id", SortOrder::Asc)),
-        ]
+    fn append_owner_highlights<'a>(
+        highlight: opensearch_query_builder::Highlight<'a>,
+    ) -> opensearch_query_builder::Highlight<'a> {
+        highlight.field("sender_id", create_highlight_field("plain", 1))
     }
 }
 
@@ -115,17 +110,17 @@ impl ChannelMessageQueryBuilder {
 
             // Add thread_ids to must clause if provided
             if !self.thread_ids.is_empty() {
-                bool_query.must(QueryType::terms("thread_id", self.thread_ids.clone()));
+                bool_query.filter(QueryType::terms("thread_id", self.thread_ids.clone()));
             }
 
             // Add mentions to must clause if provided
             if !self.mentions.is_empty() {
-                bool_query.must(QueryType::terms("mentions", self.mentions.clone()));
+                bool_query.filter(QueryType::terms("mentions", self.mentions.clone()));
             }
 
             // Add sender_ids to must clause if provided
             if !self.sender_ids.is_empty() {
-                bool_query.must(QueryType::terms("sender_id", self.sender_ids.clone()));
+                bool_query.filter(QueryType::terms("sender_id", self.sender_ids.clone()));
             }
 
             content_and_name_bool_queries.content_bool_query = Some(bool_query);

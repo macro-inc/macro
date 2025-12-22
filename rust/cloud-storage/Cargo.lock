@@ -134,6 +134,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "alloc-no-stdlib"
+version = "2.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cc7bb162ec39d46ab1ca8c77bf72e890535becd1751bb45f64c597edb4c8c6b3"
+
+[[package]]
+name = "alloc-stdlib"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "94fb8275041c72129eb51b7d0322c29b8387a0386127718b096429201a5d6ece"
+dependencies = [
+ "alloc-no-stdlib",
+]
+
+[[package]]
 name = "allocator-api2"
 version = "0.2.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -295,6 +310,7 @@ version = "0.4.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df895a515f70646414f4b45c0b79082783b80552b373a68283012928df56f522"
 dependencies = [
+ "brotli",
  "flate2",
  "futures-core",
  "memchr",
@@ -513,7 +529,9 @@ dependencies = [
  "maud",
  "mockall",
  "model",
+ "model-entity",
  "model_notifications",
+ "model_user",
  "models_team",
  "native_app_service",
  "non_empty",
@@ -1454,6 +1472,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "brotli"
+version = "7.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cc97b8f16f944bba54f0433f07e30be199b6dc2bd25937444bbad560bcea29bd"
+dependencies = [
+ "alloc-no-stdlib",
+ "alloc-stdlib",
+ "brotli-decompressor",
+]
+
+[[package]]
+name = "brotli-decompressor"
+version = "4.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a334ef7c9e23abf0ce748e8cd309037da93e606ad52eb372e4ce327a0dcfbdfd"
+dependencies = [
+ "alloc-no-stdlib",
+ "alloc-stdlib",
+]
+
+[[package]]
 name = "bstr"
 version = "1.11.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1744,6 +1783,7 @@ dependencies = [
  "chrono",
  "futures",
  "macro_db_migrator",
+ "macro_user_id",
  "macro_uuid",
  "model",
  "serde",
@@ -2629,12 +2669,14 @@ dependencies = [
  "model",
  "model-entity",
  "model_notifications",
+ "model_user",
  "models_bulk_upload",
  "models_opensearch",
  "models_pagination",
  "models_permissions",
  "models_soup",
  "ordered-float",
+ "properties",
  "rayon",
  "redis",
  "regex",
@@ -4473,9 +4515,11 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "cool_asserts",
+ "either",
  "filter_ast",
  "macro_user_id",
  "model_file_type",
+ "nom 8.0.0",
  "non_empty",
  "schemars",
  "serde",
@@ -5010,6 +5054,7 @@ dependencies = [
  "anyhow",
  "comms_service_client",
  "macro_db_client",
+ "macro_user_id",
  "model",
  "model-entity",
  "model_notifications",
@@ -5028,6 +5073,7 @@ dependencies = [
  "nom 8.0.0",
  "serde",
  "thiserror 2.0.17",
+ "tracing",
 ]
 
 [[package]]
@@ -5196,9 +5242,13 @@ name = "mention_utils"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "cool_asserts",
+ "macro_user_id",
+ "nom 8.0.0",
  "regex",
  "serde",
  "serde_json",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -5350,6 +5400,7 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "document_sub_type",
+ "macro_user_id",
  "model-error-response",
  "model_file_type",
  "model_user",
@@ -5395,6 +5446,8 @@ name = "model_file_type"
 version = "0.1.0"
 dependencies = [
  "serde",
+ "serde_json",
+ "strum",
  "thiserror 2.0.17",
  "utoipa",
 ]
@@ -5405,6 +5458,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "macro_user_id",
  "model-entity",
  "models_comms",
  "models_pagination",
@@ -5540,6 +5594,7 @@ dependencies = [
 name = "models_permissions"
 version = "0.1.0"
 dependencies = [
+ "model_file_type",
  "schemars",
  "serde",
  "serde_json",
@@ -5578,6 +5633,7 @@ dependencies = [
  "serde_json",
  "strum",
  "utoipa",
+ "uuid",
 ]
 
 [[package]]
@@ -5742,8 +5798,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "macro_user_id",
  "macro_uuid",
  "model",
+ "model-entity",
  "model_notifications",
  "models_pagination",
  "serde",
@@ -5778,10 +5836,12 @@ dependencies = [
  "macro_env",
  "macro_middleware",
  "macro_notify",
+ "macro_user_id",
  "macro_uuid",
  "mention_utils",
  "model",
  "model-entity",
+ "model_file_type",
  "model_notifications",
  "models_comms",
  "models_pagination",
@@ -5959,9 +6019,9 @@ dependencies = [
 
 [[package]]
 name = "opensearch_query_builder"
-version = "0.2.2"
+version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f4d171bfc21961e61231a8b8f7b06d34befb4152627d1c6b591aadd621c4681"
+checksum = "88471616dad533248e2ed35df90a076887afcbc000b0913739797fa7fea5df1a"
 dependencies = [
  "serde",
  "serde_json",
@@ -6572,6 +6632,7 @@ dependencies = [
  "axum",
  "chrono",
  "comms_service_client",
+ "email_db_client",
  "http-body-util",
  "macro_auth",
  "macro_cors",
@@ -7493,9 +7554,11 @@ dependencies = [
  "macro_entrypoint",
  "macro_env",
  "macro_middleware",
+ "macro_user_id",
  "macro_uuid",
  "mention_utils",
  "model",
+ "model_file_type",
  "models_opensearch",
  "models_search",
  "nom 8.0.0",
@@ -7534,6 +7597,7 @@ dependencies = [
  "email_service_client",
  "futures",
  "http-body-util",
+ "indexmap 2.7.1",
  "item_filters",
  "macro_auth",
  "macro_cors",
@@ -8102,6 +8166,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "aws-sdk-sns",
+ "model-entity",
+ "serde",
+ "serde_json",
+ "tracing",
 ]
 
 [[package]]
@@ -9467,8 +9535,15 @@ dependencies = [
  "serde_json",
  "url",
  "utoipa",
+ "utoipa-swagger-ui-vendored",
  "zip",
 ]
+
+[[package]]
+name = "utoipa-swagger-ui-vendored"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e2eebbbfe4093922c2b6734d7c679ebfebd704a0d7e56dfcb0d05818ce28977d"
 
 [[package]]
 name = "uuid"

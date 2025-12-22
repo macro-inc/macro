@@ -5,13 +5,20 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use std::collections::HashSet;
+use system_properties::SystemPropertyKey;
 use thiserror::Error;
 use uuid::Uuid;
 
-use crate::api::{context::ApiContext, properties::entities::types::SetEntityPropertyRequest};
+use crate::api::{
+    context::ApiContext,
+    properties::{
+        definitions::list::is_property_applicable_to, entities::types::SetEntityPropertyRequest,
+    },
+};
 use model::user::UserContext;
 use models_properties::service::property_value::PropertyValue;
 use models_properties::{EntityReference, EntityType, api::SetPropertyValue};
+use properties::PropertiesService;
 use properties_db_client::{
     entity_properties::upsert as entity_properties_upsert, error::PropertiesDatabaseError,
     property_definitions::get as property_definitions_get,
@@ -84,10 +91,7 @@ pub async fn set_entity_property(
 ) -> Result<StatusCode, SetEntityPropertyErr> {
     tracing::info!("setting entity property");
 
-    let entity_ref = EntityReference {
-        entity_id: entity_id.clone(),
-        entity_type,
-    };
+    let entity_ref = EntityReference::new(entity_id.clone(), entity_type);
     crate::api::permissions::check_entity_edit_permission(
         &context,
         &user_context.user_id,
@@ -163,6 +167,96 @@ pub async fn set_entity_property(
 
     tracing::debug!(has_value = has_value, "setting property in database");
 
+    // Check if this property can be attached to the given entity type
+    if !is_property_applicable_to(property_uuid, entity_type) {
+        return Err(SetEntityPropertyErr::InvalidRequest(
+            "This property cannot be attached to this entity type".to_string(),
+        ));
+    }
+
+    // Handle bidirectional linking for task Parent Task / Subtasks properties
+    // (if is_parent_or_subtask_property is true, entity_type is guaranteed to be Task by the earlier check)
+    if property_uuid == SystemPropertyKey::PARENT_TASK_UUID
+        || property_uuid == SystemPropertyKey::SUBTASKS_UUID
+    {
+        let task_id = Uuid::parse_str(&entity_id)
+            .map_err(|_| SetEntityPropertyErr::InvalidRequest("Invalid task ID".to_string()))?;
+
+        if property_uuid == SystemPropertyKey::PARENT_TASK_UUID {
+            // Extract parent task ID (None to clear)
+            let parent_task_id = match &request.value {
+                None => None,
+                Some(SetPropertyValue::EntityReference { reference }) => {
+                    if reference.entity_type != EntityType::Task {
+                        return Err(SetEntityPropertyErr::InvalidRequest(
+                            "Parent Task must reference a Task entity".to_string(),
+                        ));
+                    }
+                    Some(Uuid::parse_str(&reference.entity_id).map_err(|_| {
+                        SetEntityPropertyErr::InvalidRequest("Invalid task ID".to_string())
+                    })?)
+                }
+                _ => {
+                    return Err(SetEntityPropertyErr::InvalidRequest(
+                        "Parent Task requires a single entity reference".to_string(),
+                    ));
+                }
+            };
+
+            context
+                .properties_service
+                .link_parent_task(task_id, parent_task_id)
+                .await
+                .map_err(|e| {
+                    tracing::error!(error = ?e, "failed to link parent task");
+                    SetEntityPropertyErr::InternalError(anyhow::anyhow!(
+                        "Failed to link parent task: {}",
+                        e
+                    ))
+                })?;
+            tracing::info!("successfully linked parent task");
+        } else {
+            // Extract subtask IDs (empty to clear)
+            let subtask_ids = match &request.value {
+                None => vec![],
+                Some(SetPropertyValue::MultiEntityReference { references }) => {
+                    let mut ids = Vec::with_capacity(references.len());
+                    for reference in references {
+                        if reference.entity_type != EntityType::Task {
+                            return Err(SetEntityPropertyErr::InvalidRequest(
+                                "Subtasks must reference Task entities".to_string(),
+                            ));
+                        }
+                        ids.push(Uuid::parse_str(&reference.entity_id).map_err(|_| {
+                            SetEntityPropertyErr::InvalidRequest("Invalid task ID".to_string())
+                        })?);
+                    }
+                    ids
+                }
+                _ => {
+                    return Err(SetEntityPropertyErr::InvalidRequest(
+                        "Subtasks requires multiple entity references".to_string(),
+                    ));
+                }
+            };
+
+            context
+                .properties_service
+                .link_subtasks(task_id, subtask_ids)
+                .await
+                .map_err(|e| {
+                    tracing::error!(error = ?e, "failed to link subtasks");
+                    SetEntityPropertyErr::InternalError(anyhow::anyhow!(
+                        "Failed to link subtasks: {}",
+                        e
+                    ))
+                })?;
+            tracing::info!("successfully linked subtasks");
+        }
+
+        return Ok(StatusCode::NO_CONTENT);
+    }
+
     entity_properties_upsert::upsert_entity_property_values(
         &context.db,
         &entity_id,
@@ -232,6 +326,7 @@ fn convert_property_value_to_jsonb(value: &SetPropertyValue) -> Option<PropertyV
             PropertyValue::EntityRef(vec![EntityReference {
                 entity_type: reference.entity_type,
                 entity_id: reference.entity_id.clone(),
+                specific_message_id: reference.specific_message_id,
             }])
         }
 
@@ -246,6 +341,7 @@ fn convert_property_value_to_jsonb(value: &SetPropertyValue) -> Option<PropertyV
                 .map(|ref_| EntityReference {
                     entity_type: ref_.entity_type,
                     entity_id: ref_.entity_id.clone(),
+                    specific_message_id: ref_.specific_message_id,
                 })
                 .collect();
 
@@ -435,18 +531,9 @@ mod tests {
     fn test_multi_entity_reference_deduplication() {
         use models_properties::EntityReference;
 
-        let entity_ref_1 = EntityReference {
-            entity_type: EntityType::Document,
-            entity_id: "doc-1".to_string(),
-        };
-        let entity_ref_2 = EntityReference {
-            entity_type: EntityType::User,
-            entity_id: "user-1".to_string(),
-        };
-        let entity_ref_1_dup = EntityReference {
-            entity_type: EntityType::Document,
-            entity_id: "doc-1".to_string(), // Same as entity_ref_1
-        };
+        let entity_ref_1 = EntityReference::new("doc-1", EntityType::Document);
+        let entity_ref_2 = EntityReference::new("user-1", EntityType::User);
+        let entity_ref_1_dup = EntityReference::new("doc-1", EntityType::Document); // Same as entity_ref_1
 
         // Test with duplicate entity references
         let multi_entity_ref_with_dupes = SetPropertyValue::MultiEntityReference {
@@ -483,14 +570,8 @@ mod tests {
 
         // Test that same ID with different entity types ARE considered duplicates
         // (deduplicating by entity_id only, keeping first occurrence)
-        let entity_ref_1 = EntityReference {
-            entity_type: EntityType::Document,
-            entity_id: "123".to_string(),
-        };
-        let entity_ref_2 = EntityReference {
-            entity_type: EntityType::User,
-            entity_id: "123".to_string(), // Same ID but different type
-        };
+        let entity_ref_1 = EntityReference::new("123", EntityType::Document);
+        let entity_ref_2 = EntityReference::new("123", EntityType::User); // Same ID but different type
 
         let multi_entity_ref = SetPropertyValue::MultiEntityReference {
             references: vec![entity_ref_1, entity_ref_2],

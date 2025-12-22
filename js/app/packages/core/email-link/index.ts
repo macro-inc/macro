@@ -5,56 +5,30 @@ import {
 } from '@core/auth/channel';
 import { openEmailAuthPopup } from '@core/auth/email';
 import { isErr } from '@core/util/maybeResult';
-import { queryKeys } from '@macro-entity';
+import { invalidateEmailLinks, useEmailLinksQuery } from '@queries/email/link';
 import { emailClient } from '@service-email/client';
+import type { ListLinksResponse } from '@service-email/generated/schemas';
 import { updateUserInfo } from '@service-gql/client';
-import { useQuery } from '@tanstack/solid-query';
+import type { UseQueryResult } from '@tanstack/solid-query';
 import { err, okAsync, ResultAsync } from 'neverthrow';
-import { createSignal } from 'solid-js';
-import { queryClient } from '../../macro-entity/src/queries/client';
+import { createMemo, createSignal } from 'solid-js';
 
 export const [emailRefetchInterval, setEmailRefetchInterval] = createSignal<
   number | undefined
 >();
 
-const EMAIL_LINKS_QUERY_KEY = ['email-links'];
-
-async function fetchEmailLinks() {
-  const result = await emailClient.getLinks();
-  if (isErr(result)) {
-    throw new Error('Failed to fetch email links', { cause: result[0] });
+function hasEmailLinks(query: UseQueryResult<ListLinksResponse, Error>) {
+  if (!query.data || query.error) {
+    return false;
   }
-  return result[1]?.links ?? [];
-}
-
-export function useEmailLinksQuery() {
-  return useQuery(() => ({
-    queryKey: EMAIL_LINKS_QUERY_KEY,
-    queryFn: fetchEmailLinks,
-    suspense: false,
-    refetchOnMount: 'always',
-  }));
+  return query.data.links.length > 0;
 }
 
 export function useEmailLinksStatus() {
-  const links = useEmailLinksQuery();
-  return () => {
-    if (!links.data || links.error) {
-      return false;
-    }
-    return links.data?.length > 0;
-  };
-}
-
-function invalidateEmailLinks() {
-  queryClient.invalidateQueries({
-    queryKey: EMAIL_LINKS_QUERY_KEY,
+  const query = useEmailLinksQuery();
+  return createMemo(() => {
+    return hasEmailLinks(query);
   });
-  queryClient.cancelQueries({ queryKey: queryKeys.all.email });
-  queryClient.setQueriesData({ queryKey: queryKeys.all.email }, () => ({
-    pages: [],
-    pageParams: [],
-  }));
 }
 
 type EmailInitError =
@@ -161,7 +135,7 @@ export function useEmailLinks() {
 
   return {
     query: query,
-    status: useEmailLinksStatus(),
+    isConnected: () => hasEmailLinks(query),
     initEmailLink: () =>
       initEmailLink().map(startEmailPolling).map(invalidations),
     connect: () =>

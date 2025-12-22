@@ -1,3 +1,4 @@
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model::chat::ChatBasic;
 use sqlx::{Pool, Postgres};
 use std::collections::HashSet;
@@ -10,8 +11,7 @@ pub mod read;
 pub mod revert_delete;
 
 pub async fn get_basic_chat(db: &Pool<Postgres>, chat_id: &str) -> Result<ChatBasic, sqlx::Error> {
-    let chat: ChatBasic = sqlx::query_as!(
-        ChatBasic,
+    let chat: ChatBasic = sqlx::query!(
         r#"
         SELECT
             c.id as "id",
@@ -26,6 +26,17 @@ pub async fn get_basic_chat(db: &Pool<Postgres>, chat_id: &str) -> Result<ChatBa
     "#,
         chat_id,
     )
+    .try_map(|r| {
+        Ok(ChatBasic {
+            id: r.id,
+            name: r.name,
+            user_id: MacroUserIdStr::parse_from_str(&r.user_id)
+                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
+                .into_owned(),
+            project_id: r.project_id,
+            deleted_at: r.deleted_at,
+        })
+    })
     .fetch_one(db)
     .await?;
 

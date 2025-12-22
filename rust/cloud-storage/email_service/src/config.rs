@@ -15,19 +15,19 @@ pub struct Config {
     pub redis_uri: String,
 
     /// The SQS queue name that email_refresh_handler publishes messages to for refreshing
-    /// inbox sync subscriptions.
-    pub email_refresh_queue: String,
+    /// inbox sync subscriptions, and we will publish delete link messages to.
+    pub link_manager_queue: String,
 
     /// The SQS queue name that email_scheduled_handler publishes messages to for sending
     /// scheduled messages.
     pub email_scheduled_queue: String,
 
-    /// The SQS queue name we process history updates from.
-    pub gmail_webhook_queue: String,
+    /// The SQS queue name we process inbox updates from.
+    pub gmail_inbox_sync_queue: String,
 
-    /// The SQS queue name we process history update retries from. Separate from the main queue
+    /// The SQS queue name we process inbox update retries from. Separate from the main queue
     /// to avoid backups for large inbox update operations
-    pub gmail_webhook_retry_queue: String,
+    pub gmail_inbox_sync_retry_queue: String,
 
     /// The SQS queue name for search event
     pub search_event_queue: String,
@@ -65,20 +65,24 @@ pub struct Config {
     /// The queue max messages per poll for backfill
     pub backfill_queue_max_messages: i32,
 
-    /// The number of workers we spawn for gmail webhook
-    pub webhook_queue_workers: i32,
+    /// The number of workers we spawn for gmail inbox sync
+    pub inbox_sync_queue_workers: i32,
 
-    /// The queue max messages per poll for gmail webhook
-    pub webhook_queue_max_messages: i32,
+    /// The queue max messages per poll for gmail inbox sync
+    pub inbox_sync_queue_max_messages: i32,
 
-    /// The number of workers we spawn for gmail retry webhook
-    pub webhook_retry_queue_workers: i32,
+    /// The number of workers we spawn for gmail retry inbox sync
+    pub inbox_sync_retry_queue_workers: i32,
 
-    /// The queue max messages per poll for gmail retry webhook
-    pub webhook_retry_queue_max_messages: i32,
+    /// The queue max messages per poll for gmail retry inbox sync
+    pub inbox_sync_retry_queue_max_messages: i32,
 
     /// The number of workers we spawn for sfs uploader
     pub sfs_uploader_workers: i32,
+
+    /// The number of requests we allow per window for backfilling. Less than redis_rate_limit_reqs
+    /// so we have room for normal gmail operations while backfilling is occurring
+    pub redis_rate_limit_reqs_backfill: u32,
 
     /// The number of requests we allow per window.
     pub redis_rate_limit_reqs: u32,
@@ -136,17 +140,17 @@ impl Config {
 
         let redis_uri = std::env::var("REDIS_URI").context("REDIS_URI must be provided")?;
 
-        let email_refresh_queue =
-            std::env::var("EMAIL_REFRESH_QUEUE").context("EMAIL_REFRESH_QUEUE must be provided")?;
+        let link_manager_queue =
+            std::env::var("LINK_MANAGER_QUEUE").context("LINK_MANAGER_QUEUE must be provided")?;
 
         let email_scheduled_queue = std::env::var("EMAIL_SCHEDULED_QUEUE")
             .context("EMAIL_SCHEDULED_QUEUE must be provided")?;
 
-        let gmail_webhook_queue =
-            std::env::var("GMAIL_WEBHOOK_QUEUE").context("GMAIL_WEBHOOK_QUEUE must be provided")?;
+        let gmail_inbox_sync_queue = std::env::var("GMAIL_INBOX_SYNC_QUEUE")
+            .context("GMAIL_INBOX_SYNC_QUEUE must be provided")?;
 
-        let gmail_webhook_retry_queue = std::env::var("GMAIL_WEBHOOK_RETRY_QUEUE")
-            .context("GMAIL_WEBHOOK_RETRY_QUEUE must be provided")?;
+        let gmail_inbox_sync_retry_queue = std::env::var("GMAIL_INBOX_SYNC_RETRY_QUEUE")
+            .context("GMAIL_INBOX_SYNC_RETRY_QUEUE must be provided")?;
 
         let search_event_queue =
             std::env::var("SEARCH_EVENT_QUEUE").context("SEARCH_EVENT_QUEUE must be provided")?;
@@ -192,23 +196,23 @@ impl Config {
             .parse::<i32>()
             .unwrap();
 
-        let webhook_queue_workers: i32 = std::env::var("WEBHOOK_QUEUE_WORKERS")
+        let inbox_sync_queue_workers: i32 = std::env::var("INBOX_SYNC_QUEUE_WORKERS")
             .unwrap_or("10".to_string())
             .parse::<i32>()
             .unwrap();
 
-        let webhook_queue_max_messages: i32 = std::env::var("WEBHOOK_QUEUE_MAX_MESSAGES")
+        let inbox_sync_queue_max_messages: i32 = std::env::var("INBOX_SYNC_QUEUE_MAX_MESSAGES")
             .unwrap_or("1".to_string())
             .parse::<i32>()
             .unwrap();
 
-        let webhook_retry_queue_workers: i32 = std::env::var("WEBHOOK_RETRY_QUEUE_WORKERS")
+        let inbox_sync_retry_queue_workers: i32 = std::env::var("INBOX_SYNC_RETRY_QUEUE_WORKERS")
             .unwrap_or("10".to_string())
             .parse::<i32>()
             .unwrap();
 
-        let webhook_retry_queue_max_messages: i32 =
-            std::env::var("WEBHOOK_RETRY_QUEUE_MAX_MESSAGES")
+        let inbox_sync_retry_queue_max_messages: i32 =
+            std::env::var("INBOX_SYNC_RETRY_QUEUE_MAX_MESSAGES")
                 .unwrap_or("1".to_string())
                 .parse::<i32>()
                 .unwrap();
@@ -219,7 +223,12 @@ impl Config {
             .unwrap();
 
         let redis_rate_limit_reqs: u32 = std::env::var("REDIS_RATE_LIMIT_REQS")
-            .unwrap_or("1500".to_string())
+            .unwrap_or("14000".to_string())
+            .parse::<u32>()
+            .unwrap();
+
+        let redis_rate_limit_reqs_backfill: u32 = std::env::var("REDIS_RATE_LIMIT_REQS_BACKFILL")
+            .unwrap_or("13000".to_string())
             .parse::<u32>()
             .unwrap();
 
@@ -265,10 +274,10 @@ impl Config {
             macro_db_url: database_url,
             port,
             redis_uri,
-            email_refresh_queue,
+            link_manager_queue,
             email_scheduled_queue,
-            gmail_webhook_queue,
-            gmail_webhook_retry_queue,
+            gmail_inbox_sync_queue,
+            gmail_inbox_sync_retry_queue,
             search_event_queue,
             insight_context_queue,
             gmail_gcp_queue,
@@ -282,12 +291,13 @@ impl Config {
             queue_wait_time_seconds,
             backfill_queue_workers,
             backfill_queue_max_messages,
-            webhook_queue_workers,
-            webhook_queue_max_messages,
-            webhook_retry_queue_workers,
-            webhook_retry_queue_max_messages,
+            inbox_sync_queue_workers,
+            inbox_sync_queue_max_messages,
+            inbox_sync_retry_queue_workers,
+            inbox_sync_retry_queue_max_messages,
             sfs_uploader_workers,
             redis_rate_limit_reqs,
+            redis_rate_limit_reqs_backfill,
             redis_rate_limit_window_secs,
             environment,
             auth_service_secret_key,

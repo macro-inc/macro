@@ -70,10 +70,7 @@ pub async fn set_property_status_complete(
     tracing::info!("setting entity status to complete");
 
     // Check edit permissions
-    let entity_ref = EntityReference {
-        entity_id: entity_id.clone(),
-        entity_type,
-    };
+    let entity_ref = EntityReference::new(entity_id.clone(), entity_type);
     check_entity_edit_permission(&context, &user_context.user_id, &entity_ref).await?;
 
     // Delegate to service layer for business logic

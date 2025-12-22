@@ -15,6 +15,7 @@ type PdfHighlightLocation = {
 
 type ChannelMessageHighlightLocation = {
   type: 'channel';
+  threadId?: string;
   messageId: string;
 };
 

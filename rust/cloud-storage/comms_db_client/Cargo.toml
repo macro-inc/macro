@@ -9,6 +9,7 @@ anyhow = { workspace = true }
 cached = { workspace = true }
 chrono = { workspace = true }
 futures = { workspace = true }
+macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 model = { path = "../model" }
 serde = { workspace = true }

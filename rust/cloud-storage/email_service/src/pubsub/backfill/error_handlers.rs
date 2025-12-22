@@ -17,7 +17,11 @@ pub async fn handle_non_retryable_error(
     data: &BackfillPubsubMessage,
     e: &DetailedError,
 ) -> anyhow::Result<()> {
-    tracing::error!(error = %e, "Non-retryable error processing message. The message will be deleted.");
+    tracing::error!(
+        error = %e,
+        source = { format!("{:#}", e.source) },
+        "Non-retryable error processing message. The message will be deleted."
+    );
 
     match &data.backfill_operation {
         BackfillOperation::Init | BackfillOperation::ListThreads(_) => {
@@ -49,21 +53,23 @@ pub async fn handle_non_retryable_error(
 }
 
 /// Handles retryable errors by updating status to InProgress and adding the error message
-#[tracing::instrument(err)]
+#[tracing::instrument(skip(_e), err)]
 pub async fn handle_retryable_error(
     data: &BackfillPubsubMessage,
     _e: &DetailedError,
 ) -> anyhow::Result<()> {
+    let error_chain = format!("{:#}", _e.source);
     match &data.backfill_operation {
         BackfillOperation::Init => {
-            tracing::debug!("Retryable error in Init")
+            tracing::debug!(error = %error_chain, "Retryable error in Init")
         }
         BackfillOperation::ListThreads(_) => {
-            tracing::debug!("Retryable error listing threads")
+            tracing::debug!(error = %error_chain, "Retryable error listing threads")
         }
         BackfillOperation::BackfillThread(p) => {
             tracing::debug!(
                 thread_id = %p.thread_provider_id,
+                error = %error_chain,
                 "Retryable error backfilling thread"
             );
         }
@@ -71,18 +77,21 @@ pub async fn handle_retryable_error(
             tracing::debug!(
                 thread_id = %p.thread_provider_id,
                 message_id = %p.message_provider_id,
+                error = %error_chain,
                 "Retryable error backfilling message"
             );
         }
         BackfillOperation::UpdateThreadMetadata(p) => {
             tracing::debug!(
                 thread_id = %p.thread_provider_id,
-                "Retryable error backfilling thread"
+                error = %error_chain,
+                "Retryable error updating thread metadata"
             );
         }
         BackfillOperation::BackfillAttachment(p) => {
             tracing::debug!(
                 attachment_db_id = %p.metadata.attachment_metadata.attachment_db_id,
+                error = %error_chain,
                 "Retryable error backfilling attachment"
             )
         }

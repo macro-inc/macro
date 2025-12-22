@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { EntityType } from './entityType';
+import type { EntityReferenceSpecificMessageId } from './entityReferenceSpecificMessageId';
 
 /**
  * Entity reference for entity-type property values.
@@ -12,4 +13,7 @@ import type { EntityType } from './entityType';
 export interface EntityReference {
   entity_id: string;
   entity_type: EntityType;
+  /** For CHANNEL, CHAT, THREAD entity types - optional specific message ID.
+This allows referencing a specific message within a thread/channel/chat. */
+  specific_message_id?: EntityReferenceSpecificMessageId;
 }

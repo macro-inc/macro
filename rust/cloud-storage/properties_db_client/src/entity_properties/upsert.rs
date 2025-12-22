@@ -465,14 +465,8 @@ mod tests {
         let property_id = "33333333-3333-3333-3333-333333333333"
             .parse::<Uuid>()
             .unwrap();
-        let entity_ref_1 = EntityReference {
-            entity_type: EntityType::User,
-            entity_id: "user1".to_string(),
-        };
-        let entity_ref_2 = EntityReference {
-            entity_type: EntityType::User,
-            entity_id: "user2".to_string(),
-        };
+        let entity_ref_1 = EntityReference::new("user1", EntityType::User);
+        let entity_ref_2 = EntityReference::new("user2", EntityType::User);
         let value = PropertyValue::EntityRef(vec![entity_ref_1, entity_ref_2]);
 
         upsert_entity_property_values(

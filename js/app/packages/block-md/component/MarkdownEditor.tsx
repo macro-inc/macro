@@ -84,6 +84,7 @@ import {
   mediaPlugin,
 } from '@core/component/LexicalMarkdown/plugins/media';
 import { createAccessoryStore } from '@core/component/LexicalMarkdown/plugins/node-accessory';
+import { restoreFocusPlugin } from '@core/component/LexicalMarkdown/plugins/restore-focus';
 import { createMenuOperations } from '@core/component/LexicalMarkdown/shared/inlineMenu';
 import {
   $insertWrappedAfter,
@@ -141,6 +142,7 @@ import {
 import type { MarkdownRewriteOutput } from '@service-cognition/generated/tools/types';
 import { waitBulkUploadStatus } from '@service-connection/bulkUpload';
 import { fileExtension } from '@service-storage/util/filename';
+import { onElementConnect } from '@solid-primitives/lifecycle';
 import { createCallback } from '@solid-primitives/rootless';
 import { debounce, throttle } from '@solid-primitives/scheduled';
 import { useSearchParams } from '@solidjs/router';
@@ -150,7 +152,6 @@ import {
   autoRegister,
   lazyRegister,
   registerInternalLayoutShiftListener,
-  registerRootEventListener,
 } from 'core/component/LexicalMarkdown/plugins/shared/utils';
 import { createMethodRegistration } from 'core/orchestrator';
 import {
@@ -159,14 +160,12 @@ import {
   $isElementNode,
   type EditorState,
 } from 'lexical';
-
 import {
   type Accessor,
   createEffect,
   createMemo,
   createSignal,
   onCleanup,
-  onMount,
   Show,
   untrack,
 } from 'solid-js';
@@ -247,7 +246,6 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     return blockSave_;
   }, undefined);
 
-  let mountRef!: HTMLDivElement;
   let editorContainerRef!: HTMLDivElement;
 
   const [clickTargetHeight, setClickTargetHeight] = createSignal(0);
@@ -704,6 +702,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
       })
     )
     .use(textPastePlugin())
+    .use(restoreFocusPlugin())
     .use(markdownPastePlugin())
     .use(normalizeEnterPlugin())
     .use(
@@ -756,19 +755,24 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
 
   const observeClickTargetHeight = () => {
     const blockEl = blockElement();
-    if (!blockEl) {
+    const rootEl = editor.getRootElement();
+    if (!blockEl || !rootEl) {
       setClickTargetHeight(EDITOR_PADDING_BOTTOM);
       return;
     }
     const blockBottom = blockEl.getBoundingClientRect().bottom;
     const targetHeight =
-      blockBottom - mountRef.getBoundingClientRect().bottom - 40;
+      blockBottom - rootEl.getBoundingClientRect().bottom - 40;
     setClickTargetHeight(Math.max(targetHeight, EDITOR_PADDING_BOTTOM));
   };
 
-  onMount(() => {
+  autoRegister(
+    registerInternalLayoutShiftListener(editor, observeClickTargetHeight)
+  );
+
+  const onConnect = (el: HTMLDivElement) => {
     setMdStore('selection', lexicalWrapper.selection);
-    editor.setRootElement(mountRef);
+    editor.setRootElement(el);
 
     // Register this plugin once we have the ref.
     plugins.use(
@@ -780,32 +784,11 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
 
     const editorRefObserver = new ResizeObserver(observeClickTargetHeight);
 
-    editorRefObserver.observe(mountRef);
+    editorRefObserver.observe(el);
     onCleanup(() => {
       editorRefObserver.disconnect();
     });
-  });
-
-  // HACK: We need to distinguish click-based focus events from programmatic
-  // ones (el.focus()). We want to maintain the previous selection (editor.focus)
-  // only if we are regaining focus programmatically. If click, let browser handle
-  // focus and let lexical catch up.
-  let clickFocusFlag = false;
-  autoRegister(
-    registerRootEventListener(editor, 'pointerdown', () => {
-      clickFocusFlag = true;
-      setTimeout(() => {
-        clickFocusFlag = false; // negate the flag after tasks
-      });
-    }),
-    registerRootEventListener(editor, 'focusin', (e) => {
-      if (clickFocusFlag) return;
-      e.preventDefault();
-      editor.focus(undefined, { defaultSelection: 'rootStart' });
-    }),
-    // adjust click target height on layout shift
-    registerInternalLayoutShiftListener(editor, observeClickTargetHeight)
-  );
+  };
 
   const additionalCleanups: Array<() => void> = [];
 
@@ -848,11 +831,13 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     editor.setEditable(canEdit() ?? false);
   });
 
-  createEffect(() => {
-    const titleEditor = md.titleEditor;
-    if (!titleEditor) return;
-    plugins.use(keyNavigationPlugin(titleEditor, isInlineMenuOpen));
-  });
+  plugins.useReactive(
+    () => md.titleEditor,
+    () => {
+      if (md.titleEditor)
+        return keyNavigationPlugin(md.titleEditor, isInlineMenuOpen);
+    }
+  );
 
   const [editorHasNoContent, setEditorHasNoContent] = createSignal(false);
 
@@ -1038,7 +1023,11 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
         use:droppable
       >
         <div
-          ref={mountRef}
+          ref={(el) => {
+            onElementConnect(el, () => {
+              onConnect(el);
+            });
+          }}
           contentEditable={isContentEditable()}
           class="w-full max-w-full"
           classList={{

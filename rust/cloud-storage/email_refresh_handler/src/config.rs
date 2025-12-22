@@ -7,7 +7,7 @@ pub struct Config {
     pub database_url: String,
 
     /// The queue we put the emails on that need refreshing
-    pub email_refresh_queue: String,
+    pub link_manager_queue: String,
 
     /// The environment we are in
     #[allow(dead_code)]
@@ -19,14 +19,14 @@ impl Config {
         let database_url =
             std::env::var("DATABASE_URL").context("DATABASE_URL must be provided")?;
 
-        let email_refresh_queue =
-            std::env::var("EMAIL_REFRESH_QUEUE").context("EMAIL_REFRESH_QUEUE must be provided")?;
+        let link_manager_queue =
+            std::env::var("LINK_MANAGER_QUEUE").context("LINK_MANAGER_QUEUE must be provided")?;
 
         let environment = Environment::new_or_prod();
 
         Ok(Config {
             database_url,
-            email_refresh_queue,
+            link_manager_queue,
             environment,
         })
     }

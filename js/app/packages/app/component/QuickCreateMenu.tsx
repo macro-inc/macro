@@ -61,6 +61,7 @@ import TextStriketrough from '@icon/regular/text-strikethrough.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { $generateHtmlFromNodes } from '@lexical/html';
 import MacroGridLoader from '@macro-icons/macro-grid-noise-loader-4.svg';
+import { useEmailLinksQuery } from '@queries/email/link';
 import type { SimpleMention } from '@service-comms/generated/models/simpleMention';
 import { emailClient } from '@service-email/client';
 import type { MessageToSend } from '@service-email/generated/schemas/messageToSend';
@@ -156,6 +157,7 @@ export function QuickCreateMenuInner(props: QuickCreateMenuProps) {
   const [_, setCreateMenuOpen] = props.quickCreateMenuOpenSignal;
   let noteTitleRef: HTMLInputElement | undefined;
   const emailActive = useEmailLinksStatus();
+  const emailLinksQuery = useEmailLinksQuery();
   const [selectedEmailOptions, setSelectedEmailOptions] = createSignal<
     WithCustomUserInput<'user' | 'contact'>[]
   >([]);
@@ -244,10 +246,19 @@ export function QuickCreateMenuInner(props: QuickCreateMenuProps) {
       };
     });
 
-    // Get email links for new emails
-    const fallbackLinks = await emailClient.getLinks();
-    if (isErr(fallbackLinks) || fallbackLinks[1].links.length < 1) {
-      toast.failure('Failed to send email');
+    if (emailLinksQuery.isPending) {
+      toast.alert('Loading email accounts...');
+      return false;
+    }
+
+    if (emailLinksQuery.isError) {
+      toast.failure('Failed to send email: Could not load email accounts');
+      return false;
+    }
+
+    const linksData = emailLinksQuery.data;
+    if (!linksData || linksData.links.length < 1) {
+      toast.failure('Failed to send email: No email account connected');
       return false;
     }
 
@@ -272,7 +283,7 @@ export function QuickCreateMenuInner(props: QuickCreateMenuProps) {
       body_html,
       body_text,
       body_macro,
-      link_id: fallbackLinks[1].links[0].id,
+      link_id: linksData.links[0].id,
     };
 
     const sendRequest = await emailClient.sendMessage({

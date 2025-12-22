@@ -2,7 +2,7 @@ import {
   isDraggingOverChannelSignal,
   isValidChannelDragSignal,
 } from '@block-channel/signal/attachment';
-import type { sendMessage } from '@block-channel/signal/channel';
+import type { SendMessageArgs } from '@block-channel/signal/channel';
 import { handleFileUpload } from '@block-channel/utils/inputAttachments';
 import { isInBlock } from '@core/block';
 import { BrightJoins } from '@core/component/BrightJoins';
@@ -66,7 +66,7 @@ type InputAttachmentsStore = {
 type BaseInputProps = {
   /** callback to be executed when the user clicks the send button
    * or presses enter */
-  onSend: (args: Parameters<typeof sendMessage>[0]) => Promise<void>;
+  onSend: (args: SendMessageArgs) => Promise<void>;
   /** callback to be executed when the user changes the input */
   onChange: (content: string) => void;
   /** initial value of the input */
@@ -195,8 +195,8 @@ export function BaseInput(props: BaseInputProps) {
   } = useChannelMarkdownArea();
 
   createRenderEffect(() => {
-    const _ref = ref();
-    if (_ref) props.domRef?.(_ref);
+    const currentRef = ref();
+    if (currentRef) props.domRef?.(currentRef);
   });
 
   const allMentions: Accessor<SimpleMention[]> = () =>
@@ -331,14 +331,15 @@ export function BaseInput(props: BaseInputProps) {
     if (isPendingSend()) return false;
     setIsPendingSend(true);
     const content = markdownState();
-    clearMarkdownArea();
-    focusMarkdownArea();
 
     const args = {
       content: content,
       attachments: props.inputAttachments.store[key] ?? [],
       mentions: allMentions(),
     };
+
+    clearMarkdownArea();
+    focusMarkdownArea();
 
     props
       .onSend(args)
@@ -545,7 +546,7 @@ export function BaseInput(props: BaseInputProps) {
           >
             <FormatIcon width={20} height={20} />
           </ActionButton>
-          <Show when={props.onEmptyBlur}>
+          <Show when={props.isReplyInput && props.onEmptyBlur}>
             <ActionButton
               tooltip="Delete reply"
               onClick={(e) => {

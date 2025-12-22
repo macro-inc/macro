@@ -23,6 +23,7 @@ export * from './nodes/MediaNode';
 export * from './nodes/UnlinkedTextNode';
 export * from './nodes/UserMentionNode';
 export * from './nodes/VideoNode';
+export * from './nodes/WatermarkNode';
 
 export * from './plugins/nodeIdPlugin';
 export * from './plugins/peerIdPlugin';

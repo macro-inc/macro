@@ -1,3 +1,4 @@
+import { ENABLE_TASKS_TABS } from '@core/constant/featureFlags';
 import {
   DEFAULT_VIEWS,
   type DefaultView,
@@ -12,7 +13,6 @@ import {
   queryKeys,
   type WithNotification,
 } from '@macro-entity';
-
 import {
   markNotificationsForEntityAsDone,
   type NotificationSource,
@@ -30,13 +30,12 @@ export type ViewData = {
   id: ViewId;
   view: ViewLabel;
   viewType?: ViewType;
-  highlightedId: string | undefined;
   selectedEntity: EntityData | undefined;
   scrollOffset: number | undefined;
   initialConfig: string | undefined;
   hasUserInteractedEntity: boolean;
   searchText: string | undefined;
-  selectedEntities: EntityData[];
+  multiSelectEntities: EntityData[];
 } & ViewConfigBase;
 
 /** maps view id to view data */
@@ -226,6 +225,12 @@ const ALL_VIEWCONFIG_DEFAULTS = {
       },
     },
   },
+  files: {
+    view: 'Files',
+    filters: {
+      typeFilter: ['document'],
+    },
+  },
   people: {
     view: 'People',
     filters: {
@@ -235,10 +240,38 @@ const ALL_VIEWCONFIG_DEFAULTS = {
       showUnreadIndicator: true,
     },
   },
-  files: {
-    view: 'Files',
+  email: {
+    view: 'Email',
     filters: {
-      typeFilter: ['document'],
+      typeFilter: ['email'],
+    },
+    sort: {
+      sortBy: 'updated_at',
+    },
+    display: {
+      showUnreadIndicator: true,
+    },
+    hotkeyOptions: {
+      e: (entity, extra) => {
+        if (extra?.soupContext) {
+          const {
+            emailViewSignal: [emailView],
+          } = extra.soupContext;
+          if (emailView() === 'inbox') {
+            if (entity.type === 'email') {
+              archiveEmail(entity.id, {
+                isDone: entity.done,
+                optimisticallyExclude: true,
+              });
+            }
+            return true;
+          }
+        }
+        if (entity.type === 'email') {
+          archiveEmail(entity.id, { isDone: entity.done });
+        }
+        return true;
+      },
     },
   },
   tasks: {
@@ -270,9 +303,10 @@ const ALL_VIEWCONFIG_DEFAULTS = {
 } satisfies Record<DefaultView, Omit<DeepPartial<ViewConfigEnhanced>, 'id'>>;
 
 export const VIEWCONFIG_DEFAULTS = Object.fromEntries(
-  Object.entries(ALL_VIEWCONFIG_DEFAULTS).filter(([key]) =>
-    DEFAULT_VIEWS.includes(key as DefaultView)
-  )
+  Object.entries(ALL_VIEWCONFIG_DEFAULTS).filter(([key]) => {
+    if (key === 'tasks') return ENABLE_TASKS_TABS;
+    return DEFAULT_VIEWS.includes(key as DefaultView);
+  })
 ) as Record<DefaultView, Omit<ViewConfigEnhanced, 'id'>>;
 
 export const VIEWCONFIG_DEFAULTS_IDS = Object.keys(

@@ -23,7 +23,7 @@ export const PropertyGrid: Component<PropertiesListProps> = (props) => {
     for (const prop of props.properties) {
       if (prop.isMetadata) {
         // Hide "Project" property if value is null
-        if (prop.value != null) {
+        if (prop.value != null || !['Project'].includes(prop.displayName)) {
           metadata.push(prop);
         }
       } else if (builtinPropertyIds.includes(prop.propertyDefinitionId)) {
@@ -86,6 +86,8 @@ export const PropertyGrid: Component<PropertiesListProps> = (props) => {
               <PropertyRow
                 property={property}
                 onValueClick={handleValueClick}
+                withDelete
+                withPin
               />
             )}
           </For>
@@ -103,6 +105,8 @@ export const PropertyGrid: Component<PropertiesListProps> = (props) => {
               <PropertyRow
                 property={property}
                 onValueClick={handleValueClick}
+                withDelete
+                withPin
               />
             )}
           </For>
@@ -120,6 +124,8 @@ export const PropertyGrid: Component<PropertiesListProps> = (props) => {
               <PropertyRow
                 property={property}
                 onValueClick={handleValueClick}
+                withDelete
+                withPin
               />
             )}
           </For>

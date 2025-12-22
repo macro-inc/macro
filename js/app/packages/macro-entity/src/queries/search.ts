@@ -1,6 +1,6 @@
 import { useChannelsContext } from '@core/component/ChannelsProvider';
+import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { ENABLE_SEARCH_SERVICE } from '@core/constant/featureFlags';
-import { idToDisplayName } from '@core/user';
 import { isErr } from '@core/util/maybeResult';
 import {
   extractSearchSnippet,
@@ -61,6 +61,7 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
           sentAt: r.created_at!,
           location: {
             type: 'channel' as const,
+            threadId: r.thread_id ?? undefined,
             messageId: r.message_id!,
           },
         }));
@@ -172,7 +173,7 @@ const useMapSearchResponseItem = () => {
         return {
           type: 'document',
           id: result.document_id,
-          name: result.document_name,
+          name: result.name || blockNameToDefaultFile(result.file_type),
           ownerId: result.owner_id,
           createdAt: result.metadata?.created_at,
           updatedAt: result.metadata?.updated_at,
@@ -182,43 +183,53 @@ const useMapSearchResponseItem = () => {
         };
       }
       case 'email': {
-        const emailResult = result.email_message_search_results.at(0);
+        const messageHits = result.email_message_search_results.filter(
+          (m) => m.message_id
+        );
+        // NOTE: guaranteed to be empty or singleton array
+        const threadHits = result.email_message_search_results.filter(
+          (m) => !m.message_id
+        );
+
+        const singleMessage = messageHits.length === 1;
+
         const search = getSearchData({
           results: result.email_message_search_results,
           type: 'email',
         });
 
-        // Email thread subject match
-        // TODO: make sure this looks/feels right in the unified list
-        if (!emailResult) {
-          return {
-            type: 'email',
-            id: result.thread_id,
-            name: result.name ?? '',
-            ownerId: result.owner_id,
-            createdAt: result.created_at,
-            updatedAt: result.updated_at,
-            viewedAt: result.viewed_at ?? undefined,
-            isRead: false,
-            isImportant: false,
-            done: false,
-            senderName: idToDisplayName(result.user_id),
-            search,
-          };
-        }
+        const name = result.name ?? blockNameToDefaultFile('email');
+
+        // TODO: display sender for each message in the content hit list
+        const combinedSenders =
+          [...new Set(messageHits.map((m) => m.pretty_sender))].join(', ') ||
+          threadHits.at(0)?.pretty_sender;
+
+        // TODO: we probably want to get the actual latest message info on the full thread
+        const messagesSentAt = messageHits
+          .map((m) => m.sent_at)
+          .filter((m) => m != null);
+        const latestMessageSentAt =
+          messagesSentAt.length > 0 ? Math.max(...messagesSentAt) : null;
 
         return {
           type: 'email',
           id: result.thread_id,
-          name: result.name ?? '',
+          name,
           ownerId: result.owner_id,
-          createdAt: emailResult.sent_at ?? result.updated_at,
-          updatedAt: emailResult.sent_at ?? result.updated_at,
+          createdAt: latestMessageSentAt ?? result.created_at,
+          updatedAt: latestMessageSentAt ?? result.updated_at,
           viewedAt: result.viewed_at ?? undefined,
-          isRead: !emailResult.labels.includes('UNREAD'),
-          isImportant: emailResult.labels.includes('IMPORTANT'),
-          done: !emailResult.labels.includes('INBOX'),
-          senderName: emailResult.sender!,
+          isRead: singleMessage
+            ? !messageHits[0].labels.includes('UNREAD')
+            : false,
+          isImportant: singleMessage
+            ? messageHits[0].labels.includes('IMPORTANT')
+            : false,
+          done: singleMessage
+            ? !messageHits[0].labels.includes('INBOX')
+            : false,
+          senderName: combinedSenders,
           search,
         };
       }
@@ -228,7 +239,7 @@ const useMapSearchResponseItem = () => {
           results: result.chat_search_results,
         });
         let name = result.name;
-        if (!name || name === 'New Chat') {
+        if (!name || name === blockNameToDefaultFile('chat')) {
           const chat = history().find((item) => item.id === result.chat_id);
           if (chat) {
             name = chat.name;
@@ -258,12 +269,15 @@ const useMapSearchResponseItem = () => {
         return {
           type: 'channel',
           id: result.channel_id,
-          name: channelWithLatest?.name ?? '',
+          name: channelWithLatest?.name ?? blockNameToDefaultFile('channel'),
           ownerId: result.owner_id ?? '',
           createdAt: result.metadata?.created_at,
           updatedAt: result.metadata?.updated_at,
           channelType: result.channel_type as ChannelType,
           interactedAt: result.metadata?.interacted_at ?? undefined,
+          participantIds: channelWithLatest?.participants?.map(
+            (p) => p.user_id
+          ),
           search,
         };
       }
@@ -281,7 +295,7 @@ const useMapSearchResponseItem = () => {
           ownerId: result.owner_id,
           createdAt: result.created_at,
           updatedAt: result.updated_at,
-          parentId: result.metadata?.parent_project_id ?? undefined,
+          projectId: result.metadata?.parent_project_id ?? undefined,
           search,
         };
       }

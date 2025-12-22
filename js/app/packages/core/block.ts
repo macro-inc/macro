@@ -1,5 +1,5 @@
 import type { BlockCanvasProps } from '@block-canvas/component/Block';
-
+import type { BlockChannelProps } from '@block-channel/component/Block';
 import type { IDocumentStorageServiceFile } from '@filesystem/file';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
@@ -115,7 +115,6 @@ export type NestedState<Name extends BlockName> = {
   parentId?: string;
   parentName?: Name;
   parentContext?: PreviewState;
-  initArgs?: BlockComponentProps[Name];
 };
 
 const allBlockNames = new Set([...BlockRegistry]);
@@ -273,8 +272,9 @@ type ExtractSuccessType<T> = T extends [null, infer S]
 export type ExtractLoadType<T extends LoadFunction<any, any>> =
   ExtractSuccessType<Awaited<ReturnType<T>>>;
 
-interface BlockComponentProps extends Record<BlockName, ObjectLike> {
+export interface BlockComponentProps extends Record<BlockName, ObjectLike> {
   canvas: BlockCanvasProps;
+  channel: BlockChannelProps;
 }
 
 interface BlockComponentLoadData extends Record<BlockName, ObjectLike> {
@@ -535,6 +535,17 @@ export const useMaybeBlockName = (): BlockName | undefined => {
     return;
   }
   return context.name;
+};
+
+export const useMaybeBlockAliasedName = ():
+  | BlockName
+  | BlockAlias
+  | undefined => {
+  const context = useContext(BlockContext);
+  if (!context) {
+    return;
+  }
+  return context.aliasContext?.alias ?? context.name;
 };
 
 function styledConsoleError(message: string, code: string) {

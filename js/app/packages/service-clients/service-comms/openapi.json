@@ -997,8 +997,14 @@
           "created_at": { "type": "string", "format": "date-time" },
           "entity_id": { "type": "string" },
           "entity_type": { "type": "string" },
+          "height": { "type": ["integer", "null"], "format": "int32" },
           "id": { "type": "string", "format": "uuid" },
-          "message_id": { "type": "string", "format": "uuid" }
+          "message_id": { "type": "string", "format": "uuid" },
+          "width": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "dimensions of image/video"
+          }
         }
       },
       "Channel": {
@@ -1634,7 +1640,13 @@
         "required": ["entity_type", "entity_id"],
         "properties": {
           "entity_id": { "type": "string" },
-          "entity_type": { "type": "string" }
+          "entity_type": { "type": "string" },
+          "height": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "dimensions of image/video"
+          },
+          "width": { "type": ["integer", "null"], "format": "int32" }
         }
       },
       "ParticipantAccess": {

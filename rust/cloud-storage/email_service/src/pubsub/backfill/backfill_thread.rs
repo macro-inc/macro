@@ -1,6 +1,6 @@
 use crate::pubsub::backfill::increment_counters::incr_completed_threads;
 use crate::pubsub::context::PubSubContext;
-use crate::pubsub::util::check_gmail_rate_limit;
+use crate::pubsub::util::{CheckGmailRateLimitArgs, check_gmail_rate_limit};
 use models_email::email::service::backfill::{
     BackfillMessagePayload, BackfillOperation, BackfillPubsubMessage, BackfillThreadPayload,
 };
@@ -44,12 +44,13 @@ pub async fn backfill_thread(
         return Ok(());
     }
 
-    check_gmail_rate_limit(
-        &ctx.redis_client,
-        link.id,
-        GmailApiOperation::ThreadsGet,
-        true,
-    )
+    check_gmail_rate_limit(CheckGmailRateLimitArgs {
+        redis_client: &ctx.redis_client,
+        link_id: link.id,
+        gmail_operation: GmailApiOperation::ThreadsGet,
+        retryable: true,
+        is_backfill: true,
+    })
     .await?;
     // fetch all message_ids of the thread
     let message_ids = match ctx

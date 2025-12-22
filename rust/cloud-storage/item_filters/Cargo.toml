@@ -10,9 +10,11 @@ schema = ["dep:schemars", "dep:utoipa"]
 
 [dependencies]
 chrono = { workspace = true }
+either = { workspace = true }
 filter_ast = { path = "../filter_ast" }
 macro_user_id = { path = "../macro_user_id" }
 model_file_type = { path = "../model_file_type" }
+nom = { workspace = true }
 non_empty = { path = "../non_empty" }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true, features = ["rc"] }

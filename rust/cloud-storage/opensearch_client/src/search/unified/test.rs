@@ -449,22 +449,41 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
 
     let result = build_unified_search_request(&unified_search_args)?;
 
-    let expected = serde_json::json!(
-    {
+    let expected = serde_json::json!({
       "collapse": {
         "field": "entity_id"
       },
       "from": 20,
       "highlight": {
         "fields": {
+          "bcc": {
+            "number_of_fragments": 1,
+            "post_tags": ["</macro_em>"],
+            "pre_tags": ["<macro_em>"],
+            "type": "plain"
+          },
+          "cc": {
+            "number_of_fragments": 1,
+            "post_tags": ["</macro_em>"],
+            "pre_tags": ["<macro_em>"],
+            "type": "plain"
+          },
           "content": {
             "number_of_fragments": 500,
-            "post_tags": [
-              "</macro_em>"
-            ],
-            "pre_tags": [
-              "<macro_em>"
-            ],
+            "post_tags": ["</macro_em>"],
+            "pre_tags": ["<macro_em>"],
+            "type": "plain"
+          },
+          "recipients": {
+            "number_of_fragments": 1,
+            "post_tags": ["</macro_em>"],
+            "pre_tags": ["<macro_em>"],
+            "type": "plain"
+          },
+          "sender": {
+            "number_of_fragments": 1,
+            "post_tags": ["</macro_em>"],
+            "pre_tags": ["<macro_em>"],
             "type": "plain"
           }
         },
@@ -476,11 +495,22 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
           "should": [
             {
               "bool": {
-                "minimum_should_match": 1,
-                "must": [
+                "filter": [
                   {
-                    "match_phrase": {
-                      "content": "test"
+                    "bool": {
+                      "minimum_should_match": 1,
+                      "should": [
+                        {
+                          "terms": {
+                            "entity_id": ["id1", "id2"]
+                          }
+                        },
+                        {
+                          "term": {
+                            "owner_id": "user"
+                          }
+                        }
+                      ]
                     }
                   },
                   {
@@ -489,18 +519,26 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
                     }
                   }
                 ],
-                "should": [
+                "must": [
                   {
-                    "terms": {
-                      "entity_id": [
-                        "id1",
-                        "id2"
+                    "bool": {
+                      "minimum_should_match": 1,
+                      "should": [
+                        {
+                          "wildcard": {
+                            "owner_id": {
+                              "boost": 5000.0,
+                              "case_insensitive": true,
+                              "value": "macro|test*"
+                            }
+                          }
+                        },
+                        {
+                          "match_phrase": {
+                            "content": "test"
+                          }
+                        }
                       ]
-                    }
-                  },
-                  {
-                    "term": {
-                      "owner_id": "user"
                     }
                   }
                 ]
@@ -508,11 +546,22 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
             },
             {
               "bool": {
-                "minimum_should_match": 1,
-                "must": [
+                "filter": [
                   {
-                    "match_phrase": {
-                      "content": "test"
+                    "bool": {
+                      "minimum_should_match": 1,
+                      "should": [
+                        {
+                          "terms": {
+                            "entity_id": ["id1", "id2"]
+                          }
+                        },
+                        {
+                          "term": {
+                            "user_id": "user"
+                          }
+                        }
+                      ]
                     }
                   },
                   {
@@ -522,10 +571,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
                   },
                   {
                     "terms": {
-                      "link_id": [
-                        "id1",
-                        "id2"
-                      ]
+                      "link_id": ["id1", "id2"]
                     }
                   },
                   {
@@ -621,18 +667,60 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
                     }
                   }
                 ],
-                "should": [
+                "must": [
                   {
-                    "terms": {
-                      "entity_id": [
-                        "id1",
-                        "id2"
+                    "bool": {
+                      "minimum_should_match": 1,
+                      "should": [
+                        {
+                          "wildcard": {
+                            "sender": {
+                              "boost": 5000.0,
+                              "case_insensitive": true,
+                              "value": "test*"
+                            }
+                          }
+                        },
+                        {
+                          "wildcard": {
+                            "cc": {
+                              "boost": 5000.0,
+                              "case_insensitive": true,
+                              "value": "test*"
+                            }
+                          }
+                        },
+                        {
+                          "wildcard": {
+                            "bcc": {
+                              "boost": 5000.0,
+                              "case_insensitive": true,
+                              "value": "test*"
+                            }
+                          }
+                        },
+                        {
+                          "wildcard": {
+                            "recipients": {
+                              "boost": 5000.0,
+                              "case_insensitive": true,
+                              "value": "test*"
+                            }
+                          }
+                        },
+                        {
+                          "match_phrase": {
+                            "content": "test"
+                          }
+                        }
                       ]
                     }
-                  },
+                  }
+                ],
+                "must_not": [
                   {
                     "term": {
-                      "user_id": "user"
+                      "labels": "TRASH"
                     }
                   }
                 ]
@@ -640,11 +728,10 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
             },
             {
               "bool": {
-                "minimum_should_match": 1,
-                "must": [
+                "filter": [
                   {
-                    "match_phrase": {
-                      "content": "test"
+                    "terms": {
+                      "entity_id": ["id1", "id2"]
                     }
                   },
                   {
@@ -654,35 +741,39 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
                   },
                   {
                     "terms": {
-                      "thread_id": [
-                        "id1",
-                        "id2"
-                      ]
+                      "thread_id": ["id1", "id2"]
                     }
                   },
                   {
                     "terms": {
-                      "mentions": [
-                        "id1",
-                        "id2"
-                      ]
+                      "mentions": ["id1", "id2"]
                     }
                   },
                   {
                     "terms": {
-                      "sender_id": [
-                        "id1",
-                        "id2"
-                      ]
+                      "sender_id": ["id1", "id2"]
                     }
                   }
                 ],
-                "should": [
+                "must": [
                   {
-                    "terms": {
-                      "entity_id": [
-                        "id1",
-                        "id2"
+                    "bool": {
+                      "minimum_should_match": 1,
+                      "should": [
+                        {
+                          "wildcard": {
+                            "sender_id": {
+                              "boost": 5000.0,
+                              "case_insensitive": true,
+                              "value": "macro|test*"
+                            }
+                          }
+                        },
+                        {
+                          "match_phrase": {
+                            "content": "test"
+                          }
+                        }
                       ]
                     }
                   }
@@ -691,11 +782,22 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
             },
             {
               "bool": {
-                "minimum_should_match": 1,
-                "must": [
+                "filter": [
                   {
-                    "match_phrase": {
-                      "content": "test"
+                    "bool": {
+                      "minimum_should_match": 1,
+                      "should": [
+                        {
+                          "terms": {
+                            "entity_id": ["id1", "id2"]
+                          }
+                        },
+                        {
+                          "term": {
+                            "user_id": "user"
+                          }
+                        }
+                      ]
                     }
                   },
                   {
@@ -727,35 +829,36 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
                     }
                   }
                 ],
-                "should": [
+                "must": [
                   {
-                    "terms": {
-                      "entity_id": [
-                        "id1",
-                        "id2"
+                    "bool": {
+                      "minimum_should_match": 1,
+                      "should": [
+                        {
+                          "wildcard": {
+                            "user_id": {
+                              "boost": 5000.0,
+                              "case_insensitive": true,
+                              "value": "macro|test*"
+                            }
+                          }
+                        },
+                        {
+                          "match_phrase": {
+                            "content": "test"
+                          }
+                        }
                       ]
-                    }
-                  },
-                  {
-                    "term": {
-                      "user_id": "user"
                     }
                   }
                 ]
               }
-            },
+            }
           ]
         }
       },
       "size": 20,
-      "sort": [
-        {
-          "_score": "desc"
-        },
-        {
-          "entity_id": "desc"
-        }
-      ]
+      "sort": updated_at_sort().iter().map(|s| s.to_json()).collect::<Vec<_>>(),
     });
 
     assert_eq!(result.to_json(), expected);
@@ -814,196 +917,192 @@ fn test_build_unified_search_request_name() -> anyhow::Result<()> {
 
     let result = build_unified_search_request(&unified_search_args)?;
 
-    let expected = serde_json::json!(
-    {
-      "collapse": {
-        "field": "entity_id"
-      },
-      "from": 20,
-      "highlight": {
-        "fields": {
-          "name": {
-            "number_of_fragments": 1,
-            "post_tags": [
-              "</macro_em>"
-            ],
-            "pre_tags": [
-              "<macro_em>"
-            ],
-            "type": "plain"
-          },
-          "project_name": {
-            "number_of_fragments": 1,
-            "post_tags": [
-              "</macro_em>"
-            ],
-            "pre_tags": [
-              "<macro_em>"
-            ],
-            "type": "plain"
-          }
-        },
-        "require_field_match": true
-      },
-      "query": {
-        "bool": {
-          "minimum_should_match": 1,
-          "should": [
-            {
-              "bool": {
-                "minimum_should_match": 1,
-                "must": [
-                  {
-                    "match_phrase": {
-                      "name": "test"
-                    }
-                  },
-                  {
-                    "term": {
-                      "_index": "names"
-                    }
-                  },
-                  {
-                    "term": {
-                      "entity_type": "documents"
-                    }
-                  }
-                ],
-                "should": [
-                  {
-                    "terms": {
-                      "entity_id": [
-                        "id1",
-                        "id2"
-                      ]
-                    }
-                  },
-                  {
-                    "term": {
-                      "user_id": "user"
-                    }
-                  }
-                ]
-              }
-            },
-            {
-              "bool": {
-                "minimum_should_match": 1,
-                "must": [
-                  {
-                    "match_phrase": {
-                      "name": "test"
-                    }
-                  },
-                  {
-                    "term": {
-                      "_index": "names"
-                    }
-                  },
-                  {
-                    "term": {
-                      "entity_type": "emails"
-                    }
-                  }
-                ],
-                "should": [
-                  {
-                    "terms": {
-                      "entity_id": [
-                        "id1",
-                        "id2"
-                      ]
-                    }
-                  },
-                  {
-                    "term": {
-                      "user_id": "user"
-                    }
-                  }
-                ]
-              }
-            },
-            {
-              "bool": {
-                "minimum_should_match": 1,
-                "must": [
-                  {
-                    "match_phrase": {
-                      "name": "test"
-                    }
-                  },
-                  {
-                    "term": {
-                      "_index": "names"
-                    }
-                  },
-                  {
-                    "term": {
-                      "entity_type": "chats"
-                    }
-                  }
-                ],
-                "should": [
-                  {
-                    "terms": {
-                      "entity_id": [
-                        "id1",
-                        "id2"
-                      ]
-                    }
-                  },
-                  {
-                    "term": {
-                      "user_id": "user"
-                    }
-                  }
-                ]
-              }
-            },
-            {
-              "bool": {
-                "minimum_should_match": 1,
-                "must": [
-                  {
-                    "match_phrase": {
-                      "project_name": "test"
-                    }
-                  },
-                  {
-                    "term": {
-                      "_index": "projects"
-                    }
-                  }
-                ],
-                "should": [
-                  {
-                    "terms": {
-                      "entity_id": [
-                        "id1",
-                        "id2"
-                      ]
-                    }
-                  },
-                  {
-                    "term": {
-                      "user_id": "user"
-                    }
-                  }
-                ]
-              }
-            }
-          ]
-        }
-      },
-      "size": 20,
-      "sort": [
-        {
-          "_score": "desc"
-        },
-        {
-          "entity_id": "desc"
-        }
-      ]
+    let expected = serde_json::json!({
+     "collapse": {
+       "field": "entity_id"
+     },
+     "from": 20,
+     "highlight": {
+       "fields": {
+         "name": {
+           "number_of_fragments": 1,
+           "post_tags": ["</macro_em>"],
+           "pre_tags": ["<macro_em>"],
+           "type": "plain"
+         },
+         "project_name": {
+           "number_of_fragments": 1,
+           "post_tags": ["</macro_em>"],
+           "pre_tags": ["<macro_em>"],
+           "type": "plain"
+         }
+       },
+       "require_field_match": true
+     },
+     "query": {
+       "bool": {
+         "minimum_should_match": 1,
+         "should": [
+           {
+             "bool": {
+               "filter": [
+                 {
+                   "bool": {
+                     "minimum_should_match": 1,
+                     "should": [
+                       {
+                         "terms": {
+                           "entity_id": ["id1", "id2"]
+                         }
+                       },
+                       {
+                         "term": {
+                           "user_id": "user"
+                         }
+                       }
+                     ]
+                   }
+                 },
+                 {
+                   "term": {
+                     "_index": "names"
+                   }
+                 },
+                 {
+                   "term": {
+                     "entity_type": "documents"
+                   }
+                 }
+               ],
+               "must": [
+                 {
+                   "match_phrase": {
+                     "name": "test"
+                   }
+                 }
+               ]
+             }
+           },
+           {
+             "bool": {
+               "filter": [
+                 {
+                   "bool": {
+                     "minimum_should_match": 1,
+                     "should": [
+                       {
+                         "terms": {
+                           "entity_id": ["id1", "id2"]
+                         }
+                       },
+                       {
+                         "term": {
+                           "user_id": "user"
+                         }
+                       }
+                     ]
+                   }
+                 },
+                 {
+                   "term": {
+                     "_index": "names"
+                   }
+                 },
+                 {
+                   "term": {
+                     "entity_type": "emails"
+                   }
+                 }
+               ],
+               "must": [
+                 {
+                   "match_phrase": {
+                     "name": "test"
+                   }
+                 }
+               ]
+             }
+           },
+           {
+             "bool": {
+               "filter": [
+                 {
+                   "bool": {
+                     "minimum_should_match": 1,
+                     "should": [
+                       {
+                         "terms": {
+                           "entity_id": ["id1", "id2"]
+                         }
+                       },
+                       {
+                         "term": {
+                           "user_id": "user"
+                         }
+                       }
+                     ]
+                   }
+                 },
+                 {
+                   "term": {
+                     "_index": "names"
+                   }
+                 },
+                 {
+                   "term": {
+                     "entity_type": "chats"
+                   }
+                 }
+               ],
+               "must": [
+                 {
+                   "match_phrase": {
+                     "name": "test"
+                   }
+                 }
+               ]
+             }
+           },
+           {
+             "bool": {
+               "filter": [
+                 {
+                   "bool": {
+                     "minimum_should_match": 1,
+                     "should": [
+                       {
+                         "terms": {
+                           "entity_id": ["id1", "id2"]
+                         }
+                       },
+                       {
+                         "term": {
+                           "user_id": "user"
+                         }
+                       }
+                     ]
+                   }
+                 },
+                 {
+                   "term": {
+                     "_index": "projects"
+                   }
+                 }
+               ],
+               "must": [
+                 {
+                   "match_phrase": {
+                     "project_name": "test"
+                   }
+                 }
+               ]
+             }
+           }
+         ]
+       }
+     },
+     "size": 20,
+     "sort": updated_at_sort().iter().map(|s| s.to_json()).collect::<Vec<_>>(),
     });
 
     assert_eq!(result.to_json(), expected);
@@ -1062,42 +1161,53 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
 
     let result = build_unified_search_request(&unified_search_args)?;
 
-    let expected = serde_json::json!(
-    {
+    let expected = serde_json::json!({
       "collapse": {
         "field": "entity_id"
       },
       "from": 20,
       "highlight": {
         "fields": {
+          "bcc": {
+            "number_of_fragments": 1,
+            "post_tags": ["</macro_em>"],
+            "pre_tags": ["<macro_em>"],
+            "type": "plain"
+          },
+          "cc": {
+            "number_of_fragments": 1,
+            "post_tags": ["</macro_em>"],
+            "pre_tags": ["<macro_em>"],
+            "type": "plain"
+          },
           "content": {
             "number_of_fragments": 1,
-            "post_tags": [
-              "</macro_em>"
-            ],
-            "pre_tags": [
-              "<macro_em>"
-            ],
+            "post_tags": ["</macro_em>"],
+            "pre_tags": ["<macro_em>"],
             "type": "plain"
           },
           "name": {
             "number_of_fragments": 1,
-            "post_tags": [
-              "</macro_em>"
-            ],
-            "pre_tags": [
-              "<macro_em>"
-            ],
+            "post_tags": ["</macro_em>"],
+            "pre_tags": ["<macro_em>"],
             "type": "plain"
           },
           "project_name": {
             "number_of_fragments": 1,
-            "post_tags": [
-              "</macro_em>"
-            ],
-            "pre_tags": [
-              "<macro_em>"
-            ],
+            "post_tags": ["</macro_em>"],
+            "pre_tags": ["<macro_em>"],
+            "type": "plain"
+          },
+          "recipients": {
+            "number_of_fragments": 1,
+            "post_tags": ["</macro_em>"],
+            "pre_tags": ["<macro_em>"],
+            "type": "plain"
+          },
+          "sender": {
+            "number_of_fragments": 1,
+            "post_tags": ["</macro_em>"],
+            "pre_tags": ["<macro_em>"],
             "type": "plain"
           }
         },
@@ -1113,11 +1223,22 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
                 "should": [
                   {
                     "bool": {
-                      "minimum_should_match": 1,
-                      "must": [
+                      "filter": [
                         {
-                          "match_phrase": {
-                            "content": "test"
+                          "bool": {
+                            "minimum_should_match": 1,
+                            "should": [
+                              {
+                                "terms": {
+                                  "entity_id": ["id1", "id2"]
+                                }
+                              },
+                              {
+                                "term": {
+                                  "owner_id": "user"
+                                }
+                              }
+                            ]
                           }
                         },
                         {
@@ -1126,18 +1247,26 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
                           }
                         }
                       ],
-                      "should": [
+                      "must": [
                         {
-                          "terms": {
-                            "entity_id": [
-                              "id1",
-                              "id2"
+                          "bool": {
+                            "minimum_should_match": 1,
+                            "should": [
+                              {
+                                "wildcard": {
+                                  "owner_id": {
+                                    "boost": 5000.0,
+                                    "case_insensitive": true,
+                                    "value": "macro|test*"
+                                  }
+                                }
+                              },
+                              {
+                                "match_phrase": {
+                                  "content": "test"
+                                }
+                              }
                             ]
-                          }
-                        },
-                        {
-                          "term": {
-                            "owner_id": "user"
                           }
                         }
                       ]
@@ -1145,11 +1274,22 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
                   },
                   {
                     "bool": {
-                      "minimum_should_match": 1,
-                      "must": [
+                      "filter": [
                         {
-                          "match_phrase": {
-                            "name": "test"
+                          "bool": {
+                            "minimum_should_match": 1,
+                            "should": [
+                              {
+                                "terms": {
+                                  "entity_id": ["id1", "id2"]
+                                }
+                              },
+                              {
+                                "term": {
+                                  "user_id": "user"
+                                }
+                              }
+                            ]
                           }
                         },
                         {
@@ -1163,18 +1303,10 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
                           }
                         }
                       ],
-                      "should": [
+                      "must": [
                         {
-                          "terms": {
-                            "entity_id": [
-                              "id1",
-                              "id2"
-                            ]
-                          }
-                        },
-                        {
-                          "term": {
-                            "user_id": "user"
+                          "match_phrase": {
+                            "name": "test"
                           }
                         }
                       ]
@@ -1189,11 +1321,22 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
                 "should": [
                   {
                     "bool": {
-                      "minimum_should_match": 1,
-                      "must": [
+                      "filter": [
                         {
-                          "match_phrase": {
-                            "content": "test"
+                          "bool": {
+                            "minimum_should_match": 1,
+                            "should": [
+                              {
+                                "terms": {
+                                  "entity_id": ["id1", "id2"]
+                                }
+                              },
+                              {
+                                "term": {
+                                  "user_id": "user"
+                                }
+                              }
+                            ]
                           }
                         },
                         {
@@ -1203,10 +1346,7 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
                         },
                         {
                           "terms": {
-                            "link_id": [
-                              "id1",
-                              "id2"
-                            ]
+                            "link_id": ["id1", "id2"]
                           }
                         },
                         {
@@ -1302,18 +1442,60 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
                           }
                         }
                       ],
-                      "should": [
+                      "must": [
                         {
-                          "terms": {
-                            "entity_id": [
-                              "id1",
-                              "id2"
+                          "bool": {
+                            "minimum_should_match": 1,
+                            "should": [
+                              {
+                                "wildcard": {
+                                  "sender": {
+                                    "boost": 5000.0,
+                                    "case_insensitive": true,
+                                    "value": "test*"
+                                  }
+                                }
+                              },
+                              {
+                                "wildcard": {
+                                  "cc": {
+                                    "boost": 5000.0,
+                                    "case_insensitive": true,
+                                    "value": "test*"
+                                  }
+                                }
+                              },
+                              {
+                                "wildcard": {
+                                  "bcc": {
+                                    "boost": 5000.0,
+                                    "case_insensitive": true,
+                                    "value": "test*"
+                                  }
+                                }
+                              },
+                              {
+                                "wildcard": {
+                                  "recipients": {
+                                    "boost": 5000.0,
+                                    "case_insensitive": true,
+                                    "value": "test*"
+                                  }
+                                }
+                              },
+                              {
+                                "match_phrase": {
+                                  "content": "test"
+                                }
+                              }
                             ]
                           }
-                        },
+                        }
+                      ],
+                      "must_not": [
                         {
                           "term": {
-                            "user_id": "user"
+                            "labels": "TRASH"
                           }
                         }
                       ]
@@ -1321,11 +1503,22 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
                   },
                   {
                     "bool": {
-                      "minimum_should_match": 1,
-                      "must": [
+                      "filter": [
                         {
-                          "match_phrase": {
-                            "name": "test"
+                          "bool": {
+                            "minimum_should_match": 1,
+                            "should": [
+                              {
+                                "terms": {
+                                  "entity_id": ["id1", "id2"]
+                                }
+                              },
+                              {
+                                "term": {
+                                  "user_id": "user"
+                                }
+                              }
+                            ]
                           }
                         },
                         {
@@ -1339,18 +1532,10 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
                           }
                         }
                       ],
-                      "should": [
+                      "must": [
                         {
-                          "terms": {
-                            "entity_id": [
-                              "id1",
-                              "id2"
-                            ]
-                          }
-                        },
-                        {
-                          "term": {
-                            "user_id": "user"
+                          "match_phrase": {
+                            "name": "test"
                           }
                         }
                       ]
@@ -1365,11 +1550,10 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
                 "should": [
                   {
                     "bool": {
-                      "minimum_should_match": 1,
-                      "must": [
+                      "filter": [
                         {
-                          "match_phrase": {
-                            "content": "test"
+                          "terms": {
+                            "entity_id": ["id1", "id2"]
                           }
                         },
                         {
@@ -1379,35 +1563,39 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
                         },
                         {
                           "terms": {
-                            "thread_id": [
-                              "id1",
-                              "id2"
-                            ]
+                            "thread_id": ["id1", "id2"]
                           }
                         },
                         {
                           "terms": {
-                            "mentions": [
-                              "id1",
-                              "id2"
-                            ]
+                            "mentions": ["id1", "id2"]
                           }
                         },
                         {
                           "terms": {
-                            "sender_id": [
-                              "id1",
-                              "id2"
-                            ]
+                            "sender_id": ["id1", "id2"]
                           }
                         }
                       ],
-                      "should": [
+                      "must": [
                         {
-                          "terms": {
-                            "entity_id": [
-                              "id1",
-                              "id2"
+                          "bool": {
+                            "minimum_should_match": 1,
+                            "should": [
+                              {
+                                "wildcard": {
+                                  "sender_id": {
+                                    "boost": 5000.0,
+                                    "case_insensitive": true,
+                                    "value": "macro|test*"
+                                  }
+                                }
+                              },
+                              {
+                                "match_phrase": {
+                                  "content": "test"
+                                }
+                              }
                             ]
                           }
                         }
@@ -1416,11 +1604,10 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
                   },
                   {
                     "bool": {
-                      "minimum_should_match": 1,
-                      "must": [
+                      "filter": [
                         {
-                          "match_phrase": {
-                            "name": "test"
+                          "terms": {
+                            "entity_id": ["id1", "id2"]
                           }
                         },
                         {
@@ -1434,13 +1621,10 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
                           }
                         }
                       ],
-                      "should": [
+                      "must": [
                         {
-                          "terms": {
-                            "entity_id": [
-                              "id1",
-                              "id2"
-                            ]
+                          "match_phrase": {
+                            "name": "test"
                           }
                         }
                       ]
@@ -1455,11 +1639,22 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
                 "should": [
                   {
                     "bool": {
-                      "minimum_should_match": 1,
-                      "must": [
+                      "filter": [
                         {
-                          "match_phrase": {
-                            "content": "test"
+                          "bool": {
+                            "minimum_should_match": 1,
+                            "should": [
+                              {
+                                "terms": {
+                                  "entity_id": ["id1", "id2"]
+                                }
+                              },
+                              {
+                                "term": {
+                                  "user_id": "user"
+                                }
+                              }
+                            ]
                           }
                         },
                         {
@@ -1491,18 +1686,26 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
                           }
                         }
                       ],
-                      "should": [
+                      "must": [
                         {
-                          "terms": {
-                            "entity_id": [
-                              "id1",
-                              "id2"
+                          "bool": {
+                            "minimum_should_match": 1,
+                            "should": [
+                              {
+                                "wildcard": {
+                                  "user_id": {
+                                    "boost": 5000.0,
+                                    "case_insensitive": true,
+                                    "value": "macro|test*"
+                                  }
+                                }
+                              },
+                              {
+                                "match_phrase": {
+                                  "content": "test"
+                                }
+                              }
                             ]
-                          }
-                        },
-                        {
-                          "term": {
-                            "user_id": "user"
                           }
                         }
                       ]
@@ -1510,11 +1713,22 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
                   },
                   {
                     "bool": {
-                      "minimum_should_match": 1,
-                      "must": [
+                      "filter": [
                         {
-                          "match_phrase": {
-                            "name": "test"
+                          "bool": {
+                            "minimum_should_match": 1,
+                            "should": [
+                              {
+                                "terms": {
+                                  "entity_id": ["id1", "id2"]
+                                }
+                              },
+                              {
+                                "term": {
+                                  "user_id": "user"
+                                }
+                              }
+                            ]
                           }
                         },
                         {
@@ -1528,18 +1742,10 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
                           }
                         }
                       ],
-                      "should": [
+                      "must": [
                         {
-                          "terms": {
-                            "entity_id": [
-                              "id1",
-                              "id2"
-                            ]
-                          }
-                        },
-                        {
-                          "term": {
-                            "user_id": "user"
+                          "match_phrase": {
+                            "name": "test"
                           }
                         }
                       ]
@@ -1554,11 +1760,22 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
                 "should": [
                   {
                     "bool": {
-                      "minimum_should_match": 1,
-                      "must": [
+                      "filter": [
                         {
-                          "match_phrase": {
-                            "content": "test"
+                          "bool": {
+                            "minimum_should_match": 1,
+                            "should": [
+                              {
+                                "terms": {
+                                  "entity_id": ["id1", "id2"]
+                                }
+                              },
+                              {
+                                "term": {
+                                  "user_id": "user"
+                                }
+                              }
+                            ]
                           }
                         },
                         {
@@ -1567,18 +1784,26 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
                           }
                         }
                       ],
-                      "should": [
+                      "must": [
                         {
-                          "terms": {
-                            "entity_id": [
-                              "id1",
-                              "id2"
+                          "bool": {
+                            "minimum_should_match": 1,
+                            "should": [
+                              {
+                                "wildcard": {
+                                  "user_id": {
+                                    "boost": 5000.0,
+                                    "case_insensitive": true,
+                                    "value": "macro|test*"
+                                  }
+                                }
+                              },
+                              {
+                                "match_phrase": {
+                                  "content": "test"
+                                }
+                              }
                             ]
-                          }
-                        },
-                        {
-                          "term": {
-                            "user_id": "user"
                           }
                         }
                       ]
@@ -1586,11 +1811,22 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
                   },
                   {
                     "bool": {
-                      "minimum_should_match": 1,
-                      "must": [
+                      "filter": [
                         {
-                          "match_phrase": {
-                            "project_name": "test"
+                          "bool": {
+                            "minimum_should_match": 1,
+                            "should": [
+                              {
+                                "terms": {
+                                  "entity_id": ["id1", "id2"]
+                                }
+                              },
+                              {
+                                "term": {
+                                  "user_id": "user"
+                                }
+                              }
+                            ]
                           }
                         },
                         {
@@ -1599,18 +1835,10 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
                           }
                         }
                       ],
-                      "should": [
+                      "must": [
                         {
-                          "terms": {
-                            "entity_id": [
-                              "id1",
-                              "id2"
-                            ]
-                          }
-                        },
-                        {
-                          "term": {
-                            "user_id": "user"
+                          "match_phrase": {
+                            "project_name": "test"
                           }
                         }
                       ]
@@ -1623,14 +1851,7 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
         }
       },
       "size": 20,
-      "sort": [
-        {
-          "_score": "desc"
-        },
-        {
-          "entity_id": "desc"
-        }
-      ]
+      "sort": updated_at_sort().iter().map(|s| s.to_json()).collect::<Vec<_>>(),
     });
 
     assert_eq!(result.to_json(), expected);
@@ -1658,21 +1879,42 @@ fn test_build_unified_search_request_single_index() -> anyhow::Result<()> {
     };
 
     let result = build_unified_search_request(&unified_search_args)?;
-    let expected = serde_json::json!({
+    let expected = serde_json::json!(
+          {
       "collapse": {
         "field": "entity_id"
       },
       "from": 20,
       "highlight": {
         "fields": {
+          "bcc": {
+            "number_of_fragments": 1,
+            "post_tags": ["</macro_em>"],
+            "pre_tags": ["<macro_em>"],
+            "type": "plain"
+          },
+          "cc": {
+            "number_of_fragments": 1,
+            "post_tags": ["</macro_em>"],
+            "pre_tags": ["<macro_em>"],
+            "type": "plain"
+          },
           "content": {
             "number_of_fragments": 500,
-            "post_tags": [
-              "</macro_em>"
-            ],
-            "pre_tags": [
-              "<macro_em>"
-            ],
+            "post_tags": ["</macro_em>"],
+            "pre_tags": ["<macro_em>"],
+            "type": "plain"
+          },
+          "recipients": {
+            "number_of_fragments": 1,
+            "post_tags": ["</macro_em>"],
+            "pre_tags": ["<macro_em>"],
+            "type": "plain"
+          },
+          "sender": {
+            "number_of_fragments": 1,
+            "post_tags": ["</macro_em>"],
+            "pre_tags": ["<macro_em>"],
             "type": "plain"
           }
         },
@@ -1684,11 +1926,22 @@ fn test_build_unified_search_request_single_index() -> anyhow::Result<()> {
           "should": [
             {
               "bool": {
-                "minimum_should_match": 1,
-                "must": [
+                "filter": [
                   {
-                    "match_phrase": {
-                      "content": "test"
+                    "bool": {
+                      "minimum_should_match": 1,
+                      "should": [
+                        {
+                          "terms": {
+                            "entity_id": ["id1", "id2"]
+                          }
+                        },
+                        {
+                          "term": {
+                            "owner_id": "user"
+                          }
+                        }
+                      ]
                     }
                   },
                   {
@@ -1697,35 +1950,36 @@ fn test_build_unified_search_request_single_index() -> anyhow::Result<()> {
                     }
                   }
                 ],
-                "should": [
+                "must": [
                   {
-                    "terms": {
-                      "entity_id": [
-                        "id1",
-                        "id2"
+                    "bool": {
+                      "minimum_should_match": 1,
+                      "should": [
+                        {
+                          "wildcard": {
+                            "owner_id": {
+                              "boost": 5000.0,
+                              "case_insensitive": true,
+                              "value": "macro|test*"
+                            }
+                          }
+                        },
+                        {
+                          "match_phrase": {
+                            "content": "test"
+                          }
+                        }
                       ]
-                    }
-                  },
-                  {
-                    "term": {
-                      "owner_id": "user"
                     }
                   }
                 ]
               }
-            },
+            }
           ]
         }
       },
       "size": 20,
-      "sort": [
-        {
-          "_score": "desc"
-        },
-        {
-          "entity_id": "desc"
-        }
-      ]
+      "sort": updated_at_sort().iter().map(|s| s.to_json()).collect::<Vec<_>>(),
     });
 
     assert_eq!(result.to_json(), expected);

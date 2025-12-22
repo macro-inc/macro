@@ -6,8 +6,8 @@ import {
   getMacroNotify,
   getSearchEventQueue,
   stack,
-} from '@shared';
-import { get_coparse_api_vpc } from '@vpc';
+} from '../../packages/shared';
+import { get_coparse_api_vpc } from '../../packages/vpc';
 import { DocumentCognitionService } from './document-cognition-service';
 
 const tags = {
@@ -304,7 +304,7 @@ const documentCognitionService = new DocumentCognitionService(
       },
       {
         name: 'SYNC_SERVICE_URL',
-        value: `https://sync-service-${stack === 'dev' ? 'dev3' : stack}.macroverse.workers.dev`,
+        value: `https://sync-service-${stack === 'dev' ? 'dev3' : 'prod2'}.macroverse.workers.dev`,
       },
       {
         name: 'MACRO_API_TOKEN_ISSUER',

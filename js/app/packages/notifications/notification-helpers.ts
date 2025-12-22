@@ -30,8 +30,8 @@ export function notificationIsOfEntity(
   entity: Entity
 ): boolean {
   return (
-    notification.eventItemType === entity.type &&
-    notification.eventItemId === entity.id
+    notification.entity_type === entity.type &&
+    notification.entity_id === entity.id
   );
 }
 
@@ -39,7 +39,7 @@ export function notificationIsOfEntityType(
   notification: UnifiedNotification,
   entityType: string
 ): boolean {
-  return notification.eventItemType === entityType;
+  return notification.entity_type === entityType;
 }
 
 /**
@@ -151,7 +151,7 @@ export function markNotificationForEntityIdAsRead(
   return notificationSource.bulkMarkAsRead(
     notificationSource
       .notifications()
-      .filter((n) => n.eventItemId === id && !notificationIsRead(n))
+      .filter((n) => n.entity_id === id && !notificationIsRead(n))
   );
 }
 

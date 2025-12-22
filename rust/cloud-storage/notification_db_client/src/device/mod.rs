@@ -1,3 +1,4 @@
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model_notifications::DeviceType;
 use std::collections::HashMap;
 
@@ -56,29 +57,38 @@ pub async fn upsert_user_device(
 #[tracing::instrument(skip(db))]
 pub async fn get_users_device_endpoints(
     db: &sqlx::Pool<sqlx::Postgres>,
-    user_ids: &[String],
-) -> anyhow::Result<HashMap<String, Vec<String>>> {
+    user_ids: &[MacroUserIdStr<'static>],
+) -> anyhow::Result<HashMap<MacroUserIdStr<'static>, Vec<(String, DeviceType)>>> {
     // initialize hashmap
     // we need to initialize the hashmap here with *all* user ids so we can ensure we have empty
     // vectors for users that don't have any device endpoints
-    let mut result: HashMap<String, Vec<String>> =
+    let mut result: HashMap<MacroUserIdStr<'static>, Vec<(String, DeviceType)>> =
         user_ids.iter().map(|id| (id.clone(), Vec::new())).collect();
 
-    let device_endpoints: Vec<(String, String)> = sqlx::query!(
+    let ids: Vec<_> = user_ids.iter().map(|r| r.as_ref().to_string()).collect();
+
+    let device_endpoints: Vec<(String, String, DeviceType)> = sqlx::query!(
         r#"
         SELECT d.device_endpoint,
-        d.user_id
+        d.user_id,
+        d.device_type as "device_type: DeviceType"
         FROM user_device_registration d
         WHERE d.user_id = ANY($1)
         "#,
-        user_ids
+        ids.as_slice()
     )
-    .map(|row| (row.user_id, row.device_endpoint))
+    .map(|row| (row.user_id, row.device_endpoint, row.device_type))
     .fetch_all(db)
     .await?;
 
-    for (user_id, device_endpoint) in device_endpoints {
-        result.entry(user_id).or_default().push(device_endpoint);
+    for (user_id, device_endpoint, device_type) in device_endpoints {
+        let Ok(res) = MacroUserIdStr::parse_from_str(&user_id) else {
+            continue;
+        };
+        result
+            .entry(res.into_owned())
+            .or_default()
+            .push((device_endpoint, device_type));
     }
 
     Ok(result)

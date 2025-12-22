@@ -34,7 +34,7 @@ impl AttachmentProcessor {
     }
 
     /// Orchestrates the full upload process for a single attachment.
-    #[instrument(skip(self), fields(file_name = %attachment.filename, mime_type = %attachment.mime_type))]
+    #[instrument(skip(self), fields(file_name = ?attachment.filename, mime_type = %attachment.mime_type))]
     pub async fn upload(
         &self,
         link_id: Uuid,
@@ -104,11 +104,14 @@ impl AttachmentProcessor {
         attachment: &AttachmentUploadMetadata,
         sha256_hex: &str,
     ) -> anyhow::Result<(String, String)> {
+        // we filter out null filenames in the db query, but set to default just in case
         let file_name = attachment
             .filename
+            .clone()
+            .unwrap_or_default()
             .split('.')
             .next()
-            .unwrap_or(&attachment.filename)
+            .unwrap_or(&attachment.filename.clone().unwrap_or_default())
             .to_string();
 
         let file_type = mime_guess::get_mime_extensions_str(&attachment.mime_type)

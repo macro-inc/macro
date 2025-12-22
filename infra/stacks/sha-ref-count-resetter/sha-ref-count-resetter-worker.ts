@@ -2,7 +2,7 @@ import * as aws from '@pulumi/aws';
 import * as awsx from '@pulumi/awsx';
 import type { Output } from '@pulumi/pulumi';
 import * as pulumi from '@pulumi/pulumi';
-import { stack } from '@shared';
+import { stack } from '../../packages/shared';
 
 const BASE_NAME = `sha-ref-count-resetter-worker`;
 const WORKER_NAME = `${BASE_NAME}-${stack}`;

@@ -38,7 +38,7 @@ pub enum SearchError {
     #[error("query must be at least 3 characters")]
     InvalidQuerySize,
     /// No query or terms provided
-    #[error("query or terms must be provided")]
+    #[error("query or terms must be provided and at least 3 characters")]
     NoQueryOrTermsProvided,
     /// Opensearch error occurred
     #[error("unable to search")]

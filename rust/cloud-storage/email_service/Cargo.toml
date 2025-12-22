@@ -18,8 +18,12 @@ name = "backfill_gmail_attachments"
 path = "src/bin/backfill_gmail_attachments/backfill_gmail_attachments.rs"
 
 [[bin]]
-name = "backfill_search"
+name = "backfill_email_search"
 path = "src/bin/backfill_search/backfill_search.rs"
+
+[[bin]]
+name = "backfill_sfs_attachments"
+path = "src/bin/backfill_sfs_attachments/backfill_sfs_attachments.rs"
 
 [features]
 attachment_upload = []
@@ -111,7 +115,10 @@ system_properties = { path = "../system_properties" }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tower = { workspace = true }
-tower-http = { workspace = true }
+tower-http = { workspace = true, features = [
+  "compression-br",
+  "compression-gzip",
+] }
 tracing = { workspace = true }
 url = { workspace = true }
 urlencoding = { workspace = true }
