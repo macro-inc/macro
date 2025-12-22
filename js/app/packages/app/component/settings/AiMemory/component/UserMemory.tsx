@@ -1,4 +1,4 @@
-import { DeprecatedTextButton } from 'core/component/DeprecatedTextButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import clickOutside from '@core/directive/clickOutside';
 import { formatDate } from '@core/util/date';
 import CheckIcon from '@icon/regular/check.svg';

@@ -46,7 +46,7 @@ import LinkIcon from '@phosphor-icons/core/regular/link.svg?component-solid';
 import PencilIcon from '@phosphor-icons/core/regular/pencil.svg?component-solid';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import { createCallback } from '@solid-primitives/rootless';
-import { DeprecatedTextButton } from 'core/component/DeprecatedTextButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import {
   $getLocationUrl,
   $getSelectionLocation,

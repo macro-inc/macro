@@ -3,7 +3,7 @@ import { TruncatedText } from '@core/component/FileList/TruncatedText';
 import { UserIcon } from '@core/component/UserIcon';
 import { idToEmail } from '@core/user';
 import IconX from '@icon/regular/x.svg';
-import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { createSignal, Show } from 'solid-js';
 
 export type UserItemProps = {

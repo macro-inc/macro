@@ -5,7 +5,7 @@ import CaretDown from '@icon/regular/caret-down.svg';
 import CaretUp from '@icon/regular/caret-up.svg';
 import MagnifyingGlass from '@icon/regular/magnifying-glass.svg';
 import X from '@icon/regular/x.svg';
-import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import {
   createEffect,
   createSignal,

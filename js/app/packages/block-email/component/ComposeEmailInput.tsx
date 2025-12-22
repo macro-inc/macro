@@ -17,7 +17,7 @@ import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-
 import { useUserId } from '@service-gql/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import type { Item } from '@service-storage/generated/schemas/item';
-import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { defaultSelectionData } from 'core/component/LexicalMarkdown/plugins';
 import {
   NODE_TRANSFORM,

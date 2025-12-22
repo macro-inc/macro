@@ -39,7 +39,7 @@ import { useSplitPanelOrThrow } from 'app/component/split-layout/layoutUtils';
 import {
   DeprecatedEditingTextButton,
   DeprecatedTextButton,
-} from 'core/component/DeprecatedTextButton';
+} from '@core/component/DeprecatedTextButton';
 import { toast } from 'core/component/Toast/Toast';
 import { createMemo, createSignal, Show, useContext } from 'solid-js';
 

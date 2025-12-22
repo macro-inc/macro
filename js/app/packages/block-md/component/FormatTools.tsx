@@ -49,7 +49,7 @@ import TextT from '@icon/regular/text-t.svg';
 import TextUnderline from '@icon/regular/text-underline.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import type { ElementName } from '@lexical-core';
-import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { toast } from 'core/component/Toast/Toast';
 import type { ValidHotkey } from 'core/hotkey/types';
 import {

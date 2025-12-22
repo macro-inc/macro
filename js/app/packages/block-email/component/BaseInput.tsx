@@ -44,8 +44,8 @@ import type {
 import { useEmail, useUserId } from '@service-gql/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import type { Item } from '@service-storage/generated/schemas/item';
-import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
-import { DeprecatedTextButton } from 'core/component/DeprecatedTextButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import {
   defaultSelectionData,
   lazyRegister,

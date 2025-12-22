@@ -4,7 +4,7 @@ import { createEffect, createMemo, createSignal, Show } from 'solid-js';
 import IconLightDark from '@macro-icons/macro-light-dark.svg';
 import IconClipboard from '@macro-icons/macro-clipboard.svg';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
-import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 // import IconFigma from '@macro-icons/macro-figma.svg';
 import IconTrash from '@macro-icons/macro-trash.svg';
 import { randomizeTheme } from './ThemeEditorBasic';

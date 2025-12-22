@@ -7,7 +7,7 @@ import FileText from '@phosphor-icons/core/regular/file-text.svg?component-solid
 import type { ItemType } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import { useHistory } from '@service-storage/history';
-import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { createEffect, createSignal, Show } from 'solid-js';
 import { VList } from 'virtua/solid';
 import { Tools } from '../constants';

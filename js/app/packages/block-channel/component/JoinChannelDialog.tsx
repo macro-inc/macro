@@ -1,6 +1,6 @@
 import { EntityIcon } from '@core/component/EntityIcon';
 import CheckIcon from '@icon/regular/arrow-right.svg';
-import { DeprecatedTextButton } from 'core/component/DeprecatedTextButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 
 export type JoinChannelDialogProps = {
   channelName: string;

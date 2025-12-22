@@ -21,7 +21,7 @@ import Notepad from '@icon/regular/notepad.svg';
 import { createCognitionWebsocketEffect } from '@service-cognition/websocket';
 import { refetchHistory } from '@service-storage/history';
 import { useOpenInstructionsMd } from 'core/component/AI/util/instructions';
-import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { onCleanup, onMount } from 'solid-js';
 
 export function TopBar() {

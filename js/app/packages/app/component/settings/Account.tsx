@@ -2,7 +2,7 @@ import { uploadProfilePicture } from '@core/component/ProfilePicture';
 import { TabContentRow } from '@core/component/TabContent';
 import EditableField from '@core/component/EditableField';
 import { capitalize } from '@block-pdf/util/StringUtils';
-import { DeprecatedTextButton } from 'core/component/DeprecatedTextButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { useHasPaidAccess } from '@core/auth/license';
 import { UserIcon } from '@core/component/UserIcon';
 import { useLogout } from '@core/auth/logout';

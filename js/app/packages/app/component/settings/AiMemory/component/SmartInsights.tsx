@@ -1,4 +1,4 @@
-import { DeprecatedTextButton } from 'core/component/DeprecatedTextButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { EDITABLE_SMART_INSIGHTS } from '@core/constant/featureFlags';
 import { formatDate } from '@core/util/date';
 import Flag from '@icon/regular/flag-pennant.svg';

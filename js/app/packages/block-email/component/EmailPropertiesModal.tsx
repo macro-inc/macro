@@ -3,7 +3,7 @@ import { useDrawerControl } from '@app/component/split-layout/components/SplitDr
 import { PropertiesView } from '@core/component/Properties/PropertiesView';
 import TagIcon from '@icon/regular/tag.svg';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
-import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { Suspense } from 'solid-js';
 
 const DRAWER_ID = 'properties';

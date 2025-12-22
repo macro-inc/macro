@@ -1,4 +1,4 @@
-import { DeprecatedTextButton } from 'core/component/DeprecatedTextButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import clickOutside from '@core/directive/clickOutside';
 import CheckIcon from '@icon/bold/check-bold.svg';
 import XIcon from '@icon/regular/x.svg';

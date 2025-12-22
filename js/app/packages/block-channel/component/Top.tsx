@@ -18,7 +18,7 @@ import { useChannelQuery } from '@queries/channel/channel';
 import type { ChannelParticipant } from '@service-comms/generated/models/channelParticipant';
 import type { ChannelType } from '@service-comms/generated/models/channelType';
 import { useUserId } from '@service-gql/client';
-import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { Show } from 'solid-js';
 import { AttachmentsModal } from './AttachmentsModal';
 import { ParticipantManager } from './ParticipantManager';

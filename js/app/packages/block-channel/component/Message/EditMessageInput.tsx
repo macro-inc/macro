@@ -2,7 +2,7 @@ import { isMobileWidth } from '@core/mobile/mobileWidth';
 import FormatIcon from '@icon/regular/text-aa.svg';
 import Check from '@phosphor-icons/core/regular/check.svg?component-solid';
 import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
-import { DeprecatedTextButton } from 'core/component/DeprecatedTextButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { createSignal, onCleanup, onMount, type Setter, Show } from 'solid-js';
 import { ActionButton } from '../ActionButton';
 import { FormatRibbon } from '../FormatRibbon';

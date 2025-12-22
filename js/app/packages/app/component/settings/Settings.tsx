@@ -5,7 +5,7 @@ import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import CloseIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 import { MacroPermissions, usePermissions } from '@service-gql/client';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
-import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import ContractIcon from '@icon/regular/arrows-in.svg';
 import Organization from './Organization/Organization';
 import ExpandIcon from '@icon/regular/arrows-out.svg';

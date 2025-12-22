@@ -64,7 +64,7 @@ import { useEmailLinksQuery } from '@queries/email/link';
 import type { SimpleMention } from '@service-comms/generated/models/simpleMention';
 import { emailClient } from '@service-email/client';
 import type { MessageToSend } from '@service-email/generated/schemas/messageToSend';
-import { DeprecatedTextButton } from 'core/component/DeprecatedTextButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { normalizeEnterPlugin } from 'core/component/LexicalMarkdown/plugins/normalize-enter';
 import {
   $getRoot,

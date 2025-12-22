@@ -10,7 +10,7 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { ClippedPanel } from '@core/component/ClippedPanel';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { PresentModeGlitch } from './PresentModeGlitch';
-import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import IconQuestion from '@icon/regular/question.svg';
 import { withAnalytics } from '@coparse/analytics';
 import SplitIcon from '@macro-icons/new-split.svg';

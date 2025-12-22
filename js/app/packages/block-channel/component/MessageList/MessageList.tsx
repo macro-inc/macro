@@ -30,7 +30,7 @@ import type { Message } from '@service-comms/generated/models/message';
 import { useUserId } from '@service-gql/client';
 import { debounce } from '@solid-primitives/scheduled';
 import { activeElement } from 'app/signal/focus';
-import { DeprecatedTextButton } from 'core/component/DeprecatedTextButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import {
   type Accessor,
   createContext,

@@ -1,6 +1,6 @@
 import { INSERT_TABLE_COMMAND } from '@lexical/table';
 import { createCallback } from '@solid-primitives/rootless';
-import { DeprecatedTextButton } from 'core/component/DeprecatedTextButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { createSignal, Index, type ParentProps } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { mdStore } from '../signal/markdownBlockData';

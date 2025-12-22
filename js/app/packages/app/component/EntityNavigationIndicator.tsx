@@ -3,7 +3,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { getActiveCommandByToken, runCommand } from '@core/hotkey/utils';
 import CaretDown from '@icon/regular/caret-down.svg';
 import CaretUp from '@icon/regular/caret-up.svg';
-import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { Show } from 'solid-js';
 
 const EntityNavigationIndicator = () => {

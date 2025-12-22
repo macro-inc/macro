@@ -34,7 +34,7 @@ import { storageServiceClient } from '@service-storage/client';
 import { Navigate } from '@solidjs/router';
 import { useMutation, useQueryClient } from '@tanstack/solid-query';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
-import { DeprecatedButton } from 'core/component/FormControls/DeprecatedButton';
+import { DeprecatedButton } from '@core/component/FormControls/DeprecatedButton';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import {
   type Component,

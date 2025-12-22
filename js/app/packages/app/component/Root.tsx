@@ -39,7 +39,7 @@ import {
   type RouterProps,
   useSearchParams,
 } from '@solidjs/router';
-import { DeprecatedTextButton } from 'core/component/DeprecatedTextButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { useHotKeyRoot } from 'core/hotkey/hotkeys';
 import { detect } from 'detect-browser';
 import {

@@ -18,7 +18,7 @@ import Reverse from '@phosphor-icons/core/regular/arrows-horizontal.svg?componen
 import CornersOut from '@phosphor-icons/core/regular/corners-out.svg?component-solid';
 import TextAa from '@phosphor-icons/core/regular/text-aa.svg?component-solid';
 import TrashSimple from '@phosphor-icons/core/regular/trash-simple.svg?component-solid';
-import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import type { JSX } from 'solid-js';
 import {
   batch,

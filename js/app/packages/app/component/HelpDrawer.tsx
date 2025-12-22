@@ -8,7 +8,7 @@ import type { DefaultView, ViewId } from '@core/types/view';
 import CloseIcon from '@icon/regular/x.svg';
 import { authServiceClient } from '@service-auth/client';
 import { useTutorialCompleted } from '@service-gql/client';
-import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { For, type JSX, Match, Show, Switch } from 'solid-js';
 import { HotkeyExample, type HotkeyExampleProps } from './HotkeyExample';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';

@@ -11,7 +11,7 @@ import {
 } from '@core/util/create';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { useCreateProject } from '@service-storage/projects';
-import { DeprecatedButton } from 'core/component/FormControls/DeprecatedButton';
+import { DeprecatedButton } from '@core/component/FormControls/DeprecatedButton';
 import { type Component, createSignal, For } from 'solid-js';
 
 type MenuItemProps = {

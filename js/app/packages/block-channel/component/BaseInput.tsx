@@ -33,7 +33,7 @@ import { staticFileClient } from '@service-static-files/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { leading, throttle } from '@solid-primitives/scheduled';
 import { activeElement } from 'app/signal/focus';
-import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { toast } from 'core/component/Toast/Toast';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {

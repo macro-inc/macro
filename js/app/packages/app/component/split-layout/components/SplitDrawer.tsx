@@ -2,7 +2,7 @@ import { BrightJoins } from '@core/component/BrightJoins';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { TOKENS } from '@core/hotkey/tokens';
 import CloseIcon from '@icon/regular/x.svg';
-import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import { type JSX, type ParentProps, Show } from 'solid-js';
 import { useSplitPanel } from '../layoutUtils';

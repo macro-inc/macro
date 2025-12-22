@@ -84,8 +84,8 @@ import type {
   GetItemsSoupParams,
   PostSoupRequest,
 } from '@service-storage/generated/schemas';
-import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
-import { DeprecatedButton } from 'core/component/FormControls/DeprecatedButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
+import { DeprecatedButton } from '@core/component/FormControls/DeprecatedButton';
 import stringify from 'json-stable-stringify';
 import {
   type Accessor,

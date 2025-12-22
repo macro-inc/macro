@@ -7,7 +7,7 @@ import { downloadFile } from '@filesystem/download';
 import DownloadSimple from '@icon/regular/download-simple.svg';
 import ShareFat from '@icon/regular/share-fat.svg';
 import { createCallback } from '@solid-primitives/rootless';
-import { DeprecatedTextButton } from 'core/component/DeprecatedTextButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { toast } from 'core/component/Toast/Toast';
 import { createSignal } from 'solid-js';
 import { blockData, useGetFileBlob } from '../signal/blockData';

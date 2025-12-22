@@ -2,7 +2,7 @@ import ArrowLeft from '@icon/regular/arrow-left.svg';
 import ArrowRight from '@icon/regular/arrow-right.svg';
 import SplitIcon from '@icon/regular/square-half.svg';
 import CloseIcon from '@icon/regular/x.svg';
-import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { useContext } from 'solid-js';
 import { SplitLayoutContext, SplitPanelContext } from './context';
 

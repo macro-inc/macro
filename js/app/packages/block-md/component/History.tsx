@@ -34,8 +34,8 @@ import {
 import { storageServiceClient } from '@service-storage/client';
 import type { SyncServiceVersionID } from '@service-storage/generated/schemas/syncServiceVersionID';
 import { syncServiceClient } from '@service-sync/client';
-import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
-import { DeprecatedTextButton } from 'core/component/DeprecatedTextButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import type { SerializedEditorState } from 'lexical';
 import { LoroDoc } from 'loro-crdt';

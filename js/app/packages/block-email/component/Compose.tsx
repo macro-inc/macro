@@ -20,7 +20,7 @@ import {
 import Caution from '@icon/regular/warning.svg';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { useSendMessageMutation } from '@queries/email/thread';
-import { DeprecatedTextButton } from 'core/component/DeprecatedTextButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import {
   createMemo,
   createSignal,

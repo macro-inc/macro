@@ -26,7 +26,7 @@ import UploadSimple from '@phosphor-icons/core/bold/upload-simple-bold.svg?compo
 import Image from '@phosphor-icons/core/regular/image.svg?component-solid';
 //import { copiedFile } from "@core/state/clipboard";
 import { useHistory } from '@service-storage/history';
-import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { createMemo, createSignal, Show } from 'solid-js';
 import { VList } from 'virtua/solid';
 import { Tools } from '../constants';

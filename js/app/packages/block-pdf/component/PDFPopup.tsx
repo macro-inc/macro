@@ -18,8 +18,8 @@ import PasteIcon from '@phosphor-icons/core/regular/clipboard-text.svg?component
 import LinkIcon from '@phosphor-icons/core/regular/link.svg?component-solid';
 import TrashIcon from '@phosphor-icons/core/regular/trash.svg?component-solid';
 import { createCallback } from '@solid-primitives/rootless';
-import { DeprecatedIconButton } from 'core/component/DeprecatedIconButton';
-import { DeprecatedTextButton } from 'core/component/DeprecatedTextButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import {
   createEffect,
   createMemo,
