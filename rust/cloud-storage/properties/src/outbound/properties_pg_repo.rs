@@ -34,6 +34,20 @@ impl PropertiesRepo for PropertiesPgRepo {
             .await
     }
 
+    #[tracing::instrument(skip(self))]
+    async fn count_valid_property_options(
+        &self,
+        property_definition_id: Uuid,
+        option_ids: &[Uuid],
+    ) -> Result<i64, Self::Err> {
+        entity_property_queries::count_valid_property_options(
+            &self.pool,
+            property_definition_id,
+            option_ids,
+        )
+        .await
+    }
+
     #[tracing::instrument(skip(self, value))]
     async fn update_entity_property_value_if_exists(
         &self,

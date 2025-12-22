@@ -92,3 +92,25 @@ pub async fn upsert_entity_property(
 
     Ok(())
 }
+
+/// Counts how many of the provided option IDs exist for the property definition.
+pub async fn count_valid_property_options(
+    pool: &Pool<Postgres>,
+    property_definition_id: Uuid,
+    option_ids: &[Uuid],
+) -> anyhow::Result<i64> {
+    let count: (i64,) = sqlx::query_as(
+        r#"
+        SELECT COUNT(*) 
+        FROM property_options 
+        WHERE property_definition_id = $1
+        AND id = ANY($2)
+        "#,
+    )
+    .bind(property_definition_id)
+    .bind(option_ids)
+    .fetch_one(pool)
+    .await?;
+
+    Ok(count.0)
+}
