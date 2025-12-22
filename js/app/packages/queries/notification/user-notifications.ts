@@ -197,7 +197,13 @@ type NotificationsMutationParams = {
 type NotificationData<T> = InfiniteData<GetAllUserNotificationsResponse, T>;
 
 type NotificationsMutationContext = {
-  previousData: Maybe<NotificationData<UserNotificationsPageParam>>;
+  /**
+   * Snapshot of all cached `notificationKeys.user(...)` queries so we can rollback
+   * optimistic updates regardless of what limit a caller used.
+   */
+  previousData: Array<
+    readonly [unknown, NotificationData<UserNotificationsPageParam> | undefined]
+  >;
 };
 
 type UpdaterWithParams<T, P> = (input: Maybe<T>, params: P) => Maybe<T>;
@@ -225,12 +231,10 @@ type NotificationsOnMutateFn = (
 
 function notificationsMutationSuccessCallback<T>(
   _: T,
-  params: NotificationsMutationParams
+  _params: NotificationsMutationParams
 ) {
   queryClient.invalidateQueries({
-    queryKey: notificationKeys.user({
-      limit: params.notificationIds.length,
-    }).queryKey,
+    queryKey: notificationKeys.user._def,
   });
 }
 
@@ -240,18 +244,22 @@ function createNotificationsMutateFn(
 ): NotificationsOnMutateFn {
   return async (params) => {
     await queryClient.cancelQueries({
-      queryKey: notificationKeys.user({
-        limit: params.notificationIds.length,
-      }).queryKey,
+      queryKey: notificationKeys.user._def,
     });
 
-    const previousData = queryClient.getQueryData<
+    const previousData = queryClient.getQueriesData<
       NotificationData<UserNotificationsPageParam>
-    >(notificationKeys.user({ limit: params.notificationIds.length }).queryKey);
+    >({
+      queryKey: notificationKeys.user._def,
+    });
 
-    queryClient.setQueryData<NotificationData<UserNotificationsPageParam>>(
-      notificationKeys.user({ limit: params.notificationIds.length }).queryKey,
-      (input) => updaterFn(input, params)
+    queryClient.setQueriesData(
+      { queryKey: notificationKeys.user._def },
+      (input) =>
+        updaterFn(
+          input as Maybe<NotificationData<UserNotificationsPageParam>>,
+          params
+        )
     );
 
     return { previousData };
@@ -283,14 +291,11 @@ function createNotificationsMutation<T>(
 
 function notificationsMutationErrorFn(
   _: Error,
-  params: NotificationsMutationParams,
+  _params: NotificationsMutationParams,
   context: NotificationsMutationContext
 ) {
-  if (context?.previousData) {
-    queryClient.setQueryData(
-      notificationKeys.user({ limit: params.notificationIds.length }).queryKey,
-      context.previousData
-    );
+  for (const [queryKey, data] of context.previousData) {
+    queryClient.setQueryData(queryKey as never, data);
   }
 }
 
@@ -303,14 +308,11 @@ const mapNotificationsAsSeen = (
       ...input,
       pages: input.pages.map((page) => ({
         ...page,
-        notifications: page.items.map((n) => {
-          if (params.notificationIds.includes(n.id)) {
-            return {
-              ...n,
-              viewedAt: Date.now(),
-            };
-          }
-        }),
+        items: page.items.map((n) =>
+          params.notificationIds.includes(n.id)
+            ? { ...n, viewedAt: Date.now() }
+            : n
+        ),
       })),
     }
   );
@@ -337,9 +339,7 @@ const filterOutDoneNotifications = (
       ...input,
       pages: input.pages.map((page) => ({
         ...page,
-        notifications: page.items.filter(
-          (n) => !params.notificationIds.includes(n.id)
-        ),
+        items: page.items.filter((n) => !params.notificationIds.includes(n.id)),
       })),
     }
   );
