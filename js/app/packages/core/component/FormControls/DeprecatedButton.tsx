@@ -21,6 +21,9 @@ const themeClass: Record<Theme, string> = {
   secondary: 'text-ink',
 };
 
+/** Use Button instead!
+ * @deprecated
+*/
 export const DeprecatedButton: ParentComponent<{
   size?: Size;
   theme?: Theme;

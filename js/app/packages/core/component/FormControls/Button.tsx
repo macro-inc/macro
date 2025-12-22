@@ -10,21 +10,21 @@ type ButtonProps = JSX.ButtonHTMLAttributes<HTMLButtonElement> & {
 /**
  * ### The basic button component. When in doubt, use Button.
  *
- * @param variant - Primary, secondary, tertiary (aka the default), or destructive.
- * @param tooltip - Optional tooltip content to display when hovering over the button.
- * @param class - Use for custom styling. Tailwind will be merged automatically, be granular as you like.
- * 
- * 
+ * @param props.variant - Primary, secondary, tertiary (aka the default), or destructive.
+ * @param props.tooltip - Optional tooltip content to display when hovering over the button.
+ * @param props.class - Use for custom styling. Tailwind will be merged automatically, be granular as you like.
+ * @param props.children - Labels, icons, hotkey hints, etc. The body of the button.
+ *
  * @example
  * <Button variant="primary" disabled>
  *   Save
  * </Button>
  *
  * @example
- * // Icon button wrapped in Tooltip with Hotkey  
- * <Button 
- *   variant="primary" 
- *   class="aspect-square" 
+ * // Icon button wrapped in Tooltip with Hotkey
+ * <Button
+ *   variant="primary"
+ *   class="aspect-square"
  *   tooltip={<LabelAndHotKey label="Save" shortcut='cmd+s' />}
  * >
  *   <EntityIcon targetType="pdf" theme='monochrome' size="md" />

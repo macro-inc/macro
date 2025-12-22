@@ -103,6 +103,7 @@ type TextButtonProps = TextButton &
  * @param props.rotateChevron - Whether to rotate the chevron icon
  * @param props.showSeparator - Whether to show the separator and enable the secondary button
  * @param props.ref - An optional ref to the div wrapper of the TextButton and the secondary button if enabled
+ * @deprecated Use Button instead, composing secondaries as needed.
  */
 export function DeprecatedTextButton(props: TextButtonProps) {
   const hasSecondaryButton = () =>
@@ -209,6 +210,7 @@ export function DeprecatedTextButton(props: TextButtonProps) {
   );
 }
 
+/** @deprecated — Should likely be incorporated into EditableField */
 export function DeprecatedEditingTextButton(
   props: Omit<TextButtonProps, 'text' | 'children'> & EditableLabelProps
 ) {
