@@ -32,7 +32,7 @@ pub trait UserRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<UserName>, Report>> + Send;
 }
 
-pub trait ChannelsService {
+pub trait ChannelsService: Send + Sync + 'static {
     fn get_channels(
         &self,
         user: MacroUserIdStr<'_>,

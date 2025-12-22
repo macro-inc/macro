@@ -1780,17 +1780,22 @@ dependencies = [
 name = "comms"
 version = "0.1.0"
 dependencies = [
+ "axum",
  "chrono",
  "doppleganger",
  "frecency",
  "macro_user_id",
  "model-entity",
+ "model_user",
  "models_comms",
  "rootcause",
+ "serde",
  "serde_json",
  "sqlx",
+ "thiserror 2.0.17",
  "tokio",
  "tracing",
+ "utoipa",
  "uuid",
 ]
 

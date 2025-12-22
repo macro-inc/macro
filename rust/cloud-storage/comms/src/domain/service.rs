@@ -41,6 +41,7 @@ where
     Auth: UserRepo,
     Frec: AggregateFrecencyStorage,
 {
+    #[tracing::instrument(err, skip(self))]
     async fn get_channels(
         &self,
         user: macro_user_id::user_id::MacroUserIdStr<'_>,
