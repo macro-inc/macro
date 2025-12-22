@@ -1,28 +1,49 @@
 import { type JSX, type ParentComponent, splitProps } from 'solid-js';
 import { twMerge } from "tailwind-merge";
+import { Tooltip } from '../Tooltip';
 
-type ExclusiveVariant<T extends string> = {
-  [K in T]: { [P in K]?: true } & { [P in Exclude<T, K>]?: never }
-}[T] | { [K in T]?: never };
+type ButtonProps = JSX.ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: 'primary' | 'secondary' | 'tertiary' | 'destructive',
+  tooltip?: JSX.Element;
+};
 
-type ButtonVariant = ExclusiveVariant<'primary' | 'secondary' | 'tertiary' | 'destructive'>;
-
-type ButtonProps = ButtonVariant & JSX.ButtonHTMLAttributes<HTMLButtonElement>;
-
+/**
+ * ### The basic button component. When in doubt, use Button.
+ *
+ * @param variant - Primary, secondary, tertiary (aka the default), or destructive.
+ * @param tooltip - Optional tooltip content to display when hovering over the button.
+ * @param class - Use for custom styling. Tailwind will be merged automatically, be granular as you like.
+ * 
+ * 
+ * @example
+ * <Button variant="primary" disabled>
+ *   Save
+ * </Button>
+ *
+ * @example
+ * // Icon button wrapped in Tooltip with Hotkey  
+ * <Button 
+ *   variant="primary" 
+ *   class="aspect-square" 
+ *   tooltip={<LabelAndHotKey label="Save" shortcut='cmd+s' />}
+ * >
+ *   <EntityIcon targetType="pdf" theme='monochrome' size="md" />
+ * </Button>
+ *
+ */
 export const Button: ParentComponent<ButtonProps> = (props) => {
   const [local, ...rest] = splitProps(props, [
-    'primary',
-    'secondary',
-    'tertiary',
-    'destructive',
+    'variant',
     'class',
     'children',
     'classList',
+    'tooltip',
   ]);
+
   const classes = twMerge(
-    "relative flex items-center justify-center gap-[1ch] px-[1ch] py-[0.25lh] border border-ink",
+    "relative flex items-center justify-center gap-[1ch] px-[1ch] py-[0.25lh] border border-transparent",
     "font-mono font-medium uppercase leading-none",
-    "hover:opacity-80",
+    "hover:bg-surface-4",
     "focus:[--focus-border-inset:-4px]",
     "active:border-accent active:bg-accent active:text-panel",
     "disabled:opacity-50  disabled:cursor-not-allowed",
@@ -31,13 +52,19 @@ export const Button: ParentComponent<ButtonProps> = (props) => {
     local.class
   );
 
-  return (
+  function maybeWrapInTooltip(children: JSX.Element) {
+    if (!local.tooltip) return children;
+
+    return <Tooltip tooltip={local.tooltip}>{children}</Tooltip>;
+  }
+
+  return maybeWrapInTooltip(
     <button
       class={classes}
       classList={{
-        "bg-ink text-panel": !!local.primary,
-        "border-transparent": !!local.tertiary,
-        "border-failure! text-failure active:bg-failure": !!local.destructive,
+        "bg-ink border-ink text-panel hover:bg-accent! hover:opacity-80 active:opacity-100": 'primary' === local.variant,
+        "border-ink!": 'secondary' === local.variant,
+        "border-failure! text-failure active:bg-failure hover:bg-failure-bg!": 'destructive' === local.variant,
         ...(local.classList ?? {}),
       }}
       {...rest}
@@ -46,3 +73,7 @@ export const Button: ParentComponent<ButtonProps> = (props) => {
     </button>
   );
 };
+
+
+// New UI package
+// All pure functions (no blocks / imports from other local packages)

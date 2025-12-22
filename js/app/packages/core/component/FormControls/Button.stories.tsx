@@ -2,6 +2,7 @@ import { Button } from "./Button";
 import type { Meta, StoryObj } from 'storybook-solidjs-vite';
 import { Hotkey } from '../Hotkey';
 import { EntityIcon } from '../EntityIcon';
+import { LabelAndHotKey } from "../Tooltip";
 
 
 const meta = {
@@ -13,7 +14,7 @@ const meta = {
     class: {
       control: { type: 'text', defaultValue: '' },
     },
-  } 
+  }
 } satisfies Meta<typeof Button>;
 
 export default meta;
@@ -24,40 +25,40 @@ export const Buttons: Story = {
   render: () => (
     <div class="space-y-4">
       <div class="flex gap-4">
-        <Button primary>
+        <Button variant="primary">
           Primary
         </Button>
-        <Button secondary>
-          Secondary / default
+        <Button variant="secondary">
+          Secondary
         </Button>
-        <Button tertiary>
-          Tertiary
+        <Button variant="tertiary">
+          Tertiary / default
         </Button>
-        <Button destructive>
+        <Button variant="destructive">
           Destructive
         </Button>
       </div>
       <div class="flex gap-4">
-        <Button primary disabled>
+        <Button variant="primary" disabled>
           Disabled Primary
         </Button>
-        <Button secondary disabled>
+        <Button variant="secondary" disabled>
           Disabled Secondary
         </Button>
-         <Button destructive disabled>
+         <Button variant="destructive" disabled>
           Disabled Destructive
         </Button>
       </div>
       <div class="flex gap-4 text-xl items-center">
-        <Button primary>
-          With Shortcut <Hotkey shortcut='cmd+s' />
+        <Button variant="primary">
+          With shortcut <Hotkey shortcut='cmd+s' />
         </Button>
 
-        <Button primary>
+        <Button variant="primary">
           <EntityIcon theme='monochrome' /> With Icon
         </Button>
 
-        <Button class="aspect-square">
+        <Button class="aspect-square" tooltip={<LabelAndHotKey label="With custom styling" shortcut='cmd+s' />}>
           <EntityIcon targetType="pdf" theme='monochrome' size="md" />
         </Button>
       </div>
