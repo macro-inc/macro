@@ -11,7 +11,6 @@ pub mod delete_message;
 pub mod get_channel;
 pub mod get_channel_metadata;
 pub mod get_channel_transcript;
-pub mod get_channels;
 pub mod get_mentions;
 pub mod get_message_with_context;
 pub mod get_or_create_dm;
