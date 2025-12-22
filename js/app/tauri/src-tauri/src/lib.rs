@@ -9,6 +9,8 @@ use tauri::http::{HeaderMap, HeaderValue};
 use tauri::{AppHandle, Emitter};
 use tauri::{Manager, Runtime};
 use tauri_plugin_deep_link::{DeepLinkExt, OpenUrlEvent};
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 use url::Url;
 
 /// This module provides debuging utilities and should not be compiled in prodiction builds
@@ -30,23 +32,31 @@ static ALLOWED_DOMAINS: &[&str] = &[
 pub fn run() {
     use tracing_subscriber::EnvFilter;
 
-    tracing_subscriber::fmt()
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+        if cfg!(debug_assertions) {
+            "debug,tungstenite=info,tokio_tungstenite=info,reqwest=info,hyper=info,h2=info".into()
+        } else {
+            "info,tungstenite=info,tokio_tungstenite=info,reqwest=info".into()
+        }
+    });
+
+    let fmt_layer = tracing_subscriber::fmt::layer()
         .with_file(true)
         .with_target(false)
         .with_writer(std::io::stderr)
         .with_line_number(true)
-        .pretty()
-        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-            // Set default log levels
-            if cfg!(debug_assertions) {
-                // Enable debug logs for websocket and HTTP crates in debug mode
-                "debug,tungstenite=info,tokio_tungstenite=info,reqwest=info,hyper=info,h2=info"
-                    .into()
-            } else {
-                "info,tungstenite=info,tokio_tungstenite=info,reqwest=info".into()
-            }
-        }))
-        .init();
+        .pretty();
+
+    let registry = tracing_subscriber::registry().with(filter).with(fmt_layer);
+
+    #[cfg(target_os = "ios")]
+    let registry = registry.with(tracing_oslog::OsLogger::new(
+        "com.macro.app.prod",
+        "default",
+    ));
+
+    registry.init();
+
     let mut builder = tauri::Builder::default();
 
     #[cfg(desktop)]
