@@ -94,9 +94,20 @@ r#"
                     WHEN 'viewed_at' THEN COALESCE(uh."updatedAt", '1970-01-01 00:00:00+00')
                     WHEN 'created_at' THEN d."createdAt"
                     ELSE d."updatedAt"
-                END::timestamptz as "sort_ts!"
+                END::timestamptz as "sort_ts!",
+                CASE 
+                    WHEN dt.sub_type = 'task' 
+                        AND ep_status.values->'value' ? '00000001-0000-0000-0002-000000000004'
+                    THEN true 
+                    ELSE false 
+                END as "is_completed!"
             FROM "Document" d
             LEFT JOIN document_sub_type dt ON dt.document_id = d.id
+            LEFT JOIN entity_properties ep_status 
+                ON dt.sub_type = 'task'
+                AND ep_status.entity_id = d.id 
+                AND ep_status.entity_type = 'DOCUMENT'
+                AND ep_status.property_definition_id = '00000001-0000-0000-0000-000000000002'
             INNER JOIN UserAccessibleItems uai ON uai.item_id = d.id AND uai.item_type = 'document'
             -- This MUST be a LEFT JOIN to support all three sort methods
             LEFT JOIN "UserHistory" uh ON uh."itemId" = d.id AND uh."itemType" = 'document' AND uh."userId" = $1
@@ -140,7 +151,8 @@ r#"
                     WHEN 'viewed_at' THEN COALESCE(uh."updatedAt", '1970-01-01 00:00:00+00')
                     WHEN 'created_at' THEN c."createdAt"
                     ELSE c."updatedAt"
-                END::timestamptz as "sort_ts!"
+                END::timestamptz as "sort_ts!",
+                false as "is_completed!"
             FROM "Chat" c
             INNER JOIN UserAccessibleItems uai ON uai.item_id = c.id AND uai.item_type = 'chat'
             LEFT JOIN "UserHistory" uh ON uh."itemId" = c.id AND uh."itemType" = 'chat' AND uh."userId" = $1
@@ -170,7 +182,8 @@ r#"
                     WHEN 'viewed_at' THEN COALESCE(uh."updatedAt", '1970-01-01 00:00:00+00')
                     WHEN 'created_at'  THEN p."createdAt"
                     ELSE p."updatedAt"
-                END::timestamptz as "sort_ts!"
+                END::timestamptz as "sort_ts!",
+                false as "is_completed!"
             FROM "Project" p
             INNER JOIN UserAccessibleItems uai
                 ON uai.item_id = p.id
@@ -282,9 +295,20 @@ r#"
                     WHEN 'viewed_at' THEN COALESCE(uh."updatedAt", '1970-01-01 00:00:00+00')
                     WHEN 'created_at' THEN d."createdAt"
                     ELSE d."updatedAt"
-                END::timestamptz as "sort_ts!"
+                END::timestamptz as "sort_ts!",
+                CASE 
+                    WHEN dt.sub_type = 'task' 
+                        AND ep_status.values->'value' ? '00000001-0000-0000-0002-000000000004'
+                    THEN true 
+                    ELSE false 
+                END as "is_completed!"
             FROM "Document" d
             LEFT JOIN document_sub_type dt ON dt.document_id = d.id
+            LEFT JOIN entity_properties ep_status 
+                ON dt.sub_type = 'task'
+                AND ep_status.entity_id = d.id 
+                AND ep_status.entity_type = 'DOCUMENT'
+                AND ep_status.property_definition_id = '00000001-0000-0000-0000-000000000002'
             INNER JOIN UserAccessibleItems uai ON uai.item_id = d.id AND uai.item_type = 'document'
             -- This MUST be a LEFT JOIN to support all three sort methods
             LEFT JOIN "UserHistory" uh ON uh."itemId" = d.id AND uh."itemType" = 'document' AND uh."userId" = $1
@@ -328,7 +352,8 @@ r#"
                     WHEN 'viewed_at' THEN COALESCE(uh."updatedAt", '1970-01-01 00:00:00+00')
                     WHEN 'created_at' THEN c."createdAt"
                     ELSE c."updatedAt"
-                END::timestamptz as "sort_ts!"
+                END::timestamptz as "sort_ts!",
+                false as "is_completed!"
             FROM "Chat" c
             INNER JOIN UserAccessibleItems uai ON uai.item_id = c.id AND uai.item_type = 'chat'
             LEFT JOIN "UserHistory" uh ON uh."itemId" = c.id AND uh."itemType" = 'chat' AND uh."userId" = $1
@@ -358,7 +383,8 @@ r#"
                     WHEN 'viewed_at' THEN COALESCE(uh."updatedAt", '1970-01-01 00:00:00+00')
                     WHEN 'created_at'  THEN p."createdAt"
                     ELSE p."updatedAt"
-                END::timestamptz as "sort_ts!"
+                END::timestamptz as "sort_ts!",
+                false as "is_completed!"
             FROM "Project" p
             INNER JOIN UserAccessibleItems uai
                 ON uai.item_id = p.id

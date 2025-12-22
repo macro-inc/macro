@@ -93,9 +93,20 @@ pub async fn expanded_soup_by_ids<'a>(
                 NULL as "is_persistent",
                 di.sha as "sha",
                 dt.sub_type as "sub_type?: DocumentSubType",
-                uh."updatedAt"::timestamptz as "viewed_at"
+                uh."updatedAt"::timestamptz as "viewed_at",
+                CASE 
+                    WHEN dt.sub_type = 'task' 
+                        AND ep_status.values->'value' ? '00000001-0000-0000-0002-000000000004'
+                    THEN true 
+                    ELSE false 
+                END as "is_completed!"
             FROM "Document" d
             LEFT JOIN document_sub_type dt ON dt.document_id = d.id
+            LEFT JOIN entity_properties ep_status 
+                ON dt.sub_type = 'task'
+                AND ep_status.entity_id = d.id 
+                AND ep_status.entity_type = 'DOCUMENT'
+                AND ep_status.property_definition_id = '00000001-0000-0000-0000-000000000002'
             INNER JOIN UserAccessibleItems uai 
                 ON uai.item_id = d.id 
                 AND uai.item_type = 'document'
@@ -138,7 +149,8 @@ pub async fn expanded_soup_by_ids<'a>(
                 c."isPersistent" as "is_persistent",
                 NULL as "sha",
                 NULL as "sub_type",
-                uh."updatedAt"::timestamptz as "viewed_at"
+                uh."updatedAt"::timestamptz as "viewed_at",
+                false as "is_completed!"
             FROM "Chat" c
             INNER JOIN UserAccessibleItems uai 
                 ON uai.item_id = c.id 
