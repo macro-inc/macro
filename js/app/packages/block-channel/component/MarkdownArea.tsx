@@ -40,6 +40,7 @@ import type { PortalScope } from '@core/component/ScopedPortal';
 import type { IUser } from '@core/user';
 import type { Item } from '@service-storage/generated/schemas/item';
 import { onElementConnect } from '@solid-primitives/lifecycle';
+import { isMobile } from '@solid-primitives/platform';
 import { filePastePlugin } from 'core/component/LexicalMarkdown/plugins/file-paste/filePastePlugin';
 import { createAccessoryStore } from 'core/component/LexicalMarkdown/plugins/node-accessory/nodeAccessoryPlugin';
 import { normalizeEnterPlugin } from 'core/component/LexicalMarkdown/plugins/normalize-enter/';
@@ -197,6 +198,7 @@ function MarkdownArea(props: MarkdownAreaProps & ConsumableMarkdownAreaProps) {
     } else {
       initializeEditorEmpty(editor);
     }
+    if (!isMobile && !props.dontFocusOnMount) editor.focus();
   };
 
   createEffect(() => {
@@ -308,7 +310,6 @@ function MarkdownArea(props: MarkdownAreaProps & ConsumableMarkdownAreaProps) {
 
   createEffect(() => {
     props.markdownState();
-    console.log('PROPS', props.markdownState());
     setShowPlaceholder(editorIsEmpty(editor));
   });
 
