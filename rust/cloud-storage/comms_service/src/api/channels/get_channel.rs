@@ -17,6 +17,7 @@ use comms_db_client::{
     model::{Activity, Attachment, CountedReaction, Message},
     reactions::{get_reactions::get_messages_reactions, group_reactions_by_message},
 };
+use doppleganger::Mirror;
 use futures::try_join;
 use model::comms::{Channel, ChannelParticipant};
 use serde::{Deserialize, Serialize};
@@ -103,7 +104,7 @@ pub async fn get_channel_handler(
         StatusCode::OK,
         Json(GetChannelResponse {
             channel,
-            participants,
+            participants: <Vec<model::comms::ChannelParticipant>>::mirror(participants),
             messages,
             reactions,
             activity,

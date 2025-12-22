@@ -33,6 +33,7 @@ axum = { workspace = true, features = ["tower-log", "ws"] }
 axum-extra = { workspace = true }
 axum-macros = { workspace = true }
 chrono = { workspace = true }
+comms = { path = "../comms" }
 comms_db_client = { path = "../comms_db_client", optional = true }
 connection_gateway = { path = "../connection_gateway" }
 document_storage_service_client = { path = "../document_storage_service_client" }

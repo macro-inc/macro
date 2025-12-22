@@ -1,9 +1,6 @@
-use crate::{
-    api::{
-        context::AppState,
-        extractors::{ChannelId, ChannelMember},
-    },
-    utils::channel_name::resolve_channel_name,
+use crate::api::{
+    context::AppState,
+    extractors::{ChannelId, ChannelMember},
 };
 use anyhow::Result;
 use axum::{
@@ -12,13 +9,13 @@ use axum::{
     response::{IntoResponse, Json, Response},
 };
 use axum_extra::extract::Cached;
+use comms::domain::models::channel_name::resolve_channel_name;
 use comms_db_client::participants::get_participants::get_participants;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use models_comms::channel::OrganizationId;
 use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Postgres};
 use utoipa::ToSchema;
-use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct ChannelMetadataResponse {
@@ -28,14 +25,14 @@ pub struct ChannelMetadataResponse {
 
 #[derive(Deserialize, Debug)]
 pub struct UserIdQuery {
-    pub user_id: Option<String>,
+    pub user_id: MacroUserIdStr<'static>,
 }
 
 #[tracing::instrument(skip(db))]
 pub async fn get_channel_name_and_type(
     db: &Pool<Postgres>,
-    channel_id: &Uuid,
-    user_id: &str,
+    channel_id: &models_comms::channel::ChannelId,
+    user_id: MacroUserIdStr<'_>,
 ) -> Result<(String, model::comms::ChannelType)> {
     let channel = sqlx::query!(
         r#"
@@ -50,7 +47,7 @@ pub async fn get_channel_name_and_type(
         FROM comms_channels
         WHERE id = $1
         "#,
-        channel_id
+        channel_id.0
     )
     .try_map(|channel_row| {
         Ok(model::comms::Channel {
@@ -68,7 +65,7 @@ pub async fn get_channel_name_and_type(
     .fetch_one(db)
     .await?;
 
-    let participants = get_participants(db, channel_id).await?;
+    let participants = get_participants(db, &channel_id.0).await?;
 
     let channel_name = resolve_channel_name(
         &match channel.channel_type {
@@ -81,7 +78,7 @@ pub async fn get_channel_name_and_type(
         &participants,
         channel_id,
         user_id,
-        None,
+        &Default::default(),
     );
 
     Ok((channel_name, channel.channel_type))
@@ -95,17 +92,20 @@ pub async fn handler_external(
     Cached(ChannelMember(channel_member)): Cached<ChannelMember>,
     Cached(ChannelId(channel_id)): Cached<ChannelId>,
 ) -> Result<Response, Response> {
-    let (channel_name, channel_type) =
-        get_channel_name_and_type(&ctx.db, &channel_id, &channel_member.context.user_id)
-            .await
-            .map_err(|e| {
-                tracing::error!(error=?e, "unable to get channel metadata");
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "unable to get channel metadata",
-                )
-                    .into_response()
-            })?;
+    let (channel_name, channel_type) = get_channel_name_and_type(
+        &ctx.db,
+        &models_comms::channel::ChannelId(channel_id),
+        channel_member.user_id,
+    )
+    .await
+    .map_err(|e| {
+        tracing::error!(error=?e, "unable to get channel metadata");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "unable to get channel metadata",
+        )
+            .into_response()
+    })?;
 
     let response = ChannelMetadataResponse {
         channel_name,
@@ -119,21 +119,20 @@ pub async fn handler_external(
 #[tracing::instrument(skip(ctx))]
 pub async fn handler_internal(
     State(ctx): State<AppState>,
-    Path(channel_id): Path<Uuid>,
+    Path(channel_id): Path<models_comms::channel::ChannelId>,
     Query(query): Query<UserIdQuery>,
 ) -> Result<Response, Response> {
-    let user_id = query.user_id.as_deref().unwrap_or("");
-
-    let (channel_name, channel_type) = get_channel_name_and_type(&ctx.db, &channel_id, user_id)
-        .await
-        .map_err(|e| {
-            tracing::error!(error=?e, "unable to get channel metadata");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "unable to get channel metadata",
-            )
-                .into_response()
-        })?;
+    let (channel_name, channel_type) =
+        get_channel_name_and_type(&ctx.db, &channel_id, query.user_id)
+            .await
+            .map_err(|e| {
+                tracing::error!(error=?e, "unable to get channel metadata");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "unable to get channel metadata",
+                )
+                    .into_response()
+            })?;
 
     let response = ChannelMetadataResponse {
         channel_name,

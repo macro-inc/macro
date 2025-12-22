@@ -1,5 +1,6 @@
 use crate::participants::get_participants::get_participants;
 use anyhow::{Context, Result};
+use doppleganger::Mirror;
 use model::comms::{ChannelParticipant, ChannelType};
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
@@ -72,7 +73,11 @@ pub async fn batch_get_channel_preview(
     let mut previews: Vec<RawPreviewRecord> = vec![];
 
     for row in preview_data {
-        let participants = get_participants(db, &row.channel_id).await?;
+        let participants = get_participants(db, &row.channel_id)
+            .await?
+            .into_iter()
+            .map(model::comms::ChannelParticipant::mirror)
+            .collect();
 
         previews.push(RawPreviewRecord {
             channel_id: row.channel_id,

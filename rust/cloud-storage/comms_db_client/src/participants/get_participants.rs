@@ -1,17 +1,25 @@
 use anyhow::{Context, Result};
+use doppleganger::Doppleganger;
+use doppleganger::Mirror;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::comms::ChannelId;
-use model::comms::ChannelParticipant;
-use model::comms::ParticipantRole;
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
+
+#[derive(sqlx::Type, Doppleganger, Debug)]
+#[dg(forward = models_comms::channel::ParticipantRole)]
+pub enum DbParticipantRole {
+    Admin,
+    Member,
+    Owner,
+}
 
 #[tracing::instrument(skip(db))]
 pub async fn get_participants(
     db: &Pool<Postgres>,
     channel_id: &Uuid,
-) -> Result<Vec<ChannelParticipant>, sqlx::Error> {
+) -> Result<Vec<models_comms::channel::ChannelParticipant>, sqlx::Error> {
     let participants = sqlx::query!(
         r#"
         SELECT
@@ -19,7 +27,7 @@ pub async fn get_participants(
             channel_id,
             joined_at,
             left_at,
-            role as "role: ParticipantRole"
+            role as "role: DbParticipantRole"
         FROM comms_channel_participants
         WHERE channel_id = $1
         ORDER BY joined_at DESC
@@ -27,12 +35,12 @@ pub async fn get_participants(
         channel_id
     )
     .try_map(|row| {
-        Ok(ChannelParticipant {
+        Ok(models_comms::channel::ChannelParticipant {
             channel_id: ChannelId(row.channel_id),
             user_id: macro_user_id::user_id::MacroUserIdStr::parse_from_str(&row.user_id)
                 .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
                 .into_owned(),
-            role: row.role,
+            role: DbParticipantRole::mirror(row.role),
             joined_at: row.joined_at,
             left_at: row.left_at,
         })

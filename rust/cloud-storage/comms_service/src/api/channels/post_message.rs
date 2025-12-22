@@ -284,7 +284,7 @@ pub async fn post_message_handler(
             channel_type: model_notifications::ChannelType::mirror(channel_type),
             channel_name: channel_name.clone(),
         },
-        channel_participants.clone(),
+        <Vec<model::comms::ChannelParticipant>>::mirror(channel_participants),
         message.clone(),
         req.mentions.clone(),
     );

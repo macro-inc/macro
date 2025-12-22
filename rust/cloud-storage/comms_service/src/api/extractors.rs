@@ -1,19 +1,22 @@
 use authentication_service_client::AuthServiceClient;
 use axum::{
-    Extension, async_trait,
+    Extension, RequestPartsExt, async_trait,
     extract::{FromRef, FromRequestParts, Path},
     http::{StatusCode, request::Parts},
     response::{IntoResponse, Response},
 };
 use axum_extra::extract::Cached;
+use comms::domain::models::channel_name::resolve_channel_name;
 use comms_db_client::{
     channels::get_channel_info::{ChannelInfo, get_channel_info},
     messages::get_message_owner::get_message_owner,
     participants::get_participants::get_participants,
 };
+use doppleganger::Mirror;
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model::{
-    comms::{ChannelParticipant, ParticipantRole},
-    user::UserContext,
+    comms::ParticipantRole,
+    user::{UserContext, axum_extractor::MacroUserExtractor},
 };
 use models_comms::ChannelType;
 use serde::{Deserialize, Serialize};
@@ -22,16 +25,14 @@ use std::{collections::HashMap, sync::Arc};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::utils::{channel_name::resolve_channel_name, user_name::generate_name_lookup};
-
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ChannelName(pub String);
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ChannelId(pub Uuid);
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct ChannelParticipants(pub Vec<ChannelParticipant>);
+#[derive(Deserialize, Clone, Debug)]
+pub struct ChannelParticipants(pub Vec<models_comms::channel::ChannelParticipant>);
 
 #[derive(Debug, Clone, Copy)]
 pub struct ChannelTypeExtractor(pub ChannelType);
@@ -169,7 +170,8 @@ where
             extract_cached::<ChannelTypeExtractor, _>(parts, state).await?;
         let ChannelParticipants(participants) =
             extract_cached::<ChannelParticipants, _>(parts, state).await?;
-        let UserContext { user_id, .. } = extract_user_context(parts).await?;
+        let MacroUserExtractor { macro_user_id, .. } =
+            parts.extract().await.map_err(IntoResponse::into_response)?;
 
         let ChannelInfoExtractor(ChannelInfo { name, .. }) =
             extract_cached::<ChannelInfoExtractor, _>(parts, state).await?;
@@ -183,15 +185,32 @@ where
             .get_names(user_ids)
             .await
             .ok()
-            .map(generate_name_lookup);
+            .map(|names| {
+                names
+                    .names
+                    .into_iter()
+                    .filter_map(|n| {
+                        Some(comms::domain::models::UserName {
+                            id: MacroUserIdStr::parse_from_str(&n.id).ok()?.into_owned(),
+                            first_name: n.first_name,
+                            last_name: n.last_name,
+                        })
+                    })
+                    .filter_map(|n| {
+                        let display = n.display_name()?;
+                        Some((n.id, display))
+                    })
+                    .collect::<HashMap<_, _>>()
+            })
+            .unwrap_or_default();
 
         let channel_name = resolve_channel_name(
             &channel_type,
             name.as_deref(),
             &participants,
-            &channel_id,
-            &user_id,
-            name_lookup.as_ref(),
+            &models_comms::channel::ChannelId(channel_id),
+            macro_user_id,
+            &name_lookup,
         );
 
         return Ok(ChannelName(channel_name));
@@ -236,17 +255,18 @@ where
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct UserContextWithRole {
     pub context: UserContext,
-    pub role: Option<ParticipantRole>,
+    pub user_id: MacroUserIdStr<'static>,
+    pub role: Option<models_comms::channel::ParticipantRole>,
 }
 
 pub async fn get_user_role(
     user_context: &UserContext,
     info: &ChannelInfo,
-    participants: &[ChannelParticipant],
-) -> Option<ParticipantRole> {
+    participants: &[models_comms::channel::ChannelParticipant],
+) -> Option<models_comms::channel::ParticipantRole> {
     let user_participant = participants
         .iter()
         .find(|p| p.user_id.as_ref() == user_context.user_id);
@@ -255,7 +275,7 @@ pub async fn get_user_role(
         model::comms::ChannelType::Public => Some(
             user_participant
                 .map(|p| p.role)
-                .unwrap_or(ParticipantRole::Member),
+                .unwrap_or(models_comms::channel::ParticipantRole::Member),
         ),
         model::comms::ChannelType::Organization => {
             let org_match = user_context
@@ -267,7 +287,7 @@ pub async fn get_user_role(
                 Some(
                     user_participant
                         .map(|p| p.role)
-                        .unwrap_or(ParticipantRole::Member),
+                        .unwrap_or(models_comms::channel::ParticipantRole::Member),
                 )
             } else {
                 user_participant.map(|p| p.role)
@@ -292,7 +312,11 @@ where
         let Cached(ChannelParticipants(participants)) =
             Cached::<ChannelParticipants>::from_request_parts(parts, state).await?;
 
-        let user_context = extract_user_context(parts).await?;
+        let MacroUserExtractor {
+            macro_user_id,
+            user_context,
+            ..
+        } = parts.extract().await.map_err(IntoResponse::into_response)?;
         let info = get_channel_info(&PgPool::from_ref(state), &channel_id)
             .await
             .map_err(|err| {
@@ -306,12 +330,13 @@ where
         let role = get_user_role(&user_context, &info, &participants).await;
         Ok(UserContextWithRole {
             context: user_context,
+            user_id: macro_user_id,
             role,
         })
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct ChannelMember(pub UserContextWithRole);
 
 #[async_trait]
@@ -332,7 +357,7 @@ where
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct ChannelOwner(pub UserContextWithRole);
 
 #[async_trait]
@@ -347,13 +372,15 @@ where
         let user_context_with_role = UserContextWithRole::from_request_parts(parts, state).await?;
 
         match user_context_with_role.role {
-            Some(ParticipantRole::Owner) => Ok(ChannelOwner(user_context_with_role)),
+            Some(models_comms::channel::ParticipantRole::Owner) => {
+                Ok(ChannelOwner(user_context_with_role))
+            }
             _ => Err(unauthorized("user is not authorized to view this channel")),
         }
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct ChannelAdmin(pub UserContextWithRole);
 
 #[async_trait]
@@ -368,9 +395,10 @@ where
         let user_context_with_role = UserContextWithRole::from_request_parts(parts, state).await?;
 
         match user_context_with_role.role {
-            Some(ParticipantRole::Owner | ParticipantRole::Admin) => {
-                Ok(ChannelAdmin(user_context_with_role))
-            }
+            Some(
+                models_comms::channel::ParticipantRole::Owner
+                | models_comms::channel::ParticipantRole::Admin,
+            ) => Ok(ChannelAdmin(user_context_with_role)),
             _ => Err(unauthorized("user is not authorized to view this channel")),
         }
     }
@@ -424,7 +452,7 @@ where
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub enum MessageSenderOrAdmin {
     MessageSender(MessageSender),
     ChannelAdmin(ChannelAdmin),
@@ -461,7 +489,9 @@ where
         let user_context_with_role = extract_cached::<UserContextWithRole, _>(parts, state).await?;
 
         match user_context_with_role.role {
-            Some(role) => Ok(ParticipantAccess::Access { role }),
+            Some(role) => Ok(ParticipantAccess::Access {
+                role: ParticipantRole::mirror(role),
+            }),
             _ => Ok(ParticipantAccess::NoAccess),
         }
     }
