@@ -2,7 +2,7 @@ import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { withAnalytics } from '@coparse/analytics';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { EmailDebouncedReadMarker } from '@notifications';
-import { createMemo, onMount, Show } from 'solid-js';
+import { createMemo, onMount, Show, Suspense } from 'solid-js';
 import { blockDataSignal } from '../signal/emailBlockData';
 import { Email } from './Email';
 
@@ -36,7 +36,9 @@ export default function BlockEmail() {
                   notificationSource={notificationSource}
                   threadId={id()}
                 />
-                <Email title={title} threadId={id} />
+                <Suspense>
+                  <Email title={title} threadId={id} />
+                </Suspense>
               </>
             )}
           </Show>
