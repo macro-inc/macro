@@ -23,6 +23,7 @@ export type InputAttachment = {
   name: string;
   blockName: AttachmentType;
   pending?: boolean;
+  file?: File;
 };
 
 export interface DraftMessage {

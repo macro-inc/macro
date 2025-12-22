@@ -8,10 +8,12 @@ import { useIsAuthenticated } from '@core/auth';
 import type { BlockAliasContext } from '@core/block';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { Button } from '@core/component/FormControls/Button';
+import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { ContextMenuContent, MenuItem } from '@core/component/Menu';
 import { fileTypeToResolvedBlockName } from '@core/constant/allBlocks';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { TOKENS } from '@core/hotkey/tokens';
+import type { RegisterHotkeyReturn } from '@core/hotkey/types';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import {
   DEFAULT_VIEWS,
@@ -41,9 +43,11 @@ import {
   createRenderEffect,
   createSignal,
   For,
+  Match,
   onCleanup,
   type ParentComponent,
   Show,
+  Switch,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { EntityModal } from './EntityModal/EntityModal';
@@ -51,6 +55,7 @@ import { HelpDrawer } from './HelpDrawer';
 import { SuspenseContextComp } from './SuspenseContext';
 import { SplitHeaderLeft } from './split-layout/components/SplitHeader';
 import { SplitTabs } from './split-layout/components/SplitTabs';
+import { SplitToolbarRight } from './split-layout/components/SplitToolbar';
 import type { SplitPanelContextType } from './split-layout/context';
 import { SplitPanelContext } from './split-layout/context';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
@@ -98,9 +103,25 @@ const ViewWithSearch: Component<{
 }> = (props) => {
   return (
     <ViewTab viewId={props.viewId}>
-      <SuspenseContextComp fallback={<SuspenseUnifiedListFallback />}>
-        <UnifiedListView />
-      </SuspenseContextComp>
+      <Switch>
+        <Match
+          when={props.viewId === 'email' && DEFAULT_VIEWS.includes('email')}
+        >
+          <SuspenseContextComp fallback={<SuspenseUnifiedListFallback />}>
+            <EmailView />
+          </SuspenseContextComp>
+        </Match>
+        <Match when={props.viewId === 'all' && DEFAULT_VIEWS.includes('all')}>
+          <SuspenseContextComp fallback={<SuspenseUnifiedListFallback />}>
+            <AllView />
+          </SuspenseContextComp>
+        </Match>
+        <Match when={true}>
+          <SuspenseContextComp fallback={<SuspenseUnifiedListFallback />}>
+            <UnifiedListView />
+          </SuspenseContextComp>
+        </Match>
+      </Switch>
     </ViewTab>
   );
 };
@@ -230,34 +251,40 @@ export function Soup() {
 
   const entityQueryClient = useEntityQueryClient();
 
-  registerHotkey({
-    hotkey: ['shift+/'],
-    scopeId: splitHotkeyScope,
-    description: () =>
-      `${showHelpDrawer().has(selectedView() as DefaultView) ? 'Hide' : 'Show'} help drawer`,
-    hotkeyToken: TOKENS.split.showHelpDrawer,
-    keyDownHandler: () => {
-      if (showHelpDrawer().has(selectedView() as DefaultView)) {
-        setShowHelpDrawer(new Set<DefaultView>());
-      } else {
-        setShowHelpDrawer(new Set(DEFAULT_VIEWS));
-      }
-      return true;
-    },
-  });
+  const hotkeyDisposers: RegisterHotkeyReturn[] = [];
 
-  registerHotkey({
-    hotkey: ['p'],
-    scopeId: splitHotkeyScope,
-    description: 'Toggle Preview',
-    hotkeyToken: TOKENS.unifiedList.togglePreview,
-    keyDownHandler: () => {
-      playSound('open');
-      setPreview((prev) => !prev);
-      return true;
-    },
-    hide: true,
-  });
+  hotkeyDisposers.push(
+    registerHotkey({
+      hotkey: ['shift+/'],
+      scopeId: splitHotkeyScope,
+      description: () =>
+        `${showHelpDrawer().has(selectedView() as DefaultView) ? 'Hide' : 'Show'} help drawer`,
+      hotkeyToken: TOKENS.split.showHelpDrawer,
+      keyDownHandler: () => {
+        if (showHelpDrawer().has(selectedView() as DefaultView)) {
+          setShowHelpDrawer(new Set<DefaultView>());
+        } else {
+          setShowHelpDrawer(new Set(DEFAULT_VIEWS));
+        }
+        return true;
+      },
+    })
+  );
+
+  hotkeyDisposers.push(
+    registerHotkey({
+      hotkey: ['p'],
+      scopeId: splitHotkeyScope,
+      description: 'Toggle Preview',
+      hotkeyToken: TOKENS.unifiedList.togglePreview,
+      keyDownHandler: () => {
+        playSound('open');
+        setPreview((prev) => !prev);
+        return true;
+      },
+      // displayPriority: 10,
+    })
+  );
 
   const [isDragging, setIsDragging] = createSignal(false);
   const [isValidDrag, setIsValidDrag] = createSignal(true);
@@ -304,7 +331,10 @@ export function Soup() {
 
   let tabsRef: HTMLDivElement | undefined;
 
-  onCleanup(() => setEntityListRef(undefined));
+  onCleanup(() => {
+    setEntityListRef(undefined);
+    hotkeyDisposers.forEach((disposer) => disposer.dispose());
+  });
 
   const TabContextMenu = (props: { value: ViewId; label: string }) => {
     const [isModalOpen, setIsModalOpen] = createSignal(false);
@@ -393,9 +423,10 @@ export function Soup() {
           >
             <SplitHeaderLeft>
               <SplitTabs
-                list={Object.values(viewsData).map((view) => ({
+                list={Object.values(viewsData).map((view, index) => ({
                   value: view.id,
                   label: view.view,
+                  index: index,
                 }))}
                 active={selectedView}
                 contextMenu={({ value, label }) => (
@@ -438,6 +469,37 @@ export function Soup() {
         <HelpDrawer viewId={view().id} />
       </Show>
     </div>
+  );
+}
+
+function AllView() {
+  return <UnifiedListView />;
+}
+
+function EmailView() {
+  const {
+    emailViewSignal: [emailView, setEmailView],
+    viewsDataStore,
+    selectedView,
+  } = useSplitPanelOrThrow().unifiedListContext;
+  const viewData = createMemo(() => viewsDataStore[selectedView()]);
+
+  return (
+    <>
+      <UnifiedListView />
+      <SplitToolbarRight>
+        <div class="flex flex-row items-center pr-2">
+          <SegmentedControl
+            disabled={!!viewData().searchText}
+            size="SM"
+            label="View"
+            list={['inbox', 'sent', 'drafts']}
+            value={emailView()}
+            onChange={setEmailView}
+          />
+        </div>
+      </SplitToolbarRight>
+    </>
   );
 }
 

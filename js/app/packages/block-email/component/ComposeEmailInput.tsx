@@ -50,6 +50,7 @@ export type ComposeInputData = {
 };
 
 type ComposeEmailInputProps = {
+  inputRef?: (el: HTMLDivElement) => void;
   onSubmit: (data: ComposeInputData) => void;
   disabled?: boolean;
   isSubmitting?: boolean;
@@ -120,7 +121,9 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
   // Set up hotkey scope for the compose message component
   const [attachComposeHotkeys, composeHotkeyScope] =
     useHotkeyDOMScope('compose-message');
-  let composeContainerRef: HTMLDivElement | undefined;
+  const [composeContainerRef, setComposeContainerRef] = createSignal<
+    HTMLElement | undefined
+  >();
 
   async function handleSend() {
     const currentEditor = editor();
@@ -150,29 +153,27 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
   }
 
   onMount(() => {
-    if (composeContainerRef) {
-      attachComposeHotkeys(composeContainerRef);
+    const container = composeContainerRef();
+    if (!container) return;
+    attachComposeHotkeys(container);
+  });
 
-      registerHotkey({
-        hotkey: 'cmd+enter',
-        scopeId: composeHotkeyScope,
-        description: 'Send email',
-        keyDownHandler: () => {
-          handleSend();
-          return true;
-        },
-        runWithInputFocused: true,
-        hotkeyToken: 'email.send',
-        displayPriority: 10,
-      });
-    }
+  registerHotkey({
+    hotkey: 'cmd+enter',
+    scopeId: composeHotkeyScope,
+    description: 'Send email',
+    keyDownHandler: () => {
+      handleSend();
+      return true;
+    },
+    runWithInputFocused: true,
+    hotkeyToken: 'email.send',
+    displayPriority: 10,
   });
 
   return (
     <div
-      ref={(el) => {
-        composeContainerRef = el;
-      }}
+      ref={setComposeContainerRef}
       class="relative flex flex-col flex-1 items-center justify-between min-h-0"
     >
       <div class="w-full h-full flex flex-col min-h-0">
@@ -213,6 +214,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
             <FileDropOverlay>Drop file(s) to attach</FileDropOverlay>
           </div>
           <MarkdownTextarea
+            domRef={props.inputRef}
             captureEditor={setEditor}
             class="text-sm break-words text-ink"
             editable={() => !props.disabled}

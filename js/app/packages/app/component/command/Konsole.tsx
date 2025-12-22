@@ -7,11 +7,7 @@ import type { CommandWithInfo } from '@core/hotkey/getCommands';
 import { createFreshSearch } from '@core/util/freshSort';
 import { Dialog } from '@kobalte/core/dialog';
 import { Command as CommandK, useCommandState } from 'cmdk-solid';
-import {
-  registerHotkey,
-  runCommand,
-  useHotkeyDOMScope,
-} from 'core/hotkey/hotkeys';
+import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
   type Accessor,
   createEffect,
@@ -46,6 +42,7 @@ import {
   konsoleOpen,
   lastCommandTime,
   rawQuery,
+  setKonsoleOpen,
   setLastCommandTime,
   setRawQuery,
   toggleKonsoleVisibility,
@@ -120,16 +117,7 @@ export function KommandMenuInner(props: {
           data: {
             id: description.replaceAll(' ', '-'),
             name: description,
-            hotkeys: command.hotkeys ?? [],
-            handler: () => {
-              runCommand({
-                keyDownHandler: command.keyDownHandler,
-                activateCommandScopeId: command.activateCommandScopeId,
-              });
-              setCommandScopeCommands([]);
-              return true;
-            },
-            activateCommandScopeId: command.activateCommandScopeId,
+            command: command,
           },
         };
       });
@@ -247,6 +235,18 @@ export function KommandMenuInner(props: {
       return false;
     },
     runWithInputFocused: true,
+  });
+
+  registerHotkey({
+    hotkey: 'escape',
+    scopeId: konsoleHotkeyScopeId,
+    description: 'Close command menu',
+    keyDownHandler: () => {
+      setKonsoleOpen(false);
+      return true;
+    },
+    runWithInputFocused: true,
+    hide: true,
   });
 
   const CommandKItemWrapper = (props: {

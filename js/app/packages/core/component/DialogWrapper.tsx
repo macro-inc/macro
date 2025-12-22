@@ -1,16 +1,21 @@
-import type { JSXElement } from 'solid-js';
+import type { JSXElement, Ref } from 'solid-js';
 
 export interface DialogWrapperProps {
   children: JSXElement;
   class?: string;
   width?: string;
+  overlayRef?: Ref<HTMLDivElement>;
+  contentRef?: Ref<HTMLDivElement>;
 }
 
 export function DialogWrapper(props: DialogWrapperProps) {
   const width = props.width ?? '800px';
 
   return (
-    <div class="z-modal fixed inset-0 bg-modal-overlay pattern-edge-muted pattern-diagonal-4">
+    <div
+      class="z-modal fixed inset-0 bg-modal-overlay pattern-edge-muted pattern-diagonal-4"
+      ref={props.overlayRef}
+    >
       <div
         style={{
           'max-width': 'calc(100vw - (var(--gutter-size) * 2))',
@@ -20,6 +25,7 @@ export function DialogWrapper(props: DialogWrapperProps) {
           width: width,
         }}
         class={props.class}
+        ref={props.contentRef}
       >
         {props.children}
       </div>

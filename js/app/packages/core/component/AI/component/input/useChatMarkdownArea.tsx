@@ -44,8 +44,8 @@ import {
 import type { PortalScope } from '@core/component/ScopedPortal';
 import { shortcutBadgeStyles } from '@core/component/Themes';
 import { toast } from '@core/component/Toast/Toast';
-import { useTokenToHotkeyString } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
+import { getPrettyHotkeyStringByToken } from '@core/hotkey/utils';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import type { IOrganizationUser } from '@core/user';
 import { handleFileFolderDrop } from '@core/util/upload';
@@ -261,7 +261,7 @@ function MarkdownArea(
   //   });
   // });
 
-  const focusShortcut = useTokenToHotkeyString(TOKENS.chat.input.focus);
+  const focusShortcut = getPrettyHotkeyStringByToken(TOKENS.chat.input.focus);
 
   createEffect(
     on(props.mountRef, (ref) => {
@@ -433,7 +433,7 @@ function MarkdownArea(
                 <span
                   class={`rounded-md px-1.5 py-0.5 space-x-1 ${shortcutBadgeStyles['muted']}`}
                 >
-                  {focusShortcut()}
+                  {focusShortcut}
                 </span>{' '}
                 to chat with AI
               </p>

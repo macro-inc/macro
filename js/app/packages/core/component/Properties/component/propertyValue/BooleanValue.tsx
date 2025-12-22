@@ -19,7 +19,6 @@ type BooleanValueProps = {
 export const BooleanValue: Component<BooleanValueProps> = (props) => {
   const { value, isSaving, toggle } = useBooleanEditor(
     props.property as Property & { valueType: 'BOOLEAN' },
-    props.entityType,
     props.onRefresh
   );
 

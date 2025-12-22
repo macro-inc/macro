@@ -26,8 +26,14 @@ import { IconButton } from './IconButton';
 import { DropdownMenuContent, MenuItem, MenuSeparator } from './Menu';
 import { toast } from './Toast/Toast';
 
+type ImageData = {
+  id: string;
+  width?: string | number | undefined;
+  height?: string | number | undefined;
+};
+
 export type ImageGalleryPreviewProps = {
-  ids: string[];
+  images: ImageData[];
   initialIndex?: number;
   variant: 'small' | 'dynamic';
   square?: boolean;
@@ -63,8 +69,11 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
   const [touchEndX, setTouchEndX] = createSignal(0);
   const [isSwiping, setIsSwiping] = createSignal(false);
 
-  const currentImageUrl = (): string => {
-    const id = props.ids[currentIndex()];
+  const currentImageUrl = () => {
+    const id = props.images[currentIndex()]?.id;
+
+    if (!id) return;
+
     return `${SERVER_HOSTS['static-file']}/file/${id}`;
   };
 
@@ -72,7 +81,7 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
     return `${SERVER_HOSTS['static-file']}/file/${id}`;
   };
 
-  const hasNext = () => currentIndex() < props.ids.length - 1;
+  const hasNext = () => currentIndex() < props.images.length - 1;
   const hasPrevious = () => currentIndex() > 0;
 
   const navigateNext = () => {
@@ -123,13 +132,15 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
   };
 
   const downloadImage = async () => {
+    const imageUrl = currentImageUrl();
+    if (!imageUrl) return;
     try {
-      const response = await platformFetch(currentImageUrl());
+      const response = await platformFetch(imageUrl);
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `image-${props.ids[currentIndex()]}.png`;
+      a.download = `image-${props.images[currentIndex()]?.id}.png`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -175,11 +186,11 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
   };
 
   const copyToClipboard = async () => {
+    const imageUrl = currentImageUrl();
+    if (!imageUrl) return;
     if (isTouchDevice) {
       try {
-        const blob = await platformFetch(currentImageUrl()).then((res) =>
-          res.blob()
-        );
+        const blob = await platformFetch(imageUrl).then((res) => res.blob());
         const file = new File([blob], 'image.png', { type: blob.type });
 
         if (navigator.share) {
@@ -198,14 +209,14 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
             ]);
             toast.success('Copied to clipboard');
           } else {
-            await navigator.clipboard.writeText(currentImageUrl());
+            await navigator.clipboard.writeText(imageUrl);
             toast.success('Copied image URL to clipboard');
           }
         }
       } catch (err) {
         console.error('Share/clipboard operation failed:', err);
         try {
-          await navigator.clipboard.writeText(currentImageUrl());
+          await navigator.clipboard.writeText(imageUrl);
           toast.success('Copied image URL to clipboard');
         } catch {
           toast.failure('Failed to copy image');
@@ -213,7 +224,7 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
       }
     } else {
       try {
-        const response = await platformFetch(currentImageUrl());
+        const response = await platformFetch(imageUrl);
         const blob = await response.blob();
 
         const isSupported = ClipboardItem.supports(blob.type);
@@ -226,13 +237,13 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
           ]);
           toast.success('Copied to clipboard');
         } else {
-          await navigator.clipboard.writeText(currentImageUrl());
+          await navigator.clipboard.writeText(imageUrl);
           toast.success('Copied image URL to clipboard');
         }
       } catch (err) {
         console.error('Clipboard operation failed:', err);
         try {
-          await navigator.clipboard.writeText(currentImageUrl());
+          await navigator.clipboard.writeText(imageUrl);
           toast.success('Copied image URL to clipboard');
         } catch {
           toast.failure('Failed to copy image');
@@ -432,8 +443,8 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
       }}
     >
       <div class={props.wrapperClass ?? 'flex flex-row flex-wrap gap-2'}>
-        <For each={props.ids}>
-          {(id, index) => (
+        <For each={props.images}>
+          {(image, index) => (
             <div
               class={props.variant === 'dynamic' ? 'max-w-[200px] w-fit' : ''}
             >
@@ -456,12 +467,12 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
                           <MenuItem
                             text="Copy image"
                             icon={ClipboardIcon}
-                            onClick={() => copyToClipboardById(id)}
+                            onClick={() => copyToClipboardById(image.id)}
                           />
                           <MenuItem
                             text="Download image"
                             icon={DownloadIcon}
-                            onClick={() => downloadImageById(id)}
+                            onClick={() => downloadImageById(image.id)}
                           />
                           <Show when={props.onDelete}>
                             <MenuSeparator />
@@ -485,7 +496,7 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
                 >
                   <img
                     class={`${THEMES[props.variant]} select-none`}
-                    src={getImageUrl(id)}
+                    src={getImageUrl(image.id)}
                     alt="preview"
                     style={{
                       '-webkit-touch-callout': 'none',
@@ -545,7 +556,7 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
 
             {/* Navigation arrows */}
             <Show when={!isMobileWidth() || !isTouchDevice}>
-              <Show when={props.ids.length > 1 && hasPrevious()}>
+              <Show when={props.images.length > 1 && hasPrevious()}>
                 <button
                   class="absolute left-4 top-1/2 -translate-y-1/2 bg-dialog backdrop-blur-sm rounded-lg border border-edge p-2 shadow-md hover:bg-button transition-opacity duration-300"
                   classList={{
@@ -562,7 +573,7 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
                 </button>
               </Show>
 
-              <Show when={props.ids.length > 1 && hasNext()}>
+              <Show when={props.images.length > 1 && hasNext()}>
                 <button
                   class="absolute right-4 top-1/2 -translate-y-1/2 bg-dialog backdrop-blur-sm rounded-lg border border-edge p-2 shadow-md hover:bg-button transition-opacity duration-300"
                   classList={{
@@ -581,7 +592,7 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
             </Show>
 
             {/* Navigation indicator */}
-            <Show when={props.ids.length > 1}>
+            <Show when={props.images.length > 1}>
               <div
                 class="absolute top-4 left-4 bg-dialog backdrop-blur-sm rounded-lg border border-edge px-3 py-1.5 shadow-md transition-opacity duration-300"
                 classList={{
@@ -593,7 +604,7 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
                 style={{ 'z-index': stackingContext.zModal + 1 }}
               >
                 <span class="text-sm text-ink font-medium">
-                  {currentIndex() + 1}/{props.ids.length}
+                  {currentIndex() + 1}/{props.images.length}
                 </span>
               </div>
             </Show>

@@ -3,6 +3,8 @@ import { staticFileIdEndpoint } from '@core/constant/servers';
 export type VideoPreviewProps = {
   id: string;
   variant: 'small' | 'dynamic';
+  width?: string | number | undefined | null;
+  height?: string | number | undefined | null;
 };
 
 const THEMES = {
@@ -13,7 +15,12 @@ const THEMES = {
 export function VideoPreview(props: VideoPreviewProps) {
   return (
     <div class={THEMES[props.variant]}>
-      <video controls src={staticFileIdEndpoint(props.id)} />
+      <video
+        controls
+        src={staticFileIdEndpoint(props.id)}
+        width={props.width ?? undefined}
+        height={props.height ?? undefined}
+      />
     </div>
   );
 }

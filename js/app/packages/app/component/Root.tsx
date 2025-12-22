@@ -1,4 +1,5 @@
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
+import { setHotkeyRoot, useSubscribeToKeypress } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { withAnalytics } from '@coparse/analytics';
 import { useIsAuthenticated } from '@core/auth';
@@ -9,6 +10,7 @@ import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import { WebsocketDebugger } from '@core/component/WebsocketDebugger';
 import {
   ENABLE_WEBSOCKET_DEBUGGER,
+  ENABLE_WHICHKEY_OVERLAY,
   PROD_MODE_ENV,
 } from '@core/constant/featureFlags';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
@@ -68,6 +70,8 @@ import MacroJump from './MacroJump';
 import Onboarding from './Onboarding';
 import { SuspenseContextComp } from './SuspenseContext';
 import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
+import Visor from './Visor';
+import { setOpenWhichKey, WhichKey } from './WhichKey';
 
 const { track, identify, TrackingEvents } = withAnalytics();
 
@@ -295,7 +299,14 @@ const clearBodyInlineStyleColor = () => {
 
 export function Root() {
   const isAuthenticated = useIsAuthenticated();
-  useHotKeyRoot();
+  setHotkeyRoot(useHotKeyRoot());
+
+  useSubscribeToKeypress((context) => {
+    if (ENABLE_WHICHKEY_OVERLAY && context.commandScopeActivated) {
+      setOpenWhichKey(true);
+    }
+  });
+
   useSoundHover();
 
   clearBodyInlineStyleColor();
@@ -374,6 +385,10 @@ export function Root() {
             <ChannelsContextProvider>
               <Title>{tabTitle()}</Title>
               <MacroJump />
+              <Visor />
+              <Show when={ENABLE_WHICHKEY_OVERLAY}>
+                <WhichKey />
+              </Show>
               <SuspenseContextComp fallback={<RootSuspenseFallback />}>
                 <IsomorphicRouter
                   transformUrl={transformShortIdInUrlPathname}

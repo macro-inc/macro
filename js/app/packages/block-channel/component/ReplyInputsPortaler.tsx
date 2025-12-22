@@ -38,7 +38,7 @@ export type ReplyInputsPortalerProps = {
 
 export function ReplyInputsPortaler(props: ReplyInputsPortalerProps) {
   const listContext = useMessageListContext();
-  const sendMessage = useSendChannelMessageAction();
+  const sendMessage = useSendChannelMessageAction(() => props.channelId);
 
   const postTypingUpdate_ = createCallback(postTypingUpdate);
   const blockRef = blockElementSignal.get;

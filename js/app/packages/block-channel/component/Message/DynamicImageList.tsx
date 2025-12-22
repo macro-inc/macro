@@ -3,8 +3,14 @@ import { ImagePreview } from '@core/component/ImagePreview';
 import { commsServiceClient } from '@service-comms/client';
 import { Match, Switch } from 'solid-js';
 
+type ImageData = {
+  id: string;
+  width?: string | number | undefined;
+  height?: string | number | undefined;
+};
+
 type DynamicImageListProps = {
-  ids: string[];
+  images: ImageData[];
   attachmentIds: string[];
   isCurrentUser: boolean;
   channelId?: string;
@@ -27,10 +33,10 @@ export function DynamicImageList(props: DynamicImageListProps) {
 
   return (
     <Switch>
-      <Match when={props.ids.length === 1}>
+      <Match when={props.images.length === 1}>
         <div class="max-w-[400px] w-fit mt-0.5">
           <ImagePreview
-            id={props.ids[0]}
+            image={props.images[0]}
             variant="dynamic"
             onDelete={
               props.isCurrentUser
@@ -42,10 +48,10 @@ export function DynamicImageList(props: DynamicImageListProps) {
         </div>
       </Match>
 
-      <Match when={props.ids.length > 1}>
+      <Match when={props.images.length > 1}>
         <div class={`flex flex-wrap gap-2 mt-0.5`}>
           <ImageGalleryPreview
-            ids={props.ids}
+            images={props.images}
             variant="dynamic"
             attachmentIds={props.attachmentIds}
             onDelete={props.isCurrentUser ? handleDelete : undefined}

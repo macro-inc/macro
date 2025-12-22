@@ -1,5 +1,6 @@
 use crate::util::gmail::auth::fetch_gmail_access_token;
 use crate::util::redis::RedisClient;
+use crate::util::redis::rate_limit::RateLimitArgs;
 use anyhow::anyhow;
 use authentication_service_client::AuthServiceClient;
 use connection_gateway_client::client::ConnectionGatewayClient;
@@ -11,15 +12,29 @@ use models_email::service::link::Link;
 use sqlx::PgPool;
 use uuid::Uuid;
 
+/// Arguments for checking Gmail API rate limits
+pub struct CheckGmailRateLimitArgs<'a> {
+    pub redis_client: &'a RedisClient,
+    pub link_id: Uuid,
+    pub gmail_operation: GmailApiOperation,
+    pub retryable: bool,
+    pub is_backfill: bool,
+}
+
 // check if we are rate limited by gmail before making any requests to the api
 pub async fn check_gmail_rate_limit(
-    redis_client: &RedisClient,
-    link_id: Uuid,
-    gmail_operation: GmailApiOperation,
-    retryable: bool, // true for backfill, false for inbox sync (avoid thundering herd if there is an issue)
+    args: CheckGmailRateLimitArgs<'_>,
 ) -> Result<(), ProcessingError> {
-    if redis_client.is_rate_limited(link_id, gmail_operation).await {
-        return if retryable {
+    if args
+        .redis_client
+        .is_rate_limited(RateLimitArgs {
+            user_id: args.link_id,
+            operation: args.gmail_operation,
+            is_backfill: args.is_backfill,
+        })
+        .await
+    {
+        return if args.retryable {
             Err(ProcessingError::Retryable(DetailedError {
                 reason: FailureReason::GmailApiRateLimited,
                 source: anyhow::Error::msg("Gmail API rate limit exceeded"),

@@ -90,9 +90,9 @@ export function SplitDrawer(
     const constrainedSize = getConstrainedSize();
 
     if (isHorizontal()) {
-      return { width: constrainedSize, top: `${contentOffsetTop()}px` };
+      return { width: constrainedSize, top: `${contentOffsetTop() + 1}px` };
     } else {
-      return { height: constrainedSize, top: `${contentOffsetTop()}px` };
+      return { height: constrainedSize, top: `${contentOffsetTop() + 1}px` };
     }
   };
 
@@ -116,11 +116,11 @@ export function SplitDrawer(
     <Show when={drawerControl.isOpen()}>
       <ScopedPortal scope="split">
         <div
-          class="inset-px bg-modal-overlay absolute transition-opacity ease-in-out pattern-edge"
+          class="inset-px bg-modal-overlay absolute"
           style={{ top: `${contentOffsetTop()}px` }}
           onClick={drawerControl.close}
         />
-        <div class={getPositionClasses()} style={getSizeStyle()}>
+        <div class={getPositionClasses()} style={{ ...getSizeStyle() }}>
           <div class={getGradientMaskClasses()} />
           <BrightJoins dots={[true, true, true, true]} />
           <div class="flex items-center justify-start gap-2 shrink-0">

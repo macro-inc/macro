@@ -70,7 +70,9 @@ export function EmptyState(props: {
       </Match>
       <Match
         when={
-          (props.viewId === 'noise' || props.viewId === 'signal') &&
+          (props.viewId === 'noise' ||
+            props.viewId === 'signal' ||
+            props.viewId === 'email') &&
           emailActive()
         }
       >
@@ -80,6 +82,12 @@ export function EmptyState(props: {
         <EmptyStateHelpDrawer
           message={'Nothing to show. Email not connected.'}
           helpDrawer={'signal'}
+        />
+      </Match>
+      <Match when={props.viewId === 'email' && !emailActive()}>
+        <EmptyStateHelpDrawer
+          message={'Nothing to show. Email not connected.'}
+          helpDrawer={'email'}
         />
       </Match>
       <Match when={props.viewId === 'people'}>

@@ -226,6 +226,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     virtualizerHandleSignal: [virtualizerHandle, setVirtualizerHandle],
     entityListRefSignal: [, setEntityListRef],
     entitiesSignal: [entities_, setEntities],
+    emailViewSignal: [emailView],
   } = unifiedListContext;
   const view = createMemo(() => viewsData[selectedView()]);
   const selectedEntity = createMemo(() => view()?.selectedEntity);
@@ -259,6 +260,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
           return;
         }
 
+        if (isTouchDevice) return;
         if (!firstEntity) return;
 
         setSelectedEntity(firstEntity);
@@ -807,7 +809,9 @@ export function UnifiedListView(props: UnifiedListViewProps) {
         ? 'important'
         : view().id === VIEWCONFIG_DEFAULTS_IDS_ENUM.all
           ? 'all'
-          : undefined,
+          : view().id === VIEWCONFIG_DEFAULTS_IDS_ENUM.email
+            ? emailView()
+            : undefined,
 
       sort_method: sortType(),
     })

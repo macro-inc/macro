@@ -71,7 +71,12 @@ export function Attachment(props: AttachmentProps) {
           </div>
         </Match>
         <Match when={props.attachment.blockName === STATIC_IMAGE}>
-          <ImagePreview id={props.attachment.id} variant="small" />
+          <ImagePreview
+            image={{
+              id: props.attachment.id,
+            }}
+            variant="small"
+          />
         </Match>
         <Match when={props.attachment.blockName === STATIC_VIDEO}>
           <VideoPreview id={props.attachment.id} variant="small" />

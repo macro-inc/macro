@@ -1,6 +1,6 @@
 use crate::pubsub::context::PubSubContext;
 use crate::pubsub::inbox_sync::process::fetch_pubsub_gmail_token;
-use crate::pubsub::util::check_gmail_rate_limit;
+use crate::pubsub::util::{CheckGmailRateLimitArgs, check_gmail_rate_limit};
 use crate::util::process_pre_insert::sync_labels::sync_labels;
 use models_email::gmail::history::InboxChanges;
 use models_email::gmail::inbox_sync::{
@@ -56,15 +56,16 @@ pub async fn gmail_message(
     }
 
     // ensure user's labels are synced before we start processing changes.
-    check_gmail_rate_limit(
-        &ctx.redis_client,
-        link.id,
-        GmailApiOperation::LabelsList,
+    check_gmail_rate_limit(CheckGmailRateLimitArgs {
+        redis_client: &ctx.redis_client,
+        link_id: link.id,
+        gmail_operation: GmailApiOperation::LabelsList,
         // don't retry if rate limited, just wait until the next inbox update comes in. if we're
         // rate limited it's likely because of a large previous inbox update, so let that get
         // fully processed before the next one.
-        false,
-    )
+        retryable: false,
+        is_backfill: false,
+    })
     .await?;
     sync_labels(&ctx.db, &ctx.gmail_client, &gmail_access_token, link.id)
         .await
@@ -79,15 +80,16 @@ pub async fn gmail_message(
     // we pass the db_history_id, aka history_id at the time of the last update. once
     // we update the database, we set the db history_id to be the message history_id
     // (the current history_id for the user)
-    check_gmail_rate_limit(
-        &ctx.redis_client,
-        link.id,
-        GmailApiOperation::HistoryList,
+    check_gmail_rate_limit(CheckGmailRateLimitArgs {
+        redis_client: &ctx.redis_client,
+        link_id: link.id,
+        gmail_operation: GmailApiOperation::HistoryList,
         // don't retry if rate limited, just wait until the next inbox update comes in. if we're
         // rate limited it's likely because of a large previous inbox update, so let that get
         // fully processed before the next one.
-        false,
-    )
+        retryable: false,
+        is_backfill: false,
+    })
     .await?;
     let inbox_changes = ctx
         .gmail_client

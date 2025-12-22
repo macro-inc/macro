@@ -2,12 +2,27 @@ import type { PropertyValue } from '@service-properties/generated/schemas/proper
 import { NUMBER_DECIMAL_PLACES } from '../constants';
 import type {
   EntityPropertyWithDefinition,
+  EntityReference,
   Property,
   PropertyApiValues,
   SetPropertyValue,
   ValueType,
 } from '../types';
 import { isEntityReferenceArray, isStringArray } from '../utils/typeGuards';
+
+/**
+ * Normalized flat value type for PropertyApiValues conversion
+ * Contains the actual value with proper TypeScript typing based on the PropertyApiValues type
+ */
+export type NormalizedPropertyValue =
+  | { type: 'STRING'; value: string }
+  | { type: 'NUMBER'; value: number }
+  | { type: 'BOOLEAN'; value: boolean }
+  | { type: 'DATE'; value: Date }
+  | { type: 'SELECT_OPTION'; value: string[] }
+  | { type: 'ENTITY_REFERENCE'; value: EntityReference[] }
+  | { type: 'LINK'; value: string[] }
+  | { type: 'EMPTY'; value: null };
 
 /**
  * Type guard to check if PropertyValue has a specific type
@@ -251,6 +266,93 @@ export function propertyValueToApi(
         type: 'link',
         url: apiValues.values[0],
       };
+
+    default: {
+      const exhaustiveCheck: never = apiValues;
+      throw new Error(
+        `Unsupported value type: ${(exhaustiveCheck as { valueType: string }).valueType}`
+      );
+    }
+  }
+}
+
+/**
+ * Convert PropertyApiValues from domain format to a normalized flat value structure
+ *
+ * Transforms the PropertyApiValues discriminated union into a simplified format with:
+ * - Consistent type field naming
+ * - Properly typed value field
+ * - Normalized handling of all value types including empty/null values
+ */
+export function propertyApiValuesToNormalized(
+  apiValues: PropertyApiValues | null | undefined
+): NormalizedPropertyValue {
+  // Handle null/undefined values
+  if (!apiValues) {
+    return { type: 'EMPTY', value: null };
+  }
+
+  // Handle each PropertyApiValues type
+  switch (apiValues.valueType) {
+    case 'STRING': {
+      if (apiValues.value !== null && typeof apiValues.value === 'string') {
+        return { type: 'STRING', value: apiValues.value };
+      }
+      return { type: 'EMPTY', value: null };
+    }
+
+    case 'NUMBER': {
+      if (
+        apiValues.value !== null &&
+        typeof apiValues.value === 'number' &&
+        !isNaN(apiValues.value)
+      ) {
+        return {
+          type: 'NUMBER',
+          value: parseFloat(apiValues.value.toFixed(NUMBER_DECIMAL_PLACES)),
+        };
+      }
+      return { type: 'EMPTY', value: null };
+    }
+
+    case 'BOOLEAN': {
+      if (apiValues.value !== null && typeof apiValues.value === 'boolean') {
+        return { type: 'BOOLEAN', value: apiValues.value };
+      }
+      return { type: 'EMPTY', value: null };
+    }
+
+    case 'DATE': {
+      if (apiValues.value !== null && typeof apiValues.value === 'string') {
+        const date = new Date(apiValues.value);
+        if (!isNaN(date.getTime())) {
+          return { type: 'DATE', value: date };
+        }
+      }
+      return { type: 'EMPTY', value: null };
+    }
+
+    case 'SELECT_STRING':
+    case 'SELECT_NUMBER': {
+      if (apiValues.values && isStringArray(apiValues.values)) {
+        return { type: 'SELECT_OPTION', value: apiValues.values };
+      }
+      return { type: 'EMPTY', value: null };
+    }
+
+    case 'ENTITY': {
+      if (apiValues.refs && isEntityReferenceArray(apiValues.refs)) {
+        return { type: 'ENTITY_REFERENCE', value: apiValues.refs };
+      }
+      return { type: 'EMPTY', value: null };
+    }
+
+    case 'LINK': {
+      if (apiValues.values && isStringArray(apiValues.values)) {
+        return { type: 'LINK', value: apiValues.values };
+      }
+      return { type: 'EMPTY', value: null };
+    }
 
     default: {
       const exhaustiveCheck: never = apiValues;

@@ -73,14 +73,4 @@ export function registerEmailHotkeys(
     keyDownHandler: handlers.navigateToNextMessage,
     hotkeyToken: TOKENS.email.nextMessage,
   });
-  registerHotkey({
-    hotkey: 'escape',
-    scopeId: scopeId,
-    description: 'Cancel reply',
-    keyDownHandler: () => {
-      // handlers.setShowReply(false);
-      return true;
-    },
-    hotkeyToken: TOKENS.email.cancelReply,
-  });
 }

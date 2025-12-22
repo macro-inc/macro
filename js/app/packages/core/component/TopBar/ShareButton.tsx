@@ -28,6 +28,7 @@ import { buildSimpleEntityUrl } from '@core/util/url';
 import IconEyeSlash from '@icon/regular/eye-slash.svg';
 import IconGlobe from '@icon/regular/globe.svg';
 import IconLink from '@icon/regular/link.svg';
+import IconShared from '@icon/regular/share.svg';
 import User from '@icon/regular/user.svg';
 import IconUsers from '@icon/regular/users.svg';
 import CloseIcon from '@icon/regular/x.svg';
@@ -56,6 +57,7 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { match } from 'ts-pattern';
 import { beveledCorners } from '../../../block-theme/signals/themeSignals';
 import { ClippedPanel } from '../ClippedPanel';
 import { DialogWrapper } from '../DialogWrapper';
@@ -694,21 +696,29 @@ export function ShareButton(props: ShareButtonProps) {
 
   return (
     <>
-      <div class="border-1 border-edge-muted flex">
+      <div class="border-1 border-edge-muted flex ml-1 items-stretch">
         <Tooltip
           tooltip={
             <div>
-              {shareAccessLevelText() === 'Public' &&
-                'Anyone with the link can access this document'}
-              {shareAccessLevelText() === 'Shared' &&
-                'Shared with specific people or channels'}
-              {shareAccessLevelText() === 'Just me' &&
-                'Only you can access this document'}
+              {match(shareAccessLevelText())
+                .when(
+                  (level) => level === 'Public',
+                  () => 'Anyone with the link can access this item'
+                )
+                .when(
+                  (level) => level === 'Shared',
+                  () => 'Shared with specific people or channels'
+                )
+                .when(
+                  (level) => level === 'Just me',
+                  () => 'Only you can access this item'
+                )
+                .otherwise(() => 'This item has been shared with you')}
             </div>
           }
         >
           <button
-            class="text-xs font-mono hover:bg-hover text-ink p-1 flex items-center gap-1"
+            class="text-[0.75rem] font-mono tracking-wide hover:bg-hover text-ink px-2 flex items-center gap-1 h-full"
             onClick={() => {
               if (!isAuthenticated()) {
                 openLoginModal();
@@ -718,20 +728,22 @@ export function ShareButton(props: ShareButtonProps) {
               }
             }}
           >
-            &nbsp;SHARE
-            {shareAccessLevelText() === 'Public' && (
-              <IconGlobe class="size-4" />
-            )}
-            {shareAccessLevelText() === 'Shared' && (
-              <IconUsers class="size-4" />
-            )}
-            {shareAccessLevelText() === 'Just me' && (
-              <IconEyeSlash class="size-4" />
-            )}
+            <Switch fallback={<IconShared class="size-4" />}>
+              <Match when={shareAccessLevelText() === 'Public'}>
+                <IconGlobe class="size-4" />
+              </Match>
+              <Match when={shareAccessLevelText() === 'Shared'}>
+                <IconUsers class="size-4" />
+              </Match>
+              <Match when={shareAccessLevelText() === 'Just me'}>
+                <IconEyeSlash class="size-4" />
+              </Match>
+            </Switch>
+            SHARE
           </button>
         </Tooltip>
 
-        <div class="h-[24px] w-[1px] bg-edge-muted" />
+        <div class="w-[1px] bg-edge-muted" />
 
         <IconButton
           tooltip={{ label: 'Copy Share Link' }}
