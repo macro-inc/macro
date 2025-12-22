@@ -73,7 +73,3 @@ export const Button: ParentComponent<ButtonProps> = (props) => {
     </button>
   );
 };
-
-
-// New UI package
-// All pure functions (no blocks / imports from other local packages)
