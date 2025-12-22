@@ -263,7 +263,7 @@ function MarkdownArea(
 
   const focusShortcut = getPrettyHotkeyStringByToken(TOKENS.chat.input.focus);
 
-  const onConnect = (el: HTMLDivElement) => {
+  const onConnect = () => {
     editor.setEditable(true);
     if (props.initialValue) {
       setEditorStateFromMarkdown(editor, props.initialValue);
@@ -408,7 +408,7 @@ function MarkdownArea(
           ref={(el) => {
             onElementConnect(el, () => {
               editor.setRootElement(el);
-              onConnect(el);
+              onConnect();
               props.setMountRef(el);
             });
           }}
