@@ -163,7 +163,7 @@ function BasePathComponent() {
   }
 
   const authenticated = useIsAuthenticated();
-  if (!authenticated()) return <Navigate href="/onboarding" />;
+  if (!authenticated()) return <Navigate href="/signup" />;
 
   // Preserve existing query parameters when redirecting
   const params = new URLSearchParams(window.location.search);

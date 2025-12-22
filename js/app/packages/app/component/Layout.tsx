@@ -124,17 +124,21 @@ export function Layout(props: RouteSectionProps) {
           'max(env(safe-area-inset-right, 0px), var(--tauri-inset-right, 0px))',
       }}
     >
-      <Show when={isAuthenticated()}>
-        <GlobalShortcuts />
-        <Suspense>
-          <KommandMenu />
-        </Suspense>
-        <QuickCreateMenu />
-        <GlobalBulkEditEntityModal />
-      </Show>
-      <Show when={!isAuthenticated() && !AUTH_URLS.includes(location.pathname)}>
-        <Banner />
-      </Show>
+      <Suspense>
+        <Show when={isAuthenticated()}>
+          <GlobalShortcuts />
+          <Suspense>
+            <KommandMenu />
+          </Suspense>
+          <QuickCreateMenu />
+          <GlobalBulkEditEntityModal />
+        </Show>
+        <Show
+          when={!isAuthenticated() && !AUTH_URLS.includes(location.pathname)}
+        >
+          <Banner />
+        </Show>
+      </Suspense>
       {/* <Show when={isAuthenticated() && isTutorialCompleted() === false}>
         <Onboarding />
       </Show> */}
@@ -158,10 +162,14 @@ export function Layout(props: RouteSectionProps) {
           </ItemDndProvider>
         </Resize.Zone>
       </div>
-      <Show when={isAuthenticated() && !AUTH_URLS.includes(location.pathname)}>
-        <Dock />
-        <Launcher open={createMenuOpen()} onOpenChange={setCreateMenuOpen} />
-      </Show>
+      <Suspense>
+        <Show
+          when={isAuthenticated() && !AUTH_URLS.includes(location.pathname)}
+        >
+          <Dock />
+          <Launcher open={createMenuOpen()} onOpenChange={setCreateMenuOpen} />
+        </Show>
+      </Suspense>
     </div>
   );
 }
