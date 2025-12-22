@@ -259,7 +259,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
           return;
         }
 
-        if (isTouchDevice) return;
+        if (isTouchDevice()) return;
         if (!firstEntity) return;
 
         setSelectedEntity(firstEntity);
@@ -1650,7 +1650,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
             <Show when={contextAndModalState.selectedEntity}>
               {(selectedEntity) => (
                 <ContextMenuContent mobileFullScreen>
-                  <Show when={isTouchDevice && isMobileWidth()}>
+                  <Show when={isTouchDevice() && isMobileWidth()}>
                     <Entity
                       entity={selectedEntity()}
                       timestamp={

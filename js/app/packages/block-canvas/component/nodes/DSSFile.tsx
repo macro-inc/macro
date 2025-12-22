@@ -151,23 +151,27 @@ export function File(props: { node: FileNode; mode: RenderMode }) {
     <div
       class="document-mention internal-link"
       onMouseEnter={() => {
-        if (!isTouchDevice && !mouseIsDown() && selectedTool() !== Tools.Line) {
+        if (
+          !isTouchDevice() &&
+          !mouseIsDown() &&
+          selectedTool() !== Tools.Line
+        ) {
           debouncedSetPreviewOpen(true);
         }
       }}
       onMouseLeave={() => {
-        if (!isTouchDevice) {
+        if (!isTouchDevice()) {
           debouncedSetPreviewOpen.clear();
           debouncedSetPreviewOpen(false);
         }
       }}
       ontouchstart={(e) => {
-        if (isTouchDevice) {
+        if (isTouchDevice()) {
           e.preventDefault();
         }
       }}
       ontouchend={(e) => {
-        if (isTouchDevice) {
+        if (isTouchDevice()) {
           e.preventDefault();
           if (matches(item(), (i) => !i.loading && i.access === 'access')) {
             replaceOrInsertSplit({

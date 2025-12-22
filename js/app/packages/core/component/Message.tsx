@@ -327,7 +327,7 @@ const Root: Component<MessageRootProps> = (props) => {
             </div>
           </div>
         </BozzyBracket>
-        <Show when={props.hoverActions && !isTouchDevice}>
+        <Show when={props.hoverActions && !isTouchDevice()}>
           <div
             class="absolute right-2 -top-2 border border-edge bg-panel"
             classList={{

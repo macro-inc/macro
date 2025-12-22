@@ -96,7 +96,7 @@ export function OldMenuItem(props: OldMenuItemProps) {
   return (
     <OldBaseItem spacerTop={props.spacerTop} spacerBottom={props.spacerBottom}>
       <div
-        class={`group  ${isTouchDevice ? '' : 'relative'}`}
+        class={`group  ${isTouchDevice() ? '' : 'relative'}`}
         on:touchstart={props.onTouchStart}
         on:touchend={props.onTouchEnd}
         onmouseenter={() => setShowSubmenu(true)}
@@ -125,7 +125,7 @@ export function OldMenuItem(props: OldMenuItemProps) {
         ref={setMenuItemRef}
       >
         <div
-          class={`flex flex-row w-full ${isMobileWidth() && isTouchDevice ? 'py-2 px-1' : 'p-1'} justify-between items-center rounded ${
+          class={`flex flex-row w-full ${isMobileWidth() && isTouchDevice() ? 'py-2 px-1' : 'p-1'} justify-between items-center rounded ${
             props.disabled
               ? 'opacity-50 cursor-not-allowed text-ink'
               : (selected())
@@ -139,13 +139,13 @@ export function OldMenuItem(props: OldMenuItemProps) {
           }}
         >
           <div
-            class={`flex flex-row w-full gap-1.5 justify-start items-center ${props.textSize === 'base' ? 'text-base' : isMobileWidth() && isTouchDevice ? 'text-base' : 'text-sm'} font-medium ${
+            class={`flex flex-row w-full gap-1.5 justify-start items-center ${props.textSize === 'base' ? 'text-base' : isMobileWidth() && isTouchDevice() ? 'text-base' : 'text-sm'} font-medium ${
               props.secondaryActionHandler ? `max-w-[calc(100%-18px)]` : ''
             }`}
           >
             {props.icon && (
               <div
-                class={`flex ${isMobileWidth() && isTouchDevice ? 'w-5 h-5' : 'w-4 h-4'} justify-center items-center shrink-0 ${
+                class={`flex ${isMobileWidth() && isTouchDevice() ? 'w-5 h-5' : 'w-4 h-4'} justify-center items-center shrink-0 ${
                   selected() ? 'text-accent-ink' : ''
                 } ${props.iconClass ?? ''}`}
               >
@@ -201,9 +201,9 @@ export function OldMenuItem(props: OldMenuItemProps) {
               setShowSubmenu(false);
             }}
             style={{
-              left: `${isTouchDevice ? '0' : submenuPosition().x}px`,
-              top: `${isTouchDevice ? '0' : submenuPosition().y}px`,
-              transform: `translateX(${isTouchDevice ? '100%' : '0'})`,
+              left: `${isTouchDevice() ? '0' : submenuPosition().x}px`,
+              top: `${isTouchDevice() ? '0' : submenuPosition().y}px`,
+              transform: `translateX(${isTouchDevice() ? '100%' : '0'})`,
             }}
           >
             {props.submenu}
@@ -229,7 +229,7 @@ interface OldMenuProps {
 export function OldMenu(props: ParentProps<OldMenuProps>) {
   return (
     <div
-      class={`flex flex-col ${props.width ? (oldMenuWidths[props.width] ?? props.width) : ''} ${isTouchDevice ? 'relative' : ''} ${props.hide ? 'hidden' : ''} py-1 justify-start items-start bg-menu shadow-lg rounded-md ring-1 ring-edge cursor-default select-none ${props.class}`}
+      class={`flex flex-col ${props.width ? (oldMenuWidths[props.width] ?? props.width) : ''} ${isTouchDevice() ? 'relative' : ''} ${props.hide ? 'hidden' : ''} py-1 justify-start items-start bg-menu shadow-lg rounded-md ring-1 ring-edge cursor-default select-none ${props.class}`}
     >
       {props.children}
     </div>

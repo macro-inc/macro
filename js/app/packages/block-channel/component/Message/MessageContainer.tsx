@@ -477,7 +477,7 @@ export function MessageContainer(props: MessageProps) {
 
   return (
     <div
-      class={`shrink-0 flex justify-center w-full ${isTouchDevice ? 'no-select-children' : ''}
+      class={`shrink-0 flex justify-center w-full ${isTouchDevice() ? 'no-select-children' : ''}
       [--thread-shift:23px] @sm:[--thread-shift:46px] [--user-icon-width:30px] @sm:[--user-icon-width:40px] [--left-of-connector:20px] @sm:[--left-of-connector:28px] [--left-of-user-icon:calc(var(--left-of-connector)-var(--user-icon-width)/2)]`}
       ref={(el) => {
         props.setMessageContainerRef?.(el);
@@ -676,12 +676,12 @@ export function MessageContainer(props: MessageProps) {
                       handleClose={() => {
                         setReactionSearchOpen(false);
                       }}
-                      fullWidth={isTouchDevice && isMobileWidth()}
+                      fullWidth={isTouchDevice() && isMobileWidth()}
                       insideMenu={true}
                     />
                   </Match>
                 </Switch>
-                <Show when={isTouchDevice && isMobileWidth()}>
+                <Show when={isTouchDevice() && isMobileWidth()}>
                   <ContextMenu.Item class="mt-4 shrink-1 overflow-y-scroll overflow-x-hidden">
                     <MessageComponent
                       focused={props.isFocused}

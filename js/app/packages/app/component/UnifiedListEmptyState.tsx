@@ -168,7 +168,9 @@ export function EmptyStateInner(props: EmptyStateInnerProps) {
             </div>
           )}
         </Show>
-        <Show when={props.showDropZone && !(isTouchDevice && isMobileWidth())}>
+        <Show
+          when={props.showDropZone && !(isTouchDevice() && isMobileWidth())}
+        >
           <div class="drop-zone flex flex-col items-center justify-center w-full py-8 border border-dashed border-edge-muted bg-hover">
             <p class="text-ink-muted">Drag & drop files and folders here</p>
             <p class="text-ink-muted">
