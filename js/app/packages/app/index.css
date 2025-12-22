@@ -111,16 +111,19 @@
   /* Semantic Color names, use these when writing tailwind */
 
   /* Generic */
+  --color-accent-0 : var(--a0);
   --color-accent-1 : var(--a1);
   --color-accent-2 : var(--a2);
   --color-accent-3 : var(--a3);
   --color-accent-4 : var(--a4);
 
+  --color-surface-0 : var(--b0);
   --color-surface-1 : var(--b1);
   --color-surface-2 : var(--b2);
   --color-surface-3 : var(--b3);
   --color-surface-4 : var(--b4);
 
+  --color-contrast-0 : var(--c0);
   --color-contrast-1 : var(--c1);
   --color-contrast-2 : var(--c2);
   --color-contrast-3 : var(--c3);
@@ -242,7 +245,7 @@
   --color-accent-330: oklch(var(--a0l) var(--a0c) calc(var(--a0h) + 330deg));
 }
 
-@source inline("{data-highlighted:}text-{comment,note,canvas,html,folder,email,code,pdf,image,write,chat,video,rss,contact,default}");
+@source inline("{data-highlighted:}text-{comment,note,canvas,html,folder,email,code,pdf,image,write,chat,video,rss,contact,default},{tauri-ios:}{hidden}");
 
 @custom-variant tauri (&:where(.tauri *));
 @custom-variant ios (&:where(.tauri-ios *));
