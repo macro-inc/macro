@@ -216,8 +216,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   );
 
   const splitContext = useSplitPanelOrThrow();
-  const { isPanelActive, unifiedListContext, panelRef, previewState } =
-    splitContext;
+  const { isPanelActive, unifiedListContext, previewState } = splitContext;
   const [preview] = previewState;
   const {
     viewsDataStore: viewsData,

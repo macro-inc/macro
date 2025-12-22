@@ -4,7 +4,7 @@ import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import type { ViewId } from '@core/types/view';
 import { onElementConnect } from '@solid-primitives/lifecycle';
 import { debounce } from '@solid-primitives/scheduled';
-import { createVirtualizer, Virtualizer } from '@tanstack/solid-virtual';
+import { createVirtualizer, type Virtualizer } from '@tanstack/solid-virtual';
 import { StaticMarkdownContext } from 'core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import {
   type Accessor,
@@ -488,11 +488,9 @@ export function createUnifiedInfiniteList<T extends EntityData>({
       index: number,
       options?: ScrollToOptions | undefined
     ) => {
-      console.log('scrollToIndex before:', rowVirtualizer.scrollOffset);
       // @ts-expect-error
       scrollToIndex(index, options);
       requestAnimationFrame(() => {
-        console.log('scrollToIndex after:', rowVirtualizer.scrollOffset);
         cacheVirtualizerHandle();
       });
     };

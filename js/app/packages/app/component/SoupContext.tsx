@@ -25,7 +25,7 @@ import {
 import { storageServiceClient } from '@service-storage/client';
 import { createLazyMemo } from '@solid-primitives/memo';
 import { useQuery } from '@tanstack/solid-query';
-import { type Virtualizer } from '@tanstack/solid-virtual';
+import type { Virtualizer } from '@tanstack/solid-virtual';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
   type Accessor,
