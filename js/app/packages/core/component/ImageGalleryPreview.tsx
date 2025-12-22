@@ -1,6 +1,5 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
 import * as stackingContext from '@core/constant/stackingContext';
-import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import ExpandIcon from '@icon/regular/arrows-out-simple.svg';
@@ -20,7 +19,6 @@ import {
   createSignal,
   For,
   onCleanup,
-  onMount,
   Show,
 } from 'solid-js';
 import { platformFetch } from '../util/platformFetch';
@@ -65,10 +63,6 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
     createSignal<PanzoomObject | null>(null);
   const [isToolbarVisible, setIsToolbarVisible] = createSignal(false);
   let hideToolbarTimeout: number | undefined;
-
-  // Set up hotkey scope for this image gallery
-  const [attachHotkeys, imageGalleryHotkeyScopeId] =
-    useHotkeyDOMScope('image-gallery');
 
   // Touch gesture state for swipe detection
   const [touchStartX, setTouchStartX] = createSignal(0);
@@ -316,20 +310,6 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
 
   // let panzoomCleanup: (() => void) | null = null;
 
-  // Register escape key hotkey to prevent cascading
-  registerHotkey({
-    hotkey: 'p',
-    scopeId: imageGalleryHotkeyScopeId,
-    description: 'Close image gallery',
-    keyDownHandler: (e) => {
-      console.log('WE GOT THE HOT KEY');
-      // Dummy handler that stops propagation to prevent cascading to global handlers
-      e?.stopPropagation();
-      e?.preventDefault();
-      return true; // Return true to indicate we handled this event
-    },
-  });
-
   createEffect(() => {
     const image = imageRef();
     const dialogOpen = isDialogOpen();
@@ -537,24 +517,7 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
       <Dialog.Portal>
         <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay pattern-edge-muted pattern-diagonal-4" />
         <div class="fixed inset-0 z-modal w-screen h-screen flex items-center justify-center p-2 pb-6 sm:p-12">
-          <Dialog.Content
-            class="relative flex items-center justify-center w-full h-full sm:w-auto sm:h-auto"
-            onOpenAutoFocus={(e) => e.preventDefault()}
-            onCloseAutoFocus={(e) => {
-              console.log(e);
-              e.preventDefault();
-            }}
-            ref={attachHotkeys}
-            tabIndex={-1}
-
-            // on:keydown={(e) => {
-            //   console.log('KEY DOWN', e);
-            //   if (e.key === 'Escape') {
-            //     e.preventDefault();
-            //     e.stopPropagation();
-            //   }
-            // }}
-          >
+          <Dialog.Content class="relative flex items-center justify-center w-full h-full sm:w-auto sm:h-auto bg-panel">
             {/* Top toolbar */}
             <div
               class="absolute top-4 right-4 bg-dialog backdrop-blur-sm rounded-lg border border-edge p-1 flex flex-row items-center gap-1 shadow-md transition-opacity duration-300"
@@ -590,10 +553,11 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
 
             {/* Navigation arrows */}
             <Show when={!isMobileWidth() || !isTouchDevice}>
-              <Show when={props.images.length > 1 && hasPrevious()}>
+              <Show when={props.images.length > 1}>
                 <button
                   class="absolute left-4 top-1/2 -translate-y-1/2 bg-dialog backdrop-blur-sm rounded-lg border border-edge p-2 shadow-md hover:bg-button transition-opacity duration-300"
                   classList={{
+                    hidden: !hasPrevious(),
                     'opacity-100':
                       isMobileWidth() || isTouchDevice || isToolbarVisible(),
                     'opacity-0 pointer-events-none':
@@ -607,10 +571,11 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
                 </button>
               </Show>
 
-              <Show when={props.images.length > 1 && hasNext()}>
+              <Show when={props.images.length > 1}>
                 <button
                   class="absolute right-4 top-1/2 -translate-y-1/2 bg-dialog backdrop-blur-sm rounded-lg border border-edge p-2 shadow-md hover:bg-button transition-opacity duration-300"
                   classList={{
+                    hidden: !hasNext(),
                     'opacity-100':
                       isMobileWidth() || isTouchDevice || isToolbarVisible(),
                     'opacity-0 pointer-events-none':
