@@ -1,6 +1,7 @@
 import type { PortalScope } from '@core/component/ScopedPortal';
 import type { EditorType } from '@lexical-core';
 import type { Item } from '@service-storage/generated/schemas/item';
+import { onElementConnect } from '@solid-primitives/lifecycle';
 import {
   COMMAND_PRIORITY_CRITICAL,
   COMMAND_PRIORITY_HIGH,
@@ -15,7 +16,6 @@ import {
   createSignal,
   type JSX,
   onCleanup,
-  onMount,
   Show,
 } from 'solid-js';
 import type { SetStoreFunction } from 'solid-js/store';
@@ -112,7 +112,7 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
 
   const [markdownState, setMarkdownState] = createSignal<string>('');
 
-  onMount(() => {
+  const onConnect = () => {
     if (props.focusOnMount) {
       setTimeout(() => {
         mountRef.focus();
@@ -124,7 +124,7 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
     } else if (props.initialValue) {
       setEditorStateFromMarkdown(editor, props.initialValue);
     }
-  });
+  };
 
   createEffect(() => {
     editor.setEditable(props.editable());
@@ -227,11 +227,6 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
     );
   });
 
-  onMount(() => {
-    editor.setRootElement(mountRef);
-    props.domRef?.(mountRef);
-  });
-
   onCleanup(() => {
     cleanupEnterListener();
     cleanupLexical();
@@ -273,7 +268,16 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
           e.stopPropagation();
         }}
       >
-        <div ref={mountRef} contentEditable={props.editable()} />
+        <div
+          ref={(el) => {
+            onElementConnect(el, () => {
+              editor.setRootElement(el);
+              onConnect();
+            });
+          }}
+          contentEditable={props.editable()}
+        />
+
         <DecoratorRenderer editor={editor} />
         <NodeAccessoryRenderer editor={editor} store={accessoryStore} />
         <Show when={showPlaceholder()}>

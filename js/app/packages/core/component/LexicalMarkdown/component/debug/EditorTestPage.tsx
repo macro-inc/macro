@@ -1,6 +1,14 @@
 import { Bar } from '@core/component/TopBar/Bar';
 import { buildMentionMarkdownString } from '@lexical-core/utils/mentions';
-import { createSignal, type JSX } from 'solid-js';
+import type { LexicalEditor } from 'lexical';
+import {
+  createEffect,
+  createResource,
+  createSignal,
+  type JSX,
+  Suspense,
+} from 'solid-js';
+import { setEditorStateFromMarkdown } from '../../utils';
 import { MarkdownTextarea } from '../core/MarkdownTextarea';
 import { StaticMarkdown, StaticMarkdownContext } from '../core/StaticMarkdown';
 
@@ -76,6 +84,30 @@ function Container(props: { label: string; children: JSX.Element }) {
       <div class="h-px bg-edge"></div>
       <div class="h-full overflow-y-auto">{props.children}</div>
     </div>
+  );
+}
+
+function DelayedMarkdownComponent() {
+  const [delayedData] = createResource(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 3_000));
+    return '# Loaded\n\nThis content was loaded from a resource that resolved after a delay.';
+  });
+
+  const [editor, setEditor] = createSignal<LexicalEditor>();
+  createEffect(() => {
+    const ed = editor();
+    const content = delayedData();
+    if (!content || !ed) return;
+    setEditorStateFromMarkdown(ed, content);
+  });
+
+  return (
+    <MarkdownTextarea
+      type="markdown"
+      editable={() => true}
+      initialValue={'Waiting for resource'}
+      captureEditor={setEditor}
+    />
   );
 }
 
@@ -201,6 +233,17 @@ export default function EditorTestPage() {
               }),
             ].join('\n\n')}
           />
+        </Container>
+        <Container label="With Suspense">
+          <Suspense
+            fallback={
+              <div class="flex items-center justify-center h-full text-ink-muted">
+                Loading markdown editor...
+              </div>
+            }
+          >
+            <DelayedMarkdownComponent />
+          </Suspense>
         </Container>
       </div>
     </div>
