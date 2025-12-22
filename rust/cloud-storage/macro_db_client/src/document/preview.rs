@@ -17,9 +17,20 @@ pub async fn batch_get_document_preview_v2(
                 d."fileType" as file_type,
                 d.owner as owner,
                 d."updatedAt"::timestamptz as "updated_at",
-                dt.sub_type as "sub_type?: DocumentSubType"
+                dt.sub_type as "sub_type?: DocumentSubType",
+                CASE 
+                    WHEN dt.sub_type = 'task' 
+                        AND ep_status.values->'value' ? '00000001-0000-0000-0002-000000000004'
+                    THEN true 
+                    ELSE false 
+                END as "is_completed!"
             FROM "Document" d
             LEFT JOIN document_sub_type dt ON dt.document_id = d.id
+            LEFT JOIN entity_properties ep_status 
+                ON dt.sub_type = 'task'
+                AND ep_status.entity_id = d.id 
+                AND ep_status.entity_type = 'DOCUMENT'
+                AND ep_status.property_definition_id = '00000001-0000-0000-0000-000000000002'
             WHERE
                 d."id" = ANY($1)
         "#,
