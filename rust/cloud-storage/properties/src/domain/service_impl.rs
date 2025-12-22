@@ -27,6 +27,44 @@ where
     pub fn new(repository: R) -> Self {
         Self { repository }
     }
+
+    /// Validate that the given option IDs exist for the property definition.
+    /// Returns an error if any option ID is invalid.
+    pub async fn validate_property_options(
+        &self,
+        property_definition_id: Uuid,
+        option_ids: &[Uuid],
+    ) -> anyhow::Result<()>
+    where
+        anyhow::Error: From<R::Err>,
+    {
+        if option_ids.is_empty() {
+            return Ok(());
+        }
+
+        tracing::debug!(
+            property_definition_id = %property_definition_id,
+            option_ids = ?option_ids,
+            "validating property options"
+        );
+
+        let valid_count = self
+            .repository
+            .count_valid_property_options(property_definition_id, option_ids)
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        if valid_count != option_ids.len() as i64 {
+            anyhow::bail!(
+                "Invalid property options: {} provided but only {} valid for property {}",
+                option_ids.len(),
+                valid_count,
+                property_definition_id
+            );
+        }
+
+        Ok(())
+    }
 }
 
 impl<R> PropertiesService for PropertiesServiceImpl<R>
