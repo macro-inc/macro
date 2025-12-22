@@ -9,7 +9,13 @@ import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { useChannelQuery } from '@queries/channel/channel';
 import { commsServiceClient } from '@service-comms/client';
 import { useUserId } from '@service-gql/client';
-import { createSignal, type JSXElement, Match, Switch } from 'solid-js';
+import {
+  createSignal,
+  type JSXElement,
+  Match,
+  Suspense,
+  Switch,
+} from 'solid-js';
 import { Channel } from './Channel';
 import { JoinChannelDialog } from './JoinChannelDialog';
 import type { TargetMessageInfo } from './MessageList/MessageList';
@@ -89,38 +95,40 @@ export default function BlockChannel(props: BlockChannelProps) {
   };
 
   return (
-    <DocumentBlockContainer title={channelName() ?? 'Channel'}>
-      <Switch
-        fallback={
-          <WithTopBar>
-            <h1 />
-          </WithTopBar>
-        }
-      >
-        <Match when={error()}>
-          <WithTopBar>
-            <h1>{error()}</h1>
-          </WithTopBar>
-        </Match>
-        <Match when={validChannelDataWithJoinState()}>
-          {(channelData) => (
+    <Suspense>
+      <DocumentBlockContainer title={channelName() ?? 'Channel'}>
+        <Switch
+          fallback={
             <WithTopBar>
-              <JoinChannelDialog
-                channelName={channelData().channel.name ?? ''}
-                participantCount={channelData().participants.length}
-                onSelect={(selection) =>
-                  handleJoinChannel(channelData().channel.id, selection)
-                }
-              />
+              <h1 />
             </WithTopBar>
-          )}
-        </Match>
-        <Match when={validChannelData()}>
-          {(channelData) => (
-            <Channel data={channelData()} target={props.target} />
-          )}
-        </Match>
-      </Switch>
-    </DocumentBlockContainer>
+          }
+        >
+          <Match when={error()}>
+            <WithTopBar>
+              <h1>{error()}</h1>
+            </WithTopBar>
+          </Match>
+          <Match when={validChannelDataWithJoinState()}>
+            {(channelData) => (
+              <WithTopBar>
+                <JoinChannelDialog
+                  channelName={channelData().channel.name ?? ''}
+                  participantCount={channelData().participants.length}
+                  onSelect={(selection) =>
+                    handleJoinChannel(channelData().channel.id, selection)
+                  }
+                />
+              </WithTopBar>
+            )}
+          </Match>
+          <Match when={validChannelData()}>
+            {(channelData) => (
+              <Channel data={channelData()} target={props.target} />
+            )}
+          </Match>
+        </Switch>
+      </DocumentBlockContainer>
+    </Suspense>
   );
 }
