@@ -1,4 +1,6 @@
 /// Builds a string message attribute
+// TODO this would only fail from programmer error: when "data_type" not set.
+// it should not return a result.
 #[tracing::instrument]
 pub(crate) fn build_string_message_attribute(
     attr: &str,
