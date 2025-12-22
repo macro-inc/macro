@@ -1,9 +1,9 @@
 import { type JSX, type ParentComponent, splitProps } from 'solid-js';
-import { twMerge } from "tailwind-merge";
+import { twMerge } from 'tailwind-merge';
 import { Tooltip } from '../Tooltip';
 
 type ButtonProps = JSX.ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: 'primary' | 'secondary' | 'tertiary' | 'destructive',
+  variant?: 'primary' | 'secondary' | 'tertiary' | 'destructive';
   tooltip?: JSX.Element;
 };
 
@@ -41,12 +41,12 @@ export const Button: ParentComponent<ButtonProps> = (props) => {
   ]);
 
   const classes = twMerge(
-    "relative flex items-center justify-center gap-[1ch] px-[1ch] py-[0.25lh] border border-transparent",
-    "font-mono font-medium uppercase leading-none",
-    "hover:bg-surface-4",
-    "focus:[--focus-border-inset:-4px]",
-    "active:border-accent active:bg-accent active:text-panel",
-    "disabled:opacity-50  disabled:cursor-not-allowed",
+    'relative flex items-center justify-center gap-[1ch] px-[1ch] py-[0.25lh] border border-transparent',
+    'font-mono font-medium uppercase leading-none',
+    'hover:bg-surface-4',
+    'focus:[--focus-border-inset:-4px]',
+    'active:border-accent active:bg-accent active:text-panel',
+    'disabled:opacity-50  disabled:cursor-not-allowed',
 
     // Anything added by the caller will granularly override
     local.class
@@ -62,9 +62,11 @@ export const Button: ParentComponent<ButtonProps> = (props) => {
     <button
       class={classes}
       classList={{
-        "bg-ink border-ink text-panel hover:bg-accent! hover:opacity-80 active:opacity-100": 'primary' === local.variant,
-        "border-ink!": 'secondary' === local.variant,
-        "border-failure! text-failure active:bg-failure hover:bg-failure-bg!": 'destructive' === local.variant,
+        'bg-ink border-ink text-panel hover:bg-accent! hover:opacity-80 active:opacity-100':
+          'primary' === local.variant,
+        'border-ink!': 'secondary' === local.variant,
+        'border-failure! text-failure active:bg-failure hover:bg-failure-bg!':
+          'destructive' === local.variant,
         ...(local.classList ?? {}),
       }}
       {...rest}

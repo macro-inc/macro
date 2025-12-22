@@ -9,9 +9,7 @@ const config: StorybookConfig = {
     '../packages/**/*.mdx',
     '../packages/**/*.stories.@(js|jsx|mjs|ts|tsx)',
   ],
-  addons: [
-    '@storybook/addon-docs',
-  ],
+  addons: ['@storybook/addon-docs'],
   framework: {
     name: 'storybook-solidjs-vite',
     options: {},

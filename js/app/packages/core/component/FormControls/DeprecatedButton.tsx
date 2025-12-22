@@ -23,7 +23,7 @@ const themeClass: Record<Theme, string> = {
 
 /** Use Button instead!
  * @deprecated
-*/
+ */
 export const DeprecatedButton: ParentComponent<{
   size?: Size;
   theme?: Theme;
