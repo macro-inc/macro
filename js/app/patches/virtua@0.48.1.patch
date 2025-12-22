@@ -1,7 +1,13 @@
 diff --git a/node_modules/virtua/.bun-tag-172fdc1cd9f249d3 b/.bun-tag-172fdc1cd9f249d3
 new file mode 100644
 index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/node_modules/virtua/.bun-tag-3f7fdc11113d6518 b/.bun-tag-3f7fdc11113d6518
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
 diff --git a/node_modules/virtua/.bun-tag-69ffcae45e968edb b/.bun-tag-69ffcae45e968edb
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/node_modules/virtua/.bun-tag-b5e5cc1416c6ecd6 b/.bun-tag-b5e5cc1416c6ecd6
 new file mode 100644
 index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
 diff --git a/node_modules/virtua/.bun-tag-dc314e50881f3a5e b/.bun-tag-dc314e50881f3a5e
@@ -10,12 +16,22 @@ index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2
 diff --git a/node_modules/virtua/.bun-tag-eeedd702ea82f0a5 b/.bun-tag-eeedd702ea82f0a5
 new file mode 100644
 index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
-=======
->>>>>>> 37a2487dd5f6dec4ad4a0aa297dc057159d90255
 diff --git a/lib/solid/index.jsx b/lib/solid/index.jsx
-index 84788e713100b0e5a746bae3411a789002b42b8d..a62faf6f759e654aea303717fd18f9767428f7be 100644
+index 84788e713100b0e5a746bae3411a789002b42b8d..032896f69f7806c829bbbcf2e0c762b9868a5449 100644
 --- a/lib/solid/index.jsx
 +++ b/lib/solid/index.jsx
+@@ -819,9 +819,9 @@ const createScroller = (store, isHorizontal) => {
+                     // Set larger value than the viewportSize to force overflow. And the value must take subpixels into account.
+                     viewportSize + 9}px`;
+                     viewport.appendChild(dummy);
+-                    viewport[scrollOffsetKey] = 1;
++                    dummy.scrollIntoView();
+                     // It can be positive under some specific situations even if negative mode, so we use `<` for now.
+-                    isNegative = viewport[scrollOffsetKey] < 1;
++                    isNegative = viewport[scrollOffsetKey] < 0;
+                     viewport.removeChild(dummy);
+                     viewport[scrollOffsetKey] = prev;
+                     clean();
 @@ -1069,7 +1069,7 @@ const createResizeObserver = (cb) => {
              // https://www.w3.org/TR/resize-observer/#intro
              (ro ||
