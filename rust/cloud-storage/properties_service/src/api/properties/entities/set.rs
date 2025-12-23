@@ -4,7 +4,6 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use std::collections::HashSet;
 use system_properties::SystemPropertyKey;
 use thiserror::Error;
 use uuid::Uuid;
@@ -16,7 +15,6 @@ use crate::api::{
     },
 };
 use model::user::UserContext;
-use models_properties::service::property_value::PropertyValue;
 use models_properties::{EntityReference, EntityType, api::SetPropertyValue};
 use properties::PropertiesService;
 use properties_db_client::{

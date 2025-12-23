@@ -72,7 +72,7 @@ async fn main() -> anyhow::Result<()> {
         properties::PermissionCheckerImpl::new(db.clone(), comms_service_client.clone());
     let properties_service = Arc::new(properties::PropertiesServiceImpl::new(
         properties_repository,
-        permission_checker,
+        Some(permission_checker),
     ));
     tracing::info!("initialized properties service");
 
