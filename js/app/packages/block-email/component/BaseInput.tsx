@@ -1,4 +1,3 @@
-import ArrowUp from '@icon/bold/arrow-up-bold.svg';
 import { FormatRibbon } from '@block-channel/component/FormatRibbon';
 import { MacroSignatureButton } from '@block-email/component/MacroSignatureButton';
 import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
@@ -11,7 +10,6 @@ import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core
 import type { UserMentionRecord } from '@core/component/LexicalMarkdown/component/menu/MentionsMenu';
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { RecipientSelector } from '@core/component/RecipientSelector';
-import { TextButton } from '@core/component/TextButton';
 import { toast } from '@core/component/Toast/Toast';
 import { Tooltip } from '@core/component/Tooltip';
 import { fileDrop } from '@core/directive/fileDrop';
@@ -19,12 +17,11 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { trackMention } from '@core/signal/mention';
 import { useDisplayName } from '@core/user';
+import ArrowUp from '@icon/bold/arrow-up-bold.svg';
 import Spinner from '@icon/bold/spinner-gap-bold.svg';
 import ReplyAll from '@icon/regular/arrow-bend-double-up-left.svg';
 import Reply from '@icon/regular/arrow-bend-up-left.svg';
 import Forward from '@icon/regular/arrow-bend-up-right.svg';
-import CaretDown from '@icon/regular/caret-down.svg';
-import CheckIcon from '@icon/regular/check.svg';
 import DotsThree from '@icon/regular/dots-three.svg';
 import Plus from '@icon/regular/plus.svg';
 import TextAa from '@icon/regular/text-aa.svg';
