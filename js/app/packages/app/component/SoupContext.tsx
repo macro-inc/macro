@@ -271,6 +271,7 @@ export function createNavigationEntityListShortcut({
   const isViewingList = createMemo(() => {
     return splitHandle.content().id === 'unified-list';
   });
+  let lastMultiNavigationInput: NavigationInput;
 
   // `gg` to jump to top of list (legacy behavior) via command-scope hotkeys.
   const goScope = registerHotkey({
@@ -386,22 +387,44 @@ export function createNavigationEntityListShortcut({
 
   actionRegistry.register(
     'mark_as_done',
-    async (entities) => {
+    async (multiSelectEntities) => {
       const handler =
         VIEWCONFIG_DEFAULTS[selectedView() as DefaultView]?.hotkeyOptions?.e;
 
-      const hasSupportedEntity = entities.some(
+      const hasSupportedEntity = multiSelectEntities.some(
         (entity) => getPropertiesEntityType(entity) !== undefined
       );
 
       if (handler || hasSupportedEntity) {
-        if (isEntityLastItem()) {
-          navigateThroughList({ axis: 'start', mode: 'step' });
+        if (multiSelectEntities.length > 1) {
+          const selectedEntityData = getSelectedEntity();
+          const selectedEntityIncludedInMultiSelectedEntities =
+            multiSelectEntities.find(
+              (entity) => selectedEntityData?.entity.id === entity.id
+            );
+
+          // update selected entity to current selected entity's neighbor, before/after neighbor is based on last navigation direction.
+          // if selected entity is not from multi selected list, don't update selected entity
+          if (selectedEntityIncludedInMultiSelectedEntities) {
+            const index = selectedEntityData?.index ?? 0;
+
+            const newSelectedEntity = entities()?.at(index);
+            setSelectedEntity(newSelectedEntity);
+
+            navigateThroughList({
+              axis: lastMultiNavigationInput.axis,
+              mode: 'step',
+            });
+          }
         } else {
-          navigateThroughList({ axis: 'end', mode: 'step' });
+          if (isEntityLastItem()) {
+            navigateThroughList({ axis: 'start', mode: 'step' });
+          } else {
+            navigateThroughList({ axis: 'end', mode: 'step' });
+          }
         }
 
-        for (const entity of entities) {
+        for (const entity of multiSelectEntities) {
           if (handler) {
             handler(entity, {
               soupContext: unifiedListContext,
@@ -1119,6 +1142,7 @@ export function createNavigationEntityListShortcut({
     hotkeyToken: TOKENS.entity.select.end,
     keyDownHandler: () => {
       const navigationInput: NavigationInput = { axis: 'end', mode: 'step' };
+      lastMultiNavigationInput = navigationInput;
       return handleNavigationSelection(navigationInput);
     },
     canExecuteKeyDownHandler: () => isViewingList(),
@@ -1145,6 +1169,7 @@ export function createNavigationEntityListShortcut({
     description: 'Select up',
     keyDownHandler: () => {
       const navigationInput: NavigationInput = { axis: 'start', mode: 'step' };
+      lastMultiNavigationInput = navigationInput;
       return handleNavigationSelection(navigationInput);
     },
     canExecuteKeyDownHandler: () => isViewingList(),
