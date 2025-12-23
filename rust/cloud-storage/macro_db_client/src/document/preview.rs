@@ -22,8 +22,10 @@ pub async fn batch_get_document_preview_v2(
                     WHEN dt.sub_type = 'task' 
                         AND ep_status.values->'value' ? '00000001-0000-0000-0002-000000000004'
                     THEN true 
-                    ELSE false 
-                END as "is_completed!"
+                    WHEN dt.sub_type = 'task'
+                    THEN false
+                    ELSE NULL 
+                END as "is_completed"
             FROM "Document" d
             LEFT JOIN document_sub_type dt ON dt.document_id = d.id
             LEFT JOIN entity_properties ep_status 

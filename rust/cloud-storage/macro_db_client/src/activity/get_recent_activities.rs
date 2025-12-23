@@ -62,7 +62,9 @@ pub async fn get_recent_activities(
                 WHEN dt.sub_type = 'task' 
                     AND ep_status.values->'value' ? '00000001-0000-0000-0002-000000000004'
                 THEN true 
-                ELSE false 
+                WHEN dt.sub_type = 'task'
+                THEN false
+                ELSE NULL 
             END as "is_completed"
         FROM
             "Document" d
@@ -117,7 +119,7 @@ pub async fn get_recent_activities(
             c."isPersistent" as "is_persistent",
             NULL as "sha",
             NULL as "sub_type",
-            false as "is_completed"
+            NULL as "is_completed"
         FROM "Chat" c
         WHERE c."userId" = $1 AND c."deletedAt" IS NULL
         ORDER BY updated_at DESC
@@ -146,7 +148,7 @@ pub async fn get_recent_activities(
             match row_type.as_ref() {
                 "document" => {
                     let document_version_id: String = r.get("document_version_id");
-                    let is_completed: bool = r.get("is_completed");
+                    let is_completed: Option<bool> = r.get("is_completed");
                     Some(Activity::Document(BasicDocument {
                         document_id: id,
                         owner: MacroUserIdStr::parse_from_str(&user_id).ok()?.into_owned(),
