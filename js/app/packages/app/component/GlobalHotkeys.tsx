@@ -28,8 +28,6 @@ import {
 } from './command/state';
 import { CREATABLE_BLOCKS, setCreateMenuOpen } from './Launcher';
 import { useSplitLayout } from './split-layout/layout';
-import { fireVisor, resetVisor } from './Visor';
-import { openWhichKey, setOpenWhichKey } from './WhichKey';
 
 export default function GlobalShortcuts() {
   const [_, setBigChatOpen] = useBigChat();
@@ -68,24 +66,26 @@ export default function GlobalShortcuts() {
       hotkey: block.hotkey,
       scopeId: createCommandScope.commandScopeId,
       description: block.description,
+      runWithInputFocused: true,
       keyDownHandler: () => {
         block.keyDownHandler();
         return true;
       },
-      runWithInputFocused: true,
     });
 
-    registerHotkey({
-      hotkeyToken: block.altHotkeyToken,
-      hotkey: `opt+${block.hotkey}` as ValidHotkey,
-      scopeId: createCommandScope.commandScopeId,
-      description: `${block.description} in new split`,
-      keyDownHandler: () => {
-        block.keyDownHandler();
-        return true;
-      },
-      runWithInputFocused: true,
-    });
+    if (block.altHotkeyToken) {
+      registerHotkey({
+        hotkeyToken: block.altHotkeyToken,
+        hotkey: `opt+${block.hotkey}` as ValidHotkey,
+        scopeId: createCommandScope.commandScopeId,
+        description: `${block.description} in new split`,
+        runWithInputFocused: true,
+        keyDownHandler: () => {
+          block.keyDownHandler();
+          return true;
+        },
+      });
+    }
   }
 
   registerHotkey({
@@ -128,6 +128,17 @@ export default function GlobalShortcuts() {
       return true;
     },
     runWithInputFocused: true,
+  });
+
+  registerHotkey({
+    hotkey: '\\',
+    scopeId: 'global',
+    description: 'Create new split',
+    condition: canFit,
+    keyDownHandler: () => {
+      insertSplit({ type: 'component', id: 'unified-list' });
+      return true;
+    },
   });
 
   registerHotkey({
@@ -241,25 +252,6 @@ export default function GlobalShortcuts() {
     keyDownHandler: () => {
       setMonochromeIcons(!monochromeIcons());
       return true;
-    },
-    runWithInputFocused: true,
-  });
-
-  registerHotkey({
-    hotkeyToken: TOKENS.global.toggleVisor,
-    scopeId: 'global',
-    hotkey: ['escape'],
-    description: 'Toggle visor',
-    keyDownHandler: () => {
-      if (!openWhichKey()) {
-        fireVisor();
-        setOpenWhichKey(true);
-        return false;
-      } else {
-        resetVisor();
-        setOpenWhichKey(false);
-        return false;
-      }
     },
     runWithInputFocused: true,
   });

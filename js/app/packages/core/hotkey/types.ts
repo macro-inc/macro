@@ -28,6 +28,11 @@ export interface HotkeyCommand {
   icon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
   // Optional tags for categorizing in the command palette.
   tags?: string[];
+  /**
+   * @description Should the focus be returned to the previously active element when this command is selected in the Konsole
+   * @default true
+   */
+  shouldReturnFocusOnClose?: boolean;
 }
 
 export interface HotkeyRegistrationOptions {
@@ -108,6 +113,12 @@ export interface HotkeyRegistrationOptions {
    * Optional tags for categorizing in the command palette.
    */
   tags?: string[];
+
+  /**
+   * @description Should the focus be returned to the previously active element when this command is selected in the Konsole
+   * @default true
+   */
+  shouldReturnFocusOnClose?: boolean;
 }
 
 export type RegisterHotkeyReturn = {

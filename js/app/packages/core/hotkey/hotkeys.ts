@@ -119,6 +119,7 @@ export function registerHotkey(
     hide,
     icon,
     tags,
+    shouldReturnFocusOnClose,
   } = args;
 
   if (!scopeId) {
@@ -193,6 +194,7 @@ export function registerHotkey(
     hide,
     icon,
     tags,
+    shouldReturnFocusOnClose,
   };
 
   // Check for existing hotkeys in the scope

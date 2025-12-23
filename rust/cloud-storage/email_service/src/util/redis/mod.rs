@@ -6,9 +6,14 @@ pub mod rate_limit;
 pub struct RedisClient {
     pub inner: redis::Client,
 
-    /// Maximum allowed Gmail API quota units within the rate limiting window.
+    /// Maximum allowed Gmail API quota units within the rate limiting window, for normal operations.
     /// Gmail API per-user quota is 15,000 units per minute.
     pub rate_limit_units: u32,
+
+    /// Maximum allowed Gmail API quota units within the rate limiting window, for backfill. Less
+    /// than redis_rate_limit_reqs so we have room for normal gmail operations while backfilling
+    /// is occurring
+    pub rate_limit_units_backfill: u32,
 
     /// Duration of the sliding window for Gmail API rate limiting in seconds.
     /// Uses a 60-second window to align with Gmail's per-minute quota period.
@@ -16,10 +21,16 @@ pub struct RedisClient {
 }
 
 impl RedisClient {
-    pub fn new(inner: redis::Client, rate_limit_units: u32, rate_limit_secs: u32) -> Self {
+    pub fn new(
+        inner: redis::Client,
+        rate_limit_units: u32,
+        rate_limit_units_backfill: u32,
+        rate_limit_secs: u32,
+    ) -> Self {
         Self {
             inner,
             rate_limit_units,
+            rate_limit_units_backfill,
             rate_limit_secs,
         }
     }

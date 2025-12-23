@@ -33,7 +33,7 @@ export type ChannelInputProps = {
 export function ChannelInput(props: ChannelInputProps) {
   const channelId = useBlockId();
 
-  const sendMessage = useSendChannelMessageAction();
+  const sendMessage = useSendChannelMessageAction(() => channelId);
 
   const postTypingUpdate_ = createCallback(postTypingUpdate);
 

@@ -22,14 +22,25 @@ export function MessageAttachments(props: MessageAttachmentsProps) {
       {/* Video attachments */}
       <Show when={props.videoAttachments()?.length > 0 && !props.isDeleted()}>
         <For each={props.videoAttachments()}>
-          {(item) => <VideoPreview id={item.entity_id} variant="dynamic" />}
+          {(item) => (
+            <VideoPreview
+              id={item.entity_id}
+              variant="dynamic"
+              width={item.width}
+              height={item.height}
+            />
+          )}
         </For>
       </Show>
       {/* Image attachments */}
       <Show when={props.imageAttachments()?.length > 0 && !props.isDeleted()}>
         <div class="flex not-first:mt-2">
           <DynamicImageList
-            ids={props.imageAttachments()?.map((a) => a.entity_id)}
+            images={props.imageAttachments()?.map((a) => ({
+              id: a.entity_id,
+              width: a.width ?? undefined,
+              height: a.height ?? undefined,
+            }))}
             attachmentIds={props.imageAttachments()?.map((a) => a.id)}
             isCurrentUser={props.isCurrentUser()}
             channelId={props.channelId}

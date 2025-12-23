@@ -25,6 +25,7 @@ import {
 import { storageServiceClient } from '@service-storage/client';
 import { createLazyMemo } from '@solid-primitives/memo';
 import { useQuery } from '@tanstack/solid-query';
+import type { Virtualizer } from '@tanstack/solid-virtual';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
   type Accessor,
@@ -44,7 +45,6 @@ import {
   type SetStoreFunction,
   type Store,
 } from 'solid-js/store';
-import type { VirtualizerHandle } from 'virtua/solid';
 import { useUserId } from '../../macro-entity/src/queries/auth';
 import { createBulkCopyDssEntityMutation } from '../../macro-entity/src/queries/dss';
 import { playSound } from '../util/sound';
@@ -85,7 +85,7 @@ export type UnifiedListContext = {
   setViewDataStore: SetStoreFunction<Partial<ViewDataMap>>;
   selectedView: Accessor<ViewId>;
   setSelectedView: Setter<ViewId>;
-  virtualizerHandleSignal: Signal<VirtualizerHandle | undefined>;
+  virtualizerHandleSignal: Signal<Virtualizer<Element, Element> | undefined>;
   entityListRefSignal: Signal<HTMLDivElement | undefined>;
   entitiesSignal: Signal<EntityData[] | undefined>;
   emailViewSignal: Signal<PreviewViewStandardLabel>;
@@ -128,7 +128,7 @@ export function createSoupContext(): UnifiedListContext {
   const [viewsDataStore, setViewDataStore] = useAllViews({
     selectedViewSignal: [selectedView, setSelectedView],
   });
-  const virtualizerHandleSignal = createSignal<VirtualizerHandle>();
+  const virtualizerHandleSignal = createSignal<Virtualizer<Element, Element>>();
   const entityListRefSignal = createSignal<HTMLDivElement>();
   const entitiesSignal = createSignal<EntityData[]>();
   const emailViewSignal = createSignal<PreviewViewStandardLabel>('inbox');
@@ -230,14 +230,14 @@ export function createNavigationEntityListShortcut({
   splitHandle,
   splitHotkeyScope,
   unifiedListContext,
-  goScopeId,
   previewState,
+  getSplitCount,
 }: {
   splitHandle: SplitHandle;
   splitHotkeyScope: string;
   unifiedListContext: UnifiedListContext;
-  goScopeId: string;
   previewState: Signal<boolean>;
+  getSplitCount: () => number;
 }) {
   const {
     viewsDataStore: viewsData,
@@ -272,6 +272,40 @@ export function createNavigationEntityListShortcut({
     return splitHandle.content().id === 'unified-list';
   });
 
+  // `gg` to jump to top of list (legacy behavior) via command-scope hotkeys.
+  const goScope = registerHotkey({
+    scopeId: splitHotkeyScope,
+    hotkey: 'g',
+    description: 'Go',
+    keyDownHandler: () => true,
+    activateCommandScope: true,
+    hide: true,
+  });
+
+  registerHotkey({
+    hotkey: ['g'],
+    scopeId: goScope.commandScopeId,
+    description: 'Go to top of list',
+    condition: isViewingList,
+    keyDownHandler: () => {
+      navigateThroughList({ axis: 'start', mode: 'jump' });
+      return true;
+    },
+    hide: true,
+  });
+
+  registerHotkey({
+    hotkey: ['shift+g', 'end'],
+    scopeId: goScope.commandScopeId,
+    description: 'Go to bottom of list',
+    condition: isViewingList,
+    keyDownHandler: () => {
+      navigateThroughList({ axis: 'end', mode: 'jump' });
+      return true;
+    },
+    hide: true,
+  });
+
   /**
    * From the current selection, get the entity to try to select after a modal
    * edit operation.
@@ -299,6 +333,8 @@ export function createNavigationEntityListShortcut({
     entity: EntityData | null | undefined,
     clearSelection?: boolean
   ) => {
+    const virtualizer = virtualizerHandle();
+    const virtualItems = virtualizer?.getVirtualItems() || [];
     if (clearSelection) {
       setViewDataStore(selectedView(), 'multiSelectEntities', []);
     }
@@ -306,9 +342,14 @@ export function createNavigationEntityListShortcut({
       setSelectedEntity(entity);
       const nextIndex = entities()?.findIndex(({ id }) => id === entity.id);
       if (nextIndex !== undefined && nextIndex > -1) {
-        virtualizerHandle()?.scrollToIndex(nextIndex, {
-          align: 'nearest',
-        });
+        const start = virtualItems[0]?.index;
+        const end = virtualItems.at(-1)?.index ?? 0;
+
+        if (nextIndex < start) {
+          virtualizer?.scrollToIndex(nextIndex, { align: 'start' });
+        } else if (nextIndex > end) {
+          virtualizer?.scrollToIndex(nextIndex, { align: 'end' });
+        }
         waitForFrames(2).then(() => {
           const elem = getEntityElAtIndex(nextIndex);
           if (elem instanceof HTMLElement) {
@@ -318,9 +359,7 @@ export function createNavigationEntityListShortcut({
           }
         });
       } else {
-        const handle = virtualizerHandle();
-        if (!handle) return;
-        const firstIndex = handle.findItemIndex(handle.scrollOffset);
+        const firstIndex = virtualItems.at(0)?.index;
         if (!firstIndex) return;
         const elem = getEntityElAtIndex(firstIndex);
         if (elem instanceof HTMLElement) elem.focus();
@@ -867,15 +906,17 @@ export function createNavigationEntityListShortcut({
 
     const entityEl = entityListRef()?.querySelector('[data-entity]');
     const scrollParent = getScrollParent(entityEl);
-
     const getAdjecentEl = async () => {
-      virtualizerHandle()?.scrollToIndex(index, {
-        // align: mode === 'jump' && axis === 'end' ? 'end' : undefined,
-        // align: align(),
-        // align: index() < virtuaRef()!.findItemIndex(virtuaRef()!.scrollOffset) ? 'start' : 'end',
-        align: 'nearest',
-        // offset: 50,
-      });
+      const virtualizer = virtualizerHandle();
+      const virtualItems = virtualizer?.getVirtualItems() || [];
+      const start = virtualItems[0]?.index;
+      const end = virtualItems.at(-1)?.index ?? 0;
+
+      if (index < start) {
+        virtualizer?.scrollToIndex(index, { align: 'start' });
+      } else if (index > end) {
+        virtualizer?.scrollToIndex(index, { align: 'end' });
+      }
 
       if (mode === 'jump') {
         await new Promise<true>((resolve) =>
@@ -1132,27 +1173,6 @@ export function createNavigationEntityListShortcut({
     hide: true,
   });
 
-  registerHotkey({
-    hotkey: ['g'],
-    scopeId: goScopeId,
-    description: 'Go to top of list',
-    keyDownHandler: () => {
-      navigateThroughList({ axis: 'start', mode: 'jump' });
-      return true;
-    },
-  });
-
-  registerHotkey({
-    hotkey: ['shift+g', 'end'],
-    scopeId: goScopeId,
-    hotkeyToken: TOKENS.entity.jump.end,
-    description: 'Go to bottom of list',
-    keyDownHandler: () => {
-      navigateThroughList({ axis: 'end', mode: 'jump' });
-      return true;
-    },
-  });
-
   const navigateThroughViews = ({
     axis,
   }: {
@@ -1313,6 +1333,8 @@ export function createNavigationEntityListShortcut({
   const clearMultiCondition: () => boolean = () =>
     isViewingList() && viewData().multiSelectEntities.length > 0;
   const closeSpotlightCondition = () => splitHandle.isSpotLight();
+  const goHomeCondition = () => !splitIsUnifiedList();
+  const closeSplitCondition = () => splitIsUnifiedList() && getSplitCount() > 1;
   const escapeDescription = () => {
     if (clearMultiCondition()) {
       return 'Clear multi selection';
@@ -1320,13 +1342,23 @@ export function createNavigationEntityListShortcut({
     if (closeSpotlightCondition()) {
       return 'Close spotlight';
     }
+    if (closeSplitCondition()) {
+      return 'Close split';
+    }
+    if (goHomeCondition()) {
+      return 'Go home';
+    }
     return '';
   };
   registerHotkey({
     hotkey: ['escape'],
     scopeId: splitHotkeyScope,
     description: escapeDescription,
-    condition: () => clearMultiCondition() || closeSpotlightCondition(),
+    condition: () =>
+      clearMultiCondition() ||
+      closeSpotlightCondition() ||
+      closeSplitCondition() ||
+      goHomeCondition(),
     keyDownHandler: () => {
       if (clearMultiCondition()) {
         const length = viewData().multiSelectEntities.length;
@@ -1335,6 +1367,14 @@ export function createNavigationEntityListShortcut({
       }
       if (closeSpotlightCondition()) {
         splitHandle.toggleSpotlight();
+        return true;
+      }
+      if (closeSplitCondition()) {
+        splitHandle.close();
+        return true;
+      }
+      if (goHomeCondition()) {
+        splitHandle.replace({ type: 'component', id: 'unified-list' });
         return true;
       }
       return false;

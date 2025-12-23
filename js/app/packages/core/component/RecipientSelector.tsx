@@ -214,7 +214,7 @@ type RecipientSelectorProps<K extends CombinedRecipientKind> = {
   // If you provide triedToSubmit, the component will show an error message if no options are selected and triedToSubmit is true
   triedToSubmit?: Accessor<boolean>;
   placeholder?: string | JSX.Element;
-  inputRef?: Setter<HTMLInputElement | undefined>;
+  inputRef?: (ref: HTMLInputElement) => void;
   focusOnMount?: boolean;
   triggerMode?: ComboboxTriggerMode;
   hideBorder?: boolean;
@@ -257,15 +257,6 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
       setTimeout(() => {
         inputRef()?.focus();
       }, 0);
-    });
-  }
-
-  if (props.inputRef) {
-    createEffect(() => {
-      const ref = inputRef();
-      if (props.inputRef && ref) {
-        props.inputRef(ref);
-      }
     });
   }
 
@@ -525,8 +516,11 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
               </For>
               <Combobox.Input
                 disabled={disabled()}
-                ref={setInputRef}
-                class="flex-1 min-h-7 p-1 min-w-[200px] outline-none placeholder:text-ink-placeholder"
+                ref={(el) => {
+                  setInputRef(el);
+                  props.inputRef?.(el);
+                }}
+                class="flex-1 min-h-7 p-1 min-w-[200px] outline-none placeholder:text-ink-placeholder/50"
                 classList={{
                   'ml-1': selectedLen() === 0,
                 }}

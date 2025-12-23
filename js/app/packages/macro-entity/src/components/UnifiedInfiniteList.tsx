@@ -2,26 +2,27 @@ import { useSuspenseContext } from '@app/component/SuspenseContext';
 import { EmptyState } from '@app/component/UnifiedListEmptyState';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import type { ViewId } from '@core/types/view';
-import Fragment from '@core/util/Fragment';
 import { onElementConnect } from '@solid-primitives/lifecycle';
 import { debounce } from '@solid-primitives/scheduled';
+import { createVirtualizer, type Virtualizer } from '@tanstack/solid-virtual';
 import { StaticMarkdownContext } from 'core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import {
   type Accessor,
+  createComputed,
   createEffect,
   createMemo,
   createRenderEffect,
   createSignal,
+  For,
   Match,
   on,
   onCleanup,
   type Setter,
+  Show,
   Switch,
   untrack,
 } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
-import { type VirtualizerHandle, VList } from 'virtua/solid';
-import { LIST_WRAPPER } from '../constants/classStrings';
 import type {
   EntityInfiniteQuery,
   EntityList,
@@ -400,14 +401,38 @@ export function createUnifiedInfiniteList<T extends EntityData>({
 
   const DEFAULT_HEIGHT = 600;
   const [containerHeight, setContainerHeight] = createSignal(DEFAULT_HEIGHT);
+
   const UnifiedInfiniteList = (props: {
     children?: EntityRenderer<T>;
     entityListRef?: (ref: HTMLDivElement | undefined) => void;
-    virtualizerHandle?: Setter<VirtualizerHandle | undefined>;
+    virtualizerHandle?: Setter<Virtualizer<Element, Element> | undefined>;
     hasRefinementsFromBase?: boolean;
     viewId?: ViewId;
     searchText?: string;
   }) => {
+    const [scrollParentRef, setScrollParentRef] =
+      createSignal<HTMLDivElement>();
+
+    // Estimate items per viewport and derive overscan and page size
+    // Keep a conservative default item size for estimation; virtua will auto-measure precisely.
+    const ENTITY_HEIGHT = 40;
+    const viewportItemCount = createMemo(() =>
+      Math.max(1, Math.ceil(containerHeight() / ENTITY_HEIGHT))
+    );
+    const computedOverscan = createMemo(() =>
+      Math.max(6, Math.ceil(viewportItemCount() * 0.5))
+    );
+    const rowVirtualizer = createVirtualizer({
+      get count() {
+        return sortedEntitiesStore.length;
+      },
+      estimateSize: () => ENTITY_HEIGHT,
+      getScrollElement: () => scrollParentRef() as Element,
+      overscan: computedOverscan(),
+    });
+
+    props.virtualizerHandle?.(rowVirtualizer);
+
     const [listRef, setListRef] = createSignal<HTMLDivElement>();
     let containerSizeObserver: ResizeObserver | null = null;
 
@@ -433,16 +458,6 @@ export function createUnifiedInfiniteList<T extends EntityData>({
       onCleanup(() => containerSizeObserver?.disconnect());
     });
 
-    // Estimate items per viewport and derive overscan and page size
-    // Keep a conservative default item size for estimation; virtua will auto-measure precisely.
-    const ENTITY_HEIGHT = 52;
-    const viewportItemCount = createMemo(() =>
-      Math.max(1, Math.ceil(containerHeight() / ENTITY_HEIGHT))
-    );
-    const computedOverscan = createMemo(() =>
-      Math.max(6, Math.ceil(viewportItemCount() * 0.5))
-    );
-
     const loadingCount = () =>
       entityQueries?.filter((query) => query.query.isLoading).length ??
       0 + entityInfiniteQueries.filter((query) => query.query.isLoading).length;
@@ -464,37 +479,49 @@ export function createUnifiedInfiniteList<T extends EntityData>({
 
     onCleanup(() => debouncedFetchMore.clear());
 
-    const [virtualizerHandle, setVirtualizerHandle] =
-      createSignal<VirtualizerHandle>();
     // const cacheKey = createMemo(() => (id ? `list-cache-${id}` : null));
     const cacheKey = `list-cache-${id}`;
 
+    // compose method to cache scroll position when called
+    const scrollToIndex = rowVirtualizer.scrollToIndex;
+    rowVirtualizer.scrollToIndex = (
+      index: number,
+      options?: ScrollToOptions | undefined
+    ) => {
+      // @ts-expect-error
+      scrollToIndex(index, options);
+      requestAnimationFrame(() => {
+        cacheVirtualizerHandle();
+      });
+    };
+
     // Restore scroll position on mount
     const restoreScrollPosition = () => {
-      const handle = virtualizerHandle();
       const { offset: cachedOffset } = cacheMap.get(cacheKey) || { offset: 0 };
-      if (handle && cachedOffset) {
-        handle.scrollTo(cachedOffset);
+      if (rowVirtualizer && cachedOffset != null) {
+        rowVirtualizer.scrollToOffset(cachedOffset);
       }
     };
 
+    const cacheVirtualizerHandle = () => {
+      const key = cacheKey;
+
+      const scrollOffset = rowVirtualizer.scrollOffset;
+      if (rowVirtualizer && key) {
+        cacheMap.set(key, { offset: scrollOffset ?? 0 });
+      }
+    };
+
+    let scrollMounted = false;
     createEffect(
-      on(virtualizerHandle, (virtualizerHandle, prev) => {
-        if (virtualizerHandle && prev == null) {
+      on(scrollParentRef, (scrollParentRef, prev) => {
+        if (scrollParentRef && prev == null) {
+          scrollMounted = true;
           restoreScrollPosition();
         }
       })
     );
 
-    const cacheVirtualizerHandle = () => {
-      const handle = virtualizerHandle();
-      const key = cacheKey;
-
-      if (handle && key) {
-        const { scrollOffset } = handle;
-        cacheMap.set(key, { offset: scrollOffset });
-      }
-    };
     const { isPending } = useSuspenseContext();
 
     // Save scroll position and cache on cleanup
@@ -502,15 +529,20 @@ export function createUnifiedInfiniteList<T extends EntityData>({
       cacheVirtualizerHandle();
     });
 
-    createEffect(
+    // Restore scroll after Suspense
+    createComputed(
       on(
         isPending,
         (isPending, prevIsPending) => {
           if (isPending) {
-            cacheVirtualizerHandle();
+            if (scrollMounted) {
+              cacheVirtualizerHandle();
+            }
           }
           if (isPending === false && prevIsPending === true) {
-            restoreScrollPosition();
+            queueMicrotask(() => {
+              restoreScrollPosition();
+            });
           }
         },
         { defer: true }
@@ -563,50 +595,81 @@ export function createUnifiedInfiniteList<T extends EntityData>({
         <Match when={true}>
           <div class="flex size-full relative" ref={setListRef}>
             <StaticMarkdownContext>
-              <Fragment
+              <div
+                class="size-full relative scrollbar-hidden"
+                data-unified-entity-list
                 ref={(el) => {
                   onElementConnect(el, () => {
-                    props.entityListRef?.(el as HTMLDivElement);
+                    setScrollParentRef(el as HTMLDivElement);
                   });
                 }}
+                style={{
+                  overflow: 'auto',
+                }}
               >
-                <VList
-                  ref={(ref) => {
-                    // runs before onCleanup
-                    // prevent ref from being set to null on cleanup otherwise the scroll position will be lost in onCleanup saving the cache
-                    if (ref) {
-                      setVirtualizerHandle(ref);
-                    }
-                    props.virtualizerHandle?.(ref);
+                <div
+                  ref={(el) => {
+                    onElementConnect(el, () => {
+                      props.entityListRef?.(el as HTMLDivElement);
+                    });
                   }}
-                  data={sortedEntitiesStore}
-                  class={`${LIST_WRAPPER} scrollbar-hidden`}
-                  data-unified-entity-list
-                  bufferSize={computedOverscan() * 50}
+                  style={{
+                    height: `${rowVirtualizer.getTotalSize()}px`,
+                    width: '100%',
+                    position: 'relative',
+                  }}
                 >
-                  {(entity, index) => {
-                    if (
-                      untrack(index) >=
-                      Math.floor(untrack(sortedEntities).length * 0.9)
-                    ) {
-                      debouncedFetchMore();
-                    }
-                    return <EntityRenderer entity={entity} index={index()} />;
-                  }}
-                </VList>
-                {/* <div class={LIST_WRAPPER}>
-                <Key each={sortedEntities()} by={(item) => item.id}>
-                  {(entity, index) => {
-                    if (
-                      untrack(index) ===
-                      Math.floor(untrack(sortedEntities).length * 0.9)
-                    )
-                      debouncedFetchMore();
-                    return <EntityRenderer entity={entity()} index={index()} />;
-                  }}
-                </Key>
-              </div> */}
-              </Fragment>
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      transform: `translateY(${rowVirtualizer.getVirtualItems()?.[0]?.start}px)`,
+                    }}
+                  >
+                    <For each={rowVirtualizer.getVirtualItems()}>
+                      {(virtualItem) => {
+                        if (
+                          untrack(() => virtualItem.index) >=
+                          Math.floor(untrack(sortedEntities).length * 0.9)
+                        ) {
+                          debouncedFetchMore();
+                        }
+
+                        return (
+                          <Show
+                            when={sortedEntitiesStore[virtualItem.index]?.id}
+                            keyed
+                          >
+                            {(_) => {
+                              const entity =
+                                sortedEntitiesStore[virtualItem.index];
+                              return (
+                                <Show when={entity}>
+                                  <div
+                                    data-index={virtualItem.index}
+                                    ref={(el) =>
+                                      queueMicrotask(() =>
+                                        rowVirtualizer.measureElement(el)
+                                      )
+                                    }
+                                  >
+                                    <EntityRenderer
+                                      entity={entity}
+                                      index={virtualItem.index}
+                                    />
+                                  </div>
+                                </Show>
+                              );
+                            }}
+                          </Show>
+                        );
+                      }}
+                    </For>
+                  </div>
+                </div>
+              </div>
             </StaticMarkdownContext>
             <CustomScrollbar
               scrollContainer={() => {

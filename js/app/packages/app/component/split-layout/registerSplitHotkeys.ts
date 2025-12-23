@@ -12,21 +12,7 @@ import type { SplitContent } from './layoutManager';
 import { focusAdjacentSplit } from './layoutUtils';
 import { canSpotlight } from './utils/canSpotlight';
 
-export function registerSplitHotkeys({
-  splitHotkeyScope,
-  insertSplit,
-  closeSplit,
-  toggleSpotlight,
-  canGoBack,
-  goBack,
-  canGoForward,
-  goForward,
-  setSelectedView,
-  replaceSplit,
-  splitName,
-  getSplitCount,
-  isNotUnifiedList,
-}: {
+export function registerSplitHotkeys(args: {
   splitHotkeyScope: string;
   insertSplit: (content: SplitContent) => void;
   closeSplit: () => void;
@@ -41,44 +27,20 @@ export function registerSplitHotkeys({
   getSplitCount: () => number;
   isNotUnifiedList: () => boolean;
 }) {
+  const {
+    splitHotkeyScope,
+    closeSplit,
+    toggleSpotlight,
+    canGoBack,
+    goBack,
+    canGoForward,
+    goForward,
+    replaceSplit,
+    splitName,
+    getSplitCount,
+    isNotUnifiedList,
+  } = args;
   const splitManager = globalSplitManager();
-  const canFit = () =>
-    splitManager?.resizeContext()?.canFit({ minSize: 400 }) ?? true;
-
-  const windowScope = registerHotkey({
-    scopeId: splitHotkeyScope,
-    hotkey: 'w',
-    description: 'Window',
-    keyDownHandler: () => {
-      return true;
-    },
-    activateCommandScope: true,
-  });
-
-  registerHotkey({
-    hotkeyToken: TOKENS.window.createNewSplit,
-    hotkey: '\\',
-    scopeId: windowScope.commandScopeId,
-    description: 'Create new split',
-    condition: canFit,
-    keyDownHandler: () => {
-      insertSplit({ type: 'component', id: 'unified-list' });
-      return true;
-    },
-  });
-
-  registerHotkey({
-    scopeId: windowScope.commandScopeId,
-    hotkey: 'w',
-    condition: () => getSplitCount() > 1,
-    description: `Close split`,
-    keyDownHandler: () => {
-      closeSplit();
-      return true;
-    },
-    hotkeyToken: TOKENS.window.close,
-  });
-
   registerHotkey({
     scopeId: splitHotkeyScope,
     hotkey: 'cmd+escape',
@@ -91,9 +53,10 @@ export function registerSplitHotkeys({
     hotkeyToken: TOKENS.split.close,
   });
 
+  // Spotlight (maximize split) - legacy binding.
   registerHotkey({
-    scopeId: windowScope.commandScopeId,
-    hotkey: 'm',
+    scopeId: splitHotkeyScope,
+    hotkey: 'shift+escape',
     hotkeyToken: TOKENS.window.spotlight.toggle,
     description: () => `Maximize ${splitName()}`,
     condition: () => {
@@ -105,55 +68,6 @@ export function registerSplitHotkeys({
       return true;
     },
     runWithInputFocused: true,
-  });
-
-  const goScope = registerHotkey({
-    scopeId: splitHotkeyScope,
-    hotkey: 'g',
-    description: 'Go',
-    keyDownHandler: () => {
-      return true;
-    },
-    activateCommandScope: true,
-    hotkeyToken: TOKENS.split.goCommand,
-    displayPriority: 10,
-  });
-
-  const goScopeId = goScope.commandScopeId;
-
-  registerHotkey({
-    scopeId: goScopeId,
-    hotkey: '[',
-    hotkeyToken: TOKENS.split.go.back,
-    condition: () => canGoBack(),
-    description: `Go back`,
-    keyDownHandler: () => {
-      goBack();
-      return true;
-    },
-  });
-
-  registerHotkey({
-    scopeId: goScopeId,
-    hotkey: ']',
-    hotkeyToken: TOKENS.split.go.forward,
-    condition: () => canGoForward(),
-    description: `Go forward`,
-    keyDownHandler: () => {
-      goForward();
-      return true;
-    },
-  });
-
-  registerHotkey({
-    scopeId: goScopeId,
-    hotkey: 'h',
-    description: 'Go home',
-    keyDownHandler: () => {
-      replaceSplit({ type: 'component', id: 'unified-list' });
-      return true;
-    },
-    hotkeyToken: TOKENS.split.go.home,
   });
 
   registerHotkey({
@@ -169,35 +83,71 @@ export function registerSplitHotkeys({
     displayPriority: 8,
   });
 
+  // History back/forward - legacy bindings.
   registerHotkey({
-    scopeId: goScopeId,
-    hotkey: 'e',
-    description: 'Go to email',
+    scopeId: splitHotkeyScope,
+    hotkeyToken: TOKENS.split.go.back,
+    hotkey: 'opt+[',
+    condition: () => canGoBack(),
+    description: `Go back`,
     keyDownHandler: () => {
-      replaceSplit({ type: 'component', id: 'unified-list' });
-      setSelectedView('email');
+      goBack();
       return true;
     },
-    hotkeyToken: TOKENS.split.go.email,
+    runWithInputFocused: true,
   });
 
   registerHotkey({
-    scopeId: goScopeId,
-    hotkey: 's',
-    description: 'Go to signal',
+    scopeId: splitHotkeyScope,
+    hotkeyToken: TOKENS.split.go.forward,
+    hotkey: 'opt+]',
+    condition: () => canGoForward(),
+    description: `Go forward`,
     keyDownHandler: () => {
-      replaceSplit({ type: 'component', id: 'unified-list' });
-      setSelectedView('signal');
+      goForward();
       return true;
     },
-    hotkeyToken: TOKENS.split.go.inbox,
+    runWithInputFocused: true,
+  });
+
+  // AI side panel - legacy binding.
+  const [bigChatOpen] = useBigChat();
+  const toggleRightPanel = useToggleRightPanel();
+  registerHotkey({
+    hotkeyToken: TOKENS.split.go.toggleRightPanel,
+    hotkey: 'cmd+/',
+    scopeId: splitHotkeyScope,
+    description: () => {
+      return isRightPanelOpen() ? 'Close AI panel' : 'Open AI panel';
+    },
+    keyDownHandler: () => {
+      // Always allow closing. Only allow opening when big chat is not open.
+      toggleRightPanel(!isRightPanelOpen());
+      return true;
+    },
+    condition: () => !bigChatOpen() || isRightPanelOpen(),
+    runWithInputFocused: true,
+  });
+
+  // Macro Jump - legacy binding.
+  registerHotkey({
+    hotkeyToken: TOKENS.split.go.macroJump,
+    hotkey: 'cmd+m',
+    scopeId: splitHotkeyScope,
+    description: 'Macro Jump',
+    keyDownHandler: () => {
+      fireMacroJump();
+      return true;
+    },
+    runWithInputFocused: true,
   });
 
   registerHotkey({
     hotkeyToken: TOKENS.window.focusSplitRight,
-    hotkey: ['arrowright', 'tab', 'l'],
-    scopeId: windowScope.commandScopeId,
+    hotkey: ['arrowright'],
+    scopeId: splitHotkeyScope,
     description: 'Focus split right',
+    condition: () => getSplitCount() > 1,
     keyDownHandler: () => {
       focusAdjacentSplit('right');
       return true;
@@ -206,44 +156,15 @@ export function registerSplitHotkeys({
 
   registerHotkey({
     hotkeyToken: TOKENS.window.focusSplitLeft,
-    hotkey: ['arrowleft', 'shift+tab', 'h'],
-    scopeId: windowScope.commandScopeId,
+    hotkey: ['arrowleft'],
+    scopeId: splitHotkeyScope,
     description: 'Focus split left',
+    condition: () => getSplitCount() > 1,
     keyDownHandler: () => {
       focusAdjacentSplit('left');
       return true;
     },
   });
 
-  const [bigChatOpen, _] = useBigChat();
-  const toggleRightPanel = useToggleRightPanel();
-
-  registerHotkey({
-    hotkeyToken: TOKENS.split.go.toggleRightPanel,
-    hotkey: 'r',
-    scopeId: goScopeId,
-    description: () => {
-      return isRightPanelOpen() ? 'Close AI panel' : 'Open AI panel';
-    },
-    keyDownHandler: () => {
-      toggleRightPanel();
-      return true;
-    },
-    condition: () => {
-      return !bigChatOpen();
-    },
-  });
-
-  registerHotkey({
-    hotkeyToken: TOKENS.split.go.macroJump,
-    hotkey: 'j',
-    scopeId: goScopeId,
-    description: 'Macro Jump',
-    keyDownHandler: () => {
-      fireMacroJump();
-      return true;
-    },
-  });
-
-  return { windowScope, goScope };
+  return {};
 }

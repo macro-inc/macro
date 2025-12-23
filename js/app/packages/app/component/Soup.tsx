@@ -47,7 +47,6 @@ import {
   onCleanup,
   type ParentComponent,
   Show,
-  Suspense,
   Switch,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -81,6 +80,24 @@ const ViewTab: ParentComponent<{
   );
 };
 
+let runSuspenseWarningLog = false;
+const SuspenseUnifiedListFallback = () => {
+  const runWarningLog = () => {
+    if (!runSuspenseWarningLog) {
+      setTimeout(() => {
+        runSuspenseWarningLog = true;
+      });
+      return;
+    }
+
+    console.warn('UnifiedList Suspsense Triggered');
+  };
+
+  runWarningLog();
+
+  return null;
+};
+
 const ViewWithSearch: Component<{
   viewId: ViewId;
 }> = (props) => {
@@ -90,17 +107,17 @@ const ViewWithSearch: Component<{
         <Match
           when={props.viewId === 'email' && DEFAULT_VIEWS.includes('email')}
         >
-          <Suspense>
+          <SuspenseContextComp fallback={<SuspenseUnifiedListFallback />}>
             <EmailView />
-          </Suspense>
+          </SuspenseContextComp>
         </Match>
         <Match when={props.viewId === 'all' && DEFAULT_VIEWS.includes('all')}>
-          <Suspense>
+          <SuspenseContextComp fallback={<SuspenseUnifiedListFallback />}>
             <AllView />
-          </Suspense>
+          </SuspenseContextComp>
         </Match>
         <Match when={true}>
-          <SuspenseContextComp fallback={''}>
+          <SuspenseContextComp fallback={<SuspenseUnifiedListFallback />}>
             <UnifiedListView />
           </SuspenseContextComp>
         </Match>

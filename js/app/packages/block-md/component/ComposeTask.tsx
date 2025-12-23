@@ -1,6 +1,7 @@
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
+import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { BlockLink } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
@@ -165,7 +166,7 @@ export interface ComposeTaskProps {
 }
 
 export function ComposeTask(props: ComposeTaskProps) {
-  const splitPanel = useSplitPanel();
+  const splitPanel = useSplitPanelOrThrow();
   const [title, setTitle] = createSignal(props.initialTitle ?? '');
   const [content, setContent] = createSignal(props.initialContent ?? '');
   const [bodyEditor, setBodyEditor] = createSignal<LexicalEditor>();
@@ -354,6 +355,7 @@ export function ComposeTask(props: ComposeTaskProps) {
             }}
             onFocusLeaveStart={(e) => editorFocusChange(e, -1)}
             onFocusLeaveEnd={(e) => editorFocusChange(e, +1)}
+            portalScope={splitPanel.handle.isPopover() ? 'local' : 'block'}
           />
         </div>
 

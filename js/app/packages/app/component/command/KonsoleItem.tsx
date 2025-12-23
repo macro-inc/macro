@@ -403,7 +403,7 @@ export function useCommandItemAction(args: {
             setCommandScopeCommands(commandScopeCommands);
             break;
           } else {
-            setKonsoleOpen(false);
+            setKonsoleOpen(false, item.data.command.shouldReturnFocusOnClose);
             resetQuery();
             resetKonsoleMode();
             runCommand(item.data.command);

@@ -85,7 +85,7 @@ function ImageAttachment(props: {
         />
       </Show>
       <ImagePreview
-        id={props.attachment.attachmentId}
+        image={{ id: props.attachment.attachmentId }}
         variant="small"
         isDss={isDssImage(props.attachment)}
         onError={(e) => {

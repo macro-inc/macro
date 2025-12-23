@@ -594,7 +594,14 @@ export const Launcher = (props: LauncherProps) => {
         </Dialog.Overlay>
 
         <Dialog.Content>
-          <div class="fixed inset-0 z-modal w-screen h-screen flex items-center justify-center">
+          <div
+            class="fixed inset-0 z-modal w-screen h-screen flex items-center justify-center"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                props.onOpenChange(false);
+              }
+            }}
+          >
             <LauncherInner
               onClose={(shouldReturnFocus) =>
                 props.onOpenChange(false, shouldReturnFocus)

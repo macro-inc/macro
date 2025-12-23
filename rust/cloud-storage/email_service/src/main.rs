@@ -192,6 +192,7 @@ async fn main() -> anyhow::Result<()> {
     let redis_client = util::redis::RedisClient::new(
         redis_inner_client,
         config.redis_rate_limit_reqs,
+        config.redis_rate_limit_reqs_backfill,
         config.redis_rate_limit_window_secs,
     );
 
