@@ -129,7 +129,7 @@ pub async fn set_entity_property(
             }
 
             // Convert SetPropertyValue to PropertyValue (JSONB format)
-            convert_property_value_to_jsonb(value)
+            Some(models_properties::convert_set_property_value_to_property_value(value))
         }
         None => {
             tracing::debug!("no value provided, attaching property without value");
@@ -290,94 +290,6 @@ pub async fn set_entity_property(
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// Convert SetPropertyValue to PropertyValue for JSONB storage
-fn convert_property_value_to_jsonb(value: &SetPropertyValue) -> Option<PropertyValue> {
-    Some(match value {
-        // Single primitive values
-        SetPropertyValue::Boolean { value } => PropertyValue::Bool(*value),
-        SetPropertyValue::Date { value } => PropertyValue::Date(*value),
-        SetPropertyValue::Number { value } => PropertyValue::Num(*value),
-        SetPropertyValue::String { value } => PropertyValue::Str(value.clone()),
-
-        // Single select option
-        SetPropertyValue::SelectOption { option_id } => {
-            PropertyValue::SelectOption(vec![*option_id])
-        }
-
-        // Multi-select options
-        SetPropertyValue::MultiSelectOption { option_ids } => {
-            let original_count = option_ids.len();
-            let unique_ids: HashSet<Uuid> = option_ids.iter().copied().collect();
-
-            if unique_ids.len() < original_count {
-                tracing::warn!(
-                    original_count = original_count,
-                    unique_count = unique_ids.len(),
-                    "Duplicate option IDs detected in MultiSelectOption, deduplicating"
-                );
-            }
-
-            let ids: Vec<Uuid> = unique_ids.into_iter().collect();
-            PropertyValue::SelectOption(ids)
-        }
-
-        // Single entity reference
-        SetPropertyValue::EntityReference { reference } => {
-            PropertyValue::EntityRef(vec![EntityReference {
-                entity_type: reference.entity_type,
-                entity_id: reference.entity_id.clone(),
-                specific_message_id: reference.specific_message_id,
-            }])
-        }
-
-        // Multi-entity references
-        SetPropertyValue::MultiEntityReference { references } => {
-            let original_count = references.len();
-
-            let mut seen_ids: HashSet<String> = HashSet::new();
-            let unique_refs: Vec<EntityReference> = references
-                .iter()
-                .filter(|ref_| seen_ids.insert(ref_.entity_id.clone()))
-                .map(|ref_| EntityReference {
-                    entity_type: ref_.entity_type,
-                    entity_id: ref_.entity_id.clone(),
-                    specific_message_id: ref_.specific_message_id,
-                })
-                .collect();
-
-            if unique_refs.len() < original_count {
-                tracing::warn!(
-                    original_count = original_count,
-                    unique_count = unique_refs.len(),
-                    "Duplicate entity references detected in MultiEntityReference, deduplicating by entity_id"
-                );
-            }
-
-            PropertyValue::EntityRef(unique_refs)
-        }
-
-        // Single link
-        SetPropertyValue::Link { url } => PropertyValue::Link(vec![url.clone()]),
-
-        // Multi-link
-        SetPropertyValue::MultiLink { urls } => {
-            let original_count = urls.len();
-            let unique_urls: HashSet<String> = urls.iter().cloned().collect();
-
-            if unique_urls.len() < original_count {
-                tracing::warn!(
-                    original_count = original_count,
-                    unique_count = unique_urls.len(),
-                    "Duplicate URLs detected in MultiLink, deduplicating"
-                );
-            }
-
-            let links: Vec<String> = unique_urls.into_iter().collect();
-            PropertyValue::Link(links)
-        }
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -488,7 +400,11 @@ mod tests {
             ],
         };
 
-        let result = convert_property_value_to_jsonb(&multi_option_with_dupes).unwrap();
+        let result = Some(
+            models_properties::convert_set_property_value_to_property_value(
+                &multi_option_with_dupes,
+            ),
+        );
 
         // Should have only 3 unique values
         let PropertyValue::SelectOption(option_ids) = result else {
@@ -514,7 +430,8 @@ mod tests {
             option_ids: vec![option_id_1, option_id_2],
         };
 
-        let result = convert_property_value_to_jsonb(&multi_option).unwrap();
+        let result =
+            Some(models_properties::convert_set_property_value_to_property_value(&multi_option));
 
         // Should have 2 values
         let PropertyValue::SelectOption(option_ids) = result else {
@@ -544,7 +461,11 @@ mod tests {
             ],
         };
 
-        let result = convert_property_value_to_jsonb(&multi_entity_ref_with_dupes).unwrap();
+        let result = Some(
+            models_properties::convert_set_property_value_to_property_value(
+                &multi_entity_ref_with_dupes,
+            ),
+        );
 
         // Should have only 2 unique values (duplicates removed)
         let PropertyValue::EntityRef(entity_refs) = result else {
@@ -577,7 +498,9 @@ mod tests {
             references: vec![entity_ref_1, entity_ref_2],
         };
 
-        let result = convert_property_value_to_jsonb(&multi_entity_ref).unwrap();
+        let result = Some(
+            models_properties::convert_set_property_value_to_property_value(&multi_entity_ref),
+        );
 
         // Should have 1 value (considered duplicates, keeps first occurrence)
         let PropertyValue::EntityRef(entity_refs) = result else {
