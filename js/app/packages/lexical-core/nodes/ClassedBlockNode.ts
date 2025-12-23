@@ -21,6 +21,7 @@ const ALLOWED_TAGS = new Set<TagName>(['div', 'p', 'span', 'blockquote']);
 export type ClassedBlockData = {
   tag: TagName;
   classes: string[];
+  attributes?: Record<string, string>;
 };
 
 export type SerializedClassedBlockNode = Spread<
@@ -31,19 +32,44 @@ export type SerializedClassedBlockNode = Spread<
 export class ClassedBlockNode extends ElementNode {
   __tag: TagName;
   __classes: string[];
+  __attributes?: Record<string, string>;
+  hidden: boolean = false;
+
+  setHidden(value: boolean) {
+    const writable = this.getWritable();
+    writable.hidden = value;
+    return writable;
+  }
 
   static getType() {
     return 'classed-block';
   }
 
   static clone(node: ClassedBlockNode) {
-    return new ClassedBlockNode(node.__tag, node.__classes.slice(), node.__key);
+    return new ClassedBlockNode(
+      node.__tag,
+      node.__classes.slice(),
+      node.__attributes,
+      node.__key
+    );
   }
 
-  constructor(tag: TagName, classes: string[], key?: NodeKey) {
+  constructor(
+    tag: TagName,
+    classes: string[],
+    attributes?: Record<string, string>,
+    key?: NodeKey
+  ) {
     super(key);
     this.__tag = ALLOWED_TAGS.has(tag) ? tag : 'div';
     this.__classes = classes;
+    this.__attributes = attributes;
+  }
+
+  remove(preserveEmptyParent?: boolean) {
+    if (this.hidden) return;
+
+    super.remove(preserveEmptyParent);
   }
 
   isInline(): boolean {
@@ -73,6 +99,7 @@ export class ClassedBlockNode extends ElementNode {
       version: 1,
       tag: this.__tag,
       classes: this.__classes,
+      attributes: this.__attributes,
     };
   }
 
@@ -97,9 +124,21 @@ export class ClassedBlockNode extends ElementNode {
   }
 
   exportDOM(_editor: LexicalEditor): DOMExportOutput {
+    if (this.hidden)
+      return {
+        element: null,
+      };
+
     const element = document.createElement(this.__tag);
     element.setAttribute('data-classed-block', 'true');
     for (const c of this.__classes) element.classList.add(c);
+
+    const attrs = this.__attributes ?? {};
+
+    for (const attr in attrs) {
+      element.setAttribute(attr, attrs[attr]);
+    }
+
     return { element };
   }
 
@@ -107,6 +146,11 @@ export class ClassedBlockNode extends ElementNode {
     const el = document.createElement(this.__tag);
     el.setAttribute('data-classed-block', 'true');
     for (const c of this.__classes) el.classList.add(c);
+    const attrs = this.__attributes ?? {};
+
+    for (const attr in attrs) {
+      el.setAttribute(attr, attrs[attr]);
+    }
     return el;
   }
 
@@ -118,7 +162,11 @@ export class ClassedBlockNode extends ElementNode {
 export function $createClassedBlockNode(
   params: ClassedBlockData
 ): ClassedBlockNode {
-  const node = new ClassedBlockNode(params.tag, params.classes);
+  const node = new ClassedBlockNode(
+    params.tag,
+    params.classes,
+    params.attributes
+  );
   return $applyNodeReplacement(node);
 }
 
