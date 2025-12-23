@@ -107,6 +107,16 @@ export const sendMentions = (
   return storageServiceClient.upsertUserMentions(aggregatedMention);
 };
 
+const getCommentMentions = (mentionsSignal: Signal<UserMentionRecord[]>) => {
+    const [mentions, setMentions] = mentionsSignal;
+    const mentions_ = mentions();
+    setMentions([]);
+    return {
+      mentions: mentions_.flatMap((m) => m.mentions),
+      mention_id: mentions_[0].metadata.mention_id,
+    };
+};
+
 export function Thread(props: {
   comment: Root;
   layout: Layout;
@@ -227,6 +237,7 @@ export function Thread(props: {
                       .createComment({
                         threadId: props.comment.threadId,
                         text: content,
+                        mentions: getCommentMentions(mentionsSignal),
                       })
                       .then((response) => {
                         if (!response) return;
@@ -324,6 +335,7 @@ export function Thread(props: {
                       .createComment({
                         threadId: props.comment.threadId,
                         text: content,
+                        mentions: getCommentMentions(mentionsSignal),
                       })
                       .then((response) => {
                         if (!response) return;
