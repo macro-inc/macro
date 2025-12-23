@@ -106,7 +106,7 @@ r#"
             LEFT JOIN entity_properties ep_status 
                 ON dt.sub_type = 'task'
                 AND ep_status.entity_id = d.id 
-                AND ep_status.entity_type = 'DOCUMENT'
+                AND ep_status.entity_type = 'TASK'
                 AND ep_status.property_definition_id = '00000001-0000-0000-0000-000000000002'
             INNER JOIN UserAccessibleItems uai ON uai.item_id = d.id AND uai.item_type = 'document'
             -- This MUST be a LEFT JOIN to support all three sort methods
@@ -307,7 +307,7 @@ r#"
             LEFT JOIN entity_properties ep_status 
                 ON dt.sub_type = 'task'
                 AND ep_status.entity_id = d.id 
-                AND ep_status.entity_type = 'DOCUMENT'
+                AND ep_status.entity_type = 'TASK'
                 AND ep_status.property_definition_id = '00000001-0000-0000-0000-000000000002'
             INNER JOIN UserAccessibleItems uai ON uai.item_id = d.id AND uai.item_type = 'document'
             -- This MUST be a LEFT JOIN to support all three sort methods
