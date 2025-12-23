@@ -1,4 +1,3 @@
-import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
