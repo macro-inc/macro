@@ -11,8 +11,8 @@ use uuid::Uuid;
 
 use crate::domain::ports::ChannelsService;
 
-struct CommsRouterState<S> {
-    inner: Arc<S>,
+pub struct CommsRouterState<S> {
+    pub inner: Arc<S>,
 }
 
 impl<S> Clone for CommsRouterState<S> {
@@ -24,27 +24,30 @@ impl<S> Clone for CommsRouterState<S> {
 }
 
 impl<S: ChannelsService> CommsRouterState<S> {
-    fn new(s: S) -> Self {
+    pub fn new(s: S) -> Self {
         CommsRouterState { inner: Arc::new(s) }
     }
 }
 
-pub fn comms_router<S: ChannelsService, T: Send + Sync + 'static>(s: S) -> Router<T> {
+pub fn comms_router<S: ChannelsService, T: Send + Sync + 'static>(
+    s: CommsRouterState<S>,
+) -> Router<T> {
     Router::new()
         .route("/channels", get(get_channels_handler))
-        .with_state(CommsRouterState::new(s))
+        .route("/activity", get(get_activity_handler))
+        .with_state(s)
 }
 
 #[derive(Debug, Error)]
 pub enum CommsErr {
     #[error("Internal server error")]
-    Unknown,
+    Internal,
 }
 
 impl IntoResponse for CommsErr {
     fn into_response(self) -> axum::response::Response {
         let status = match self {
-            CommsErr::Unknown => StatusCode::INTERNAL_SERVER_ERROR,
+            CommsErr::Internal => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
         (status, self.to_string()).into_response()
@@ -57,7 +60,7 @@ impl IntoResponse for CommsErr {
     tag = "channels",
     operation_id = "get_channels",
     responses(
-        (status = 200, body=Vec<ChannelWithLatest>),
+        (status = 200, body=Vec<ApiChannelWithLatest>),
         (status = 401, body=String),
         (status = 404, body=String),
         (status = 500, body=String),
@@ -66,14 +69,37 @@ impl IntoResponse for CommsErr {
 async fn get_channels_handler<S: ChannelsService>(
     State(service): State<CommsRouterState<S>>,
     MacroUserExtractor { macro_user_id, .. }: MacroUserExtractor,
-) -> Result<Json<Vec<ChannelWithLatest>>, CommsErr> {
+) -> Result<Json<Vec<ApiChannelWithLatest>>, CommsErr> {
     let res = service
         .inner
         .get_channels(macro_user_id)
         .await
-        .map_err(|_| CommsErr::Unknown)?;
+        .map_err(|_| CommsErr::Internal)?;
 
-    Ok(Json(<Vec<ChannelWithLatest>>::mirror(res)))
+    Ok(Json(<Vec<ApiChannelWithLatest>>::mirror(res)))
+}
+
+#[tracing::instrument(skip(service))]
+#[utoipa::path(get,
+    tag = "activity",
+    operation_id = "get_activity",
+    path = "/activity", responses(
+    (status = 200, body=Vec<ApiActivity>),
+    (status = 401, body=String),
+    (status = 404, body=String),
+    (status = 500, body=String),
+))]
+pub async fn get_activity_handler<S: ChannelsService>(
+    State(service): State<CommsRouterState<S>>,
+    MacroUserExtractor { macro_user_id, .. }: MacroUserExtractor,
+) -> Result<Json<Vec<ApiActivity>>, CommsErr> {
+    let res = service
+        .inner
+        .get_activities(macro_user_id)
+        .await
+        .map_err(|_| CommsErr::Internal)?;
+
+    Ok(Json(<Vec<ApiActivity>>::mirror(res)))
 }
 
 #[derive(Debug, Clone, Copy, Serialize, ToSchema, Doppleganger)]
@@ -112,7 +138,7 @@ pub struct ChannelWithParticipants {
 
 #[derive(Debug, Clone, Serialize, ToSchema, Doppleganger)]
 #[dg(backward = models_comms::channel::ChannelWithLatest)]
-pub struct ChannelWithLatest {
+pub struct ApiChannelWithLatest {
     #[serde(flatten)]
     pub channel: ChannelWithParticipants,
     #[serde(flatten)]
@@ -173,4 +199,20 @@ pub struct ChannelMessage {
     pub deleted_at: Option<chrono::DateTime<chrono::Utc>>,
     /// message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`
     pub mentions: Vec<String>,
+}
+
+#[derive(Debug, ToSchema, Doppleganger, Serialize)]
+#[dg(backward = models_comms::channel::Activity)]
+pub struct ApiActivity {
+    pub id: Uuid,
+    pub user_id: String,
+    #[schema(value_type = Uuid)]
+    pub channel_id: ChannelId,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+    /// the last time the user viewed the channel
+    pub viewed_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// the last time the user intereacted with the channel
+    /// eg. reacting, replying, sending a message
+    pub interacted_at: Option<chrono::DateTime<chrono::Utc>>,
 }

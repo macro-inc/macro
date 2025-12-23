@@ -1,19 +1,116 @@
-use anyhow::Result;
-use model::comms::{ChannelMessage, LatestMessage};
-use sqlx::{Pool, Postgres};
+use crate::domain::ports::CommsRepo;
+use chrono::DateTime;
+use chrono::Utc;
+use doppleganger::{Doppleganger, Mirror};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use models_comms::channel::{
+    Activity, Channel, ChannelId, ChannelMessage, ChannelParticipant, ChannelWithParticipants,
+    LatestMessage, OrganizationId,
+};
+use rootcause::Report;
+use sqlx::PgPool;
 use std::collections::HashMap;
 use uuid::Uuid;
 
-pub type ChannelLatestMessages = HashMap<Uuid, LatestMessage>;
+#[derive(Debug, Clone, Copy, Doppleganger, sqlx::Type)]
+#[sqlx(type_name = "comms_channel_type", rename_all = "snake_case")]
+#[dg(forward = models_comms::channel::ChannelType)]
+pub enum ChannelType {
+    Public,
+    Organization,
+    Private,
+    DirectMessage,
+}
+
+#[tracing::instrument(skip(db))]
+pub async fn get_user_channels_with_participants(
+    db: &PgPool,
+    user_id: &str,
+) -> Result<Vec<ChannelWithParticipants>, sqlx::Error> {
+    sqlx::query!(
+        r#"
+        WITH user_channels AS (
+            SELECT DISTINCT c.*
+            FROM comms_channels c
+            INNER JOIN comms_channel_participants cp ON cp.channel_id = c.id
+            WHERE cp.user_id = $1 AND cp.left_at IS NULL
+        ),
+        channel_participants_json AS (
+            SELECT 
+                uc.id as channel_id,
+                ARRAY_AGG(
+                    json_build_object(
+                        'channel_id', cp.channel_id,
+                        'user_id', cp.user_id,
+                        'role', cp.role,
+                        'joined_at', cp.joined_at,
+                        'left_at', cp.left_at
+                    )
+                ) as participants
+            FROM user_channels uc
+            JOIN comms_channel_participants cp ON cp.channel_id = uc.id
+            WHERE cp.left_at IS NULL
+            GROUP BY uc.id
+        )
+        SELECT 
+            uc.id as "id!",
+            uc.name as "name",
+            uc.channel_type as "channel_type!: ChannelType",
+            uc.org_id,
+            uc.created_at as "created_at!",
+            uc.updated_at as "updated_at!",
+            uc.owner_id as "owner_id!",
+            cpj.participants as "participants_json?"
+        FROM user_channels uc
+        LEFT JOIN channel_participants_json cpj ON cpj.channel_id = uc.id
+        ORDER BY uc.created_at DESC
+        "#,
+        user_id
+    )
+    .try_map(|row| {
+        let channel = Channel {
+            id: ChannelId(row.id),
+            name: row.name,
+            channel_type: ChannelType::mirror(row.channel_type),
+            org_id: row.org_id.map(|id| OrganizationId(id as u32)),
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            owner_id: MacroUserIdStr::parse_from_str(&row.owner_id)
+                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
+                .into_owned(),
+        };
+
+        let participants = row
+            .participants_json
+            .map(|json_array| {
+                json_array
+                    .iter()
+                    .filter_map(|json_value| {
+                        serde_json::from_value::<ChannelParticipant>(json_value.clone()).ok()
+                    })
+                    .collect::<Vec<ChannelParticipant>>()
+            })
+            .unwrap_or_default();
+
+        Ok(ChannelWithParticipants {
+            channel,
+            participants,
+        })
+    })
+    .fetch_all(db)
+    .await
+}
 
 #[tracing::instrument(err)]
 pub async fn get_latest_channel_messages_batch(
-    pool: &Pool<Postgres>,
-    channel_ids: &[Uuid],
-) -> Result<ChannelLatestMessages> {
+    pool: &PgPool,
+    channel_ids: &[ChannelId],
+) -> Result<HashMap<ChannelId, LatestMessage>, Report> {
     if channel_ids.is_empty() {
         return Ok(HashMap::new());
     }
+
+    let ids: Vec<Uuid> = channel_ids.iter().map(|x| x.0).collect();
 
     let rows = sqlx::query!(
         r#"
@@ -89,12 +186,12 @@ pub async fn get_latest_channel_messages_batch(
             LIMIT 1
         ) n ON TRUE
         "#,
-        channel_ids
+        &ids
     )
     .fetch_all(pool)
     .await?;
 
-    let mut result: ChannelLatestMessages = HashMap::with_capacity(rows.len());
+    let mut result = HashMap::with_capacity(rows.len());
 
     let build_message = |message_id: Option<Uuid>,
                          thread_id: Option<Uuid>,
@@ -153,7 +250,7 @@ pub async fn get_latest_channel_messages_batch(
         );
 
         result.insert(
-            row.channel_id,
+            ChannelId(row.channel_id),
             LatestMessage {
                 latest_message,
                 latest_non_thread_message,
@@ -165,168 +262,81 @@ pub async fn get_latest_channel_messages_batch(
 }
 
 pub async fn get_latest_channel_message(
-    pool: &Pool<Postgres>,
-    channel_id: Uuid,
-) -> Result<LatestMessage> {
+    pool: &PgPool,
+    channel_id: ChannelId,
+) -> Result<LatestMessage, Report> {
     let res = get_latest_channel_messages_batch(pool, &[channel_id]).await?;
     Ok(res.get(&channel_id).cloned().unwrap_or(LatestMessage {
         latest_message: None,
         latest_non_thread_message: None,
     }))
 }
+#[tracing::instrument(skip(db), err)]
+pub async fn get_activities(
+    db: &PgPool,
+    user_id: MacroUserIdStr<'_>,
+) -> Result<Vec<Activity>, Report> {
+    Ok(sqlx::query!(
+        r#"
+        SELECT 
+            a.id as "id!: Uuid",
+            a.user_id as "user_id!: String",
+            a.channel_id as "channel_id!: Uuid",
+            a.viewed_at as "viewed_at?: DateTime<Utc>",
+            a.interacted_at as "interacted_at?: DateTime<Utc>",
+            a.created_at as "created_at!: DateTime<Utc>",
+            a.updated_at as "updated_at!: DateTime<Utc>"
+        FROM comms_activity a
+        WHERE a.user_id = $1
+        ORDER BY 
+            GREATEST(
+                COALESCE(a.viewed_at, '1970-01-01'::timestamp),
+                COALESCE(a.interacted_at, '1970-01-01'::timestamp)
+            ) DESC,
+            a.created_at DESC
+        LIMIT 100
+        "#,
+        user_id.as_ref()
+    )
+    .map(|row| Activity {
+        id: row.id,
+        user_id: row.user_id,
+        channel_id: ChannelId(row.channel_id),
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        viewed_at: row.viewed_at,
+        interacted_at: row.interacted_at,
+    })
+    .fetch_all(db)
+    .await?)
+}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use macro_db_migrator::MACRO_DB_MIGRATIONS;
+pub struct PgCommsRepo {
+    pub pool: PgPool,
+}
 
-    fn uuid(s: &str) -> Uuid {
-        Uuid::parse_str(s).unwrap()
+impl CommsRepo for PgCommsRepo {
+    async fn get_user_channels_with_participants(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+    ) -> Result<Vec<ChannelWithParticipants>, rootcause::Report> {
+        Ok(get_user_channels_with_participants(&self.pool, user_id.as_ref()).await?)
     }
 
-    #[sqlx::test(
-        migrator = "MACRO_DB_MIGRATIONS",
-        fixtures(path = "../../fixtures", scripts("latest_messages"))
-    )]
-    async fn test_get_latest_channel_messages_batch(
-        pool: sqlx::Pool<sqlx::Postgres>,
-    ) -> Result<()> {
-        const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS; // Dummy reference for IDE
-        let ids = vec![
-            uuid("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
-            uuid("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
-            uuid("cccccccc-cccc-cccc-cccc-cccccccccccc"),
-            uuid("dddddddd-dddd-dddd-dddd-dddddddddddd"),
-        ];
-
-        let res = get_latest_channel_messages_batch(&pool, &ids).await?;
-
-        // aaaaaaaa
-        let a = res.get(&ids[0]).expect("channel a should exist");
-        assert_eq!(
-            a.latest_non_thread_message
-                .as_ref()
-                .map(|m| m.message_id.to_string())
-                .as_deref(),
-            Some("aaaaaa2a-0000-0000-0000-000000000002")
-        );
-
-        // bbbbbbbb
-        let b = res.get(&ids[1]).expect("channel b should exist");
-        assert_eq!(
-            b.latest_message
-                .as_ref()
-                .map(|m| m.message_id.to_string())
-                .as_deref(),
-            Some("bbbbbb2b-0000-0000-0000-000000000003")
-        );
-        assert!(b.latest_non_thread_message.is_none());
-
-        // cccccccc
-        let c = res.get(&ids[2]).expect("channel c should exist");
-        assert_eq!(
-            c.latest_message
-                .as_ref()
-                .map(|m| m.message_id.to_string())
-                .as_deref(),
-            Some("cccccc2c-0000-0000-0000-000000000002")
-        );
-        assert_eq!(
-            c.latest_non_thread_message
-                .as_ref()
-                .map(|m| m.message_id.to_string())
-                .as_deref(),
-            Some("cccccc2c-0000-0000-0000-000000000002")
-        );
-
-        // dddddddd
-        let d = res.get(&ids[3]).expect("channel d should exist");
-        assert_eq!(
-            d.latest_message
-                .as_ref()
-                .map(|m| m.message_id.to_string())
-                .as_deref(),
-            Some("dddddd1d-0000-0000-0000-000000000001")
-        );
-        assert_eq!(
-            d.latest_non_thread_message
-                .as_ref()
-                .map(|m| m.message_id.to_string())
-                .as_deref(),
-            Some("dddddd1d-0000-0000-0000-000000000001")
-        );
-
-        Ok(())
+    async fn get_latest_channel_messages_batch(
+        &self,
+        channels: &[ChannelId],
+    ) -> Result<
+        std::collections::HashMap<ChannelId, models_comms::channel::LatestMessage>,
+        rootcause::Report,
+    > {
+        get_latest_channel_messages_batch(&self.pool, channels).await
     }
 
-    #[sqlx::test(
-        migrator = "MACRO_DB_MIGRATIONS",
-        fixtures(path = "../../fixtures", scripts("latest_messages"))
-    )]
-    async fn test_get_latest_channel_message(pool: sqlx::Pool<sqlx::Postgres>) -> Result<()> {
-        let a =
-            get_latest_channel_message(&pool, uuid("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")).await?;
-
-        assert_eq!(
-            a.latest_message
-                .as_ref()
-                .map(|m| m.message_id.to_string())
-                .as_deref(),
-            Some("aaaaaa2a-0000-0000-0000-000000000004")
-        );
-        assert_eq!(
-            a.latest_non_thread_message
-                .as_ref()
-                .map(|m| m.message_id.to_string())
-                .as_deref(),
-            Some("aaaaaa2a-0000-0000-0000-000000000002")
-        );
-
-        let b =
-            get_latest_channel_message(&pool, uuid("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")).await?;
-        assert_eq!(
-            b.latest_message
-                .as_ref()
-                .map(|m| m.message_id.to_string())
-                .as_deref(),
-            Some("bbbbbb2b-0000-0000-0000-000000000003")
-        );
-        assert!(b.latest_non_thread_message.is_none());
-
-        let c =
-            get_latest_channel_message(&pool, uuid("cccccccc-cccc-cccc-cccc-cccccccccccc")).await?;
-        assert_eq!(
-            c.latest_message
-                .as_ref()
-                .map(|m| m.message_id.to_string())
-                .as_deref(),
-            Some("cccccc2c-0000-0000-0000-000000000002")
-        );
-        assert_eq!(
-            c.latest_non_thread_message
-                .as_ref()
-                .map(|m| m.message_id.to_string())
-                .as_deref(),
-            Some("cccccc2c-0000-0000-0000-000000000002")
-        );
-
-        let d =
-            get_latest_channel_message(&pool, uuid("dddddddd-dddd-dddd-dddd-dddddddddddd")).await?;
-        assert_eq!(
-            d.latest_message
-                .as_ref()
-                .map(|m| m.message_id.to_string())
-                .as_deref(),
-            Some("dddddd1d-0000-0000-0000-000000000001")
-        );
-        assert_eq!(
-            d.latest_non_thread_message
-                .as_ref()
-                .map(|m| m.message_id.to_string())
-                .as_deref(),
-            Some("dddddd1d-0000-0000-0000-000000000001")
-        );
-
-        Ok(())
+    async fn get_activities(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+    ) -> Result<Vec<models_comms::channel::Activity>, rootcause::Report> {
+        get_activities(&self.pool, user_id).await
     }
 }

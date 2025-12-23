@@ -1,5 +1,10 @@
 use crate::api::context::{AppState, DocumentPermissionJwtSecretKey};
 use anyhow::Context;
+use comms::{
+    domain::service::ChannelServiceImpl,
+    inbound::CommsRouterState,
+    outbound::{http::user_repo::UserRepoImpl, postgres::comms_repo::PgCommsRepo},
+};
 use config::{Config, Environment};
 use connection_gateway_client::ConnectionGatewayClient;
 use frecency::outbound::postgres::FrecencyPgStorage;
@@ -105,8 +110,8 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let auth_service_client = authentication_service_client::AuthServiceClient::new(
-        auth_service_secret_key,
-        config.auth_service_url.clone(),
+        auth_service_secret_key.clone(),
+        config.auth_service_url.to_string(),
     );
 
     let permissions_token_secret = secretsmanager_client
@@ -132,6 +137,8 @@ async fn main() -> anyhow::Result<()> {
         &config.port
     );
 
+    let frecency_storage = FrecencyPgStorage::new(macro_db.clone());
+
     let service = api::service(AppState {
         jwt_validation_args,
         internal_auth_key: secretsmanager_client::LocalOrRemoteSecret::Local(
@@ -145,7 +152,12 @@ async fn main() -> anyhow::Result<()> {
         auth_service_client: Arc::new(auth_service_client),
         connection_gateway_client: Arc::new(connection_gateway_client),
         permissions_token_secret,
-        frecency_storage: FrecencyPgStorage::new(macro_db),
+        comms_state: CommsRouterState::new(ChannelServiceImpl::new(
+            PgCommsRepo { pool: macro_db },
+            UserRepoImpl::new(auth_service_secret_key, config.auth_service_url.clone()),
+            frecency_storage.clone(),
+        )),
+        frecency_storage,
     });
 
     axum::serve(listener, service)

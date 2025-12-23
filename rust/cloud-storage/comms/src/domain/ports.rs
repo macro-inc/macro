@@ -26,9 +26,9 @@ pub trait CommsRepo: Send + Sync + 'static {
 }
 
 pub trait UserRepo: Send + Sync + 'static {
-    fn get_names_from_channels(
+    fn get_names_for_ids(
         &self,
-        channels: HashSet<MacroUserIdStr<'_>>,
+        names: HashSet<MacroUserIdStr<'_>>,
     ) -> impl Future<Output = Result<Vec<UserName>, Report>> + Send;
 }
 
@@ -37,4 +37,14 @@ pub trait ChannelsService: Send + Sync + 'static {
         &self,
         user: MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Vec<ChannelWithLatest>, Report>> + Send;
+
+    fn get_activities(
+        &self,
+        user: MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Vec<Activity>, Report>> + Send;
+
+    fn get_names(
+        &self,
+        names: HashSet<MacroUserIdStr<'_>>,
+    ) -> impl Future<Output = Result<Vec<UserName>, Report>> + Send;
 }

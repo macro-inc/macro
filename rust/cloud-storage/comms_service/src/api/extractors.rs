@@ -1,12 +1,14 @@
-use authentication_service_client::AuthServiceClient;
 use axum::{
-    Extension, RequestPartsExt, async_trait,
+    RequestPartsExt, async_trait,
     extract::{FromRef, FromRequestParts, Path},
     http::{StatusCode, request::Parts},
     response::{IntoResponse, Response},
 };
 use axum_extra::extract::Cached;
-use comms::domain::models::channel_name::resolve_channel_name;
+use comms::{
+    domain::{models::channel_name::resolve_channel_name, ports::ChannelsService},
+    inbound::CommsRouterState,
+};
 use comms_db_client::{
     channels::get_channel_info::{ChannelInfo, get_channel_info},
     messages::get_message_owner::get_message_owner,
@@ -21,12 +23,21 @@ use model::{
 use models_comms::ChannelType;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    marker::PhantomData,
+};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct ChannelName(pub String);
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ChannelName<T>(pub String, pub PhantomData<T>);
+
+impl<T> Clone for ChannelName<T> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), PhantomData)
+    }
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ChannelId(pub Uuid);
@@ -60,13 +71,6 @@ pub async fn extract_path_uuid_by_name(parts: &mut Parts, name: &str) -> Result<
         tracing::error!("Failed to parse {} as UUID: {}", name, err);
         (StatusCode::BAD_REQUEST, format!("Invalid {} format", name)).into_response()
     })
-}
-
-async fn extract_user_context(parts: &mut Parts) -> Result<UserContext, Response> {
-    Extension::<UserContext>::from_request_parts(parts, &())
-        .await
-        .map(|Extension(ctx)| ctx)
-        .map_err(|_| unauthorized("Missing user context"))
 }
 
 async fn extract_cached<T, S>(parts: &mut Parts, state: &S) -> Result<T, Response>
@@ -155,16 +159,16 @@ where
 }
 
 #[async_trait]
-impl<S> FromRequestParts<S> for ChannelName
+impl<S, U> FromRequestParts<S> for ChannelName<U>
 where
     S: Send + Sync,
     PgPool: FromRef<S>,
-    Arc<AuthServiceClient>: FromRef<S>,
+    CommsRouterState<U>: FromRef<S>,
+    U: ChannelsService,
 {
     type Rejection = Response;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let auth_service_client = <Arc<AuthServiceClient>>::from_ref(state);
         let ChannelId(channel_id) = extract_cached::<ChannelId, _>(parts, state).await?;
         let ChannelTypeExtractor(channel_type) =
             extract_cached::<ChannelTypeExtractor, _>(parts, state).await?;
@@ -178,24 +182,18 @@ where
 
         let user_ids = participants
             .iter()
-            .map(|p| p.user_id.to_string())
-            .collect::<Vec<String>>();
+            .map(|p| p.user_id.copied())
+            .collect::<HashSet<_>>();
 
-        let name_lookup = auth_service_client
+        let service = <CommsRouterState<U>>::from_ref(state);
+        let name_lookup = service
+            .inner
             .get_names(user_ids)
             .await
             .ok()
             .map(|names| {
                 names
-                    .names
                     .into_iter()
-                    .filter_map(|n| {
-                        Some(comms::domain::models::UserName {
-                            id: MacroUserIdStr::parse_from_str(&n.id).ok()?.into_owned(),
-                            first_name: n.first_name,
-                            last_name: n.last_name,
-                        })
-                    })
                     .filter_map(|n| {
                         let display = n.display_name()?;
                         Some((n.id, display))
@@ -213,7 +211,7 @@ where
             &name_lookup,
         );
 
-        return Ok(ChannelName(channel_name));
+        return Ok(ChannelName(channel_name, PhantomData));
     }
 }
 
@@ -453,6 +451,7 @@ where
 }
 
 #[derive(Clone, Debug)]
+#[expect(dead_code)]
 pub enum MessageSenderOrAdmin {
     MessageSender(MessageSender),
     ChannelAdmin(ChannelAdmin),

@@ -1,5 +1,5 @@
 use crate::api::channels::create_channel::to_lowercase;
-use crate::api::context::AppState;
+use crate::api::context::{AppState, ChannelImpl};
 use crate::api::extractors::{
     ChannelAdmin, ChannelId, ChannelName, ChannelParticipants, ChannelTypeExtractor,
 };
@@ -41,10 +41,11 @@ pub struct AddParticipantsRequest {
     )
 )]
 #[tracing::instrument(skip(ctx, channel_participants))]
+#[axum::debug_handler]
 pub async fn handler(
     State(ctx): State<AppState>,
     Cached(ChannelAdmin(channel_admin)): Cached<ChannelAdmin>,
-    Cached(ChannelName(channel_name)): Cached<ChannelName>,
+    Cached(ChannelName(channel_name, ..)): Cached<ChannelName<ChannelImpl>>,
     Cached(ChannelTypeExtractor(channel_type)): Cached<ChannelTypeExtractor>,
     Cached(ChannelParticipants(channel_participants)): Cached<ChannelParticipants>,
     Cached(ChannelId(channel_id)): Cached<ChannelId>,

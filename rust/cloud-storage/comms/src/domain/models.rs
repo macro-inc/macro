@@ -1,6 +1,6 @@
 use macro_user_id::user_id::MacroUserIdStr;
-use models_comms::channel::ChannelWithParticipants;
 pub use models_comms::*;
+use serde::Deserialize;
 use uuid::Uuid;
 
 pub mod channel_name;
@@ -11,6 +11,7 @@ pub struct ChannelPreviewsRequest<'a> {
     pub organization_id: Option<channel::OrganizationId>,
 }
 
+#[derive(Debug, Deserialize)]
 pub struct UserName {
     pub id: MacroUserIdStr<'static>,
     pub first_name: Option<String>,

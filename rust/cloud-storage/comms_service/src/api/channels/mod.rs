@@ -31,10 +31,6 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/", post(create_channel::create_channel_handler))
         .route(
-            "/",
-            get(get_channels::get_channels_handler).layer(CompressionLayer::new()),
-        )
-        .route(
             "/:channel_id",
             get(get_channel::get_channel_handler).layer(compose_layers![CompressionLayer::new(),]),
         )
