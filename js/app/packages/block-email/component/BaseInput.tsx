@@ -560,7 +560,7 @@ export function BaseInput(props: {
       attachComposeHotkeys(composeContainerRef);
 
       registerHotkey({
-        hotkey: 'shift+cmd+enter',
+        hotkey: 'cmd+enter',
         scopeId: composeHotkeyScope,
         description: 'Send email',
         keyDownHandler: () => {
@@ -573,7 +573,7 @@ export function BaseInput(props: {
       });
 
       registerHotkey({
-        hotkey: 'cmd+enter',
+        hotkey: 'shift+cmd+enter',
         scopeId: composeHotkeyScope,
         description: 'Send and mark done',
         keyDownHandler: () => {
