@@ -15,12 +15,12 @@ pub enum ChannelType {
 }
 
 impl ChannelType {
-    pub fn to_model_comms(self) -> models_comms::ChannelType {
+    pub fn to_model_comms(self) -> models_comms::channel::ChannelType {
         match self {
-            ChannelType::Public => models_comms::ChannelType::Public,
-            ChannelType::Organization => models_comms::ChannelType::Organization,
-            ChannelType::Private => models_comms::ChannelType::Private,
-            ChannelType::DirectMessage => models_comms::ChannelType::DirectMessage,
+            ChannelType::Public => models_comms::channel::ChannelType::Public,
+            ChannelType::Organization => models_comms::channel::ChannelType::Organization,
+            ChannelType::Private => models_comms::channel::ChannelType::Private,
+            ChannelType::DirectMessage => models_comms::channel::ChannelType::DirectMessage,
         }
     }
 }

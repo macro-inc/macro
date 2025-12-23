@@ -1,8 +1,7 @@
 use ai_format::{Indent, InsightContextLog};
 use anyhow::Error;
 use comms_service_client::CommsServiceClient;
-use doppleganger::Mirror;
-use models_comms::ChannelMetadata;
+use models_comms::channel::ChannelMetadata;
 use std::fmt::Debug;
 use std::sync::Arc;
 use uuid::Uuid;

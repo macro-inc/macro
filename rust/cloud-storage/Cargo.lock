@@ -5693,6 +5693,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "comms",
  "document_sub_type",
  "doppleganger",
  "email",

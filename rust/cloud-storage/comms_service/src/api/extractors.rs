@@ -20,7 +20,7 @@ use model::{
     comms::ParticipantRole,
     user::{UserContext, axum_extractor::MacroUserExtractor},
 };
-use models_comms::ChannelType;
+use models_comms::channel::ChannelType;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use std::{

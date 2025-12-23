@@ -1,8 +1,5 @@
 use macro_user_id::{cowlike::CowLike, email::ReadEmailParts, user_id::MacroUserIdStr};
-use models_comms::{
-    ChannelType,
-    channel::{ChannelId, ChannelParticipant},
-};
+use models_comms::channel::{ChannelId, ChannelParticipant, ChannelType};
 use std::collections::HashMap;
 use uuid::Uuid;
 

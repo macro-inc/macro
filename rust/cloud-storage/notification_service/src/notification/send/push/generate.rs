@@ -8,7 +8,6 @@ use model_notifications::{
     ChannelInviteMetadata, ChannelMentionMetadata, ChannelMessageSendMetadata,
     ChannelReplyMetadata, DocumentMentionMetadata, TaskAssignedMetadata,
 };
-use models_comms::ChannelType;
 use sns_client::{APNSPushNotification, Aps};
 use std::str::FromStr;
 use thiserror::Error;

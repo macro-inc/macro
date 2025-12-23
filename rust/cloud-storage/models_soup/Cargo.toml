@@ -11,6 +11,8 @@ schema = ["dep:utoipa"]
 [dependencies]
 anyhow = { workspace = true }
 chrono = { workspace = true }
+comms = { path = "../comms" }
+document_sub_type = { path = "../document_sub_type" }
 doppleganger = { workspace = true, features = ["chrono", "uuid"] }
 email = { path = "../email" }
 macro_user_id = { path = "../macro_user_id" }
@@ -20,4 +22,3 @@ serde = { workspace = true }
 strum = { workspace = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
-document_sub_type = { path = "../document_sub_type" }

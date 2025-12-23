@@ -5,6 +5,8 @@ version = "0.1.0"
 
 [features]
 inbound = ["dep:axum", "dep:model_user", "dep:reqwest", "dep:utoipa"]
+outbound = ["dep:reqwest"]
+
 
 [dependencies]
 axum = { workspace = true, optional = true }

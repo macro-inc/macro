@@ -69,10 +69,14 @@ pub async fn get_channel_name_and_type(
 
     let channel_name = resolve_channel_name(
         &match channel.channel_type {
-            model::comms::ChannelType::Public => models_comms::ChannelType::Public,
-            model::comms::ChannelType::Organization => models_comms::ChannelType::Organization,
-            model::comms::ChannelType::Private => models_comms::ChannelType::Private,
-            model::comms::ChannelType::DirectMessage => models_comms::ChannelType::DirectMessage,
+            model::comms::ChannelType::Public => models_comms::channel::ChannelType::Public,
+            model::comms::ChannelType::Organization => {
+                models_comms::channel::ChannelType::Organization
+            }
+            model::comms::ChannelType::Private => models_comms::channel::ChannelType::Private,
+            model::comms::ChannelType::DirectMessage => {
+                models_comms::channel::ChannelType::DirectMessage
+            }
         },
         channel.name.as_deref(),
         &participants,
