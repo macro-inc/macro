@@ -49,6 +49,8 @@ import type {
 import type { EntityClickEvent, EntityClickHandler } from './Entity';
 import { PropertyPills } from './PropertyPills';
 
+export const ENTITY_HEIGHT = 40;
+
 function UnreadIndicator(props: { active?: boolean }) {
   return (
     <div class="flex size-4 items-center justify-center">
@@ -808,6 +810,9 @@ export function EntityWithEverything(
       use:droppable
       data-checked={props.checked}
       class="everything-entity relative group/entity hover:bg-hover/30"
+      style={{
+        'min-height': `${ENTITY_HEIGHT}px`,
+      }}
       classList={{
         'outline outline-accent/20 outline-offset-[-1px]':
           !isTouchDevice && props.selected && !props.checked,

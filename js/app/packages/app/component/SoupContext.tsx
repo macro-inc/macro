@@ -13,6 +13,7 @@ import { isInteractiveElement } from '@core/util/isInteractiveElement';
 import { filterMap } from '@core/util/list';
 import { isErr } from '@core/util/maybeResult';
 import { getScrollParent } from '@core/util/scrollParent';
+import { scrollToKeepGap } from '@core/util/scrollToKeepGap';
 import { waitForFrames } from '@core/util/sleep';
 import { type EntityData, isTaskEntity } from '@macro-entity';
 import { entityHasUnreadNotifications } from '@notifications';
@@ -45,6 +46,7 @@ import {
   type SetStoreFunction,
   type Store,
 } from 'solid-js/store';
+import { ENTITY_HEIGHT } from '../../macro-entity/src/components/EntityWithEverything';
 import { useUserId } from '../../macro-entity/src/queries/auth';
 import { createBulkCopyDssEntityMutation } from '../../macro-entity/src/queries/dss';
 import { playSound } from '../util/sound';
@@ -964,6 +966,7 @@ export function createNavigationEntityListShortcut({
           container: scrollParent,
           target: newSelectedEntityEl.parentElement!,
           align: axis === 'start' ? 'top' : 'bottom',
+          gap: ENTITY_HEIGHT,
         });
       }
 
@@ -1460,61 +1463,6 @@ const useAllViews = ({
 
   return [viewsData, setViewsData] as const;
 };
-
-type AlignMode = 'top' | 'bottom';
-
-/**
- * Conditionally scrolls the container to align the target element
- * near either the container's top or bottom based on the align parameter.
- *
- * @param container - The scrollable container
- * @param target - The element to bring into view
- * @param threshold - Distance from the viewport edge within which to trigger scroll
- * @param gap - Desired distance from the aligned edge after scrolling
- * @param align - "top" or "bottom" (default: "bottom")
- */
-export function scrollToKeepGap({
-  container,
-  target,
-  threshold,
-  gap,
-  align = 'bottom',
-}: {
-  container: Element;
-  target: Element;
-  threshold?: number; // px distance from edge to trigger scroll
-  gap?: number; // px distance from edge after scrolling
-  align?: AlignMode; // "top" | "bottom"
-}) {
-  const containerRect = container.getBoundingClientRect();
-  const targetRect = target.getBoundingClientRect();
-
-  // Relative positions (in container scroll coordinates)
-  const targetTop = targetRect.top - containerRect.top + container.scrollTop;
-  const targetBottom =
-    targetRect.bottom - containerRect.top + container.scrollTop;
-
-  gap = targetRect.height ?? 50;
-  threshold = targetRect.height ?? 50;
-
-  if (align === 'bottom') {
-    const containerBottom = container.scrollTop + container.clientHeight;
-    const distanceToBottom = containerBottom - targetBottom;
-
-    if (distanceToBottom <= threshold) {
-      const newScrollTop = targetBottom - container.clientHeight + gap;
-      container.scrollTo({ top: newScrollTop, behavior: 'auto' });
-    }
-  } else {
-    // align = "top"
-    const distanceToTop = targetTop - container.scrollTop;
-
-    if (distanceToTop <= threshold) {
-      const newScrollTop = targetTop - gap;
-      container.scrollTo({ top: newScrollTop, behavior: 'auto' });
-    }
-  }
-}
 
 let globalKeyboardEvent: KeyboardEvent | undefined;
 
