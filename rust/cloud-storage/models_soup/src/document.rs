@@ -67,7 +67,8 @@ pub struct SoupDocument {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sub_type: Option<DocumentSubType>,
 
-    /// Whether the task is completed (only relevant when sub_type is 'task').
-    /// True if the Status property is set to "Completed", false otherwise.
-    pub is_completed: bool,
+    /// Whether the task is completed (only present when sub_type is 'task').
+    /// True if the Status property is set to "Completed".
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_completed: Option<bool>,
 }

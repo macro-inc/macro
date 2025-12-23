@@ -95,9 +95,10 @@ pub struct BasicDocument {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sub_type: Option<DocumentSubType>,
 
-    /// Whether the task is completed (only relevant when sub_type is 'task').
-    /// True if the Status property is set to "Completed", false otherwise.
-    pub is_completed: bool,
+    /// Whether the task is completed (only present when sub_type is 'task').
+    /// True if the Status property is set to "Completed".
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_completed: Option<bool>,
 }
 
 #[derive(sqlx::FromRow, serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
@@ -339,9 +340,10 @@ pub struct DocumentPreviewData {
     /// The sub type of the document if present.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sub_type: Option<DocumentSubType>,
-    /// Whether the task is completed (only relevant when sub_type is 'task').
-    /// True if the Status property is set to "Completed", false otherwise.
-    pub is_completed: bool,
+    /// Whether the task is completed (only present when sub_type is 'task').
+    /// True if the Status property is set to "Completed".
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_completed: Option<bool>,
 }
 
 #[derive(
