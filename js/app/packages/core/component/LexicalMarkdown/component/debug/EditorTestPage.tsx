@@ -1,6 +1,5 @@
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import { StaticSplitLabel } from '@app/component/split-layout/components/SplitLabel';
-import { Bar } from '@core/component/TopBar/Bar';
 import { buildMentionMarkdownString } from '@lexical-core/utils/mentions';
 import type { LexicalEditor } from 'lexical';
 import {

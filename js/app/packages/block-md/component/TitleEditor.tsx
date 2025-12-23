@@ -39,7 +39,6 @@ import {
   createMemo,
   createSignal,
   onCleanup,
-  onMount,
   Show,
   untrack,
 } from 'solid-js';
@@ -147,8 +146,6 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
     const name = state();
     if (canEdit()) renameMarkdownDocument(name);
   }, 500);
-
-  let mountRef!: HTMLDivElement;
 
   const [state, setState] = createSignal('');
   const [initialized, setInitialized] = createSignal(false);
