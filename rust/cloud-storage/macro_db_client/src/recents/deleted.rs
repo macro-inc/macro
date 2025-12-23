@@ -26,9 +26,22 @@ pub async fn get_recently_deleted(
             d."deletedAt"::timestamptz as "deleted_at",
             d."projectId" as "project_id",
             NULL as "is_persistent",
-            dt.sub_type as "sub_type?: DocumentSubType"
+            dt.sub_type as "sub_type?: DocumentSubType",
+            CASE 
+                WHEN dt.sub_type = 'task' 
+                    AND ep_status.values->'value' ? '00000001-0000-0000-0002-000000000004'
+                THEN true 
+                WHEN dt.sub_type = 'task'
+                THEN false
+                ELSE NULL 
+            END as "is_completed"
         FROM "Document" d
         LEFT JOIN document_sub_type dt ON dt.document_id = d.id
+        LEFT JOIN entity_properties ep_status 
+            ON dt.sub_type = 'task'
+            AND ep_status.entity_id = d.id 
+            AND ep_status.entity_type = 'TASK'
+            AND ep_status.property_definition_id = '00000001-0000-0000-0000-000000000002'
         LEFT JOIN LATERAL (
             SELECT
                 b.id
@@ -65,7 +78,8 @@ pub async fn get_recently_deleted(
             c."deletedAt"::timestamptz as "deleted_at",
             c."projectId" as "project_id",
             c."isPersistent" as "is_persistent",
-            NULL as "sub_type"
+            NULL as "sub_type",
+            NULL as "is_completed"
         FROM "Chat" c
         WHERE c."userId" = $1 AND c."deletedAt" IS NOT NULL
         UNION ALL
@@ -81,7 +95,8 @@ pub async fn get_recently_deleted(
             p."deletedAt"::timestamptz as "deleted_at",
             p."parentId" as "project_id",
             NULL as "is_persistent",
-            NULL as "sub_type"
+            NULL as "sub_type",
+            NULL as "is_completed"
         FROM "Project" p
         WHERE p."userId" = $1 AND p."deletedAt" IS NOT NULL
     ORDER BY deleted_at DESC
@@ -105,6 +120,7 @@ pub async fn get_recently_deleted(
                 None, // don't care about branched_from_version_id
                 r.project_id,
                 r.sub_type,
+                r.is_completed,
             )
             .map_err(|e| sqlx::Error::TypeNotFound {
                 type_name: e.to_string(),

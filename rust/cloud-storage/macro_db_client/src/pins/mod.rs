@@ -81,9 +81,22 @@ pub async fn get_pins(db: Pool<Postgres>, user_id: &str) -> anyhow::Result<Vec<P
             di.sha as "sha",
             NULL as "is_persistent",
             dt.sub_type as "sub_type?: DocumentSubType",
-            pi.pin_index as "pin_index"
+            pi.pin_index as "pin_index",
+            CASE 
+                WHEN dt.sub_type = 'task' 
+                    AND ep_status.values->'value' ? '00000001-0000-0000-0002-000000000004'
+                THEN true 
+                WHEN dt.sub_type = 'task'
+                THEN false
+                ELSE NULL 
+            END as "is_completed"
         FROM "Document" d
         LEFT JOIN document_sub_type dt ON dt.document_id = d.id
+        LEFT JOIN entity_properties ep_status 
+            ON dt.sub_type = 'task'
+            AND ep_status.entity_id = d.id 
+            AND ep_status.entity_type = 'TASK'
+            AND ep_status.property_definition_id = '00000001-0000-0000-0000-000000000002'
         INNER JOIN PinnedItems pi ON pi.pin_item_id = d.id AND pi.pin_item_type = 'document'
         LEFT JOIN LATERAL (
             SELECT
@@ -128,7 +141,8 @@ pub async fn get_pins(db: Pool<Postgres>, user_id: &str) -> anyhow::Result<Vec<P
             NULL as "sha",
             c."isPersistent" as "is_persistent",
             NULL as sub_type,
-            pi.pin_index as "pin_index"
+            pi.pin_index as "pin_index",
+            NULL as "is_completed"
         FROM "Chat" c
         INNER JOIN PinnedItems pi ON pi.pin_item_id = c.id AND pi.pin_item_type = 'chat'
         UNION ALL
@@ -148,7 +162,8 @@ pub async fn get_pins(db: Pool<Postgres>, user_id: &str) -> anyhow::Result<Vec<P
             NULL as "sha",
             NULL as "is_persistent",
             NULL as sub_type,
-            pi.pin_index as "pin_index"
+            pi.pin_index as "pin_index",
+            NULL as "is_completed"
         FROM "Project" p
         INNER JOIN PinnedItems pi ON pi.pin_item_id = p.id AND pi.pin_item_type = 'project'
     )
@@ -180,6 +195,7 @@ pub async fn get_pins(db: Pool<Postgres>, user_id: &str) -> anyhow::Result<Vec<P
                     r.branched_from_version_id,
                     r.project_id,
                     r.sub_type,
+                    r.is_completed,
                 )
                 .map_err(|e| sqlx::Error::TypeNotFound {
                     type_name: e.to_string(),
