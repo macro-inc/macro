@@ -563,7 +563,9 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
                     'opacity-100':
                       isMobileWidth() || isTouchDevice() || isToolbarVisible(),
                     'opacity-0 pointer-events-none':
-                      !isMobileWidth() && !isTouchDevice() && !isToolbarVisible(),
+                      !isMobileWidth() &&
+                      !isTouchDevice() &&
+                      !isToolbarVisible(),
                   }}
                   style={{ 'z-index': stackingContext.zModal + 1 }}
                   onClick={navigatePrevious}
@@ -580,7 +582,9 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
                     'opacity-100':
                       isMobileWidth() || isTouchDevice() || isToolbarVisible(),
                     'opacity-0 pointer-events-none':
-                      !isMobileWidth() && !isTouchDevice() && !isToolbarVisible(),
+                      !isMobileWidth() &&
+                      !isTouchDevice() &&
+                      !isToolbarVisible(),
                   }}
                   style={{ 'z-index': stackingContext.zModal + 1 }}
                   onClick={navigateNext}

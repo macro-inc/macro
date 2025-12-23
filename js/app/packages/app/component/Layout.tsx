@@ -3,6 +3,7 @@ import { useIsAuthenticated } from '@core/auth';
 import { Resize } from '@core/component/Resize';
 import { useABTest } from '@core/constant/ABTest';
 import { usePaywallState } from '@core/constant/PaywallState';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import {
   LAYOUT_CONTEXT_ID,
@@ -19,6 +20,7 @@ import { Dock } from './dock/Dock';
 import GlobalShortcuts from './GlobalHotkeys';
 import { ItemDndProvider } from './ItemDragAndDrop';
 import { createMenuOpen, Launcher, setCreateMenuOpen } from './Launcher';
+import { MobileDock } from './mobile/MobileDock';
 import { Paywall } from './paywall/Paywall';
 import { QuickCreateMenu } from './QuickCreateMenu';
 import { RightbarWrapper } from './rightbar/Rightbar';
@@ -142,7 +144,7 @@ export function Layout(props: RouteSectionProps) {
       <Show when={paywallOpen()}>
         <Paywall />
       </Show>
-      <div class="p-[var(--gutter-size)] grow-1">
+      <div class="p-[var(--gutter-size)] ios:p-0 grow-1">
         <Resize.Zone
           gutter={8}
           direction="horizontal"
@@ -159,7 +161,9 @@ export function Layout(props: RouteSectionProps) {
         </Resize.Zone>
       </div>
       <Show when={isAuthenticated() && !AUTH_URLS.includes(location.pathname)}>
-        <Dock />
+        <Show when={!isNativeMobilePlatform()} fallback={<MobileDock />}>
+          <Dock />
+        </Show>
         <Launcher open={createMenuOpen()} onOpenChange={setCreateMenuOpen} />
       </Show>
     </div>
