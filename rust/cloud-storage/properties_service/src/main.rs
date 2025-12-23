@@ -68,8 +68,11 @@ async fn main() -> anyhow::Result<()> {
 
     // Initialize properties service
     let properties_repository = properties::PropertiesPgRepo::new(db.clone());
+    let permission_checker =
+        properties::PermissionCheckerImpl::new(db.clone(), comms_service_client.clone());
     let properties_service = Arc::new(properties::PropertiesServiceImpl::new(
         properties_repository,
+        permission_checker,
     ));
     tracing::info!("initialized properties service");
 
