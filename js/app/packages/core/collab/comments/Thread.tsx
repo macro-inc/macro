@@ -293,7 +293,7 @@ export function Thread(props: {
                             Promise.all([
                               commentOperations.updateComment({
                                 text: content,
-                                commentId: replyId,
+                                commentId: replyId, // TODO add mentions here
                               }),
                               sendMentions(
                                 {
