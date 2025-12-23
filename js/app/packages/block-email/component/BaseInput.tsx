@@ -848,24 +848,25 @@ export function BaseInput(props: {
             domRef={props.markdownDomRef}
           />
         </div>
-        <Show when={!form().replyAppended()}>
-          <div class="px-2 flex flex-row items-center space-x-2">
-            <IconButton
-              theme="clear"
-              icon={DotsThree}
-              onclick={() => {
-                form().setReplyAppended(true);
-                editor()?.dispatchCommand(APPEND_PREVIOUS_EMAIL_COMMAND, {
-                  replyingTo: props.replyingTo(),
-                  replyType: effectiveReplyType(),
-                });
-                editor()?.update(() => {
-                  $getRoot().getFirstChild()?.selectStart();
-                });
-              }}
-            />
-          </div>
-        </Show>
+
+        <div class="px-2 flex flex-row items-center space-x-2">
+          <IconButton
+            theme="clear"
+            icon={DotsThree}
+            onclick={() => {
+              const appended = form().replyAppended();
+              form().setReplyAppended(!appended);
+              editor()?.dispatchCommand(APPEND_PREVIOUS_EMAIL_COMMAND, {
+                replyingTo: props.replyingTo(),
+                replyType: effectiveReplyType(),
+              });
+              editor()?.update(() => {
+                $getRoot().getFirstChild()?.selectStart();
+              });
+            }}
+          />
+        </div>
+
         <div class="flex flex-row w-full h-8 justify-between items-center py-2 px-2 mb-2 space-x-2 allow-css-brackets">
           <div class="flex flex-row items-center gap-2">
             <div class="relative" ref={attachButtonRef}>
