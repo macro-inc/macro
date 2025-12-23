@@ -1,6 +1,7 @@
 //! Service trait for properties.
 
 use models_properties::EntityType;
+use models_properties::api::requests::SetPropertyValue;
 use models_properties::service::property_value::PropertyValue;
 use system_properties::SystemPropertyKey;
 use uuid::Uuid;
@@ -61,4 +62,16 @@ pub trait PropertiesService: Send + Sync + 'static {
         entity_type: EntityType,
         property_key: SystemPropertyKey,
     ) -> impl Future<Output = Result<Option<PropertyValue>, Self::Err>> + Send;
+
+    /// Set or update a property value for an entity, or attach a property without a value.
+    /// Validates property options if the value contains select options.
+    /// Requires edit access to the entity.
+    fn set_entity_property(
+        &self,
+        user_id: &str,
+        entity_id: &str,
+        entity_type: EntityType,
+        property_definition_id: Uuid,
+        value: Option<SetPropertyValue>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }

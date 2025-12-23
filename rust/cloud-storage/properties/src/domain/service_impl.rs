@@ -3,29 +3,37 @@
 use std::fmt::Debug;
 
 use models_properties::EntityType;
+use models_properties::api::requests::SetPropertyValue;
+use models_properties::convert_set_property_value_to_property_value;
 use models_properties::service::property_value::PropertyValue;
 use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
 
-use super::ports::PropertiesRepo;
+use super::ports::{PermissionChecker, PropertiesRepo};
 use super::service::PropertiesService;
 
-/// Implementation of PropertiesService using a repository.
+/// Implementation of PropertiesService using a repository and optional permission checker.
 #[derive(Debug)]
-pub struct PropertiesServiceImpl<R>
+pub struct PropertiesServiceImpl<R, P>
 where
     R: PropertiesRepo,
+    P: PermissionChecker,
 {
     repository: R,
+    permission_checker: Option<P>,
 }
 
-impl<R> PropertiesServiceImpl<R>
+impl<R, P> PropertiesServiceImpl<R, P>
 where
     R: PropertiesRepo,
+    P: PermissionChecker,
 {
-    /// Create a new PropertiesService.
-    pub fn new(repository: R) -> Self {
-        Self { repository }
+    /// Create a new PropertiesService with an optional permission checker.
+    pub fn new(repository: R, permission_checker: Option<P>) -> Self {
+        Self {
+            repository,
+            permission_checker,
+        }
     }
 
     /// Validate that the given option IDs exist for the property definition.
@@ -65,12 +73,34 @@ where
 
         Ok(())
     }
+
+    /// Extract option IDs from a PropertyValue (matches properties_db_client pattern).
+    fn extract_option_ids_from_property_value(value: &Option<PropertyValue>) -> Vec<Uuid> {
+        match value {
+            Some(PropertyValue::SelectOption(ids)) => ids.clone(),
+            _ => Vec::new(),
+        }
+    }
+
+    /// Check if a property can be attached to the given entity type.
+    fn is_property_applicable_to(property_id: Uuid, entity_type: EntityType) -> bool {
+        // Task-only properties: Parent Task and Subtasks
+        if property_id == SystemPropertyKey::PARENT_TASK_UUID
+            || property_id == SystemPropertyKey::SUBTASKS_UUID
+        {
+            return entity_type == EntityType::Task;
+        }
+
+        true
+    }
 }
 
-impl<R> PropertiesService for PropertiesServiceImpl<R>
+impl<R, P> PropertiesService for PropertiesServiceImpl<R, P>
 where
     R: PropertiesRepo,
-    R::Err: Debug,
+    P: PermissionChecker,
+    R::Err: Debug + From<anyhow::Error> + From<P::Err>,
+    anyhow::Error: From<R::Err>,
 {
     type Err = R::Err;
 
@@ -133,5 +163,154 @@ where
     ) -> Result<Option<PropertyValue>, Self::Err> {
         self.get_property_value(entity_id, entity_type, property_key.uuid())
             .await
+    }
+
+    #[tracing::instrument(
+        skip(self),
+        fields(
+            entity_id = %entity_id,
+            entity_type = ?entity_type,
+            property_definition_id = %property_definition_id,
+            has_value = value.is_some()
+        )
+    )]
+    async fn set_entity_property(
+        &self,
+        user_id: &str,
+        entity_id: &str,
+        entity_type: EntityType,
+        property_definition_id: Uuid,
+        value: Option<SetPropertyValue>,
+    ) -> Result<(), Self::Err> {
+        // Check edit permission first (permission checker is required)
+        let permission_checker = self.permission_checker.as_ref().ok_or_else(|| {
+            anyhow::anyhow!("Permission checker is required for set_entity_property")
+        })?;
+        permission_checker
+            .check_entity_edit_permission(user_id, entity_id, entity_type)
+            .await
+            .map_err(|e| R::Err::from(e))?;
+
+        // Get property definition to validate it exists and for validation
+        let property_definition = self
+            .repository
+            .get_property_definition(property_definition_id)
+            .await?
+            .ok_or_else(|| {
+                anyhow::anyhow!("Property definition not found: {}", property_definition_id)
+            })?;
+
+        // Determine the value to set (if any) and validate
+        let property_value = match &value {
+            Some(set_value) => {
+                // Validate that the request value is compatible with the property definition
+                set_value
+                    .validate_compatibility(
+                        &property_definition.data_type,
+                        property_definition.is_multi_select,
+                    )
+                    .map_err(|e| anyhow::anyhow!("Property value validation failed: {}", e))?;
+
+                // Convert SetPropertyValue to PropertyValue (JSONB format)
+                Some(convert_set_property_value_to_property_value(set_value))
+            }
+            None => {
+                tracing::debug!("no value provided, attaching property without value");
+                None
+            }
+        };
+
+        // Validate property options at service layer (before upserting)
+        let option_ids = Self::extract_option_ids_from_property_value(&property_value);
+        if !option_ids.is_empty() {
+            self.validate_property_options(property_definition_id, &option_ids)
+                .await?;
+        }
+
+        // Check if this property can be attached to the given entity type
+        if !Self::is_property_applicable_to(property_definition_id, entity_type) {
+            return Err(
+                anyhow::anyhow!("This property cannot be attached to this entity type").into(),
+            );
+        }
+
+        // Handle bidirectional linking for task Parent Task / Subtasks properties
+        // (if is_parent_or_subtask_property is true, entity_type is guaranteed to be Task by the earlier check)
+        if property_definition_id == SystemPropertyKey::PARENT_TASK_UUID
+            || property_definition_id == SystemPropertyKey::SUBTASKS_UUID
+        {
+            let task_id =
+                Uuid::parse_str(entity_id).map_err(|_| anyhow::anyhow!("Invalid task ID"))?;
+
+            if property_definition_id == SystemPropertyKey::PARENT_TASK_UUID {
+                // Extract parent task ID (None to clear)
+                let parent_task_id = match &value {
+                    None => None,
+                    Some(SetPropertyValue::EntityReference { reference }) => {
+                        if reference.entity_type != EntityType::Task {
+                            return Err(anyhow::anyhow!(
+                                "Parent Task must reference a Task entity"
+                            )
+                            .into());
+                        }
+                        Some(
+                            Uuid::parse_str(&reference.entity_id)
+                                .map_err(|_| anyhow::anyhow!("Invalid task ID"))?,
+                        )
+                    }
+                    Some(_) => {
+                        return Err(anyhow::anyhow!(
+                            "Parent Task requires a single entity reference"
+                        )
+                        .into());
+                    }
+                };
+
+                self.link_parent_task(task_id, parent_task_id).await?;
+            } else {
+                // Extract subtask IDs (empty to clear)
+                let subtask_ids = match &value {
+                    None => vec![],
+                    Some(SetPropertyValue::MultiEntityReference { references }) => {
+                        let mut ids = Vec::with_capacity(references.len());
+                        for ref_ in references {
+                            if ref_.entity_type != EntityType::Task {
+                                return Err(anyhow::anyhow!(
+                                    "Subtasks must reference Task entities"
+                                )
+                                .into());
+                            }
+                            ids.push(
+                                Uuid::parse_str(&ref_.entity_id)
+                                    .map_err(|_| anyhow::anyhow!("Invalid task ID"))?,
+                            );
+                        }
+                        ids
+                    }
+                    Some(_) => {
+                        return Err(anyhow::anyhow!(
+                            "Subtasks requires multiple entity references"
+                        )
+                        .into());
+                    }
+                };
+
+                self.link_subtasks(task_id, subtask_ids).await?;
+            }
+
+            return Ok(());
+        }
+
+        // For all other properties, upsert the already-converted PropertyValue
+        self.repository
+            .upsert_entity_property(
+                entity_id,
+                entity_type,
+                property_definition_id,
+                property_value,
+            )
+            .await?;
+
+        Ok(())
     }
 }
