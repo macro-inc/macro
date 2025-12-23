@@ -65,6 +65,7 @@ import {
   VIEWCONFIG_DEFAULTS_IDS,
   type ViewConfigBase,
 } from './ViewConfig';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 
 false && fileFolderDrop;
 
@@ -465,7 +466,7 @@ export function Soup() {
           />
         </Show>
       </div>
-      <Show when={showHelpDrawer().has(selectedView() as DefaultView)}>
+      <Show when={showHelpDrawer().has(selectedView() as DefaultView) && !isNativeMobilePlatform()}>
         <HelpDrawer viewId={view().id} />
       </Show>
     </div>
