@@ -238,18 +238,6 @@ export function Thread(props: {
                         threadId: props.comment.threadId,
                         text: content,
                         mentions: getCommentMentions(mentionsSignal),
-                      })
-                      .then((response) => {
-                        if (!response) return;
-                        sendMentions(
-                          {
-                            type: 'create-comment',
-                            commentId: response.comments[0].commentId,
-                            threadId: response.thread.threadId,
-                            text: content,
-                          },
-                          mentionsSignal
-                        );
                       });
                   }}
                   isNewThread
@@ -336,20 +324,6 @@ export function Thread(props: {
                         threadId: props.comment.threadId,
                         text: content,
                         mentions: getCommentMentions(mentionsSignal),
-                      })
-                      .then((response) => {
-                        if (!response) return;
-                        sendMentions(
-                          {
-                            type: 'create-comment',
-                            commentId:
-                              response.comments[response.comments.length - 1]
-                                .commentId,
-                            threadId: props.comment.threadId,
-                            text: content,
-                          },
-                          mentionsSignal
-                        );
                       });
                   }}
                   isEditing={isEditingNewReply()}
