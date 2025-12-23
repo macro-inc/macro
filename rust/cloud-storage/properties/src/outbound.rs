@@ -1,4 +1,5 @@
 pub mod entity_property_queries;
+pub mod permission_checker;
 pub mod properties_pg_repo;
 pub mod property_definition_queries;
 pub mod task_property_queries;

@@ -87,3 +87,21 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         property_definition_id: Uuid,
     ) -> impl Future<Output = Result<Option<PropertyValue>, Self::Err>> + Send;
 }
+
+/// Permission checker trait for entity access control.
+///
+/// This trait abstracts permission checking, allowing for different implementations
+/// (e.g., database-backed, mock for testing).
+#[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
+pub trait PermissionChecker: Send + Sync + 'static {
+    type Err;
+
+    /// Check if a user has edit access to an entity.
+    /// Returns an error if the user does not have edit or owner access.
+    fn check_entity_edit_permission(
+        &self,
+        user_id: &str,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+}

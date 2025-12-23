@@ -13,7 +13,8 @@
 pub mod domain;
 pub mod outbound;
 
-pub use domain::ports::PropertiesRepo;
+pub use domain::ports::{PermissionChecker, PropertiesRepo};
 pub use domain::service::PropertiesService;
 pub use domain::service_impl::PropertiesServiceImpl;
+pub use outbound::permission_checker::PermissionCheckerImpl;
 pub use outbound::properties_pg_repo::PropertiesPgRepo;
