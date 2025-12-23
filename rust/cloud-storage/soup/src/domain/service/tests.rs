@@ -115,6 +115,7 @@ fn soup_document_uuid_with_updated(id: Uuid, updated_at: DateTime<Utc>) -> SoupD
         updated_at,
         viewed_at: Default::default(),
         sub_type: Some(DocumentSubType::Task),
+        is_completed: None,
     }
 }
 
