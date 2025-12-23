@@ -44,7 +44,7 @@ export function NotificationRenderer(props: NotificationRendererProps) {
               <Show when={d().target?.type === 'channel' && d().target?.id}>
                 <div class="self-center max-h-[1lh]">
                   <InlineItemPreview
-                    itemId={d().target!.id!}
+                    itemId={d().target.id!}
                     itemType="channel"
                   />
                 </div>
@@ -64,10 +64,7 @@ export function NotificationRenderer(props: NotificationRendererProps) {
             <div class="text-sm text-ink inline-flex items-center gap-1">
               <span class="font-medium">{displayName()}</span> {d().action}{' '}
               <Show when={d().target?.type === 'channel' && d().target?.id}>
-                <InlineItemPreview
-                  itemId={d().target!.id!}
-                  itemType="channel"
-                />
+                <InlineItemPreview itemId={d().target.id!} itemType="channel" />
               </Show>
               <Show when={d().target?.name && d().target?.type !== 'channel'}>
                 <span class="font-medium">{d().target!.name}</span>

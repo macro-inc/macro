@@ -1,3 +1,4 @@
+import type { ApiChannelWithLatest } from '@service-comms/generated/models';
 import { useQuery } from '@tanstack/solid-query';
 import { SERVER_HOSTS } from 'core/constant/servers';
 import { platformFetch } from 'core/util/platformFetch';
