@@ -1,7 +1,7 @@
 //! Property definition query helpers.
 
-use models_properties::db;
 use models_properties::service::property_definition::PropertyDefinition;
+use models_properties::{DataType, EntityType, db};
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 

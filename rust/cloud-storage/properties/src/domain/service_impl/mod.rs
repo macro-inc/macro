@@ -3,8 +3,6 @@
 mod helpers;
 mod task_properties;
 
-use std::fmt::Debug;
-
 use models_properties::EntityType;
 use models_properties::api::requests::SetPropertyValue;
 use models_properties::convert_set_property_value_to_property_value;
@@ -12,6 +10,7 @@ use models_properties::service::property_value::PropertyValue;
 use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
 
+use super::error::PropertiesErr;
 use super::ports::{PermissionChecker, PropertiesRepo};
 use super::service::PropertiesService;
 
@@ -47,7 +46,7 @@ where
         &self,
         property_definition_id: Uuid,
         option_ids: &[Uuid],
-    ) -> anyhow::Result<()>
+    ) -> Result<(), PropertiesErr>
     where
         anyhow::Error: From<R::Err>,
     {
@@ -68,12 +67,12 @@ where
             .map_err(anyhow::Error::from)?;
 
         if valid_count != option_ids.len() as i64 {
-            anyhow::bail!(
+            return Err(PropertiesErr::Validation(format!(
                 "Invalid property options: {} provided but only {} valid for property {}",
                 option_ids.len(),
                 valid_count,
                 property_definition_id
-            );
+            )));
         }
 
         Ok(())
@@ -84,17 +83,14 @@ impl<R, P> PropertiesService for PropertiesServiceImpl<R, P>
 where
     R: PropertiesRepo,
     P: PermissionChecker,
-    R::Err: Debug + From<anyhow::Error> + From<P::Err>,
-    anyhow::Error: From<R::Err>,
+    anyhow::Error: From<R::Err> + From<P::Err>,
 {
-    type Err = R::Err;
-
     #[tracing::instrument(skip(self), fields(entity_id = %entity_id, entity_type = ?entity_type))]
     async fn set_system_property_status_complete(
         &self,
         entity_id: &str,
         entity_type: EntityType,
-    ) -> Result<(), Self::Err> {
+    ) -> Result<(), PropertiesErr> {
         let status_property_id = SystemPropertyKey::STATUS_UUID;
         let completed_value = PropertyValue::SelectOption(vec![StatusOption::COMPLETED_UUID]);
 
@@ -106,7 +102,8 @@ where
                 status_property_id,
                 Some(completed_value),
             )
-            .await?;
+            .await
+            .map_err(anyhow::Error::from)?;
 
         Ok(())
     }
@@ -116,15 +113,25 @@ where
         &self,
         task_id: Uuid,
         parent_task_id: Option<Uuid>,
-    ) -> Result<(), Self::Err> {
+    ) -> Result<(), PropertiesErr> {
         self.repository
             .link_parent_task(task_id, parent_task_id)
             .await
+            .map_err(anyhow::Error::from)?;
+        Ok(())
     }
 
     #[tracing::instrument(skip(self))]
-    async fn link_subtasks(&self, task_id: Uuid, subtask_ids: Vec<Uuid>) -> Result<(), Self::Err> {
-        self.repository.link_subtasks(task_id, subtask_ids).await
+    async fn link_subtasks(
+        &self,
+        task_id: Uuid,
+        subtask_ids: Vec<Uuid>,
+    ) -> Result<(), PropertiesErr> {
+        self.repository
+            .link_subtasks(task_id, subtask_ids)
+            .await
+            .map_err(anyhow::Error::from)?;
+        Ok(())
     }
 
     #[tracing::instrument(skip(self), fields(entity_id = %entity_id, entity_type = ?entity_type, property_definition_id = %property_definition_id))]
@@ -133,10 +140,12 @@ where
         entity_id: &str,
         entity_type: EntityType,
         property_definition_id: Uuid,
-    ) -> Result<Option<PropertyValue>, Self::Err> {
-        self.repository
+    ) -> Result<Option<PropertyValue>, PropertiesErr> {
+        Ok(self
+            .repository
             .get_entity_property_value(entity_id, entity_type, property_definition_id)
             .await
+            .map_err(anyhow::Error::from)?)
     }
 
     #[tracing::instrument(skip(self), fields(entity_id = %entity_id, entity_type = ?entity_type, property_key = ?property_key))]
@@ -145,7 +154,7 @@ where
         entity_id: &str,
         entity_type: EntityType,
         property_key: SystemPropertyKey,
-    ) -> Result<Option<PropertyValue>, Self::Err> {
+    ) -> Result<Option<PropertyValue>, PropertiesErr> {
         self.get_property_value(entity_id, entity_type, property_key.uuid())
             .await
     }
@@ -166,23 +175,28 @@ where
         entity_type: EntityType,
         property_definition_id: Uuid,
         value: Option<SetPropertyValue>,
-    ) -> Result<(), Self::Err> {
+    ) -> Result<(), PropertiesErr> {
         // Check edit permission first (permission checker is required)
-        let permission_checker = self.permission_checker.as_ref().ok_or_else(|| {
-            anyhow::anyhow!("Permission checker is required for set_entity_property")
-        })?;
+        let permission_checker = self
+            .permission_checker
+            .as_ref()
+            .ok_or(PropertiesErr::PermissionDenied)?;
         permission_checker
             .check_entity_edit_permission(user_id, entity_id, entity_type)
             .await
-            .map_err(|e| R::Err::from(e))?;
+            .map_err(|_| PropertiesErr::PermissionDenied)?;
 
         // Get property definition to validate it exists and for validation
         let property_definition = self
             .repository
             .get_property_definition(property_definition_id)
-            .await?
+            .await
+            .map_err(anyhow::Error::from)?
             .ok_or_else(|| {
-                anyhow::anyhow!("Property definition not found: {}", property_definition_id)
+                PropertiesErr::Validation(format!(
+                    "Property definition not found: {}",
+                    property_definition_id
+                ))
             })?;
 
         // Determine the value to set (if any) and validate
@@ -194,7 +208,12 @@ where
                         &property_definition.data_type,
                         property_definition.is_multi_select,
                     )
-                    .map_err(|e| anyhow::anyhow!("Property value validation failed: {}", e))?;
+                    .map_err(|e| {
+                        PropertiesErr::Validation(format!(
+                            "Property value validation failed: {}",
+                            e
+                        ))
+                    })?;
 
                 // Convert SetPropertyValue to PropertyValue (JSONB format)
                 Some(convert_set_property_value_to_property_value(set_value))
@@ -214,9 +233,9 @@ where
 
         // Check if this property can be attached to the given entity type
         if !is_property_applicable_to(property_definition_id, entity_type) {
-            return Err(
-                anyhow::anyhow!("This property cannot be attached to this entity type").into(),
-            );
+            return Err(PropertiesErr::Validation(
+                "This property cannot be attached to this entity type".to_string(),
+            ));
         }
 
         // Handle special property types that require custom logic
@@ -246,7 +265,8 @@ where
                 property_definition_id,
                 property_value,
             )
-            .await?;
+            .await
+            .map_err(anyhow::Error::from)?;
 
         Ok(())
     }

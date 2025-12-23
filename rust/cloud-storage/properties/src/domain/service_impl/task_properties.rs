@@ -5,6 +5,7 @@ use models_properties::api::requests::SetPropertyValue;
 use system_properties::SystemPropertyKey;
 use uuid::Uuid;
 
+use crate::domain::error::PropertiesErr;
 use crate::domain::ports::PropertiesRepo;
 use crate::domain::service::PropertiesService;
 use crate::domain::service_impl::PropertiesServiceImpl;
@@ -13,8 +14,7 @@ impl<R, P> PropertiesServiceImpl<R, P>
 where
     R: PropertiesRepo,
     P: super::super::ports::PermissionChecker,
-    R::Err: std::fmt::Debug + From<anyhow::Error> + From<P::Err>,
-    anyhow::Error: From<R::Err>,
+    anyhow::Error: From<R::Err> + From<P::Err>,
 {
     /// Handle task relationship properties (Parent Task / Subtasks) with bidirectional linking.
     /// Entity type is guaranteed to be Task (enforced by match guard).
@@ -23,8 +23,9 @@ where
         entity_id: &str,
         property_definition_id: Uuid,
         value: Option<SetPropertyValue>,
-    ) -> Result<(), R::Err> {
-        let task_id = Uuid::parse_str(entity_id).map_err(|_| anyhow::anyhow!("Invalid task ID"))?;
+    ) -> Result<(), PropertiesErr> {
+        let task_id = Uuid::parse_str(entity_id)
+            .map_err(|_| PropertiesErr::Validation("Invalid task ID".to_string()))?;
 
         match property_definition_id {
             SystemPropertyKey::PARENT_TASK_UUID => {
@@ -33,21 +34,18 @@ where
                     None => None,
                     Some(SetPropertyValue::EntityReference { reference }) => {
                         if reference.entity_type != EntityType::Task {
-                            return Err(anyhow::anyhow!(
-                                "Parent Task must reference a Task entity"
-                            )
-                            .into());
+                            return Err(PropertiesErr::Validation(
+                                "Parent Task must reference a Task entity".to_string(),
+                            ));
                         }
-                        Some(
-                            Uuid::parse_str(&reference.entity_id)
-                                .map_err(|_| anyhow::anyhow!("Invalid task ID"))?,
-                        )
+                        Some(Uuid::parse_str(&reference.entity_id).map_err(|_| {
+                            PropertiesErr::Validation("Invalid task ID".to_string())
+                        })?)
                     }
                     Some(_) => {
-                        return Err(anyhow::anyhow!(
-                            "Parent Task requires a single entity reference"
-                        )
-                        .into());
+                        return Err(PropertiesErr::Validation(
+                            "Parent Task requires a single entity reference".to_string(),
+                        ));
                     }
                 };
 
@@ -61,23 +59,20 @@ where
                         let mut ids = Vec::with_capacity(references.len());
                         for ref_ in references {
                             if ref_.entity_type != EntityType::Task {
-                                return Err(anyhow::anyhow!(
-                                    "Subtasks must reference Task entities"
-                                )
-                                .into());
+                                return Err(PropertiesErr::Validation(
+                                    "Subtasks must reference Task entities".to_string(),
+                                ));
                             }
-                            ids.push(
-                                Uuid::parse_str(&ref_.entity_id)
-                                    .map_err(|_| anyhow::anyhow!("Invalid task ID"))?,
-                            );
+                            ids.push(Uuid::parse_str(&ref_.entity_id).map_err(|_| {
+                                PropertiesErr::Validation("Invalid task ID".to_string())
+                            })?);
                         }
                         ids
                     }
                     Some(_) => {
-                        return Err(anyhow::anyhow!(
-                            "Subtasks requires multiple entity references"
-                        )
-                        .into());
+                        return Err(PropertiesErr::Validation(
+                            "Subtasks requires multiple entity references".to_string(),
+                        ));
                     }
                 };
 
@@ -85,9 +80,9 @@ where
             }
             _ => {
                 // This should never happen due to the match guard, but handle it for completeness
-                return Err(
-                    anyhow::anyhow!("Invalid property for task relationship handling").into(),
-                );
+                return Err(PropertiesErr::Validation(
+                    "Invalid property for task relationship handling".to_string(),
+                ));
             }
         }
 
@@ -101,21 +96,22 @@ where
         &self,
         entity_id: &str,
         value: Option<SetPropertyValue>,
-    ) -> Result<(), R::Err> {
+    ) -> Result<(), PropertiesErr> {
         // Clearing assignees - nothing to do for notifications/permissions
         let Some(SetPropertyValue::MultiEntityReference { references }) = &value else {
             if value.is_some() {
                 // Assignees is multi-select, so only MultiEntityReference is valid
                 // This should be caught by validate_compatibility, but handle it here for safety
-                return Err(
-                    anyhow::anyhow!("Assignees requires multiple entity references").into(),
-                );
+                return Err(PropertiesErr::Validation(
+                    "Assignees requires multiple entity references".to_string(),
+                ));
             }
             return Ok(());
         };
 
         let assignee_ids: Vec<String> = references.iter().map(|r| r.entity_id.clone()).collect();
-        let task_id = Uuid::parse_str(entity_id).map_err(|_| anyhow::anyhow!("Invalid task ID"))?;
+        let task_id = Uuid::parse_str(entity_id)
+            .map_err(|_| PropertiesErr::Validation("Invalid task ID".to_string()))?;
         self.handle_task_assignee_notifications(task_id, &assignee_ids)
             .await?;
         self.handle_task_assignee_permissions(task_id, &assignee_ids)
@@ -129,7 +125,7 @@ where
         &self,
         _task_id: Uuid,
         _assignee_ids: &[String],
-    ) -> Result<(), R::Err> {
+    ) -> Result<(), PropertiesErr> {
         // No-op for now
         Ok(())
     }
@@ -140,7 +136,7 @@ where
         &self,
         _task_id: Uuid,
         _assignee_ids: &[String],
-    ) -> Result<(), R::Err> {
+    ) -> Result<(), PropertiesErr> {
         // No-op for now
         Ok(())
     }

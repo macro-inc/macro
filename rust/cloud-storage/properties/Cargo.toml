@@ -15,6 +15,7 @@ models_properties = { path = "../models_properties" }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
 system_properties = { path = "../system_properties" }
+thiserror = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
 
