@@ -14,6 +14,9 @@ export interface DocumentPreviewData {
   document_name: string;
   /** The file type of the document (e.g. pdf, docx) */
   file_type?: DocumentPreviewDataFileType;
+  /** Whether the task is completed (only relevant when sub_type is 'task').
+True if the Status property is set to "Completed", false otherwise. */
+  is_completed: boolean;
   /** The id of the owner of the document */
   owner: string;
   sub_type?: DocumentPreviewDataSubType;

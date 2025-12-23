@@ -30,6 +30,9 @@ This could be the document_instance_id or document_bom_id depending on the file 
   fileType?: SoupDocumentFileType;
   /** The document id */
   id: string;
+  /** Whether the task is completed (only relevant when sub_type is 'task').
+True if the Status property is set to "Completed", false otherwise. */
+  isCompleted: boolean;
   /** The name of the document */
   name: string;
   /** The owner of the document */

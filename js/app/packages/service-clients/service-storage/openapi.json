@@ -4125,7 +4125,8 @@
           "name",
           "createdAt",
           "updatedAt",
-          "deletedAt"
+          "deletedAt",
+          "isCompleted"
         ],
         "properties": {
           "branchedFromId": {
@@ -4162,6 +4163,10 @@
             "description": "The file type of the document (e.g. pdf, docx)"
           },
           "id": { "type": "string", "description": "The document id" },
+          "isCompleted": {
+            "type": "boolean",
+            "description": "Whether the task is completed (only relevant when sub_type is 'task').\nTrue if the Status property is set to \"Completed\", false otherwise."
+          },
           "name": {
             "type": "string",
             "description": "The name of the document"
@@ -5007,7 +5012,13 @@
       },
       "DocumentPreviewData": {
         "type": "object",
-        "required": ["document_id", "document_name", "owner", "updated_at"],
+        "required": [
+          "document_id",
+          "document_name",
+          "owner",
+          "updated_at",
+          "is_completed"
+        ],
         "properties": {
           "document_id": { "type": "string", "description": "The document id" },
           "document_name": {
@@ -5017,6 +5028,10 @@
           "file_type": {
             "type": ["string", "null"],
             "description": "The file type of the document (e.g. pdf, docx)"
+          },
+          "is_completed": {
+            "type": "boolean",
+            "description": "Whether the task is completed (only relevant when sub_type is 'task').\nTrue if the Status property is set to \"Completed\", false otherwise."
           },
           "owner": {
             "type": "string",
@@ -7226,7 +7241,8 @@
           "name",
           "createdAt",
           "updatedAt",
-          "viewedAt"
+          "viewedAt",
+          "isCompleted"
         ],
         "properties": {
           "branchedFromId": {
@@ -7262,6 +7278,10 @@
             "type": "string",
             "format": "uuid",
             "description": "The document id"
+          },
+          "isCompleted": {
+            "type": "boolean",
+            "description": "Whether the task is completed (only relevant when sub_type is 'task').\nTrue if the Status property is set to \"Completed\", false otherwise."
           },
           "name": {
             "type": "string",
