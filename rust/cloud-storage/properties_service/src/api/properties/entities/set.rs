@@ -293,6 +293,7 @@ mod tests {
     use super::*;
     use chrono::Utc;
     use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
+    use models_properties::service::property_value::PropertyValue;
     use std::collections::HashSet;
     use uuid::Uuid;
 
@@ -405,7 +406,7 @@ mod tests {
         );
 
         // Should have only 3 unique values
-        let PropertyValue::SelectOption(option_ids) = result else {
+        let Some(PropertyValue::SelectOption(option_ids)) = result else {
             panic!("Expected SelectOption variant");
         };
         assert_eq!(option_ids.len(), 3);
@@ -432,7 +433,7 @@ mod tests {
             Some(models_properties::convert_set_property_value_to_property_value(&multi_option));
 
         // Should have 2 values
-        let PropertyValue::SelectOption(option_ids) = result else {
+        let Some(PropertyValue::SelectOption(option_ids)) = result else {
             panic!("Expected SelectOption variant");
         };
         assert_eq!(option_ids.len(), 2);
@@ -466,7 +467,7 @@ mod tests {
         );
 
         // Should have only 2 unique values (duplicates removed)
-        let PropertyValue::EntityRef(entity_refs) = result else {
+        let Some(PropertyValue::EntityRef(entity_refs)) = result else {
             panic!("Expected EntityRef variant");
         };
         assert_eq!(entity_refs.len(), 2);
@@ -501,7 +502,7 @@ mod tests {
         );
 
         // Should have 1 value (considered duplicates, keeps first occurrence)
-        let PropertyValue::EntityRef(entity_refs) = result else {
+        let Some(PropertyValue::EntityRef(entity_refs)) = result else {
             panic!("Expected EntityRef variant");
         };
         assert_eq!(entity_refs.len(), 1);
