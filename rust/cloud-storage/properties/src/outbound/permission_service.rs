@@ -8,6 +8,7 @@ use uuid::Uuid;
 use crate::domain::ports::PermissionService;
 use comms_service_client::CommsServiceClient;
 use email_db_client::threads::get::get_macro_id_from_thread_id;
+use models_permissions::share_permission::access_level::AccessLevel;
 
 /// Permission service implementation using database and comms service client.
 pub struct PermissionServiceImpl {
@@ -83,24 +84,34 @@ impl PermissionService for PermissionServiceImpl {
         }
     }
 
-    #[tracing::instrument(skip(self), fields(task_id = %task_id, user_count = user_ids.len()), err)]
-    async fn grant_permissions_to_task(
+    #[tracing::instrument(skip(self), fields(entity_id = %entity_id, entity_type = ?entity_type, user_count = user_ids.len()), err)]
+    async fn grant_entity_permissions(
         &self,
         user_ids: &[String],
-        task_id: &str,
+        entity_id: &str,
+        entity_type: EntityType,
     ) -> Result<(), Self::Err> {
         if user_ids.is_empty() {
             return Ok(());
         }
 
         // Tasks are stored as "document" type in the permission system
-        let item_type = "document";
+        let item_type = match entity_type {
+            EntityType::Task => "document",
+            _ => {
+                tracing::warn!(
+                    entity_type = ?entity_type,
+                    "grant_entity_permissions only supports Task entities"
+                );
+                return Ok(());
+            }
+        };
 
         // Grant edit permissions to all users
         macro_db_client::item_access::insert::upsert_user_item_access_bulk(
             &self.db,
             user_ids,
-            task_id,
+            entity_id,
             item_type,
             AccessLevel::Edit,
             None, // No channel association for direct task assignee permissions
