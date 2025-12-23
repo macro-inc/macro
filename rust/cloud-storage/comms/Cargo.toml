@@ -12,8 +12,8 @@ outbound = ["dep:reqwest"]
 [dependencies]
 axum = { workspace = true, optional = true }
 chrono = { workspace = true }
-doppleganger = { workspace = true }
-frecency = { path = "../frecency" }
+doppleganger = { workspace = true, features = ["chrono", "uuid"] }
+frecency = { path = "../frecency", features = ["ports"] }
 macro_user_id = { path = "../macro_user_id" }
 model-entity = { path = "../model-entity" }
 model_user = { path = "../model_user", optional = true, features = ["axum"] }

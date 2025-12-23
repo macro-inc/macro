@@ -6,7 +6,7 @@ use axum::{
 };
 use axum_extra::extract::Cached;
 use comms_db_client::participants::add_participant::{AddParticipantOptions, add_participant};
-use model::comms::{ChannelType, ParticipantRole};
+use model::comms::ParticipantRole;
 use model::user::UserContext;
 use sqlx::PgPool;
 

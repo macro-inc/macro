@@ -1,11 +1,10 @@
 use crate::utils::previews::resolve_previews;
 use anyhow::Result;
+use axum::extract::Json;
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
-use axum::{Extension, extract::Json};
 use comms_db_client::model::ChannelPreview;
 use model::response::{GenericErrorResponse, GenericResponse};
-use model::user::UserContext;
 use model::user::axum_extractor::MacroUserExtractor;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};

@@ -4,7 +4,6 @@ use axum::{
     middleware::from_fn_with_state,
     routing::{IntoMakeService, post},
 };
-use comms::{domain::service::ChannelServiceImpl, outbound::postgres::comms_repo::PgCommsRepo};
 use tower_http::trace::TraceLayer;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;

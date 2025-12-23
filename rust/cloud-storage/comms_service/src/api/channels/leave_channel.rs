@@ -8,7 +8,6 @@ use axum_extra::extract::Cached;
 use comms_db_client::participants::remove_participant::{
     RemoveParticipantOptions, remove_participant,
 };
-use model::comms::ChannelType;
 
 #[utoipa::path(
     post,
