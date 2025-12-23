@@ -26,7 +26,7 @@ import type {
 import { TextButton } from '@core/component/TextButton';
 import { toast } from '@core/component/Toast/Toast';
 import { itemToSafeName } from '@core/constant/allBlocks';
-import { createMarkdownFile } from '@core/util/create';
+import { createTask } from '@core/util/create';
 import { filterMap } from '@core/util/list';
 import { isErr } from '@core/util/maybeResult';
 import XIcon from '@icon/regular/x.svg';
@@ -47,7 +47,7 @@ const COMPOSER_PROPERTIES = [
 ];
 
 /**
- * Make a task and append props.
+ * Make a task and append props using the create_task endpoint.
  * @param taskTitle Title string
  * @param taskContent content markdown string
  * @param properties Stored prop value map
@@ -60,39 +60,35 @@ async function createTaskWithProperties(
   properties: Array<[string, PropertyApiValues]>,
   definitions: Map<string, PropertyDefinition>
 ) {
-  const res = await createMarkdownFile({
-    title: taskTitle,
-    content: taskContent,
-    isTask: true,
+  // Convert properties to API format (filter out null values)
+  const propertyValues = properties.flatMap(([id, value]) => {
+    const isMultiSelect = definitions.get(id)?.is_multi_select ?? false;
+    const apiValue = propertyValueToApi(value, isMultiSelect);
+    if (apiValue === null) return [];
+    return [{ propertyId: id, value: apiValue }];
   });
 
-  if (!res) {
+  const documentId = await createTask({
+    title: taskTitle,
+    content: taskContent,
+    propertyValues: propertyValues.length > 0 ? propertyValues : undefined,
+  });
+
+  if (!documentId) {
     toast.failure('Failed to create Task');
     return null;
   }
 
-  const propRequests = properties.map(([id, value]) => {
-    const isMultiSelect = definitions.get(id)?.is_multi_select ?? false;
-    return propertiesServiceClient.setEntityProperty({
-      entity_id: res,
-      entity_type: 'TASK',
-      property_id: id,
-      body: {
-        value: propertyValueToApi(value, isMultiSelect),
-      },
-    });
-  });
-
-  await Promise.allSettled(propRequests);
-
   toast.embed(
-    () => <TaskToastPreview id={res} title={taskTitle} body={taskContent} />,
+    () => (
+      <TaskToastPreview id={documentId} title={taskTitle} body={taskContent} />
+    ),
     {
       duration: 2_000,
     }
   );
 
-  return res;
+  return documentId;
 }
 
 /**
