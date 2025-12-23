@@ -860,6 +860,9 @@ export function BaseInput(props: {
             theme="clear"
             icon={DotsThree}
             onclick={() => {
+              const replyingToID = props.replyingTo()?.replying_to_id;
+              if (!replyingToID) return;
+
               const appended = form().replyAppended();
               form().setReplyAppended(!appended);
 
@@ -868,11 +871,7 @@ export function BaseInput(props: {
                   replyingTo: props.replyingTo(),
                   replyType: effectiveReplyType(),
                 });
-                return;
-              }
-
-              const replyingToID = props.replyingTo()?.replying_to_id;
-              if (replyingToID) {
+              } else {
                 console.log('Call toggle');
                 editor()?.dispatchCommand(TOGGLE_APPENED_EMAIL_THREAD_COMMAND, {
                   hidden: true,
@@ -880,9 +879,9 @@ export function BaseInput(props: {
                 });
               }
 
-              // editor()?.update(() => {
-              //   $getRoot().getFirstChild()?.selectStart();
-              // });
+              editor()?.update(() => {
+                $getRoot().getFirstChild()?.selectStart();
+              });
             }}
           />
         </div>
