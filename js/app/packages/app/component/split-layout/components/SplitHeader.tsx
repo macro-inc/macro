@@ -1,4 +1,5 @@
 import EntityNavigationIndicator from '@app/component/EntityNavigationIndicator';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { IconButton } from '@core/component/IconButton';
 import { ENABLE_PREVIEW } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -20,9 +21,8 @@ import {
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { SplitLayoutContext, SplitPanelContext } from '../context';
-import { canSpotlight } from '../utils/canSpotlight';
 import { useSplitLayout } from '../layout';
-import { globalSplitManager } from '@app/signal/splitLayout';
+import { canSpotlight } from '../utils/canSpotlight';
 
 function SplitBackButton() {
   const context = useContext(SplitPanelContext);
