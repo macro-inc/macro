@@ -123,7 +123,7 @@ fn test_document_serde() {
         updated_at: Some(chrono::Utc::now()),
         deleted_at: None,
         sub_type: None,
-        is_completed: false,
+        is_completed: None,
     };
 
     let item = Item::Document(doc.clone());
