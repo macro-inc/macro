@@ -230,13 +230,11 @@ export function registerAppendPreviousEmail(editor: LexicalEditor) {
       const replyingToID = replyingTo?.replying_to_id ?? undefined;
       const node = $findPreviousEmailNode(replyingToID).next();
 
-      console.log(node);
-
-      $appendPreviousEmail(editor, replyingTo, replyType);
-      // if (!node.value) {
-      // } else {
-      //   toggleAppendedThread(editor, replyingToID, false);
-      // }
+      if (!node.value) {
+        $appendPreviousEmail(editor, replyingTo, replyType);
+      } else {
+        toggleAppendedThread(editor, replyingToID, false);
+      }
 
       return true;
     },
