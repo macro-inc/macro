@@ -1,18 +1,16 @@
+import { IconButton } from '@core/component/IconButton';
+import { toast } from '@core/component/Toast/Toast';
 import { Tooltip } from '@core/component/Tooltip';
 import { idToDisplayName, idToEmail } from '@core/user';
 import { isOk } from '@core/util/maybeResult';
+import IconCheck from '@icon/regular/check.svg';
+import IconCopy from '@icon/regular/copy.svg';
 import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
 import { commsServiceClient } from '@service-comms/client';
+import { debounce } from '@solid-primitives/scheduled';
 import { createMemo, createSignal, Match, Show, Switch } from 'solid-js';
 import { useSplitLayout } from '../../app/component/split-layout/layout';
 import { ProfilePicture } from './ProfilePicture';
-import IconCopy from '@icon/regular/copy.svg';
-import IconCheck from '@icon/regular/check.svg';
-import { IconButton } from '@core/component/IconButton';
-import { debounce } from '@solid-primitives/scheduled';
-import { toast } from '@core/component/Toast/Toast';
-
-const COPIED_DURATION = 800;
 
 export type UserIconProps = {
   isDeleted?: boolean;
@@ -125,7 +123,7 @@ export function UserIcon(props: UserIconProps) {
 
   const [copied, setCopied] = createSignal(false);
 
-  const resetCopied = debounce(() => setCopied(false), COPIED_DURATION);
+  const resetCopied = debounce(() => setCopied(false), 800);
 
   function handleCopyEmail() {
     const email_ = email();
@@ -133,7 +131,7 @@ export function UserIcon(props: UserIconProps) {
 
     setCopied(true);
     navigator.clipboard.writeText(email_);
-    toast.success('Email copied', undefined, undefined, COPIED_DURATION);
+    toast.success('Email copied');
     resetCopied();
   }
 
