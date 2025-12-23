@@ -2,7 +2,7 @@
 
 use super::service_impl::PropertiesServiceImpl;
 use crate::domain::{
-    ports::{MockPermissionChecker, MockPropertiesRepo},
+    ports::{MockPermissionService, MockPropertiesRepo},
     service::PropertiesService,
 };
 use anyhow::anyhow;
@@ -34,7 +34,7 @@ async fn test_set_system_property_status_complete_happy_path() {
         })
         .returning(|_, _, _, _| Box::pin(async { Ok(()) }));
 
-    let mut perm_checker = MockPermissionChecker::new();
+    let mut perm_checker = MockPermissionService::new();
     perm_checker
         .expect_check_entity_edit_permission()
         .returning(|_, _, _| Box::pin(async { Ok(()) }));
@@ -57,7 +57,7 @@ async fn test_set_system_property_status_complete_error_path() {
     repo.expect_update_entity_property_value_if_exists()
         .returning(|_, _, _, _| Box::pin(async { Err(anyhow!("boom")) }));
 
-    let mut perm_checker = MockPermissionChecker::new();
+    let mut perm_checker = MockPermissionService::new();
     perm_checker
         .expect_check_entity_edit_permission()
         .returning(|_, _, _| Box::pin(async { Ok(()) }));
@@ -86,7 +86,7 @@ async fn test_link_parent_task_delegates_to_repo() {
         .withf(move |t, p| *t == task_id && *p == Some(parent_id))
         .returning(|_, _| Box::pin(async { Ok(()) }));
 
-    let mut perm_checker = MockPermissionChecker::new();
+    let mut perm_checker = MockPermissionService::new();
     perm_checker
         .expect_check_entity_edit_permission()
         .returning(|_, _, _| Box::pin(async { Ok(()) }));
@@ -108,7 +108,7 @@ async fn test_link_parent_task_clear_parent() {
         .withf(move |t, p| *t == task_id && p.is_none())
         .returning(|_, _| Box::pin(async { Ok(()) }));
 
-    let mut perm_checker = MockPermissionChecker::new();
+    let mut perm_checker = MockPermissionService::new();
     perm_checker
         .expect_check_entity_edit_permission()
         .returning(|_, _, _| Box::pin(async { Ok(()) }));
@@ -124,7 +124,7 @@ async fn test_link_parent_task_error_propagates() {
     repo.expect_link_parent_task()
         .returning(|_, _| Box::pin(async { Err(anyhow!("link failed")) }));
 
-    let mut perm_checker = MockPermissionChecker::new();
+    let mut perm_checker = MockPermissionService::new();
     perm_checker
         .expect_check_entity_edit_permission()
         .returning(|_, _, _| Box::pin(async { Ok(()) }));
@@ -156,7 +156,7 @@ async fn test_link_subtasks_delegates_to_repo() {
         })
         .returning(|_, _| Box::pin(async { Ok(()) }));
 
-    let mut perm_checker = MockPermissionChecker::new();
+    let mut perm_checker = MockPermissionService::new();
     perm_checker
         .expect_check_entity_edit_permission()
         .returning(|_, _, _| Box::pin(async { Ok(()) }));
@@ -178,7 +178,7 @@ async fn test_link_subtasks_clear_all() {
         .withf(move |t, s| *t == task_id && s.is_empty())
         .returning(|_, _| Box::pin(async { Ok(()) }));
 
-    let mut perm_checker = MockPermissionChecker::new();
+    let mut perm_checker = MockPermissionService::new();
     perm_checker
         .expect_check_entity_edit_permission()
         .returning(|_, _, _| Box::pin(async { Ok(()) }));
@@ -193,7 +193,7 @@ async fn test_link_subtasks_error_propagates() {
 
     repo.expect_link_subtasks()
         .returning(|_, _| Box::pin(async { Err(anyhow!("subtask link failed")) }));
-    let mut perm_checker = MockPermissionChecker::new();
+    let mut perm_checker = MockPermissionService::new();
     perm_checker
         .expect_check_entity_edit_permission()
         .returning(|_, _, _| Box::pin(async { Ok(()) }));
@@ -223,7 +223,7 @@ async fn test_get_property_value_returns_value_when_exists() {
         })
         .returning(|_, _, _| Box::pin(async { Ok(Some(PropertyValue::Str("hello".to_string()))) }));
 
-    let mut perm_checker = MockPermissionChecker::new();
+    let mut perm_checker = MockPermissionService::new();
     perm_checker
         .expect_check_entity_edit_permission()
         .returning(|_, _, _| Box::pin(async { Ok(()) }));
@@ -244,7 +244,7 @@ async fn test_get_property_value_returns_none_when_not_attached() {
     repo.expect_get_entity_property_value()
         .returning(|_, _, _| Box::pin(async { Ok(None) }));
 
-    let mut perm_checker = MockPermissionChecker::new();
+    let mut perm_checker = MockPermissionService::new();
     perm_checker
         .expect_check_entity_edit_permission()
         .returning(|_, _, _| Box::pin(async { Ok(()) }));
@@ -265,7 +265,7 @@ async fn test_get_property_value_error_path() {
     repo.expect_get_entity_property_value()
         .returning(|_, _, _| Box::pin(async { Err(anyhow!("db error")) }));
 
-    let mut perm_checker = MockPermissionChecker::new();
+    let mut perm_checker = MockPermissionService::new();
     perm_checker
         .expect_check_entity_edit_permission()
         .returning(|_, _, _| Box::pin(async { Ok(()) }));
@@ -301,7 +301,7 @@ async fn test_get_system_property_value_returns_value_when_exists() {
             })
         });
 
-    let mut perm_checker = MockPermissionChecker::new();
+    let mut perm_checker = MockPermissionService::new();
     perm_checker
         .expect_check_entity_edit_permission()
         .returning(|_, _, _| Box::pin(async { Ok(()) }));
@@ -327,7 +327,7 @@ async fn test_get_system_property_value_returns_none_when_not_attached() {
     repo.expect_get_entity_property_value()
         .returning(|_, _, _| Box::pin(async { Ok(None) }));
 
-    let mut perm_checker = MockPermissionChecker::new();
+    let mut perm_checker = MockPermissionService::new();
     perm_checker
         .expect_check_entity_edit_permission()
         .returning(|_, _, _| Box::pin(async { Ok(()) }));
@@ -348,7 +348,7 @@ async fn test_get_system_property_value_error_path() {
     repo.expect_get_entity_property_value()
         .returning(|_, _, _| Box::pin(async { Err(anyhow!("db error")) }));
 
-    let mut perm_checker = MockPermissionChecker::new();
+    let mut perm_checker = MockPermissionService::new();
     perm_checker
         .expect_check_entity_edit_permission()
         .returning(|_, _, _| Box::pin(async { Ok(()) }));

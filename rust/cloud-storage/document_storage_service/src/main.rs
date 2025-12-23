@@ -16,7 +16,7 @@ use macro_entrypoint::MacroEntrypoint;
 use macro_env_var::env_var;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use macro_redis_cluster_client::Redis;
-use properties::{PermissionCheckerImpl, PropertiesPgRepo, PropertiesServiceImpl};
+use properties::{PermissionServiceImpl, PropertiesPgRepo, PropertiesServiceImpl};
 use secretsmanager_client::SecretManager;
 use soup::{
     domain::service::SoupImpl, inbound::axum_router::SoupRouterState,
@@ -188,7 +188,7 @@ async fn main() -> anyhow::Result<()> {
         EmailServiceImpl::new(EmailPgRepo::new(db.clone()), frecency_service.clone());
     let system_properties_service =
         SystemPropertiesServiceImpl::new(PgSystemPropertiesRepository::new(db.clone()));
-    let permission_checker = PermissionCheckerImpl::new(
+    let permission_checker = PermissionServiceImpl::new(
         db.clone(),
         CommsServiceClient::new(
             dss_auth_key.as_ref().to_string(),

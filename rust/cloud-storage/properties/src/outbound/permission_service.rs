@@ -1,21 +1,21 @@
-//! Permission checker implementation for properties.
+//! Permission service implementation for properties.
 
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_properties::EntityType;
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
-use super::super::domain::ports::PermissionChecker;
+use crate::domain::ports::PermissionService;
 use comms_service_client::CommsServiceClient;
 use email_db_client::threads::get::get_macro_id_from_thread_id;
 
-/// Permission checker implementation using database and comms service client.
-pub struct PermissionCheckerImpl {
+/// Permission service implementation using database and comms service client.
+pub struct PermissionServiceImpl {
     db: Pool<Postgres>,
     comms_service_client: CommsServiceClient,
 }
 
-impl PermissionCheckerImpl {
+impl PermissionServiceImpl {
     pub fn new(db: Pool<Postgres>, comms_service_client: CommsServiceClient) -> Self {
         Self {
             db,
@@ -24,7 +24,7 @@ impl PermissionCheckerImpl {
     }
 }
 
-impl PermissionChecker for PermissionCheckerImpl {
+impl PermissionService for PermissionServiceImpl {
     type Err = anyhow::Error;
 
     #[tracing::instrument(skip(self), fields(user_id = %user_id, entity_id = %entity_id, entity_type = ?entity_type), err)]

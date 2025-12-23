@@ -11,7 +11,7 @@ use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
 
 use super::error::PropertiesErr;
-use super::ports::{PermissionChecker, PropertiesRepo};
+use super::ports::{PermissionService, PropertiesRepo};
 use super::service::PropertiesService;
 
 use helpers::{extract_option_ids_from_property_value, is_property_applicable_to};
@@ -21,7 +21,7 @@ use helpers::{extract_option_ids_from_property_value, is_property_applicable_to}
 pub struct PropertiesServiceImpl<R, P>
 where
     R: PropertiesRepo,
-    P: PermissionChecker,
+    P: PermissionService,
 {
     repository: R,
     permission_checker: Option<P>,
@@ -30,7 +30,7 @@ where
 impl<R, P> PropertiesServiceImpl<R, P>
 where
     R: PropertiesRepo,
-    P: PermissionChecker,
+    P: PermissionService,
 {
     /// Create a new PropertiesService with an optional permission checker.
     pub fn new(repository: R, permission_checker: Option<P>) -> Self {
@@ -82,7 +82,7 @@ where
 impl<R, P> PropertiesService for PropertiesServiceImpl<R, P>
 where
     R: PropertiesRepo,
-    P: PermissionChecker,
+    P: PermissionService,
     anyhow::Error: From<R::Err> + From<P::Err>,
 {
     #[tracing::instrument(skip(self), fields(entity_id = %entity_id, entity_type = ?entity_type))]

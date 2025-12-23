@@ -88,12 +88,12 @@ pub trait PropertiesRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<PropertyValue>, Self::Err>> + Send;
 }
 
-/// Permission checker trait for entity access control.
+/// Permission service trait for entity access control.
 ///
-/// This trait abstracts permission checking, allowing for different implementations
+/// This trait abstracts permission operations (checking and granting), allowing for different implementations
 /// (e.g., database-backed, mock for testing).
 #[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
-pub trait PermissionChecker: Send + Sync + 'static {
+pub trait PermissionService: Send + Sync + 'static {
     type Err;
 
     /// Check if a user has edit access to an entity.

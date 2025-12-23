@@ -6,14 +6,14 @@ use system_properties::SystemPropertyKey;
 use uuid::Uuid;
 
 use crate::domain::error::PropertiesErr;
-use crate::domain::ports::PropertiesRepo;
+use crate::domain::ports::{PermissionService, PropertiesRepo};
 use crate::domain::service::PropertiesService;
 use crate::domain::service_impl::PropertiesServiceImpl;
 
 impl<R, P> PropertiesServiceImpl<R, P>
 where
     R: PropertiesRepo,
-    P: super::super::ports::PermissionChecker,
+    P: PermissionService,
     anyhow::Error: From<R::Err> + From<P::Err>,
 {
     /// Handle task relationship properties (Parent Task / Subtasks) with bidirectional linking.
