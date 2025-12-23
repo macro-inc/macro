@@ -3,9 +3,16 @@ import { idToDisplayName, idToEmail } from '@core/user';
 import { isOk } from '@core/util/maybeResult';
 import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
 import { commsServiceClient } from '@service-comms/client';
-import { createMemo, Match, Show, Switch } from 'solid-js';
+import { createMemo, createSignal, Match, Show, Switch } from 'solid-js';
 import { useSplitLayout } from '../../app/component/split-layout/layout';
 import { ProfilePicture } from './ProfilePicture';
+import IconCopy from '@icon/regular/copy.svg';
+import IconCheck from '@icon/regular/check.svg';
+import { IconButton } from '@core/component/IconButton';
+import { debounce } from '@solid-primitives/scheduled';
+import { toast } from '@core/component/Toast/Toast';
+
+const COPIED_DURATION = 800;
 
 export type UserIconProps = {
   isDeleted?: boolean;
@@ -116,6 +123,20 @@ export function UserIcon(props: UserIconProps) {
     </div>
   ));
 
+  const [copied, setCopied] = createSignal(false);
+
+  const resetCopied = debounce(() => setCopied(false), COPIED_DURATION);
+
+  function handleCopyEmail() {
+    const email_ = email();
+    if (!email_) return;
+
+    setCopied(true);
+    navigator.clipboard.writeText(email_);
+    toast.success('Email copied', undefined, undefined, COPIED_DURATION);
+    resetCopied();
+  }
+
   return (
     <Show when={displayName().length > 0 || email()} fallback={icon()}>
       <Tooltip
@@ -123,7 +144,18 @@ export function UserIcon(props: UserIconProps) {
           <div>
             <span class="text-xs">{displayName()}</span>
             <Show when={email()}>
-              <span class="text-xs select-all block">{email()}</span>
+              <span class="text-xs select-all flex items-center gap-1">
+                {email()}
+
+                <IconButton
+                  icon={copied() ? IconCheck : IconCopy}
+                  iconSize={16}
+                  class="transition-all duration-300"
+                  theme={copied() ? 'accent' : 'contrast'}
+                  size="sm"
+                  onDeepClick={handleCopyEmail}
+                />
+              </span>
             </Show>
           </div>
         }
