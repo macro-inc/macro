@@ -1,9 +1,9 @@
 import { Tooltip } from '@core/component/Tooltip';
-import { idToDisplayName } from '@core/user';
+import { idToDisplayName, idToEmail } from '@core/user';
 import { isOk } from '@core/util/maybeResult';
 import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
 import { commsServiceClient } from '@service-comms/client';
-import { createMemo, Match, Switch } from 'solid-js';
+import { createMemo, Match, Show, Switch } from 'solid-js';
 import { useSplitLayout } from '../../app/component/split-layout/layout';
 import { ProfilePicture } from './ProfilePicture';
 
@@ -24,6 +24,12 @@ export type SizeClass = {
 
 export function UserIcon(props: UserIconProps) {
   const displayName = createMemo(() => idToDisplayName(props.id!));
+  const email = createMemo(() => {
+    if (!props.id) {
+      return props.email;
+    }
+    return idToEmail(props.id);
+  });
 
   const sizeClasses = createMemo(() => {
     switch (props.size || 'md') {
@@ -110,17 +116,21 @@ export function UserIcon(props: UserIconProps) {
     </div>
   ));
 
-  const tooltipContent = createMemo(() => (
-    <span class="text-xs">{displayName()}</span>
-  ));
-
-  if (displayName().length > 0) {
-    return (
-      <Tooltip tooltip={tooltipContent()} class={sizeClasses().container}>
+  return (
+    <Show when={displayName().length > 0 || email()} fallback={icon()}>
+      <Tooltip
+        tooltip={
+          <div>
+            <span class="text-xs">{displayName()}</span>
+            <Show when={email()}>
+              <span class="text-xs select-all block">{email()}</span>
+            </Show>
+          </div>
+        }
+        class={sizeClasses().container}
+      >
         {icon()}
       </Tooltip>
-    );
-  } else {
-    return icon();
-  }
+    </Show>
+  );
 }
