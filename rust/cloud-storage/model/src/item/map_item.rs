@@ -38,6 +38,7 @@ pub fn map_document_item(
         branched_from_version_id,
         project_id,
         sub_type,
+        is_completed: false,
     })
 }
 

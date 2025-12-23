@@ -57,10 +57,21 @@ pub async fn get_recent_activities(
             d."projectId" as "project_id",
             NULL as "is_persistent",
             di.sha as "sha",
-            dt.sub_type as "sub_type"
+            dt.sub_type as "sub_type",
+            CASE 
+                WHEN dt.sub_type = 'task' 
+                    AND ep_status.values->'value' ? '00000001-0000-0000-0002-000000000004'
+                THEN true 
+                ELSE false 
+            END as "is_completed"
         FROM
             "Document" d
         LEFT JOIN document_sub_type dt ON dt.document_id = d.id
+        LEFT JOIN entity_properties ep_status 
+            ON dt.sub_type = 'task'
+            AND ep_status.entity_id = d.id 
+            AND ep_status.entity_type = 'DOCUMENT'
+            AND ep_status.property_definition_id = '00000001-0000-0000-0000-000000000002'
         LEFT JOIN LATERAL (
             SELECT
                 b.id
@@ -105,7 +116,8 @@ pub async fn get_recent_activities(
             c."projectId" as "project_id",
             c."isPersistent" as "is_persistent",
             NULL as "sha",
-            NULL as "sub_type"
+            NULL as "sub_type",
+            false as "is_completed"
         FROM "Chat" c
         WHERE c."userId" = $1 AND c."deletedAt" IS NULL
         ORDER BY updated_at DESC
@@ -134,6 +146,7 @@ pub async fn get_recent_activities(
             match row_type.as_ref() {
                 "document" => {
                     let document_version_id: String = r.get("document_version_id");
+                    let is_completed: bool = r.get("is_completed");
                     Some(Activity::Document(BasicDocument {
                         document_id: id,
                         owner: MacroUserIdStr::parse_from_str(&user_id).ok()?.into_owned(),
@@ -149,6 +162,7 @@ pub async fn get_recent_activities(
                         branched_from_version_id: r.get("branched_from_version_id"),
                         project_id,
                         sub_type,
+                        is_completed,
                     }))
                 }
                 "chat" => Some(Activity::Chat(Chat {
