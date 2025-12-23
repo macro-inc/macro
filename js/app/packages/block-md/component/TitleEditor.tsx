@@ -18,6 +18,7 @@ import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { useCanEdit } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { mergeRegister } from '@lexical/utils';
+import { onElementConnect } from '@solid-primitives/lifecycle';
 import { debounce } from '@solid-primitives/scheduled';
 import {
   $createParagraphNode,
@@ -202,15 +203,14 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
     trimWhitespace(editor, { trailing: true });
   }
 
-  onMount(() => {
-    editor.setRootElement(mountRef);
-    mountRef.addEventListener('blur', onBlur);
-  });
-
-  onCleanup(() => {
-    cleanup();
-    mountRef.removeEventListener('blur', onBlur);
-  });
+  const onConnect = (el: HTMLDivElement) => {
+    editor.setRootElement(el);
+    el.addEventListener('blur', onBlur);
+    onCleanup(() => {
+      cleanup();
+      el.removeEventListener('blur', onBlur);
+    });
+  };
 
   createEffect(() => {
     editor.setEditable(canEdit() ?? false);
@@ -280,11 +280,13 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
   return (
     <div class="relative">
       <div
-        ref={mountRef}
         contentEditable={canEdit() ?? false}
         class="text-4xl font-semibold **:optical-24!"
         classList={{
           'select-auto': !canEdit(),
+        }}
+        ref={(el) => {
+          onElementConnect(el, () => onConnect(el));
         }}
       />
       <EmojiMenu
