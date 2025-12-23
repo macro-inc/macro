@@ -8,6 +8,7 @@ import CaretLeft from '@icon/regular/caret-left.svg';
 import CaretRight from '@icon/regular/caret-right.svg';
 import SplitIcon from '@icon/regular/square-split-horizontal.svg';
 import CloseIcon from '@icon/regular/x.svg';
+import IconGear from '@macro-icons/macro-gear.svg';
 import {
   createEffect,
   createMemo,
@@ -20,6 +21,8 @@ import {
 import { Portal } from 'solid-js/web';
 import { SplitLayoutContext, SplitPanelContext } from '../context';
 import { canSpotlight } from '../utils/canSpotlight';
+import { useSplitLayout } from '../layout';
+import { globalSplitManager } from '@app/signal/splitLayout';
 
 function SplitBackButton() {
   const context = useContext(SplitPanelContext);
@@ -130,6 +133,36 @@ function SplitControlButtons() {
   );
 }
 
+function SplitSettingsButton() {
+  const { replaceSplit } = useSplitLayout();
+  const activeSplit = createMemo(() => {
+    const manager = globalSplitManager();
+    if (!manager) return;
+    const activeSplitId = manager.activeSplitId();
+    return activeSplitId ? manager.getSplit(activeSplitId) : undefined;
+  });
+
+  const isSettingsSplitOpen = createMemo(() => {
+    const content = activeSplit()?.content();
+    return content?.type === 'component' && content.id === 'settings';
+  });
+
+  return (
+    <IconButton
+      theme={isSettingsSplitOpen() ? 'accent' : 'clear'}
+      onClick={() => {
+        if (isSettingsSplitOpen()) {
+          activeSplit()?.goBack();
+          return;
+        }
+        replaceSplit({ type: 'component', id: 'settings' });
+      }}
+      icon={IconGear}
+      size="lg"
+    />
+  );
+}
+
 export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
   const ctx = useContext(SplitPanelContext);
   if (!ctx)
@@ -163,6 +196,9 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
           <EntityNavigationIndicator />
           <SplitPreviewToggle />
           <SplitSpotlightButton />
+        </div>
+        <div class="z-2 relative items-center bg-panel pr-2 h-full hidden ios:flex">
+          <SplitSettingsButton />
         </div>
       </div>
     </div>
