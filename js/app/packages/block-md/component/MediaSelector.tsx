@@ -1,3 +1,4 @@
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { INSERT_MEDIA_COMMAND } from '@core/component/LexicalMarkdown/plugins';
 import { DropdownMenuContent } from '@core/component/Menu';
@@ -12,7 +13,6 @@ import ImageIcon from '@icon/regular/image.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import UploadSimple from '@phosphor-icons/core/bold/upload-simple-bold.svg?component-solid';
 import { useHistory } from '@service-storage/history';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import type { LexicalEditor } from 'lexical';
 import type { Accessor } from 'solid-js';
 import { createMemo, createSignal, For, Show } from 'solid-js';

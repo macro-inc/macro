@@ -1,7 +1,7 @@
 import { reactToMessage } from '@block-channel/signal/reactions';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import clickOutside from '@core/directive/clickOutside';
 import { createCallback } from '@solid-primitives/rootless';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { type Component, For, type Setter } from 'solid-js';
 import { ReactionSelector } from '../ReactionSelector';
 import type { MessageAction } from './actions';

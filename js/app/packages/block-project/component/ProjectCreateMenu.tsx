@@ -1,6 +1,7 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import type { BlockName } from '@core/block';
 import { EntityIcon, getIconConfig } from '@core/component/EntityIcon';
+import { DeprecatedButton } from '@core/component/FormControls/DeprecatedButton';
 import { toast } from '@core/component/Toast/Toast';
 import { pressedKeys } from '@core/hotkey/state';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
@@ -11,7 +12,6 @@ import {
 } from '@core/util/create';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { useCreateProject } from '@service-storage/projects';
-import { DeprecatedButton } from '@core/component/FormControls/DeprecatedButton';
 import { type Component, createSignal, For } from 'solid-js';
 
 type MenuItemProps = {

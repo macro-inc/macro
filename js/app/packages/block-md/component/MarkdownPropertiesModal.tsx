@@ -1,6 +1,7 @@
 import { SplitDrawer } from '@app/component/split-layout/components/SplitDrawer';
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import { useBlockAliasedName } from '@core/block';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import {
   $getPinnedProperties,
   ADD_PINNED_PROPERTY_COMMAND,
@@ -11,7 +12,6 @@ import { useCanEdit } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import TagIcon from '@icon/regular/tag.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { createEffect, createSignal, Suspense } from 'solid-js';
 import { mdStore } from '../signal/markdownBlockData';
 import { propertiesRefreshSignal } from '../signal/propertiesRefresh';

@@ -18,6 +18,7 @@ import {
   type MessageListContextLookup,
 } from '@block-channel/utils/listContext';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { toast } from '@core/component/Toast/Toast';
 import { observedSize } from '@core/directive/observedSize';
 import type { InputAttachment } from '@core/store/cacheChannelInput';
@@ -30,7 +31,6 @@ import type { Message } from '@service-comms/generated/models/message';
 import { useUserId } from '@service-gql/client';
 import { debounce } from '@solid-primitives/scheduled';
 import { activeElement } from 'app/signal/focus';
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import {
   type Accessor,
   createContext,

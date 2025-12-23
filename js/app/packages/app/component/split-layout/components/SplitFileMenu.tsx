@@ -1,4 +1,5 @@
 import { useBlockName } from '@core/block';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { useItemOperations } from '@core/component/FileList/useItemOperations';
 import { MenuItem } from '@core/component/Menu';
 import { useIsDocumentOwner } from '@core/signal/permissions';
@@ -12,7 +13,6 @@ import Trash from '@icon/regular/trash-simple.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { blockNameToItemType, type ItemType } from '@service-storage/client';
 import { usePinnedIds } from '@service-storage/pins';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import {
   type Component,
   createMemo,

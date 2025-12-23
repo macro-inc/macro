@@ -1,3 +1,4 @@
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { toast } from '@core/component/Toast/Toast';
 import { fileSelector } from '@core/directive/fileSelector';
 import { useEmailLinks, useEmailLinksStatus } from '@core/email-link';
@@ -8,7 +9,6 @@ import type { DefaultView, ViewId } from '@core/types/view';
 import CloseIcon from '@icon/regular/x.svg';
 import { authServiceClient } from '@service-auth/client';
 import { useTutorialCompleted } from '@service-gql/client';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { For, type JSX, Match, Show, Switch } from 'solid-js';
 import { HotkeyExample, type HotkeyExampleProps } from './HotkeyExample';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';

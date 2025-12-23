@@ -3,6 +3,10 @@ import type { ChatData } from '@block-chat/definition';
 import { LocationType, useCreateShareUrl } from '@block-pdf/signal/location';
 import { withAnalytics } from '@coparse/analytics';
 import { useIsAuthenticated } from '@core/auth';
+import {
+  DeprecatedEditingTextButton,
+  DeprecatedTextButton,
+} from '@core/component/DeprecatedTextButton';
 import { EditableProvider } from '@core/component/Editable';
 import {
   DropdownMenuContent,
@@ -36,10 +40,6 @@ import { refetchResources } from '@service-storage/util/refetchResources';
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
 import { useSplitPanelOrThrow } from 'app/component/split-layout/layoutUtils';
-import {
-  DeprecatedEditingTextButton,
-  DeprecatedTextButton,
-} from '@core/component/DeprecatedTextButton';
 import { toast } from 'core/component/Toast/Toast';
 import { createMemo, createSignal, Show, useContext } from 'solid-js';
 

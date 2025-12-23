@@ -1,7 +1,7 @@
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import ResetIcon from '@icon/regular/arrow-clockwise.svg';
 import HomeIcon from '@icon/regular/house.svg';
 import { logger } from '@observability';
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { Show } from 'solid-js';
 
 interface FatalErrorProps {

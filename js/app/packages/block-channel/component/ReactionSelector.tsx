@@ -1,3 +1,4 @@
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { EmojiSelector } from '@core/component/Emoji/EmojiSelector';
 import type { SimpleEmoji } from '@core/component/Emoji/emojis';
 import { resolveEmojiFromUnicode } from '@core/component/Emoji/emojis';
@@ -7,7 +8,6 @@ import { Popover } from '@kobalte/core/popover';
 import SearchIcon from '@phosphor-icons/core/regular/magnifying-glass.svg?component-solid';
 import PlusIcon from '@phosphor-icons/core/regular/plus.svg';
 import SmileIcon from '@phosphor-icons/core/regular/smiley.svg?component-solid';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import {
   createEffect,
   createSignal,

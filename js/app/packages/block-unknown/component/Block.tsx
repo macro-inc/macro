@@ -1,4 +1,5 @@
 import { useBlockId } from '@core/block';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { getPermissions, Permissions } from '@core/component/SharePermissions';
 import { ShareModal } from '@core/component/TopBar/ShareButton';
@@ -7,7 +8,6 @@ import { downloadFile } from '@filesystem/download';
 import DownloadSimple from '@icon/regular/download-simple.svg';
 import ShareFat from '@icon/regular/share-fat.svg';
 import { createCallback } from '@solid-primitives/rootless';
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { toast } from 'core/component/Toast/Toast';
 import { createSignal } from 'solid-js';
 import { blockData, useGetFileBlob } from '../signal/blockData';

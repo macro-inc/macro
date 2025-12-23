@@ -1,4 +1,5 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { ImagePreview } from '@core/component/ImagePreview';
 import { VideoPreview } from '@core/component/VideoPreview';
@@ -16,7 +17,6 @@ import { matches } from '@core/util/match';
 import { truncateString } from '@core/util/string';
 import XIcon from '@icon/regular/x.svg';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { createSignal, Match, Show, Switch } from 'solid-js';
 
 type AttachmentProps = {

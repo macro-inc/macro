@@ -1,4 +1,5 @@
 import EntityNavigationIndicator from '@app/component/EntityNavigationIndicator';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { ENABLE_PREVIEW } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
 import CollapseIcon from '@icon/regular/arrows-in.svg';
@@ -7,7 +8,6 @@ import CaretLeft from '@icon/regular/caret-left.svg';
 import CaretRight from '@icon/regular/caret-right.svg';
 import SplitIcon from '@icon/regular/square-split-horizontal.svg';
 import CloseIcon from '@icon/regular/x.svg';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import {
   createEffect,
   createMemo,

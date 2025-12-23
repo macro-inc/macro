@@ -7,6 +7,8 @@ import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { URL_PARAMS as EMAIL_PARAMS } from '@block-email/constants';
 import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/signal/location';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
+import { DeprecatedButton } from '@core/component/FormControls/DeprecatedButton';
 import DropdownMenu from '@core/component/FormControls/DropdownMenu';
 import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { ToggleButton } from '@core/component/FormControls/ToggleButton';
@@ -84,8 +86,6 @@ import type {
   GetItemsSoupParams,
   PostSoupRequest,
 } from '@service-storage/generated/schemas';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
-import { DeprecatedButton } from '@core/component/FormControls/DeprecatedButton';
 import stringify from 'json-stable-stringify';
 import {
   type Accessor,

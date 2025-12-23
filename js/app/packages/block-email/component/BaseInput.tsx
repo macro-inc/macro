@@ -4,6 +4,8 @@ import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
 import { useHasPaidAccess } from '@core/auth';
 import { useBlockId } from '@core/block';
 import { BrightJoins } from '@core/component/BrightJoins';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import type { UserMentionRecord } from '@core/component/LexicalMarkdown/component/menu/MentionsMenu';
@@ -44,8 +46,6 @@ import type {
 import { useEmail, useUserId } from '@service-gql/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import type { Item } from '@service-storage/generated/schemas/item';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import {
   defaultSelectionData,
   lazyRegister,

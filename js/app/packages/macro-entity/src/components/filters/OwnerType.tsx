@@ -1,7 +1,7 @@
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import FunnelClearIcon from '@phosphor-icons/core/assets/regular/funnel-simple-x.svg';
 import UserSwitchIcon from '@phosphor-icons/core/assets/regular/user-switch.svg';
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import {
   DropdownMenuContent,
   MenuItem,

@@ -4,6 +4,7 @@ import {
 } from '@block-canvas/model/CanvasModel';
 import { useCachedStyle } from '@block-canvas/signal/cachedStyle';
 import { useToolManager } from '@block-canvas/signal/toolManager';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import {
@@ -25,7 +26,6 @@ import PencilSimple from '@icon/regular/pencil-simple.svg';
 import Rectangle from '@icon/regular/rectangle.svg';
 import Text from '@icon/regular/text-t.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import { createSignal, Show } from 'solid-js';
 import { Tools } from '../constants';

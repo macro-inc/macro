@@ -1,4 +1,5 @@
 import { BozzyBracketInnerSibling } from '@core/component/BozzyBracket';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { GlitchText } from '@core/component/GlitchText';
 import { Hotkey } from '@core/component/Hotkey';
 import { DecoratorRenderer } from '@core/component/LexicalMarkdown/component/core/DecoratorRenderer';
@@ -64,7 +65,6 @@ import { useEmailLinksQuery } from '@queries/email/link';
 import type { SimpleMention } from '@service-comms/generated/models/simpleMention';
 import { emailClient } from '@service-email/client';
 import type { MessageToSend } from '@service-email/generated/schemas/messageToSend';
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { normalizeEnterPlugin } from 'core/component/LexicalMarkdown/plugins/normalize-enter';
 import {
   $getRoot,

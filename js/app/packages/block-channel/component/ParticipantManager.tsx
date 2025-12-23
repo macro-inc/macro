@@ -7,6 +7,8 @@ import {
   useRemoveParticipantsFromChannel,
 } from '@block-channel/signal/participants';
 import { ClippedPanel } from '@core/component/ClippedPanel';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { DialogWrapper } from '@core/component/DialogWrapper';
 import { getDestinationFromOptions } from '@core/component/NewMessage';
 import { RecipientSelector } from '@core/component/RecipientSelector';
@@ -25,8 +27,6 @@ import BracketLeft from '@macro-icons/macro-group-bracket-left.svg';
 import type { ChannelParticipant } from '@service-comms/generated/models/channelParticipant';
 import { ChannelType } from '@service-comms/generated/models/channelType';
 import { useUserId } from '@service-gql/client';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { createMemo, createSignal, Show } from 'solid-js';
 import { VList } from 'virtua/solid';
 import { beveledCorners } from '../../block-theme/signals/themeSignals';

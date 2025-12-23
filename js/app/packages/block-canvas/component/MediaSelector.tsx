@@ -5,6 +5,7 @@ import {
 import { useRenderState } from '@block-canvas/store/RenderState';
 import { vec2 } from '@block-canvas/util/vector2';
 import { withAnalytics } from '@coparse/analytics';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { DropdownMenuContent } from '@core/component/Menu';
@@ -26,7 +27,6 @@ import UploadSimple from '@phosphor-icons/core/bold/upload-simple-bold.svg?compo
 import Image from '@phosphor-icons/core/regular/image.svg?component-solid';
 //import { copiedFile } from "@core/state/clipboard";
 import { useHistory } from '@service-storage/history';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { createMemo, createSignal, Show } from 'solid-js';
 import { VList } from 'virtua/solid';
 import { Tools } from '../constants';

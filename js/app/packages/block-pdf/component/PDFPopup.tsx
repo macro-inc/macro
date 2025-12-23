@@ -4,6 +4,8 @@ import { useIsAuthenticated } from '@core/auth';
 import { useBlockId } from '@core/block';
 import { structuredOutputCompletion } from '@core/client/structuredOutput';
 import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMessageMarkdown';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { AskAi } from '@core/component/GeneralizedPopup/AskAI';
 import { GeneralizedPopup } from '@core/component/GeneralizedPopup/Popup';
 import { blockElementSignal } from '@core/signal/blockElement';
@@ -18,8 +20,6 @@ import PasteIcon from '@phosphor-icons/core/regular/clipboard-text.svg?component
 import LinkIcon from '@phosphor-icons/core/regular/link.svg?component-solid';
 import TrashIcon from '@phosphor-icons/core/regular/trash.svg?component-solid';
 import { createCallback } from '@solid-primitives/rootless';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import {
   createEffect,
   createMemo,

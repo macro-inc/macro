@@ -1,10 +1,10 @@
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import ArrowBendDoubleUpLeft from '@icon/regular/arrow-bend-double-up-left.svg';
 import ArrowBendUpLeft from '@icon/regular/arrow-bend-up-left.svg';
 import ArrowBendUpRight from '@icon/regular/arrow-bend-up-right.svg';
 import type { MessageWithBodyReplyless } from '@service-email/generated/schemas';
 // import EnvelopSimple from '@icon/regular/envelope-simple.svg';
 import { useEmail } from '@service-gql/client';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { type Setter, Show } from 'solid-js';
 import { getEmailFormRegistry } from './EmailFormContext';
 

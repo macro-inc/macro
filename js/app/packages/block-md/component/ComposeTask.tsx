@@ -1,4 +1,6 @@
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { BlockLink } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
@@ -31,8 +33,6 @@ import XIcon from '@icon/regular/x.svg';
 import { propertiesServiceClient } from '@service-properties/client';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import { useQuery } from '@tanstack/solid-query';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import type { LexicalEditor } from 'lexical';
 import { createSignal, For, Show, Suspense } from 'solid-js';
 import { createStore, reconcile, type Store, unwrap } from 'solid-js/store';
