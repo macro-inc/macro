@@ -1,5 +1,8 @@
 //! Service implementation for properties.
 
+mod helpers;
+mod task_properties;
+
 use std::fmt::Debug;
 
 use models_properties::EntityType;
@@ -11,6 +14,8 @@ use uuid::Uuid;
 
 use super::ports::{PermissionChecker, PropertiesRepo};
 use super::service::PropertiesService;
+
+use helpers::{extract_option_ids_from_property_value, is_property_applicable_to};
 
 /// Implementation of PropertiesService using a repository and optional permission checker.
 #[derive(Debug)]
@@ -72,26 +77,6 @@ where
         }
 
         Ok(())
-    }
-
-    /// Extract option IDs from a PropertyValue (matches properties_db_client pattern).
-    fn extract_option_ids_from_property_value(value: &Option<PropertyValue>) -> Vec<Uuid> {
-        match value {
-            Some(PropertyValue::SelectOption(ids)) => ids.clone(),
-            _ => Vec::new(),
-        }
-    }
-
-    /// Check if a property can be attached to the given entity type.
-    fn is_property_applicable_to(property_id: Uuid, entity_type: EntityType) -> bool {
-        // Task-only properties: Parent Task and Subtasks
-        if property_id == SystemPropertyKey::PARENT_TASK_UUID
-            || property_id == SystemPropertyKey::SUBTASKS_UUID
-        {
-            return entity_type == EntityType::Task;
-        }
-
-        true
     }
 }
 
@@ -221,14 +206,14 @@ where
         };
 
         // Validate property options at service layer (before upserting)
-        let option_ids = Self::extract_option_ids_from_property_value(&property_value);
+        let option_ids = extract_option_ids_from_property_value(&property_value);
         if !option_ids.is_empty() {
             self.validate_property_options(property_definition_id, &option_ids)
                 .await?;
         }
 
         // Check if this property can be attached to the given entity type
-        if !Self::is_property_applicable_to(property_definition_id, entity_type) {
+        if !is_property_applicable_to(property_definition_id, entity_type) {
             return Err(
                 anyhow::anyhow!("This property cannot be attached to this entity type").into(),
             );
@@ -263,135 +248,6 @@ where
             )
             .await?;
 
-        Ok(())
-    }
-
-    /// Handle task relationship properties (Parent Task / Subtasks) with bidirectional linking.
-    /// Entity type is guaranteed to be Task (enforced by match guard).
-    async fn handle_task_relationship_property(
-        &self,
-        entity_id: &str,
-        property_definition_id: Uuid,
-        value: Option<SetPropertyValue>,
-    ) -> Result<(), Self::Err> {
-        let task_id = Uuid::parse_str(entity_id).map_err(|_| anyhow::anyhow!("Invalid task ID"))?;
-
-        match property_definition_id {
-            SystemPropertyKey::PARENT_TASK_UUID => {
-                // Extract parent task ID (None to clear)
-                let parent_task_id = match &value {
-                    None => None,
-                    Some(SetPropertyValue::EntityReference { reference }) => {
-                        if reference.entity_type != EntityType::Task {
-                            return Err(anyhow::anyhow!(
-                                "Parent Task must reference a Task entity"
-                            )
-                            .into());
-                        }
-                        Some(
-                            Uuid::parse_str(&reference.entity_id)
-                                .map_err(|_| anyhow::anyhow!("Invalid task ID"))?,
-                        )
-                    }
-                    Some(_) => {
-                        return Err(anyhow::anyhow!(
-                            "Parent Task requires a single entity reference"
-                        )
-                        .into());
-                    }
-                };
-
-                self.link_parent_task(task_id, parent_task_id).await?;
-            }
-            SystemPropertyKey::SUBTASKS_UUID => {
-                // Extract subtask IDs (empty to clear)
-                let subtask_ids = match &value {
-                    None => vec![],
-                    Some(SetPropertyValue::MultiEntityReference { references }) => {
-                        let mut ids = Vec::with_capacity(references.len());
-                        for ref_ in references {
-                            if ref_.entity_type != EntityType::Task {
-                                return Err(anyhow::anyhow!(
-                                    "Subtasks must reference Task entities"
-                                )
-                                .into());
-                            }
-                            ids.push(
-                                Uuid::parse_str(&ref_.entity_id)
-                                    .map_err(|_| anyhow::anyhow!("Invalid task ID"))?,
-                            );
-                        }
-                        ids
-                    }
-                    Some(_) => {
-                        return Err(anyhow::anyhow!(
-                            "Subtasks requires multiple entity references"
-                        )
-                        .into());
-                    }
-                };
-
-                self.link_subtasks(task_id, subtask_ids).await?;
-            }
-            _ => {
-                // This should never happen due to the match guard, but handle it for completeness
-                return Err(
-                    anyhow::anyhow!("Invalid property for task relationship handling").into(),
-                );
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Handle task assignees property with notifications and permissions.
-    /// Assignees is a multi-select entity property, so only accepts MultiEntityReference.
-    /// If value is None (clearing assignees), there's nothing to do for notifications/permissions.
-    async fn handle_task_assignees_property(
-        &self,
-        entity_id: &str,
-        value: Option<SetPropertyValue>,
-    ) -> Result<(), Self::Err> {
-        // Clearing assignees - nothing to do for notifications/permissions
-        let Some(SetPropertyValue::MultiEntityReference { references }) = &value else {
-            if value.is_some() {
-                // Assignees is multi-select, so only MultiEntityReference is valid
-                // This should be caught by validate_compatibility, but handle it here for safety
-                return Err(
-                    anyhow::anyhow!("Assignees requires multiple entity references").into(),
-                );
-            }
-            return Ok(());
-        };
-
-        let assignee_ids: Vec<String> = references.iter().map(|r| r.entity_id.clone()).collect();
-        let task_id = Uuid::parse_str(entity_id).map_err(|_| anyhow::anyhow!("Invalid task ID"))?;
-        self.handle_task_assignee_notifications(task_id, &assignee_ids)
-            .await?;
-        self.handle_task_assignee_permissions(task_id, &assignee_ids)
-            .await?;
-        Ok(())
-    }
-
-    /// Handle notifications when task assignees are updated.
-    /// This is a no-op for now.
-    async fn handle_task_assignee_notifications(
-        &self,
-        _task_id: Uuid,
-        _assignee_ids: &[String],
-    ) -> Result<(), Self::Err> {
-        // No-op for now
-        Ok(())
-    }
-
-    /// Handle permissions when task assignees are updated.
-    /// This is a no-op for now.
-    async fn handle_task_assignee_permissions(
-        &self,
-        _task_id: Uuid,
-        _assignee_ids: &[String],
-    ) -> Result<(), Self::Err> {
-        // No-op for now
         Ok(())
     }
 }
