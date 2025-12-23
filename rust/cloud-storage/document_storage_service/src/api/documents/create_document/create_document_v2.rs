@@ -7,8 +7,12 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model::document::response::CreateDocumentResponseData;
 use model::document::response::{DocumentResponse, DocumentResponseMetadata};
 use model::document::{ContentType, FileType, build_cloud_storage_bucket_document_key};
+use models_opensearch::SearchEntityType;
 use models_permissions::share_permission::SharePermissionV2;
+use sqs_client::search::SearchQueueMessage;
+use sqs_client::search::name::EntityName;
 use system_properties::SystemPropertiesService;
+use tracing::Instrument;
 use uuid::Uuid;
 
 /// Parameters for creating a document
@@ -190,6 +194,39 @@ pub async fn create_document(
         content_type: mime_type,
         file_type: file_type.map(|f| f.to_string()),
     };
+
+    // Notify search service of new document
+    let sqs_client = ctx.sqs_client.clone();
+    let document_id = response_data
+        .document_response
+        .document_metadata
+        .document_id
+        .clone();
+    tokio::spawn(
+        async move {
+            tracing::trace!("sending message to search extractor queue");
+            let document_id = match macro_uuid::string_to_uuid(&document_id) {
+                Ok(document_id) => document_id,
+                Err(err) => {
+                    tracing::error!(error=?err, "failed to convert document_id to uuid");
+                    return;
+                }
+            };
+
+            let _ = sqs_client
+                .send_message_to_search_event_queue(SearchQueueMessage::UpdateEntityName(
+                    EntityName {
+                        entity_id: document_id,
+                        entity_type: SearchEntityType::Documents,
+                    },
+                ))
+                .await
+                .inspect_err(|e| {
+                    tracing::error!(error=?e, "SEARCH_QUEUE unable to enqueue message");
+                });
+        }
+        .in_current_span(),
+    );
 
     Ok(response_data)
 }
