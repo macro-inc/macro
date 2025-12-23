@@ -1,3 +1,4 @@
+import ArrowUp from '@icon/bold/arrow-up-bold.svg';
 import { FormatRibbon } from '@block-channel/component/FormatRibbon';
 import { MacroSignatureButton } from '@block-email/component/MacroSignatureButton';
 import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
@@ -902,45 +903,24 @@ export function BaseInput(props: {
             </Show>
           </div>
           <div class="flex flex-row items-center">
-            <TextButton
-              theme="base"
+            <button
               disabled={isPendingUpload() || sendMutation.isPending}
               onClick={() => {
-                sendEmail(true);
+                sendEmail();
               }}
-              tooltip={{
-                label: 'Send and mark done',
-                hotkeyToken: TOKENS.email.sendAndMarkDone,
-              }}
+              class="text-ink-muted hover:scale-115 transition ease-in-out flex flex-col justify-center items-center size-6 rounded-full"
             >
               <Show
                 when={!isPendingUpload() && !sendMutation.isPending}
                 fallback={
-                  <Spinner class="w-5 h-5 animate-spin cursor-disabled" />
+                  <Spinner class="size-6 animate-spin cursor-disabled" />
                 }
               >
-                <div class="flex fles-row items-center gap-0.5">
-                  <span>Send +</span>
-                  <CheckIcon class="size-4" />
+                <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center">
+                  <ArrowUp class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
                 </div>
               </Show>
-            </TextButton>
-            <DropdownMenu>
-              <DropdownMenu.Trigger>
-                <div class="w-8 min-h-8 flex justify-center items-center h-full border-r border-t border-b border-ink hover:bg-hover">
-                  <CaretDown class="size-4 text-ink transition-transform [[data-expanded]_&]:scale-y-[-1]" />
-                </div>
-              </DropdownMenu.Trigger>
-              <DropdownMenuContent>
-                <MenuItem
-                  text="Send without marking done"
-                  onClick={() => {
-                    sendEmail();
-                  }}
-                  hotkeyToken={TOKENS.email.send}
-                />
-              </DropdownMenuContent>
-            </DropdownMenu>
+            </button>
           </div>
         </div>
       </div>
