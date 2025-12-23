@@ -86,6 +86,8 @@ import {
   prepareEmailBody,
   prepareMacroBody,
   registerAppendPreviousEmail,
+  registerToggleAppendedThread,
+  TOGGLE_APPENED_EMAIL_THREAD_COMMAND,
 } from '../util/prepareEmailBody';
 import { convertEmailRecipientToContactInfo } from '../util/recipientConversion';
 import { getReplyTypeFromDraft } from '../util/replyType';
@@ -232,6 +234,10 @@ export function BaseInput(props: {
 
   lazyRegister(editor, (editor) => {
     return registerAppendPreviousEmail(editor);
+  });
+
+  lazyRegister(editor, (editor) => {
+    return registerToggleAppendedThread(editor);
   });
 
   const userEmail = useEmail();
@@ -856,13 +862,27 @@ export function BaseInput(props: {
             onclick={() => {
               const appended = form().replyAppended();
               form().setReplyAppended(!appended);
-              editor()?.dispatchCommand(APPEND_PREVIOUS_EMAIL_COMMAND, {
-                replyingTo: props.replyingTo(),
-                replyType: effectiveReplyType(),
-              });
-              editor()?.update(() => {
-                $getRoot().getFirstChild()?.selectStart();
-              });
+
+              if (!appended) {
+                editor()?.dispatchCommand(APPEND_PREVIOUS_EMAIL_COMMAND, {
+                  replyingTo: props.replyingTo(),
+                  replyType: effectiveReplyType(),
+                });
+                return;
+              }
+
+              const replyingToID = props.replyingTo()?.replying_to_id;
+              if (replyingToID) {
+                console.log('Call toggle');
+                editor()?.dispatchCommand(TOGGLE_APPENED_EMAIL_THREAD_COMMAND, {
+                  hidden: true,
+                  replyingToID: replyingToID,
+                });
+              }
+
+              // editor()?.update(() => {
+              //   $getRoot().getFirstChild()?.selectStart();
+              // });
             }}
           />
         </div>

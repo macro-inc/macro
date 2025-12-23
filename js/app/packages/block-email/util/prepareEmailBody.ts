@@ -1,6 +1,7 @@
 import { formatEmailDate } from '@core/util/date';
 import { $generateHtmlFromNodes, $generateNodesFromDOM } from '@lexical/html';
 import { $createQuoteNode } from '@lexical/rich-text';
+import { $dfsIterator } from '@lexical/utils';
 import {
   $createClassedBlockNode,
   $createDocumentMentionNode,
@@ -40,6 +41,11 @@ export const APPEND_PREVIOUS_EMAIL_COMMAND = createCommand<{
   replyingTo: MessageWithBodyReplyless | undefined;
   replyType?: ReplyType;
 }>('APPEND_PREVIOUS_EMAIL_COMMAND');
+
+export const TOGGLE_APPENED_EMAIL_THREAD_COMMAND = createCommand<{
+  replyingToID: string;
+  hidden: boolean;
+}>('TOGGLE_APPENED_EMAIL_THREAD_COMMAND');
 
 type HeaderDescriptor =
   | { kind: 'forward'; lines: string[] }
@@ -122,11 +128,18 @@ function $generateHeaderNodes(
   const emailHeader = $createClassedBlockNode({
     tag: 'div',
     classes: ['gmail_attr'],
+    attributes: replyingTo.replying_to_id
+      ? {
+          [REPLYING_TO_ID_ATTRIBUTE]: replyingTo.replying_to_id,
+        }
+      : undefined,
   });
   const emailHeaderText = $createTextNode(descriptor.text);
   emailHeader.append(emailHeaderText);
   return [emailHeader];
 }
+
+const REPLYING_TO_ID_ATTRIBUTE = 'data-replying-to-id';
 
 const $appendPreviousEmail = (
   editor: LexicalEditor,
@@ -134,9 +147,15 @@ const $appendPreviousEmail = (
   replyType: ReplyType | undefined
 ) => {
   if (!replyingTo) return true;
+  console.log('Appending');
   const wrapper = $createClassedBlockNode({
     tag: 'div',
     classes: ['macro_quote', 'gmail_quote'],
+    attributes: replyingTo.replying_to_id
+      ? {
+          [REPLYING_TO_ID_ATTRIBUTE]: replyingTo.replying_to_id,
+        }
+      : undefined,
   });
   const spacing = $createLineBreakNode();
   wrapper.append(spacing);
@@ -170,11 +189,67 @@ const $appendPreviousEmail = (
   return true;
 };
 
+function* $findPreviousEmailNode(replyingToID: string | undefined) {
+  if (!replyingToID) yield;
+  for (const { node } of $dfsIterator()) {
+    if (!$isClassedBlockNode(node)) continue;
+
+    const replyingToIDAttr = node.__attributes?.[REPLYING_TO_ID_ATTRIBUTE];
+    if (!replyingToIDAttr || replyingToIDAttr !== replyingToID) continue;
+    yield node;
+  }
+  yield;
+}
+
+function toggleAppendedThread(
+  editor: LexicalEditor,
+  replyingToID: string | undefined,
+  value: boolean
+) {
+  if (!replyingToID) return;
+
+  editor.update(
+    () => {
+      for (const node of $findPreviousEmailNode(replyingToID)) {
+        if (!node) continue;
+        console.log(node, value);
+
+        node.setHidden(value);
+        if (value) node.remove();
+      }
+      return true;
+    },
+    { discrete: true }
+  );
+}
+
 export function registerAppendPreviousEmail(editor: LexicalEditor) {
   return editor.registerCommand(
     APPEND_PREVIOUS_EMAIL_COMMAND,
     ({ replyingTo, replyType }) => {
+      const replyingToID = replyingTo?.replying_to_id ?? undefined;
+      const node = $findPreviousEmailNode(replyingToID).next();
+
+      console.log(node);
+
       $appendPreviousEmail(editor, replyingTo, replyType);
+      // if (!node.value) {
+      // } else {
+      //   toggleAppendedThread(editor, replyingToID, false);
+      // }
+
+      return true;
+    },
+    COMMAND_PRIORITY_EDITOR
+  );
+}
+
+export function registerToggleAppendedThread(editor: LexicalEditor) {
+  return editor.registerCommand(
+    TOGGLE_APPENED_EMAIL_THREAD_COMMAND,
+    ({ hidden, replyingToID }) => {
+      console.log('Toggle', hidden);
+      toggleAppendedThread(editor, replyingToID, hidden);
       return true;
     },
     COMMAND_PRIORITY_EDITOR
