@@ -10,7 +10,6 @@ import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core
 import type { UserMentionRecord } from '@core/component/LexicalMarkdown/component/menu/MentionsMenu';
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { RecipientSelector } from '@core/component/RecipientSelector';
-import { TextButton } from '@core/component/TextButton';
 import { toast } from '@core/component/Toast/Toast';
 import { Tooltip } from '@core/component/Tooltip';
 import { fileDrop } from '@core/directive/fileDrop';
@@ -18,12 +17,11 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { trackMention } from '@core/signal/mention';
 import { useDisplayName } from '@core/user';
+import ArrowUp from '@icon/bold/arrow-up-bold.svg';
 import Spinner from '@icon/bold/spinner-gap-bold.svg';
 import ReplyAll from '@icon/regular/arrow-bend-double-up-left.svg';
 import Reply from '@icon/regular/arrow-bend-up-left.svg';
 import Forward from '@icon/regular/arrow-bend-up-right.svg';
-import CaretDown from '@icon/regular/caret-down.svg';
-import CheckIcon from '@icon/regular/check.svg';
 import DotsThree from '@icon/regular/dots-three.svg';
 import Plus from '@icon/regular/plus.svg';
 import TextAa from '@icon/regular/text-aa.svg';
@@ -559,7 +557,7 @@ export function BaseInput(props: {
       attachComposeHotkeys(composeContainerRef);
 
       registerHotkey({
-        hotkey: 'shift+cmd+enter',
+        hotkey: 'cmd+enter',
         scopeId: composeHotkeyScope,
         description: 'Send email',
         keyDownHandler: () => {
@@ -572,7 +570,7 @@ export function BaseInput(props: {
       });
 
       registerHotkey({
-        hotkey: 'cmd+enter',
+        hotkey: 'shift+cmd+enter',
         scopeId: composeHotkeyScope,
         description: 'Send and mark done',
         keyDownHandler: () => {
@@ -902,45 +900,22 @@ export function BaseInput(props: {
             </Show>
           </div>
           <div class="flex flex-row items-center">
-            <TextButton
-              theme="base"
+            <button
               disabled={isPendingUpload() || sendMutation.isPending}
-              onClick={() => {
-                sendEmail(true);
-              }}
-              tooltip={{
-                label: 'Send and mark done',
-                hotkeyToken: TOKENS.email.sendAndMarkDone,
-              }}
+              onClick={() => sendEmail()}
+              class="text-ink-muted hover:scale-115 transition ease-in-out flex flex-col justify-center items-center size-6 rounded-full"
             >
               <Show
                 when={!isPendingUpload() && !sendMutation.isPending}
                 fallback={
-                  <Spinner class="w-5 h-5 animate-spin cursor-disabled" />
+                  <Spinner class="size-6 animate-spin cursor-disabled" />
                 }
               >
-                <div class="flex fles-row items-center gap-0.5">
-                  <span>Send +</span>
-                  <CheckIcon class="size-4" />
+                <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center">
+                  <ArrowUp class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
                 </div>
               </Show>
-            </TextButton>
-            <DropdownMenu>
-              <DropdownMenu.Trigger>
-                <div class="w-8 min-h-8 flex justify-center items-center h-full border-r border-t border-b border-ink hover:bg-hover">
-                  <CaretDown class="size-4 text-ink transition-transform [[data-expanded]_&]:scale-y-[-1]" />
-                </div>
-              </DropdownMenu.Trigger>
-              <DropdownMenuContent>
-                <MenuItem
-                  text="Send without marking done"
-                  onClick={() => {
-                    sendEmail();
-                  }}
-                  hotkeyToken={TOKENS.email.send}
-                />
-              </DropdownMenuContent>
-            </DropdownMenu>
+            </button>
           </div>
         </div>
       </div>

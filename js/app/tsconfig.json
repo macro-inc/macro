@@ -198,12 +198,18 @@
       ],
       "@queries/*": [
         "./packages/queries/*"
+      ],
+      "@ui/*": [
+        "./packages/ui/*"
       ]
     },
     "rootDir": ".",
     "outDir": "./dist"
   },
   "references": [
+    {
+      "path": "./packages/ui"
+    },
     {
       "path": "./packages/core"
     },

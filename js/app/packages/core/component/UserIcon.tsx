@@ -1,9 +1,14 @@
+import { IconButton } from '@core/component/IconButton';
+import { toast } from '@core/component/Toast/Toast';
 import { Tooltip } from '@core/component/Tooltip';
-import { idToDisplayName } from '@core/user';
+import { idToDisplayName, idToEmail } from '@core/user';
 import { isOk } from '@core/util/maybeResult';
+import IconCheck from '@icon/regular/check.svg';
+import IconCopy from '@icon/regular/copy.svg';
 import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
 import { commsServiceClient } from '@service-comms/client';
-import { createMemo, Match, Switch } from 'solid-js';
+import { debounce } from '@solid-primitives/scheduled';
+import { createMemo, createSignal, Match, Show, Switch } from 'solid-js';
 import { useSplitLayout } from '../../app/component/split-layout/layout';
 import { ProfilePicture } from './ProfilePicture';
 
@@ -24,6 +29,12 @@ export type SizeClass = {
 
 export function UserIcon(props: UserIconProps) {
   const displayName = createMemo(() => idToDisplayName(props.id!));
+  const email = createMemo(() => {
+    if (!props.id) {
+      return props.email;
+    }
+    return idToEmail(props.id);
+  });
 
   const sizeClasses = createMemo(() => {
     switch (props.size || 'md') {
@@ -110,17 +121,46 @@ export function UserIcon(props: UserIconProps) {
     </div>
   ));
 
-  const tooltipContent = createMemo(() => (
-    <span class="text-xs">{displayName()}</span>
-  ));
+  const [copied, setCopied] = createSignal(false);
 
-  if (displayName().length > 0) {
-    return (
-      <Tooltip tooltip={tooltipContent()} class={sizeClasses().container}>
+  const resetCopied = debounce(() => setCopied(false), 800);
+
+  function handleCopyEmail() {
+    const email_ = email();
+    if (!email_) return;
+
+    setCopied(true);
+    navigator.clipboard.writeText(email_);
+    toast.success('Email copied');
+    resetCopied();
+  }
+
+  return (
+    <Show when={displayName().length > 0 || email()} fallback={icon()}>
+      <Tooltip
+        tooltip={
+          <div>
+            <span class="text-xs">{displayName()}</span>
+            <Show when={email()}>
+              <span class="text-xs select-all flex items-center gap-1">
+                {email()}
+
+                <IconButton
+                  icon={copied() ? IconCheck : IconCopy}
+                  iconSize={16}
+                  class="transition-all duration-300"
+                  theme={copied() ? 'accent' : 'contrast'}
+                  size="sm"
+                  onDeepClick={handleCopyEmail}
+                />
+              </span>
+            </Show>
+          </div>
+        }
+        class={sizeClasses().container}
+      >
         {icon()}
       </Tooltip>
-    );
-  } else {
-    return icon();
-  }
+    </Show>
+  );
 }
