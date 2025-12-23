@@ -1,6 +1,6 @@
-import { GlitchText } from '@ui/components/GlitchText';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useBigChat } from '@core/signal/layout/bigChat';
+import { GlitchText } from '@ui/components/GlitchText';
 import { createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import { setKonsoleMode, setKonsoleOpen } from '../command/state';
 import { setCreateMenuOpen } from '../Launcher';
