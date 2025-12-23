@@ -905,9 +905,7 @@ export function BaseInput(props: {
           <div class="flex flex-row items-center">
             <button
               disabled={isPendingUpload() || sendMutation.isPending}
-              onClick={() => {
-                sendEmail();
-              }}
+              onClick={sendEmail}
               class="text-ink-muted hover:scale-115 transition ease-in-out flex flex-col justify-center items-center size-6 rounded-full"
             >
               <Show
