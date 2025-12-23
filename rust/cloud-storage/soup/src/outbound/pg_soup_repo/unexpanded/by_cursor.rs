@@ -71,8 +71,10 @@ pub async fn unexpanded_generic_cursor_soup(
                     WHEN dt.sub_type = 'task' 
                         AND ep_status.values->'value' ? '00000001-0000-0000-0002-000000000004'
                     THEN true 
-                    ELSE false 
-                END as "is_completed!"
+                    WHEN dt.sub_type = 'task'
+                    THEN false
+                    ELSE NULL 
+                END as "is_completed"
             FROM "Document" d
             LEFT JOIN document_sub_type dt ON dt.document_id = d.id
             LEFT JOIN entity_properties ep_status 
@@ -128,7 +130,7 @@ pub async fn unexpanded_generic_cursor_soup(
                     WHEN 'created_at'  THEN c."createdAt"
                     ELSE c."updatedAt"
                 END::timestamptz as "sort_ts!",
-                false as "is_completed!"
+                NULL as "is_completed"
             FROM "Chat" c
             INNER JOIN UserAccessibleItems uai 
                 ON uai.item_id = c.id 
@@ -164,7 +166,7 @@ pub async fn unexpanded_generic_cursor_soup(
                     WHEN 'created_at'  THEN p."createdAt"
                     ELSE p."updatedAt"
                 END::timestamptz as "sort_ts!",
-                false as "is_completed!"
+                NULL as "is_completed"
             FROM "Project" p
             INNER JOIN UserAccessibleItems uai 
                 ON uai.item_id = p.id 
@@ -258,8 +260,10 @@ pub async fn no_frecency_unexpanded_generic_cursor_soup(
                     WHEN dt.sub_type = 'task' 
                         AND ep_status.values->'value' ? '00000001-0000-0000-0002-000000000004'
                     THEN true 
-                    ELSE false 
-                END as "is_completed!"
+                    WHEN dt.sub_type = 'task'
+                    THEN false
+                    ELSE NULL 
+                END as "is_completed"
             FROM "Document" d
             LEFT JOIN document_sub_type dt ON dt.document_id = d.id
             LEFT JOIN entity_properties ep_status 
@@ -315,7 +319,7 @@ pub async fn no_frecency_unexpanded_generic_cursor_soup(
                     WHEN 'created_at'  THEN c."createdAt"
                     ELSE c."updatedAt"
                 END::timestamptz as "sort_ts!",
-                false as "is_completed!"
+                NULL as "is_completed"
             FROM "Chat" c
             INNER JOIN UserAccessibleItems uai 
                 ON uai.item_id = c.id 
@@ -351,7 +355,7 @@ pub async fn no_frecency_unexpanded_generic_cursor_soup(
                     WHEN 'created_at'  THEN p."createdAt"
                     ELSE p."updatedAt"
                 END::timestamptz as "sort_ts!",
-                false as "is_completed!"
+                NULL as "is_completed"
             FROM "Project" p
             INNER JOIN UserAccessibleItems uai 
                 ON uai.item_id = p.id 

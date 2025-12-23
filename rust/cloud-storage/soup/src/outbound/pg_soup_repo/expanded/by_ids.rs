@@ -98,8 +98,10 @@ pub async fn expanded_soup_by_ids<'a>(
                     WHEN dt.sub_type = 'task' 
                         AND ep_status.values->'value' ? '00000001-0000-0000-0002-000000000004'
                     THEN true 
-                    ELSE false 
-                END as "is_completed!"
+                    WHEN dt.sub_type = 'task'
+                    THEN false
+                    ELSE NULL 
+                END as "is_completed"
             FROM "Document" d
             LEFT JOIN document_sub_type dt ON dt.document_id = d.id
             LEFT JOIN entity_properties ep_status 
@@ -150,7 +152,7 @@ pub async fn expanded_soup_by_ids<'a>(
                 NULL as "sha",
                 NULL as "sub_type",
                 uh."updatedAt"::timestamptz as "viewed_at",
-                false as "is_completed!"
+                NULL as "is_completed"
             FROM "Chat" c
             INNER JOIN UserAccessibleItems uai 
                 ON uai.item_id = c.id 

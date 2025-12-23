@@ -99,8 +99,10 @@ r#"
                     WHEN dt.sub_type = 'task' 
                         AND ep_status.values->'value' ? '00000001-0000-0000-0002-000000000004'
                     THEN true 
-                    ELSE false 
-                END as "is_completed!"
+                    WHEN dt.sub_type = 'task'
+                    THEN false
+                    ELSE NULL 
+                END as "is_completed"
             FROM "Document" d
             LEFT JOIN document_sub_type dt ON dt.document_id = d.id
             LEFT JOIN entity_properties ep_status 
@@ -152,7 +154,7 @@ r#"
                     WHEN 'created_at' THEN c."createdAt"
                     ELSE c."updatedAt"
                 END::timestamptz as "sort_ts!",
-                false as "is_completed!"
+                NULL as "is_completed"
             FROM "Chat" c
             INNER JOIN UserAccessibleItems uai ON uai.item_id = c.id AND uai.item_type = 'chat'
             LEFT JOIN "UserHistory" uh ON uh."itemId" = c.id AND uh."itemType" = 'chat' AND uh."userId" = $1
@@ -183,7 +185,7 @@ r#"
                     WHEN 'created_at'  THEN p."createdAt"
                     ELSE p."updatedAt"
                 END::timestamptz as "sort_ts!",
-                false as "is_completed!"
+                NULL as "is_completed"
             FROM "Project" p
             INNER JOIN UserAccessibleItems uai
                 ON uai.item_id = p.id
@@ -300,8 +302,10 @@ r#"
                     WHEN dt.sub_type = 'task' 
                         AND ep_status.values->'value' ? '00000001-0000-0000-0002-000000000004'
                     THEN true 
-                    ELSE false 
-                END as "is_completed!"
+                    WHEN dt.sub_type = 'task'
+                    THEN false
+                    ELSE NULL 
+                END as "is_completed"
             FROM "Document" d
             LEFT JOIN document_sub_type dt ON dt.document_id = d.id
             LEFT JOIN entity_properties ep_status 
@@ -353,7 +357,7 @@ r#"
                     WHEN 'created_at' THEN c."createdAt"
                     ELSE c."updatedAt"
                 END::timestamptz as "sort_ts!",
-                false as "is_completed!"
+                NULL as "is_completed"
             FROM "Chat" c
             INNER JOIN UserAccessibleItems uai ON uai.item_id = c.id AND uai.item_type = 'chat'
             LEFT JOIN "UserHistory" uh ON uh."itemId" = c.id AND uh."itemType" = 'chat' AND uh."userId" = $1
@@ -384,7 +388,7 @@ r#"
                     WHEN 'created_at'  THEN p."createdAt"
                     ELSE p."updatedAt"
                 END::timestamptz as "sort_ts!",
-                false as "is_completed!"
+                NULL as "is_completed"
             FROM "Project" p
             INNER JOIN UserAccessibleItems uai
                 ON uai.item_id = p.id
