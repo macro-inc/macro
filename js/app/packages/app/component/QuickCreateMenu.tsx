@@ -1,5 +1,5 @@
 import { BozzyBracketInnerSibling } from '@core/component/BozzyBracket';
-import { GlitchText } from '@core/component/GlitchText';
+import { GlitchText } from '@ui/components/GlitchText';
 import { Hotkey } from '@core/component/Hotkey';
 import { DecoratorRenderer } from '@core/component/LexicalMarkdown/component/core/DecoratorRenderer';
 import { NodeAccessoryRenderer } from '@core/component/LexicalMarkdown/component/core/NodeAccessoryRenderer';

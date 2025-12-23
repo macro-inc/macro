@@ -1,4 +1,4 @@
-import { GlitchText } from '@core/component/GlitchText';
+import { GlitchText } from '@ui/components/GlitchText';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useBigChat } from '@core/signal/layout/bigChat';
 import { createMemo, createSignal, onCleanup, onMount } from 'solid-js';

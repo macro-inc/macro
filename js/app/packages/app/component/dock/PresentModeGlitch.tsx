@@ -1,4 +1,4 @@
-import { GlitchText } from '@core/component/GlitchText';
+import { GlitchText } from '@ui/components/GlitchText';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { createEffect, createSignal, For, onCleanup, Show } from 'solid-js';
 

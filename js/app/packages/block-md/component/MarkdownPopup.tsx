@@ -6,7 +6,7 @@ import { structuredOutputCompletion } from '@core/client/structuredOutput';
 import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMessageMarkdown';
 import { AskAi } from '@core/component/GeneralizedPopup/AskAI';
 import { GeneralizedPopup } from '@core/component/GeneralizedPopup/Popup';
-import { GlitchText } from '@core/component/GlitchText';
+import { GlitchText } from '@ui/components/GlitchText';
 import { LocationHighlight } from '@core/component/LexicalMarkdown/component/core/Highlights';
 import {
   createMenuOpenSignal,

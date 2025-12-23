@@ -1,4 +1,4 @@
-import '../packages/app/index.css';
+import '../../app/index.css';
 import type { Preview } from 'storybook-solidjs-vite';
 
 // Set up focus-visible modality tracking

@@ -1,4 +1,4 @@
-import { GlitchText } from '@core/component/GlitchText';
+import { GlitchText } from '@ui/components/GlitchText';
 import MacroGridLoader from '@macro-icons/macro-grid-noise-loader-4.svg';
 import type { ChatAttachmentWithName } from '@service-cognition/generated/schemas/chatAttachmentWithName';
 import { createCallback } from '@solid-primitives/rootless';
