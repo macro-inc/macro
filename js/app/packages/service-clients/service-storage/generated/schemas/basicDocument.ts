@@ -9,6 +9,7 @@ import type { BasicDocumentBranchedFromVersionId } from './basicDocumentBranched
 import type { BasicDocumentDeletedAt } from './basicDocumentDeletedAt';
 import type { BasicDocumentDocumentFamilyId } from './basicDocumentDocumentFamilyId';
 import type { BasicDocumentFileType } from './basicDocumentFileType';
+import type { BasicDocumentIsCompleted } from './basicDocumentIsCompleted';
 import type { BasicDocumentProjectId } from './basicDocumentProjectId';
 import type { BasicDocumentSha } from './basicDocumentSha';
 import type { BasicDocumentSubType } from './basicDocumentSubType';
@@ -35,9 +36,9 @@ the file type */
   fileType?: BasicDocumentFileType;
   /** The document id */
   id: string;
-  /** Whether the task is completed (only relevant when sub_type is 'task').
-True if the Status property is set to "Completed", false otherwise. */
-  isCompleted: boolean;
+  /** Whether the task is completed (only present when sub_type is 'task').
+True if the Status property is set to "Completed". */
+  isCompleted?: BasicDocumentIsCompleted;
   /** The name of the document */
   name: string;
   /** The owner of the document */
