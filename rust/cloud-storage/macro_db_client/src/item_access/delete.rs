@@ -185,7 +185,7 @@ mod tests {
 
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("user_item_access.sql")))]
     async fn test_delete_user_item_access(pool: Pool<Postgres>) -> anyhow::Result<()> {
-        let user_id = "test-user";
+        let user_id = "macro|test-user@test.com";
         let item_id = "test-item";
         let item_type = "document";
 

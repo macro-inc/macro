@@ -256,7 +256,7 @@ mod tests {
 
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("user_item_access.sql")))]
     async fn test_insert_user_item_access(pool: Pool<Postgres>) -> anyhow::Result<()> {
-        let user_id = MacroUserIdStr::parse_from_str("macro|test@user.com").unwrap();
+        let user_id = MacroUserIdStr::parse_from_str("macro|test@test.com").unwrap();
         let item_id = "new-test-item";
         let item_type = "document";
         let access_level = AccessLevel::Edit;
@@ -659,15 +659,12 @@ mod tests {
             r#"
         SELECT COUNT(*) as count
         FROM "UserItemAccess"
-        WHERE ("user_id" = ANY($1) OR "user_id" = ANY($2)) 
-        AND "item_id" = $3 AND "item_type" = $4 
+        WHERE ("user_id" = ANY($1) OR "user_id" = ANY($2))
+        AND "item_id" = $3 AND "item_type" = $4
         AND "granted_from_channel_id" = $5
         "#,
             &ids,
-            &[
-                "macro|user3@test.com".to_string(),
-                "macro|user4@test.com".to_string()
-            ],
+            &["macro|user2@test.com".to_string()], // user2 from original insert, not in mixed_user_ids
             item_id,
             item_type,
             granted_from_channel_id,

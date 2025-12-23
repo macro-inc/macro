@@ -9,6 +9,7 @@ use uuid::Uuid;
 
 #[derive(sqlx::Type, Doppleganger, Debug)]
 #[dg(forward = models_comms::channel::ParticipantRole)]
+#[sqlx(rename_all = "lowercase")]
 pub enum DbParticipantRole {
     Admin,
     Member,

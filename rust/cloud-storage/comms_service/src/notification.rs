@@ -512,11 +512,17 @@ mod tests {
         let channel_id = Uuid::new_v4();
         let participants = vec![
             participant(
-                MacroUserIdStr::parse_from_str("sender").unwrap(),
+                MacroUserIdStr::parse_from_str("macro|sender@test.com").unwrap(),
                 channel_id,
             ),
-            participant(MacroUserIdStr::parse_from_str("alice").unwrap(), channel_id),
-            participant(MacroUserIdStr::parse_from_str("bob").unwrap(), channel_id),
+            participant(
+                MacroUserIdStr::parse_from_str("macro|alice@test.com").unwrap(),
+                channel_id,
+            ),
+            participant(
+                MacroUserIdStr::parse_from_str("macro|bob@test.com").unwrap(),
+                channel_id,
+            ),
         ];
         let msg = message(
             channel_id,
@@ -526,7 +532,7 @@ mod tests {
             None,
         );
         let metadata = private_metadata();
-        let user_mentions = vec!["alice".to_string()];
+        let user_mentions = vec!["macro|alice@test.com".to_string()];
 
         let event = ChannelMessageEvent {
             channel_id: &channel_id,
@@ -548,7 +554,8 @@ mod tests {
             .expect("should have mention notification");
 
         let mention_recipients = mention.recipient_ids.as_ref().unwrap();
-        assert!(mention_recipients.contains(&"alice".to_string()));
+
+        assert!(mention_recipients.contains(&"macro|alice@test.com".to_string()));
 
         let send = notifications
             .iter()
@@ -561,8 +568,8 @@ mod tests {
             .expect("should have message send notification");
 
         let send_recipients = send.recipient_ids.as_ref().unwrap();
-        assert!(!send_recipients.contains(&"alice".to_string()));
-        assert!(send_recipients.contains(&"bob".to_string()));
+        assert!(!send_recipients.contains(&"macro|alice@test.com".to_string()));
+        assert!(send_recipients.contains(&"macro|bob@test.com".to_string()));
     }
 
     #[test]
