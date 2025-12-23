@@ -4,6 +4,10 @@ use crate::{
     service::s3::S3,
 };
 use anyhow::Context;
+use comms::{
+    domain::service::ChannelServiceImpl,
+    outbound::{http::user_repo::UserRepoImpl, postgres::comms_repo::PgCommsRepo},
+};
 use comms_service_client::CommsServiceClient;
 use config::{Config, Environment};
 use connection_gateway_client::client::ConnectionGatewayClient;
@@ -209,6 +213,11 @@ async fn main() -> anyhow::Result<()> {
                 PgSoupRepo::new(db.clone()),
                 frecency_service,
                 email_service.clone(),
+                ChannelServiceImpl::new(
+                    PgCommsRepo { pool: db.clone() },
+                    UserRepoImpl::new(todo!(), todo!()),
+                    FrecencyPgStorage::new(db.clone()),
+                ),
             ),
             email_service,
         ),

@@ -138,18 +138,6 @@ pub struct LatestMessage {
     pub latest_non_thread_message: Option<ChannelMessage>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, Doppleganger)]
-#[dg(backward = models_comms::channel::ChannelWithLatest)]
-pub struct ChannelWithLatest {
-    #[serde(flatten)]
-    pub channel: ChannelWithParticipants,
-    #[serde(flatten)]
-    pub latest_message: LatestMessage,
-    pub viewed_at: Option<chrono::DateTime<chrono::Utc>>,
-    pub interacted_at: Option<chrono::DateTime<chrono::Utc>>,
-    pub frecency_score: f64,
-}
-
 /// information about a channel used in search responses
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ChannelHistoryInfo {

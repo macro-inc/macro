@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use doppleganger::Primitive;
+use frecency::domain::models::AggregateFrecency;
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use strum::Display;
@@ -80,7 +81,7 @@ pub struct ChannelWithLatest {
     pub latest_message: LatestMessage,
     pub viewed_at: Option<chrono::DateTime<chrono::Utc>>,
     pub interacted_at: Option<chrono::DateTime<chrono::Utc>>,
-    pub frecency_score: f64,
+    pub frecency_score: Option<AggregateFrecency>,
 }
 
 #[derive(Debug, Clone)]

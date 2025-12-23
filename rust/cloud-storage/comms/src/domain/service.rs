@@ -3,7 +3,7 @@ use std::{
     str::FromStr,
 };
 
-use frecency::domain::ports::AggregateFrecencyStorage;
+use frecency::domain::{models::AggregateFrecency, ports::AggregateFrecencyStorage};
 use macro_user_id::cowlike::CowLike;
 use model_entity::EntityType;
 use models_comms::channel::{Activity, ChannelId, ChannelWithLatest};
@@ -77,15 +77,10 @@ where
             .map(|a| (a.channel_id, a))
             .collect();
 
-        let frecency_map: HashMap<ChannelId, f64> = frecency
+        let mut frecency_map: HashMap<ChannelId, AggregateFrecency> = frecency
             .unwrap_or_default()
             .into_iter()
-            .filter_map(|f| {
-                Some((
-                    ChannelId(Uuid::from_str(&f.id.entity.entity_id).ok()?),
-                    f.data.frecency_score,
-                ))
-            })
+            .filter_map(|f| Some((ChannelId(Uuid::from_str(&f.id.entity.entity_id).ok()?), f)))
             .collect();
 
         let name_lookup = names.map(|n| {
@@ -120,7 +115,7 @@ where
                 latest_message: latest_messages.remove(&channel.channel.id).unwrap_or_default(),
                 viewed_at,
                 interacted_at,
-                frecency_score: frecency_map.get(&channel.channel.id).copied().unwrap_or_default()
+                frecency_score: frecency_map.remove(&channel.channel.id)
             };
 
             tracing::trace!(channel_type=?channel.channel.channel_type,channel_name=?channel.channel.name, "resolved channel name");

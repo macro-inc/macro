@@ -15,7 +15,6 @@ pub struct SoupChannel {
     pub latest_message: LatestMessage,
     pub viewed_at: Option<chrono::DateTime<chrono::Utc>>,
     pub interacted_at: Option<chrono::DateTime<chrono::Utc>>,
-    pub frecency_score: f64,
 }
 
 #[derive(Debug, Doppleganger, Serialize, Deserialize)]

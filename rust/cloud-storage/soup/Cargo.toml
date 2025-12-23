@@ -60,6 +60,7 @@ item_filters = { path = "../item_filters", features = ["mock"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 mockall = { workspace = true }
 ordered-float = { workspace = true }
+rootcause = "0.11"
 serde_json = { workspace = true }
 tokio = { workspace = true }
 tower = { workspace = true }

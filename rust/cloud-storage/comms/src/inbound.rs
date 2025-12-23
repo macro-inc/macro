@@ -1,5 +1,6 @@
 use axum::{Json, Router, extract::State, http::StatusCode, response::IntoResponse, routing::get};
 use doppleganger::{Doppleganger, Mirror};
+use frecency::domain::models::AggregateFrecency;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_user::axum_extractor::MacroUserExtractor;
 use models_comms::channel::{ChannelId, OrganizationId};
@@ -145,7 +146,12 @@ pub struct ApiChannelWithLatest {
     pub latest_message: LatestMessage,
     pub viewed_at: Option<chrono::DateTime<chrono::Utc>>,
     pub interacted_at: Option<chrono::DateTime<chrono::Utc>>,
-    pub frecency_score: f64,
+    #[dg(map = map_frecency)]
+    pub frecency_score: Option<f64>,
+}
+
+fn map_frecency(f: Option<AggregateFrecency>) -> Option<f64> {
+    f.map(|f| f.data.frecency_score)
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema, Doppleganger)]

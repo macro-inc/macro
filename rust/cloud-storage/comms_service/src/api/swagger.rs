@@ -28,7 +28,7 @@ use comms_db_client::model::{
     SimpleMention,
 };
 use model::comms::{
-    Channel, ChannelParticipant, ChannelType, ChannelWithLatest, ChannelWithParticipants,
+    Channel, ChannelParticipant, ChannelType, ChannelWithParticipants,
     GetMessageWithContextResponse, GetOrCreateAction, LatestMessage, ParticipantRole,
 };
 
@@ -146,7 +146,6 @@ use super::preview::get_batch_preview;
                 DeleteEntityMentionResponse,
 
                 GetMentionsResponse,
-                ChannelWithLatest,
                 ChannelWithParticipants,
                 LatestMessage,
                 GetMessageWithContextResponse,
