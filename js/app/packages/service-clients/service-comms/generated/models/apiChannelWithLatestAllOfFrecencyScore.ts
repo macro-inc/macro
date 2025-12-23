@@ -5,8 +5,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-/**
- * id of the organization this channel belongs too
- * @minimum 0
- */
-export type ChannelOrgId = number | null;
+export type ApiChannelWithLatestAllOfFrecencyScore = number | null;

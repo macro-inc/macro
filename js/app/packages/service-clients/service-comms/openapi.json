@@ -17,7 +17,10 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/GetActivityResponse" }
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/ApiActivity" }
+                }
               }
             }
           },
@@ -125,7 +128,12 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/GetChannelsResponse" }
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ApiChannelWithLatest"
+                  }
+                }
               }
             }
           },
@@ -982,6 +990,47 @@
           "participants": { "type": "array", "items": { "type": "string" } }
         }
       },
+      "ApiActivity": {
+        "type": "object",
+        "required": ["id", "user_id", "channel_id", "created_at", "updated_at"],
+        "properties": {
+          "channel_id": { "type": "string", "format": "uuid" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "id": { "type": "string", "format": "uuid" },
+          "interacted_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "the last time the user intereacted with the channel\neg. reacting, replying, sending a message"
+          },
+          "updated_at": { "type": "string", "format": "date-time" },
+          "user_id": { "type": "string" },
+          "viewed_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "the last time the user viewed the channel"
+          }
+        }
+      },
+      "ApiChannelWithLatest": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ChannelWithParticipants" },
+          { "$ref": "#/components/schemas/LatestMessage" },
+          {
+            "type": "object",
+            "properties": {
+              "frecency_score": {
+                "type": ["number", "null"],
+                "format": "double"
+              },
+              "interacted_at": {
+                "type": ["string", "null"],
+                "format": "date-time"
+              },
+              "viewed_at": { "type": ["string", "null"], "format": "date-time" }
+            }
+          }
+        ]
+      },
       "Attachment": {
         "type": "object",
         "required": [
@@ -1037,8 +1086,9 @@
           },
           "org_id": {
             "type": ["integer", "null"],
-            "format": "int64",
-            "description": "id of the organization this channel belongs too"
+            "format": "int32",
+            "description": "id of the organization this channel belongs too",
+            "minimum": 0
           },
           "owner_id": {
             "type": "string",
@@ -1205,24 +1255,6 @@
       "ChannelType": {
         "type": "string",
         "enum": ["public", "organization", "private", "direct_message"]
-      },
-      "ChannelWithLatest": {
-        "allOf": [
-          { "$ref": "#/components/schemas/ChannelWithParticipants" },
-          { "$ref": "#/components/schemas/LatestMessage" },
-          {
-            "type": "object",
-            "required": ["frecency_score"],
-            "properties": {
-              "frecency_score": { "type": "number", "format": "double" },
-              "interacted_at": {
-                "type": ["string", "null"],
-                "format": "date-time"
-              },
-              "viewed_at": { "type": ["string", "null"], "format": "date-time" }
-            }
-          }
-        ]
       },
       "ChannelWithParticipants": {
         "allOf": [
@@ -1436,16 +1468,6 @@
           }
         }
       },
-      "GetActivityResponse": {
-        "type": "object",
-        "required": ["items"],
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": { "$ref": "#/components/schemas/Activity" }
-          }
-        }
-      },
       "GetAttachmentReferencesResponse": {
         "type": "object",
         "required": ["references"],
@@ -1524,16 +1546,6 @@
               "items": { "$ref": "#/components/schemas/CountedReaction" }
             },
             "propertyNames": { "type": "string" }
-          }
-        }
-      },
-      "GetChannelsResponse": {
-        "type": "object",
-        "required": ["channels"],
-        "properties": {
-          "channels": {
-            "type": "array",
-            "items": { "$ref": "#/components/schemas/ChannelWithLatest" }
           }
         }
       },

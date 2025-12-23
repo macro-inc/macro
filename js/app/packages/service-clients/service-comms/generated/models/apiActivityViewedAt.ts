@@ -5,4 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ChannelWithLatestAllOfViewedAt = string | null;
+/**
+ * the last time the user viewed the channel
+ */
+export type ApiActivityViewedAt = string | null;
