@@ -1,8 +1,8 @@
 import type { Entity } from '@core/types';
 import {
-  useUserNotificationsQuery,
   useMarkNotificationsAsDoneMutation,
   useMarkNotificationsAsSeenMutation,
+  useUserNotificationsQuery,
 } from '@queries/notification/user-notifications';
 import type { ConnectionGatewayWebsocket } from '@service-connection/websocket';
 import { notificationServiceClient } from '@service-notification/client';
