@@ -37,15 +37,11 @@ export function clearEmailBody(editor: LexicalEditor | undefined) {
   );
 }
 
-export const APPEND_PREVIOUS_EMAIL_COMMAND = createCommand<{
+export const TOGGLE_APPEND_EMAIL_THREAD_COMMAND = createCommand<{
   replyingTo: MessageWithBodyReplyless | undefined;
   replyType?: ReplyType;
-}>('APPEND_PREVIOUS_EMAIL_COMMAND');
-
-export const TOGGLE_APPENED_EMAIL_THREAD_COMMAND = createCommand<{
-  replyingToID: string;
-  hidden: boolean;
-}>('TOGGLE_APPENED_EMAIL_THREAD_COMMAND');
+  visible: boolean;
+}>('TOGGLE_APPEND_EMAIL_THREAD_COMMAND');
 
 type HeaderDescriptor =
   | { kind: 'forward'; lines: string[] }
@@ -147,7 +143,6 @@ const $appendPreviousEmail = (
   replyType: ReplyType | undefined
 ) => {
   if (!replyingTo) return true;
-  console.log('Appending');
   const wrapper = $createClassedBlockNode({
     tag: 'div',
     classes: ['macro_quote', 'gmail_quote'],
@@ -201,10 +196,9 @@ function* $findPreviousEmailNode(replyingToID: string | undefined) {
   yield;
 }
 
-function toggleAppendedThread(
+function removeAppendedThread(
   editor: LexicalEditor,
-  replyingToID: string | undefined,
-  value: boolean
+  replyingToID: string | undefined
 ) {
   if (!replyingToID) return;
 
@@ -212,42 +206,28 @@ function toggleAppendedThread(
     () => {
       for (const node of $findPreviousEmailNode(replyingToID)) {
         if (!node) continue;
-        console.log(node, value);
 
-        node.setHidden(value);
-        if (value) node.remove();
+        node.remove();
       }
-      return true;
     },
     { discrete: true }
   );
-}
-
-export function registerAppendPreviousEmail(editor: LexicalEditor) {
-  return editor.registerCommand(
-    APPEND_PREVIOUS_EMAIL_COMMAND,
-    ({ replyingTo, replyType }) => {
-      const replyingToID = replyingTo?.replying_to_id ?? undefined;
-      const node = $findPreviousEmailNode(replyingToID).next();
-
-      if (!node.value) {
-        $appendPreviousEmail(editor, replyingTo, replyType);
-      } else {
-        toggleAppendedThread(editor, replyingToID, false);
-      }
-
-      return true;
-    },
-    COMMAND_PRIORITY_EDITOR
-  );
+  // editor.setEditorState(editor.getEditorState().clone(null));
 }
 
 export function registerToggleAppendedThread(editor: LexicalEditor) {
   return editor.registerCommand(
-    TOGGLE_APPENED_EMAIL_THREAD_COMMAND,
-    ({ hidden, replyingToID }) => {
-      console.log('Toggle', hidden);
-      toggleAppendedThread(editor, replyingToID, hidden);
+    TOGGLE_APPEND_EMAIL_THREAD_COMMAND,
+    ({ replyingTo, visible, replyType }) => {
+      const replyingToID = replyingTo?.replying_to_id ?? undefined;
+
+      if (!visible) {
+        removeAppendedThread(editor, replyingToID);
+        return true;
+      }
+
+      $appendPreviousEmail(editor, replyingTo, replyType);
+
       return true;
     },
     COMMAND_PRIORITY_EDITOR

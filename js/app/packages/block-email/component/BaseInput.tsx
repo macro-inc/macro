@@ -80,14 +80,12 @@ import { handleFileUpload } from '../util/handleFileUpload';
 import { makeAttachmentPublic } from '../util/makeAttachmentPublic';
 import { getFirstName } from '../util/name';
 import {
-  APPEND_PREVIOUS_EMAIL_COMMAND,
   appendItemsAsMacroMentions,
   clearEmailBody,
   prepareEmailBody,
   prepareMacroBody,
-  registerAppendPreviousEmail,
   registerToggleAppendedThread,
-  TOGGLE_APPENED_EMAIL_THREAD_COMMAND,
+  TOGGLE_APPEND_EMAIL_THREAD_COMMAND,
 } from '../util/prepareEmailBody';
 import { convertEmailRecipientToContactInfo } from '../util/recipientConversion';
 import { getReplyTypeFromDraft } from '../util/replyType';
@@ -230,10 +228,6 @@ export function BaseInput(props: {
         ? 'reply-all'
         : 'reply')
     );
-  });
-
-  lazyRegister(editor, (editor) => {
-    return registerAppendPreviousEmail(editor);
   });
 
   lazyRegister(editor, (editor) => {
@@ -863,21 +857,14 @@ export function BaseInput(props: {
               const replyingToID = props.replyingTo()?.replying_to_id;
               if (!replyingToID) return;
 
-              const appended = form().replyAppended();
-              form().setReplyAppended(!appended);
+              const currentlyAppended = form().replyAppended();
+              form().setReplyAppended(!currentlyAppended);
 
-              if (!appended) {
-                editor()?.dispatchCommand(APPEND_PREVIOUS_EMAIL_COMMAND, {
-                  replyingTo: props.replyingTo(),
-                  replyType: effectiveReplyType(),
-                });
-              } else {
-                console.log('Call toggle');
-                editor()?.dispatchCommand(TOGGLE_APPENED_EMAIL_THREAD_COMMAND, {
-                  hidden: true,
-                  replyingToID: replyingToID,
-                });
-              }
+              editor()?.dispatchCommand(TOGGLE_APPEND_EMAIL_THREAD_COMMAND, {
+                replyingTo: props.replyingTo(),
+                replyType: effectiveReplyType(),
+                visible: !currentlyAppended,
+              });
 
               editor()?.update(() => {
                 $getRoot().getFirstChild()?.selectStart();

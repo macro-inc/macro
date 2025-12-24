@@ -3,7 +3,7 @@ import type { LexicalEditor } from 'lexical';
 import { createSignal, type Setter } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { decodeBase64Utf8 } from '../util/decodeBase64';
-import { APPEND_PREVIOUS_EMAIL_COMMAND } from '../util/prepareEmailBody';
+import { TOGGLE_APPEND_EMAIL_THREAD_COMMAND } from '../util/prepareEmailBody';
 import {
   convertContactInfoToEmailRecipient,
   getReplyAllRecipients,
@@ -139,10 +139,14 @@ export function createEmailFormState(key: string) {
 
         if (rt === 'forward') {
           setReplyAppended(true);
-          capturedEditor()?.dispatchCommand(APPEND_PREVIOUS_EMAIL_COMMAND, {
-            replyingTo: replyingTo,
-            replyType: rt,
-          });
+          capturedEditor()?.dispatchCommand(
+            TOGGLE_APPEND_EMAIL_THREAD_COMMAND,
+            {
+              replyingTo: replyingTo,
+              replyType: rt,
+              visible: true,
+            }
+          );
         }
       }
     }
