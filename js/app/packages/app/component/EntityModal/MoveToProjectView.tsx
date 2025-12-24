@@ -1,4 +1,3 @@
-import { scrollToKeepGap } from '@app/component/SoupContext';
 import { BozzyBracket } from '@core/component/BozzyBracket';
 import {
   CustomEntityIcon,
@@ -8,6 +7,7 @@ import {
 import { ExplorerSpacer } from '@core/component/FileList/ExplorerSpacer';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import Fragment from '@core/util/Fragment';
+import { scrollToKeepGap } from '@core/util/scrollToKeepGap';
 import CaretRight from '@icon/regular/caret-right.svg';
 import ArrowRight from '@phosphor-icons/core/regular/arrow-right.svg?component-solid';
 import type { Project } from '@service-storage/generated/schemas';

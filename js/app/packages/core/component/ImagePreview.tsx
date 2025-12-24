@@ -325,14 +325,11 @@ export function ImagePreview(props: ImagePreviewProps) {
         </Dialog.Trigger>
       </div>
       <Dialog.Portal>
-        <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay backdrop-blur-md" />
+        <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay pattern-edge-muted pattern-diagonal-4" />
         <div class="fixed inset-0 z-modal w-screen h-screen flex items-center justify-center p-2 pb-6 sm:p-12">
-          <Dialog.Content
-            class="relative flex items-center justify-center w-full h-full sm:w-auto sm:h-auto"
-            onOpenAutoFocus={(e) => e.preventDefault()}
-          >
+          <Dialog.Content class="relative flex items-center justify-center w-full h-full sm:w-auto sm:h-auto bg-panel">
             <div
-              class="absolute top-4 right-4 bg-dialog backdrop-blur-sm rounded-lg border border-edge p-1 flex flex-row items-center gap-1 shadow-md transition-opacity duration-300"
+              class="absolute top-4 right-4 bg-dialog rounded-lg border border-edge p-1 flex flex-row items-center gap-1 shadow-md transition-opacity duration-300"
               classList={{
                 'opacity-100':
                   isMobileWidth() || isTouchDevice || isToolbarVisible(),

@@ -6,7 +6,6 @@ import { structuredOutputCompletion } from '@core/client/structuredOutput';
 import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMessageMarkdown';
 import { AskAi } from '@core/component/GeneralizedPopup/AskAI';
 import { GeneralizedPopup } from '@core/component/GeneralizedPopup/Popup';
-import { GlitchText } from '@core/component/GlitchText';
 import { LocationHighlight } from '@core/component/LexicalMarkdown/component/core/Highlights';
 import {
   createMenuOpenSignal,
@@ -47,6 +46,7 @@ import LinkIcon from '@phosphor-icons/core/regular/link.svg?component-solid';
 import PencilIcon from '@phosphor-icons/core/regular/pencil.svg?component-solid';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import { createCallback } from '@solid-primitives/rootless';
+import { GlitchText } from '@ui/components/GlitchText';
 import {
   $getLocationUrl,
   $getSelectionLocation,

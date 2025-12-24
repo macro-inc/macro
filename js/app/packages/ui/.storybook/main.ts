@@ -6,14 +6,14 @@ import tsconfigpaths from 'vite-tsconfig-paths';
 
 const config: StorybookConfig = {
   stories: [
-    '../packages/**/*.mdx',
-    '../packages/**/*.stories.@(js|jsx|mjs|ts|tsx)',
+    // @ui package stories
+    '../**/*.mdx',
+    '../**/*.stories.@(js|jsx|mjs|ts|tsx)',
+    // Other packages stories
+    '../../core/**/*.mdx',
+    '../../core/**/*.stories.@(js|jsx|mjs|ts|tsx)',
   ],
-  addons: [
-    '@storybook/addon-docs',
-    '@storybook/addon-a11y',
-    '@storybook/addon-designs',
-  ],
+  addons: ['@storybook/addon-docs'],
   framework: {
     name: 'storybook-solidjs-vite',
     options: {},
@@ -32,7 +32,7 @@ const config: StorybookConfig = {
     config.plugins = config.plugins || [];
     config.plugins.push(
       tsconfigpaths({
-        root: '../',
+        root: '../../',
       })
     );
 

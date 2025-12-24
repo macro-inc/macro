@@ -1,7 +1,7 @@
 use crate::api::context::ApiContext;
 use axum::{
     Router,
-    routing::{delete, get, patch, put},
+    routing::{delete, get, patch, post, put},
 };
 
 pub mod definitions;
@@ -42,6 +42,11 @@ pub fn router() -> Router<ApiContext> {
         .route(
             "/entities/:entity_type/:entity_id",
             get(entities::get::get_entity_properties),
+        )
+        // Bulk entity properties - requires authentication
+        .route(
+            "/entities/bulk",
+            post(entities::get_bulk::get_bulk_entity_properties).layer(ensure_user_exists.clone()),
         )
         // PUT/DELETE require authentication
         .route(

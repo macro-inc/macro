@@ -14,6 +14,7 @@ import { ToggleButton } from '@core/component/FormControls/ToggleButton';
 import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
 import { IconButton } from '@core/component/IconButton';
 import { ContextMenuContent, MenuSeparator } from '@core/component/Menu';
+import { useTaskProperties } from '@core/component/Properties/hooks';
 import { getSuggestedProperties } from '@core/component/Properties/utils';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import {
@@ -111,7 +112,10 @@ import {
   type SetStoreFunction,
   unwrap,
 } from 'solid-js/store';
-import { EntityWithEverything } from '../../macro-entity/src/components/EntityWithEverything';
+import {
+  ENTITY_HEIGHT,
+  EntityWithEverything,
+} from '../../macro-entity/src/components/EntityWithEverything';
 import {
   resetCommandCategoryIndex,
   searchCategories,
@@ -229,7 +233,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   } = unifiedListContext;
 
   // Properties for task entities
-  // const taskPropertiesStore = useTaskProperties(entities_);
+  const [taskPropertiesStore] = useTaskProperties(entities_);
 
   const view = createMemo(() => viewsData[selectedView()]);
   const selectedEntity = createMemo(() => view()?.selectedEntity);
@@ -1464,6 +1468,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
             viewId={view()?.id}
             searchText={searchText()}
             hasRefinementsFromBase={isViewConfigChanged()}
+            entityMinHeight={ENTITY_HEIGHT}
           >
             {(innerProps) => {
               const displayDoneButton = () => {
@@ -1501,7 +1506,11 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                   entity={innerProps.entity}
                   properties={
                     isTaskEntity(innerProps.entity)
+<<<<<<< HEAD
                       ? taskPropertiesStore()[innerProps.entity.id]
+=======
+                      ? taskPropertiesStore[innerProps.entity.id]
+>>>>>>> 00e32684f81ede71ac2e788c7c829414af3202be
                       : undefined
                   }
                   timestamp={timestamp()}
