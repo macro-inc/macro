@@ -227,6 +227,10 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     entitiesSignal: [entities_, setEntities],
     emailViewSignal: [emailView],
   } = unifiedListContext;
+
+  // Properties for task entities
+  // const taskPropertiesStore = useTaskProperties(entities_);
+
   const view = createMemo(() => viewsData[selectedView()]);
   const selectedEntity = createMemo(() => view()?.selectedEntity);
 
@@ -1495,6 +1499,11 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                     });
                   }}
                   entity={innerProps.entity}
+                  properties={
+                    isTaskEntity(innerProps.entity)
+                      ? taskPropertiesStore()[innerProps.entity.id]
+                      : undefined
+                  }
                   timestamp={timestamp()}
                   onClick={entityClickHandler}
                   onClickRowAction={

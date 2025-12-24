@@ -51,3 +51,31 @@ export function mapFromListsByKey<T extends Record<string, any>>(
   }
   return map;
 }
+
+/**
+ * Deduplicate items by a string key, keeping the first occurrence of each key.
+ */
+export function uniqueByKey<T>(
+  items: readonly T[],
+  keyOf: (item: T) => string
+): T[] {
+  const map = new Map<string, T>();
+  for (const item of items) {
+    const key = keyOf(item);
+    if (!map.has(key)) map.set(key, item);
+  }
+  return [...map.values()];
+}
+
+/**
+ * Deduplicate items by key and return them sorted by that key.
+ * Useful for canonicalizing inputs (e.g. query key params).
+ */
+export function uniqueByKeySorted<T>(
+  items: readonly T[],
+  keyOf: (item: T) => string
+): T[] {
+  return uniqueByKey(items, keyOf).toSorted((a, b) =>
+    keyOf(a).localeCompare(keyOf(b))
+  );
+}
