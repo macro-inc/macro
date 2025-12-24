@@ -33,13 +33,6 @@ export class ClassedBlockNode extends ElementNode {
   __tag: TagName;
   __classes: string[];
   __attributes?: Record<string, string>;
-  hidden: boolean = false;
-
-  setHidden(value: boolean) {
-    const writable = this.getWritable();
-    writable.hidden = value;
-    return writable;
-  }
 
   static getType() {
     return 'classed-block';
@@ -64,12 +57,6 @@ export class ClassedBlockNode extends ElementNode {
     this.__tag = ALLOWED_TAGS.has(tag) ? tag : 'div';
     this.__classes = classes;
     this.__attributes = attributes;
-  }
-
-  remove(preserveEmptyParent?: boolean) {
-    if (this.hidden) return;
-
-    super.remove(preserveEmptyParent);
   }
 
   isInline(): boolean {
@@ -124,11 +111,6 @@ export class ClassedBlockNode extends ElementNode {
   }
 
   exportDOM(_editor: LexicalEditor): DOMExportOutput {
-    if (this.hidden)
-      return {
-        element: null,
-      };
-
     const element = document.createElement(this.__tag);
     element.setAttribute('data-classed-block', 'true');
     for (const c of this.__classes) element.classList.add(c);

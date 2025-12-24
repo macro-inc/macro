@@ -212,7 +212,6 @@ function removeAppendedThread(
     },
     { discrete: true }
   );
-  // editor.setEditorState(editor.getEditorState().clone(null));
 }
 
 export function registerToggleAppendedThread(editor: LexicalEditor) {
