@@ -24,11 +24,12 @@ import Reply from '@icon/regular/arrow-bend-up-left.svg';
 import Forward from '@icon/regular/arrow-bend-up-right.svg';
 import CaretDown from '@icon/regular/caret-down.svg';
 import CheckIcon from '@icon/regular/check.svg';
-import DotsThree from '@icon/regular/dots-three.svg';
 import Plus from '@icon/regular/plus.svg';
+import Quotes from '@icon/regular/quotes.svg';
 import TextAa from '@icon/regular/text-aa.svg';
 import Trash from '@icon/regular/trash.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import { ToggleButton as KToggleButton } from '@kobalte/core/toggle-button';
 import {
   $appendWatermarkNodeToLast,
   $removeAllWatermarkNodes,
@@ -849,30 +850,6 @@ export function BaseInput(props: {
           />
         </div>
 
-        <div class="px-2 flex flex-row items-center space-x-2">
-          <IconButton
-            theme="clear"
-            icon={DotsThree}
-            onclick={() => {
-              const replyingToID = props.replyingTo()?.replying_to_id;
-              if (!replyingToID) return;
-
-              const currentlyAppended = form().replyAppended();
-              form().setReplyAppended(!currentlyAppended);
-
-              editor()?.dispatchCommand(TOGGLE_APPEND_EMAIL_THREAD_COMMAND, {
-                replyingTo: props.replyingTo(),
-                replyType: effectiveReplyType(),
-                visible: !currentlyAppended,
-              });
-
-              editor()?.update(() => {
-                $getRoot().getFirstChild()?.selectStart();
-              });
-            }}
-          />
-        </div>
-
         <div class="flex flex-row w-full h-8 justify-between items-center py-2 px-2 mb-2 space-x-2 allow-css-brackets">
           <div class="flex flex-row items-center gap-2">
             <div class="relative" ref={attachButtonRef}>
@@ -907,6 +884,34 @@ export function BaseInput(props: {
                 tooltip={{ label: 'Delete draft' }}
               />
             </Show>
+
+            <KToggleButton
+              class={
+                'w-fit disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none [&:focus]:disabled:[--focus-border-inset:0] [&:focus]:[--focus-border-inset:-3px] group'
+              }
+              onChange={() => {
+                const replyingToID = props.replyingTo()?.replying_to_id;
+                if (!replyingToID) return;
+
+                const currentlyAppended = form().replyAppended();
+                form().setReplyAppended(!currentlyAppended);
+
+                editor()?.dispatchCommand(TOGGLE_APPEND_EMAIL_THREAD_COMMAND, {
+                  replyingTo: props.replyingTo(),
+                  replyType: effectiveReplyType(),
+                  visible: !currentlyAppended,
+                });
+
+                editor()?.update(() => {
+                  $getRoot().getFirstChild()?.selectStart();
+                });
+              }}
+            >
+              <div class="min-w-[22px] text-xs font-medium font-mono text-ink-muted text-center uppercase leading-none whitespace-nowrap group-data-[pressed]:bg-accent/10 group-data-[pressed]:hover:bg-accent/20 group-data-[pressed='false']:hover:text-ink hover:bg-edge-muted hover-transition-bg group-data-[pressed]:text-accent-ink p-1">
+                <Quotes class="inline mr-2 size-4" />
+                Quoted text
+              </div>
+            </KToggleButton>
           </div>
           <div class="flex flex-row items-center">
             <TextButton
