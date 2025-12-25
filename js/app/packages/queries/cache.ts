@@ -5,12 +5,6 @@ export type CachePartition<Item, Data> = {
   readonly missing: readonly Item[];
 };
 
-/**
- * Partition items into those that already have cached query data and those that don't.
- *
- * This is useful for "bulk endpoints" where you want to preserve per-item cache keys
- * but still fetch missing items in a single request.
- */
 export function partitionByQueryCache<Item, Data>(args: {
   readonly queryClient: QueryClient;
   readonly items: readonly Item[];
@@ -28,5 +22,3 @@ export function partitionByQueryCache<Item, Data>(args: {
 
   return { cached, missing };
 }
-
-

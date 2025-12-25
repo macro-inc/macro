@@ -21,25 +21,14 @@ function isTaskEntity(entity: Entity): boolean {
   return entity.type === 'document' && entity.subType === 'task';
 }
 
-/**
- * Hook to fetch and cache properties for task entities.
- * Returns a store where keys are entity IDs and values are property arrays.
- *
- * Uses TanStack Query cache internally - properties are cached per entity
- * and won't be refetched if already in cache.
- *
- * @param entities - Accessor for the list of entities to fetch properties for
- */
 export function useTaskProperties(
   entities: () => Entity[] | undefined
 ): () => TaskPropertiesStore {
   const taskEntityRefs = createMemo(() => {
     const allEntities = entities() ?? [];
-    const taskEntities = allEntities.filter(isTaskEntity);
-    return taskEntities.map((e) => ({
-      entity_id: e.id,
-      entity_type: 'TASK' as const,
-    }));
+    return allEntities
+      .filter(isTaskEntity)
+      .map((e) => ({ entity_id: e.id, entity_type: 'TASK' as const }));
   });
 
   const query = useBulkEntityPropertiesQuery(

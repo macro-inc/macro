@@ -32,12 +32,11 @@ const entityPropertiesKey = (
     propertyDefinitionIds,
   }).queryKey;
 
-async function getBulkEntityPropertiesCached(
+async function fetchBulkWithCachePartition(
   params: BulkEntityPropertiesParams
 ): Promise<BulkEntityPropertiesData> {
   if (params.entities.length === 0) return {};
 
-  // 1) Read whatever we already have, per-entity, for this property-id set.
   const { cached, missing } = partitionByQueryCache<EntityReference, Property[]>({
     queryClient,
     items: params.entities,
@@ -49,13 +48,11 @@ async function getBulkEntityPropertiesCached(
     out[entity.entity_id] = properties;
   }
 
-  const entitiesToFetch = [...missing];
-  if (entitiesToFetch.length === 0) return out;
+  if (missing.length === 0) return out;
 
-  // 2) Fetch missing entities in one API call.
   const result = await propertiesServiceClient.getBulkEntityProperties({
     body: {
-      entities: entitiesToFetch,
+      entities: [...missing],
       property_ids: [...params.propertyDefinitionIds],
     },
   });
@@ -64,13 +61,9 @@ async function getBulkEntityPropertiesCached(
     throw new Error('Failed to fetch entity properties', { cause: result[0] });
   }
 
-  // 3) Populate per-entity cache + return merged output.
   const [, data] = result;
-  for (const entity of entitiesToFetch) {
+  for (const entity of missing) {
     const response = data[entity.entity_id];
-    // The API may omit entities (e.g. permission filtered). In that case, do NOT
-    // write an empty array into the per-entity cache, otherwise we'll treat it
-    // as a permanent cache hit and never attempt to refetch.
     if (!response) {
       out[entity.entity_id] = [];
       continue;
@@ -87,24 +80,18 @@ async function getBulkEntityPropertiesCached(
   return out;
 }
 
-function bulkEntityPropertiesQueryOptions(params: {
-  entities: readonly EntityReference[];
-  propertyDefinitionIds: readonly string[];
-}): BulkEntityPropertiesQueryOptions {
+function bulkEntityPropertiesQueryOptions(
+  params: BulkEntityPropertiesParams
+): BulkEntityPropertiesQueryOptions {
   return {
     queryKey: propertiesKeys.bulk({
       entities: params.entities,
       propertyDefinitionIds: params.propertyDefinitionIds,
     }).queryKey,
-    queryFn: async () => {
-      return await getBulkEntityPropertiesCached(params);
-    },
+    queryFn: () => fetchBulkWithCachePartition(params),
   };
 }
 
-/**
- * Imperatively fetch bulk properties (deduped + cached) using TanStack Query.
- */
 export async function fetchAndCacheBulkEntityProperties(
   entities: readonly EntityReference[],
   propertyDefinitionIds: readonly string[]
@@ -114,12 +101,6 @@ export async function fetchAndCacheBulkEntityProperties(
   );
 }
 
-/**
- * Query hook for fetching properties for many entities in a single API call.
- *
- * Note: we explicitly use the `packages/queries/client.ts` QueryClient to keep behavior
- * consistent with other query helpers in this package.
- */
 export function useBulkEntityPropertiesQuery(
   entities: Accessor<readonly EntityReference[]>,
   propertyDefinitionIds: readonly string[],
@@ -138,9 +119,6 @@ export function useBulkEntityPropertiesQuery(
         placeholder[entity.entity_id] = cached ?? [];
       }
       return {
-        // Provide stable shape (no `undefined`) but still fetch immediately.
-        // Note: queries/client has default staleTime=5m; initialData would otherwise
-        // be considered fresh and skip fetching.
         initialData: placeholder,
         staleTime: 0,
         enabled: currentEntities.length > 0,
@@ -154,5 +132,3 @@ export function useBulkEntityPropertiesQuery(
     () => queryClient
   );
 }
-
-

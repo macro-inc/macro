@@ -14,10 +14,6 @@ const normalizeEntities = (entities: readonly EntityReference[]) =>
 export const propertiesKeys = createQueryKeys('properties', {
   all: null,
 
-  /**
-   * Cache key for a specific entity's properties for a given set of propertyDefinitionIds.
-   * (The ids are normalized to keep keys stable.)
-   */
   entity: (params: {
     entityType: EntityType;
     entityId: string;
@@ -33,10 +29,6 @@ export const propertiesKeys = createQueryKeys('properties', {
     ],
   }),
 
-  /**
-   * Cache key for fetching many entities' properties in a single request.
-   * (Entities + ids are normalized to keep keys stable.)
-   */
   bulk: (params: {
     entities: readonly EntityReference[];
     propertyDefinitionIds: readonly string[];
@@ -50,5 +42,3 @@ export const propertiesKeys = createQueryKeys('properties', {
     ],
   }),
 });
-
-
