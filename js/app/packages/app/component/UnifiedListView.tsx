@@ -233,7 +233,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   } = unifiedListContext;
 
   // Properties for task entities
-  const [taskPropertiesStore] = useTaskProperties(entities_);
+  const taskPropertiesStore = useTaskProperties(entities_);
 
   const view = createMemo(() => viewsData[selectedView()]);
   const selectedEntity = createMemo(() => view()?.selectedEntity);
@@ -1488,6 +1488,14 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                     return innerProps.entity.updatedAt;
                 }
               };
+
+              const properties = () => {
+                if (isTaskEntity(innerProps.entity)) {
+                  return taskPropertiesStore()[innerProps.entity.id] ?? [];
+                }
+                return undefined;
+              };
+
               return (
                 <EntityWithEverything
                   onContextMenu={() => {
@@ -1504,15 +1512,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                     });
                   }}
                   entity={innerProps.entity}
-                  properties={
-                    isTaskEntity(innerProps.entity)
-<<<<<<< HEAD
-                      ? taskPropertiesStore()[innerProps.entity.id]
-=======
-                      ? taskPropertiesStore[innerProps.entity.id]
->>>>>>> 00e32684f81ede71ac2e788c7c829414af3202be
-                      : undefined
-                  }
+                  properties={properties()}
                   timestamp={timestamp()}
                   onClick={entityClickHandler}
                   onClickRowAction={

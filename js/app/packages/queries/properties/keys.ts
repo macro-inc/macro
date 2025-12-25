@@ -1,7 +1,7 @@
 import { createQueryKeys } from '@lukemorales/query-key-factory';
-import { uniqueByKeySorted } from '@core/util/compareUtils';
-import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
-import type { EntityType } from '@service-properties/generated/schemas/entityType';
+import { uniqueByKeySorted } from '../../core/util/compareUtils';
+import type { EntityReference } from '../../service-clients/service-properties/generated/schemas/entityReference';
+import type { EntityType } from '../../service-clients/service-properties/generated/schemas/entityType';
 
 const normalizeStringIds = (ids: readonly string[]) =>
   [...new Set(ids)].slice().sort();

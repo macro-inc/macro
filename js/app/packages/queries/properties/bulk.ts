@@ -1,9 +1,9 @@
-import { isErr } from '@core/util/maybeResult';
-import { entityPropertyFromApi } from '@core/component/Properties/api/converters';
-import type { Property } from '@core/component/Properties/types';
-import { queryClient } from '@queries/client';
-import { propertiesServiceClient } from '@service-properties/client';
-import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
+import { isErr } from '../../core/util/maybeResult';
+import { entityPropertyFromApi } from '../../core/component/Properties/api/converters';
+import type { Property } from '../../core/component/Properties/types';
+import { queryClient } from '../client';
+import { propertiesServiceClient } from '../../service-clients/service-properties/client';
+import type { EntityReference } from '../../service-clients/service-properties/generated/schemas/entityReference';
 import type { UseBaseQueryOptions } from '@tanstack/solid-query';
 import { useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
@@ -68,13 +68,19 @@ async function getBulkEntityPropertiesCached(
   const [, data] = result;
   for (const entity of entitiesToFetch) {
     const response = data[entity.entity_id];
-    const properties = response ? response.properties.map(entityPropertyFromApi) : [];
+    // The API may omit entities (e.g. permission filtered). In that case, do NOT
+    // write an empty array into the per-entity cache, otherwise we'll treat it
+    // as a permanent cache hit and never attempt to refetch.
+    if (!response) {
+      out[entity.entity_id] = [];
+      continue;
+    }
 
+    const properties = response.properties.map(entityPropertyFromApi);
     queryClient.setQueryData(
       entityPropertiesKey(entity, params.propertyDefinitionIds),
       properties
     );
-
     out[entity.entity_id] = properties;
   }
 
@@ -111,7 +117,7 @@ export async function fetchAndCacheBulkEntityProperties(
 /**
  * Query hook for fetching properties for many entities in a single API call.
  *
- * Note: we explicitly use the `@queries/client` QueryClient to keep behavior
+ * Note: we explicitly use the `packages/queries/client.ts` QueryClient to keep behavior
  * consistent with other query helpers in this package.
  */
 export function useBulkEntityPropertiesQuery(
@@ -124,9 +130,19 @@ export function useBulkEntityPropertiesQuery(
   return useQuery(
     () => {
       const currentEntities = entities();
+      const placeholder: BulkEntityPropertiesData = {};
+      for (const entity of currentEntities) {
+        const cached = queryClient.getQueryData<Property[]>(
+          entityPropertiesKey(entity, propertyDefinitionIds)
+        );
+        placeholder[entity.entity_id] = cached ?? [];
+      }
       return {
-        // Always provide an object so consumers can treat `data` as total.
-        initialData: {},
+        // Provide stable shape (no `undefined`) but still fetch immediately.
+        // Note: queries/client has default staleTime=5m; initialData would otherwise
+        // be considered fresh and skip fetching.
+        initialData: placeholder,
+        staleTime: 0,
         enabled: currentEntities.length > 0,
         ...options?.(),
         ...bulkEntityPropertiesQueryOptions({
