@@ -1,13 +1,13 @@
-import { isErr } from '../../core/util/maybeResult';
-import { entityPropertyFromApi } from '../../core/component/Properties/api/converters';
-import type { Property } from '../../core/component/Properties/types';
-import { queryClient } from '../client';
-import { propertiesServiceClient } from '../../service-clients/service-properties/client';
-import type { EntityReference } from '../../service-clients/service-properties/generated/schemas/entityReference';
 import type { UseBaseQueryOptions } from '@tanstack/solid-query';
 import { useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
+import { entityPropertyFromApi } from '../../core/component/Properties/api/converters';
+import type { Property } from '../../core/component/Properties/types';
+import { isErr } from '../../core/util/maybeResult';
+import { propertiesServiceClient } from '../../service-clients/service-properties/client';
+import type { EntityReference } from '../../service-clients/service-properties/generated/schemas/entityReference';
 import { partitionByQueryCache } from '../cache';
+import { queryClient } from '../client';
 import { propertiesKeys } from './keys';
 
 export type BulkEntityPropertiesData = Record<string, Property[]>;
@@ -37,10 +37,14 @@ async function fetchBulkWithCachePartition(
 ): Promise<BulkEntityPropertiesData> {
   if (params.entities.length === 0) return {};
 
-  const { cached, missing } = partitionByQueryCache<EntityReference, Property[]>({
+  const { cached, missing } = partitionByQueryCache<
+    EntityReference,
+    Property[]
+  >({
     queryClient,
     items: params.entities,
-    queryKeyOf: (entity) => entityPropertiesKey(entity, params.propertyDefinitionIds),
+    queryKeyOf: (entity) =>
+      entityPropertiesKey(entity, params.propertyDefinitionIds),
   });
 
   const out: BulkEntityPropertiesData = {};
@@ -105,7 +109,10 @@ export function useBulkEntityPropertiesQuery(
   entities: Accessor<readonly EntityReference[]>,
   propertyDefinitionIds: readonly string[],
   options?: Accessor<
-    Omit<BulkEntityPropertiesQueryOptions, 'queryKey' | 'queryFn' | 'initialData'>
+    Omit<
+      BulkEntityPropertiesQueryOptions,
+      'queryKey' | 'queryFn' | 'initialData'
+    >
   >
 ) {
   return useQuery(
