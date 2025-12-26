@@ -295,7 +295,10 @@ function notificationsMutationErrorFn(
   context: NotificationsMutationContext
 ) {
   for (const [queryKey, data] of context.previousData) {
-    queryClient.setQueryData(queryKey as never, data);
+    queryClient.setQueryData(
+      queryKey as readonly unknown[],
+      data as NotificationData<UserNotificationsPageParam> | undefined
+    );
   }
 }
 
