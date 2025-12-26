@@ -105,7 +105,8 @@ pub(crate) async fn process_message(
     );
 
     let user_ids =
-        filter_sender_id_from_recipient_ids(sender_id, recipient_ids).unwrap_or_default();
+        filter_sender_id_from_recipient_ids(sender_id.map(|r| r.as_ref()), recipient_ids)
+            .unwrap_or_default();
 
     // If there are no users to notify, we can skip the notification
     if user_ids.is_empty() {

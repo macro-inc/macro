@@ -170,7 +170,7 @@ redis = "0.29.0"
 regex = "1.11.1"
 reqwest = { version = "0.12.12", features = ["json"] }
 reqwest-middleware = { git = "https://github.com/seanaye/reqwest-middleware" }
-schemars = { version = "1.0.4", features = ["chrono04"] }
+schemars = { version = "1.0.4", features = ["chrono04", "uuid1"] }
 serde = { version = "1.0.214", features = ["derive"] }
 serde_dynamo = { version = "4", features = ["aws-sdk-dynamodb+1"] }
 serde_json = { version = "1.0.132" }

@@ -1,4 +1,4 @@
-import { TextButton } from '@core/component/TextButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import clickOutside from '@core/directive/clickOutside';
 import { formatDate } from '@core/util/date';
 import CheckIcon from '@icon/regular/check.svg';
@@ -51,14 +51,14 @@ export function UserMemory(props: UserMemoryProps) {
           <div class="flex items-center justify-center align-center flex-col w-full h-full">
             Are you sure you want to delete this memory?
             <div class="flex flex-row gap-x-1">
-              <TextButton
+              <DeprecatedTextButton
                 onClick={() => setIsDeleting(false)}
                 icon={XIcon}
                 theme="clear"
                 text="Cancel"
               />
 
-              <TextButton
+              <DeprecatedTextButton
                 onClick={createCallback(() =>
                   deleteMemory(props.memory.id as string)
                 )}
@@ -155,13 +155,13 @@ function EditMemory(props: EditMemoryProps) {
         {props.text}
       </div>
       <div class="justify-end gap-x-1 flex flex-row items-center">
-        <TextButton
+        <DeprecatedTextButton
           onClick={props.onCancel}
           icon={XIcon}
           text="Cancel"
           theme="clear"
         />
-        <TextButton
+        <DeprecatedTextButton
           onClick={() => {
             if (editableRef?.textContent) props.onSave(editableRef.textContent);
           }}

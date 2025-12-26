@@ -16,7 +16,7 @@ use crate::{
 
 use macro_db_client::dcs::create_chat_message::create_chat_message;
 
-use ai::tool::AiClient;
+use ai::tool::ToolLoop;
 use ai::tool::types::StreamPart;
 use ai::types::Role;
 use ai::types::{AssistantMessagePart, ChatCompletionRequest, Model};
@@ -121,7 +121,7 @@ pub async fn stream_chat_response(
         jwt_token: jwt_token.to_string(),
     };
 
-    let client = AiClient::new(toolset, tool_context);
+    let client = ToolLoop::new(toolset, tool_context);
     let mut chat = client.chat();
     let now = std::time::Instant::now();
     let mut stream = chat

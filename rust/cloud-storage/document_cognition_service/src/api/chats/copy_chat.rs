@@ -6,13 +6,13 @@ use macro_db_client::dcs::copy_messages::copy_messages;
 use macro_db_client::dcs::create_chat::create_chat_v2;
 
 use axum::{
-    Extension, Json,
+    Json,
     extract::{self, Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
 use macro_middleware::cloud_storage::ensure_access::chat::ChatAccessLevelExtractor;
-use model::{response::StringIDResponse, user::UserContext};
+use model::{response::StringIDResponse, user::axum_extractor::MacroUserExtractor};
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::ViewAccessLevel;
 
@@ -37,7 +37,7 @@ pub struct Params {
 pub async fn copy_chat_handler(
     _access: ChatAccessLevelExtractor<ViewAccessLevel>,
     State(state): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    user_context: MacroUserExtractor,
     Path(Params { chat_id }): Path<Params>,
     extract::Json(req): extract::Json<CopyChatRequest>,
 ) -> Result<Response, Response> {
@@ -48,17 +48,17 @@ pub async fn copy_chat_handler(
     Ok((StatusCode::OK, Json(string_id_response)).into_response())
 }
 
-#[tracing::instrument(skip(state, user_context, req), fields(user_id=?user_context.user_id, chat_id))]
+#[tracing::instrument(skip(state, user_context, req), fields(user_id=?user_context.macro_user_id, chat_id))]
 pub async fn copy_chat_v2(
     state: &ApiContext,
-    user_context: Extension<UserContext>,
+    user_context: MacroUserExtractor,
     chat_id: String,
     req: CopyChatRequest,
 ) -> Result<StringIDResponse, (StatusCode, String)> {
     // 1. create share permission
     let share_permission = SharePermissionV2::new_chat_share_permission();
     // 2. create new chat
-    let old_chat = get_chat(state, &chat_id, &user_context.user_id)
+    let old_chat = get_chat(state, &chat_id, &user_context.user_context.user_id)
         .await
         .map_err(|e| {
             tracing::error!(error=?e, "failed to get chat");
@@ -83,7 +83,7 @@ pub async fn copy_chat_v2(
             )
         })?;
 
-        if !project.user_id.eq(&user_context.user_id) {
+        if !project.user_id.eq(&user_context.macro_user_id) {
             None
         } else {
             Some(project.id)
@@ -95,7 +95,7 @@ pub async fn copy_chat_v2(
     let model = old_chat.model.unwrap_or(FALLBACK_MODEL);
     let chat_id = create_chat_v2(
         &state.db,
-        user_context.user_id.as_str(),
+        user_context.macro_user_id,
         req.name.as_str(),
         model,
         project_id.as_deref(),

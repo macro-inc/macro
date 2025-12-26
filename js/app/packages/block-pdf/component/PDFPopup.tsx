@@ -4,10 +4,10 @@ import { useIsAuthenticated } from '@core/auth';
 import { useBlockId } from '@core/block';
 import { structuredOutputCompletion } from '@core/client/structuredOutput';
 import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMessageMarkdown';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { AskAi } from '@core/component/GeneralizedPopup/AskAI';
 import { GeneralizedPopup } from '@core/component/GeneralizedPopup/Popup';
-import { IconButton } from '@core/component/IconButton';
-import { TextButton } from '@core/component/TextButton';
 import { blockElementSignal } from '@core/signal/blockElement';
 import { blockMetadataSignal } from '@core/signal/load';
 import { createFromMarkdownText } from '@core/util/md';
@@ -267,7 +267,7 @@ export function PDFPopup(props: PDFPopupProps) {
           <div class="flex flex-row space-x-2 items-center">
             <Show when={completion() && props.insertProps}>
               {(insertProps) => (
-                <IconButton
+                <DeprecatedIconButton
                   theme="clear"
                   icon={PasteIcon}
                   onClick={() =>
@@ -281,7 +281,7 @@ export function PDFPopup(props: PDFPopupProps) {
             <Switch>
               <Match when={!props.highlightProps.currentHighlight}>
                 <Show when={props.highlightProps.canCreate}>
-                  <IconButton
+                  <DeprecatedIconButton
                     theme="clear"
                     icon={HighlightIcon}
                     onClick={() => {
@@ -293,7 +293,7 @@ export function PDFPopup(props: PDFPopupProps) {
               </Match>
               <Match when={props.highlightProps.currentHighlight}>
                 <Show when={props.highlightProps.canEdit}>
-                  <IconButton
+                  <DeprecatedIconButton
                     theme="clear"
                     icon={TrashIcon}
                     onClick={() => {
@@ -312,7 +312,7 @@ export function PDFPopup(props: PDFPopupProps) {
                   : props.commentProps.canCreate
               }
             >
-              <IconButton
+              <DeprecatedIconButton
                 theme="clear"
                 icon={ChatIcon}
                 onClick={(e: MouseEvent | KeyboardEvent) =>
@@ -323,7 +323,7 @@ export function PDFPopup(props: PDFPopupProps) {
           </div>
           <Show when={props.shareLinkProps}>
             {(shareLinkProps) => (
-              <TextButton
+              <DeprecatedTextButton
                 theme="clear"
                 icon={
                   locationCopied()

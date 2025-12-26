@@ -48,13 +48,16 @@ pub async fn update_message_read_status<'t>(
 
 /// Update the read status of multiple messages at once
 /// Returns the count of messages that were successfully updated
-#[tracing::instrument(skip(pool), level = "info")]
-pub async fn update_message_read_status_batch(
-    pool: &sqlx::PgPool,
+#[tracing::instrument(skip(executor), err)]
+pub async fn update_message_read_status_batch<'e, E>(
+    executor: E,
     message_ids: Vec<Uuid>,
     fusionauth_user_id: &str,
     is_read: bool,
-) -> anyhow::Result<usize> {
+) -> anyhow::Result<usize>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Postgres>,
+{
     if message_ids.is_empty() {
         return Ok(0);
     }
@@ -76,15 +79,8 @@ pub async fn update_message_read_status_batch(
         &message_ids,
         fusionauth_user_id
     )
-    .fetch_all(pool)
-    .await
-    .with_context(|| {
-        format!(
-            "Failed to update read status for {} messages for user {}",
-            message_ids.len(),
-            fusionauth_user_id
-        )
-    })?;
+    .fetch_all(executor)
+    .await?;
 
     let updated_count = result.len();
 

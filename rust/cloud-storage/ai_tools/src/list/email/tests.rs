@@ -1,6 +1,6 @@
 use super::tool::*;
 use ai::generate_tool_input_schema;
-use ai::tool::types::toolset::tool_object::validate_tool_schema;
+use ai::tool::types::tool_object::validate_tool_schema;
 use cool_asserts::assert_matches;
 use email::inbound::ApiPaginatedThreadCursor;
 use models_email::service::thread::PreviewViewStandardLabel;

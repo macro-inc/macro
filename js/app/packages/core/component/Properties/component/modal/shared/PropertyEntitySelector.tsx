@@ -1,4 +1,4 @@
-import { useBlockId } from '@core/block';
+import { useMaybeBlockId } from '@core/block';
 import { useChannelsContext } from '@core/component/ChannelsProvider';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
@@ -209,7 +209,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   let searchInputRef!: HTMLInputElement;
 
   // Get current entity context for self-filtering
-  const blockId = useBlockId();
+  const blockId = useMaybeBlockId();
   const { entityType: currentEntityType } = usePropertiesContext();
 
   const history = useHistory();
@@ -349,8 +349,10 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     const MAX_SEARCH_RESULTS = 20;
 
     // Filter out the current entity when selecting same entity type (e.g., parent task on a task)
-    const excludeFilter = (e: CombinedEntity) =>
-      !(getEntityType(e) === currentEntityType && e.id === blockId);
+    const excludeFilter = blockId
+      ? (e: CombinedEntity) =>
+          !(getEntityType(e) === currentEntityType && e.id === blockId)
+      : () => true;
 
     // Get visible entities based on search
     const localResults = term

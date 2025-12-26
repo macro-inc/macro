@@ -3,6 +3,7 @@ pub mod preview;
 pub mod utils;
 
 use chrono::serde::ts_seconds_option;
+use macro_user_id::user_id::MacroUserIdStr;
 pub use message::*;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -50,7 +51,7 @@ pub struct Chat {
 pub struct ChatBasic {
     pub id: String,
     pub name: String,
-    pub user_id: String,
+    pub user_id: MacroUserIdStr<'static>,
     pub project_id: Option<String>,
     pub deleted_at: Option<chrono::DateTime<chrono::Utc>>,
 }

@@ -7,6 +7,7 @@ import {
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { blockMetadataSignal } from '@core/signal/load';
 import { useUpdatedDssItemName } from '@service-storage/history';
+import { formatDocumentName } from '@service-storage/util/filename';
 import { createMemo } from 'solid-js';
 
 const currentBlockDocumentName = createBlockMemo(() => {
@@ -33,5 +34,17 @@ export const useBlockDocumentName = (defaultName?: string) => {
       return blockNameToDefaultFile(blockName);
     }
     return '';
+  });
+};
+
+export const useBlockDocumentDownloadName = (defaultName?: string) => {
+  const documentName = useBlockDocumentName(defaultName);
+
+  return createMemo(() => {
+    let current = documentName();
+    if (!current) current = 'download';
+
+    const fileType = blockMetadataSignal()?.fileType;
+    return formatDocumentName(current, fileType);
   });
 };

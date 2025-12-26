@@ -21,7 +21,7 @@ async fn process_single_document(
     // Add row for the owner
     generated_items.push(UserItemAccess {
         id: macro_uuid::generate_uuid_v7(),
-        user_id: user_id.clone(),
+        user_id: user_id.to_string(),
         item_id: document_id.clone(),
         item_type: "document".to_string(),
         access_level: AccessLevel::Owner,
@@ -54,7 +54,7 @@ async fn process_single_document(
             })?;
 
         for participant in participants {
-            if participant.user_id != user_id {
+            if participant.user_id != user_id.as_ref() {
                 generated_items.push(UserItemAccess {
                     id: macro_uuid::generate_uuid_v7(),
                     user_id: participant.user_id,

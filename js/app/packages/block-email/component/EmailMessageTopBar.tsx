@@ -1,4 +1,4 @@
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { Tooltip } from '@core/component/Tooltip';
 import { formatDate } from '@core/util/date';
 import CaretDown from '@icon/regular/caret-down.svg';
@@ -7,7 +7,7 @@ import type { MessageWithBodyReplyless } from '@service-email/generated/schemas'
 import { type Accessor, For, type Setter, Show } from 'solid-js';
 import type { SetStoreFunction } from 'solid-js/store';
 import { getFirstName } from '../util/name';
-import { MessageActions } from './MessageActions';
+import { type EmailMessageAction, MessageActions } from './MessageActions';
 
 interface EmailMessageTopBarProps {
   message: MessageWithBodyReplyless;
@@ -16,9 +16,10 @@ interface EmailMessageTopBarProps {
   isBodyExpanded: Accessor<boolean>;
   expandedHeader: Accessor<boolean>;
   setExpandedHeader: Setter<boolean>;
-  setFocusedMessageId: Setter<string | undefined>;
+  setFocusedMessageId: (messageId: string | undefined) => void;
   setShowReply: Setter<boolean>;
   isLastMessage?: boolean;
+  hiddenActions?: EmailMessageAction[];
 }
 
 export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
@@ -78,6 +79,7 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
             showActions={props.focused}
             setShowReply={props.setShowReply}
             isLastMessage={props.isLastMessage}
+            hiddenActions={props.hiddenActions}
           />
         </div>
       </div>
@@ -147,7 +149,7 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
                 </For>
               </div>
               {/* Expand Header Button */}
-              <IconButton
+              <DeprecatedIconButton
                 theme="clear"
                 icon={CaretDown}
                 onclick={() => {
@@ -189,7 +191,7 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
                     props.message.bcc.length === 0
                   }
                 >
-                  <IconButton
+                  <DeprecatedIconButton
                     theme="clear"
                     icon={CaretUp}
                     onclick={() => {
@@ -227,7 +229,7 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
                 {/* Expand Header Button */}
 
                 <Show when={props.message.bcc.length === 0}>
-                  <IconButton
+                  <DeprecatedIconButton
                     theme="clear"
                     icon={CaretUp}
                     onclick={() => {
@@ -264,7 +266,7 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
                 </For>
                 {/* Expand Header Button */}
 
-                <IconButton
+                <DeprecatedIconButton
                   theme="clear"
                   icon={CaretUp}
                   onclick={() => {

@@ -40,6 +40,7 @@ export const NOTIFICATION_LABEL_BY_TYPE: Record<NotificationType, string> = {
   [NotificationType.new_email]: 'EMAIL',
   [NotificationType.invite_to_team]: 'INVITE',
   [NotificationType.reject_team_invite]: 'REJECTED',
+  [NotificationType.task_assigned]: 'ASSIGNED',
 } as const;
 
 const extractors: {
@@ -217,6 +218,25 @@ const extractors: {
       action: 'rejected your team invitation',
       target: { type: 'team', id: n.entity_id },
       content: undefined,
+    };
+  },
+  task_assigned: (n) => {
+    const m = n.notificationMetadata;
+    if (!m) return null;
+    return {
+      type: n.notificationEventType,
+      actor: m.assignedBy ? { id: m.assignedBy } : undefined,
+      action: 'assigned you a task',
+      target: {
+        type: 'document' as EntityType, // Tasks are stored as documents
+        id: m.taskId,
+        name: m.taskName ?? undefined,
+        show: true, // Show task name in platform notification title
+      },
+      content: m.taskName ?? undefined,
+      meta: {
+        itemId: m.taskId,
+      },
     };
   },
 };

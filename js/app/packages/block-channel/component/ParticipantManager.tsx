@@ -7,10 +7,11 @@ import {
   useRemoveParticipantsFromChannel,
 } from '@block-channel/signal/participants';
 import { ClippedPanel } from '@core/component/ClippedPanel';
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
+import { DialogWrapper } from '@core/component/DialogWrapper';
 import { getDestinationFromOptions } from '@core/component/NewMessage';
 import { RecipientSelector } from '@core/component/RecipientSelector';
-import { TextButton } from '@core/component/TextButton';
 import { Tooltip } from '@core/component/Tooltip';
 import {
   idToEmail,
@@ -28,6 +29,7 @@ import { ChannelType } from '@service-comms/generated/models/channelType';
 import { useUserId } from '@service-gql/client';
 import { createMemo, createSignal, Show } from 'solid-js';
 import { VList } from 'virtua/solid';
+import { beveledCorners } from '../../block-theme/signals/themeSignals';
 import { UserItem } from './UserItem';
 
 export function ParticipantManager(props: { participantCount: number }) {
@@ -84,13 +86,13 @@ export function ParticipantManager(props: { participantCount: number }) {
       </Dialog.Trigger>
 
       <Dialog.Portal>
-        <Dialog.Overlay class="fixed flex inset-0 z-modal bg-modal-overlay pattern-edge-muted pattern-diagonal-4 items-center justify-content" />
-        <div class="fixed inset-0 z-modal w-screen h-screen flex items-center justify-center bg-transparent">
-          <Dialog.Content class="w-[512px]">
-            <ClippedPanel tl>
+        <Dialog.Overlay class="fixed inset-0 z-modal bg-transparent" />
+        <DialogWrapper>
+          <Dialog.Content>
+            <ClippedPanel tl={!beveledCorners()} active>
               <div class="flex flex-row items-center px-2 h-[40px] gap-2 border-b-1 border-b-edge-muted">
                 <Dialog.CloseButton>
-                  <IconButton
+                  <DeprecatedIconButton
                     tooltip={{ label: 'Close' }}
                     icon={CloseIcon}
                     iconSize={16}
@@ -107,7 +109,7 @@ export function ParticipantManager(props: { participantCount: number }) {
                   isChannelAdminOrOwnerMemo()
                 }
               >
-                <div class="flex flex-row justify-between gap-2 h-[40px] text-ink-muted border-b border-edge-muted/50 px-2 items-center">
+                <div class="flex flex-row justify-between gap-2 min-h-[40px] text-ink-muted border-b border-edge-muted/50 p-2 items-center">
                   <RecipientSelector<'user'>
                     setSelectedOptions={setUsersToInvite}
                     selectedOptions={usersToInvite}
@@ -116,11 +118,15 @@ export function ParticipantManager(props: { participantCount: number }) {
                     hideBorder
                     noPadding
                   />
-                  <TextButton
+                  <DeprecatedTextButton
                     disabled={usersToInvite().length === 0}
                     onClick={handleAddParticipants}
                     icon={InvitedIcon}
-                    text="Add Participant"
+                    text={
+                      usersToInvite().length > 1
+                        ? 'Add Participants'
+                        : 'Add Participant'
+                    }
                     theme="accent"
                   />
                 </div>
@@ -135,7 +141,7 @@ export function ParticipantManager(props: { participantCount: number }) {
               </div>
             </ClippedPanel>
           </Dialog.Content>
-        </div>
+        </DialogWrapper>
       </Dialog.Portal>
     </Dialog>
   );

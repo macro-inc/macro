@@ -1,5 +1,5 @@
 use crate::pubsub::context::PubSubContext;
-use crate::pubsub::util::check_gmail_rate_limit;
+use crate::pubsub::util::{CheckGmailRateLimitArgs, check_gmail_rate_limit};
 use crate::util::process_pre_insert::sync_labels::sync_labels;
 use crate::util::sync_contacts::sync_contacts;
 use models_email::email::service::backfill::{
@@ -47,12 +47,13 @@ pub async fn init_backfill(
 
     let threads_requested_limit = backfill_job.threads_requested_limit;
 
-    check_gmail_rate_limit(
-        &ctx.redis_client,
-        link.id,
-        GmailApiOperation::UsersGetProfile,
-        true,
-    )
+    check_gmail_rate_limit(CheckGmailRateLimitArgs {
+        redis_client: &ctx.redis_client,
+        link_id: link.id,
+        gmail_operation: GmailApiOperation::UsersGetProfile,
+        retryable: true,
+        is_backfill: true,
+    })
     .await?;
     // get the total number of threads the user has in their account
     let total_threads = match ctx

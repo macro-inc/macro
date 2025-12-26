@@ -20,61 +20,28 @@ fn test_build_search_request() -> anyhow::Result<()> {
     let result = builder.build_search_request()?;
 
     let expected = serde_json::json!({
-          "from": 20,
-          "size": 20,
-          "collapse": {
-              "field": "entity_id"
-          },
-          "sort": EmailSearchConfig::default_sort_types().iter().map(|s| s.to_json()).collect::<Vec<_>>(),
-          "highlight": EmailSearchConfig::append_owner_highlights(EmailSearchConfig::default_highlight()).to_json(),
-        "query": {
+      "from": 20,
+      "size": 20,
+      "collapse": {
+          "field": "entity_id"
+      },
+      "sort": EmailSearchConfig::default_sort_types().iter().map(|s| s.to_json()).collect::<Vec<_>>(),
+      "highlight": EmailSearchConfig::append_owner_highlights(EmailSearchConfig::default_highlight()).to_json(),
+       "query": {
       "bool": {
-        "minimum_should_match": 1,
-        "must": [
+        "filter": [
           {
             "bool": {
               "minimum_should_match": 1,
               "should": [
                 {
-                  "wildcard": {
-                    "sender": {
-                      "case_insensitive": true,
-                      "value": "test*",
-                      "boost": 5000.0
-
-                    }
+                  "terms": {
+                    "entity_id": ["thread1", "thread2"]
                   }
                 },
                 {
-                  "wildcard": {
-                    "cc": {
-                      "case_insensitive": true,
-                      "value": "test*",
-                      "boost": 5000.0
-                    }
-                  }
-                },
-                {
-                  "wildcard": {
-                    "bcc": {
-                      "case_insensitive": true,
-                      "value": "test*",
-                      "boost": 5000.0
-                    }
-                  }
-                },
-                {
-                  "wildcard": {
-                    "recipients": {
-                      "case_insensitive": true,
-                      "value": "test*",
-                      "boost": 5000.0
-                    }
-                  }
-                },
-                {
-                  "match_phrase": {
-                    "content": "test"
+                  "term": {
+                    "user_id": "user123"
                   }
                 }
               ]
@@ -151,28 +118,66 @@ fn test_build_search_request() -> anyhow::Result<()> {
             }
           }
         ],
-        "must_not":  [
+        "must": [
           {
-            "term": {
-              "labels": "TRASH",
+            "bool": {
+              "minimum_should_match": 1,
+              "should": [
+                {
+                  "wildcard": {
+                    "sender": {
+                      "boost": 5000.0,
+                      "case_insensitive": true,
+                      "value": "test*"
+                    }
+                  }
+                },
+                {
+                  "wildcard": {
+                    "cc": {
+                      "boost": 5000.0,
+                      "case_insensitive": true,
+                      "value": "test*"
+                    }
+                  }
+                },
+                {
+                  "wildcard": {
+                    "bcc": {
+                      "boost": 5000.0,
+                      "case_insensitive": true,
+                      "value": "test*"
+                    }
+                  }
+                },
+                {
+                  "wildcard": {
+                    "recipients": {
+                      "boost": 5000.0,
+                      "case_insensitive": true,
+                      "value": "test*"
+                    }
+                  }
+                },
+                {
+                  "match_phrase": {
+                    "content": "test"
+                  }
+                }
+              ]
             }
           }
         ],
-        "should": [
-          {
-            "terms": {
-              "entity_id": ["thread1", "thread2"]
-            }
-          },
+        "must_not": [
           {
             "term": {
-              "user_id": "user123"
+              "labels": "TRASH"
             }
           }
         ]
       }
     },
-      });
+        });
 
     assert_eq!(result.to_json(), expected);
 

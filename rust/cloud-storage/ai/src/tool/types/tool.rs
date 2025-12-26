@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use serde::Serialize;
 
 pub type ToolResult<T> = std::result::Result<T, ToolCallError>;
+pub struct NoContext();
 
 #[derive(Debug)]
 pub struct ToolCallError {
@@ -29,5 +30,3 @@ pub trait AsyncTool<Sc, Rc>: Sync + Send {
     type Output: Serialize + 'static;
     async fn call(&self, service_context: Sc, request_context: Rc) -> ToolResult<Self::Output>;
 }
-
-pub struct NoContext();

@@ -7,11 +7,15 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import type { DefaultView, ViewId } from '@core/types/view';
 import { handleFolderSelect } from '@core/util/upload';
-import { createMemo, Match, onMount, Show, Switch } from 'solid-js';
+import { createMemo, Match, onCleanup, onMount, Show, Switch } from 'solid-js';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 
 false && fileSelector;
 false && folderSelector;
+
+const EMPTY_STATE_HELP_DRAWER_TIMEOUT_MS = 0;
+
+const DEFAULT_EMPTY_MESSAGE = 'No items to show.';
 
 function EmptyStateHelpDrawer(props: {
   message?: string;
@@ -21,24 +25,42 @@ function EmptyStateHelpDrawer(props: {
   const {
     unifiedListContext: { setShowHelpDrawer },
   } = useSplitPanelOrThrow();
+
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+  // because the empty state can sometimes be mounted and unmounted rapidly, we need to
+  // ensure that the help drawer is only shown when this state is stable
   onMount(() => {
-    setShowHelpDrawer((prev) => new Set([...prev, props.helpDrawer]));
+    timeoutId = setTimeout(() => {
+      setShowHelpDrawer((prev) => new Set([...prev, props.helpDrawer]));
+    }, EMPTY_STATE_HELP_DRAWER_TIMEOUT_MS);
   });
+  onCleanup(() => {
+    clearTimeout(timeoutId);
+  });
+
   return (
     <EmptyStateInner
-      emptyMessage={props.message}
+      message={props.message}
       showDropZone={props.showDropZone}
     />
   );
 }
 
-export function EmptyState(props: { viewId?: ViewId; search?: boolean }) {
+export function EmptyState(props: {
+  viewId?: ViewId;
+  search?: boolean;
+  hasRefinementsFromBase?: boolean;
+}) {
   const emailActive = useEmailLinksStatus();
 
   return (
     <Switch>
       <Match when={props.search}>
-        <EmptyStateInner emptyMessage={'No results.'} />
+        <EmptyStateInner message={'No results.'} />
+      </Match>
+      <Match when={props.hasRefinementsFromBase}>
+        <EmptyStateInner />
       </Match>
       <Match when={props.viewId === 'noise' && !emailActive()}>
         <EmptyStateHelpDrawer
@@ -48,16 +70,24 @@ export function EmptyState(props: { viewId?: ViewId; search?: boolean }) {
       </Match>
       <Match
         when={
-          (props.viewId === 'noise' || props.viewId === 'signal') &&
+          (props.viewId === 'noise' ||
+            props.viewId === 'signal' ||
+            props.viewId === 'email') &&
           emailActive()
         }
       >
-        <EmptyStateInner emptyMessage={'Inbox zero.'} />
+        <EmptyStateInner message={'Inbox zero.'} />
       </Match>
       <Match when={props.viewId === 'signal' && !emailActive()}>
         <EmptyStateHelpDrawer
           message={'Nothing to show. Email not connected.'}
           helpDrawer={'signal'}
+        />
+      </Match>
+      <Match when={props.viewId === 'email' && !emailActive()}>
+        <EmptyStateHelpDrawer
+          message={'Nothing to show. Email not connected.'}
+          helpDrawer={'email'}
         />
       </Match>
       <Match when={props.viewId === 'people'}>
@@ -93,14 +123,14 @@ export function EmptyState(props: { viewId?: ViewId; search?: boolean }) {
         />
       </Match>
       <Match when={true}>
-        <EmptyStateInner emptyMessage={'No items to show.'} showDropZone />
+        <EmptyStateInner />
       </Match>
     </Switch>
   );
 }
 
 export interface EmptyStateInnerProps {
-  emptyMessage?: string;
+  message?: string;
   showDropZone?: boolean;
   cta?: {
     label: string;
@@ -123,9 +153,9 @@ export function EmptyStateInner(props: EmptyStateInnerProps) {
   return (
     <div class="size-full flex items-center justify-center p-4 text-ink-muted">
       <div class="panel w-full flex flex-col size-full">
-        <Show when={props.emptyMessage}>
-          <p class="text-ink-muted font-mono">{props.emptyMessage}</p>
-        </Show>
+        <p class="text-ink-muted font-mono">
+          {props.message ?? DEFAULT_EMPTY_MESSAGE}
+        </p>
         <Show when={props.cta}>
           {(cta) => (
             <div class="w-full flex justify-start pt-4">
@@ -138,7 +168,9 @@ export function EmptyStateInner(props: EmptyStateInnerProps) {
             </div>
           )}
         </Show>
-        <Show when={props.showDropZone && !(isTouchDevice && isMobileWidth())}>
+        <Show
+          when={props.showDropZone && !(isTouchDevice() && isMobileWidth())}
+        >
           <div class="drop-zone flex flex-col items-center justify-center w-full py-8 border border-dashed border-edge-muted bg-hover">
             <p class="text-ink-muted">Drag & drop files and folders here</p>
             <p class="text-ink-muted">

@@ -16,7 +16,10 @@ import { ReferencesModal } from '@core/component/ReferencesModal';
 import { ShareButton } from '@core/component/TopBar/ShareButton';
 import { blockFileSignal, blockMetadataSignal } from '@core/signal/load';
 import { useGetPermissions } from '@core/signal/permissions';
-import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
+import {
+  useBlockDocumentDownloadName,
+  useBlockDocumentName,
+} from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
 import Download from '@icon/regular/download.svg';
 import { createCallback } from '@solid-primitives/rootless';
@@ -25,12 +28,13 @@ export function TopBar() {
   const blockId = useBlockId();
   const imageFile = blockFileSignal.get;
   const name = useBlockDocumentName();
+  const downloadName = useBlockDocumentDownloadName();
   const userPermissions = useGetPermissions();
 
   const downloadDocument = createCallback(async () => {
     const file = imageFile();
     if (!file) return;
-    downloadFile(file);
+    downloadFile(file, downloadName());
   });
 
   const ops: FileOperation[] = [

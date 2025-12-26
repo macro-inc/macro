@@ -35,7 +35,6 @@ function channelQueryOptions(channelId: string): ChannelQueryOptions {
             channel_id: channelId,
           })
       );
-      console.log('fetch', result);
 
       return result;
     },

@@ -18,6 +18,7 @@ import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { useCanEdit } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { mergeRegister } from '@lexical/utils';
+import { onElementConnect } from '@solid-primitives/lifecycle';
 import { debounce } from '@solid-primitives/scheduled';
 import {
   $createParagraphNode,
@@ -38,7 +39,6 @@ import {
   createMemo,
   createSignal,
   onCleanup,
-  onMount,
   Show,
   untrack,
 } from 'solid-js';
@@ -61,7 +61,8 @@ function titleNavigationPlugin(
       // Press enter in the title editor.
       titleEditor.registerCommand(
         KEY_ENTER_COMMAND,
-        (event: KeyboardEvent) => {
+        (event) => {
+          if (!event) return false;
           if (ignoreArrows()) return true;
           event?.preventDefault();
           // Prepend a new paragraph to the main editor.
@@ -147,8 +148,6 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
     if (canEdit()) renameMarkdownDocument(name);
   }, 500);
 
-  let mountRef!: HTMLDivElement;
-
   const [state, setState] = createSignal('');
   const [initialized, setInitialized] = createSignal(false);
 
@@ -202,15 +201,14 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
     trimWhitespace(editor, { trailing: true });
   }
 
-  onMount(() => {
-    editor.setRootElement(mountRef);
-    mountRef.addEventListener('blur', onBlur);
-  });
-
-  onCleanup(() => {
-    cleanup();
-    mountRef.removeEventListener('blur', onBlur);
-  });
+  const onConnect = (el: HTMLDivElement) => {
+    editor.setRootElement(el);
+    el.addEventListener('blur', onBlur);
+    onCleanup(() => {
+      cleanup();
+      el.removeEventListener('blur', onBlur);
+    });
+  };
 
   createEffect(() => {
     editor.setEditable(canEdit() ?? false);
@@ -223,11 +221,11 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
 
   createEffect(() => {
     const docName = mdDocumentName();
-    const _state = untrack(state);
+    const currentState = untrack(state);
     if (
       dataReady() &&
       docName !== undefined &&
-      docName !== _state.trim() &&
+      docName !== currentState.trim() &&
       !selfChangedTitle
     ) {
       forceSetTextContent(editor, docName);
@@ -237,12 +235,12 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
 
   createEffect(() => {
     if (emojiMenuOperations.isOpen()) return;
-    const _state = state();
+    const currentState = state();
     if (!untrack(initialized)) {
       setInitialized(true);
       return;
     }
-    if (_state.trim() !== untrack(mdDocumentName)) {
+    if (currentState.trim() !== untrack(mdDocumentName)) {
       selfChangedTitle = true;
       debouncedRename();
     }
@@ -280,11 +278,13 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
   return (
     <div class="relative">
       <div
-        ref={mountRef}
         contentEditable={canEdit() ?? false}
         class="text-4xl font-semibold **:optical-24!"
         classList={{
           'select-auto': !canEdit(),
+        }}
+        ref={(el) => {
+          onElementConnect(el, () => onConnect(el));
         }}
       />
       <EmojiMenu

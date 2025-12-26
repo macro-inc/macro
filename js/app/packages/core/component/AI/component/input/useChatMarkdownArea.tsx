@@ -44,13 +44,14 @@ import {
 import type { PortalScope } from '@core/component/ScopedPortal';
 import { shortcutBadgeStyles } from '@core/component/Themes';
 import { toast } from '@core/component/Toast/Toast';
-import { useTokenToHotkeyString } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
+import { getPrettyHotkeyStringByToken } from '@core/hotkey/utils';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import type { IOrganizationUser } from '@core/user';
 import { handleFileFolderDrop } from '@core/util/upload';
 import { $isDocumentMentionNode } from '@lexical-core';
 import type { Item } from '@service-storage/generated/schemas/item';
+import { onElementConnect } from '@solid-primitives/lifecycle';
 import { activeElement } from 'app/signal/focus';
 import { filePastePlugin } from 'core/component/LexicalMarkdown/plugins/file-paste/filePastePlugin';
 import { createAccessoryStore } from 'core/component/LexicalMarkdown/plugins/node-accessory/nodeAccessoryPlugin';
@@ -68,7 +69,6 @@ import {
   createEffect,
   createSignal,
   type JSXElement,
-  on,
   onCleanup,
   type Setter,
   Show,
@@ -261,24 +261,19 @@ function MarkdownArea(
   //   });
   // });
 
-  const focusShortcut = useTokenToHotkeyString(TOKENS.chat.input.focus);
+  const focusShortcut = getPrettyHotkeyStringByToken(TOKENS.chat.input.focus);
 
-  createEffect(
-    on(props.mountRef, (ref) => {
-      console.log('EFFECT ON REF', ref);
-      if (!ref) return;
-      editor.setRootElement(ref);
-      editor.setEditable(true);
-      if (props.initialValue) {
-        setEditorStateFromMarkdown(editor, props.initialValue);
-      } else {
-        initializeEditorEmpty(editor);
-      }
-      if (!isMobileWidth() && !props.dontFocusOnMount) {
-        editor.focus();
-      }
-    })
-  );
+  const onConnect = () => {
+    editor.setEditable(true);
+    if (props.initialValue) {
+      setEditorStateFromMarkdown(editor, props.initialValue);
+    } else {
+      initializeEditorEmpty(editor);
+    }
+    if (!isMobileWidth() && !props.dontFocusOnMount) {
+      editor.focus();
+    }
+  };
 
   if (props.captureEditor) {
     props.captureEditor(editor);
@@ -378,7 +373,8 @@ function MarkdownArea(
     autoRegister(
       editor.registerCommand(
         KEY_ENTER_COMMAND,
-        (e: KeyboardEvent) => {
+        (e) => {
+          if (!e) return false;
           // TODO (seamus) : This is hacky. If we got a props.onEnter,then shift+enter becomes
           // the new "", so we delete the shiftKey and pass along to lexical.
           if (e.shiftKey) {
@@ -410,7 +406,13 @@ function MarkdownArea(
     <LexicalWrapperContext.Provider value={props.lexicalWrapper}>
       <div class="relative w-full">
         <div
-          ref={(el) => props.setMountRef(el)}
+          ref={(el) => {
+            onElementConnect(el, () => {
+              editor.setRootElement(el);
+              onConnect();
+              props.setMountRef(el);
+            });
+          }}
           contentEditable={true}
           class="overflow-y-auto max-h-40 p-0 m-0"
         ></div>
@@ -433,7 +435,7 @@ function MarkdownArea(
                 <span
                   class={`rounded-md px-1.5 py-0.5 space-x-1 ${shortcutBadgeStyles['muted']}`}
                 >
-                  {focusShortcut()}
+                  {focusShortcut}
                 </span>{' '}
                 to chat with AI
               </p>

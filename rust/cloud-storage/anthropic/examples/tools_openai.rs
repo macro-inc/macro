@@ -1,5 +1,5 @@
 use anthropic::client::Client;
-use anthropic::types::stream_response::{ContentDeltaEvent, StreamEvent};
+use anthropic::types::response::{ContentDeltaEvent, StreamEvent};
 use async_openai::types::{
     ChatCompletionRequestUserMessage, ChatCompletionRequestUserMessageContent,
     ChatCompletionToolArgs, ChatCompletionToolType, CreateChatCompletionRequestArgs,

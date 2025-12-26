@@ -1,6 +1,8 @@
 use crate::history::{upsert_item_last_accessed_timestamp, upsert_user_history_timestamp};
 use crate::share_permission::create::create_document_permission;
 use document_sub_type::DocumentSubType;
+use macro_user_id::cowlike::CowLike;
+use macro_user_id::user_id::MacroUserIdStr;
 use model::document::DocumentMetadata;
 use model::document::FileType;
 use model::document::ID;
@@ -19,7 +21,7 @@ pub struct CreateDocumentArgs<'a> {
     pub id: Option<&'a str>,
     pub sha: &'a str,
     pub document_name: &'a str,
-    pub user_id: &'a str,
+    pub user_id: MacroUserIdStr<'static>,
     pub file_type: Option<FileType>,
     pub project_id: Option<&'a str>,
     pub project_name: Option<&'a str>,
@@ -107,7 +109,7 @@ pub async fn create_document_txn(
         insert_document_with_id(
             transaction,
             id,
-            user_id,
+            user_id.copied(),
             document_name,
             file_type,
             project_id,
@@ -118,7 +120,7 @@ pub async fn create_document_txn(
     } else {
         insert_document_no_id(
             transaction,
-            user_id,
+            user_id.copied(),
             document_name,
             file_type,
             project_id,
@@ -196,15 +198,21 @@ pub async fn create_document_txn(
 
     // Add item to user history for creator
     if !skip_history {
-        upsert_user_history_timestamp(transaction, user_id, &document_id, "document", created_at)
-            .await?;
+        upsert_user_history_timestamp(
+            transaction,
+            user_id.copied(),
+            &document_id,
+            "document",
+            created_at,
+        )
+        .await?;
         upsert_item_last_accessed_timestamp(transaction, &document_id, "document", created_at)
             .await?;
     }
 
     crate::item_access::insert::insert_user_item_access(
         transaction,
-        user_id,
+        user_id.copied(),
         &document_id,
         "document",
         AccessLevel::Owner,
@@ -243,7 +251,7 @@ pub async fn create_document_txn(
 #[instrument(skip(transaction))]
 async fn insert_document_no_id(
     transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    user_id: &str,
+    user_id: MacroUserIdStr<'_>,
     document_name: &str,
     file_type: Option<FileType>,
     project_id: Option<&str>,
@@ -256,7 +264,7 @@ async fn insert_document_no_id(
             VALUES ($1, $2, $3, $4, $5, $5)
             RETURNING id;
         "#,
-        user_id,
+        user_id.as_ref(),
         document_name,
         file_type.map(|file_type| file_type.as_str().to_string()),
         project_id,
@@ -274,7 +282,7 @@ async fn insert_document_no_id(
 async fn insert_document_with_id(
     transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     id: &str,
-    user_id: &str,
+    user_id: MacroUserIdStr<'_>,
     document_name: &str,
     file_type: Option<FileType>,
     project_id: Option<&str>,
@@ -286,7 +294,7 @@ async fn insert_document_with_id(
             VALUES ($1, $2, $3, $4, $5, $6, $6)
         "#,
         id,
-        user_id,
+        user_id.as_ref(),
         document_name,
         file_type.map(|file_type| file_type.as_str().to_string()),
         project_id,
@@ -342,7 +350,7 @@ mod tests {
                 id: None,
                 sha: "sha",
                 document_name: "document-name",
-                user_id: "macro|user@user.com",
+                user_id: MacroUserIdStr::parse_from_str("macro|user@user.com").unwrap(),
                 file_type: Some(FileType::Pdf),
                 project_id: Some("project-one"),
                 project_name: None,
@@ -359,7 +367,7 @@ mod tests {
 
         assert!(!document_metadata.document_id.is_empty());
         assert_eq!(document_metadata.document_name, "document-name".to_string());
-        assert_eq!(document_metadata.owner, "macro|user@user.com".to_string());
+        assert_eq!(document_metadata.owner.as_ref(), "macro|user@user.com");
         assert_eq!(document_metadata.project_id.as_deref(), Some("project-one"));
         assert_eq!(document_metadata.project_name.as_deref(), Some("name"));
         assert_eq!(document_metadata.created_at, Some(ts));
@@ -371,7 +379,7 @@ mod tests {
                 id: None,
                 sha: "sha",
                 document_name: "document-name",
-                user_id: "macro|user@user.com",
+                user_id: MacroUserIdStr::parse_from_str("macro|user@user.com").unwrap(),
                 file_type: Some(FileType::Docx),
                 project_id: None,
                 project_name: None,
@@ -388,7 +396,7 @@ mod tests {
 
         assert!(!document_metadata.document_id.is_empty());
         assert_eq!(document_metadata.document_name, "document-name".to_string());
-        assert_eq!(document_metadata.owner, "macro|user@user.com".to_string());
+        assert_eq!(document_metadata.owner.as_ref(), "macro|user@user.com");
 
         Ok(())
     }
@@ -412,7 +420,7 @@ mod tests {
                 id: Some("20f603c2-99db-aaaa-0000-1d8b9f95a52f"),
                 sha: "sha",
                 document_name: "document-name",
-                user_id: "macro|user@user.com",
+                user_id: MacroUserIdStr::parse_from_str("macro|user@user.com").unwrap(),
                 file_type: Some(FileType::Pdf),
                 project_id: Some("project-one"),
                 project_name: None,
@@ -432,7 +440,7 @@ mod tests {
             "20f603c2-99db-aaaa-0000-1d8b9f95a52f"
         );
         assert_eq!(document_metadata.document_name, "document-name".to_string());
-        assert_eq!(document_metadata.owner, "macro|user@user.com".to_string());
+        assert_eq!(document_metadata.owner.as_ref(), "macro|user@user.com");
         assert_eq!(document_metadata.project_id.as_deref(), Some("project-one"));
         assert_eq!(document_metadata.project_name.as_deref(), Some("name"));
         assert_eq!(document_metadata.created_at, Some(ts));
@@ -444,7 +452,7 @@ mod tests {
                 id: Some("20f603c2-99db-4f02-aaaa-1d8b9f95a52f"),
                 sha: "sha",
                 document_name: "document-name",
-                user_id: "macro|user@user.com",
+                user_id: MacroUserIdStr::parse_from_str("macro|user@user.com").unwrap(),
                 file_type: Some(FileType::Docx),
                 project_id: None,
                 project_name: None,
@@ -464,7 +472,7 @@ mod tests {
             "20f603c2-99db-4f02-aaaa-1d8b9f95a52f"
         );
         assert_eq!(document_metadata.document_name, "document-name".to_string());
-        assert_eq!(document_metadata.owner, "macro|user@user.com".to_string());
+        assert_eq!(document_metadata.owner.as_ref(), "macro|user@user.com");
 
         Ok(())
     }
@@ -477,7 +485,8 @@ mod tests {
                 id: None,
                 sha: "sha",
                 document_name: "document-name",
-                user_id: "macro|non-existent-user@fake.com",
+                user_id: MacroUserIdStr::parse_from_str("macro|non-existent-user@fake.com")
+                    .unwrap(),
                 file_type: Some(FileType::Pdf),
                 project_id: None,
                 project_name: None,
@@ -503,7 +512,7 @@ mod tests {
     #[sqlx::test(fixtures(path = "../../../fixtures", scripts("basic_user_with_documents")))]
     async fn test_insert_document_with_duplicate_id(pool: Pool<Postgres>) -> anyhow::Result<()> {
         let test_id = "duplicate-document-id";
-        let user_id = "macro|user@user.com";
+        let user_id = MacroUserIdStr::parse_from_str("macro|user@user.com").unwrap();
 
         // First, create a document with the test ID
         let mut transaction = pool.begin().await?;
@@ -514,7 +523,7 @@ mod tests {
         insert_document_with_id(
             &mut transaction,
             test_id,
-            user_id,
+            user_id.clone(),
             "First Document",
             Some(FileType::Pdf),
             None,
@@ -530,7 +539,7 @@ mod tests {
         let result = insert_document_with_id(
             &mut transaction,
             test_id,
-            user_id,
+            user_id.clone(),
             "Second Document with Same ID",
             Some(FileType::Pdf),
             None,

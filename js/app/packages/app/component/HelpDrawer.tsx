@@ -1,4 +1,4 @@
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { toast } from '@core/component/Toast/Toast';
 import { fileSelector } from '@core/directive/fileSelector';
 import { useEmailLinks, useEmailLinksStatus } from '@core/email-link';
@@ -23,7 +23,9 @@ export function HelpDrawer(props: { viewId?: ViewId }) {
     <Switch>
       <Match
         when={
-          (props.viewId === 'noise' || props.viewId === 'signal') &&
+          (props.viewId === 'noise' ||
+            props.viewId === 'signal' ||
+            props.viewId === 'email') &&
           !emailActive()
         }
       >
@@ -75,7 +77,7 @@ export function HelpDrawer(props: { viewId?: ViewId }) {
               ],
             },
             {
-              hotkeyTokenSequence: [TOKENS.global.toggleRightPanel],
+              hotkeyTokenSequence: [TOKENS.split.go.toggleRightPanel],
             },
           ]}
         />
@@ -108,6 +110,41 @@ export function HelpDrawer(props: { viewId?: ViewId }) {
                 }
               : undefined
           }
+        />
+      </Match>
+      <Match when={props.viewId === 'email'}>
+        <HelpDrawerInner
+          title={'Email is better with Macro.'}
+          subtitle={
+            <span>
+              Use{' '}
+              <span class="font-mono bg-edge/20 rounded-xs md-inline-code p-0.3">
+                @mentions
+              </span>{' '}
+              to give email recipients access to anything in Macro. Ask AI to
+              search your emails.
+            </span>
+          }
+          hotkeyExamples={[
+            {
+              hotkeyTokenSequence: [
+                TOKENS.global.createCommand,
+                TOKENS.create.email,
+              ],
+            },
+            {
+              hotkeyTokenSequence: [
+                TOKENS.global.createCommand,
+                TOKENS.create.message,
+              ],
+            },
+            {
+              hotkeyTokenSequence: [
+                TOKENS.split.goCommand,
+                TOKENS.split.go.toggleRightPanel,
+              ],
+            },
+          ]}
         />
       </Match>
       <Match when={props.viewId === 'comms'}>
@@ -207,7 +244,7 @@ export function HelpDrawer(props: { viewId?: ViewId }) {
               hotkeyTokenSequence: [TOKENS.global.createNewSplit],
             },
             {
-              hotkeyTokenSequence: [TOKENS.global.toggleRightPanel],
+              hotkeyTokenSequence: [TOKENS.split.go.toggleRightPanel],
             },
             {
               hotkeyTokenSequence: [TOKENS.global.createCommand],
@@ -249,7 +286,7 @@ export function HelpDrawerInner(props: HelpDrawerInnerProps) {
       <div class="absolute pattern-edge pattern-diagonal-4 opacity-100 w-full h-4 top-0 -translate-y-[calc(100%_+_1px)] mask-t-from-0" />
       <div class="content bg-dialog min-h-[16rem]">
         <div class="absolute top-3 right-3">
-          <IconButton
+          <DeprecatedIconButton
             icon={CloseIcon}
             theme="clear"
             size="sm"
@@ -279,7 +316,7 @@ export function HelpDrawerInner(props: HelpDrawerInnerProps) {
             </Show>
           </div>
           <Show
-            when={props.hotkeyExamples && !(isTouchDevice && isMobileWidth())}
+            when={props.hotkeyExamples && !(isTouchDevice() && isMobileWidth())}
           >
             <div class="hotkey-examples-container px-4 py-8 h-full basis-1/2">
               <div class="grid grid-cols-[min-content_1fr] gap-x-8 gap-y-4">

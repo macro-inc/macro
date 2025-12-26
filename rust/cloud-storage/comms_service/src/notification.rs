@@ -4,6 +4,7 @@ use comms_db_client::{
     model::{Message, SimpleMention},
     participants::get_participants::get_channel_participants_for_thread_id,
 };
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model::{comms::ChannelParticipant, document_storage_service_internal::DocumentMetadata};
 use model_entity::EntityType;
 use model_notifications::{
@@ -27,7 +28,7 @@ pub struct ChannelMessageEvent<'a> {
 
 pub struct ChannelInviteEvent<'a> {
     channel_id: &'a Uuid,
-    invited_by_user_id: &'a str,
+    invited_by_user_id: &'a MacroUserIdStr<'static>,
     recipient_user_ids: &'a [String],
     common: &'a CommonChannelMetadata,
 }
@@ -46,13 +47,13 @@ fn recipients_excluding<'a>(
 
 fn create_notification_queue_message(
     channel_id: &Uuid,
-    sender_id: &str,
+    sender_id: MacroUserIdStr<'static>,
     recipients: &[String],
     notification_event: NotificationEvent,
 ) -> NotificationQueueMessage {
     NotificationQueueMessage {
         notification_entity: EntityType::Channel.with_entity_string(channel_id.to_string()),
-        sender_id: Some(sender_id.to_string()),
+        sender_id: Some(sender_id),
         recipient_ids: Some(recipients.to_vec()),
         notification_event,
     }
@@ -65,13 +66,13 @@ impl<'a> ChannelInviteEvent<'a> {
         if !self.recipient_user_ids.is_empty() {
             notifications.push(create_notification_queue_message(
                 self.channel_id,
-                self.invited_by_user_id,
+                self.invited_by_user_id.copied().into_owned(),
                 &recipients_excluding(
                     self.recipient_user_ids.iter().map(|m| m.as_str()),
-                    once(self.invited_by_user_id),
+                    once(self.invited_by_user_id.as_ref()),
                 ),
                 NotificationEvent::ChannelInvite(ChannelInviteMetadata {
-                    invited_by: self.invited_by_user_id.to_string(),
+                    invited_by: self.invited_by_user_id.clone(),
                     common: self.common.clone(),
                 }),
             ));
@@ -88,10 +89,10 @@ impl ChannelMessageEvent<'_> {
         if !self.user_mentions.is_empty() {
             notifications.push(create_notification_queue_message(
                 self.channel_id,
-                &self.message.sender_id,
+                self.message.sender_id.clone(),
                 &recipients_excluding(
                     self.user_mentions.iter().map(|m| m.as_str()),
-                    once(self.message.sender_id.as_str()),
+                    once(self.message.sender_id.0.as_ref()),
                 ),
                 NotificationEvent::ChannelMention(ChannelMentionMetadata {
                     message_content: self.message.content.clone(),
@@ -105,13 +106,13 @@ impl ChannelMessageEvent<'_> {
         if !self.document_mentions.is_empty() {
             let recipients_excluding_mentions = recipients_excluding(
                 self.participants.iter().map(|p| p.user_id.as_str()),
-                once(self.message.sender_id.as_str()),
+                once(self.message.sender_id.0.as_ref()),
             );
 
             for mention in self.document_mentions {
                 notifications.push(create_notification_queue_message(
                     self.channel_id,
-                    &self.message.sender_id,
+                    self.message.sender_id.clone(),
                     &recipients_excluding_mentions,
                     NotificationEvent::ChannelMessageDocument(ChannelMessageDocumentMetadata(
                         DocumentMentionMetadata {
@@ -125,9 +126,8 @@ impl ChannelMessageEvent<'_> {
             }
         }
 
-        let sender_and_mentions = once(&self.message.sender_id)
-            .chain(self.user_mentions)
-            .map(String::as_str)
+        let sender_and_mentions = once(self.message.sender_id.0.as_ref())
+            .chain(self.user_mentions.iter().map(String::as_str))
             .collect::<Vec<&str>>();
 
         // MessageSend and Invite notifications are sent to all participants except the sender and
@@ -143,7 +143,7 @@ impl ChannelMessageEvent<'_> {
                 if !self.thread_participants.is_empty() {
                     notifications.push(create_notification_queue_message(
                         self.channel_id,
-                        &self.message.sender_id,
+                        self.message.sender_id.clone(),
                         &recipients_excluding(
                             self.thread_participants.iter().map(|p| p.as_str()),
                             sender_and_mentions,
@@ -164,7 +164,7 @@ impl ChannelMessageEvent<'_> {
             (0, None) => {
                 notifications.push(create_notification_queue_message(
                     self.channel_id,
-                    &self.message.sender_id,
+                    self.message.sender_id.clone(),
                     &recipients_without_sender_and_mentions,
                     NotificationEvent::ChannelInvite(ChannelInviteMetadata {
                         invited_by: self.message.sender_id.clone(),
@@ -176,11 +176,11 @@ impl ChannelMessageEvent<'_> {
             (_, None) => {
                 notifications.push(create_notification_queue_message(
                     self.channel_id,
-                    &self.message.sender_id,
+                    self.message.sender_id.clone(),
                     &recipients_without_sender_and_mentions,
                     NotificationEvent::ChannelMessageSend(ChannelMessageSendMetadata {
                         message_id: self.message.id.to_string(),
-                        sender: self.message.sender_id.to_string(),
+                        sender: self.message.sender_id.clone(),
                         message_content: self.message.content.to_string(),
                         common: self.channel_metadata.clone(),
                     }),
@@ -195,7 +195,7 @@ impl ChannelMessageEvent<'_> {
 pub async fn dispatch_notifications_for_invite(
     api_context: &AppState,
     channel_id: &Uuid,
-    invited_by_user_id: &str,
+    invited_by_user_id: &MacroUserIdStr<'static>,
     recipient_user_ids: Vec<String>,
     common: CommonChannelMetadata,
 ) -> anyhow::Result<()> {
@@ -301,10 +301,14 @@ mod tests {
         }
     }
 
-    fn message(channel_id: Uuid, sender_id: &str, thread_id: Option<Uuid>) -> Message {
+    fn message(
+        channel_id: Uuid,
+        sender_id: MacroUserIdStr<'static>,
+        thread_id: Option<Uuid>,
+    ) -> Message {
         Message {
             id: Uuid::new_v4(),
-            sender_id: sender_id.to_string(),
+            sender_id,
             content: "test".to_string(),
             thread_id,
             channel_id,
@@ -318,7 +322,9 @@ mod tests {
     fn doc_metadata(name: &str) -> DocumentMetadata {
         DocumentMetadata {
             item_name: name.to_string(),
-            item_owner: "owner".to_string(),
+            item_owner: MacroUserIdStr::parse_from_str("macro|owner@test.com")
+                .unwrap()
+                .into_owned(),
             file_type: Some("pdf".to_string()),
             item_id: "id".to_string(),
         }
@@ -370,11 +376,17 @@ mod tests {
     fn sender_excluded_from_all_recipients() {
         let channel_id = Uuid::new_v4();
         let participants = vec![
-            participant("sender", channel_id),
-            participant("alice", channel_id),
-            participant("bob", channel_id),
+            participant("macro|sender@test.com", channel_id),
+            participant("macro|alice@test.com", channel_id),
+            participant("macro|bob@test.com", channel_id),
         ];
-        let msg = message(channel_id, "sender", None);
+        let msg = message(
+            channel_id,
+            MacroUserIdStr::parse_from_str("macro|sender@test.com")
+                .unwrap()
+                .into_owned(),
+            None,
+        );
         let metadata = private_metadata();
 
         let event = ChannelMessageEvent {
@@ -408,7 +420,13 @@ mod tests {
             participant("sender", channel_id),
             participant("alice", channel_id),
         ];
-        let msg = message(channel_id, "sender", None);
+        let msg = message(
+            channel_id,
+            MacroUserIdStr::parse_from_str("macro|sender@test.com")
+                .unwrap()
+                .into_owned(),
+            None,
+        );
         let metadata = private_metadata();
 
         let event = ChannelMessageEvent {
@@ -439,7 +457,13 @@ mod tests {
             participant("sender", channel_id),
             participant("alice", channel_id),
         ];
-        let msg = message(channel_id, "sender", None);
+        let msg = message(
+            channel_id,
+            MacroUserIdStr::parse_from_str("macro|sender@test.com")
+                .unwrap()
+                .into_owned(),
+            None,
+        );
         let metadata = private_metadata();
 
         let event = ChannelMessageEvent {
@@ -471,7 +495,13 @@ mod tests {
             participant("alice", channel_id),
             participant("bob", channel_id),
         ];
-        let msg = message(channel_id, "sender", None);
+        let msg = message(
+            channel_id,
+            MacroUserIdStr::parse_from_str("macro|sender@test.com")
+                .unwrap()
+                .into_owned(),
+            None,
+        );
         let metadata = private_metadata();
         let user_mentions = vec!["alice".to_string()];
 
@@ -517,19 +547,25 @@ mod tests {
         let channel_id = Uuid::new_v4();
         let thread_id = Uuid::new_v4();
         let participants = vec![
-            participant("sender", channel_id),
-            participant("alice", channel_id),
-            participant("bob", channel_id),
-            participant("charlie", channel_id),
+            participant("macro|sender@test.com", channel_id),
+            participant("macro|alice@test.com", channel_id),
+            participant("macro|bob@test.com", channel_id),
+            participant("macro|charlie@test.com", channel_id),
         ];
-        let msg = message(channel_id, "sender", Some(thread_id));
+        let msg = message(
+            channel_id,
+            MacroUserIdStr::parse_from_str("macro|sender@test.com")
+                .unwrap()
+                .into_owned(),
+            Some(thread_id),
+        );
         let metadata = private_metadata();
-        let user_mentions = vec!["alice".to_string()];
+        let user_mentions = vec!["macro|alice@test.com".to_string()];
         let thread_participants = vec![
-            "sender".to_string(),
-            "alice".to_string(),
-            "bob".to_string(),
-            "charlie".to_string(),
+            "macro|sender@test.com".to_string(),
+            "macro|alice@test.com".to_string(),
+            "macro|bob@test.com".to_string(),
+            "macro|charlie@test.com".to_string(),
         ];
 
         let event = ChannelMessageEvent {
@@ -557,21 +593,27 @@ mod tests {
             .expect("should have reply notification");
 
         let recipients = reply.recipient_ids.as_ref().unwrap();
-        assert!(!recipients.contains(&"sender".to_string()));
-        assert!(!recipients.contains(&"alice".to_string()));
-        assert!(recipients.contains(&"bob".to_string()));
-        assert!(recipients.contains(&"charlie".to_string()));
+        assert!(!recipients.contains(&"macro|sender@test.com".to_string()));
+        assert!(!recipients.contains(&"macro|alice@test.com".to_string()));
+        assert!(recipients.contains(&"macro|bob@test.com".to_string()));
+        assert!(recipients.contains(&"macro|charlie@test.com".to_string()));
     }
 
     #[test]
     fn document_mentions_exclude_sender() {
         let channel_id = Uuid::new_v4();
         let participants = vec![
-            participant("sender", channel_id),
-            participant("alice", channel_id),
-            participant("bob", channel_id),
+            participant("macro|sender@test.com", channel_id),
+            participant("macro|alice@test.com", channel_id),
+            participant("macro|bob@test.com", channel_id),
         ];
-        let msg = message(channel_id, "sender", None);
+        let msg = message(
+            channel_id,
+            MacroUserIdStr::parse_from_str("macro|sender@test.com")
+                .unwrap()
+                .into_owned(),
+            None,
+        );
         let metadata = private_metadata();
         let doc_mentions = vec![doc_metadata("test.pdf")];
 
@@ -600,9 +642,9 @@ mod tests {
             .expect("should have document notification");
 
         let recipients = doc_notif.recipient_ids.as_ref().unwrap();
-        assert!(!recipients.contains(&"sender".to_string()));
-        assert!(recipients.contains(&"alice".to_string()));
-        assert!(recipients.contains(&"bob".to_string()));
+        assert!(!recipients.contains(&"macro|sender@test.com".to_string()));
+        assert!(recipients.contains(&"macro|alice@test.com".to_string()));
+        assert!(recipients.contains(&"macro|bob@test.com".to_string()));
     }
 
     #[test]
@@ -613,7 +655,13 @@ mod tests {
             participant("sender", channel_id),
             participant("alice", channel_id),
         ];
-        let msg = message(channel_id, "sender", Some(thread_id));
+        let msg = message(
+            channel_id,
+            MacroUserIdStr::parse_from_str("macro|sender@test.com")
+                .unwrap()
+                .into_owned(),
+            Some(thread_id),
+        );
         let metadata = private_metadata();
 
         let event = ChannelMessageEvent {

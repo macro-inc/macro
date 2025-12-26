@@ -4,7 +4,7 @@ use crate::{
     Result,
     error::{OpensearchClientError, ResponseExt},
     search::{
-        builder::{SearchQueryConfig, create_highlight_field},
+        builder::{SearchQueryConfig, create_highlight_field, updated_at_sort},
         channels::{
             ChannelMessageIndex, ChannelMessageQueryBuilder, ChannelMessageSearchArgs,
             ChannelMessageSearchConfig,
@@ -400,6 +400,8 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
     let title_keys: Vec<&'static str> = title_keys.into_iter().collect();
 
     let mut bool_query = BoolQueryBuilder::new();
+
+    // There will always be 1 query as the indices are never empty
     bool_query.minimum_should_match(1);
 
     if args.search_indices.contains(&SearchEntityType::Documents) {
@@ -458,10 +460,7 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
     }
 
     // Build sort
-    let sort = vec![
-        SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
-        SortType::Field(FieldSort::new("entity_id", SortOrder::Desc)),
-    ];
+    let sort = updated_at_sort();
 
     for sort in sort {
         search_request_builder.add_sort(sort);
@@ -527,8 +526,10 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
     // fields
     match args.search_on {
         SearchOn::Content | SearchOn::NameContent => {
-            highlight = highlight.field("user_id", create_highlight_field("plain", 1));
-            highlight = highlight.field("owner_id", create_highlight_field("plain", 1));
+            // Commenting out for now as it's causing highlights on the user_id of filter matches
+            // Need to think of a different way to surface the owner matches
+            // highlight = highlight.field("user_id", create_highlight_field("plain", 1));
+            // highlight = highlight.field("owner_id", create_highlight_field("plain", 1));
             highlight = highlight.field("sender", create_highlight_field("plain", 1));
             highlight = highlight.field("recipients", create_highlight_field("plain", 1));
             highlight = highlight.field("cc", create_highlight_field("plain", 1));
@@ -554,6 +555,8 @@ pub(crate) async fn search_unified(
     args: UnifiedSearchArgs,
 ) -> Result<Vec<SearchHit>> {
     let search_request = build_unified_search_request(&args)?.to_json();
+
+    tracing::trace!("search request {:?}", search_request);
 
     let mut search_indices: Vec<&str> = args.search_indices.iter().map(|i| i.as_ref()).collect();
 

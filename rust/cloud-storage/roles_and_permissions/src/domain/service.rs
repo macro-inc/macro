@@ -1,5 +1,5 @@
 //! Contains the service logic for roles and permissions
-use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserId};
+use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr};
 
 use crate::domain::{
     model::{RoleId, SubscriptionStatus, UserRolesAndPermissionsError},
@@ -69,7 +69,7 @@ where
 
     async fn dangerous_upsert_roles_for_user(
         &self,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: &MacroUserIdStr<'_>,
         role_ids: non_empty::NonEmpty<&[RoleId]>,
     ) -> Result<(), UserRolesAndPermissionsError> {
         self.user_roles_and_permissions_repository
@@ -79,7 +79,7 @@ where
 
     async fn dangerous_remove_roles_from_user(
         &self,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: &MacroUserIdStr<'_>,
         role_ids: &non_empty::NonEmpty<&[RoleId]>,
     ) -> Result<(), UserRolesAndPermissionsError> {
         self.user_roles_and_permissions_repository

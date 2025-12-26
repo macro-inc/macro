@@ -1,5 +1,7 @@
 use crate::api::context::ApiContext;
-use crate::util::upload_attachment::{UploadAttachmentContext, upload_attachment};
+use crate::util::upload_attachment::{
+    UploadAttachmentContext, UploadAttachmentError, upload_attachment,
+};
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
@@ -22,7 +24,7 @@ pub enum GetAttachmentDocumentIdError {
     DatabaseError(anyhow::Error),
 
     #[error("Failed to upload attachment")]
-    UploadError(anyhow::Error),
+    UploadError(UploadAttachmentError),
 }
 
 impl IntoResponse for GetAttachmentDocumentIdError {

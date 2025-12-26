@@ -4,12 +4,11 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { String } from './string';
 import type { InviteToTeamMetadataRole } from './inviteToTeamMetadataRole';
 
 export interface InviteToTeamMetadata {
   /** The user who sent the invitation */
-  invitedBy: String;
+  invitedBy: string;
   /** Role/permission level in the team */
   role?: InviteToTeamMetadataRole;
   /** The unique identifier of the team */

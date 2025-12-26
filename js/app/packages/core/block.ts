@@ -537,6 +537,17 @@ export const useMaybeBlockName = (): BlockName | undefined => {
   return context.name;
 };
 
+export const useMaybeBlockAliasedName = ():
+  | BlockName
+  | BlockAlias
+  | undefined => {
+  const context = useContext(BlockContext);
+  if (!context) {
+    return;
+  }
+  return context.aliasContext?.alias ?? context.name;
+};
+
 function styledConsoleError(message: string, code: string) {
   if (import.meta.env.DEV) {
     const styles = `

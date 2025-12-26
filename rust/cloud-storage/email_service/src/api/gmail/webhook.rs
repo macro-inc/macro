@@ -8,9 +8,9 @@ use axum::{
     response::{IntoResponse, Json, Response},
 };
 use model::response::ErrorResponse;
-use models_email::gmail::webhook::{
-    GmailMessagePayload, GmailWebhookPayload, JwtVerificationError, WebhookOperation,
-    WebhookPubsubMessage,
+use models_email::gmail::inbox_sync::{
+    GmailInboxSyncPayload, GmailMessagePayload, InboxSyncOperation, InboxSyncPubsubMessage,
+    JwtVerificationError,
 };
 use models_email::service::link::UserProvider;
 
@@ -19,7 +19,7 @@ use models_email::service::link::UserProvider;
 pub async fn webhook_handler(
     State(ctx): State<ApiContext>,
     headers: HeaderMap,
-    extract::Json(req): extract::Json<GmailWebhookPayload>,
+    extract::Json(req): extract::Json<GmailInboxSyncPayload>,
 ) -> Result<Response, Response> {
     // Validate the token in the headers sent from Google
     if cfg!(feature = "gmail_webhook_auth") {
@@ -46,15 +46,15 @@ pub async fn webhook_handler(
     })?;
 
     if let Some(link) = link {
-        let message = WebhookPubsubMessage {
+        let message = InboxSyncPubsubMessage {
             link_id: link.id,
-            operation: WebhookOperation::GmailMessage(GmailMessagePayload {
+            operation: InboxSyncOperation::GmailMessage(GmailMessagePayload {
                 history_id: req.message.data.history_id,
             }),
         };
 
         ctx.sqs_client
-            .enqueue_gmail_webhook_notification(message)
+            .enqueue_gmail_inbox_sync_notification(message)
             .await
             .map_err(|e| {
                 tracing::error!(error=?e, "unable to enqueue gmail notification");

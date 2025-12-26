@@ -82,6 +82,18 @@ type ComponentMount = {
 
 export type SplitMount = BlockMount | ComponentMount;
 
+export type PopoverSplitOptions = {
+  content: SplitContent;
+  onClose?: () => void;
+};
+
+export type PopoverSplitHandle = {
+  close: () => void;
+  isOpen: () => boolean;
+  content: () => SplitContent;
+  id: string;
+};
+
 export type SplitState = {
   id: SplitId;
   history: History<SplitContent>;
@@ -212,6 +224,27 @@ export type SplitManager = {
 
   /** Set the layout resize context from the component tree. */
   setResizeContext: (cts: ResizeZoneCtx) => void;
+
+  /** Create a temporary popover split that renders content in a modal dialog */
+  createPopoverSplit: (options: PopoverSplitOptions) => PopoverSplitHandle;
+
+  /** Get all active popover splits */
+  getActivePopovers: () => PopoverSplitHandle[];
+
+  /** Close all popover splits */
+  closeAllPopovers: () => void;
+
+  /** Get reactive accessor to popovers map */
+  popovers: () => Map<
+    string,
+    {
+      id: string;
+      content: SplitContent;
+      mount: SplitMount;
+      isOpen: boolean;
+      options: PopoverSplitOptions;
+    }
+  >;
 } & UrlCapabilities;
 
 export type SplitHandle<TMeta extends ComponentMeta = ComponentMeta> = {
@@ -228,6 +261,7 @@ export type SplitHandle<TMeta extends ComponentMeta = ComponentMeta> = {
   canGoForward: () => boolean;
   content: () => SplitContent;
   isSpotLight: () => boolean;
+  isPopover: () => boolean;
   displayName: () => string;
   canGoBack: () => boolean;
   isActive: () => boolean;
@@ -320,12 +354,23 @@ export function createSplitLayout(
     lastActiveSplitId: SplitId | undefined;
     spotlightId: SplitId | undefined;
     events: SplitEventWithType[];
+    popovers: Map<
+      string,
+      {
+        id: string;
+        content: SplitContent;
+        mount: SplitMount;
+        isOpen: boolean;
+        options: PopoverSplitOptions;
+      }
+    >;
   }>({
     splits: [],
     activeSplitId: undefined,
     lastActiveSplitId: undefined,
     spotlightId: undefined,
     events: [],
+    popovers: new Map(),
   });
 
   const [resizeContext, setResizeContext] = createSignal<ResizeZoneCtx>();
@@ -593,6 +638,7 @@ export function createSplitLayout(
       isLast: () => state.splits.at(-1)?.id === id,
       isActive: () => currentSplit.id === state.activeSplitId,
       isSpotLight: () => state.spotlightId === currentSplit.id,
+      isPopover: () => state.popovers.has(currentSplit.id),
       toggleSpotlight: (force?: boolean) => {
         toggleSpotlightSplit(currentSplit.id, force);
       },
@@ -757,6 +803,104 @@ export function createSplitLayout(
     return splitNamesById[state.activeSplitId] || undefined;
   };
 
+  // Popover split functions
+  function createPopoverSplit(
+    options: PopoverSplitOptions
+  ): PopoverSplitHandle {
+    const id = `popover-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const mount = createPinnedMount(orchestrator, options.content);
+
+    const popoverData = {
+      id,
+      content: options.content,
+      mount,
+      isOpen: true,
+      options,
+    };
+
+    setState('popovers', (prev) => {
+      const newMap = new Map(prev);
+      newMap.set(id, popoverData);
+      return newMap;
+    });
+
+    const handle: PopoverSplitHandle = {
+      id,
+      close: () => {
+        setState('popovers', (prev) => {
+          const newMap = new Map(prev);
+          const popover = newMap.get(id);
+          if (popover) {
+            newMap.set(id, { ...popover, isOpen: false });
+            // Schedule cleanup after a brief delay to allow for animations
+            setTimeout(() => {
+              setState('popovers', (prev) => {
+                const cleanupMap = new Map(prev);
+                cleanupMap.delete(id);
+                return cleanupMap;
+              });
+            }, 300);
+          }
+          return newMap;
+        });
+        options.onClose?.();
+      },
+      isOpen: () => {
+        const popover = state.popovers.get(id);
+        return popover?.isOpen ?? false;
+      },
+      content: () => options.content,
+    };
+
+    return handle;
+  }
+
+  function getActivePopovers(): PopoverSplitHandle[] {
+    return Array.from(state.popovers.values())
+      .filter((popover) => popover.isOpen)
+      .map((popover) => ({
+        id: popover.id,
+        close: () => {
+          setState('popovers', (prev) => {
+            const newMap = new Map(prev);
+            const p = newMap.get(popover.id);
+            if (p) {
+              newMap.set(popover.id, { ...p, isOpen: false });
+              setTimeout(() => {
+                setState('popovers', (prev) => {
+                  const cleanupMap = new Map(prev);
+                  cleanupMap.delete(popover.id);
+                  return cleanupMap;
+                });
+              }, 300);
+            }
+            return newMap;
+          });
+          popover.options.onClose?.();
+        },
+        isOpen: () => {
+          const p = state.popovers.get(popover.id);
+          return p?.isOpen ?? false;
+        },
+        content: () => popover.content,
+      }));
+  }
+
+  function closeAllPopovers(): void {
+    setState('popovers', (prev) => {
+      const newMap = new Map();
+      for (const [id, popover] of prev) {
+        newMap.set(id, { ...popover, isOpen: false });
+        popover.options.onClose?.();
+      }
+      // Schedule cleanup
+      setTimeout(() => {
+        setState('popovers', () => new Map());
+      }, 300);
+      return newMap;
+    });
+  }
+
   return {
     splits: () => state.splits,
     activeSplitId: () => state.activeSplitId,
@@ -779,5 +923,9 @@ export function createSplitLayout(
     resizeContext,
     setResizeContext,
     getOrchestrator: () => orchestrator,
+    createPopoverSplit,
+    getActivePopovers,
+    closeAllPopovers,
+    popovers: () => state.popovers,
   };
 }

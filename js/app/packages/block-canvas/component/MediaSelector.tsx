@@ -5,9 +5,9 @@ import {
 import { useRenderState } from '@block-canvas/store/RenderState';
 import { vec2 } from '@block-canvas/util/vector2';
 import { withAnalytics } from '@coparse/analytics';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
-import { IconButton } from '@core/component/IconButton';
 import { DropdownMenuContent } from '@core/component/Menu';
 import {
   blockAcceptsFileExtension,
@@ -143,7 +143,7 @@ export function MediaSelector() {
       onOpenChange={setImageSelectorOpen}
     >
       <DropdownMenu.Trigger class="dropdown-menu__trigger">
-        <IconButton
+        <DeprecatedIconButton
           tooltip={{ label: 'Media' }}
           theme="clear"
           icon={Image}

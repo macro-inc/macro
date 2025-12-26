@@ -22,7 +22,7 @@ import {
 } from '@block-md/comments/commentStore';
 import { useDownloadDocumentAsMarkdownText } from '@block-md/signal/save';
 import { useBlockId, useBlockName } from '@core/block';
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import { NotificationsModal } from '@core/component/NotificationsModal';
 import { ReferencesModal } from '@core/component/ReferencesModal';
@@ -107,7 +107,7 @@ export function TopBar() {
             documentName={name()}
             buttonSize="sm"
           />
-          <IconButton
+          <DeprecatedIconButton
             size="sm"
             icon={showCommentsPreference() ? HideComments : ShowComments}
             theme="clear"

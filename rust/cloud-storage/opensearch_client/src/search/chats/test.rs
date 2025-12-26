@@ -16,78 +16,88 @@ fn test_build_search_request() -> anyhow::Result<()> {
     let result = builder.build_search_request()?;
 
     let expected = serde_json::json!({
-        "from": 20,
-        "size": 20,
-        "collapse": {
-            "field": "entity_id"
-        },
-        "sort": ChatSearchConfig::default_sort_types().iter().map(|s| s.to_json()).collect::<Vec<_>>(),
-        "highlight": ChatSearchConfig::append_owner_highlights(ChatSearchConfig::default_highlight()).to_json(),
-        "query": {
+          "from": 20,
+          "size": 20,
+          "collapse": {
+              "field": "entity_id"
+          },
+          "sort": ChatSearchConfig::default_sort_types().iter().map(|s| s.to_json()).collect::<Vec<_>>(),
+          "highlight": ChatSearchConfig::append_owner_highlights(ChatSearchConfig::default_highlight()).to_json(),
+    "query": {
+      "bool": {
+        "filter": [
+          {
             "bool": {
-                "must": [
+              "minimum_should_match": 1,
+              "should": [
                 {
-                    "bool": {
-                        "minimum_should_match": 1,
-                        "should": [
-                            {
-                                "wildcard": {
-                                    "user_id": {
-                                        "value": "macro|test*",
-                                        "case_insensitive": true,
-                                        "boost": 5000.0
-                                    }
-                                }
-                            },
-                            {
-                                "match_phrase": {
-                                    "content": "test"
-                                }
-                            }
-                        ]
-                    }
+                  "terms": {
+                    "entity_id": ["chat1", "chat2"]
+                  }
                 },
-                    {"term": {"_index": "chats"}},
-                    {
-                        "bool": {
-                            "minimum_should_match": 1,
-                            "should": [
-                                {
-                                    "wildcard": {
-                                        "role": {
-                                            "case_insensitive": true,
-                                            "value": "*user*"
-                                        }
-                                    }
-                                },
-                                {
-                                    "wildcard": {
-                                        "role": {
-                                            "case_insensitive": true,
-                                            "value": "*assistant*"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                ],
-                "should": [
-                    {
-                        "terms": {
-                            "entity_id": ["chat1", "chat2"]
-                        }
-                    },
-                    {
-                        "term": {
-                            "user_id": "user123"
-                        }
-                    }
-                ],
-                "minimum_should_match": 1,
+                {
+                  "term": {
+                    "user_id": "user123"
+                  }
+                }
+              ]
             }
-        }
-    });
+          },
+          {
+            "term": {
+              "_index": "chats"
+            }
+          },
+          {
+            "bool": {
+              "minimum_should_match": 1,
+              "should": [
+                {
+                  "wildcard": {
+                    "role": {
+                      "case_insensitive": true,
+                      "value": "*user*"
+                    }
+                  }
+                },
+                {
+                  "wildcard": {
+                    "role": {
+                      "case_insensitive": true,
+                      "value": "*assistant*"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "must": [
+          {
+            "bool": {
+              "minimum_should_match": 1,
+              "should": [
+                {
+                  "wildcard": {
+                    "user_id": {
+                      "boost": 5000.0,
+                      "case_insensitive": true,
+                      "value": "macro|test*"
+                    }
+                  }
+                },
+                {
+                  "match_phrase": {
+                    "content": "test"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+     });
 
     assert_eq!(result.to_json(), expected);
 

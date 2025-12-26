@@ -1,7 +1,7 @@
 import IconGear from '@macro-icons/macro-gear.svg';
 import type { Meta, StoryObj } from 'storybook-solidjs-vite';
-import { IconButton } from './IconButton';
-import { TextButton } from './TextButton';
+import { DeprecatedIconButton } from './DeprecatedIconButton';
+import { DeprecatedTextButton } from './DeprecatedTextButton';
 import { LabelAndHotKey, Tooltip } from './Tooltip';
 
 const meta = {
@@ -33,14 +33,14 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
   args: {
     tooltip: <div class="text-xs">This is a simple tooltip</div>,
-    children: <TextButton text="Hover me" theme="base" />,
+    children: <DeprecatedTextButton text="Hover me" theme="base" />,
   },
 };
 
 export const WithHotkey: Story = {
   args: {
     tooltip: <LabelAndHotKey label="Open Settings" shortcut="⌘," />,
-    children: <IconButton icon={IconGear} theme="base" />,
+    children: <DeprecatedIconButton icon={IconGear} theme="base" />,
   },
 };
 
@@ -53,6 +53,6 @@ export const ComplexContent: Story = {
       </div>
     ),
     placement: 'top',
-    children: <TextButton text="Complex tooltip" theme="accent" />,
+    children: <DeprecatedTextButton text="Complex tooltip" theme="accent" />,
   },
 };
