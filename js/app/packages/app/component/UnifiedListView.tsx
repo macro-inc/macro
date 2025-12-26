@@ -1313,7 +1313,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                     />
 
                     <div class="flex items-center justify-between">
-                      <span class="font-medium text-xs">Visible</span>
+                      <span class="font-medium text-xs">Focus</span>
                       <div class="flex items-center gap-1">
                         <ToggleButton
                           size="SM"
