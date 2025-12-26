@@ -292,14 +292,14 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     );
   };
 
-  const visibleFilters = createMemo(
-    () => view()?.filters?.visibleFilters ?? defaultFilterOptions.visibleFilters
+  const focusFilters = createMemo(
+    () => view()?.filters?.focusFilters ?? defaultFilterOptions.focusFilters
   );
 
-  const toggleVisibleFilter = (
-    filter: NonNullable<FilterOptions['visibleFilters']>[number]
+  const toggleFocusFilter = (
+    filter: NonNullable<FilterOptions['focusFilters']>[number]
   ) => {
-    setViewDataStore(selectedView(), 'filters', 'visibleFilters', (prev) => {
+    setViewDataStore(selectedView(), 'filters', 'focusFilters', (prev) => {
       if (!prev) return [filter];
 
       if (prev.includes(filter)) {
@@ -636,15 +636,15 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
     if (notificationFilter() === 'notDone') filterFns.push(notDoneFilterFn);
 
-    const visibleFilters_ = visibleFilters();
-    const hasSignalFilter = visibleFilters_?.includes('signal') === true;
-    const hasNoiseFilter = visibleFilters_?.includes('noise') === true;
+    const focusFilters_ = focusFilters();
+    const hasSignalFilter = focusFilters_?.includes('signal') === true;
+    const hasNoiseFilter = focusFilters_?.includes('noise') === true;
 
-    if ((hasSignalFilter && !hasNoiseFilter) || !visibleFilters) {
+    if ((hasSignalFilter && !hasNoiseFilter) || !focusFilters) {
       filterFns.push(signalFilter.predicate);
     }
 
-    if ((hasNoiseFilter && !hasSignalFilter) || !visibleFilters) {
+    if ((hasNoiseFilter && !hasSignalFilter) || !focusFilters) {
       filterFns.push(noiseFilter.predicate);
     }
 
@@ -1317,15 +1317,15 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       <div class="flex items-center gap-1">
                         <ToggleButton
                           size="SM"
-                          pressed={visibleFilters()?.includes('signal')}
-                          onChange={() => toggleVisibleFilter('signal')}
+                          pressed={focusFilters()?.includes('signal')}
+                          onChange={() => toggleFocusFilter('signal')}
                         >
                           <span class="uppercase">Signal</span>
                         </ToggleButton>
                         <ToggleButton
                           size="SM"
-                          pressed={visibleFilters()?.includes('noise')}
-                          onChange={() => toggleVisibleFilter('noise')}
+                          pressed={focusFilters()?.includes('noise')}
+                          onChange={() => toggleFocusFilter('noise')}
                         >
                           <span class="uppercase">Noise</span>
                         </ToggleButton>
