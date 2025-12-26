@@ -515,12 +515,9 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
         </For>
       </div>
       <Dialog.Portal>
-        <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay backdrop-blur-md" />
+        <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay pattern-edge-muted pattern-diagonal-4" />
         <div class="fixed inset-0 z-modal w-screen h-screen flex items-center justify-center p-2 pb-6 sm:p-12">
-          <Dialog.Content
-            class="relative flex items-center justify-center w-full h-full sm:w-auto sm:h-auto"
-            onOpenAutoFocus={(e) => e.preventDefault()}
-          >
+          <Dialog.Content class="relative flex items-center justify-center w-full h-full sm:w-auto sm:h-auto bg-panel">
             {/* Top toolbar */}
             <div
               class="absolute top-4 right-4 bg-dialog backdrop-blur-sm rounded-lg border border-edge p-1 flex flex-row items-center gap-1 shadow-md transition-opacity duration-300"
@@ -556,10 +553,11 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
 
             {/* Navigation arrows */}
             <Show when={!isMobileWidth() || !isTouchDevice}>
-              <Show when={props.images.length > 1 && hasPrevious()}>
+              <Show when={props.images.length > 1}>
                 <button
                   class="absolute left-4 top-1/2 -translate-y-1/2 bg-dialog backdrop-blur-sm rounded-lg border border-edge p-2 shadow-md hover:bg-button transition-opacity duration-300"
                   classList={{
+                    hidden: !hasPrevious(),
                     'opacity-100':
                       isMobileWidth() || isTouchDevice || isToolbarVisible(),
                     'opacity-0 pointer-events-none':
@@ -573,10 +571,11 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
                 </button>
               </Show>
 
-              <Show when={props.images.length > 1 && hasNext()}>
+              <Show when={props.images.length > 1}>
                 <button
                   class="absolute right-4 top-1/2 -translate-y-1/2 bg-dialog backdrop-blur-sm rounded-lg border border-edge p-2 shadow-md hover:bg-button transition-opacity duration-300"
                   classList={{
+                    hidden: !hasNext(),
                     'opacity-100':
                       isMobileWidth() || isTouchDevice || isToolbarVisible(),
                     'opacity-0 pointer-events-none':

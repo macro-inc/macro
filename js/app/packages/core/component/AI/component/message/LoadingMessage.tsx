@@ -1,7 +1,7 @@
-import { GlitchText } from '@core/component/GlitchText';
 import MacroGridLoader from '@macro-icons/macro-grid-noise-loader-4.svg';
 import type { ChatAttachmentWithName } from '@service-cognition/generated/schemas/chatAttachmentWithName';
 import { createCallback } from '@solid-primitives/rootless';
+import { GlitchText } from '@ui/components/GlitchText';
 import { createEffect, createSignal, untrack } from 'solid-js';
 
 export function LoadingMessage(props: {
