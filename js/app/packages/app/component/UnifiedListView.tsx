@@ -291,6 +291,24 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     );
   };
 
+  const visibleFilters = createMemo(
+    () => view()?.filters?.visibleFilters ?? defaultFilterOptions.visibleFilters
+  );
+
+  const toggleVisibleFilter = (
+    filter: NonNullable<FilterOptions['visibleFilters']>[number]
+  ) => {
+    setViewDataStore(selectedView(), 'filters', 'visibleFilters', (prev) => {
+      if (!prev) return [filter];
+
+      if (prev.includes(filter)) {
+        return prev.filter((value) => value !== filter);
+      }
+
+      return [...prev, filter];
+    });
+  };
+
   const importantFilter = createMemo(
     () =>
       view()?.filters?.importantFilter ?? defaultFilterOptions.importantFilter
@@ -1288,6 +1306,24 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       value={notificationFilter()}
                       onChange={setNotificationFilter}
                     />
+
+                    <div class="flex items-center justify-between">
+                      <span class="font-medium text-xs">Visible</span>
+                      <div class="flex items-center gap-1">
+                        <ToggleButton
+                          size="SM"
+                          onChange={() => toggleVisibleFilter('signal')}
+                        >
+                          <span class="uppercase">Signal</span>
+                        </ToggleButton>
+                        <ToggleButton
+                          size="SM"
+                          onChange={() => toggleVisibleFilter('noise')}
+                        >
+                          <span class="uppercase">Noise</span>
+                        </ToggleButton>
+                      </div>
+                    </div>
                   </section>
                   <section class="gap-1 p-2">
                     <span class="font-medium text-xs">Type</span>
