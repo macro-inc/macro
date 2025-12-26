@@ -117,10 +117,7 @@ export function EmptyState(props: {
         />
       </Match>
       <Match when={props.viewId === 'all'}>
-        <EmptyStateHelpDrawer
-          message={'No items to show.'}
-          helpDrawer={'all'}
-        />
+        <EmptyStateHelpDrawer helpDrawer={'all'} />
       </Match>
       <Match when={true}>
         <EmptyStateInner />
