@@ -153,6 +153,7 @@ import {
   type ViewConfigBase,
   type ViewData,
 } from './ViewConfig';
+import { noiseFilter, signalFilter } from '@app/component/soupFilters';
 
 const SEARCH_SERVICE_DEBOUNCE_MS = 200;
 const LOCAL_FUZZY_SEARCH_DEBOUNCE_MS = 20;
@@ -635,13 +636,17 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
     if (notificationFilter() === 'notDone') filterFns.push(notDoneFilterFn);
 
-    const clientFilterFn = (entity: WithNotification<EntityData>) => {
-      const filtered = applyClientFilters([entity], selectedView(), {
-        soupContext: unifiedListContext,
-      });
-      return filtered.length > 0;
-    };
-    filterFns.push(clientFilterFn);
+    const visibleFilters_ = visibleFilters();
+    const hasSignalFilter = visibleFilters_?.includes('signal') === true;
+    const hasNoiseFilter = visibleFilters_?.includes('noise') === true;
+
+    if ((hasSignalFilter && !hasNoiseFilter) || !visibleFilters) {
+      filterFns.push(signalFilter.predicate);
+    }
+
+    if ((hasNoiseFilter && !hasSignalFilter) || !visibleFilters) {
+      filterFns.push(noiseFilter.predicate);
+    }
 
     setRequiredFilters(filterFns);
   });
