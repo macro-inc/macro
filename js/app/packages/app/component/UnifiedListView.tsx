@@ -5,7 +5,6 @@ import {
 import { noiseFilter, signalFilter } from '@app/component/soupFilters';
 import type { BlockChannelProps } from '@block-channel/component/Block';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
-import { codeFileExtensions } from '@block-code/util/languageSupport';
 import { URL_PARAMS as EMAIL_PARAMS } from '@block-email/constants';
 import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/signal/location';
@@ -725,8 +724,8 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       if (entityTypeFilter().includes('document')) {
         if (fileTypeFilter().length > 0) {
           const documentFileTypes = fileTypeFilter().flatMap((fileType) => {
-            // not ideal but it works for most cases
-            if (fileType === 'code') return codeFileExtensions;
+            if (fileType === 'code') return ['assoc:code'];
+            if (fileType === 'unknown') return ['assoc:other'];
             return [fileType];
           });
           fileTypes.push(...documentFileTypes);
