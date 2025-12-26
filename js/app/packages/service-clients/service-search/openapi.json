@@ -938,6 +938,7 @@
         "properties": {
           "channel_id": {
             "type": "string",
+            "format": "uuid",
             "description": "The id of the channel"
           },
           "channel_message_search_results": {
@@ -951,6 +952,7 @@
           },
           "id": {
             "type": "string",
+            "format": "uuid",
             "description": "Standardized fields that all item types will share.\nThese field names are being aligned across all item types\nfor consistency in our data model."
           },
           "owner_id": {
@@ -995,6 +997,7 @@
           },
           "message_id": {
             "type": ["string", "null"],
+            "format": "uuid",
             "description": "The channel message id\nThis is only prsent if the search result is on the message content"
           },
           "score": {
@@ -1008,6 +1011,7 @@
           },
           "thread_id": {
             "type": ["string", "null"],
+            "format": "uuid",
             "description": "The channel message thread id"
           },
           "updated_at": {
@@ -1050,6 +1054,7 @@
         "properties": {
           "chat_message_id": {
             "type": ["string", "null"],
+            "format": "uuid",
             "description": "The chat message id for the chat\nThis is only present if the search match was on the chat message content"
           },
           "highlight": {
@@ -1149,7 +1154,11 @@
           "chat_search_results"
         ],
         "properties": {
-          "chat_id": { "type": "string", "description": "The id of the chat" },
+          "chat_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the chat"
+          },
           "chat_search_results": {
             "type": "array",
             "items": { "$ref": "#/components/schemas/ChatMessageSearchResult" },
@@ -1157,6 +1166,7 @@
           },
           "id": {
             "type": "string",
+            "format": "uuid",
             "description": "Standardized fields that all item types will share.\nThese field names are being aligned across all item types\nfor consistency in our data model."
           },
           "name": { "type": "string" },
@@ -1297,6 +1307,7 @@
         "properties": {
           "document_id": {
             "type": "string",
+            "format": "uuid",
             "description": "The id of the document"
           },
           "document_name": {
@@ -1314,6 +1325,7 @@
           },
           "id": {
             "type": "string",
+            "format": "uuid",
             "description": "Standardized fields that all item types will share.\nThese field names are being aligned across all item types\nfor consistency in our data model."
           },
           "name": { "type": "string" },
@@ -1480,6 +1492,7 @@
           },
           "id": {
             "type": "string",
+            "format": "uuid",
             "description": "Standardized fields that all item types will share.\nThese field names are being aligned across all item types\nfor consistency in our data model."
           },
           "name": {
@@ -1493,6 +1506,7 @@
           },
           "thread_id": {
             "type": "string",
+            "format": "uuid",
             "description": "The id of the email thread"
           },
           "user_id": {
@@ -1782,6 +1796,7 @@
           "rbi",
           "rs",
           "scss",
+          "sass",
           "shader",
           "sh",
           "bash",
@@ -2066,7 +2081,7 @@
         "properties": {
           "created_at": { "type": "integer", "format": "int64" },
           "owner_id": { "type": "string" },
-          "project_id": { "type": "string" },
+          "project_id": { "type": "string", "format": "uuid" },
           "project_name": { "type": "string" },
           "updated_at": { "type": "integer", "format": "int64" }
         }
@@ -2130,6 +2145,7 @@
           "created_at": { "type": "integer", "format": "int64" },
           "id": {
             "type": "string",
+            "format": "uuid",
             "description": "Standardized fields that all item types will share.\nThese field names are being aligned across all item types\nfor consistency in our data model."
           },
           "name": { "type": "string" },
@@ -2176,6 +2192,16 @@
       "SearchHighlight": {
         "type": "object",
         "properties": {
+          "bcc": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "The highlight match on the bcc (email only)"
+          },
+          "cc": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "The highlight match on the cc (email only)"
+          },
           "content": {
             "type": "array",
             "items": { "type": "string" },
@@ -2184,6 +2210,19 @@
           "name": {
             "type": ["string", "null"],
             "description": "The highlight match on the name field"
+          },
+          "recipients": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "The highlight match on the recipients (email only)"
+          },
+          "sender": {
+            "type": ["string", "null"],
+            "description": "The highlight match on the sender (email only)"
+          },
+          "user_id": {
+            "type": ["string", "null"],
+            "description": "The highlight match on the user (owner) of the entity"
           }
         }
       },
