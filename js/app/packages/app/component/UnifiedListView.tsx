@@ -2,6 +2,7 @@ import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
 } from '@app/component/GlobalAppState';
+import { noiseFilter, signalFilter } from '@app/component/soupFilters';
 import type { BlockChannelProps } from '@block-channel/component/Block';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { URL_PARAMS as EMAIL_PARAMS } from '@block-email/constants';
@@ -139,7 +140,6 @@ import {
 import { useSplitLayout } from './split-layout/layout';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 import {
-  applyClientFilters,
   type DisplayOptions,
   type DocumentTypeFilter,
   type FilterOptions,
@@ -153,7 +153,6 @@ import {
   type ViewConfigBase,
   type ViewData,
 } from './ViewConfig';
-import { noiseFilter, signalFilter } from '@app/component/soupFilters';
 
 const SEARCH_SERVICE_DEBOUNCE_MS = 200;
 const LOCAL_FUZZY_SEARCH_DEBOUNCE_MS = 20;
