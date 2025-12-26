@@ -1312,12 +1312,14 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       <div class="flex items-center gap-1">
                         <ToggleButton
                           size="SM"
+                          pressed={visibleFilters()?.includes('signal')}
                           onChange={() => toggleVisibleFilter('signal')}
                         >
                           <span class="uppercase">Signal</span>
                         </ToggleButton>
                         <ToggleButton
                           size="SM"
+                          pressed={visibleFilters()?.includes('noise')}
                           onChange={() => toggleVisibleFilter('noise')}
                         >
                           <span class="uppercase">Noise</span>
