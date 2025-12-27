@@ -2,17 +2,17 @@
  * @vitest-environment jsdom
  */
 
-import { ok, err } from '@core/util/maybeResult';
+import { err, ok } from '@core/util/maybeResult';
 import type { GetAllUserNotificationsResponse } from '@service-notification/generated/schemas/getAllUserNotificationsResponse';
 import type { UserNotification } from '@service-notification/generated/schemas/userNotification';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { JSX } from 'solid-js';
 import { render } from 'solid-js/web';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { notificationKeys } from '../keys';
 import {
-  useMarkNotificationsAsSeenMutation,
   useMarkNotificationsAsDoneMutation,
+  useMarkNotificationsAsSeenMutation,
 } from '../user-notifications';
 
 vi.mock('@service-notification/client', () => ({
