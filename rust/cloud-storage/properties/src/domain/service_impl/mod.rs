@@ -16,7 +16,7 @@ use super::service::PropertiesService;
 
 use helpers::{extract_option_ids_from_property_value, is_property_applicable_to};
 
-/// Implementation of PropertiesService using a repository and optional permission checker.
+/// Implementation of PropertiesService using a repository and optional permission service.
 #[derive(Debug)]
 pub struct PropertiesServiceImpl<R, P>
 where
@@ -24,7 +24,7 @@ where
     P: PermissionService,
 {
     repository: R,
-    permission_checker: Option<P>,
+    permission_service: Option<P>,
 }
 
 impl<R, P> PropertiesServiceImpl<R, P>
@@ -32,11 +32,11 @@ where
     R: PropertiesRepo,
     P: PermissionService,
 {
-    /// Create a new PropertiesService with an optional permission checker.
-    pub fn new(repository: R, permission_checker: Option<P>) -> Self {
+    /// Create a new PropertiesService with an optional permission service.
+    pub fn new(repository: R, permission_service: Option<P>) -> Self {
         Self {
             repository,
-            permission_checker,
+            permission_service,
         }
     }
 
@@ -176,12 +176,12 @@ where
         property_definition_id: Uuid,
         value: Option<SetPropertyValue>,
     ) -> Result<(), PropertiesErr> {
-        // Check edit permission first (permission checker is required)
-        let permission_checker = self
-            .permission_checker
+        // Check edit permission first (permission service is required)
+        let permission_service = self
+            .permission_service
             .as_ref()
             .ok_or(PropertiesErr::PermissionDenied)?;
-        permission_checker
+        permission_service
             .check_entity_edit_permission(user_id, entity_id, entity_type)
             .await
             .map_err(|_| PropertiesErr::PermissionDenied)?;
