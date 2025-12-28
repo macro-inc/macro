@@ -86,6 +86,7 @@ pub async fn set_entity_property(
 mod tests {
     use super::*;
     use chrono::Utc;
+    use models_properties::api::SetPropertyValue;
     use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
     use models_properties::service::property_value::PropertyValue;
     use std::collections::HashSet;
