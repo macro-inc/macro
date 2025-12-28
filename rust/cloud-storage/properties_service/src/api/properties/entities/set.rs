@@ -305,4 +305,3 @@ mod tests {
         assert_eq!(entity_refs[0].entity_id, "123");
     }
 }
-
