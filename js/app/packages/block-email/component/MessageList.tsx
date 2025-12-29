@@ -46,7 +46,15 @@ export function MessageList(props: MessageListProps) {
         </div>
       </Show>
       <For each={context.filteredMessages()}>
-        {(message, index) => {
+        {(message, index_) => {
+          const index = () => {
+            if (index_() === 0 && context.hasMore()) {
+              return -1;
+            }
+
+            return index_();
+          };
+
           return (
             <MessageContainer
               isFirstMessage={index() === 0}
@@ -58,7 +66,6 @@ export function MessageList(props: MessageListProps) {
               message={message}
               expandedMessageBodyIds={expandedMessageBodyIds}
               setExpandedMessageBodyIds={setExpandedMessageBodyIds}
-              threadMessageIndex={index()}
             />
           );
         }}

@@ -27,7 +27,7 @@ interface EmailMessageBodyProps {
   isBodyExpanded: Accessor<boolean>;
   setExpandedMessageBody: (id: string) => void;
   setFocusedMessageId: Setter<string | undefined>;
-  threadMessageIndex: number;
+  isFirstMessageInThread: boolean;
 }
 
 export function EmailMessageBody(props: EmailMessageBodyProps) {
@@ -84,7 +84,7 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
   });
 
   const source = () => {
-    return showFullHTML() || props.threadMessageIndex === 0
+    return showFullHTML() || props.isFirstMessageInThread
       ? parsedBodyHtml()
       : parsedBodyReplyless();
   };
