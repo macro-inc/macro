@@ -119,7 +119,7 @@ impl TryFrom<PartialTool> for ServerToolUse {
     type Error = OpenAIError;
     fn try_from(value: PartialTool) -> Result<Self, Self::Error> {
         let any = serde_json::from_str::<serde_json::Value>(&value.input)
-            .map_err(|e| OpenAIError::JSONDeserialize(e))?;
+            .map_err(OpenAIError::JSONDeserialize)?;
         Ok(Self {
             id: value.id,
             name: value.name,
@@ -282,15 +282,12 @@ fn map_stream_extended(mut stream: MessageCompletionResponseStream) -> ExtendedS
                         }
                     }
                     StreamEvent::ContentBlockStop { .. } => {
-                        match tool_state {
-                            ToolState::StreamingServerTool(partial_tool) => {
+                            if let ToolState::StreamingServerTool(partial_tool) = tool_state {
                                 yield ServerToolUse::try_from(partial_tool)
                                     .map(|tool| {
                                         AnthropicResponseExtension::ServerToolUse(tool).into()
-                                    })
+                                    });
                             }
-                            _ => {}
-                        }
                         tool_state = ToolState::Streaming;
                         continue;
                     }
