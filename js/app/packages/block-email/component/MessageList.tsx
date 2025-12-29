@@ -1,8 +1,8 @@
+import { useNextEmailContext } from '@block-email/component/NextEmailContext';
 import { isScrollingToMessage } from '@block-email/signal/scrollState';
 import { CircleSpinner } from '@core/component/CircleSpinner';
 import { createSelector, For, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import { useEmailContext } from './EmailContext';
 import { MessageContainer } from './MessageContainer';
 
 interface MessageListProps {
@@ -11,44 +11,47 @@ interface MessageListProps {
 
 export function MessageList(props: MessageListProps) {
   const getIsScrollingToMessage = isScrollingToMessage.get;
-  const context = useEmailContext();
+  const context = useNextEmailContext();
   const [expandedMessageBodyIds, setExpandedMessageBodyIds] = createStore<
     Record<string, boolean>
   >({});
   const isFocusedSelector = createSelector(
-    context.focusedMessageId,
+    context.messages.focusedID,
     (a, b) => !!a && !!b && a === b
   );
   const isTargetSelector = createSelector(
-    context.activeTargetMessageId,
+    context.messages.targetMessageID,
     (a, b) => !!a && !!b && a === b
   );
 
   return (
     <div
-      class="pt-3 w-full flex-1 flex flex-col items-center overflow-y-scroll overflow-x-hidden suppress-css-brackets"
-      ref={context.setMessagesRef}
+      class="pt-3 w-full flex flex-col-reverse items-center overflow-y-scroll overflow-x-hidden suppress-css-brackets"
+      ref={context.registerMessagesList}
       onscroll={(e) => {
         // Don't load more if we're programmatically scrolling to a message
         if (getIsScrollingToMessage() || !props.initialLoadComplete) return;
 
-        const threshold = 300;
-        const isNearBeginning = e.currentTarget.scrollTop <= threshold;
+        const scrollHeight = e.currentTarget.scrollHeight;
 
-        if (isNearBeginning && !context.isFetching() && context.hasMore()) {
-          context.fetchNextPage();
+        const threshold = scrollHeight * 0.6;
+
+        const isNearBeginning =
+          scrollHeight + e.currentTarget.scrollTop <= threshold;
+
+        if (
+          isNearBeginning &&
+          !context.query.isFetching() &&
+          context.query.hasMore()
+        ) {
+          context.query.fetchNextPage();
         }
       }}
     >
-      <Show when={context.isFetching()}>
-        <div class="flex items-center justify-center h-16">
-          <CircleSpinner />
-        </div>
-      </Show>
-      <For each={context.filteredMessages()}>
+      <For each={context.messages.list().toReversed()}>
         {(message, index_) => {
           const index = () => {
-            if (index_() === 0 && context.hasMore()) {
+            if (index_() === 0 && context.query.hasMore()) {
               return -1;
             }
 
@@ -59,7 +62,7 @@ export function MessageList(props: MessageListProps) {
             <MessageContainer
               isFirstMessage={index() === 0}
               isLastMessage={
-                index() === (context.filteredMessages().length ?? 0) - 1
+                index() === (context.messages.list().length ?? 0) - 1
               }
               isFocused={isFocusedSelector(message.db_id ?? undefined)}
               isTarget={isTargetSelector(message.db_id ?? undefined)}
@@ -70,6 +73,12 @@ export function MessageList(props: MessageListProps) {
           );
         }}
       </For>
+
+      <Show when={context.query.isFetching()}>
+        <div class="flex items-center justify-center h-16">
+          <CircleSpinner />
+        </div>
+      </Show>
     </div>
   );
 }
