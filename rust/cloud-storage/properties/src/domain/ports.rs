@@ -86,6 +86,15 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         entity_type: EntityType,
         property_definition_id: Uuid,
     ) -> impl Future<Output = Result<Option<PropertyValue>, Self::Err>> + Send;
+
+    /// Get the name of an entity by its ID and type.
+    /// Returns `None` if the entity doesn't exist or has no name.
+    /// Currently supports Task and Document entities (tasks are stored as documents).
+    fn get_entity_name(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
 }
 
 /// Permission service trait for entity access control.
