@@ -114,3 +114,19 @@ pub trait PermissionService: Send + Sync + 'static {
         entity_type: EntityType,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
+
+/// Notification service trait for sending notifications.
+///
+/// This trait abstracts notification operations, allowing for different implementations
+/// (e.g., macro_notify-backed, mock for testing).
+#[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
+pub trait NotificationService: Send + Sync + 'static {
+    type Err;
+
+    /// Send a notification message.
+    /// Returns the notification ID if successful.
+    fn send_notification(
+        &self,
+        message: model_notifications::NotificationQueueMessage,
+    ) -> impl Future<Output = Result<uuid::Uuid, Self::Err>> + Send;
+}
