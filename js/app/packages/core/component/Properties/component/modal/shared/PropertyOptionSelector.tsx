@@ -23,9 +23,6 @@ type SelectOptionsProps = {
   onAddOption?: (value: string) => Promise<void>;
 };
 
-const ADD_OPTION_BASE_CLASSES =
-  'flex flex-row w-full justify-between items-center gap-4 cursor-pointer p-2 border border-dashed border-accent/50 hover:border-accent hover:bg-accent/5 text-accent';
-
 export const PropertyOptionSelector = (props: SelectOptionsProps) => {
   const [searchQuery, setSearchQuery] = createSignal('');
   const [isAddingOption, setIsAddingOption] = createSignal(false);
@@ -124,12 +121,7 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
   );
 
   const AddOptionButton = () => (
-    <div
-      class={`${ADD_OPTION_BASE_CLASSES} ${
-        isAddingOption() ? 'opacity-50 pointer-events-none' : ''
-      }`}
-      onClick={handleAddOption}
-    >
+    <div onClick={handleAddOption}>
       <div class="flex items-center gap-2 flex-1 text-left">
         <div class="w-4 h-4 flex-shrink-0">
           <Show
@@ -174,27 +166,23 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
           </div>
         }
       >
-        <div class="space-y-3">
+        <div>
           <div class="relative">
-            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none z-10">
+            <div class="flex w-full items-center py-1 gap-2 px-2 border-b border-edge-muted">
               <SearchIcon class="h-4 w-4 text-ink-muted" />
+              <input
+                class="w-full caret-accent"
+                ref={searchInputRef}
+                type={
+                  props.property.valueType === 'SELECT_NUMBER'
+                    ? 'number'
+                    : 'text'
+                }
+                value={searchQuery()}
+                onInput={(e) => setSearchQuery(e.currentTarget.value)}
+                placeholder={`Change ${props.property.displayName.toLocaleLowerCase()}...`}
+              />
             </div>
-            <input
-              ref={searchInputRef}
-              type={
-                props.property.valueType === 'SELECT_NUMBER' ? 'number' : 'text'
-              }
-              value={searchQuery()}
-              onInput={(e) => setSearchQuery(e.currentTarget.value)}
-              placeholder={
-                props.onAddOption
-                  ? props.property.valueType === 'SELECT_NUMBER'
-                    ? 'Search or add new number...'
-                    : 'Search or add new option...'
-                  : 'Search options...'
-              }
-              class={`${PROPERTY_STYLES.input.search} relative z-0`}
-            />
           </div>
 
           <Show
@@ -214,7 +202,7 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
               </div>
             }
           >
-            <div class="space-y-2 max-h-48 overflow-y-auto">
+            <div class="p-1">
               <Show when={isValidNewOption() && props.onAddOption}>
                 <AddOptionButton />
               </Show>
@@ -236,7 +224,7 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
 
                     return (
                       <div
-                        class={`flex flex-row w-full justify-between items-center gap-4 cursor-pointer py-1.5 px-2 border ${isOptionSelected(optionId) ? 'bg-active border-accent text-accent-ink' : 'hover:bg-hover border-edge text-ink'}`}
+                        class={`flex flex-row w-full justify-between items-center gap-4 cursor-pointer py-1.5 hover:bg-hover px-2`}
                         onClick={() => props.onToggleOption(optionId)}
                       >
                         <div class="flex-1 text-left">

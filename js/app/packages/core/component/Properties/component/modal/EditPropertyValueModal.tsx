@@ -27,9 +27,8 @@ import { PropertyOptionSelector } from './shared/PropertyOptionSelector';
 
 // Common CSS classes
 const MODAL_BASE =
-  'absolute bg-dialog border-3 border-edge shadow-xl max-h-96 overflow-hidden flex flex-col w-full max-w-md';
+  'absolute bg-menu border border-edge-muted max-h-96 overflow-hidden flex flex-col w-full max-w-md';
 const HEADER_CLASSES = 'flex items-center justify-between pt-3 pb-2 px-4';
-const CONTENT_CLASSES = 'flex-1 max-h-64 pt-2 px-4 pb-4';
 
 export function EditPropertyValueModal(props: PropertyEditorProps) {
   const { saveHandler } = usePropertiesContext();
@@ -185,8 +184,8 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
           })()}
           onClick={(e) => e.stopPropagation()}
         >
-          <div class="bg-dialog text-ink font-mono">
-            <div class={HEADER_CLASSES}>
+          <div class="bg-dialog text-ink">
+            {/*<div class={HEADER_CLASSES}>
               <div>
                 <h3 class="text-base font-semibold text-ink">
                   {props.property.displayName}
@@ -203,9 +202,9 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
                   onClick={handleClose}
                 />
               </div>
-            </div>
+            </div>*/}
 
-            <div class={CONTENT_CLASSES}>
+            <div>
               <Show
                 when={
                   props.property.valueType === 'SELECT_STRING' ||

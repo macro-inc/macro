@@ -12,7 +12,10 @@ import {
   propertyValueToApi,
 } from '@core/component/Properties/api/converters';
 import { Modals } from '@core/component/Properties/component/modal';
-import { PropertyRow } from '@core/component/Properties/component/panel';
+import {
+  PropertyGrid,
+  PropertyRow,
+} from '@core/component/Properties/component/panel';
 import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 import {
   PropertiesProvider,
@@ -364,38 +367,7 @@ export function ComposeTask(props: ComposeTaskProps) {
             onPropertyDeleted={() => {}}
             saveHandler={saveHandler}
           >
-            <div class="w-full grid grid-cols-2 gap-1 flex-wrap text-xs font-mono text-ink-muted mt-8">
-              <For each={properties()}>
-                {(prop) => {
-                  const { openPropertyEditor, openDatePicker } =
-                    usePropertiesContext();
-                  const handleValueClick = (
-                    property: Property,
-                    anchor?: HTMLElement
-                  ) => {
-                    if (property.valueType === 'DATE') {
-                      openDatePicker(property, anchor);
-                    } else if (
-                      property.valueType === 'SELECT_STRING' ||
-                      property.valueType === 'SELECT_NUMBER' ||
-                      property.valueType === 'ENTITY'
-                    ) {
-                      openPropertyEditor(property, anchor);
-                    }
-                  };
-                  return (
-                    <div class="grid grid-cols-[8rem_auto] rounded-xs items-center p-1">
-                      <PropertyRow
-                        property={prop}
-                        onValueClick={handleValueClick}
-                        withDelete={false}
-                        withPin={false}
-                      />
-                    </div>
-                  );
-                }}
-              </For>
-            </div>
+            <PropertyGrid properties={properties()} columns={2}></PropertyGrid>
             <Modals />
           </PropertiesProvider>
         </Suspense>
