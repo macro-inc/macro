@@ -711,8 +711,11 @@ async fn test_handle_task_assignees_property_calls_both_handlers() {
 
     let task_id = Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc);
     let entity_id = task_id.to_string();
-    let assigned_by = "assigner".to_string();
-    let assignees = vec!["user1".to_string(), "user2".to_string()];
+    let assigned_by = "macro|assigner@macro.com".to_string();
+    let assignees = vec![
+        "macro|user1@macro.com".to_string(),
+        "macro|user2@macro.com".to_string(),
+    ];
 
     let value = Some(
         models_properties::api::requests::SetPropertyValue::MultiEntityReference {
