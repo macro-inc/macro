@@ -257,7 +257,7 @@ where
                     .await;
             }
             SystemPropertyKey::ASSIGNEES_UUID if entity_type == EntityType::Task => {
-                self.handle_task_assignees_property(entity_id, value)
+                self.handle_task_assignees_property(entity_id, value, user_id)
                     .await?;
             }
             _ => {

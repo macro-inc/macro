@@ -8,7 +8,6 @@ use uuid::Uuid;
 use crate::domain::ports::PermissionService;
 use comms_service_client::CommsServiceClient;
 use email_db_client::threads::get::get_macro_id_from_thread_id;
-use models_permissions::share_permission::access_level::AccessLevel;
 
 /// Permission service implementation using database and comms service client.
 pub struct PermissionServiceImpl {
