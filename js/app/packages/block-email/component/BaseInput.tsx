@@ -879,6 +879,7 @@ export function BaseInput(props: {
               class={
                 'w-fit disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none [&:focus]:disabled:[--focus-border-inset:0] [&:focus]:[--focus-border-inset:-3px] group'
               }
+              pressed={form().replyAppended()}
               onChange={() => {
                 const replyingToID = props.replyingTo()?.replying_to_id;
                 if (!replyingToID) return;
