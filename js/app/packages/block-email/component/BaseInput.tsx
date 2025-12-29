@@ -875,33 +875,42 @@ export function BaseInput(props: {
               }}
             />
 
-            <KToggleButton
-              class={
-                'w-fit disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none [&:focus]:disabled:[--focus-border-inset:0] [&:focus]:[--focus-border-inset:-3px] group'
+            <Tooltip
+              tooltip={
+                form().replyAppended() ? 'Hide quoted text' : 'Show quoted text'
               }
-              pressed={form().replyAppended()}
-              onChange={() => {
-                const replyingToID = props.replyingTo()?.replying_to_id;
-                if (!replyingToID) return;
-
-                const currentlyAppended = form().replyAppended();
-                form().setReplyAppended(!currentlyAppended);
-
-                editor()?.dispatchCommand(TOGGLE_APPEND_EMAIL_THREAD_COMMAND, {
-                  replyingTo: props.replyingTo(),
-                  replyType: effectiveReplyType(),
-                  visible: !currentlyAppended,
-                });
-
-                editor()?.update(() => {
-                  $getRoot().getFirstChild()?.selectStart();
-                });
-              }}
             >
-              <div class="min-w-[22px] text-xs font-medium font-mono text-ink-muted text-center uppercase leading-none whitespace-nowrap group-data-[pressed]:bg-accent/10 group-data-[pressed]:hover:bg-accent/20 group-data-[pressed='false']:hover:text-ink hover:bg-edge-muted hover-transition-bg group-data-[pressed]:text-accent-ink p-1">
-                <Quotes class="inline size-4" />
-              </div>
-            </KToggleButton>
+              <KToggleButton
+                class={
+                  'w-fit disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none [&:focus]:disabled:[--focus-border-inset:0] [&:focus]:[--focus-border-inset:-3px] group'
+                }
+                pressed={form().replyAppended()}
+                onChange={() => {
+                  const replyingToID = props.replyingTo()?.replying_to_id;
+                  if (!replyingToID) return;
+
+                  const currentlyAppended = form().replyAppended();
+                  form().setReplyAppended(!currentlyAppended);
+
+                  editor()?.dispatchCommand(
+                    TOGGLE_APPEND_EMAIL_THREAD_COMMAND,
+                    {
+                      replyingTo: props.replyingTo(),
+                      replyType: effectiveReplyType(),
+                      visible: !currentlyAppended,
+                    }
+                  );
+
+                  editor()?.update(() => {
+                    $getRoot().getFirstChild()?.selectStart();
+                  });
+                }}
+              >
+                <div class="min-w-[22px] text-xs font-medium font-mono text-ink-muted text-center uppercase leading-none whitespace-nowrap group-data-[pressed]:bg-accent/10 group-data-[pressed]:hover:bg-accent/20 group-data-[pressed='false']:hover:text-ink hover:bg-edge-muted hover-transition-bg group-data-[pressed]:text-accent-ink p-1">
+                  <Quotes class="inline size-4" />
+                </div>
+              </KToggleButton>
+            </Tooltip>
             <Show when={savedDraftId()}>
               <IconButton
                 theme="base"
