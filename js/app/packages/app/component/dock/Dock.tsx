@@ -14,7 +14,7 @@ import { IconButton } from '@core/component/IconButton';
 import IconQuestion from '@icon/regular/question.svg';
 import { withAnalytics } from '@coparse/analytics';
 import SplitIcon from '@macro-icons/new-split.svg';
-import IconAtom from '@macro-icons/macro-atom.svg';
+import IconAI from '@macro-icons/pixel/ai.svg';
 import IconGear from '@macro-icons/macro-gear.svg';
 import IconLogo from '@macro-icons/macro-logo.svg';
 import { BasicTierLimit } from './BasicTierLimit';
@@ -306,7 +306,7 @@ export function Dock() {
                   hotkeyToken: TOKENS.split.go.toggleRightPanel,
                   label: 'Toggle AI Panel',
                 }}
-                icon={IconAtom}
+                icon={IconAI}
                 size="sm"
               />
 
