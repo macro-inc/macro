@@ -33,9 +33,9 @@ impl PhantomTool<(), ()> {
 }
 
 impl<O: Clone + Debug> PhantomTool<(), O> {
-    pub fn with_input_schema<I: Clone + Debug>(self) -> PhantomTool<I, O>
+    pub fn with_input_schema<I>(self) -> PhantomTool<I, O>
     where
-        I: JsonSchema,
+        I: JsonSchema + Clone + Debug,
     {
         PhantomTool {
             i: PhantomData,
@@ -46,9 +46,9 @@ impl<O: Clone + Debug> PhantomTool<(), O> {
 }
 
 impl<I: Clone + Debug> PhantomTool<I, ()> {
-    pub fn with_output_schema<O: Clone + Debug>(self) -> PhantomTool<I, O>
+    pub fn with_output_schema<O>(self) -> PhantomTool<I, O>
     where
-        O: JsonSchema,
+        O: Clone + Debug + JsonSchema,
     {
         PhantomTool {
             i: PhantomData,

@@ -61,9 +61,9 @@ impl ExtendedClient for OpenRouterClient {
             .create_stream_byot::<_, CreateChatCompletionStreamResponse>(request)
             .await
             .map(|stream| {
-                Box::pin(stream.map(|item_result| {
-                    item_result.map(|item| ExtendedOpenAIStreamItem::Response(item))
-                })) as _
+                Box::pin(
+                    stream.map(|item_result| item_result.map(ExtendedOpenAIStreamItem::Response)),
+                ) as _
             })
             .map_err(AiError::from)
     }

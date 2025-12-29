@@ -28,5 +28,5 @@ pub trait ExtendedClient {
         request: CreateChatCompletionRequest,
     ) -> impl Future<Output = Result<ExtendedOpenAIStream<Self::ResponseExtension>, AiError>> + Send;
 
-    fn handle_extension_item<'a>(&self, item: Self::ResponseExtension) -> Option<StreamPart>;
+    fn handle_extension_item(&self, item: Self::ResponseExtension) -> Option<StreamPart>;
 }
