@@ -137,6 +137,14 @@ function EmailMessageContentHit(props: {
     if (new Set(senders).size === 1) return true;
     return false;
   });
+  const isSingleSentAt = createMemo(() => {
+    const sentAts = props.allData.map((d) => d.sentAt);
+    if (sentAts.length === 1) return true;
+    if (new Set(sentAts).size === 1) return true;
+    const formattedDates = sentAts.map(createFormattedDate);
+    if (new Set(formattedDates).size === 1) return true;
+    return false;
+  });
 
   return (
     <div class="flex gap-2 items-center min-w-0">
@@ -148,6 +156,8 @@ function EmailMessageContentHit(props: {
           <div class="text-sm shrink-0 truncate min-w-0 font-medium">
             {props.data.sender}
           </div>
+        </Show>
+        <Show when={!isSingleMatch() && !isSingleSentAt()}>
           <div class="shrink-0 font-mono text-xs uppercase text-ink-extra-muted">
             {formattedDate()}
           </div>
