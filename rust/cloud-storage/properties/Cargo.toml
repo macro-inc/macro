@@ -10,6 +10,8 @@ comms_service_client = { path = "../comms_service_client" }
 email_db_client = { path = "../email_db_client" }
 macro_db_client = { path = "../macro_db_client" }
 macro_middleware = { path = "../macro_middleware", default-features = false, features = ["cloud_storage", "user_permissions"] }
+macro_notify = { path = "../macro_notify" }
+model_notifications = { path = "../model_notifications" }
 macro_uuid = { path = "../macro_uuid" }
 models_permissions = { path = "../models_permissions" }
 models_properties = { path = "../models_properties" }
