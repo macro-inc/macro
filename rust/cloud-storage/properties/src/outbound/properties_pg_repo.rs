@@ -143,18 +143,14 @@ impl PropertiesRepo for PropertiesPgRepo {
         // (tasks are documents with sub_type='task')
         match entity_type {
             EntityType::Task | EntityType::Document => {
-                match macro_db_client::document::get_document::get_document_name(
-                    &self.pool, entity_id,
-                )
-                .await
-                {
+                match macro_db_client::document::get_document_name(&self.pool, entity_id).await {
                     Ok(name) => Ok(Some(name)),
                     Err(e) => {
                         // If document/task doesn't exist, return None instead of error
-                        if let Some(db_err) = e.downcast_ref::<sqlx::Error>() {
-                            if matches!(db_err, sqlx::Error::RowNotFound) {
-                                return Ok(None);
-                            }
+                        if let Some(db_err) = e.downcast_ref::<sqlx::Error>()
+                            && matches!(db_err, sqlx::Error::RowNotFound)
+                        {
+                            return Ok(None);
                         }
                         Err(e)
                     }

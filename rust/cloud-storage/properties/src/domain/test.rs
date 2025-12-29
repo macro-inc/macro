@@ -477,9 +477,12 @@ async fn test_handle_task_assignee_notifications_sends_to_new_assignees_only() {
     let mut notif_service = MockNotificationService::new();
 
     let task_id = Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc);
-    let assigned_by = "assigner".to_string();
-    let new_assignees = vec!["user1".to_string(), "user2".to_string()];
-    let existing_assignees = vec!["user3".to_string()];
+    let assigned_by = "macro|assigner@macro.com".to_string();
+    let new_assignees = vec![
+        "macro|user1@macro.com".to_string(),
+        "macro|user2@macro.com".to_string(),
+    ];
+    let existing_assignees = vec!["macro|user3@macro.com".to_string()];
 
     // Mock: get current assignees (existing ones)
     repo.expect_get_entity_property_value()
@@ -530,9 +533,9 @@ async fn test_handle_task_assignee_notifications_sends_to_new_assignees_only() {
 
     // Pass all assignees (new + existing), but only new ones should get notifications
     let all_assignees = vec![
-        "user1".to_string(),
-        "user2".to_string(),
-        "user3".to_string(), // existing, should not get notification
+        "macro|user1@macro.com".to_string(),
+        "macro|user2@macro.com".to_string(),
+        "macro|user3@macro.com".to_string(), // existing, should not get notification
     ];
 
     service
@@ -547,8 +550,11 @@ async fn test_handle_task_assignee_notifications_filters_out_assigner() {
     let mut notif_service = MockNotificationService::new();
 
     let task_id = Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc);
-    let assigned_by = "assigner".to_string();
-    let assignees = vec!["user1".to_string(), "assigner".to_string()];
+    let assigned_by = "macro|assigner@macro.com".to_string();
+    let assignees = vec![
+        "macro|user1@macro.com".to_string(),
+        "macro|assigner@macro.com".to_string(),
+    ];
 
     // Mock: no existing assignees
     repo.expect_get_entity_property_value()
@@ -562,14 +568,12 @@ async fn test_handle_task_assignee_notifications_filters_out_assigner() {
     notif_service
         .expect_send_notification()
         .times(1)
-        .withf(move |message| {
-            message
-                .recipient_ids
-                .as_ref()
-                .map(|ids| {
-                    ids.contains(&"user1".to_string()) && !ids.contains(&"assigner".to_string())
-                })
-                .unwrap_or(false)
+        .withf(|message| {
+            if let Some(ids) = message.recipient_ids.as_ref() {
+                ids.len() == 1 && ids[0] == "macro|user1@macro.com"
+            } else {
+                false
+            }
         })
         .returning(|_| Box::pin(async { Ok(Uuid::new_v4()) }));
 
@@ -588,9 +592,9 @@ async fn test_handle_task_assignee_notifications_no_new_assignees() {
     let notif_service = MockNotificationService::new();
 
     let task_id = Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc);
-    let assigned_by = "assigner".to_string();
-    let assignees = vec!["user1".to_string()];
-    let existing_assignees = vec!["user1".to_string()];
+    let assigned_by = "macro|assigner@macro.com".to_string();
+    let assignees = vec!["macro|user1@macro.com".to_string()];
+    let existing_assignees = vec!["macro|user1@macro.com".to_string()];
 
     // Mock: all assignees already exist
     repo.expect_get_entity_property_value().returning({
@@ -660,7 +664,8 @@ async fn test_handle_task_assignee_notifications_task_name_none() {
     let mut notif_service = MockNotificationService::new();
 
     let task_id = Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc);
-    let assignees = vec!["user1".to_string()];
+    let assigned_by = "macro|assigner@macro.com".to_string();
+    let assignees = vec!["macro|user1@macro.com".to_string()];
 
     // Mock: no existing assignees
     repo.expect_get_entity_property_value()
@@ -689,7 +694,7 @@ async fn test_handle_task_assignee_notifications_task_name_none() {
         PropertiesServiceImpl::new(repo, None::<MockPermissionService>, Some(notif_service));
 
     service
-        .handle_task_assignee_notifications(task_id, &assignees, "assigner")
+        .handle_task_assignee_notifications(task_id, &assignees, &assigned_by)
         .await
         .unwrap();
 }

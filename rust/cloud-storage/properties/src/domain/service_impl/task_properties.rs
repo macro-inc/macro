@@ -207,6 +207,9 @@ where
                 .map_err(|e| PropertiesErr::Validation(format!("Invalid user ID format: {}", e)))?
                 .into_owned();
 
+        // Clone assigned_by for use in notification messages
+        let assigned_by_for_sender = assigned_by.clone();
+
         // Create notification metadata
         let metadata = model_notifications::TaskAssignedMetadata {
             task_id: task_id.to_string(),
@@ -232,7 +235,7 @@ where
                 let message = model_notifications::NotificationQueueMessage {
                     notification_entity: notification_entity.clone(),
                     notification_event: notification_event.clone(),
-                    sender_id: Some(assigned_by.clone()),
+                    sender_id: Some(assigned_by_for_sender.clone()),
                     recipient_ids: Some(vec![recipient_id.clone()]),
                 };
 
@@ -247,10 +250,9 @@ where
                                 "sent task assignment notification"
                             );
                         }
-                        Err(e) => {
+                        Err(_e) => {
                             tracing::error!(
                                 recipient_id = %recipient_id_for_log,
-                                error = ?e,
                                 "failed to send task assignment notification"
                             );
                         }

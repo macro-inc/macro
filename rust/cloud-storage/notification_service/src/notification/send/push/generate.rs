@@ -179,6 +179,7 @@ pub fn generate_apns_notification<T: XmlFormatter>(
         model_notifications::NotificationEvent::NewEmail(_new_email_metadata) => None,
         model_notifications::NotificationEvent::InviteToTeam(_invite_to_team_metadata) => None,
         model_notifications::NotificationEvent::RejectTeamInvite => None,
+        model_notifications::NotificationEvent::TaskAssigned(_task_assigned_metadata) => None,
     })
 }
 
