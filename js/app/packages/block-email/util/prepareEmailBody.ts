@@ -190,7 +190,17 @@ function* $findPreviousEmailNode(replyingToID: string | undefined) {
     if (!$isClassedBlockNode(node)) continue;
 
     const replyingToIDAttr = node.__attributes?.[REPLYING_TO_ID_ATTRIBUTE];
-    if (!replyingToIDAttr || replyingToIDAttr !== replyingToID) continue;
+    if (!replyingToIDAttr || replyingToIDAttr !== replyingToID) {
+      // In our case, quoted text replies do not exist more than once in the
+      // same message so returning any classed block node with the proper class
+      // should be valid. This is probably fine but we might not want to do this.
+      // The backend seems to strip the html of data attributes during sanitization
+      // so we can't check for the replying id attribute
+      if (node.__classes.includes('macro_quote')) {
+        yield node;
+      }
+      continue;
+    }
     yield node;
   }
   yield;
