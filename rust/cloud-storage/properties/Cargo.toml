@@ -6,11 +6,16 @@ version = "0.1.0"
 
 [dependencies]
 anyhow = { workspace = true }
+comms_service_client = { path = "../comms_service_client" }
+email_db_client = { path = "../email_db_client" }
+macro_middleware = { path = "../macro_middleware", default-features = false, features = ["cloud_storage", "user_permissions"] }
 macro_uuid = { path = "../macro_uuid" }
+models_permissions = { path = "../models_permissions" }
 models_properties = { path = "../models_properties" }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
 system_properties = { path = "../system_properties" }
+thiserror = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
 

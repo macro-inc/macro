@@ -57,9 +57,12 @@ type GenericContentHitData = {
   location?: never;
 };
 
-type EmailContentHitData = {
+export type EmailContentHitData = {
   type: 'email';
   content: string;
+  sender: string;
+  senderId: string;
+  sentAt: number;
   location: EmailMessageHighlightLocation;
 };
 

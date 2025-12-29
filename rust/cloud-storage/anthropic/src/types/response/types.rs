@@ -1,4 +1,4 @@
-use super::request::Role;
+use crate::types::request::Role;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -7,6 +7,7 @@ pub enum ResponseContentKind {
     Text(TextResponse),
     Thinking(ThinkingResponse),
     ToolUse(ToolUse),
+    ServerToolUse(ServerToolUse),
     // there are many more options that could be implemented here
     // https://docs.claude.com/en/api/messages#responsewebfetchtoolresultblock
 }
@@ -16,12 +17,6 @@ pub enum ResponseContentKind {
 pub enum Content {
     Text(String),
     Array(Vec<ResponseContentKind>),
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct WebSearchToolResult {
-    pub content: serde_json::Value,
-    pub tool_use_id: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

@@ -140,17 +140,35 @@ pub enum ToolChoice {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct Tool {
+#[serde(untagged)]
+pub enum Tool {
+    /// A tool that is round-tripped (sent to anthropic, "called" by anthropic,
+    /// code executed by us, result sent back to anthropic in a 2nd request)
+    Client(ClientTool),
+    /// A tool that's called, and executed in a single request to anthropic
+    Server(ServerTool),
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ClientTool {
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     pub input_schema: serde_json::Value,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ServerTool {
+    pub r#type: String,
+    pub name: String,
+    #[serde(flatten)]
+    pub args: serde_json::Value,
+}
+
 #[derive(Default, Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct CreateMessageRequestBody {
     /// The model that will complete your prompt.
-    /// https://docs.claude.com/en/docs/about-claude/models/overview
+    /// <https://docs.claude.com/en/docs/about-claude/models/overview>
     pub model: String,
     /// Input messages.
     pub messages: Vec<RequestMessage>,

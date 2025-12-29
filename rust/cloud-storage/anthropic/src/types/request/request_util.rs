@@ -1,5 +1,6 @@
-use super::request::*;
+use std::collections::BTreeMap;
 
+use super::types::*;
 impl RequestContentKind {
     pub fn text(text: String) -> Self {
         Self::Text {
@@ -54,5 +55,53 @@ impl RequestMessage {
                 }
             }
         }
+    }
+}
+
+impl From<ServerTool> for Tool {
+    fn from(value: ServerTool) -> Self {
+        Self::Server(value)
+    }
+}
+
+impl From<ClientTool> for Tool {
+    fn from(value: ClientTool) -> Self {
+        Self::Client(value)
+    }
+}
+
+impl Tool {
+    pub fn name(&self) -> &str {
+        match self {
+            Self::Client(ClientTool { name, .. }) => name.as_str(),
+            Self::Server(ServerTool { name, .. }) => name.as_str(),
+        }
+    }
+}
+
+impl CreateMessageRequestBody {
+    // openapi completions/v1 does not support ServerTools
+    // this helper lets tools be directly added to the anthropic request
+    // additional tools are deduplicated
+    pub fn with_additional_tools<I, T>(mut self, tools: I) -> Self
+    where
+        I: IntoIterator<Item = T>,
+        T: Into<Tool>,
+    {
+        match self.tools {
+            Some(ref mut existing) => {
+                existing.append(&mut tools.into_iter().map(Into::into).collect());
+                let deduped = existing
+                    .clone()
+                    .into_iter()
+                    .map(|t| (t.name().to_owned(), t))
+                    .collect::<BTreeMap<_, _>>()
+                    .into_values()
+                    .collect::<Vec<_>>();
+                self.tools = Some(deduped);
+            }
+            None => self.tools = Some(tools.into_iter().map(Into::into).collect()),
+        }
+        self
     }
 }

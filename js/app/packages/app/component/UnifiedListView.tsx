@@ -2,6 +2,7 @@ import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
 } from '@app/component/GlobalAppState';
+import { noiseFilter, signalFilter } from '@app/component/soupFilters';
 import type { BlockChannelProps } from '@block-channel/component/Block';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { URL_PARAMS as EMAIL_PARAMS } from '@block-email/constants';
@@ -139,7 +140,6 @@ import {
 import { useSplitLayout } from './split-layout/layout';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 import {
-  applyClientFilters,
   type DisplayOptions,
   type DocumentTypeFilter,
   type FilterOptions,
@@ -289,6 +289,24 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       'notificationFilter',
       notificationFilter
     );
+  };
+
+  const focusFilters = createMemo(
+    () => view()?.filters?.focusFilters ?? defaultFilterOptions.focusFilters
+  );
+
+  const toggleFocusFilter = (
+    filter: NonNullable<FilterOptions['focusFilters']>[number]
+  ) => {
+    setViewDataStore(selectedView(), 'filters', 'focusFilters', (prev) => {
+      if (!prev) return [filter];
+
+      if (prev.includes(filter)) {
+        return prev.filter((value) => value !== filter);
+      }
+
+      return [...prev, filter];
+    });
   };
 
   const importantFilter = createMemo(
@@ -617,13 +635,19 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
     if (notificationFilter() === 'notDone') filterFns.push(notDoneFilterFn);
 
-    const clientFilterFn = (entity: WithNotification<EntityData>) => {
-      const filtered = applyClientFilters([entity], selectedView(), {
-        soupContext: unifiedListContext,
-      });
-      return filtered.length > 0;
-    };
-    filterFns.push(clientFilterFn);
+    const focusFilters_ = focusFilters();
+    const hasSignalFilter = focusFilters_?.includes('signal') === true;
+    const hasNoiseFilter = focusFilters_?.includes('noise') === true;
+
+    // We only want to apply these filters when their opposite is not in the list
+    // because the filters negate each other
+    if (hasSignalFilter && !hasNoiseFilter) {
+      filterFns.push(signalFilter.predicate);
+    }
+
+    if (hasNoiseFilter && !hasSignalFilter) {
+      filterFns.push(noiseFilter.predicate);
+    }
 
     setRequiredFilters(filterFns);
   });
@@ -1288,6 +1312,26 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       value={notificationFilter()}
                       onChange={setNotificationFilter}
                     />
+
+                    <div class="flex items-center justify-between">
+                      <span class="font-medium text-xs">Focus</span>
+                      <div class="flex items-center gap-1">
+                        <ToggleButton
+                          size="SM"
+                          pressed={focusFilters()?.includes('signal')}
+                          onChange={() => toggleFocusFilter('signal')}
+                        >
+                          <span class="uppercase">Signal</span>
+                        </ToggleButton>
+                        <ToggleButton
+                          size="SM"
+                          pressed={focusFilters()?.includes('noise')}
+                          onChange={() => toggleFocusFilter('noise')}
+                        >
+                          <span class="uppercase">Noise</span>
+                        </ToggleButton>
+                      </div>
+                    </div>
                   </section>
                   <section class="gap-1 p-2">
                     <span class="font-medium text-xs">Type</span>

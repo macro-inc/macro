@@ -4,13 +4,18 @@ import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import ChevronDown from '@icon/regular/caret-down.svg?component-solid';
 import ChevronUp from '@icon/regular/caret-up.svg?component-solid';
 import MagnifyingGlass from '@phosphor-icons/core/regular/magnifying-glass.svg';
-import type { UnifiedSearchResult } from '@service-cognition/toolTypes';
+import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import { useSplitLayout } from 'app/component/split-layout/layout';
 import { createMemo, createSignal, Show } from 'solid-js';
 import { VList } from 'virtua/solid';
 import { BaseTool } from './BaseTool';
 import { createToolRenderer } from './ToolRenderer';
+
+type UnifiedSearchResult = NamedTool<
+  'UnifiedSearch',
+  'response'
+>['data']['response']['results'][number];
 
 const UnifiedSearchToolResponse = (props: {
   results: UnifiedSearchResult[];

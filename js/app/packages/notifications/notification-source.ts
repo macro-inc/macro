@@ -1,5 +1,9 @@
 import type { Entity } from '@core/types';
-import { createNotificationsInfiniteQuery as createNotificationQuery } from '@macro-entity';
+import {
+  useMarkNotificationsAsDoneMutation,
+  useMarkNotificationsAsSeenMutation,
+  useUserNotificationsQuery,
+} from '@queries/notification/user-notifications';
 import type { ConnectionGatewayWebsocket } from '@service-connection/websocket';
 import { notificationServiceClient } from '@service-notification/client';
 import type { UserUnsubscribe } from '@service-notification/generated/schemas';
@@ -16,13 +20,7 @@ import {
   createMemo,
   createSignal,
 } from 'solid-js';
-import {
-  createStore,
-  produce,
-  reconcile,
-  type Store,
-  unwrap,
-} from 'solid-js/store';
+import { createStore, reconcile, type Store, unwrap } from 'solid-js/store';
 import { fetchNotificationsForEntities } from './queries/entities-notifications-query';
 import { createMutedEntitiesQuery } from './queries/muted-entities-query';
 import {
@@ -51,6 +49,7 @@ export type NotificationSource = {
     UnifiedNotification[],
     Error
   >;
+
   readonly _mutedEntitiesQuery: UseQueryResult<UserUnsubscribe[], Error>;
 
   /** Mark a single notification as done */
@@ -92,8 +91,12 @@ export function createNotificationSource(
 
   const [mutedEntities, setMutedEntities] = createSignal<UserUnsubscribe[]>([]);
 
-  const notificationsQuery = createNotificationQuery({ limit: QUERY_LIMIT });
+  const notificationsQuery = useUserNotificationsQuery({ limit: QUERY_LIMIT });
   const mutedEntitiesQuery = createMutedEntitiesQuery({ limit: QUERY_LIMIT });
+
+  const markNotificationsAsSeenMutation = useMarkNotificationsAsSeenMutation();
+
+  const markNotificationsAsDoneMutation = useMarkNotificationsAsDoneMutation();
 
   /** Reconcile new notifications into the store */
   const reconcileNotifications = (
@@ -183,34 +186,15 @@ export function createNotificationSource(
   });
 
   const bulkMarkAsDone = async (notifications: UnifiedNotification[]) => {
-    // optimistically update
-    setStore(
-      produce((state) => {
-        notifications.forEach((notification) => {
-          const notDoneNotification = state[
-            compositeEntity(notificationEntity(notification))
-          ]?.find(({ id }) => id === notification.id);
-
-          if (notDoneNotification) notDoneNotification.done = true;
-        });
-      })
-    );
-
-    const notificationIds = notifications.map(({ id }) => id);
-
-    await notificationServiceClient.bulkMarkNotificationAsDone({
-      notificationIds,
+    await markNotificationsAsDoneMutation.mutateAsync({
+      notificationIds: notifications.map((n) => n.id),
     });
-    refetchAndReconcileNotifications(notifications);
   };
 
   const bulkMarkAsRead = async (notifications: UnifiedNotification[]) => {
-    const notificationIds = notifications.map(({ id }) => id);
-    await notificationServiceClient.bulkMarkNotificationAsSeen({
-      notificationIds,
+    await markNotificationsAsSeenMutation.mutateAsync({
+      notificationIds: notifications.map((n) => n.id),
     });
-
-    refetchAndReconcileNotifications(notifications);
   };
 
   const markAsDone = async (notification: UnifiedNotification) => {

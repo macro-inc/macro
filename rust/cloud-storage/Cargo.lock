@@ -81,6 +81,7 @@ name = "ai_tools"
 version = "0.1.0"
 dependencies = [
  "ai",
+ "anthropic",
  "anyhow",
  "async-trait",
  "chrono",
@@ -228,12 +229,13 @@ dependencies = [
 
 [[package]]
 name = "anthropic"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "async-openai",
  "async-stream",
  "chrono",
  "futures",
+ "lazy_static",
  "rand 0.9.0",
  "reqwest",
  "reqwest-eventsource",
@@ -5615,6 +5617,7 @@ dependencies = [
  "sqlx",
  "strum",
  "thiserror 2.0.17",
+ "tracing",
  "utoipa",
  "uuid",
 ]
@@ -6589,13 +6592,18 @@ name = "properties"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "comms_service_client",
+ "email_db_client",
  "macro_db_migrator",
+ "macro_middleware",
  "macro_uuid",
  "mockall",
+ "models_permissions",
  "models_properties",
  "serde_json",
  "sqlx",
  "system_properties",
+ "thiserror 2.0.17",
  "tokio",
  "tracing",
  "uuid",

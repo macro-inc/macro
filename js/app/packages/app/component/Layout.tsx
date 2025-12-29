@@ -3,6 +3,7 @@ import { useIsAuthenticated } from '@core/auth';
 import { Resize } from '@core/component/Resize';
 import { useABTest } from '@core/constant/ABTest';
 import { usePaywallState } from '@core/constant/PaywallState';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import {
   LAYOUT_CONTEXT_ID,
@@ -15,6 +16,7 @@ import { updateCookie } from '../util/updateCookie';
 import Banner from './banner/Banner';
 import { GlobalBulkEditEntityModal } from './bulk-edit-entity/BulkEditEntityModal';
 import { KommandMenu } from './command/Konsole';
+import { Dock } from './dock/Dock';
 import GlobalShortcuts from './GlobalHotkeys';
 import { ItemDndProvider } from './ItemDragAndDrop';
 import { createMenuOpen, Launcher, setCreateMenuOpen } from './Launcher';
@@ -165,6 +167,9 @@ export function Layout(props: RouteSectionProps) {
         <Show
           when={isAuthenticated() && !AUTH_URLS.includes(location.pathname)}
         >
+          <Show when={!isNativeMobilePlatform()}>
+            <Dock />
+          </Show>
           <Launcher open={createMenuOpen()} onOpenChange={setCreateMenuOpen} />
         </Show>
       </Suspense>

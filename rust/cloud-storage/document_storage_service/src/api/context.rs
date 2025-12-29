@@ -8,7 +8,7 @@ use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::F
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_env_var::env_var;
 use macro_redis_cluster_client::Redis;
-use properties::{PropertiesPgRepo, PropertiesServiceImpl};
+use properties::{PermissionServiceImpl, PropertiesPgRepo, PropertiesServiceImpl};
 use soup::{
     domain::service::SoupImpl, inbound::axum_router::SoupRouterState,
     outbound::pg_soup_repo::PgSoupRepo,
@@ -33,7 +33,7 @@ type DssSoupState = SoupRouterState<
 >;
 
 type SystemPropertiesService = SystemPropertiesServiceImpl<PgSystemPropertiesRepository>;
-type PropertiesService = PropertiesServiceImpl<PropertiesPgRepo>;
+type PropertiesService = PropertiesServiceImpl<PropertiesPgRepo, PermissionServiceImpl>;
 
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {

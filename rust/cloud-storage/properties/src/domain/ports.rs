@@ -4,6 +4,7 @@
 //! Implementations live in the outbound module.
 
 use models_properties::EntityType;
+use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_value::PropertyValue;
 use uuid::Uuid;
 
@@ -15,9 +16,34 @@ use uuid::Uuid;
 pub trait PropertiesRepo: Send + Sync + 'static {
     type Err;
 
+    /// Get a property definition by ID.
+    /// Returns `None` if the property definition doesn't exist.
+    fn get_property_definition(
+        &self,
+        property_definition_id: Uuid,
+    ) -> impl Future<Output = Result<Option<PropertyDefinition>, Self::Err>> + Send;
+
+    /// Count how many of the provided option IDs exist for the property definition.
+    fn count_valid_property_options(
+        &self,
+        property_definition_id: Uuid,
+        option_ids: &[Uuid],
+    ) -> impl Future<Output = Result<i64, Self::Err>> + Send;
+
     /// Atomically update a property value if the property is attached to the entity.
     /// No-op if the property is not attached.
     fn update_entity_property_value_if_exists(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        property_definition_id: Uuid,
+        value: Option<PropertyValue>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Upsert an entity property value (insert or update).
+    /// If the property doesn't exist, it will be created and attached to the entity.
+    /// If it exists, the value will be updated.
+    fn upsert_entity_property(
         &self,
         entity_id: &str,
         entity_type: EntityType,
@@ -60,4 +86,22 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         entity_type: EntityType,
         property_definition_id: Uuid,
     ) -> impl Future<Output = Result<Option<PropertyValue>, Self::Err>> + Send;
+}
+
+/// Permission service trait for entity access control.
+///
+/// This trait abstracts permission operations (checking and granting), allowing for different implementations
+/// (e.g., database-backed, mock for testing).
+#[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
+pub trait PermissionService: Send + Sync + 'static {
+    type Err;
+
+    /// Check if a user has edit access to an entity.
+    /// Returns an error if the user does not have edit or owner access.
+    fn check_entity_edit_permission(
+        &self,
+        user_id: &str,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }

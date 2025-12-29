@@ -194,6 +194,10 @@ function createViewData(
         viewProps?.filters?.fromFilter ??
         VIEWCONFIG_BASE.filters.fromFilter ??
         [],
+      focusFilters:
+        viewProps?.filters?.focusFilters ??
+        VIEWCONFIG_BASE.filters.focusFilters ??
+        [],
     },
     display: {
       layout: viewProps?.display?.layout ?? VIEWCONFIG_BASE.display.layout,

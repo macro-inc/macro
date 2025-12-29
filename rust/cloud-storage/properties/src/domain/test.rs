@@ -1,11 +1,23 @@
 //! Unit tests for PropertiesServiceImpl using mockall-generated repo.
 
 use super::service_impl::PropertiesServiceImpl;
-use crate::domain::{ports::MockPropertiesRepo, service::PropertiesService};
+use crate::domain::{
+    ports::{MockPermissionService, MockPropertiesRepo},
+    service::PropertiesService,
+};
 use anyhow::anyhow;
 use models_properties::{EntityType, service::property_value::PropertyValue};
 use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
+
+/// Creates a mock permission service with default expectations for entity edit permission checks.
+fn create_mock_permission_service() -> MockPermissionService {
+    let mut perm_checker = MockPermissionService::new();
+    perm_checker
+        .expect_check_entity_edit_permission()
+        .returning(|_, _, _| Box::pin(async { Ok(()) }));
+    perm_checker
+}
 
 #[tokio::test]
 async fn test_set_system_property_status_complete_happy_path() {
@@ -31,7 +43,7 @@ async fn test_set_system_property_status_complete_happy_path() {
         })
         .returning(|_, _, _, _| Box::pin(async { Ok(()) }));
 
-    let service = PropertiesServiceImpl::new(repo);
+    let service = PropertiesServiceImpl::new(repo, Some(create_mock_permission_service()));
 
     let entity_id = "e1";
     let entity_type = EntityType::Document;
@@ -50,7 +62,7 @@ async fn test_set_system_property_status_complete_error_path() {
     repo.expect_update_entity_property_value_if_exists()
         .returning(|_, _, _, _| Box::pin(async { Err(anyhow!("boom")) }));
 
-    let service = PropertiesServiceImpl::new(repo);
+    let service = PropertiesServiceImpl::new(repo, Some(create_mock_permission_service()));
 
     let err = service
         .set_system_property_status_complete("e1", EntityType::Document)
@@ -75,7 +87,7 @@ async fn test_link_parent_task_delegates_to_repo() {
         .withf(move |t, p| *t == task_id && *p == Some(parent_id))
         .returning(|_, _| Box::pin(async { Ok(()) }));
 
-    let service = PropertiesServiceImpl::new(repo);
+    let service = PropertiesServiceImpl::new(repo, Some(create_mock_permission_service()));
 
     service
         .link_parent_task(task_id, Some(parent_id))
@@ -93,7 +105,7 @@ async fn test_link_parent_task_clear_parent() {
         .withf(move |t, p| *t == task_id && p.is_none())
         .returning(|_, _| Box::pin(async { Ok(()) }));
 
-    let service = PropertiesServiceImpl::new(repo);
+    let service = PropertiesServiceImpl::new(repo, Some(create_mock_permission_service()));
 
     service.link_parent_task(task_id, None).await.unwrap();
 }
@@ -105,7 +117,7 @@ async fn test_link_parent_task_error_propagates() {
     repo.expect_link_parent_task()
         .returning(|_, _| Box::pin(async { Err(anyhow!("link failed")) }));
 
-    let service = PropertiesServiceImpl::new(repo);
+    let service = PropertiesServiceImpl::new(repo, Some(create_mock_permission_service()));
 
     let err = service
         .link_parent_task(Uuid::nil(), Some(Uuid::nil()))
@@ -133,7 +145,7 @@ async fn test_link_subtasks_delegates_to_repo() {
         })
         .returning(|_, _| Box::pin(async { Ok(()) }));
 
-    let service = PropertiesServiceImpl::new(repo);
+    let service = PropertiesServiceImpl::new(repo, Some(create_mock_permission_service()));
 
     service
         .link_subtasks(task_id, vec![subtask_1, subtask_2])
@@ -151,7 +163,7 @@ async fn test_link_subtasks_clear_all() {
         .withf(move |t, s| *t == task_id && s.is_empty())
         .returning(|_, _| Box::pin(async { Ok(()) }));
 
-    let service = PropertiesServiceImpl::new(repo);
+    let service = PropertiesServiceImpl::new(repo, Some(create_mock_permission_service()));
 
     service.link_subtasks(task_id, vec![]).await.unwrap();
 }
@@ -162,7 +174,7 @@ async fn test_link_subtasks_error_propagates() {
 
     repo.expect_link_subtasks()
         .returning(|_, _| Box::pin(async { Err(anyhow!("subtask link failed")) }));
-    let service = PropertiesServiceImpl::new(repo);
+    let service = PropertiesServiceImpl::new(repo, Some(create_mock_permission_service()));
 
     let err = service
         .link_subtasks(Uuid::nil(), vec![Uuid::nil()])
@@ -188,7 +200,7 @@ async fn test_get_property_value_returns_value_when_exists() {
         })
         .returning(|_, _, _| Box::pin(async { Ok(Some(PropertyValue::Str("hello".to_string()))) }));
 
-    let service = PropertiesServiceImpl::new(repo);
+    let service = PropertiesServiceImpl::new(repo, Some(create_mock_permission_service()));
 
     let result = service
         .get_property_value("e1", EntityType::Document, prop_id)
@@ -205,7 +217,7 @@ async fn test_get_property_value_returns_none_when_not_attached() {
     repo.expect_get_entity_property_value()
         .returning(|_, _, _| Box::pin(async { Ok(None) }));
 
-    let service = PropertiesServiceImpl::new(repo);
+    let service = PropertiesServiceImpl::new(repo, Some(create_mock_permission_service()));
 
     let result = service
         .get_property_value("e1", EntityType::Document, Uuid::nil())
@@ -222,7 +234,7 @@ async fn test_get_property_value_error_path() {
     repo.expect_get_entity_property_value()
         .returning(|_, _, _| Box::pin(async { Err(anyhow!("db error")) }));
 
-    let service = PropertiesServiceImpl::new(repo);
+    let service = PropertiesServiceImpl::new(repo, Some(create_mock_permission_service()));
 
     let err = service
         .get_property_value("e1", EntityType::Document, Uuid::nil())
@@ -254,7 +266,7 @@ async fn test_get_system_property_value_returns_value_when_exists() {
             })
         });
 
-    let service = PropertiesServiceImpl::new(repo);
+    let service = PropertiesServiceImpl::new(repo, Some(create_mock_permission_service()));
 
     let result = service
         .get_system_property_value("e1", EntityType::Document, SystemPropertyKey::Status)
@@ -276,7 +288,7 @@ async fn test_get_system_property_value_returns_none_when_not_attached() {
     repo.expect_get_entity_property_value()
         .returning(|_, _, _| Box::pin(async { Ok(None) }));
 
-    let service = PropertiesServiceImpl::new(repo);
+    let service = PropertiesServiceImpl::new(repo, Some(create_mock_permission_service()));
 
     let result = service
         .get_system_property_value("e1", EntityType::Document, SystemPropertyKey::Status)
@@ -293,7 +305,7 @@ async fn test_get_system_property_value_error_path() {
     repo.expect_get_entity_property_value()
         .returning(|_, _, _| Box::pin(async { Err(anyhow!("db error")) }));
 
-    let service = PropertiesServiceImpl::new(repo);
+    let service = PropertiesServiceImpl::new(repo, Some(create_mock_permission_service()));
 
     let err = service
         .get_system_property_value("e1", EntityType::Document, SystemPropertyKey::Status)
