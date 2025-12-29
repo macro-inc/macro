@@ -22,10 +22,12 @@ import {
   createMemo,
   createSignal,
   For,
+  Match,
   onCleanup,
   onMount,
   Show,
   Suspense,
+  Switch,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import {
@@ -43,6 +45,7 @@ import type { Notification, WithNotification } from '../types/notification';
 import type {
   ChannelContentHitData,
   ContentHitData,
+  EmailContentHitData,
   SearchLocation,
   WithSearch,
 } from '../types/search';
@@ -108,6 +111,47 @@ function ChannelMessageContentHit(props: { data: ChannelContentHitData }) {
         <div class="shrink-0 font-mono text-xs uppercase text-ink-extra-muted">
           {formattedDate()}
         </div>
+        <div class="text-sm text-ink-muted truncate flex items-center flex-1 min-w-0">
+          <StaticMarkdown
+            markdown={props.data.content}
+            theme={unifiedListMarkdownTheme}
+            singleLine={true}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EmailMessageContentHit(props: {
+  allData: EmailContentHitData[];
+  data: EmailContentHitData;
+}) {
+  const formattedDate = createFormattedDate(props.data.sentAt);
+  const isSingleMatch = createMemo(() => {
+    return props.allData.length === 1;
+  });
+  const isSingleSender = createMemo(() => {
+    const senders = props.allData.map((d) => d.sender);
+    if (senders.length === 1) return true;
+    if (new Set(senders).size === 1) return true;
+    return false;
+  });
+
+  return (
+    <div class="flex gap-2 items-center min-w-0">
+      <div class="flex size-5 shrink-0 items-center justify-center">
+        <UserIcon id={props.data.senderId} size="xs" />
+      </div>
+      <div class="flex gap-2 text-sm w-full min-w-0 overflow-hidden items-baseline">
+        <Show when={!isSingleMatch() && !isSingleSender()}>
+          <div class="text-sm shrink-0 truncate min-w-0 font-medium">
+            {props.data.sender}
+          </div>
+          <div class="shrink-0 font-mono text-xs uppercase text-ink-extra-muted">
+            {formattedDate()}
+          </div>
+        </Show>
         <div class="text-sm text-ink-muted truncate flex items-center flex-1 min-w-0">
           <StaticMarkdown
             markdown={props.data.content}
@@ -309,6 +353,7 @@ function NotificationRow(props: {
 }
 
 function ContentHitRow(props: {
+  allData: ContentHitData[];
   data: ContentHitData;
   onClick: (e: EntityClickEvent, location?: SearchLocation) => void;
   index?: number;
@@ -325,9 +370,19 @@ function ContentHitRow(props: {
       onClick={(e) => props.onClick(e, props.data.location)}
       showThreadBorder={props.data.type === 'channel'}
     >
-      <Show
-        when={props.data.type === 'channel' && props.data}
-        fallback={
+      <Switch>
+        <Match when={props.data.type === 'channel' && props.data}>
+          {(data) => <ChannelMessageContentHit data={data()} />}
+        </Match>
+        <Match when={props.data.type === 'email' && props.data}>
+          {(data) => (
+            <EmailMessageContentHit
+              allData={props.allData as EmailContentHitData[]}
+              data={data()}
+            />
+          )}
+        </Match>
+        <Match when={true}>
           <div class="flex gap-2 items-center min-w-0 w-full">
             <div class="flex size-5 shrink-0 items-center justify-center">
               <div class="h-4/5 border-l border-b w-2 border-edge-muted -translate-y-2 translate-x-[calc(0.25em-1px)]"></div>
@@ -343,10 +398,8 @@ function ContentHitRow(props: {
             </Show>
             <GenericContentHit data={props.data} />
           </div>
-        }
-      >
-        {(data) => <ChannelMessageContentHit data={data()} />}
-      </Show>
+        </Match>
+      </Switch>
     </CollapsibleListRow>
   );
 }
@@ -1025,6 +1078,7 @@ export function EntityWithEverything(
             <CollapsibleList items={contentHitData()} threadBorder>
               {(data, index, count) => (
                 <ContentHitRow
+                  allData={contentHitData()}
                   data={data}
                   onClick={(e, location) => {
                     props.onClick?.(props.entity, e, location);
