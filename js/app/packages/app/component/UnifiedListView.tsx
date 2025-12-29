@@ -639,11 +639,13 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     const hasSignalFilter = focusFilters_?.includes('signal') === true;
     const hasNoiseFilter = focusFilters_?.includes('noise') === true;
 
-    if ((hasSignalFilter && !hasNoiseFilter) || !focusFilters) {
+    // We only want to apply these filters when their opposite is not in the list
+    // or the list is empty because the filters negate each other
+    if ((hasSignalFilter && !hasNoiseFilter) || !focusFilters_?.length) {
       filterFns.push(signalFilter.predicate);
     }
 
-    if ((hasNoiseFilter && !hasSignalFilter) || !focusFilters) {
+    if ((hasNoiseFilter && !hasSignalFilter) || !focusFilters_?.length) {
       filterFns.push(noiseFilter.predicate);
     }
 
