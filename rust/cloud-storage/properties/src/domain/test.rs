@@ -2,7 +2,7 @@
 
 use super::service_impl::PropertiesServiceImpl;
 use crate::domain::{
-    ports::{MockPermissionService, MockPropertiesRepo},
+    ports::{MockNotificationService, MockPermissionService, MockPropertiesRepo},
     service::PropertiesService,
 };
 use anyhow::anyhow;
