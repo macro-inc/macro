@@ -11,7 +11,7 @@ import type { MessageWithBodyReplyless } from '@service-email/generated/schemas'
 export function scrollToMessage(
   messageId: string,
   messages: MessageWithBodyReplyless[],
-  messagesContainer: HTMLDivElement,
+  messagesContainer: HTMLElement,
   behavior: ScrollBehavior = 'smooth'
 ): boolean {
   const messageIndex = messages.findIndex((m) => m.db_id === messageId);

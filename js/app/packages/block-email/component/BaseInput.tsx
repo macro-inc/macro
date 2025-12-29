@@ -90,6 +90,7 @@ import { getReplyTypeFromDraft } from '../util/replyType';
 import { AttachMenu } from './AttachMenu';
 import { type EmailRecipient, useEmailContext } from './EmailContext';
 import { getOrInitEmailFormContext } from './EmailFormContext';
+import { useNextEmailContext } from '@block-email/component/NextEmailContext';
 
 false && fileDrop;
 
@@ -143,7 +144,7 @@ export function BaseInput(props: {
   setShowReply?: Setter<boolean>;
   markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
 }) {
-  const ctx = useEmailContext();
+  const ctx = useNextEmailContext();
   const form = createMemo(() =>
     getOrInitEmailFormContext(props.replyingTo().db_id!)()
   );
@@ -280,7 +281,7 @@ export function BaseInput(props: {
       setSavedDraftId(undefined);
       return;
     }
-    const currentThread = ctx.threadData();
+    const currentThread = ctx.thread();
     const newMessage = props.newMessage ?? false;
 
     if (!currentThread && !newMessage) {
@@ -411,7 +412,7 @@ export function BaseInput(props: {
       return;
     }
 
-    const currentThread = ctx.threadData();
+    const currentThread = ctx.thread();
     const newMessage = props.newMessage ?? false;
 
     if (!currentThread && !newMessage) {
@@ -505,11 +506,7 @@ export function BaseInput(props: {
     }
     const replyingToId = props.replyingTo()?.db_id;
     if (replyingToId) {
-      ctx.setMessageDbIdToDraftChildren(
-        produce((state) => {
-          delete state[replyingToId];
-        })
-      );
+      ctx.drafts.deleteDraftForMessage(replyingToId);
     }
     resetState();
     props.setShowReply?.(false);

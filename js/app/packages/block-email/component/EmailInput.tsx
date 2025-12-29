@@ -6,6 +6,7 @@ import { type Accessor, createMemo, type Setter, Show } from 'solid-js';
 import { decodeBase64Utf8 } from '../util/decodeBase64';
 import { BaseInput } from './BaseInput';
 import { useEmailContext } from './EmailContext';
+import { useNextEmailContext } from '@block-email/component/NextEmailContext';
 
 interface EmailInputProps {
   replyingTo: Accessor<MessageWithBodyReplyless>;
@@ -15,7 +16,7 @@ interface EmailInputProps {
 }
 
 export function EmailInput(props: EmailInputProps) {
-  const ctx = useEmailContext();
+  const ctx = useNextEmailContext();
 
   const draftHTML = createMemo(() => {
     const encoded = props.draft?.body_html_sanitized;
@@ -26,10 +27,10 @@ export function EmailInput(props: EmailInputProps) {
 
   function afterSend(newMessageId: MessageToSendDbId | null) {
     // Refresh to get the new message
-    ctx.refetch();
+    ctx.query.refetch();
 
     // Set focus to new message if provided
-    if (newMessageId) ctx.setFocusedMessageId(newMessageId);
+    if (newMessageId) ctx.messages.setFocused(newMessageId);
   }
 
   return (

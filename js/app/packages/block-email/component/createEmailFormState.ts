@@ -12,6 +12,7 @@ import {
 import type { ReplyType } from '../util/replyType';
 import { getSubjectText } from '../util/subjectText';
 import { type EmailRecipient, useEmailContext } from './EmailContext';
+import { useNextEmailContext } from '@block-email/component/NextEmailContext';
 
 export type EmailFormRecipients = {
   to: EmailRecipient[];
@@ -25,11 +26,11 @@ export type EmailFormRecipients = {
  * @returns A state object for the email form.
  */
 export function createEmailFormState(key: string) {
-  const emailCtx = useEmailContext();
+  const emailCtx = useNextEmailContext();
   const userEmail = useEmail();
 
-  const replyingTo = emailCtx.filteredMessages().find((m) => m.db_id === key);
-  const draft = emailCtx.messageDbIdToDraftChildren[key];
+  const replyingTo = emailCtx.messages.list().find((m) => m.db_id === key);
+  const draft = emailCtx.drafts.getDraftForMessage(key);
 
   const draftContainsAppendedReply = () => {
     const encoded = draft?.body_html_sanitized;
@@ -96,7 +97,7 @@ export function createEmailFormState(key: string) {
     setRecipientsInner(field, next);
     callDirty();
     const all = [...recipients.to, ...recipients.cc, ...recipients.bcc];
-    emailCtx.onRecipientsAugment(all);
+    emailCtx.onRecipientsChange(all);
   };
 
   const initialSubject =
@@ -175,7 +176,7 @@ export function createEmailFormState(key: string) {
       ...initialRecipients.cc,
       ...initialRecipients.bcc,
     ];
-    emailCtx.onRecipientsAugment(all);
+    emailCtx.onRecipientsChange(all);
 
     // Restore subject and input focus
     setSubjectInner(initialSubject);
