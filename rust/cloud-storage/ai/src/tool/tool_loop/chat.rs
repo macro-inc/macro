@@ -87,7 +87,7 @@ where
     ) -> Result<ChatCompletionStream<'_>> {
         let item_stream = stream!({
             let mut stream_parts = vec![];
-            for _ in 0..MAX_RECURSIONS {
+            'outer: for _ in 0..MAX_RECURSIONS {
                 let stream = match self.make_openai_chat_completion_stream().await {
                     Ok(stream) => stream,
                     Err(err) => {
@@ -102,7 +102,7 @@ where
                     while let Some(item) = stream.next().await {
                         if let Err(e) = item {
                             yield Err(e);
-                            break;
+                            break 'outer;
                         }
 
                         let part_or_ext = item.unwrap();
@@ -370,10 +370,17 @@ where
                         }
                         if let Some(FinishReason::ToolCalls) = first.finish_reason {
                             for call in tool_calls.into_values() {
-                                if let Ok(call) = ToolCall::try_from(call) {
-                                    yield Ok(PartOrExt::Part(StreamPart::ToolCall(call)));
-                                } else {
-                                    panic!("Failed to try from")
+                                match ToolCall::try_from(call.clone()) {
+                                    Ok(call) => {
+                                        yield Ok(PartOrExt::Part(StreamPart::ToolCall(call)))
+                                    }
+                                    Err(e) => {
+                                        tracing::error!(
+                                            err=?e,
+                                            "ToolCall::try_from failed from {:#?}",
+                                            call
+                                        );
+                                    }
                                 }
                             }
                             tool_calls = HashMap::new();
