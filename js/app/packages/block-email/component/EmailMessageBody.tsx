@@ -12,7 +12,6 @@ import {
   createMemo,
   createSignal,
   Match,
-  type Setter,
   Show,
   Switch,
   untrack,
@@ -26,7 +25,7 @@ interface EmailMessageBodyProps {
   message: MessageWithBodyReplyless;
   isBodyExpanded: Accessor<boolean>;
   setExpandedMessageBody: (id: string) => void;
-  setFocusedMessageId: Setter<string | undefined>;
+  setFocusedMessageId: (messageID: string | undefined) => void;
   isFirstMessageInThread: boolean;
 }
 
