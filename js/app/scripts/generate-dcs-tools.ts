@@ -66,7 +66,7 @@ async function generateSchemasFile(tools: AiToolsResponse) {
 		const { resolved: inputSchema } = await resolveRefs(tool.inputSchema);
 		const inputCode = jsonSchemaToZod(inputSchema, {
 			module: "esm",
-			name: `${tool.name}InputSchema`,
+			name: inputSchema.title,
 			withoutDescribes: true,
 			noImport: true,
 		});
@@ -74,7 +74,7 @@ async function generateSchemasFile(tools: AiToolsResponse) {
 		const { resolved: outputSchema } = await resolveRefs(tool.outputSchema);
 		const outputCode = jsonSchemaToZod(outputSchema, {
 			module: "esm",
-			name: `${tool.name}OutputSchema`,
+			name: outputSchema.title,
 			withoutDescribes: true,
 			noImport: true,
 		});
@@ -97,14 +97,13 @@ async function generateToolTypesFile(tools: AiToolsResponse) {
 	for (const tool of tools) {
 		const inputCode = await compile(
 			tool.inputSchema,
-			`${tool.name}InputSchema`,
+			tool.inputSchema.title,
 			{
 				// override top level name for export
 				customName: (schema) => {
 					if (schema.title) {
-						const newName = `${tool.name}Input`;
-						console.log(`Renamed ${schema.title} to ${newName}`);
-						return newName;
+						console.log(`Using schema title: ${schema.title}`);
+						return schema.title;
 					}
 				},
 				additionalProperties: false,
@@ -116,14 +115,13 @@ async function generateToolTypesFile(tools: AiToolsResponse) {
 
 		const outputCode = await compile(
 			tool.outputSchema,
-			`${tool.name}OutputSchema`,
+			tool.outputSchema.title,
 			{
 				// override top level name for export
 				customName: (schema) => {
 					if (schema.title) {
-						const newName = `${tool.name}Output`;
-						console.log(`Renamed ${schema.title} to ${newName}`);
-						return newName;
+						console.log(`Using schema title: ${schema.title}`);
+						return schema.title;
 					}
 					return undefined;
 				},
@@ -145,6 +143,19 @@ ${content.join("\n\n")}
 }
 
 async function generateToolsFile(tools: AiToolsResponse) {
+	// Resolve schemas to get titles
+	const toolsWithTitles = await Promise.all(
+		tools.map(async (tool) => {
+			const { resolved: inputSchema } = await resolveRefs(tool.inputSchema);
+			const { resolved: outputSchema } = await resolveRefs(tool.outputSchema);
+			return {
+				name: tool.name,
+				inputTitle: inputSchema.title,
+				outputTitle: outputSchema.title,
+			};
+		}),
+	);
+
 	const contents = `${warning}
 
 import { err, type MaybeResult, ok } from 'core/util/maybeResult';
@@ -153,19 +164,19 @@ import * as schemas from './schemas';
 import type * as types from './types';
 
 type ToolParserMap = {
-${tools
+${toolsWithTitles
 	.map(
 		(tool) =>
-			`${tool.name}: { call: types.${tool.name}Input, response: types.${tool.name}Output }`,
+			`${tool.name}: { call: types.${tool.inputTitle}, response: types.${tool.outputTitle} }`,
 	)
 	.join("\n")}
 };
 
 const toolParserMap = {
-${tools
+${toolsWithTitles
 	.map(
 		(tool) =>
-			`${tool.name}: { call: schemas.${tool.name}InputSchema, response: schemas.${tool.name}OutputSchema }`,
+			`${tool.name}: { call: schemas.${tool.inputTitle}, response: schemas.${tool.outputTitle} }`,
 	)
 	.join(",\n")}
 };
@@ -179,10 +190,10 @@ type NamedRawTool = {
 };
 
 type ToolDataMap = {
-${tools
+${toolsWithTitles
 	.map(
 		(tool) =>
-			`${tool.name}: { call: types.${tool.name}Input, response: types.${tool.name}Output }`,
+			`${tool.name}: { call: types.${tool.inputTitle}, response: types.${tool.outputTitle} }`,
 	)
 	.join(";\n")};
 };

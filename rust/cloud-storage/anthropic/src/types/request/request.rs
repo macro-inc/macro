@@ -139,6 +139,8 @@ pub enum ToolChoice {
     None,
 }
 
+/// Two kinds of tools supported by anthropic
+/// <https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview#how-tool-use-works>
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum Tool {

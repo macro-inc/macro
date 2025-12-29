@@ -323,7 +323,7 @@ impl AsyncTool<ToolServiceContext, RequestContext> for UnifiedSearch {
 mod tests {
     use super::*;
     use ai::generate_tool_input_schema;
-    use ai::tool::types::toolset::tool_object::validate_tool_schema;
+    use ai::tool::types::tool_object::validate_tool_schema;
 
     // run `cargo test -p ai_tools unified::tests::print_output_schema -- --nocapture --include-ignored`
     #[test]

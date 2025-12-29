@@ -53,7 +53,6 @@ import {
   type PeerIdValidator,
   peerIdPlugin,
 } from '@lexical-core';
-import type { MarkdownRewriteOutput } from '@service-cognition/generated/tools/types';
 import { onElementConnect } from '@solid-primitives/lifecycle';
 import { debounce } from '@solid-primitives/scheduled';
 import { createMethodRegistration } from 'core/orchestrator';
@@ -67,6 +66,7 @@ import {
   Show,
 } from 'solid-js';
 import { blockDataSignal, mdStore } from '../signal/markdownBlockData';
+import type { MarkdownRewriteOutput } from '../signal/rewriteSignal';
 import { useBlockSave, useSaveMarkdownDocument } from '../signal/save';
 import { MarkdownCollabProvider } from './MarkdownCollabProvider';
 

@@ -98,10 +98,6 @@ impl CreateMessageRequestBody {
                     .map(|t| (t.name().to_owned(), t))
                     .collect::<BTreeMap<_, _>>()
                     .into_values()
-<<<<<<<< HEAD:rust/cloud-storage/anthropic/src/types/request/util.rs
-========
-                    .into_iter()
->>>>>>>> f2a1a7cf4 (feat(anthropic): Add support for server tools):rust/cloud-storage/anthropic/src/types/request/request_util.rs
                     .collect::<Vec<_>>();
                 self.tools = Some(deduped);
             }
