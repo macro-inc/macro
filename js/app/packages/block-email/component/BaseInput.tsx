@@ -874,14 +874,6 @@ export function BaseInput(props: {
                 setShowFormatRibbon(!showFormatRibbon());
               }}
             />
-            <Show when={savedDraftId()}>
-              <IconButton
-                theme="base"
-                icon={Trash}
-                onclick={deleteDraftAndReset}
-                tooltip={{ label: 'Delete draft' }}
-              />
-            </Show>
 
             <KToggleButton
               class={
@@ -906,10 +898,17 @@ export function BaseInput(props: {
               }}
             >
               <div class="min-w-[22px] text-xs font-medium font-mono text-ink-muted text-center uppercase leading-none whitespace-nowrap group-data-[pressed]:bg-accent/10 group-data-[pressed]:hover:bg-accent/20 group-data-[pressed='false']:hover:text-ink hover:bg-edge-muted hover-transition-bg group-data-[pressed]:text-accent-ink p-1">
-                <Quotes class="inline mr-2 size-4" />
-                Quoted text
+                <Quotes class="inline size-4" />
               </div>
             </KToggleButton>
+            <Show when={savedDraftId()}>
+              <IconButton
+                theme="base"
+                icon={Trash}
+                onclick={deleteDraftAndReset}
+                tooltip={{ label: 'Delete draft' }}
+              />
+            </Show>
           </div>
           <div class="flex flex-row items-center">
             <button
