@@ -36,11 +36,9 @@ export function createEmailFormState(key: string) {
     if (!encoded) return false;
     const decodedHtml = decodeBase64Utf8(encoded);
     if (!decodedHtml) return false;
-    return (
-      new DOMParser()
-        .parseFromString(decodedHtml, 'text/html')
-        .body.querySelector('div.macro_quote') !== null
-    );
+    const parsed = new DOMParser().parseFromString(decodedHtml, 'text/html');
+
+    return parsed.body.querySelector('div.macro_quote') !== null;
   };
 
   const [replyAppended, setReplyAppended] = createSignal<boolean>(
