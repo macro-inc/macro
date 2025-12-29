@@ -97,7 +97,6 @@ function GenericContentHit(props: { data: ContentHitData }) {
 
 function ChannelMessageContentHit(props: { data: ChannelContentHitData }) {
   const [userName] = useDisplayName(props.data.senderId);
-  const formattedDate = createFormattedDate(props.data.sentAt);
 
   return (
     <div class="flex gap-2 items-center min-w-0">
@@ -109,7 +108,7 @@ function ChannelMessageContentHit(props: { data: ChannelContentHitData }) {
           {userName()}
         </div>
         <div class="shrink-0 font-mono text-xs uppercase text-ink-extra-muted">
-          {formattedDate()}
+          {createFormattedDate(props.data.sentAt)}
         </div>
         <div class="text-sm text-ink-muted truncate flex items-center flex-1 min-w-0">
           <StaticMarkdown
@@ -127,7 +126,6 @@ function EmailMessageContentHit(props: {
   allData: EmailContentHitData[];
   data: EmailContentHitData;
 }) {
-  const formattedDate = createFormattedDate(props.data.sentAt);
   const isSingleMatch = createMemo(() => {
     return props.allData.length === 1;
   });
@@ -159,7 +157,7 @@ function EmailMessageContentHit(props: {
         </Show>
         <Show when={!isSingleMatch() && !isSingleSentAt()}>
           <div class="shrink-0 font-mono text-xs uppercase text-ink-extra-muted">
-            {formattedDate()}
+            {createFormattedDate(props.data.sentAt)}
           </div>
         </Show>
         <div class="text-sm text-ink-muted truncate flex items-center flex-1 min-w-0">
@@ -271,7 +269,6 @@ function NotificationRow(props: {
   entity: EntityData;
 }) {
   const [userName] = useDisplayName(props.notification.senderId);
-  const formattedDate = createFormattedDate(props.notification.createdAt);
 
   const ActionContent = () => {
     if (
@@ -356,7 +353,7 @@ function NotificationRow(props: {
         <MessageContent />
       </div>
       <div class="shrink-0 font-mono text-xs uppercase text-ink-extra-muted ml-2">
-        {formattedDate()}
+        {createFormattedDate(props.notification.createdAt)}
       </div>
     </CollapsibleListRow>
   );
@@ -665,14 +662,11 @@ export function EntityWithEverything(
               </div>
               {/* Timestamp inline with subject in narrow mode */}
               <Show when={props.timestamp ?? props.entity.updatedAt}>
-                {(date) => {
-                  const formattedDate = createFormattedDate(date());
-                  return (
-                    <span class="hidden @max-md/split:inline shrink-0 whitespace-nowrap text-xs font-mono uppercase text-ink-extra-muted">
-                      {formattedDate()}
-                    </span>
-                  );
-                }}
+                {(date) => (
+                  <span class="hidden @max-md/split:inline shrink-0 whitespace-nowrap text-xs font-mono uppercase text-ink-extra-muted">
+                    {createFormattedDate(date())}
+                  </span>
+                )}
               </Show>
             </div>
             {/* Body snippet - below subject in narrow mode */}
@@ -776,14 +770,11 @@ export function EntityWithEverything(
             </span>
             {/* Timestamp inline with title in narrow mode */}
             <Show when={props.timestamp ?? props.entity.updatedAt}>
-              {(date) => {
-                const formattedDate = createFormattedDate(date());
-                return (
-                  <span class="hidden @max-md/split:inline shrink-0 whitespace-nowrap text-xs font-mono uppercase text-ink-extra-muted">
-                    {formattedDate()}
-                  </span>
-                );
-              }}
+              {(date) => (
+                <span class="hidden @max-md/split:inline shrink-0 whitespace-nowrap text-xs font-mono uppercase text-ink-extra-muted">
+                  {createFormattedDate(date())}
+                </span>
+              )}
             </Show>
           </div>
 
@@ -1042,14 +1033,11 @@ export function EntityWithEverything(
               )}
             </Show>
             <Show when={props.timestamp ?? props.entity.updatedAt}>
-              {(date) => {
-                const formattedDate = createFormattedDate(date());
-                return (
-                  <span class="shrink-0 whitespace-nowrap text-xs font-mono uppercase text-ink-extra-muted @max-md/split:hidden">
-                    {formattedDate()}
-                  </span>
-                );
-              }}
+              {(date) => (
+                <span class="shrink-0 whitespace-nowrap text-xs font-mono uppercase text-ink-extra-muted @max-md/split:hidden">
+                  {createFormattedDate(date())}
+                </span>
+              )}
             </Show>
             <Show
               when={
@@ -1304,39 +1292,38 @@ const trackKeydownDuringTask = () => {
 const startOfDay = (d: Date) =>
   new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
 
-const createFormattedDate = (timestamp: number) =>
-  createMemo(() => {
-    const ts = timestamp < 1e12 ? timestamp * 1000 : timestamp;
+const createFormattedDate = (timestamp: number) => {
+  const ts = timestamp < 1e12 ? timestamp * 1000 : timestamp;
 
-    const date = new Date(ts);
-    const now = new Date();
+  const date = new Date(ts);
+  const now = new Date();
 
-    const dateDay = startOfDay(date);
-    const todayDay = startOfDay(now);
+  const dateDay = startOfDay(date);
+  const todayDay = startOfDay(now);
 
-    // Today → show time
-    if (dateDay === todayDay) {
-      return date.toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-    }
-
-    // Same year → show Month Day
-    if (date.getFullYear() === now.getFullYear()) {
-      return date.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-      });
-    }
-
-    // Older → show numeric date
-    return date.toLocaleDateString('en-US', {
-      month: 'numeric',
-      day: 'numeric',
-      year: '2-digit',
+  // Today → show time
+  if (dateDay === todayDay) {
+    return date.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
     });
+  }
+
+  // Same year → show Month Day
+  if (date.getFullYear() === now.getFullYear()) {
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+    });
+  }
+
+  // Older → show numeric date
+  return date.toLocaleDateString('en-US', {
+    month: 'numeric',
+    day: 'numeric',
+    year: '2-digit',
   });
+};
 
 let lastMouseX: number | null = null;
 let lastMouseY: number | null = null;
