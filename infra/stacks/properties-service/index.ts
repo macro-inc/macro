@@ -1,6 +1,11 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { config, getMacroApiToken, stack } from '../../packages/shared';
+import {
+  config,
+  getMacroApiToken,
+  getMacroNotify,
+  stack,
+} from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
 import { PropertiesService } from './properties-service';
 
@@ -53,6 +58,8 @@ const internalAuthKeyArn: pulumi.Output<string> = aws.secretsmanager
 
 const MACRO_API_TOKENS = getMacroApiToken();
 
+const { notificationQueueName, notificationQueueArn } = getMacroNotify();
+
 const DOCUMENT_STORAGE_SERVICE_URL = `https://cloud-storage${stack === 'prod' ? '' : `-${stack}`}.macro.com`;
 
 const COMMS_SERVICE_URL = `https://comms-service${stack === 'prod' ? '' : `-${stack}`}.macro.com`;
@@ -86,6 +93,7 @@ const propertiesService = new PropertiesService(`properties-service-${stack}`, {
   },
   serviceContainerPort: 8080,
   healthCheckPath: '/health',
+  notificationQueueArn,
   containerEnvVars: [
     {
       name: 'DATABASE_URL',
@@ -134,6 +142,10 @@ const propertiesService = new PropertiesService(`properties-service-${stack}`, {
     {
       name: 'DOCUMENT_STORAGE_SERVICE_AUTH_KEY',
       value: pulumi.interpolate`${INTERNAL_AUTH_KEY}`,
+    },
+    {
+      name: 'NOTIFICATION_QUEUE',
+      value: pulumi.interpolate`${notificationQueueName}`,
     },
   ],
   isPrivate: false,
