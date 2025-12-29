@@ -287,7 +287,7 @@ where
         );
 
         permission_service
-            .grant_entity_permissions(assignee_ids, &task_id.to_string(), EntityType::Task)
+            .grant_permissions_to_task(assignee_ids, &task_id.to_string())
             .await
             .map_err(anyhow::Error::from)
             .map_err(PropertiesErr::Repo)?;

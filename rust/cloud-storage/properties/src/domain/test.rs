@@ -386,15 +386,14 @@ async fn test_handle_task_assignee_permissions_grants_permissions() {
     let assignee_ids = vec!["user1".to_string(), "user2".to_string()];
 
     perm_service
-        .expect_grant_entity_permissions()
-        .withf(move |user_ids, entity_id, entity_type| {
+        .expect_grant_permissions_to_task()
+        .withf(move |user_ids, task_id_param| {
             user_ids.len() == 2
                 && user_ids.contains(&"user1".to_string())
                 && user_ids.contains(&"user2".to_string())
-                && entity_id == &task_id.to_string()
-                && *entity_type == EntityType::Task
+                && task_id_param == &task_id.to_string()
         })
-        .returning(|_, _, _| Box::pin(async { Ok(()) }));
+        .returning(|_, _| Box::pin(async { Ok(()) }));
 
     let service =
         PropertiesServiceImpl::new(repo, Some(perm_service), None::<MockNotificationService>);
@@ -454,8 +453,8 @@ async fn test_handle_task_assignee_permissions_error_propagates() {
     let assignee_ids = vec!["user1".to_string()];
 
     perm_service
-        .expect_grant_entity_permissions()
-        .returning(|_, _, _| Box::pin(async { Err(anyhow!("permission error")) }));
+        .expect_grant_permissions_to_task()
+        .returning(|_, _| Box::pin(async { Err(anyhow!("permission error")) }));
 
     let service =
         PropertiesServiceImpl::new(repo, Some(perm_service), None::<MockNotificationService>);
@@ -734,12 +733,10 @@ async fn test_handle_task_assignees_property_calls_both_handlers() {
     // Mock: permissions should be granted to all assignees
     let entity_id_clone = entity_id.clone();
     perm_service
-        .expect_grant_entity_permissions()
+        .expect_grant_permissions_to_task()
         .times(1)
-        .withf(move |user_ids, eid, etype| {
-            user_ids.len() == 2 && eid == &entity_id_clone && *etype == EntityType::Task
-        })
-        .returning(|_, _, _| Box::pin(async { Ok(()) }));
+        .withf(move |user_ids, tid| user_ids.len() == 2 && tid == &entity_id_clone)
+        .returning(|_, _| Box::pin(async { Ok(()) }));
 
     // Mock: notifications should be sent
     notif_service
