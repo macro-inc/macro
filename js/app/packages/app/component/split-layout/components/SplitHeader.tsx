@@ -1,5 +1,4 @@
 import EntityNavigationIndicator from '@app/component/EntityNavigationIndicator';
-import { globalSplitManager } from '@app/signal/splitLayout';
 import { IconButton } from '@core/component/IconButton';
 import { ENABLE_PREVIEW } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -22,6 +21,10 @@ import {
 import { Portal } from 'solid-js/web';
 import { SplitLayoutContext, SplitPanelContext } from '../context';
 import { useSplitLayout } from '../layout';
+import {
+  createActiveSplitMemo,
+  createIsActiveSplitContentMemo,
+} from '../layoutUtils';
 import { canSpotlight } from '../utils/canSpotlight';
 
 function SplitBackButton() {
@@ -135,17 +138,12 @@ function SplitControlButtons() {
 
 function SplitSettingsButton() {
   const { replaceSplit } = useSplitLayout();
-  const activeSplit = createMemo(() => {
-    const manager = globalSplitManager();
-    if (!manager) return;
-    const activeSplitId = manager.activeSplitId();
-    return activeSplitId ? manager.getSplit(activeSplitId) : undefined;
-  });
-
-  const isSettingsSplitOpen = createMemo(() => {
-    const content = activeSplit()?.content();
-    return content?.type === 'component' && content.id === 'settings';
-  });
+  const activeSplit = createActiveSplitMemo();
+  const isSettingsSplitOpen = createIsActiveSplitContentMemo(
+    activeSplit,
+    'component',
+    'settings'
+  );
 
   return (
     <IconButton
