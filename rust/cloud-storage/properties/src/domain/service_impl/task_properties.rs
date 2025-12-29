@@ -10,11 +10,12 @@ use crate::domain::ports::{PermissionService, PropertiesRepo};
 use crate::domain::service::PropertiesService;
 use crate::domain::service_impl::PropertiesServiceImpl;
 
-impl<R, P> PropertiesServiceImpl<R, P>
+impl<R, P, N> PropertiesServiceImpl<R, P, N>
 where
     R: PropertiesRepo,
     P: PermissionService,
-    anyhow::Error: From<R::Err> + From<P::Err>,
+    N: NotificationService,
+    anyhow::Error: From<R::Err> + From<P::Err> + From<N::Err>,
 {
     /// Handle task relationship properties (Parent Task / Subtasks) with bidirectional linking.
     /// Entity type is guaranteed to be Task (enforced by match guard).
