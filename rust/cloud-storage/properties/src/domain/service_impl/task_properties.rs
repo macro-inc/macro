@@ -89,15 +89,15 @@ where
         Ok(())
     }
 
-    /// Handle task assignees property with notifications and permissions.
+    /// Handle task assignees property with permissions.
     /// Assignees is a multi-select entity property, so only accepts MultiEntityReference.
-    /// If value is None (clearing assignees), there's nothing to do for notifications/permissions.
+    /// If value is None (clearing assignees), there's nothing to do for permissions.
     pub async fn handle_task_assignees_property(
         &self,
         entity_id: &str,
         value: Option<SetPropertyValue>,
     ) -> Result<(), PropertiesErr> {
-        // Clearing assignees - nothing to do for notifications/permissions
+        // Clearing assignees - nothing to do for permissions
         let Some(SetPropertyValue::MultiEntityReference { references }) = &value else {
             if value.is_some() {
                 // Assignees is multi-select, so only MultiEntityReference is valid
@@ -110,34 +110,46 @@ where
         };
 
         let assignee_ids: Vec<String> = references.iter().map(|r| r.entity_id.clone()).collect();
+        if assignee_ids.is_empty() {
+            return Ok(());
+        }
+
         let task_id = Uuid::parse_str(entity_id)
             .map_err(|_| PropertiesErr::Validation("Invalid task ID".to_string()))?;
-        self.handle_task_assignee_notifications(task_id, &assignee_ids)
-            .await?;
+
         self.handle_task_assignee_permissions(task_id, &assignee_ids)
             .await?;
         Ok(())
     }
 
-    /// Handle notifications when task assignees are updated.
-    /// This is a no-op for now.
-    pub async fn handle_task_assignee_notifications(
-        &self,
-        _task_id: Uuid,
-        _assignee_ids: &[String],
-    ) -> Result<(), PropertiesErr> {
-        // No-op for now
-        Ok(())
-    }
-
     /// Handle permissions when task assignees are updated.
-    /// This is a no-op for now.
+    /// Grants edit permissions to all assignees so they can edit the task.
     pub async fn handle_task_assignee_permissions(
         &self,
-        _task_id: Uuid,
-        _assignee_ids: &[String],
+        task_id: Uuid,
+        assignee_ids: &[String],
     ) -> Result<(), PropertiesErr> {
-        // No-op for now
+        if assignee_ids.is_empty() {
+            return Ok(());
+        }
+
+        let permission_service = self
+            .permission_service
+            .as_ref()
+            .ok_or(PropertiesErr::PermissionDenied)?;
+
+        tracing::debug!(
+            task_id = %task_id,
+            assignee_count = assignee_ids.len(),
+            "granting edit permissions to task assignees"
+        );
+
+        permission_service
+            .grant_permissions_to_task(assignee_ids, &task_id.to_string())
+            .await
+            .map_err(anyhow::Error::from)
+            .map_err(PropertiesErr::Repo)?;
+
         Ok(())
     }
 }

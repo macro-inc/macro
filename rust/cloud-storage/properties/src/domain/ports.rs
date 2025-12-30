@@ -104,4 +104,12 @@ pub trait PermissionService: Send + Sync + 'static {
         entity_id: &str,
         entity_type: EntityType,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Grant edit permissions to users for a task.
+    /// This is used when task assignees are updated to ensure they can edit the task.
+    fn grant_permissions_to_task(
+        &self,
+        user_ids: &[String],
+        task_id: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }

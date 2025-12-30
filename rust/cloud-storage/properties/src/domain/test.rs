@@ -6,7 +6,9 @@ use crate::domain::{
     service::PropertiesService,
 };
 use anyhow::anyhow;
-use models_properties::{EntityType, service::property_value::PropertyValue};
+use models_properties::{
+    EntityType, service::property_value::PropertyValue, shared::EntityReference,
+};
 use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
 
@@ -313,4 +315,150 @@ async fn test_get_system_property_value_error_path() {
         .unwrap_err();
 
     assert_eq!(err.to_string(), "db error");
+}
+
+// ============================================================================
+// handle_task_assignee_permissions unit tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_handle_task_assignee_permissions_grants_permissions() {
+    let repo = MockPropertiesRepo::new();
+    let mut perm_service = MockPermissionService::new();
+
+    let task_id = Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc);
+    let assignee_ids = vec!["user1".to_string(), "user2".to_string()];
+
+    perm_service
+        .expect_grant_permissions_to_task()
+        .withf(move |user_ids, task_id_param| {
+            user_ids.len() == 2
+                && user_ids.contains(&"user1".to_string())
+                && user_ids.contains(&"user2".to_string())
+                && task_id_param == &task_id.to_string()
+        })
+        .returning(|_, _| Box::pin(async { Ok(()) }));
+
+    let service = PropertiesServiceImpl::new(repo, Some(perm_service));
+
+    service
+        .handle_task_assignee_permissions(task_id, &assignee_ids)
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn test_handle_task_assignee_permissions_empty_assignees() {
+    let repo = MockPropertiesRepo::new();
+    let perm_service = MockPermissionService::new();
+
+    let task_id = Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc);
+
+    let service = PropertiesServiceImpl::new(repo, Some(perm_service));
+
+    // Should return Ok without calling permission service
+    service
+        .handle_task_assignee_permissions(task_id, &[])
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn test_handle_task_assignee_permissions_no_service() {
+    let repo = MockPropertiesRepo::new();
+    let task_id = Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc);
+    let assignee_ids = vec!["user1".to_string()];
+
+    let service = PropertiesServiceImpl::new(repo, None::<MockPermissionService>);
+
+    let err = service
+        .handle_task_assignee_permissions(task_id, &assignee_ids)
+        .await
+        .unwrap_err();
+
+    assert!(matches!(
+        err,
+        crate::domain::error::PropertiesErr::PermissionDenied
+    ));
+}
+
+#[tokio::test]
+async fn test_handle_task_assignee_permissions_error_propagates() {
+    let repo = MockPropertiesRepo::new();
+    let mut perm_service = MockPermissionService::new();
+
+    let task_id = Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc);
+    let assignee_ids = vec!["user1".to_string()];
+
+    perm_service
+        .expect_grant_permissions_to_task()
+        .returning(|_, _| Box::pin(async { Err(anyhow!("permission error")) }));
+
+    let service = PropertiesServiceImpl::new(repo, Some(perm_service));
+
+    let err = service
+        .handle_task_assignee_permissions(task_id, &assignee_ids)
+        .await
+        .unwrap_err();
+
+    assert_eq!(err.to_string(), "permission error");
+}
+
+// ============================================================================
+// handle_task_assignees_property integration tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_handle_task_assignees_property_calls_permission_handler() {
+    let mut repo = MockPropertiesRepo::new();
+    let mut perm_service = MockPermissionService::new();
+
+    let task_id = Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc);
+    let entity_id = task_id.to_string();
+    let assignees = vec!["user1".to_string(), "user2".to_string()];
+
+    let value = Some(
+        models_properties::api::requests::SetPropertyValue::MultiEntityReference {
+            references: assignees
+                .iter()
+                .map(|id| models_properties::shared::EntityReference {
+                    entity_type: EntityType::User,
+                    entity_id: id.clone(),
+                    specific_message_id: None,
+                })
+                .collect(),
+        },
+    );
+
+    // Mock: permissions should be granted to all assignees
+    let entity_id_clone = entity_id.clone();
+    perm_service
+        .expect_grant_permissions_to_task()
+        .times(1)
+        .withf(move |user_ids, tid| user_ids.len() == 2 && tid == &entity_id_clone)
+        .returning(|_, _| Box::pin(async { Ok(()) }));
+
+    let service = PropertiesServiceImpl::new(repo, Some(perm_service));
+
+    service
+        .handle_task_assignees_property(&entity_id, value)
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn test_handle_task_assignees_property_clearing_assignees() {
+    let repo = MockPropertiesRepo::new();
+    let perm_service = MockPermissionService::new();
+
+    let task_id = Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc);
+    let entity_id = task_id.to_string();
+
+    let service = PropertiesServiceImpl::new(repo, Some(perm_service));
+
+    // Should return Ok without calling any handlers
+    service
+        .handle_task_assignees_property(&entity_id, None)
+        .await
+        .unwrap();
 }

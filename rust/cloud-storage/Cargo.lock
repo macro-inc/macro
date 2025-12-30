@@ -6594,6 +6594,7 @@ dependencies = [
  "anyhow",
  "comms_service_client",
  "email_db_client",
+ "macro_db_client",
  "macro_db_migrator",
  "macro_middleware",
  "macro_uuid",
