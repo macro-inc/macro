@@ -227,12 +227,13 @@ const extractors: {
     return {
       type: n.notificationEventType,
       actor: m.assignedBy ? { id: m.assignedBy } : undefined,
-      action: hasTaskName ? 'assigned you to' : 'assigned you a task',
+      action: 'assigned you a task',
       target: hasTaskName
         ? {
             type: 'document' as EntityType, // Tasks are stored as documents
             id: m.taskId,
             name: m.taskName ?? undefined,
+            show: true, // Show task name in platform notification title
           }
         : undefined,
       content: m.taskName ?? undefined,
