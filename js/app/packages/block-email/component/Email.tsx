@@ -1,7 +1,7 @@
 import {
-  NextEmailProvider,
-  useNextEmailContext,
-} from '@block-email/component/NextEmailContext';
+  EmailProvider,
+  useEmailContext,
+} from '@block-email/component/EmailContext';
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerScopeSignalHotkey } from '@core/hotkey/utils';
 import {
@@ -33,9 +33,9 @@ type EmailViewProps = {
 
 export function EmailView(props: EmailViewProps) {
   return (
-    <NextEmailProvider threadID={props.threadId()}>
+    <EmailProvider threadID={props.threadId()}>
       <EmailContent {...props} />
-    </NextEmailProvider>
+    </EmailProvider>
   );
 }
 
@@ -45,7 +45,7 @@ function EmailContent(props: EmailViewProps) {
   const setIsScrollingToMessage = isScrollingToMessage.set;
   const blockElement = blockElementSignal.get;
 
-  const context = useNextEmailContext();
+  const context = useEmailContext();
 
   /**
    * Waits for the query to finish fetching

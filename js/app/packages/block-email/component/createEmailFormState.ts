@@ -12,7 +12,6 @@ import {
 import type { ReplyType } from '../util/replyType';
 import { getSubjectText } from '../util/subjectText';
 import { type EmailRecipient, useEmailContext } from './EmailContext';
-import { useNextEmailContext } from '@block-email/component/NextEmailContext';
 
 export type EmailFormRecipients = {
   to: EmailRecipient[];
@@ -26,7 +25,7 @@ export type EmailFormRecipients = {
  * @returns A state object for the email form.
  */
 export function createEmailFormState(key: string) {
-  const emailCtx = useNextEmailContext();
+  const emailCtx = useEmailContext();
   const userEmail = useEmail();
 
   const replyingTo = emailCtx.messages.list().find((m) => m.db_id === key);

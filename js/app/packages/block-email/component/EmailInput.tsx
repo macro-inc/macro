@@ -1,4 +1,4 @@
-import { useNextEmailContext } from '@block-email/component/NextEmailContext';
+import { useEmailContext } from '@block-email/component/EmailContext';
 import type {
   MessageToSendDbId,
   MessageWithBodyReplyless,
@@ -15,7 +15,7 @@ interface EmailInputProps {
 }
 
 export function EmailInput(props: EmailInputProps) {
-  const ctx = useNextEmailContext();
+  const ctx = useEmailContext();
 
   const draftHTML = createMemo(() => {
     const encoded = props.draft?.body_html_sanitized;

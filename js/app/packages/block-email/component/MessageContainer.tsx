@@ -1,9 +1,9 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { EmailAttachmentPill } from '@block-email/component/AttachmentPill';
+import { useEmailContext } from '@block-email/component/EmailContext';
 import { EmailInput } from '@block-email/component/EmailInput';
 import { EmailMessageBody } from '@block-email/component/EmailMessageBody';
 import { EmailMessageTopBar } from '@block-email/component/EmailMessageTopBar';
-import { useNextEmailContext } from '@block-email/component/NextEmailContext';
 import { ImageGalleryPreview } from '@core/component/ImageGalleryPreview';
 import { ImagePreview } from '@core/component/ImagePreview';
 import { Message } from '@core/component/Message';
@@ -45,7 +45,7 @@ interface MessageContainerProps {
 }
 
 export function MessageContainer(props: MessageContainerProps) {
-  const context = useNextEmailContext();
+  const context = useEmailContext();
   const draftChild = createMemo(() => {
     if (!props.message.db_id) return undefined;
     const draft = context.drafts.getDraftForMessage(props.message.db_id);

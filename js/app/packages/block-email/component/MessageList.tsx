@@ -1,4 +1,4 @@
-import { useNextEmailContext } from '@block-email/component/NextEmailContext';
+import { useEmailContext } from '@block-email/component/EmailContext';
 import { isScrollingToMessage } from '@block-email/signal/scrollState';
 import { CircleSpinner } from '@core/component/CircleSpinner';
 import { createMemo, createSelector, For, Show } from 'solid-js';
@@ -11,7 +11,7 @@ interface MessageListProps {
 
 export function MessageList(props: MessageListProps) {
   const getIsScrollingToMessage = isScrollingToMessage.get;
-  const context = useNextEmailContext();
+  const context = useEmailContext();
   const [expandedMessageBodyIds, setExpandedMessageBodyIds] = createStore<
     Record<string, boolean>
   >({});

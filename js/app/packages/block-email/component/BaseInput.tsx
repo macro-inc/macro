@@ -1,6 +1,5 @@
 import { FormatRibbon } from '@block-channel/component/FormatRibbon';
 import { MacroSignatureButton } from '@block-email/component/MacroSignatureButton';
-import { useNextEmailContext } from '@block-email/component/NextEmailContext';
 import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
 import { useHasPaidAccess } from '@core/auth';
 import { useBlockId } from '@core/block';
@@ -90,7 +89,7 @@ import {
 import { convertEmailRecipientToContactInfo } from '../util/recipientConversion';
 import { getReplyTypeFromDraft } from '../util/replyType';
 import { AttachMenu } from './AttachMenu';
-import type { EmailRecipient } from './EmailContext';
+import { type EmailRecipient, useEmailContext } from './EmailContext';
 import { getOrInitEmailFormContext } from './EmailFormContext';
 
 false && fileDrop;
@@ -145,7 +144,7 @@ export function BaseInput(props: {
   setShowReply?: Setter<boolean>;
   markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
 }) {
-  const ctx = useNextEmailContext();
+  const ctx = useEmailContext();
   const form = createMemo(() =>
     getOrInitEmailFormContext(props.replyingTo().db_id!)()
   );
