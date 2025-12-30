@@ -40,8 +40,14 @@ import { createStore } from 'solid-js/store';
 export type EmailRecipient = WithCustomUserInput<'user' | 'contact'>;
 
 export type NextEmailContextValues = {
+  registerMessagesList: (list: HTMLElement) => void;
+  messagesListRef: Accessor<HTMLElement | undefined>;
+  registerMessagesContainer: (container: HTMLElement) => void;
+  messagesContainerRef: Accessor<HTMLElement | undefined>;
+
   recipientOptions: Accessor<EmailRecipient[]>;
   onRecipientsChange: (items: EmailRecipient[]) => void;
+
   drafts: {
     getDraftForMessage: (
       messageDbID: string
@@ -49,10 +55,7 @@ export type NextEmailContextValues = {
     deleteDraftForMessage: (messageDbID: string) => void;
     initialDraftsSettled: Accessor<boolean>;
   };
-  registerMessagesList: (list: HTMLElement) => void;
-  messagesListRef: Accessor<HTMLElement | undefined>;
-  registerMessagesContainer: (container: HTMLElement) => void;
-  messagesContainerRef: Accessor<HTMLElement | undefined>;
+
   messages: {
     unfiltered: Accessor<MessageWithBodyReplyless[]>;
     list: Accessor<MessageWithBodyReplyless[]>;
@@ -61,12 +64,14 @@ export type NextEmailContextValues = {
     setFocused: (messageID: string | undefined) => void;
   };
   thread: Accessor<Thread | undefined>;
+
   query: {
     hasMore: Accessor<boolean>;
     isFetching: Accessor<boolean>;
     fetchNextPage: () => void;
     refetch: () => void;
   };
+
   archiveThread: () => boolean;
   initialLoadComplete: Accessor<boolean>;
   onInitialDataLoad: (callback: () => boolean) => void;
@@ -119,9 +124,9 @@ export function NextEmailProvider(props: FlowProps<{ threadID: string }>) {
 
         return {
           ...data.pages[0],
-          messages: filtered,
+          messages: messages,
+          filtered: filtered,
           draftMap: messageDraftMap,
-          unfilteredMessages: messages,
         };
       },
     })
@@ -173,7 +178,7 @@ export function NextEmailProvider(props: FlowProps<{ threadID: string }>) {
   });
 
   const [messageDraftMap, setMessageDraftMap] = createStore<
-    Record<string, MessageWithBodyReplyless>
+    Record<string, MessageWithBodyReplyless | undefined>
   >({});
 
   const deleteDraftForMessage = (messageID: string) => {
@@ -240,7 +245,7 @@ export function NextEmailProvider(props: FlowProps<{ threadID: string }>) {
         if (!existing || (!existing.name && c.name)) seen.set(c.email, c);
       };
 
-      thread.unfilteredMessages.forEach((m) => {
+      thread.messages.forEach((m) => {
         m.to.forEach(add);
         m.cc.forEach(add);
         m.bcc.forEach(add);
@@ -402,10 +407,8 @@ export function NextEmailProvider(props: FlowProps<{ threadID: string }>) {
             focusedID: focusedMessageId,
             setFocused: setFocusedMessageId,
             targetMessageID: targetMessageId,
-            list: createMemo(() => threadQuery.data?.messages ?? []),
-            unfiltered: createMemo(
-              () => threadQuery.data?.unfilteredMessages ?? []
-            ),
+            list: createMemo(() => threadQuery.data?.filtered ?? []),
+            unfiltered: createMemo(() => threadQuery.data?.messages ?? []),
           },
           initialLoadComplete: hasHandledTarget,
           onInitialDataLoad,
