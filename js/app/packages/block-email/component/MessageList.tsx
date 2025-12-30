@@ -1,7 +1,7 @@
 import { useNextEmailContext } from '@block-email/component/NextEmailContext';
 import { isScrollingToMessage } from '@block-email/signal/scrollState';
 import { CircleSpinner } from '@core/component/CircleSpinner';
-import { createSelector, For, Show } from 'solid-js';
+import { createMemo, createSelector, For, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { MessageContainer } from './MessageContainer';
 
@@ -53,23 +53,19 @@ export function MessageList(props: MessageListProps) {
       }}
     >
       <For each={context.messages.list().toReversed()}>
-        {(message, listIndex) => {
-          const index = () => {
-            // If the index here is 0 but we still have more data to fetch,
-            // the index is technically incorrect and will lead to isFirstMessage
-            // to be wrong
-            if (listIndex() === 0 && context.query.hasMore()) {
-              return -1;
-            }
+        {(message, index) => {
+          // We need the index as if the list was not reversed
+          const normalizedIndex = createMemo(() => {
+            const listLength = context.messages.list().length;
 
-            return listIndex();
-          };
+            return listLength - 1 - index();
+          });
 
           return (
             <MessageContainer
-              isFirstMessage={index() === 0}
+              isFirstMessage={normalizedIndex() === 0}
               isLastMessage={
-                index() === (context.messages.list().length ?? 0) - 1
+                normalizedIndex() === (context.messages.list().length ?? 0) - 1
               }
               isFocused={isFocusedSelector(message.db_id ?? undefined)}
               isTarget={isTargetSelector(message.db_id ?? undefined)}
