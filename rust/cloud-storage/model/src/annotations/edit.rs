@@ -3,6 +3,8 @@ use serde_json::Value;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use crate::annotations::Mentions;
+
 use super::{Anchor, Comment};
 
 #[derive(Deserialize, ToSchema)]
@@ -10,6 +12,8 @@ use super::{Anchor, Comment};
 pub struct EditCommentRequest {
     pub text: Option<String>,
     pub metadata: Option<Value>,
+    pub mentions: Option<Mentions>,
+    pub thread_id: i64,
 }
 
 #[derive(Deserialize, ToSchema)]

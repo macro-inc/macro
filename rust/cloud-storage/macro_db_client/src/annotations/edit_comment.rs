@@ -11,7 +11,7 @@ pub async fn edit_document_comment(
     db: &Pool<Postgres>,
     comment_id: i64,
     user_id: &str,
-    req: EditCommentRequest,
+    req: &EditCommentRequest,
 ) -> Result<EditCommentResponse> {
     let (comment_owner, document_id) = sqlx::query!(
         r#"
