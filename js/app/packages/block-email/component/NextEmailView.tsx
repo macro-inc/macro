@@ -114,7 +114,7 @@ function NextEmailContent(props: NextEmailViewProps) {
     if (success) {
       context.messages.setFocused(messageId);
 
-      if (context.messages.targetMessageID()) {
+      if (context.messages.targetMessageID() === messageId) {
         setTimeout(() => {
           context.messages.setTargetMessageID(undefined);
         }, 800);
