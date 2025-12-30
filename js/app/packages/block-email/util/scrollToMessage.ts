@@ -12,17 +12,22 @@ export function scrollToMessage(
   messageId: string,
   messages: MessageWithBodyReplyless[],
   messagesContainer: HTMLElement,
-  behavior: ScrollBehavior = 'smooth'
+  {
+    behavior = 'smooth',
+    reversed = false,
+  }: { behavior?: ScrollBehavior; reversed?: boolean }
 ): boolean {
-  const messageIndex = messages.findIndex((m) => m.db_id === messageId);
+  let messageIndex = messages.findIndex((m) => m.db_id === messageId);
+
+  if (reversed) {
+    messageIndex = messages.length - 1 - messageIndex;
+  }
 
   if (messageIndex < 0) {
     return false;
   }
 
-  const targetElement = messagesContainer?.querySelector(
-    `[data-message-id="${messageId}"]`
-  );
+  const targetElement = messagesContainer.children[messageIndex];
 
   if (!targetElement) {
     return false;

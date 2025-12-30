@@ -110,7 +110,7 @@ function EmailContent(props: EmailViewProps) {
     }
   ) => {
     opts = { focus: true, behavior: 'smooth', ...opts };
-    const messages = untrack(context.messages.unfiltered);
+    const messages = untrack(context.messages.list);
     const container = untrack(context.messagesListRef);
 
     if (!messages || !container) return false;
@@ -121,12 +121,10 @@ function EmailContent(props: EmailViewProps) {
 
     setIsScrollingToMessage(true);
 
-    const success = scrollToMessage(
-      messageId,
-      messages,
-      container,
-      opts.behavior
-    );
+    const success = scrollToMessage(messageId, messages, container, {
+      behavior: opts.behavior,
+      reversed: true,
+    });
 
     if (!success) {
       setIsScrollingToMessage(false);

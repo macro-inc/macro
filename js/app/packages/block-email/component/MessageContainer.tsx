@@ -183,10 +183,7 @@ export function MessageContainer(props: MessageContainerProps) {
   };
 
   return (
-    <div
-      class="shrink-0 flex justify-center w-full"
-      data-message-id={props.message.db_id}
-    >
+    <div class="shrink-0 flex justify-center w-full">
       <div class="macro-message-width w-full">
         <Message
           id={props.message.db_id ?? undefined}
