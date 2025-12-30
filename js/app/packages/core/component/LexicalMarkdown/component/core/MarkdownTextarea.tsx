@@ -272,6 +272,8 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
           ref={(el) => {
             onElementConnect(el, () => {
               editor.setRootElement(el);
+              props.domRef?.(el);
+              mountRef = el;
               onConnect();
             });
           }}
