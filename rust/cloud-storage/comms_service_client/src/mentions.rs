@@ -1,31 +1,8 @@
 use super::CommsServiceClient;
 use crate::error::{ClientError, ResponseExt};
-use models_comms::mentions::{CreateEntityMentionRequest, DeleteMentionsRequest};
+use models_comms::mentions::DeleteMentionsRequest;
 
 impl CommsServiceClient {
-    pub async fn create_mention(
-        &self,
-        source_entity_type: String,
-        source_entity_id: String,
-        entity_type: String,
-        entity_id: String,
-    ) -> Result<(), ClientError> {
-        let response = self
-            .client
-            .post(format!("{}/mentions", self.url,))
-            .json(&CreateEntityMentionRequest {
-                source_entity_type,
-                source_entity_id,
-                entity_type,
-                entity_id,
-            })
-            .send()
-            .await
-            .map_client_error()
-            .await?;
-        Ok(())
-    }
-
     /// Given an item id and item type, this will return all channel ids that mention the item
     #[tracing::instrument(skip(self))]
     pub async fn get_channel_mentions(

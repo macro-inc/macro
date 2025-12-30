@@ -1,4 +1,5 @@
 use crate::api::extractors::ParticipantAccess;
+use crate::api::mentions::{CreateEntityMentionRequest, CreateEntityMentionResponse};
 use crate::api::{
     activity::post_activity::PostActivityRequest,
     channels::{
@@ -27,7 +28,6 @@ use model::comms::{
     Channel, ChannelParticipant, ChannelType, ChannelWithParticipants,
     GetMessageWithContextResponse, GetOrCreateAction, LatestMessage, ParticipantRole,
 };
-use models_comms::mentions::{CreateEntityMentionRequest, CreateEntityMentionResponse};
 
 use model::response::{GenericErrorResponse, StringIDResponse};
 use model::version::CommunicationServiceApiVersion;
