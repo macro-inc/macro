@@ -128,6 +128,12 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
       setEditorStateFromMarkdown(editor, props.initialValue);
     }
 
+    if (props.initialHtml || props.initialValue) {
+      // We do this to make sure anything relying on the markdownState existing initially
+      // has the content
+      props.onChange?.(markdownState());
+    }
+
     didInitializeContent = true;
   };
 
