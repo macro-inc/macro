@@ -58,7 +58,17 @@ export function MessageList(props: MessageListProps) {
           const normalizedIndex = createMemo(() => {
             const listLength = context.messages.list().length;
 
-            return listLength - 1 - index();
+            const normalized = listLength - 1 - index();
+
+            // The element at the 0th index isn't actually the first message
+            // if there is more data to load so we return -1 so that `isFirstMessage`
+            // evaluates to false. This fixes an issue with the "first" message' full
+            // html to show in `EmailMessageBody`
+            if (normalized === 0 && context.query.hasMore()) {
+              return -1;
+            }
+
+            return normalized;
           });
 
           return (
