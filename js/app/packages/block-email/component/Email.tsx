@@ -1,13 +1,16 @@
+import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import {
   EmailProvider,
   useEmailContext,
 } from '@block-email/component/EmailContext';
+import { toast } from '@core/component/Toast/Toast';
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerScopeSignalHotkey } from '@core/hotkey/utils';
 import {
   blockElementSignal,
   blockHotkeyScopeSignal,
 } from '@core/signal/blockElement';
+import { useArchiveThreadMutation } from '@queries/email/thread';
 import type { MessageWithBodyReplyless } from '@service-email/generated/schemas';
 import { createCallback } from '@solid-primitives/rootless';
 import {
@@ -299,9 +302,50 @@ function EmailContent(props: EmailViewProps) {
   const navigateToPreviousMessage = () => navigateMessage('prev');
   const navigateToNextMessage = () => navigateMessage('next');
 
+  const archiveMutation = useArchiveThreadMutation({
+    onError: () => {
+      toast.failure('Failed to archive thread');
+    },
+  });
+
+  const {
+    unifiedListContext: {
+      entitiesSignal: [entities],
+      actionRegistry,
+    },
+  } = useSplitPanelOrThrow();
+
+  const archiveThread = () => {
+    const thread = context.thread();
+
+    if (!thread?.db_id) return false;
+
+    archiveMutation.mutate({
+      threadId: thread.db_id,
+      archive: thread.inbox_visible,
+    });
+
+    if (!props) return false;
+
+    const selectedEntity = entities()?.find(
+      (entity) => entity.id === thread.db_id
+    );
+
+    if (selectedEntity) {
+      actionRegistry.execute('mark_as_done', selectedEntity);
+    } else {
+      archiveMutation.mutate({
+        threadId: thread.db_id,
+        archive: thread.inbox_visible,
+      });
+    }
+
+    return true;
+  };
+
   onMount(() => {
     registerEmailHotkeys(scopeId(), context.thread, {
-      archiveThread: context.archiveThread,
+      archiveThread,
       navigateToPreviousMessage,
       navigateToNextMessage,
     });
