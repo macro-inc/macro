@@ -15,6 +15,7 @@ import {
   createEffect,
   createSignal,
   type JSX,
+  on,
   onCleanup,
   Show,
 } from 'solid-js';
@@ -130,9 +131,15 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
     editor.setEditable(props.editable());
   });
 
-  createEffect(() => {
-    props.onChange?.(markdownState(), editor);
-  });
+  createEffect(
+    on(
+      markdownState,
+      () => {
+        props.onChange?.(markdownState(), editor);
+      },
+      { defer: true }
+    )
+  );
 
   if (props.initialHtml) {
     setEditorStateFromHtml(editor, props.initialHtml);
