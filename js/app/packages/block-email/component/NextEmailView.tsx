@@ -54,10 +54,10 @@ function NextEmailContent(props: NextEmailViewProps) {
     targetMessageId: string
   ): Promise<boolean> => {
     while (true) {
-      const data = context.thread();
+      const messages = context.messages.unfiltered();
 
       // Check if message exists in current batch
-      const messageExists = data?.messages.some(
+      const messageExists = messages.some(
         (m: MessageWithBodyReplyless) => m.db_id === targetMessageId
       );
 

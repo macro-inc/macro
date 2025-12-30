@@ -121,7 +121,7 @@ export function NextEmailProvider(props: FlowProps<{ threadID: string }>) {
           ...data.pages[0],
           messages: filtered,
           draftMap: messageDraftMap,
-          rawMessages: messages,
+          unfilteredMessages: messages,
         };
       },
     })
@@ -230,8 +230,8 @@ export function NextEmailProvider(props: FlowProps<{ threadID: string }>) {
       .map(recipientEntityMapper('user'))
       .forEach((u) => optionsMap.set(u.data.email, u));
 
-    const t = threadQuery.data;
-    if (t) {
+    const thread = threadQuery.data;
+    if (thread) {
       const seen = new Map<string, ContactInfo>();
 
       const add = (c: ContactInfo) => {
@@ -239,7 +239,7 @@ export function NextEmailProvider(props: FlowProps<{ threadID: string }>) {
         if (!existing || (!existing.name && c.name)) seen.set(c.email, c);
       };
 
-      t.messages.forEach((m) => {
+      thread.unfilteredMessages.forEach((m) => {
         m.to.forEach(add);
         m.cc.forEach(add);
         m.bcc.forEach(add);
@@ -398,7 +398,7 @@ export function NextEmailProvider(props: FlowProps<{ threadID: string }>) {
           setFocused: setFocusedMessageId,
           targetMessageID: targetMessageId,
           list: () => threadQuery.data?.messages ?? [],
-          unfiltered: () => threadQuery.data?.rawMessages ?? [],
+          unfiltered: () => threadQuery.data?.unfilteredMessages ?? [],
         },
         initialLoadComplete: hasHandledTarget,
         onInitialDataLoad,
