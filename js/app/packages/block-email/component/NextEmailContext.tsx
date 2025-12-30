@@ -2,7 +2,6 @@ import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { URL_PARAMS } from '@block-email/constants';
 import { toast } from '@core/component/Toast/Toast';
-import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
 import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
 import {
@@ -118,13 +117,11 @@ export function NextEmailProvider(props: FlowProps<{ threadID: string }>) {
           return 0;
         });
 
-        const lastPage = data.pages.at(-1)!;
-
         return {
+          ...data.pages[0],
+          messages: filtered,
+          draftMap: messageDraftMap,
           rawMessages: messages,
-          messageDraftMap,
-          thread: { ...data.pages[0], messages: filtered },
-          hasMore: lastPage.messages.length === DEFAULT_THREAD_MESSAGES_LIMIT,
         };
       },
     })
@@ -138,7 +135,7 @@ export function NextEmailProvider(props: FlowProps<{ threadID: string }>) {
     (notification) => {
       if (!isNewEmail(notification)) return;
       const notificationThreadId = notification.notificationMetadata.threadId;
-      if (notificationThreadId === threadQuery.data?.thread?.db_id) {
+      if (notificationThreadId === threadQuery.data?.db_id) {
         threadQuery.refetch();
       }
     }
@@ -178,19 +175,21 @@ export function NextEmailProvider(props: FlowProps<{ threadID: string }>) {
   const [messageDraftMap, setMessageDraftMap] = createStore<
     Record<string, MessageWithBodyReplyless>
   >({});
-  const [draftsSettled, setDraftsSettled] = createSignal(false);
 
-  const [messagesListRef, setMessagesListRef] = createSignal<
-    HTMLDivElement | undefined
-  >(undefined);
-  const [messagesContainerRef, setMessagesContainerRef] = createSignal<
-    HTMLDivElement | undefined
-  >(undefined);
+  const deleteDraftForMessage = (messageID: string) => {
+    setMessageDraftMap(messageID, undefined!);
+  };
+
+  const getDraftForMessage = (messageID: string) => {
+    return messageDraftMap[messageID];
+  };
+
+  const [draftsSettled, setDraftsSettled] = createSignal(false);
 
   whenSettled(
     threadQuery,
     (data) => {
-      setMessageDraftMap(data.messageDraftMap);
+      setMessageDraftMap(data.draftMap);
       setDraftsSettled(true);
     },
     (error) => {
@@ -231,7 +230,7 @@ export function NextEmailProvider(props: FlowProps<{ threadID: string }>) {
       .map(recipientEntityMapper('user'))
       .forEach((u) => optionsMap.set(u.data.email, u));
 
-    const t = threadQuery.data?.thread;
+    const t = threadQuery.data;
     if (t) {
       const seen = new Map<string, ContactInfo>();
 
@@ -280,7 +279,7 @@ export function NextEmailProvider(props: FlowProps<{ threadID: string }>) {
   });
 
   const archiveThread = () => {
-    const thread = threadQuery.data?.thread;
+    const thread = threadQuery.data;
 
     if (!thread?.db_id) return false;
 
@@ -307,6 +306,13 @@ export function NextEmailProvider(props: FlowProps<{ threadID: string }>) {
     return true;
   };
 
+  const [messagesListRef, setMessagesListRef] = createSignal<
+    HTMLDivElement | undefined
+  >(undefined);
+  const [messagesContainerRef, setMessagesContainerRef] = createSignal<
+    HTMLDivElement | undefined
+  >(undefined);
+
   let containerFilled = false;
   const isContainerFilled = () => {
     const messageList = messagesListRef();
@@ -316,7 +322,7 @@ export function NextEmailProvider(props: FlowProps<{ threadID: string }>) {
     if (
       !messageList ||
       !containerRef ||
-      !untrack(() => threadQuery.data?.thread)?.db_id
+      !untrack(() => threadQuery.data)?.db_id
     ) {
       containerFilled = false;
       return false;
@@ -344,60 +350,58 @@ export function NextEmailProvider(props: FlowProps<{ threadID: string }>) {
     return true;
   };
 
+  const onInitialDataLoad = (callback: () => boolean) => {
+    createEffect(() => {
+      if (hasHandledTarget()) return;
+      const fetching = threadQuery.isFetching;
+      if (fetching) return;
+      // Check if initial loading is complete
+      const isInitialLoadComplete =
+        (isContainerFilled() || threadQuery.hasNextPage === false) &&
+        !threadQuery.isFetching;
+
+      if (!isInitialLoadComplete) return;
+
+      // Skip if basic requirements not met
+      if (!untrack(messagesListRef)) {
+        return;
+      }
+
+      setHasHandledTarget(callback());
+    });
+  };
+
   return (
     <NextEmailContext.Provider
       value={{
         registerMessagesList: setMessagesListRef,
         registerMessagesContainer: setMessagesContainerRef,
-        thread: () => threadQuery.data?.thread,
+        thread: () => threadQuery.data,
         recipientOptions,
         onRecipientsChange,
         archiveThread,
         messagesContainerRef,
         messagesListRef,
         query: {
-          hasMore: () => threadQuery.data?.hasMore ?? false,
+          hasMore: () => threadQuery.hasNextPage ?? false,
           fetchNextPage: threadQuery.fetchNextPage,
           isFetching: () => threadQuery.isFetching,
           refetch: threadQuery.refetch,
         },
         drafts: {
-          deleteDraftForMessage(messageDbID) {
-            setMessageDraftMap(messageDbID, undefined!);
-          },
-          getDraftForMessage(messageDbID) {
-            return messageDraftMap[messageDbID];
-          },
+          deleteDraftForMessage,
+          getDraftForMessage,
           initialDraftsSettled: draftsSettled,
         },
         messages: {
           focusedID: focusedMessageId,
           setFocused: setFocusedMessageId,
           targetMessageID: targetMessageId,
-          list: () => threadQuery.data?.thread.messages ?? [],
+          list: () => threadQuery.data?.messages ?? [],
           unfiltered: () => threadQuery.data?.rawMessages ?? [],
         },
         initialLoadComplete: hasHandledTarget,
-        onInitialDataLoad(callback) {
-          createEffect(() => {
-            if (hasHandledTarget()) return;
-            const fetching = threadQuery.isFetching;
-            if (fetching) return;
-            // Check if initial loading is complete
-            const isInitialLoadComplete =
-              (isContainerFilled() || threadQuery.hasNextPage === false) &&
-              !threadQuery.isFetching;
-
-            if (!isInitialLoadComplete) return;
-
-            // Skip if basic requirements not met
-            if (!untrack(messagesListRef)) {
-              return;
-            }
-
-            setHasHandledTarget(callback());
-          });
-        },
+        onInitialDataLoad,
       }}
     >
       <Suspense>

@@ -72,10 +72,24 @@ function NextEmailContent(props: NextEmailViewProps) {
   };
 
   /**
+   * Waits for the query to finish fetching
+   */
+  const waitForQueryLoad = (): Promise<void> => {
+    return new Promise((resolve) => {
+      const checkInterval = setInterval(() => {
+        if (!context.query.isFetching()) {
+          clearInterval(checkInterval);
+          resolve();
+        }
+      }, 50);
+    });
+  };
+
+  /**
    * Loads one more batch of messages for better scroll context
    * (useful when target message is at the edge of loaded messages)
    */
-  const fetchNextPage = async (): Promise<void> => {
+  const fetchNextPage = () => {
     if (context.query.hasMore() && !context.query.isFetching()) {
       context.query.fetchNextPage();
     }
@@ -212,7 +226,8 @@ function NextEmailContent(props: NextEmailViewProps) {
         const found = await loadMessagesUntilFound(messageId);
         if (found) {
           // Load one more batch for scroll context
-          await fetchNextPage();
+          fetchNextPage();
+          await waitForQueryLoad();
           // Scroll to the message after DOM updates
           setTimeout(() => performScrollToMessage(messageId, 'instant'));
         } else {
@@ -226,7 +241,8 @@ function NextEmailContent(props: NextEmailViewProps) {
     }
     // Case 2: Message is first in current batch - load more for context
     else if (targetIndex === 0) {
-      await fetchNextPage();
+      fetchNextPage();
+      await waitForQueryLoad();
       setTimeout(() => performScrollToMessage(messageId, 'instant'));
     }
     // Case 3: Message is in current batch with sufficient context
