@@ -337,14 +337,8 @@ export function BaseInput(props: {
     }, DRAFT_DEBOUNCE_MS);
   }
 
-  // We are consuming the first change, because it is the initial value
-  let firstChangeConsumed = false;
   const handleChange = (value: string) => {
     setBodyMacro(value);
-    if (!firstChangeConsumed) {
-      firstChangeConsumed = true;
-      return;
-    }
     untrack(scheduleDraftSave);
   };
 

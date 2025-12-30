@@ -113,6 +113,8 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
 
   const [markdownState, setMarkdownState] = createSignal<string>('');
 
+  let didInitializeContent = false;
+
   const onConnect = () => {
     if (props.focusOnMount) {
       setTimeout(() => {
@@ -125,6 +127,8 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
     } else if (props.initialValue) {
       setEditorStateFromMarkdown(editor, props.initialValue);
     }
+
+    didInitializeContent = true;
   };
 
   createEffect(() => {
@@ -135,6 +139,7 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
     on(
       markdownState,
       () => {
+        if (!didInitializeContent) return;
         props.onChange?.(markdownState(), editor);
       },
       { defer: true }
