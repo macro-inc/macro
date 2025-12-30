@@ -28,9 +28,9 @@ import {
   type Accessor,
   createContext,
   createEffect,
+  createMemo,
   createSignal,
   type FlowProps,
-  Show,
   Suspense,
   untrack,
   useContext,
@@ -223,12 +223,13 @@ export function NextEmailProvider(props: FlowProps<{ threadID: string }>) {
     setAugmentedRecipients([...existing, ...uniques]);
   }
 
-  const recipientOptions = () => {
+  const getRecipientOptions = () => {
     const optionsMap = new Map<string, EmailRecipient>();
 
-    contacts()
-      .map(recipientEntityMapper('user'))
-      .forEach((u) => optionsMap.set(u.data.email, u));
+    for (const contact of contacts()) {
+      const mapped = recipientEntityMapper('user')(contact);
+      optionsMap.set(mapped.data.email, mapped);
+    }
 
     const thread = threadQuery.data;
     if (thread) {
@@ -249,12 +250,15 @@ export function NextEmailProvider(props: FlowProps<{ threadID: string }>) {
             name: m.from.name ?? undefined,
           });
       });
-      seen
-        .values()
-        .map(recipientEntityMapper('contact'))
-        .forEach((c) => {
-          optionsMap.set(c.data.email, c);
+
+      for (const value of seen.values()) {
+        const mapped = recipientEntityMapper('contact')({
+          ...value,
+          type: 'extracted',
+          id: value.email,
         });
+        optionsMap.set(mapped.data.email, mapped);
+      }
     }
 
     augmentedRecipients().forEach((r) => {
@@ -372,42 +376,44 @@ export function NextEmailProvider(props: FlowProps<{ threadID: string }>) {
   };
 
   return (
-    <NextEmailContext.Provider
-      value={{
-        registerMessagesList: setMessagesListRef,
-        registerMessagesContainer: setMessagesContainerRef,
-        thread: () => threadQuery.data,
-        recipientOptions,
-        onRecipientsChange,
-        archiveThread,
-        messagesContainerRef,
-        messagesListRef,
-        query: {
-          hasMore: () => threadQuery.hasNextPage ?? false,
-          fetchNextPage: threadQuery.fetchNextPage,
-          isFetching: () => threadQuery.isFetching,
-          refetch: threadQuery.refetch,
-        },
-        drafts: {
-          deleteDraftForMessage,
-          getDraftForMessage,
-          initialDraftsSettled: draftsSettled,
-        },
-        messages: {
-          focusedID: focusedMessageId,
-          setFocused: setFocusedMessageId,
-          targetMessageID: targetMessageId,
-          list: () => threadQuery.data?.messages ?? [],
-          unfiltered: () => threadQuery.data?.unfilteredMessages ?? [],
-        },
-        initialLoadComplete: hasHandledTarget,
-        onInitialDataLoad,
-      }}
-    >
-      <Suspense>
-        <Show when={threadQuery.data}>{props.children}</Show>
-      </Suspense>
-    </NextEmailContext.Provider>
+    <Suspense>
+      <NextEmailContext.Provider
+        value={{
+          registerMessagesList: setMessagesListRef,
+          registerMessagesContainer: setMessagesContainerRef,
+          thread: createMemo(() => threadQuery.data),
+          recipientOptions: createMemo(getRecipientOptions),
+          onRecipientsChange,
+          archiveThread,
+          messagesContainerRef,
+          messagesListRef,
+          query: {
+            hasMore: () => threadQuery.hasNextPage ?? false,
+            fetchNextPage: threadQuery.fetchNextPage,
+            isFetching: () => threadQuery.isFetching,
+            refetch: threadQuery.refetch,
+          },
+          drafts: {
+            deleteDraftForMessage,
+            getDraftForMessage,
+            initialDraftsSettled: draftsSettled,
+          },
+          messages: {
+            focusedID: focusedMessageId,
+            setFocused: setFocusedMessageId,
+            targetMessageID: targetMessageId,
+            list: createMemo(() => threadQuery.data?.messages ?? []),
+            unfiltered: createMemo(
+              () => threadQuery.data?.unfilteredMessages ?? []
+            ),
+          },
+          initialLoadComplete: hasHandledTarget,
+          onInitialDataLoad,
+        }}
+      >
+        {props.children}
+      </NextEmailContext.Provider>
+    </Suspense>
   );
 }
 
