@@ -60,6 +60,7 @@ export type NextEmailContextValues = {
     unfiltered: Accessor<MessageWithBodyReplyless[]>;
     list: Accessor<MessageWithBodyReplyless[]>;
     targetMessageID: Accessor<string | undefined>;
+    setTargetMessageID: (id: string | undefined) => void;
     focusedID: Accessor<string | undefined>;
     setFocused: (messageID: string | undefined) => void;
   };
@@ -147,7 +148,6 @@ export function NextEmailProvider(props: FlowProps<{ threadID: string }>) {
   );
 
   const [focusedMessageId, setFocusedMessageId] = createSignal<string>();
-  // const [targetMessageActive, setTargetMessageActive] = createSignal(false);
   const [searchParams] = useSearchParams();
   const searchParamsMessageId = () => {
     const messageID = searchParams[URL_PARAMS.messageId];
@@ -407,6 +407,7 @@ export function NextEmailProvider(props: FlowProps<{ threadID: string }>) {
             focusedID: focusedMessageId,
             setFocused: setFocusedMessageId,
             targetMessageID: targetMessageId,
+            setTargetMessageID: setTargetMessageId,
             list: createMemo(() => threadQuery.data?.filtered ?? []),
             unfiltered: createMemo(() => threadQuery.data?.messages ?? []),
           },

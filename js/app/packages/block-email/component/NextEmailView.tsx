@@ -113,11 +113,9 @@ function NextEmailContent(props: NextEmailViewProps) {
 
     if (success) {
       context.messages.setFocused(messageId);
-      // Flash the message after scroll completes
-      // setTargetMessageActive(true);
-      // setTimeout(() => {
-      //   setTargetMessageActive(false);
-      // }, 800);
+      setTimeout(() => {
+        context.messages.setTargetMessageID(undefined);
+      }, 800);
       // Clear scrolling flag after animation
       setTimeout(() => setIsScrollingToMessage(false), 1000);
     } else {

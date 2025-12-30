@@ -21,7 +21,7 @@ export function MessageList(props: MessageListProps) {
   );
   const isTargetSelector = createSelector(
     context.messages.targetMessageID,
-    (a, b) => !!a && !!b && a === b
+    (a, b) => a === b
   );
 
   return (
