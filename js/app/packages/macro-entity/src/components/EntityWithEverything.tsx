@@ -1,5 +1,4 @@
 import { EntityIcon } from '@core/component/EntityIcon';
-import { truncateSearchMatchMarkdown } from '@core/component/LexicalMarkdown/searchUtils';
 import type { Property } from '@core/component/Properties/types';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -88,7 +87,7 @@ function GenericContentHit(props: { data: ContentHitData }) {
   return (
     <div class="text-sm text-ink-muted truncate flex items-center">
       <StaticMarkdown
-        markdown={truncateSearchMatchMarkdown(props.data.content, 160)}
+        markdown={props.data.content}
         theme={unifiedListMarkdownTheme}
         singleLine={true}
       />
@@ -113,7 +112,7 @@ function ChannelMessageContentHit(props: { data: ChannelContentHitData }) {
         </div>
         <div class="text-sm text-ink-muted truncate flex items-center flex-1 min-w-0">
           <StaticMarkdown
-            markdown={truncateSearchMatchMarkdown(props.data.content, 160)}
+            markdown={props.data.content}
             theme={unifiedListMarkdownTheme}
             singleLine={true}
           />
