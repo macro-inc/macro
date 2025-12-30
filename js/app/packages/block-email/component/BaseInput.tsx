@@ -1,5 +1,6 @@
 import { FormatRibbon } from '@block-channel/component/FormatRibbon';
 import { MacroSignatureButton } from '@block-email/component/MacroSignatureButton';
+import { useNextEmailContext } from '@block-email/component/NextEmailContext';
 import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
 import { useHasPaidAccess } from '@core/auth';
 import { useBlockId } from '@core/block';
@@ -72,7 +73,7 @@ import {
   Show,
   untrack,
 } from 'solid-js';
-import { createStore, produce } from 'solid-js/store';
+import { createStore } from 'solid-js/store';
 import { deleteEmailDraft, saveEmailDraft } from '../signal/emailDraft';
 import { handleFileUpload } from '../util/handleFileUpload';
 import { makeAttachmentPublic } from '../util/makeAttachmentPublic';
@@ -88,9 +89,8 @@ import {
 import { convertEmailRecipientToContactInfo } from '../util/recipientConversion';
 import { getReplyTypeFromDraft } from '../util/replyType';
 import { AttachMenu } from './AttachMenu';
-import { type EmailRecipient, useEmailContext } from './EmailContext';
+import type { EmailRecipient } from './EmailContext';
 import { getOrInitEmailFormContext } from './EmailFormContext';
-import { useNextEmailContext } from '@block-email/component/NextEmailContext';
 
 false && fileDrop;
 
