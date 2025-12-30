@@ -1,3 +1,4 @@
+import { useNextEmailContext } from '@block-email/component/NextEmailContext';
 import type {
   MessageToSendDbId,
   MessageWithBodyReplyless,
@@ -5,8 +6,6 @@ import type {
 import { type Accessor, createMemo, type Setter, Show } from 'solid-js';
 import { decodeBase64Utf8 } from '../util/decodeBase64';
 import { BaseInput } from './BaseInput';
-import { useEmailContext } from './EmailContext';
-import { useNextEmailContext } from '@block-email/component/NextEmailContext';
 
 interface EmailInputProps {
   replyingTo: Accessor<MessageWithBodyReplyless>;
@@ -34,7 +33,7 @@ export function EmailInput(props: EmailInputProps) {
   }
 
   return (
-    <Show when={props.replyingTo() && ctx.draftsSettled()}>
+    <Show when={props.replyingTo() && ctx.drafts.initialDraftsSettled()}>
       <BaseInput
         replyingTo={props.replyingTo}
         draft={props.draft}
