@@ -1563,7 +1563,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                   <SwipeGestureRow
                     entityId={innerProps.entity.id}
                     RightReveal={<div>Right Reveal</div>}
-                    swipeLeftColor="bg-red-200"
                   >
                     <EntityWithEverything
                       onContextMenu={() => {

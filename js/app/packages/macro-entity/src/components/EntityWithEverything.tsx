@@ -863,7 +863,7 @@ export function EntityWithEverything(
       use:draggable
       use:droppable
       data-checked={props.checked}
-      class="everything-entity relative group/entity hover:bg-hover/30"
+      class="everything-entity w-full relative group/entity hover:bg-hover/30"
       style={{
         'min-height': `${ENTITY_HEIGHT}px`,
       }}

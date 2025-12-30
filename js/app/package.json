@@ -97,6 +97,7 @@
     "@tanstack/solid-query-devtools": "^5.90.3",
     "@tanstack/solid-virtual": "^3.13.13",
     "@tauri-apps/plugin-http": "~2",
+    "@tauri-apps/plugin-haptics": "~2",
     "@tauri-apps/plugin-notification": "~2",
     "@tauri-apps/plugin-os": "~2",
     "@tauri-apps/plugin-websocket": "~2",
