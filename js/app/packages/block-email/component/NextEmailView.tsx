@@ -48,6 +48,20 @@ function NextEmailContent(props: NextEmailViewProps) {
   const context = useNextEmailContext();
 
   /**
+   * Waits for the query to finish fetching
+   */
+  const waitForQueryLoad = (): Promise<void> => {
+    return new Promise((resolve) => {
+      const checkInterval = setInterval(() => {
+        if (!context.query.isFetching()) {
+          clearInterval(checkInterval);
+          resolve();
+        }
+      }, 50);
+    });
+  };
+
+  /**
    * Loads messages until the target message is found or no more messages available
    */
   const loadMessagesUntilFound = async (
@@ -68,21 +82,8 @@ function NextEmailContent(props: NextEmailViewProps) {
 
       // Load next batch and wait
       context.query.fetchNextPage();
+      await waitForQueryLoad();
     }
-  };
-
-  /**
-   * Waits for the query to finish fetching
-   */
-  const waitForQueryLoad = (): Promise<void> => {
-    return new Promise((resolve) => {
-      const checkInterval = setInterval(() => {
-        if (!context.query.isFetching()) {
-          clearInterval(checkInterval);
-          resolve();
-        }
-      }, 50);
-    });
   };
 
   /**
@@ -245,10 +246,9 @@ function NextEmailContent(props: NextEmailViewProps) {
       await waitForQueryLoad();
       setTimeout(() => performScrollToMessage(messageId, 'instant'));
     }
+
     // Case 3: Message is in current batch with sufficient context
-    else {
-      setTimeout(() => performScrollToMessage(messageId, 'instant'));
-    }
+    setTimeout(() => performScrollToMessage(messageId, 'instant'));
   }
 
   // If there is a focused message id, but it does not currently exist in the message list, it is because the user has just sent a message. When it does come into existence, we want to scroll to the bottom.
