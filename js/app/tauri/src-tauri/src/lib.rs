@@ -57,7 +57,7 @@ pub fn run() {
 
     registry.init();
 
-    let mut builder = tauri::Builder::default();
+    let mut builder = tauri::Builder::default().plugin(tauri_plugin_haptics::init());
 
     #[cfg(desktop)]
     {
