@@ -162,8 +162,8 @@ const PreviewPanelContent: Component<{
       class="size-full"
       onFocusIn={(event) => {
         if (interactedWith()) return;
-        const relatedTarget = event.relatedTarget as HTMLElement;
-        const currentTarget = event.currentTarget as HTMLElement;
+        const relatedTarget = event.relatedTarget;
+        const currentTarget = event.currentTarget;
 
         // TODO: use state instead to determine when preview block can recieve focus
         if (event.target.hasAttribute('data-allow-focus-in-preview')) {
@@ -171,8 +171,10 @@ const PreviewPanelContent: Component<{
           return;
         }
 
-        if (!currentTarget.contains(relatedTarget)) {
-          relatedTarget.focus();
+        if (relatedTarget instanceof HTMLElement) {
+          if (!currentTarget.contains(relatedTarget)) {
+            relatedTarget.focus();
+          }
         }
       }}
       onPointerDown={() => {
