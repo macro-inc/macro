@@ -131,6 +131,7 @@ import {
 import { EntityActionsMenuItems } from './EntityActionsMenuItems';
 import { EntityModal } from './EntityModal/EntityModal';
 import { EntitySelectionToolbarModal } from './EntitySelectionToolbarModal';
+import { SwipeGestureProvider, SwipeGestureRow } from './mobile/SwipeGesture';
 import { PropertyDisplayControl } from './PropertyDisplayControl';
 import { useUpsertSavedViewMutation } from './Soup';
 import {
@@ -237,6 +238,15 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
   const view = createMemo(() => viewsData[selectedView()]);
   const selectedEntity = createMemo(() => view()?.selectedEntity);
+
+  const entityById = createMemo(() => {
+    const list = entities_() ?? [];
+    const map = new Map<string, EntityData>();
+    for (const entity of list as any[]) {
+      if (entity?.id) map.set(entity.id, entity);
+    }
+    return map;
+  });
 
   const setSelectedEntity = (entity: EntityData | undefined) => {
     setViewDataStore(
@@ -1506,188 +1516,204 @@ export function UnifiedListView(props: UnifiedListViewProps) {
         }}
       >
         <ContextMenu.Trigger class="size-full unified-list-root">
-          <UnifiedListComponent
-            entityListRef={setLocalEntityListRef}
-            virtualizerHandle={setVirtualizerHandle}
-            viewId={view()?.id}
-            searchText={searchText()}
-            hasRefinementsFromBase={isViewConfigChanged()}
-            entityMinHeight={ENTITY_HEIGHT}
-          >
-            {(innerProps) => {
-              const displayDoneButton = () => {
-                if (innerProps.entity.type === 'email') {
-                  return !innerProps.entity.done;
-                }
-
-                return (innerProps.entity.notifications?.().length ?? 0) > 0;
-              };
-              const timestamp = () => {
-                switch (sortType()) {
-                  case 'viewed_at':
-                    return innerProps.entity.viewedAt;
-                  case 'created_at':
-                    return innerProps.entity.createdAt;
-                  case 'updated_at':
-                    return innerProps.entity.updatedAt;
-                }
-              };
-              return (
-                <EntityWithEverything
-                  onContextMenu={() => {
-                    if (isPanelActive() && !preview()) {
-                      setSelectedEntity(innerProps.entity);
-                    }
-
-                    setContextAndModalState((prev) => {
-                      return {
-                        ...prev,
-                        contextMenuOpen: true,
-                        selectedEntity: innerProps.entity,
-                      };
-                    });
-                  }}
-                  entity={innerProps.entity}
-                  properties={
-                    isTaskEntity(innerProps.entity)
-                      ? taskPropertiesStore[innerProps.entity.id]
-                      : undefined
-                  }
-                  timestamp={timestamp()}
-                  onClick={entityClickHandler}
-                  onClickRowAction={
-                    unifiedListContext.actionRegistry.isActionEnabled(
-                      'mark_as_done',
-                      innerProps.entity
-                    )
-                      ? (entity, type) => {
-                          if (type === 'done') {
-                            markEntityAsDone?.(entity);
-                          }
-                        }
-                      : undefined
-                  }
-                  onClickNotification={(notifiedEntity) => {
-                    const notification = tryToTypedNotification(
-                      notifiedEntity.notification
-                    );
-                    if (!notification) return;
-
-                    if (notifiedEntity.type === 'channel')
-                      gotoChannelNotification(notification);
-                  }}
-                  onMouseOver={() => {
-                    if (preview()) return;
-
-                    setViewDataStore(
-                      selectedView(),
-                      'hasUserInteractedEntity',
-                      true
-                    );
-
-                    setSelectedEntity(innerProps.entity);
-                  }}
-                  onMouseLeave={() => {}}
-                  onFocusIn={() => {
-                    if (preview()) return;
-
-                    setSelectedEntity(innerProps.entity);
-                  }}
-                  showLeftColumnIndicator={
-                    showUnreadIndicator() || importantFilter()
-                  }
-                  fadeIfRead={showUnreadIndicator()}
-                  showUnrollNotifications={showUnrollNotifications()}
-                  importantIndicatorActive={importantFilterFn(
-                    innerProps.entity
-                  )}
-                  unreadIndicatorActive={unreadFilterFn(innerProps.entity)}
-                  showDoneButton={displayDoneButton()}
-                  highlighted={
-                    isPanelActive() && focusedSelector(innerProps.entity.id)
-                  }
-                  selected={
-                    focusedSelector(innerProps.entity.id) ||
-                    contextAndModalState.selectedEntity?.id ===
-                      innerProps.entity.id
-                  }
-                  checked={multiSelectSelector(innerProps.entity.id)}
-                  onChecked={(next, shiftKey) => {
-                    const toggleSingle = () =>
-                      unifiedListContext.setViewDataStore(
-                        selectedView(),
-                        'multiSelectEntities',
-                        (p) => {
-                          if (!next) {
-                            return p.filter(
-                              (e) => e.id !== innerProps.entity.id
-                            );
-                          }
-                          return p.concat(innerProps.entity);
-                        }
-                      );
-
-                    if (shiftKey) {
-                      const entityList = unifiedListContext.entitiesSignal[0]();
-                      if (!entityList) return;
-
-                      const selectedEntitySet = new Set(
-                        unifiedListContext.viewsDataStore[
-                          unifiedListContext.selectedView()
-                        ].multiSelectEntities
-                      );
-                      const newEnititiesForSeleciton: EntityData[] = [];
-
-                      // Try to grab the last clicked item and fall back on
-                      // the highest currently selected index.
-                      let anchorIndex = lastClickedEntityId;
-                      if (anchorIndex === -1) {
-                        for (let i = 0; i < entityList.length; i++) {
-                          if (selectedEntitySet.has(entityList[i])) {
-                            anchorIndex = i;
-                          }
-                        }
-                      }
-
-                      if (anchorIndex === -1) {
-                        toggleSingle();
-                        lastClickedEntityId = innerProps.index;
-                        return;
-                      }
-
-                      const targetIndex = innerProps.index;
-                      const sign = Math.sign(targetIndex - anchorIndex);
-                      if (anchorIndex === targetIndex) {
-                        // no_op
-                      } else {
-                        for (
-                          let i = anchorIndex;
-                          sign > 0 ? i <= targetIndex : i >= targetIndex;
-                          i += sign
-                        ) {
-                          const entity = entityList[i];
-                          if (!selectedEntitySet.has(entity)) {
-                            newEnititiesForSeleciton.push(entity);
-                          }
-                        }
-                      }
-                      unifiedListContext.setViewDataStore(
-                        selectedView(),
-                        'multiSelectEntities',
-                        (p) => {
-                          return p.concat(newEnititiesForSeleciton);
-                        }
-                      );
-                      lastClickedEntityId = innerProps.index;
-                    } else {
-                      toggleSingle();
-                      lastClickedEntityId = innerProps.index;
-                    }
-                  }}
-                />
+          <SwipeGestureProvider
+            container={localEntityListRef}
+            canSwipeLeft={(entityId) => {
+              const entity = entityById().get(entityId);
+              if (!entity) return false;
+              return unifiedListContext.actionRegistry.isActionEnabled(
+                'mark_as_done',
+                entity
               );
             }}
-          </UnifiedListComponent>
+            onSwipeLeft={(entityId) => {
+              const entity = entityById().get(entityId);
+              if (!entity) return false;
+
+              unifiedListContext.actionRegistry.execute('mark_as_done', entity);
+            }}
+          >
+            <UnifiedListComponent
+              entityListRef={setLocalEntityListRef}
+              virtualizerHandle={setVirtualizerHandle}
+              viewId={view()?.id}
+              searchText={searchText()}
+              hasRefinementsFromBase={isViewConfigChanged()}
+              entityMinHeight={ENTITY_HEIGHT}
+            >
+              {(innerProps) => {
+                const displayDoneButton = () => {
+                  if (innerProps.entity.type === 'email') {
+                    return !innerProps.entity.done;
+                  }
+
+                  return (innerProps.entity.notifications?.().length ?? 0) > 0;
+                };
+                const timestamp = () => {
+                  switch (sortType()) {
+                    case 'viewed_at':
+                      return innerProps.entity.viewedAt;
+                    case 'created_at':
+                      return innerProps.entity.createdAt;
+                    case 'updated_at':
+                      return innerProps.entity.updatedAt;
+                  }
+                };
+                return (
+                  <SwipeGestureRow
+                    entityId={innerProps.entity.id}
+                    RightReveal={<div>Right Reveal</div>}
+                    swipeLeftColor="bg-red-200"
+                  >
+                    <EntityWithEverything
+                      onContextMenu={() => {
+                        if (isPanelActive() && !preview()) {
+                          setSelectedEntity(innerProps.entity);
+                        }
+                        setContextAndModalState((prev) => {
+                          return {
+                            ...prev,
+                            contextMenuOpen: true,
+                            selectedEntity: innerProps.entity,
+                          };
+                        });
+                      }}
+                      entity={innerProps.entity}
+                      properties={
+                        isTaskEntity(innerProps.entity)
+                          ? taskPropertiesStore[innerProps.entity.id]
+                          : undefined
+                      }
+                      timestamp={timestamp()}
+                      onClick={entityClickHandler}
+                      onClickRowAction={
+                        unifiedListContext.actionRegistry.isActionEnabled(
+                          'mark_as_done',
+                          innerProps.entity
+                        )
+                          ? (entity, type) => {
+                              if (type === 'done') {
+                                markEntityAsDone?.(entity);
+                              }
+                            }
+                          : undefined
+                      }
+                      onClickNotification={(notifiedEntity) => {
+                        const notification = tryToTypedNotification(
+                          notifiedEntity.notification
+                        );
+                        if (!notification) return;
+                        if (notifiedEntity.type === 'channel')
+                          gotoChannelNotification(notification);
+                      }}
+                      onMouseOver={() => {
+                        if (preview()) return;
+                        setViewDataStore(
+                          selectedView(),
+                          'hasUserInteractedEntity',
+                          true
+                        );
+                        setSelectedEntity(innerProps.entity);
+                      }}
+                      onMouseLeave={() => {}}
+                      onFocusIn={() => {
+                        if (preview()) return;
+                        setSelectedEntity(innerProps.entity);
+                      }}
+                      showLeftColumnIndicator={
+                        showUnreadIndicator() || importantFilter()
+                      }
+                      fadeIfRead={showUnreadIndicator()}
+                      showUnrollNotifications={showUnrollNotifications()}
+                      importantIndicatorActive={importantFilterFn(
+                        innerProps.entity
+                      )}
+                      unreadIndicatorActive={unreadFilterFn(innerProps.entity)}
+                      showDoneButton={displayDoneButton()}
+                      highlighted={
+                        isPanelActive() && focusedSelector(innerProps.entity.id)
+                      }
+                      selected={
+                        focusedSelector(innerProps.entity.id) ||
+                        contextAndModalState.selectedEntity?.id ===
+                          innerProps.entity.id
+                      }
+                      checked={multiSelectSelector(innerProps.entity.id)}
+                      onChecked={(next, shiftKey) => {
+                        const toggleSingle = () =>
+                          unifiedListContext.setViewDataStore(
+                            selectedView(),
+                            'multiSelectEntities',
+                            (p) => {
+                              if (!next) {
+                                return p.filter(
+                                  (e) => e.id !== innerProps.entity.id
+                                );
+                              }
+                              return p.concat(innerProps.entity);
+                            }
+                          );
+                        if (shiftKey) {
+                          const entityList =
+                            unifiedListContext.entitiesSignal[0]();
+                          if (!entityList) return;
+                          const selectedEntitySet = new Set(
+                            unifiedListContext.viewsDataStore[
+                              unifiedListContext.selectedView()
+                            ].multiSelectEntities
+                          );
+                          const newEnititiesForSeleciton: EntityData[] = [];
+                          // Try to grab the last clicked item and fall back on
+                          // the highest currently selected index.
+                          let anchorIndex = lastClickedEntityId;
+                          if (anchorIndex === -1) {
+                            for (let i = 0; i < entityList.length; i++) {
+                              if (selectedEntitySet.has(entityList[i])) {
+                                anchorIndex = i;
+                              }
+                            }
+                          }
+                          if (anchorIndex === -1) {
+                            toggleSingle();
+                            lastClickedEntityId = innerProps.index;
+                            return;
+                          }
+                          const targetIndex = innerProps.index;
+                          const sign = Math.sign(targetIndex - anchorIndex);
+                          if (anchorIndex === targetIndex) {
+                            // no_op
+                          } else {
+                            for (
+                              let i = anchorIndex;
+                              sign > 0 ? i <= targetIndex : i >= targetIndex;
+                              i += sign
+                            ) {
+                              const entity = entityList[i];
+                              if (!selectedEntitySet.has(entity)) {
+                                newEnititiesForSeleciton.push(entity);
+                              }
+                            }
+                          }
+                          unifiedListContext.setViewDataStore(
+                            selectedView(),
+                            'multiSelectEntities',
+                            (p) => {
+                              return p.concat(newEnititiesForSeleciton);
+                            }
+                          );
+                          lastClickedEntityId = innerProps.index;
+                        } else {
+                          toggleSingle();
+                          lastClickedEntityId = innerProps.index;
+                        }
+                      }}
+                    />
+                  </SwipeGestureRow>
+                );
+              }}
+            </UnifiedListComponent>
+          </SwipeGestureProvider>
+
           <EntityModal
             isOpen={() =>
               !!(
