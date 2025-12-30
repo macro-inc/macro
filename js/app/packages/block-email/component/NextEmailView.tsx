@@ -20,7 +20,7 @@ import {
 } from 'solid-js';
 import { isScrollingToMessage } from '../signal/scrollState';
 import { registerEmailHotkeys } from '../util/emailHotkeys';
-import { getLastMessageId, scrollToMessage } from '../util/scrollToMessage';
+import { scrollToMessage } from '../util/scrollToMessage';
 import { EmailFormContextProvider } from './EmailFormContext';
 import { EmailInput } from './EmailInput';
 import { MessageList } from './MessageList';
@@ -87,8 +87,8 @@ function NextEmailContent(props: NextEmailViewProps) {
   };
 
   /**
-   * Loads one more batch of messages for better scroll context
-   * (useful when target message is at the edge of loaded messages)
+   * Loads the next page only when there is more data to load and
+   * it's not already fetching
    */
   const fetchNextPage = () => {
     if (context.query.hasMore() && !context.query.isFetching()) {
@@ -97,76 +97,63 @@ function NextEmailContent(props: NextEmailViewProps) {
   };
 
   /**
-   * Performs the actual scroll to a message and updates focus
+   * Performs scrolling to a message and updates focus.
    */
   const performScrollToMessage = (
     messageId: string,
-    behavior: ScrollBehavior = 'smooth'
+    opts: { behavior?: ScrollBehavior; focus?: boolean } = {
+      behavior: 'smooth',
+      focus: true,
+    }
   ) => {
+    opts = { focus: true, behavior: 'smooth', ...opts };
     const messages = untrack(context.messages.unfiltered);
     const container = untrack(context.messagesListRef);
 
     if (!messages || !container) return false;
 
+    if (opts.focus) {
+      context.messages.setFocused(messageId);
+    }
+
     setIsScrollingToMessage(true);
 
-    const success = scrollToMessage(messageId, messages, container, behavior);
+    const success = scrollToMessage(
+      messageId,
+      messages,
+      container,
+      opts.behavior
+    );
 
     if (!success) {
       setIsScrollingToMessage(false);
       return false;
     }
 
-    context.messages.setFocused(messageId);
-
     if (context.messages.targetMessageID() === messageId) {
       setTimeout(() => {
         context.messages.setTargetMessageID(undefined);
       }, 800);
     }
+
     // Clear scrolling flag after animation
     setTimeout(() => setIsScrollingToMessage(false), 1000);
 
     return true;
   };
 
-  const scrollToLastMessage = (behavior: ScrollBehavior = 'instant') => {
+  const scrollToLastMessage = (
+    behavior: ScrollBehavior = 'instant',
+    focus = false
+  ) => {
     const messages = context.messages.list();
     if (!messages?.length) return;
 
     const lastMessage = messages[messages.length - 1];
 
-    if (!lastMessage) return;
+    if (!lastMessage.db_id) return;
 
-    const container = context.messagesListRef();
-
-    const messageContainer = container?.querySelector(
-      `[data-message-id="${lastMessage.db_id}"]`
-    );
-
-    messageContainer?.scrollIntoView({ behavior });
-  };
-
-  /**
-   * Scrolls to the last message in the thread
-   */
-  const scrollToLastMessageAndFocus = (
-    behavior: ScrollBehavior = 'instant'
-  ) => {
-    const container = untrack(context.messagesListRef);
-    const messages = untrack(context.messages.list);
-    if (!messages) return;
-    if (container && messages.length > 0) {
-      // We need to scroll after focus because the scroll needs to account
-      // for the size of the message with the focused styling applied
-      const lastMessageId = getLastMessageId(messages);
-      if (lastMessageId) {
-        context.messages.setFocused(lastMessageId);
-      }
-      queueMicrotask(() => {
-        scrollToLastMessage(behavior);
-      });
-    }
+    performScrollToMessage(lastMessage.db_id, { behavior, focus });
   };
 
   const firstUnreadMessageId = createMemo(() => {
@@ -204,12 +191,12 @@ function NextEmailContent(props: NextEmailViewProps) {
       // Check if there is an unread message
       if (lastUnreadMessageId_) {
         setTimeout(() =>
-          performScrollToMessage(lastUnreadMessageId_!, 'instant')
+          performScrollToMessage(lastUnreadMessageId_!, { behavior: 'instant' })
         );
         context.messages.setFocused(lastUnreadMessageId_!);
       } else {
         // No unread message, scroll to last message
-        scrollToLastMessageAndFocus('instant');
+        scrollToLastMessage('instant', true);
       }
     }
 
@@ -233,25 +220,31 @@ function NextEmailContent(props: NextEmailViewProps) {
           fetchNextPage();
           await waitForQueryLoad();
           // Scroll to the message after DOM updates
-          setTimeout(() => performScrollToMessage(messageId, 'instant'));
+          setTimeout(() =>
+            performScrollToMessage(messageId, { behavior: 'instant' })
+          );
         } else {
           // Message not found, fallback to last message
-          setTimeout(() => scrollToLastMessageAndFocus('instant'));
+          setTimeout(() => scrollToLastMessage('instant', true));
         }
       } catch (error) {
         console.error('Error loading target message:', error);
-        setTimeout(() => scrollToLastMessageAndFocus('instant'));
+        setTimeout(() => scrollToLastMessage('instant', true));
       }
     }
     // Case 2: Message is first in current batch - load more for context
     else if (targetIndex === 0) {
       fetchNextPage();
       await waitForQueryLoad();
-      setTimeout(() => performScrollToMessage(messageId, 'instant'));
+      setTimeout(() =>
+        performScrollToMessage(messageId, { behavior: 'instant' })
+      );
     }
 
     // Case 3: Message is in current batch with sufficient context
-    setTimeout(() => performScrollToMessage(messageId, 'instant'));
+    setTimeout(() =>
+      performScrollToMessage(messageId, { behavior: 'instant' })
+    );
   }
 
   // If there is a focused message id, but it does not currently exist in the message list, it is because the user has just sent a message. When it does come into existence, we want to scroll to the bottom.
@@ -295,17 +288,11 @@ function NextEmailContent(props: NextEmailViewProps) {
 
     if (!targetMsg?.db_id) return false;
 
-    // The displayed elements are reversed, need to get the element index from the bottom up
-    const normalizedIndex = messages.length - 1 - targetIndex;
+    performScrollToMessage(targetMsg.db_id, {
+      behavior: 'smooth',
+      focus: true,
+    });
 
-    const targetEl = list.children.item(
-      normalizedIndex
-    ) as HTMLDivElement | null;
-
-    targetEl?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    targetEl?.focus();
-
-    context.messages.setFocused(targetMsg.db_id);
     return true;
   });
 
