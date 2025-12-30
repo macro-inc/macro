@@ -158,6 +158,9 @@ export function SwipeGestureProvider(
     if (!els) return;
     const onSwipeLeft = props.onSwipeLeft;
     if (!onSwipeLeft) return;
+    
+    // Cancel any pending animation frame
+    if (rafId) cancelAnimationFrame(rafId);
 
     els.contentEl.style.transition = `transform ${TRANSLATE_AFTER_TRIGGERED_SPEED}ms ease-out`;
     els.contentEl.style.transform = 'translateX(-100%)';
@@ -292,6 +295,9 @@ export function SwipeGestureProvider(
         }
       } else {
         if (phase !== 'dragging') {
+          if (phase === 'threshold') {
+            impactFeedback('light');
+          }
           impactFeedback('light');
           setActivationState(touchState.entityId, {
             direction: dx > 0 ? 'right' : 'left',
