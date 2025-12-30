@@ -113,9 +113,12 @@ function NextEmailContent(props: NextEmailViewProps) {
 
     if (success) {
       context.messages.setFocused(messageId);
-      setTimeout(() => {
-        context.messages.setTargetMessageID(undefined);
-      }, 800);
+
+      if (context.messages.targetMessageID()) {
+        setTimeout(() => {
+          context.messages.setTargetMessageID(undefined);
+        }, 800);
+      }
       // Clear scrolling flag after animation
       setTimeout(() => setIsScrollingToMessage(false), 1000);
     } else {
