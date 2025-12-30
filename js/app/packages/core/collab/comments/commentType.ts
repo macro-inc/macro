@@ -38,6 +38,7 @@ export type CreateCommentInfo = {
 export type UpdateCommentInfo = {
   commentId: number;
   text: string;
+  threadId: number,
   mentions: string[];
 };
 

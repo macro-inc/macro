@@ -84,6 +84,8 @@ export function useUpdateComment() {
 
     return editComment(info.commentId, {
       text: info.text,
+      mentions: info.mentions,
+      threadId: info.threadId,
     });
   });
 }

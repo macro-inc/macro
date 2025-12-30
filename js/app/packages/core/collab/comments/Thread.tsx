@@ -285,17 +285,9 @@ export function Thread(props: {
                               commentOperations.updateComment({
                                 text: content,
                                 commentId: replyId,
+                                threadId: props.comment.threadId,
                                 mentions: getCommentMentions(mentionsSignal).mentions,
                               }),
-                              sendMentions(
-                                {
-                                  type: 'edit-comment',
-                                  commentId: replyId,
-                                  threadId: props.comment.threadId,
-                                  text: content,
-                                },
-                                mentionsSignal
-                              ),
                             ]);
                           }}
                         />

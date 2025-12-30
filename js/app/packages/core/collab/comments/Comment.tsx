@@ -123,6 +123,7 @@ export function Comment(
             commentOperations.updateComment({
               text: newText,
               commentId: props.comment.id,
+              threadId: props.comment.threadId,
               mentions: getCommentMentions(mentionsSignal).mentions,
             }),
             sendMentions(

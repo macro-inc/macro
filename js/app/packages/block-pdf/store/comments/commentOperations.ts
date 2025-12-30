@@ -96,6 +96,8 @@ export function useUpdateComment() {
     track(TrackingEvents.BLOCKPDF.COMMENT.UPDATE);
     return editComment(info.commentId, {
       text: info.text,
+      mentions: info.mentions,
+      threadId: info.threadId,
     });
   });
 }
