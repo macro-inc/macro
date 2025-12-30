@@ -10,6 +10,7 @@ import type {
   ItemSharedOrganizationMetadata,
   NewEmailMetadata,
   NotificationEventType,
+  TaskAssignedMetadata,
 } from '@service-notification/generated/schemas';
 
 export interface NotificationMetadataByType {
@@ -24,6 +25,7 @@ export interface NotificationMetadataByType {
   [NotificationEventType.new_email]: NewEmailMetadata;
   [NotificationEventType.invite_to_team]: InviteToTeamMetadata;
   [NotificationEventType.reject_team_invite]: null;
+  [NotificationEventType.task_assigned]: TaskAssignedMetadata;
 }
 
 export type UnifiedNotificationMetadata =
