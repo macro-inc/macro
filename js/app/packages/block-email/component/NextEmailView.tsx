@@ -103,7 +103,7 @@ function NextEmailContent(props: NextEmailViewProps) {
     messageId: string,
     behavior: ScrollBehavior = 'smooth'
   ) => {
-    const messages = untrack(() => context.thread()?.messages);
+    const messages = untrack(context.messages.unfiltered);
     const container = untrack(context.messagesListRef);
 
     if (!messages || !container) return false;
@@ -281,18 +281,25 @@ function NextEmailContent(props: NextEmailViewProps) {
     if (currentIndex < 0) return false;
 
     const delta = dir === 'prev' ? -1 : 1;
+
     const targetIndex = currentIndex + delta;
+
     if (targetIndex < 0 || targetIndex >= messages.length) return false;
 
     const targetMsg = messages[targetIndex];
 
     if (!targetMsg?.db_id) return false;
 
+    // The displayed elements are reversed, need to get the element index from the bottom up
+    const normalizedIndex = messages.length - 1 - targetIndex;
+
     const targetEl = list.children.item(
-      messages.length - 1 - targetIndex
+      normalizedIndex
     ) as HTMLDivElement | null;
+
     targetEl?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     targetEl?.focus();
+
     context.messages.setFocused(targetMsg.db_id);
     return true;
   });
