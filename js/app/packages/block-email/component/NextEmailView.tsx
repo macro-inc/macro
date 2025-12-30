@@ -300,7 +300,7 @@ function NextEmailContent(props: NextEmailViewProps) {
     if (hasRun) return;
     // Focus the email block on mount
     if (!blockElement()) return;
-    // blockElement()?.focus();
+    blockElement()?.focus();
     hasRun = true;
   });
 
