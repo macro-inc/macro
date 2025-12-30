@@ -49,13 +49,16 @@ export function MessageList(props: MessageListProps) {
       }}
     >
       <For each={context.messages.list().toReversed()}>
-        {(message, index_) => {
+        {(message, listIndex) => {
           const index = () => {
-            if (index_() === 0 && context.query.hasMore()) {
+            // If the index here is 0 but we still have more data to fetch,
+            // the index is technically incorrect and will lead to isFirstMessage
+            // to be wrong
+            if (listIndex() === 0 && context.query.hasMore()) {
               return -1;
             }
 
-            return index_();
+            return listIndex();
           };
 
           return (
