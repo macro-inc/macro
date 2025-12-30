@@ -15,7 +15,7 @@ use model::{
     response::{EmptyResponse, GenericErrorResponse, GenericResponse},
 };
 use model_entity::EntityType;
-use model_notifications::{DocumentMentionMetadata, NotificationEvent, NotificationQueueMessage};
+use model_notifications::{DocumentMentionMetadata, NotificationQueueMessage};
 use models_permissions::share_permission::access_level::CommentAccessLevel;
 
 #[derive(serde::Deserialize)]
@@ -71,7 +71,7 @@ pub async fn handler(
         };
         let notification_queue_message = NotificationQueueMessage {
             notification_entity: EntityType::Document.with_entity_string(document_id),
-            notification_event: NotificationEvent::DocumentMention(metadata),
+            notification_event: metadata.into(),
             sender_id: Some(sender_id),
             recipient_ids: Some(req.mentions.clone()),
         };

@@ -129,7 +129,7 @@ fn build_mention_notif(
     NotificationQueueMessage {
         notification_entity: EntityType::Document.with_entity_string(document_id),
         notification_event: metadata.into(),
-        sender_id: Some(user_context.user_id.clone()),
+        sender_id: Some(user_context.user_id.clone().try_into().unwrap()),
         recipient_ids: Some(mentions.to_vec()),
     }
 }
