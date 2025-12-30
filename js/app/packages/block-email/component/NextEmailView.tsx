@@ -109,23 +109,25 @@ function NextEmailContent(props: NextEmailViewProps) {
     if (!messages || !container) return false;
 
     setIsScrollingToMessage(true);
+
     const success = scrollToMessage(messageId, messages, container, behavior);
 
-    if (success) {
-      context.messages.setFocused(messageId);
-
-      if (context.messages.targetMessageID() === messageId) {
-        setTimeout(() => {
-          context.messages.setTargetMessageID(undefined);
-        }, 800);
-      }
-      // Clear scrolling flag after animation
-      setTimeout(() => setIsScrollingToMessage(false), 1000);
-    } else {
+    if (!success) {
       setIsScrollingToMessage(false);
+      return false;
     }
 
-    return success;
+    context.messages.setFocused(messageId);
+
+    if (context.messages.targetMessageID() === messageId) {
+      setTimeout(() => {
+        context.messages.setTargetMessageID(undefined);
+      }, 800);
+    }
+    // Clear scrolling flag after animation
+    setTimeout(() => setIsScrollingToMessage(false), 1000);
+
+    return true;
   };
 
   const scrollToLastMessage = (behavior: ScrollBehavior = 'instant') => {
