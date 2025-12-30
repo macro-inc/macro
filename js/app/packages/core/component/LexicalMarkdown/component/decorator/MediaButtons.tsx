@@ -62,7 +62,7 @@ export function MediaButtons(props: MediaButtonsProps) {
           />
         </Dialog.Trigger>
       </Show>
-      <Show when={props.newTab && !isMobileWidth() && !isTouchDevice}>
+      <Show when={props.newTab && !isMobileWidth() && !isTouchDevice()}>
         <IconButton
           class="m-0"
           icon={() => <NewTab class="size-5" />}
@@ -127,7 +127,9 @@ export function MediaButtons(props: MediaButtonsProps) {
                     }}
                   />
                 </Show>
-                <Show when={props.newTab && !isMobileWidth() && !isTouchDevice}>
+                <Show
+                  when={props.newTab && !isMobileWidth() && !isTouchDevice()}
+                >
                   <MenuItem
                     text="Open in new tab"
                     icon={NewTab}

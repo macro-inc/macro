@@ -562,7 +562,12 @@ const ClassedBlock: RenderableElement<ClassedBlockNode> = {
     const tag = props.node.__tag;
     const classes = props.node.__classes.join(' ');
     return (
-      <Dynamic component={tag} class={classes} data-classed-block="true">
+      <Dynamic
+        component={tag}
+        class={classes}
+        data-classed-block="true"
+        {...props.node.__attributes}
+      >
         {props.children}
       </Dynamic>
     );

@@ -1,8 +1,5 @@
-import {
-  getNativeMobilePlatform,
-  type NativeMobilePlatform,
-} from '@core/util/platform';
+import { getNativeMobilePlatform } from '@core/util/platform';
 
-export function isNativeMobilePlatform(): NativeMobilePlatform | undefined {
-  return getNativeMobilePlatform();
+export function isNativeMobilePlatform() {
+  return !!getNativeMobilePlatform();
 }

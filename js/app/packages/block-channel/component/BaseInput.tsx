@@ -210,7 +210,7 @@ export function BaseInput(props: BaseInputProps) {
   onMount(() => {
     attachFn(containerRef);
 
-    if (!isTouchDevice && !isMobileWidth()) {
+    if (!isTouchDevice() && !isMobileWidth()) {
       setTimeout(() => {
         if (
           props.autoFocusOnMount === true ||

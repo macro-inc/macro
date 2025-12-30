@@ -227,18 +227,47 @@ const isSignalEmail = (entity: Extract<EntityData, { type: 'email' }>) => {
   );
 };
 
+const hasRecentlyViewed = (entity: EntityData) => {
+  if (!entity.viewedAt) return false;
+
+  const now = Date.now();
+  const viewedAt = new Date(entity.viewedAt);
+
+  const diff = now - viewedAt.getTime();
+
+  const seconds = diff / 1000;
+
+  const oneDayOfSeconds = 3600 * 24;
+
+  return seconds < oneDayOfSeconds;
+};
+
 export const signalFilter: ClientFilter = {
   id: 'signal',
   predicate: (entity, _ctx) => {
-    if (entity.type !== 'email') return true;
-    return isSignalEmail(entity);
+    switch (entity.type) {
+      case 'channel': {
+        return hasRecentlyViewed(entity);
+      }
+      case 'chat': {
+        return hasRecentlyViewed(entity);
+      }
+      case 'document': {
+        return hasRecentlyViewed(entity);
+      }
+      case 'email': {
+        return isSignalEmail(entity);
+      }
+      case 'project': {
+        return hasRecentlyViewed(entity);
+      }
+    }
   },
 };
 
 export const noiseFilter: ClientFilter = {
   id: 'noise',
   predicate: (entity, ctx) => {
-    if (entity.type !== 'email') return false;
     return !signalFilter.predicate(entity, ctx);
   },
 };

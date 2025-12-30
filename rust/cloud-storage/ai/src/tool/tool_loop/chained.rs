@@ -1,33 +1,21 @@
-///
-/// The chained API is identical to the chat API
-///
-/// This client doesn't send tool JSON schema to the selected model.
-/// Instead this client sends (name, description) data of each tool,
-/// then gives the primary model a tool to call a tool with
-/// (name, instructions). This tool call is then used to send a single
-/// tool to a secondary model that makes the tool call.
-///
-/// This is done transparently so the calls to the `ChainedTool` are not
-/// persisted to the database or presented to the frontend. This is
-/// intended to be a drop-in replacement for the `Chat` client
-///
 use crate::generate_tool_input_schema;
-use crate::tool::client::constant::{MAX_RECURSIONS, TOOL_GENERATOR};
 use crate::tool::completion::tool_completion;
+use crate::tool::tool_loop::constant::{MAX_RECURSIONS, TOOL_GENERATOR};
 use crate::tool::types::{AsyncToolSet, PartialToolCall, StreamPart, ToolCall, ToolResult};
 use crate::tool::types::{ChatCompletionStream, ToolResponse};
 
-use crate::types::Client;
 use crate::types::openai::message::convert_message;
+use crate::types::traits::ExtendedOpenAIStream;
 use crate::types::{
     ChatCompletionRequest, ChatMessage, ChatMessages, MessageBuilder, Result, SystemPrompt,
 };
+use crate::types::{ExtendedClient, ExtendedOpenAIStreamItem};
 use async_openai::types::{
     ChatCompletionMessageToolCall, ChatCompletionRequestAssistantMessage,
     ChatCompletionRequestAssistantMessageContent, ChatCompletionRequestMessage,
-    ChatCompletionRequestToolMessage, ChatCompletionResponseStream, ChatCompletionStreamOptions,
-    ChatCompletionTool, ChatCompletionToolType, CreateChatCompletionRequest, FinishReason,
-    FunctionCall, FunctionObject,
+    ChatCompletionRequestToolMessage, ChatCompletionStreamOptions, ChatCompletionTool,
+    ChatCompletionToolType, CreateChatCompletionRequest, FinishReason, FunctionCall,
+    FunctionObject,
 };
 use async_stream::stream;
 use futures::stream::StreamExt;
@@ -52,6 +40,17 @@ struct ChainedTool {
     pub instructions: String,
 }
 
+// The chained API is identical to the chat API
+///
+/// This loop doesn't send tool JSON schema to the selected model.
+/// Instead this client sends (name, description) data of each tool,
+/// then gives the primary model a tool to call a tool with
+/// (name, instructions). This tool call is then used to send a single
+/// tool to a secondary model that makes the tool call.
+///
+/// This is done transparently so the calls to the `ChainedTool` are not
+/// persisted to the database or presented to the frontend. This is
+/// intended to be a drop-in replacement for the `Chat` client
 impl ChainedTool {
     pub fn as_openai_tool() -> ChatCompletionTool {
         let schema = generate_tool_input_schema!(ChainedTool);
@@ -88,7 +87,7 @@ description: {}
 
 pub struct Chained<I, T, R>
 where
-    I: Client + Send + Sync,
+    I: ExtendedClient + Send + Sync + Clone,
     T: Clone + Send + Sync + 'static,
     R: Send + Sync + 'static,
 {
@@ -104,12 +103,12 @@ where
 
 impl<I, T, R> Chained<I, T, R>
 where
-    I: Client + Send + Sync,
+    I: ExtendedClient + Send + Sync + Clone,
     T: Clone + Send + Sync,
     R: Clone + Send + Sync,
 {
     pub fn new(client: I, toolset: Arc<AsyncToolSet<T, R>>, context: T) -> Chained<I, T, R> {
-        Chained {
+        Self {
             inner: client,
             toolset,
             messages: vec![],
@@ -150,14 +149,16 @@ where
         messages.0
     }
 
-    async fn route_chained_calls(&self, part: ToolCall) -> Result<ToolCall> {
+    async fn route_chained_calls(
+        toolset: &Arc<AsyncToolSet<T, R>>,
+        part: ToolCall,
+    ) -> Result<ToolCall> {
         tracing::debug!("route chained call {:#?}", part);
         let chained: ChainedTool = serde_json::from_value(part.json)
             .inspect_err(|_| tracing::warn!("AI returned an invalid chained tool"))
             .map_err(anyhow::Error::from)?;
 
-        let selected_tool = self
-            .toolset
+        let selected_tool = toolset
             .tools
             .get(&chained.tool_name)
             .ok_or(anyhow::anyhow!("AI returned an uknown tool"))
@@ -190,11 +191,7 @@ where
         let item_stream = stream!({
             let mut stream_parts = vec![];
             for _ in 0..MAX_RECURSIONS {
-                let mut stream = match self
-                    .make_openai_chat_completion_stream()
-                    .await
-                    .map(Self::map_stream)
-                {
+                let stream = match self.make_openai_chat_completion_stream().await {
                     Ok(stream) => stream,
                     Err(err) => {
                         yield Err(err);
@@ -202,23 +199,27 @@ where
                     }
                 };
 
-                // consume stream
-                // accumulate to stream_parts
-                while let Some(item) = stream.next().await {
-                    if item.is_err() {
-                        yield item;
-                        break;
-                    }
+                {
+                    let mut stream = Self::map_stream(&self.inner, stream);
 
-                    let stream_part = match item.unwrap() {
-                        StreamPart::ToolCall(call) => {
-                            StreamPart::ToolCall(self.route_chained_calls(call).await?)
+                    // consume stream
+                    // accumulate to stream_parts
+                    while let Some(item) = stream.next().await {
+                        if item.is_err() {
+                            yield item;
+                            break;
                         }
-                        other => other,
-                    };
 
-                    yield Ok(stream_part.clone());
-                    stream_parts.push(stream_part);
+                        let stream_part = match item.unwrap() {
+                            StreamPart::ToolCall(call) => StreamPart::ToolCall(
+                                Self::route_chained_calls(&self.toolset, call).await?,
+                            ),
+                            other => other,
+                        };
+
+                        yield Ok(stream_part.clone());
+                        stream_parts.push(stream_part);
+                    }
                 }
                 // call tools, aggregate response to a new request
                 let mut processed = self
@@ -348,12 +349,15 @@ where
         }
     }
 
-    fn map_stream<'a>(mut stream: ChatCompletionResponseStream) -> ChatCompletionStream<'a> {
+    fn map_stream<'a>(
+        client: &'a I,
+        mut stream: ExtendedOpenAIStream<I::ResponseExtension>,
+    ) -> ChatCompletionStream<'a> {
         Box::pin(stream!({
             let mut tool_calls: HashMap<u32, PartialToolCall> = HashMap::new();
             while let Some(part) = stream.next().await {
                 match part {
-                    Ok(part) => {
+                    Ok(ExtendedOpenAIStreamItem::Response(part)) => {
                         if let Some(usage) = &part.usage {
                             yield Ok(StreamPart::Usage(usage.clone().into()))
                         }
@@ -407,13 +411,21 @@ where
                             tool_calls = HashMap::new();
                         }
                     }
+                    Ok(ExtendedOpenAIStreamItem::Extension(ext)) => {
+                        // Handle provider-specific extension items (Anthropic server tools)
+                        if let Some(stream_part) = client.handle_extension_item(ext) {
+                            yield Ok(stream_part);
+                        }
+                    }
                     Err(error) => yield Err(error.into()),
                 }
             }
         }))
     }
 
-    async fn make_openai_chat_completion_stream(&mut self) -> Result<ChatCompletionResponseStream> {
+    async fn make_openai_chat_completion_stream(
+        &mut self,
+    ) -> Result<ExtendedOpenAIStream<I::ResponseExtension>> {
         self.request.messages = self.messages.clone();
         // don't send the tools
         self.request.tools = Some(vec![ChainedTool::as_openai_tool()]);
@@ -424,6 +436,6 @@ where
 
         tracing::trace!("{:#?}", self.request);
 
-        self.inner.chat_stream(self.request.clone(), None).await
+        self.inner.chat_stream(self.request.clone()).await
     }
 }

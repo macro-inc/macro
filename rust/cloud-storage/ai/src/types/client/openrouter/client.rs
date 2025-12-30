@@ -1,10 +1,13 @@
 use super::config::OpenRouterConfig;
-use crate::types::client::traits::{Client, RequestExtensions};
-use crate::types::{AiError, Model, ModelWithMetadataAndProvider};
+use crate::tool::types::StreamPart;
+use crate::types::client::traits::ExtendedClient;
+use crate::types::{
+    AiError, ExtendedOpenAIStream, ExtendedOpenAIStreamItem, Model, ModelWithMetadataAndProvider,
+};
 
-use anyhow::Context;
 use async_openai::Client as OpenAiClient;
-use async_openai::types::CreateChatCompletionRequest;
+use async_openai::types::{CreateChatCompletionRequest, CreateChatCompletionStreamResponse};
+use futures::StreamExt;
 
 #[derive(Clone)]
 pub struct OpenRouterClient {
@@ -44,22 +47,29 @@ impl OpenRouterClient {
     }
 }
 
-impl Client for OpenRouterClient {
+impl ExtendedClient for OpenRouterClient {
+    // not yet implemented
+    type ResponseExtension = ();
+
     async fn chat_stream(
         &self,
-        request: async_openai::types::CreateChatCompletionRequest,
-        extensions: Option<RequestExtensions>,
-    ) -> Result<async_openai::types::ChatCompletionResponseStream, AiError> {
+        request: CreateChatCompletionRequest,
+    ) -> anyhow::Result<ExtendedOpenAIStream<Self::ResponseExtension>, AiError> {
         let request = self.preprocess_request(request);
-        let request = if let Some(ext) = extensions {
-            self.extend_request(request, ext)
-        } else {
-            serde_json::to_value(request).context("failed to jsonfiy request")
-        }?;
         self.inner
             .chat()
-            .create_stream_byot(request)
+            .create_stream_byot::<_, CreateChatCompletionStreamResponse>(request)
             .await
+            .map(|stream| {
+                Box::pin(
+                    stream.map(|item_result| item_result.map(ExtendedOpenAIStreamItem::Response)),
+                ) as _
+            })
             .map_err(AiError::from)
+    }
+
+    // extensions are not yet supported so this will never be called
+    fn handle_extension_item(&self, _: Self::ResponseExtension) -> Option<StreamPart> {
+        None
     }
 }

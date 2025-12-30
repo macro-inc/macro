@@ -1,51 +1,32 @@
+use crate::tool::StreamPart;
 use crate::types::AiError;
-use anyhow::{Context, Result};
-use async_openai::types::{ChatCompletionResponseStream, CreateChatCompletionRequest};
-use serde::Serialize;
+use anyhow::Result;
+use async_openai::error::OpenAIError;
+use async_openai::types::{CreateChatCompletionRequest, CreateChatCompletionStreamResponse};
+use futures::Stream;
+use std::fmt::Debug;
+use std::future::Future;
+use std::pin::Pin;
 
-#[derive(Clone, Debug)]
-pub struct RequestExtensions(serde_json::Value);
-
-impl RequestExtensions {
-    pub fn new(extensions: impl Serialize) -> Result<Self> {
-        let extensions = serde_json::to_value(extensions).context("serialization")?;
-        match extensions {
-            obj @ serde_json::Value::Object(_) => Ok(Self(obj)),
-            _ => Err(anyhow::anyhow!("extensions must be an object")),
-        }
-    }
-
-    pub fn into_inner(self) -> serde_json::Value {
-        self.0
-    }
+#[derive(Debug, Clone)]
+pub enum ExtendedOpenAIStreamItem<T: Send + Debug> {
+    /// A standard OpenAI compatible item
+    Response(CreateChatCompletionStreamResponse),
+    /// A client-defined item
+    Extension(T),
 }
 
-pub trait Client {
+pub type ExtendedOpenAIStream<T> =
+    Pin<Box<dyn Stream<Item = Result<ExtendedOpenAIStreamItem<T>, OpenAIError>> + Send>>;
+
+/// A client that is openai compatible may implement this trait.
+/// Extension items may be used to support non-openai compatible featuture (ie server tools)
+pub trait ExtendedClient {
+    type ResponseExtension: Send + Sync + Clone + Debug + 'static;
     fn chat_stream(
         &self,
         request: CreateChatCompletionRequest,
-        extensions: Option<RequestExtensions>,
-    ) -> impl Future<Output = Result<ChatCompletionResponseStream, AiError>> + Send;
+    ) -> impl Future<Output = Result<ExtendedOpenAIStream<Self::ResponseExtension>, AiError>> + Send;
 
-    fn extend_request(
-        &self,
-        request: CreateChatCompletionRequest,
-        extensions: RequestExtensions,
-    ) -> Result<serde_json::Value> {
-        fn dumb_merge(a: serde_json::Value, b: serde_json::Value) -> serde_json::Value {
-            match (a, b) {
-                (serde_json::Value::Object(mut oa), serde_json::Value::Object(ob)) => {
-                    for (k, v) in ob.into_iter() {
-                        oa.insert(k, v);
-                    }
-                    serde_json::Value::Object(oa)
-                }
-                (a, _) => a,
-            }
-        }
-
-        let request = serde_json::to_value(request).context("jsonify request")?;
-
-        Ok(dumb_merge(request, extensions.into_inner()))
-    }
+    fn handle_extension_item(&self, item: Self::ResponseExtension) -> Option<StreamPart>;
 }

@@ -3,6 +3,7 @@ use super::stream_extension::{ExtendedAnthropicStreamItem, ExtendedStream};
 use crate::client::chat::MessageCompletionResponseStream;
 use crate::error::AnthropicError;
 use crate::openai::stream_extension::AnthropicResponseExtension;
+use crate::prelude::ServerToolUse;
 use crate::types::response::{ContentDeltaEvent, StopReason, StreamEvent, Usage};
 use crate::{client::chat::Chat, prelude::CreateMessageRequestBody};
 use async_openai::error::{ApiError, OpenAIError};
@@ -108,17 +109,51 @@ fn map_stop_reason(stop_reason: StopReason) -> FinishReason {
     }
 }
 
+struct PartialTool {
+    pub name: String,
+    pub id: String,
+    pub input: String,
+}
+
+impl TryFrom<PartialTool> for ServerToolUse {
+    type Error = OpenAIError;
+    fn try_from(value: PartialTool) -> Result<Self, Self::Error> {
+        let any = serde_json::from_str::<serde_json::Value>(&value.input)
+            .map_err(OpenAIError::JSONDeserialize)?;
+        Ok(Self {
+            id: value.id,
+            name: value.name,
+            input: any,
+        })
+    }
+}
+
+impl From<ServerToolUse> for PartialTool {
+    fn from(value: ServerToolUse) -> Self {
+        Self {
+            id: value.id,
+            name: value.name,
+            input: "".into(),
+        }
+    }
+}
+
+enum ToolState {
+    Streaming,
+    StreamingTool { name: String, id: String },
+    StreamingServerTool(PartialTool),
+}
+
 fn map_stream_extended(mut stream: MessageCompletionResponseStream) -> ExtendedStream {
     Box::pin(stream! {
         let mut message_id: Option<String> = None;
         let mut model: Option<String> = None;
         let created = chrono::Utc::now().timestamp();
-        let mut streaming_tool_name = String::new();
-        let mut streaming_tool_id = String::new();
+        let mut tool_state = ToolState::Streaming;
 
         while let Some(part) = stream.next().await {
-            let result = if let Err(e) = part {
-                Err(match e {
+            if let Err(e) = part {
+                yield Err(match e {
                     AnthropicError::JsonDeserialize(e) => OpenAIError::JSONDeserialize(e),
                     AnthropicError::Reqwest(e) => OpenAIError::Reqwest(e),
                     AnthropicError::StreamError(e) => OpenAIError::StreamError(e),
@@ -130,15 +165,13 @@ fn map_stream_extended(mut stream: MessageCompletionResponseStream) -> ExtendedS
                             code: Some(status_code.to_string())
                         })
                     }
-
                 })
             } else {
                 match part.unwrap() {
                     StreamEvent::MessageStart { message } => {
                         message_id = message.id.clone();
                         model = message.model.clone();
-
-                        Ok(create_response(
+                        yield Ok(create_response(
                             &message_id.clone().unwrap_or_default(),
                             &model.clone().unwrap_or_default(),
                             created as u32,
@@ -146,12 +179,35 @@ fn map_stream_extended(mut stream: MessageCompletionResponseStream) -> ExtendedS
                             create_role_delta(Role::Assistant),
                             None,
                             None,
-                        ).into())
+                        ).into());
                     }
-                    StreamEvent::ContentBlockStart { content_block, ..} => {
-                        if let ContentDeltaEvent::ToolUse { name, id, .. } = content_block {
-                            streaming_tool_name = name;
-                            streaming_tool_id = id;
+                    StreamEvent::ContentBlockStart { content_block, index } => {
+                        match content_block {
+                            ContentDeltaEvent::ToolUse { name, id, .. } => {
+                                yield Ok(create_response(
+                                        &message_id.clone().unwrap_or_default(),
+                                        &model.clone().unwrap_or_default(),
+                                        created as u32,
+                                        index,
+                                        create_tool_call_delta(
+                                            index,
+                                            Some(id.clone()),
+                                            Some(ChatCompletionToolType::Function),
+                                            Some(name.clone()),
+                                            Some(String::new()),
+                                        ),
+                                        None,
+                                        None,
+                                        ).into());
+                                tool_state = ToolState::StreamingTool { name, id };
+                            }
+                            ContentDeltaEvent::ServerToolUse(server_tool) => {
+                                tool_state = ToolState::StreamingServerTool(server_tool.into())
+                            }
+                            ContentDeltaEvent::WebSearchToolResult(web_search_response) => {
+                                yield Ok(AnthropicResponseExtension::WebSearchToolResponse(web_search_response).into());
+                            }
+                            _ => {}
                         }
                         // Skip content block start events
                         continue;
@@ -159,15 +215,15 @@ fn map_stream_extended(mut stream: MessageCompletionResponseStream) -> ExtendedS
                     StreamEvent::ContentBlockDelta { index, delta } => {
                         match delta {
                             ContentDeltaEvent::CitationsDelta { citation } => {
-                                Ok(
+                                yield Ok(
                                     AnthropicResponseExtension::Citation(citation).into()
-                                )
+                                );
                             }
                             ContentDeltaEvent::WebSearchToolResult(web_search_response) => {
-                                Ok(AnthropicResponseExtension::WebSearchToolResponse(web_search_response).into())
+                                yield Ok(AnthropicResponseExtension::WebSearchToolResponse(web_search_response).into());
                             }
                             ContentDeltaEvent::TextDelta { text } | ContentDeltaEvent::StartTextDelta { text } => {
-                                Ok(create_response(
+                                yield Ok(create_response(
                                     &message_id.clone().unwrap_or_default(),
                                     &model.clone().unwrap_or_default(),
                                     created as u32,
@@ -175,11 +231,11 @@ fn map_stream_extended(mut stream: MessageCompletionResponseStream) -> ExtendedS
                                     create_content_delta(text),
                                     None,
                                     None,
-                                ).into())
+                                ).into());
                             }
                             ContentDeltaEvent::ThinkingDelta { thinking } => {
                                 // OpenAI doesn't have thinking blocks, skip or include as content
-                                Ok(create_response(
+                                yield Ok(create_response(
                                     &message_id.clone().unwrap_or_default(),
                                     &model.clone().unwrap_or_default(),
                                     created as u32,
@@ -187,62 +243,58 @@ fn map_stream_extended(mut stream: MessageCompletionResponseStream) -> ExtendedS
                                     create_content_delta(format!("[Thinking] {}", thinking)),
                                     None,
                                     None,
-                                ).into())
-                            }
-                            ContentDeltaEvent::ToolUse { id, name, input } => {
-                                // Map to OpenAI tool call
-                                Ok(create_response(
-                                    &message_id.clone().unwrap_or_default(),
-                                    &model.clone().unwrap_or_default(),
-                                    created as u32,
-                                    index,
-                                    create_tool_call_delta(
-                                        index,
-                                        Some(id),
-                                        Some(ChatCompletionToolType::Function),
-                                        Some(name),
-                                        Some(input.to_string()),
-                                    ),
-                                    None,
-                                    None,
-                                ).into())
-                            }
-                            ContentDeltaEvent::ServerToolUse(server_tool_use) => {
-                                Ok(AnthropicResponseExtension::ServerToolUse(server_tool_use).into())
+                                ).into());
                             }
                             ContentDeltaEvent::InputJsonDelta { partial_json } => {
-                                // Stream partial JSON for tool call arguments
-                                Ok(create_response(
-                                    &message_id.clone().unwrap_or_default(),
-                                    &model.clone().unwrap_or_default(),
-                                    created as u32,
-                                    index,
-                                    create_tool_call_delta(
-                                        index,
-                                        Some(streaming_tool_id.clone()),
-                                        None,
-                                        Some(streaming_tool_name.clone()),
-                                        Some(partial_json),
-                                    ),
-                                    None,
-                                    None,
-                                ).into())
+                                match &mut tool_state {
+                                    ToolState::Streaming => {},
+                                    ToolState::StreamingTool {name, id} => {
+                                        yield Ok(create_response(
+                                            &message_id.clone().unwrap_or_default(),
+                                            &model.clone().unwrap_or_default(),
+                                            created as u32,
+                                            index,
+                                            create_tool_call_delta(
+                                                index,
+                                                Some(id.clone()),
+                                                None,
+                                                Some(name.clone()),
+                                                Some(partial_json),
+                                            ),
+                                            None,
+                                            None,
+                                        ).into());
+                                    }
+                                    ToolState::StreamingServerTool(server_tool) => {
+                                        server_tool.input.push_str(partial_json.as_str());
+                                    }
+                                }
                             }
-
-                            ContentDeltaEvent::SignatureDelta { .. } => {
-                                // Skip signature deltas as OpenAI doesn't have an equivalent
+                            // signature events are uneeded + unsupported
+                            ContentDeltaEvent::SignatureDelta{..}
+                            // server tool deltas are emitted in content block start events
+                            | ContentDeltaEvent::ServerToolUse(_)
+                            // tool use deltas are emitted in content block start events
+                            | ContentDeltaEvent::ToolUse { .. }
+                            => {
                                 continue;
                             }
                         }
                     }
                     StreamEvent::ContentBlockStop { .. } => {
-                        // Skip content block stop events
+                            if let ToolState::StreamingServerTool(partial_tool) = tool_state {
+                                yield ServerToolUse::try_from(partial_tool)
+                                    .map(|tool| {
+                                        AnthropicResponseExtension::ServerToolUse(tool).into()
+                                    });
+                            }
+                        tool_state = ToolState::Streaming;
                         continue;
                     }
                     StreamEvent::MessageDelta { delta , usage } => {
                         let finish_reason = delta.stop_reason.map(map_stop_reason);
 
-                        Ok(create_response(
+                        yield Ok(create_response(
                             &message_id.clone().unwrap_or_default(),
                             &model.clone().unwrap_or_default(),
                             created as u32,
@@ -250,10 +302,10 @@ fn map_stream_extended(mut stream: MessageCompletionResponseStream) -> ExtendedS
                             create_empty_delta(),
                             finish_reason,
                             usage.map(Into::into),
-                        ).into())
+                        ).into());
                     }
                     StreamEvent::MessageStop => {
-                        Ok(create_response(
+                        yield Ok(create_response(
                             &message_id.clone().unwrap_or_default(),
                             &model.clone().unwrap_or_default(),
                             created as u32,
@@ -261,23 +313,22 @@ fn map_stream_extended(mut stream: MessageCompletionResponseStream) -> ExtendedS
                             create_empty_delta(),
                             Some(FinishReason::Stop),
                             None,
-                        ).into())
+                        ).into());
                     }
                     StreamEvent::Ping => {
                         // Skip ping events
                         continue;
                     }
                     StreamEvent::Error { error } => {
-                        Err(OpenAIError::ApiError(ApiError {
+                        yield Err(OpenAIError::ApiError(ApiError {
                             message: format!("{:?}", error),
                             r#type: None,
                             param: None,
                             code: None,
-                        }))
+                        }));
                     }
                 }
             };
-            yield result;
         }
     })
 }

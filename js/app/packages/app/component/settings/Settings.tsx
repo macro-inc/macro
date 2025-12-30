@@ -21,7 +21,11 @@ const SCROLL_THRESHOLD = 10;
 
 const { track, TrackingEvents } = withAnalytics();
 
-export function SettingsPanel() {
+type SettingsPanelProps = {
+  hide?: boolean;
+};
+
+export function SettingsPanel(props: SettingsPanelProps) {
   const { settingsOpen, closeSettings, activeTabId, setActiveTabId } = useSettingsState();
   const permissions = usePermissions();
   const orgName = useOrganizationName();
@@ -121,9 +125,9 @@ export function SettingsPanel() {
 
   return (
     <div
-      class="size-full invisible"
+      class="size-full"
       classList={{
-        visible: settingsOpen() || spotlight(),
+        invisible: props.hide,
       }}
     >
       <SplitlikeContainer
@@ -145,13 +149,15 @@ export function SettingsPanel() {
               {/* Header with tabs */}
               <div class="relative isolate shrink-0 border-b border-edge-muted">
                 <div class="flex items-center px-2 h-[2.5rem]">
-                  <IconButton
-                    icon={CloseIcon}
-                    onClick={closeSettings}
-                    tooltip={{ label: 'Close Settings' }}
-                    theme="clear"
-                    size="sm"
-                  />
+                  <Show when={!isNativeMobilePlatform()}>
+                    <IconButton
+                      icon={CloseIcon}
+                      onClick={closeSettings}
+                      tooltip={{ label: 'Close Settings' }}
+                      theme="clear"
+                      size="sm"
+                    />
+                  </Show>
 
                   {/* Left clip boundary indicator */}
                   <div
@@ -224,15 +230,17 @@ export function SettingsPanel() {
 
                   <div class="flex-1" />
 
-                  <IconButton
-                    icon={spotlight() ? ContractIcon : ExpandIcon}
-                    onClick={() => setSpotlight(!spotlight())}
-                    tooltip={{
-                      label: spotlight() ? 'Exit Spotlight' : 'Enter Spotlight Mode'
-                    }}
-                    theme="clear"
-                    size="sm"
-                  />
+                  <Show when={!isNativeMobilePlatform()}>
+                    <IconButton
+                      icon={spotlight() ? ContractIcon : ExpandIcon}
+                      onClick={() => setSpotlight(!spotlight())}
+                      tooltip={{
+                        label: spotlight() ? 'Exit Spotlight' : 'Enter Spotlight Mode'
+                      }}
+                      theme="clear"
+                      size="sm"
+                    />
+                  </Show>
                 </div>
               </div>
 

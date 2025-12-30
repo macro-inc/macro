@@ -14,6 +14,7 @@ import { fileTypeToResolvedBlockName } from '@core/constant/allBlocks';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { RegisterHotkeyReturn } from '@core/hotkey/types';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import {
   DEFAULT_VIEWS,
@@ -464,7 +465,12 @@ export function Soup() {
           />
         </Show>
       </div>
-      <Show when={showHelpDrawer().has(selectedView() as DefaultView)}>
+      <Show
+        when={
+          showHelpDrawer().has(selectedView() as DefaultView) &&
+          !isNativeMobilePlatform()
+        }
+      >
         <HelpDrawer viewId={view().id} />
       </Show>
     </div>

@@ -402,7 +402,9 @@ export function MarkdownPopup(props: {
           </Show>
           <Show
             when={
-              !isMobileWidth() && !isTouchDevice && (canEdit() || canComment())
+              !isMobileWidth() &&
+              !isTouchDevice() &&
+              (canEdit() || canComment())
             }
           >
             <FormatTools withinPopup />
