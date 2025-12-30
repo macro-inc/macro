@@ -4,7 +4,7 @@ import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { EmailDebouncedReadMarker } from '@notifications';
 import { createMemo, onMount, Show, Suspense } from 'solid-js';
 import { blockDataSignal } from '../signal/emailBlockData';
-import { NextEmailView } from '@block-email/component/NextEmailView';
+import { EmailView } from './Email';
 
 const { track, TrackingEvents } = withAnalytics();
 
@@ -37,7 +37,7 @@ export default function BlockEmail() {
                   threadId={id()}
                 />
                 <Suspense>
-                  <NextEmailView title={title} threadId={id} />
+                  <EmailView title={title} threadId={id} />
                 </Suspense>
               </>
             )}
