@@ -222,7 +222,7 @@ export function useCreateHighlightCommentResource() {
 export function useCreateThreadReplyResource() {
   const createComment = useCreateComment();
 
-  return async (text: string, threadId: number) => {
+  return async (text: string, threadId: number, mentions: string[]) => {
     if (threadId < 0) {
       console.error('Provide a valid thread id');
       return null;
@@ -231,6 +231,7 @@ export function useCreateThreadReplyResource() {
     const body: CreateCommentRequest = {
       text: text,
       threadId,
+      mentions,
     };
 
     return createComment(body);

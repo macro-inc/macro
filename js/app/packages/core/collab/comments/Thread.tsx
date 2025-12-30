@@ -23,6 +23,7 @@ import { Comment, CommentReply } from './Comment';
 import type { CommentOperations, Layout, Reply, Root } from './commentType';
 import { EditInput, NewReplyInput } from './Inputs';
 import { MeasureContainer } from './MeasureContainer';
+import { getCommentMentions } from '.';
 
 type SoftSetEdit = {
   action: 'soft';
@@ -105,16 +106,6 @@ export const sendMentions = (
     },
   };
   return storageServiceClient.upsertUserMentions(aggregatedMention);
-};
-
-const getCommentMentions = (mentionsSignal: Signal<UserMentionRecord[]>) => {
-    const [mentions, setMentions] = mentionsSignal;
-    const mentions_ = mentions();
-    setMentions([]);
-    return {
-      mentions: mentions_.flatMap((m) => m.mentions),
-      mention_id: mentions_[0].metadata.mention_id,
-    };
 };
 
 export function Thread(props: {
@@ -237,7 +228,7 @@ export function Thread(props: {
                       .createComment({
                         threadId: props.comment.threadId,
                         text: content,
-                        mentions: getCommentMentions(mentionsSignal),
+                        mentions: getCommentMentions(mentionsSignal).mentions,
                       });
                   }}
                   isNewThread
@@ -293,7 +284,8 @@ export function Thread(props: {
                             Promise.all([
                               commentOperations.updateComment({
                                 text: content,
-                                commentId: replyId, // TODO add mentions here
+                                commentId: replyId,
+                                mentions: getCommentMentions(mentionsSignal).mentions,
                               }),
                               sendMentions(
                                 {
@@ -323,7 +315,7 @@ export function Thread(props: {
                       .createComment({
                         threadId: props.comment.threadId,
                         text: content,
-                        mentions: getCommentMentions(mentionsSignal),
+                        mentions: getCommentMentions(mentionsSignal).mentions,
                       });
                   }}
                   isEditing={isEditingNewReply()}

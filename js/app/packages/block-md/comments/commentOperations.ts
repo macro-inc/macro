@@ -43,7 +43,7 @@ export function useCreateComment() {
   return createCallback(
     async (info: CreateCommentInfo & { markId: string }) => {
       track(TrackingEvents.BLOCKMARKDOWN.COMMENT.CREATE);
-      const { threadId, text } = info;
+      const { threadId, text, mentions } = info;
 
       if (threadId === -1) {
         setActiveThread(threadId);
@@ -71,7 +71,7 @@ export function useCreateComment() {
         return response;
       }
 
-      return await createThreadReply(text, threadId);
+      return await createThreadReply(text, threadId, mentions);
     }
   );
 }

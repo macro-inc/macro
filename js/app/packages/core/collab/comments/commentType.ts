@@ -32,11 +32,13 @@ export type Reply = ThreadedComment & {};
 export type CreateCommentInfo = {
   threadId: number;
   text: string;
+  mentions: string[];
 };
 
 export type UpdateCommentInfo = {
   commentId: number;
   text: string;
+  mentions: string[];
 };
 
 export type DeleteCommentInfo = {
