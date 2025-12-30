@@ -32,12 +32,16 @@ export function MessageList(props: MessageListProps) {
         // Don't load more if we're programmatically scrolling to a message
         if (getIsScrollingToMessage() || !props.initialLoadComplete) return;
 
-        const scrollHeight = e.currentTarget.scrollHeight;
+        const threshold = 300;
 
-        const threshold = scrollHeight * 0.6;
+        // Since the list is reversed, the scrollTop is negative. So we get the scroll position
+        // from the bottom up using the scrollHeight and clientHeight
+        const currentScrollPosition =
+          e.currentTarget.scrollHeight +
+          e.currentTarget.scrollTop -
+          e.currentTarget.clientHeight;
 
-        const isNearBeginning =
-          scrollHeight + e.currentTarget.scrollTop <= threshold;
+        const isNearBeginning = currentScrollPosition <= threshold;
 
         if (
           isNearBeginning &&
