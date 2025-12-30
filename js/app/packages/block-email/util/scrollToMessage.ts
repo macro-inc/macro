@@ -20,7 +20,9 @@ export function scrollToMessage(
     return false;
   }
 
-  const targetElement = messagesContainer.children[messageIndex];
+  const targetElement = messagesContainer?.querySelector(
+    `[data-message-id="${messageId}"]`
+  );
 
   if (!targetElement) {
     return false;
