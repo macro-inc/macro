@@ -479,8 +479,8 @@ export const storageServiceClient = {
       return result;
     }
 
-    const [, { data }] = result;
-    return ok({ documentId: data.documentId });
+    const [, response] = result;
+    return ok({ documentId: response.documentId });
   },
 
   async createTextDocument({ text, ...docArgs }) {
