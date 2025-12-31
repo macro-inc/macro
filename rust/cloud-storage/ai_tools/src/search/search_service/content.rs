@@ -1,4 +1,4 @@
-use super::types::{PAGE_SIZE, SearchResponse};
+use super::types::{PAGE_SIZE, SearchToolResponse};
 use crate::tool_context::{RequestContext, ToolServiceContext};
 use ai::tool::{AsyncTool, ToolCallError, ToolResult};
 use async_trait::async_trait;
@@ -30,7 +30,7 @@ pub struct ContentSearch {
 
 #[async_trait]
 impl AsyncTool<ToolServiceContext, RequestContext> for ContentSearch {
-    type Output = SearchResponse;
+    type Output = SearchToolResponse;
 
     #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id), err)]
     async fn call(
@@ -67,7 +67,7 @@ impl AsyncTool<ToolServiceContext, RequestContext> for ContentSearch {
                 internal_error: e,
             })?;
 
-        Ok(SearchResponse {
+        Ok(SearchToolResponse {
             results: response.results,
         })
     }
