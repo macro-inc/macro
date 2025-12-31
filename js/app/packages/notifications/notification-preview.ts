@@ -223,19 +223,16 @@ const extractors: {
   task_assigned: (n) => {
     const m = n.notificationMetadata;
     if (!m) return null;
-    const hasTaskName = m.taskName != null && m.taskName.trim() !== '';
     return {
       type: n.notificationEventType,
       actor: m.assignedBy ? { id: m.assignedBy } : undefined,
       action: 'assigned you a task',
-      target: hasTaskName
-        ? {
-            type: 'document' as EntityType, // Tasks are stored as documents
-            id: m.taskId,
-            name: m.taskName ?? undefined,
-            show: true, // Show task name in platform notification title
-          }
-        : undefined,
+      target: {
+        type: 'document' as EntityType, // Tasks are stored as documents
+        id: m.taskId,
+        name: m.taskName ?? undefined,
+        show: true, // Show task name in platform notification title
+      },
       content: m.taskName ?? undefined,
       meta: {
         itemId: m.taskId,

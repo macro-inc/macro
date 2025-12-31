@@ -87,13 +87,12 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         property_definition_id: Uuid,
     ) -> impl Future<Output = Result<Option<PropertyValue>, Self::Err>> + Send;
 
-    /// Get the name of an entity by its ID and type.
-    /// Returns `None` if the entity doesn't exist or has no name.
-    /// Currently supports Task and Document entities (tasks are stored as documents).
-    fn get_entity_name(
+    /// Get the name of a document.
+    /// Returns `None` if the document doesn't exist or has no name.
+    /// Tasks are stored as documents, so this works for both documents and tasks.
+    fn get_document_name(
         &self,
-        entity_id: &str,
-        entity_type: EntityType,
+        id: &str,
     ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
 }
 
