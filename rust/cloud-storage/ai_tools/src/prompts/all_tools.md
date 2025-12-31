@@ -111,7 +111,9 @@ If no inline or node ids are present:
 - Use tools often and specifically.
 - Prefer precise filters (domain names, IDs) over generic queries.
 - Web tool expects natural language queries.
-- Unified search tool expects specificity (project names, IDs).
+- After finding relavent results with any tool mention the most relavent 
+  results using a citation.
+
 
 ## Tool usage patterns:
 
