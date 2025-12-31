@@ -4,8 +4,8 @@ use crate::tool_context::{RequestContext, ToolServiceContext};
 use ai::tool::{AsyncTool, ToolCallError, ToolResult};
 use async_trait::async_trait;
 use models_search::{
-    HumanReadableTimestamp,
-    unified::{SimpleUnifiedSearchResponseBaseItem, UnifiedSearchRequest},
+    SimpleSearchResponseItem,
+    unified::UnifiedSearchRequest,
 };
 use schemars::{JsonSchema, Schema};
 use serde::{Deserialize, Serialize};
@@ -34,7 +34,7 @@ fn default_page_size() -> i64 {
 #[serde(rename_all = "camelCase")]
 pub struct TruncatedUnifiedSearchResponse {
     /// The search results (truncated to `results_returned` limit if applicable)
-    pub results: Vec<SimpleUnifiedSearchResponseBaseItem<HumanReadableTimestamp>>,
+    pub results: Vec<SimpleSearchResponseItem>,
     /// total number of results from search
     pub total_results: usize,
     /// the number of results returned
@@ -92,7 +92,7 @@ async fn fetch_all_pages_simple(
     context: &ToolServiceContext,
     request_context: &RequestContext,
     search_request: &UnifiedSearchRequest,
-) -> Result<Vec<SimpleUnifiedSearchResponseBaseItem<HumanReadableTimestamp>>, ToolCallError> {
+) -> Result<Vec<SimpleSearchResponseItem>, ToolCallError> {
     const BATCH_SIZE: usize = 4;
     let mut page = 0;
     let mut all_results = vec![];

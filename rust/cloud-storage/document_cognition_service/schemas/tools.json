@@ -1,6 +1,579 @@
 {
   "schemas": [
     {
+      "name": "ListDocuments",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "List documents the user has access to with optional filtering and pagination. Only applies to documents, not emails, AI conversations, chat/slack threads, projects aka folders. This tool returns document metadata including access levels and supports filtering by file type, minimum access level, and pagination. Use this tool to discover and browse documents before using the Read tool to access their content. Prefer using the search tool to search on a specific matching string within the content or the name of the entity.",
+        "properties": {
+          "exhaustiveSearch": {
+            "additionalProperties": false,
+            "default": false,
+            "description": "Exhaustive search to get all results. Defaults to false. Set to true when you need all matching documents, ignoring pagination limits.",
+            "type": "boolean"
+          },
+          "fileTypes": {
+            "additionalProperties": false,
+            "description": "Document file types to include. Examples: ['pdf'], ['md', 'txt']. Leave empty to include all document types.",
+            "items": {
+              "additionalProperties": false,
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "minAccessLevel": {
+            "additionalProperties": false,
+            "description": "Minimum access level required. Defaults to 'view' if not specified.",
+            "enum": [
+              "view",
+              "comment",
+              "edit",
+              "owner",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pageOffset": {
+            "additionalProperties": false,
+            "default": 0,
+            "description": "Page offset for pagination. Default is 0. Use higher values to get subsequent pages of results.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "pageSize": {
+            "additionalProperties": false,
+            "default": 50,
+            "description": "Number of results per page. Max is 100, default is 50. Use smaller values for focused results.",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "exhaustiveSearch",
+          "fileTypes",
+          "minAccessLevel",
+          "pageOffset",
+          "pageSize"
+        ],
+        "title": "ListDocuments",
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "results": {
+            "description": "The list results (truncated to `results_returned` limit if applicable)",
+            "items": {
+              "properties": {
+                "access_level": {
+                  "description": "The user's access level to this document",
+                  "enum": [
+                    "view",
+                    "comment",
+                    "edit",
+                    "owner"
+                  ],
+                  "type": "string"
+                },
+                "created_at": {
+                  "description": "When the document was created",
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "deleted_at": {
+                  "description": "When the document was deleted (null if not deleted)",
+                  "format": "date-time",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "document_id": {
+                  "description": "The document id",
+                  "type": "string"
+                },
+                "document_name": {
+                  "description": "The document name",
+                  "type": "string"
+                },
+                "file_type": {
+                  "description": "The file type of the document",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "owner": {
+                  "description": "The owner of the document",
+                  "type": "string"
+                },
+                "project_id": {
+                  "description": "The project id containing the document",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "updated_at": {
+                  "description": "When the document was last updated",
+                  "format": "date-time",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "document_id",
+                "document_name",
+                "owner",
+                "created_at",
+                "updated_at",
+                "access_level"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "resultsReturned": {
+            "description": "The number of results returned",
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "totalResults": {
+            "description": "Total number of results found",
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "results",
+          "totalResults",
+          "resultsReturned"
+        ],
+        "title": "ListDocumentsResponse",
+        "type": "object"
+      }
+    },
+    {
+      "name": "ListEmails",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "List the emails the user has access to. Use this tool to discover and browse emails before using the Read tool to access their content. Prefer using the search tool to search on a specific matching string within the content or the name of the entity.",
+        "properties": {
+          "cursor": {
+            "additionalProperties": false,
+            "default": null,
+            "description": "A preview response will tell you what the next cursor id is.\n        If expected emails are not in the current response and it gives you a cursor id, use this field to list the next page of emails. If no cursor id is provided you've reached the end",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "limit": {
+            "additionalProperties": false,
+            "default": 20,
+            "description": "limit the max emails returned. This defaults to 20 and has a maximum of 500",
+            "format": "int64",
+            "type": "integer"
+          },
+          "sortMethod": {
+            "additionalProperties": false,
+            "default": "viewed_at",
+            "description": "Sort response by one of: viewed_at | updated_at | created_at | viewed_updated. Prefer viewed_at unless the otherwise specified",
+            "enum": [
+              "viewed_at",
+              "updated_at",
+              "created_at",
+              "viewed_updated"
+            ],
+            "type": "string"
+          },
+          "view": {
+            "additionalProperties": false,
+            "default": {
+              "standardLabel": null,
+              "userLabel": null
+            },
+            "description": "Choose the view to list emails from. One of either standard label or user label must be specified, otherwise defaults to important.",
+            "properties": {
+              "standardLabel": {
+                "additionalProperties": false,
+                "description": "Prefer important or all. Leave empty if using a user label",
+                "enum": [
+                  "Inbox",
+                  "Sent",
+                  "Drafts",
+                  "Starred",
+                  "All",
+                  "Important",
+                  "Other",
+                  null
+                ],
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "userLabel": {
+                "additionalProperties": false,
+                "description": "Choose a custom user label to filter by (optional). Standard label will take precedence over user label if both are specified.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "standardLabel",
+              "userLabel"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "cursor",
+          "limit",
+          "sortMethod",
+          "view"
+        ],
+        "title": "ListEmails",
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "attachments": {
+                  "items": {
+                    "properties": {
+                      "contentId": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "createdAt": {
+                        "format": "int64",
+                        "type": "integer"
+                      },
+                      "filename": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "id": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "messageId": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "mimeType": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "providerAttachmentId": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "sizeBytes": {
+                        "format": "int64",
+                        "type": [
+                          "integer",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "messageId",
+                      "createdAt"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "contacts": {
+                  "items": {
+                    "properties": {
+                      "emailAddress": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "id": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "linkId": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "sfsPhotoUrl": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "linkId"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "createdAt": {
+                  "format": "int64",
+                  "type": "integer"
+                },
+                "frecencyScore": {
+                  "format": "double",
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "id": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "inboxVisible": {
+                  "type": "boolean"
+                },
+                "isDraft": {
+                  "type": "boolean"
+                },
+                "isImportant": {
+                  "type": "boolean"
+                },
+                "isRead": {
+                  "type": "boolean"
+                },
+                "labels": {
+                  "items": {
+                    "properties": {
+                      "createdAt": {
+                        "format": "date-time",
+                        "type": "string"
+                      },
+                      "id": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "labelListVisibility": {
+                        "enum": [
+                          "LabelShow",
+                          "LabelShowIfUnread",
+                          "LabelHide"
+                        ],
+                        "type": "string"
+                      },
+                      "linkId": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "messageListVisibility": {
+                        "enum": [
+                          "Show",
+                          "Hide"
+                        ],
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "providerLabelId": {
+                        "type": "string"
+                      },
+                      "type": {
+                        "enum": [
+                          "System",
+                          "User"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "linkId",
+                      "providerLabelId",
+                      "name",
+                      "createdAt",
+                      "messageListVisibility",
+                      "labelListVisibility",
+                      "type"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "macroAttachments": {
+                  "items": {
+                    "properties": {
+                      "dbId": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "itemId": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "itemType": {
+                        "type": "string"
+                      },
+                      "messageId": {
+                        "format": "uuid",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "dbId",
+                      "messageId",
+                      "itemId",
+                      "itemType"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "metadata": {
+                  "properties": {
+                    "calendar_invite": {
+                      "description": "if any email contains a calendar invite",
+                      "type": "boolean"
+                    },
+                    "generic_sender": {
+                      "description": "if any sender in the thread is a generic email",
+                      "type": "boolean"
+                    },
+                    "known_sender": {
+                      "description": "if user has previously emailed any sender in the thread",
+                      "type": "boolean"
+                    },
+                    "tabular": {
+                      "description": "if any email contains a <table> html tag",
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "known_sender",
+                    "tabular",
+                    "calendar_invite",
+                    "generic_sender"
+                  ],
+                  "type": "object"
+                },
+                "name": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "ownerId": {
+                  "type": "string"
+                },
+                "providerId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "senderEmail": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "senderName": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "senderPhotoUrl": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "snippet": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "sortTs": {
+                  "format": "int64",
+                  "type": "integer"
+                },
+                "updatedAt": {
+                  "format": "int64",
+                  "type": "integer"
+                },
+                "viewedAt": {
+                  "format": "int64",
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "ownerId",
+                "inboxVisible",
+                "isRead",
+                "isDraft",
+                "isImportant",
+                "sortTs",
+                "createdAt",
+                "updatedAt",
+                "attachments",
+                "macroAttachments",
+                "contacts",
+                "labels",
+                "metadata"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ApiPaginatedThreadCursor",
+        "type": "object"
+      }
+    },
+    {
       "name": "Read",
       "inputSchema": {
         "additionalProperties": false,
@@ -735,577 +1308,163 @@
               "results": {
                 "description": "The search results (truncated to `results_returned` limit if applicable)",
                 "items": {
-                  "oneOf": [
-                    {
-                      "properties": {
-                        "document_id": {
-                          "description": "The document id",
-                          "type": "string"
-                        },
-                        "document_name": {
-                          "description": "The document name",
-                          "type": "string"
-                        },
-                        "file_type": {
-                          "description": "The file type",
-                          "type": "string"
-                        },
-                        "highlight": {
-                          "description": "The highlights on the document",
-                          "properties": {
-                            "bcc": {
-                              "description": "The highlight match on the bcc (email only)",
-                              "items": {
-                                "type": "string"
+                  "description": "Simple response item to mimic what we get back from opensearch",
+                  "properties": {
+                    "entity_id": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "entity_type": {
+                      "type": "string"
+                    },
+                    "goto": {
+                      "anyOf": [
+                        {
+                          "anyOf": [
+                            {
+                              "properties": {
+                                "node_id": {
+                                  "description": "The node id of the document\nThis can be a stringified page number 0-indexed for pdf/docx files,\nor it can be a unique id that is used in lexical for markdown files.",
+                                  "type": "string"
+                                },
+                                "raw_content": {
+                                  "description": "The raw content of the document",
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                }
                               },
-                              "type": "array"
+                              "required": [
+                                "node_id"
+                              ],
+                              "type": "object"
                             },
-                            "cc": {
-                              "description": "The highlight match on the cc (email only)",
-                              "items": {
-                                "type": "string"
+                            {
+                              "properties": {
+                                "chat_message_id": {
+                                  "description": "The chat message id",
+                                  "format": "uuid",
+                                  "type": "string"
+                                },
+                                "role": {
+                                  "description": "The role of the chat message",
+                                  "type": "string"
+                                }
                               },
-                              "type": "array"
+                              "required": [
+                                "chat_message_id",
+                                "role"
+                              ],
+                              "type": "object"
                             },
-                            "content": {
-                              "description": "The highlight match on the content field",
-                              "items": {
-                                "type": "string"
+                            {
+                              "properties": {
+                                "bcc": {
+                                  "items": {
+                                    "type": "string"
+                                  },
+                                  "type": "array"
+                                },
+                                "cc": {
+                                  "items": {
+                                    "type": "string"
+                                  },
+                                  "type": "array"
+                                },
+                                "email_message_id": {
+                                  "description": "The email message id",
+                                  "format": "uuid",
+                                  "type": "string"
+                                },
+                                "labels": {
+                                  "items": {
+                                    "type": "string"
+                                  },
+                                  "type": "array"
+                                },
+                                "recipients": {
+                                  "items": {
+                                    "type": "string"
+                                  },
+                                  "type": "array"
+                                },
+                                "sender": {
+                                  "type": "string"
+                                },
+                                "sent_at": {
+                                  "format": "int64",
+                                  "type": [
+                                    "integer",
+                                    "null"
+                                  ]
+                                }
                               },
-                              "type": "array"
+                              "required": [
+                                "email_message_id",
+                                "bcc",
+                                "cc",
+                                "labels",
+                                "sender",
+                                "recipients"
+                              ],
+                              "type": "object"
                             },
-                            "name": {
-                              "description": "The highlight match on the name field",
-                              "type": [
-                                "string",
-                                "null"
-                              ]
-                            },
-                            "recipients": {
-                              "description": "The highlight match on the recipients (email only)",
-                              "items": {
-                                "type": "string"
+                            {
+                              "properties": {
+                                "channel_message_id": {
+                                  "description": "The channel message id",
+                                  "format": "uuid",
+                                  "type": "string"
+                                }
                               },
-                              "type": "array"
-                            },
-                            "sender": {
-                              "description": "The highlight match on the sender (email only)",
-                              "type": [
-                                "string",
-                                "null"
-                              ]
-                            },
-                            "user_id": {
-                              "description": "The highlight match on the user (owner) of the entity",
-                              "type": [
-                                "string",
-                                "null"
-                              ]
+                              "required": [
+                                "channel_message_id"
+                              ],
+                              "type": "object"
                             }
+                          ],
+                          "description": "The search service version of a goto"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "highlight": {
+                      "description": "The search service version of a highlight",
+                      "properties": {
+                        "content": {
+                          "description": "If the match was on the entity content, this will provide a list of highlights\nfor each content match",
+                          "items": {
+                            "type": "string"
                           },
-                          "type": "object"
+                          "type": "array"
                         },
-                        "node_id": {
-                          "description": "The node id",
-                          "type": "string"
-                        },
-                        "owner_id": {
-                          "description": "The owner id",
-                          "type": "string"
-                        },
-                        "raw_content": {
-                          "description": "The raw content of the document",
+                        "name": {
+                          "description": "If the match was on the entity name, this will be present with that highlight",
                           "type": [
                             "string",
                             "null"
                           ]
-                        },
-                        "type": {
-                          "const": "document",
-                          "type": "string"
-                        },
-                        "updated_at": {
-                          "description": "The time the document was last updated",
-                          "format": "date-time",
-                          "type": "string"
                         }
                       },
-                      "required": [
-                        "type",
-                        "document_id",
-                        "document_name",
-                        "node_id",
-                        "owner_id",
-                        "file_type",
-                        "updated_at",
-                        "highlight"
-                      ],
                       "type": "object"
                     },
-                    {
-                      "properties": {
-                        "chat_id": {
-                          "description": "The chat id",
-                          "type": "string"
-                        },
-                        "chat_message_id": {
-                          "description": "The chat message id",
-                          "type": "string"
-                        },
-                        "highlight": {
-                          "description": "The highlights on the chat",
-                          "properties": {
-                            "bcc": {
-                              "description": "The highlight match on the bcc (email only)",
-                              "items": {
-                                "type": "string"
-                              },
-                              "type": "array"
-                            },
-                            "cc": {
-                              "description": "The highlight match on the cc (email only)",
-                              "items": {
-                                "type": "string"
-                              },
-                              "type": "array"
-                            },
-                            "content": {
-                              "description": "The highlight match on the content field",
-                              "items": {
-                                "type": "string"
-                              },
-                              "type": "array"
-                            },
-                            "name": {
-                              "description": "The highlight match on the name field",
-                              "type": [
-                                "string",
-                                "null"
-                              ]
-                            },
-                            "recipients": {
-                              "description": "The highlight match on the recipients (email only)",
-                              "items": {
-                                "type": "string"
-                              },
-                              "type": "array"
-                            },
-                            "sender": {
-                              "description": "The highlight match on the sender (email only)",
-                              "type": [
-                                "string",
-                                "null"
-                              ]
-                            },
-                            "user_id": {
-                              "description": "The highlight match on the user (owner) of the entity",
-                              "type": [
-                                "string",
-                                "null"
-                              ]
-                            }
-                          },
-                          "type": "object"
-                        },
-                        "role": {
-                          "description": "The role",
-                          "type": "string"
-                        },
-                        "title": {
-                          "description": "The title",
-                          "type": "string"
-                        },
-                        "type": {
-                          "const": "chat",
-                          "type": "string"
-                        },
-                        "updated_at": {
-                          "description": "The time the chat was last updated",
-                          "format": "date-time",
-                          "type": "string"
-                        },
-                        "user_id": {
-                          "description": "The user id",
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "type",
-                        "chat_id",
-                        "chat_message_id",
-                        "user_id",
-                        "role",
-                        "updated_at",
-                        "title",
-                        "highlight"
-                      ],
-                      "type": "object"
-                    },
-                    {
-                      "properties": {
-                        "bcc": {
-                          "description": "The bcc",
-                          "items": {
-                            "type": "string"
-                          },
-                          "type": "array"
-                        },
-                        "cc": {
-                          "description": "The cc",
-                          "items": {
-                            "type": "string"
-                          },
-                          "type": "array"
-                        },
-                        "highlight": {
-                          "description": "The highlights on the email",
-                          "properties": {
-                            "bcc": {
-                              "description": "The highlight match on the bcc (email only)",
-                              "items": {
-                                "type": "string"
-                              },
-                              "type": "array"
-                            },
-                            "cc": {
-                              "description": "The highlight match on the cc (email only)",
-                              "items": {
-                                "type": "string"
-                              },
-                              "type": "array"
-                            },
-                            "content": {
-                              "description": "The highlight match on the content field",
-                              "items": {
-                                "type": "string"
-                              },
-                              "type": "array"
-                            },
-                            "name": {
-                              "description": "The highlight match on the name field",
-                              "type": [
-                                "string",
-                                "null"
-                              ]
-                            },
-                            "recipients": {
-                              "description": "The highlight match on the recipients (email only)",
-                              "items": {
-                                "type": "string"
-                              },
-                              "type": "array"
-                            },
-                            "sender": {
-                              "description": "The highlight match on the sender (email only)",
-                              "type": [
-                                "string",
-                                "null"
-                              ]
-                            },
-                            "user_id": {
-                              "description": "The highlight match on the user (owner) of the entity",
-                              "type": [
-                                "string",
-                                "null"
-                              ]
-                            }
-                          },
-                          "type": "object"
-                        },
-                        "labels": {
-                          "description": "The labels",
-                          "items": {
-                            "type": "string"
-                          },
-                          "type": "array"
-                        },
-                        "link_id": {
-                          "description": "The link id",
-                          "type": "string"
-                        },
-                        "message_id": {
-                          "description": "The message id",
-                          "type": "string"
-                        },
-                        "recipients": {
-                          "description": "The recipients",
-                          "items": {
-                            "type": "string"
-                          },
-                          "type": "array"
-                        },
-                        "sender": {
-                          "description": "The sender",
-                          "type": "string"
-                        },
-                        "sent_at": {
-                          "description": "The time the email was sent",
-                          "format": "date-time",
-                          "type": [
-                            "string",
-                            "null"
-                          ]
-                        },
-                        "subject": {
-                          "description": "The subject",
-                          "type": [
-                            "string",
-                            "null"
-                          ]
-                        },
-                        "thread_id": {
-                          "description": "The thread id",
-                          "type": "string"
-                        },
-                        "type": {
-                          "const": "email",
-                          "type": "string"
-                        },
-                        "updated_at": {
-                          "description": "The time the email was last updated",
-                          "format": "date-time",
-                          "type": "string"
-                        },
-                        "user_id": {
-                          "description": "The user id",
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "type",
-                        "thread_id",
-                        "message_id",
-                        "sender",
-                        "recipients",
-                        "cc",
-                        "bcc",
-                        "labels",
-                        "link_id",
-                        "user_id",
-                        "updated_at",
-                        "highlight"
-                      ],
-                      "type": "object"
-                    },
-                    {
-                      "properties": {
-                        "channel_id": {
-                          "description": "The channel id",
-                          "type": "string"
-                        },
-                        "channel_type": {
-                          "description": "The channel type",
-                          "type": "string"
-                        },
-                        "created_at": {
-                          "description": "The time the channel message was created",
-                          "format": "date-time",
-                          "type": "string"
-                        },
-                        "highlight": {
-                          "description": "The highlights on the channel message",
-                          "properties": {
-                            "bcc": {
-                              "description": "The highlight match on the bcc (email only)",
-                              "items": {
-                                "type": "string"
-                              },
-                              "type": "array"
-                            },
-                            "cc": {
-                              "description": "The highlight match on the cc (email only)",
-                              "items": {
-                                "type": "string"
-                              },
-                              "type": "array"
-                            },
-                            "content": {
-                              "description": "The highlight match on the content field",
-                              "items": {
-                                "type": "string"
-                              },
-                              "type": "array"
-                            },
-                            "name": {
-                              "description": "The highlight match on the name field",
-                              "type": [
-                                "string",
-                                "null"
-                              ]
-                            },
-                            "recipients": {
-                              "description": "The highlight match on the recipients (email only)",
-                              "items": {
-                                "type": "string"
-                              },
-                              "type": "array"
-                            },
-                            "sender": {
-                              "description": "The highlight match on the sender (email only)",
-                              "type": [
-                                "string",
-                                "null"
-                              ]
-                            },
-                            "user_id": {
-                              "description": "The highlight match on the user (owner) of the entity",
-                              "type": [
-                                "string",
-                                "null"
-                              ]
-                            }
-                          },
-                          "type": "object"
-                        },
-                        "mentions": {
-                          "description": "The mentions",
-                          "items": {
-                            "type": "string"
-                          },
-                          "type": "array"
-                        },
-                        "message_id": {
-                          "description": "The message id",
-                          "type": "string"
-                        },
-                        "org_id": {
-                          "description": "The org id",
-                          "format": "int64",
-                          "type": [
-                            "integer",
-                            "null"
-                          ]
-                        },
-                        "sender_id": {
-                          "description": "The sender id",
-                          "type": "string"
-                        },
-                        "thread_id": {
-                          "description": "The thread id",
-                          "type": [
-                            "string",
-                            "null"
-                          ]
-                        },
-                        "type": {
-                          "const": "channel",
-                          "type": "string"
-                        },
-                        "updated_at": {
-                          "description": "The time the channel message was last updated",
-                          "format": "date-time",
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "type",
-                        "channel_id",
-                        "channel_type",
-                        "message_id",
-                        "sender_id",
-                        "mentions",
-                        "created_at",
-                        "updated_at",
-                        "highlight"
-                      ],
-                      "type": "object"
-                    },
-                    {
-                      "properties": {
-                        "created_at": {
-                          "description": "The time the project was created",
-                          "format": "date-time",
-                          "type": "string"
-                        },
-                        "highlight": {
-                          "description": "The highlights on the project",
-                          "properties": {
-                            "bcc": {
-                              "description": "The highlight match on the bcc (email only)",
-                              "items": {
-                                "type": "string"
-                              },
-                              "type": "array"
-                            },
-                            "cc": {
-                              "description": "The highlight match on the cc (email only)",
-                              "items": {
-                                "type": "string"
-                              },
-                              "type": "array"
-                            },
-                            "content": {
-                              "description": "The highlight match on the content field",
-                              "items": {
-                                "type": "string"
-                              },
-                              "type": "array"
-                            },
-                            "name": {
-                              "description": "The highlight match on the name field",
-                              "type": [
-                                "string",
-                                "null"
-                              ]
-                            },
-                            "recipients": {
-                              "description": "The highlight match on the recipients (email only)",
-                              "items": {
-                                "type": "string"
-                              },
-                              "type": "array"
-                            },
-                            "sender": {
-                              "description": "The highlight match on the sender (email only)",
-                              "type": [
-                                "string",
-                                "null"
-                              ]
-                            },
-                            "user_id": {
-                              "description": "The highlight match on the user (owner) of the entity",
-                              "type": [
-                                "string",
-                                "null"
-                              ]
-                            }
-                          },
-                          "type": "object"
-                        },
-                        "project_id": {
-                          "description": "The project id",
-                          "type": "string"
-                        },
-                        "project_name": {
-                          "description": "The project name",
-                          "type": "string"
-                        },
-                        "type": {
-                          "const": "project",
-                          "type": "string"
-                        },
-                        "updated_at": {
-                          "description": "The time the project was last updated",
-                          "format": "date-time",
-                          "type": "string"
-                        },
-                        "user_id": {
-                          "description": "The id of the user who created the project",
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "type",
-                        "project_id",
-                        "updated_at",
-                        "created_at",
-                        "project_name",
-                        "user_id",
-                        "highlight"
-                      ],
-                      "type": "object"
+                    "score": {
+                      "format": "double",
+                      "type": [
+                        "number",
+                        "null"
+                      ]
                     }
-                  ]
+                  },
+                  "required": [
+                    "entity_id",
+                    "entity_type",
+                    "highlight"
+                  ],
+                  "type": "object"
                 },
                 "type": "array"
               },
@@ -1338,579 +1497,6 @@
           "responseSchema"
         ],
         "title": "UnifiedSearchResponseOutput",
-        "type": "object"
-      }
-    },
-    {
-      "name": "ListEmails",
-      "inputSchema": {
-        "additionalProperties": false,
-        "description": "List the emails the user has access to. Use this tool to discover and browse emails before using the Read tool to access their content. Prefer using the search tool to search on a specific matching string within the content or the name of the entity.",
-        "properties": {
-          "cursor": {
-            "additionalProperties": false,
-            "default": null,
-            "description": "A preview response will tell you what the next cursor id is.\n        If expected emails are not in the current response and it gives you a cursor id, use this field to list the next page of emails. If no cursor id is provided you've reached the end",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "limit": {
-            "additionalProperties": false,
-            "default": 20,
-            "description": "limit the max emails returned. This defaults to 20 and has a maximum of 500",
-            "format": "int64",
-            "type": "integer"
-          },
-          "sortMethod": {
-            "additionalProperties": false,
-            "default": "viewed_at",
-            "description": "Sort response by one of: viewed_at | updated_at | created_at | viewed_updated. Prefer viewed_at unless the otherwise specified",
-            "enum": [
-              "viewed_at",
-              "updated_at",
-              "created_at",
-              "viewed_updated"
-            ],
-            "type": "string"
-          },
-          "view": {
-            "additionalProperties": false,
-            "default": {
-              "standardLabel": null,
-              "userLabel": null
-            },
-            "description": "Choose the view to list emails from. One of either standard label or user label must be specified, otherwise defaults to important.",
-            "properties": {
-              "standardLabel": {
-                "additionalProperties": false,
-                "description": "Prefer important or all. Leave empty if using a user label",
-                "enum": [
-                  "Inbox",
-                  "Sent",
-                  "Drafts",
-                  "Starred",
-                  "All",
-                  "Important",
-                  "Other",
-                  null
-                ],
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "userLabel": {
-                "additionalProperties": false,
-                "description": "Choose a custom user label to filter by (optional). Standard label will take precedence over user label if both are specified.",
-                "type": [
-                  "string",
-                  "null"
-                ]
-              }
-            },
-            "required": [
-              "standardLabel",
-              "userLabel"
-            ],
-            "type": "object"
-          }
-        },
-        "required": [
-          "cursor",
-          "limit",
-          "sortMethod",
-          "view"
-        ],
-        "title": "ListEmails",
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "items": {
-            "items": {
-              "properties": {
-                "attachments": {
-                  "items": {
-                    "properties": {
-                      "contentId": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
-                      },
-                      "createdAt": {
-                        "format": "int64",
-                        "type": "integer"
-                      },
-                      "filename": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
-                      },
-                      "id": {
-                        "format": "uuid",
-                        "type": "string"
-                      },
-                      "messageId": {
-                        "format": "uuid",
-                        "type": "string"
-                      },
-                      "mimeType": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
-                      },
-                      "providerAttachmentId": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
-                      },
-                      "sizeBytes": {
-                        "format": "int64",
-                        "type": [
-                          "integer",
-                          "null"
-                        ]
-                      }
-                    },
-                    "required": [
-                      "id",
-                      "messageId",
-                      "createdAt"
-                    ],
-                    "type": "object"
-                  },
-                  "type": "array"
-                },
-                "contacts": {
-                  "items": {
-                    "properties": {
-                      "emailAddress": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
-                      },
-                      "id": {
-                        "format": "uuid",
-                        "type": "string"
-                      },
-                      "linkId": {
-                        "format": "uuid",
-                        "type": "string"
-                      },
-                      "name": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
-                      },
-                      "sfsPhotoUrl": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
-                      }
-                    },
-                    "required": [
-                      "id",
-                      "linkId"
-                    ],
-                    "type": "object"
-                  },
-                  "type": "array"
-                },
-                "createdAt": {
-                  "format": "int64",
-                  "type": "integer"
-                },
-                "frecencyScore": {
-                  "format": "double",
-                  "type": [
-                    "number",
-                    "null"
-                  ]
-                },
-                "id": {
-                  "format": "uuid",
-                  "type": "string"
-                },
-                "inboxVisible": {
-                  "type": "boolean"
-                },
-                "isDraft": {
-                  "type": "boolean"
-                },
-                "isImportant": {
-                  "type": "boolean"
-                },
-                "isRead": {
-                  "type": "boolean"
-                },
-                "labels": {
-                  "items": {
-                    "properties": {
-                      "createdAt": {
-                        "format": "date-time",
-                        "type": "string"
-                      },
-                      "id": {
-                        "format": "uuid",
-                        "type": "string"
-                      },
-                      "labelListVisibility": {
-                        "enum": [
-                          "LabelShow",
-                          "LabelShowIfUnread",
-                          "LabelHide"
-                        ],
-                        "type": "string"
-                      },
-                      "linkId": {
-                        "format": "uuid",
-                        "type": "string"
-                      },
-                      "messageListVisibility": {
-                        "enum": [
-                          "Show",
-                          "Hide"
-                        ],
-                        "type": "string"
-                      },
-                      "name": {
-                        "type": "string"
-                      },
-                      "providerLabelId": {
-                        "type": "string"
-                      },
-                      "type": {
-                        "enum": [
-                          "System",
-                          "User"
-                        ],
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "id",
-                      "linkId",
-                      "providerLabelId",
-                      "name",
-                      "createdAt",
-                      "messageListVisibility",
-                      "labelListVisibility",
-                      "type"
-                    ],
-                    "type": "object"
-                  },
-                  "type": "array"
-                },
-                "macroAttachments": {
-                  "items": {
-                    "properties": {
-                      "dbId": {
-                        "format": "uuid",
-                        "type": "string"
-                      },
-                      "itemId": {
-                        "format": "uuid",
-                        "type": "string"
-                      },
-                      "itemType": {
-                        "type": "string"
-                      },
-                      "messageId": {
-                        "format": "uuid",
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "dbId",
-                      "messageId",
-                      "itemId",
-                      "itemType"
-                    ],
-                    "type": "object"
-                  },
-                  "type": "array"
-                },
-                "metadata": {
-                  "properties": {
-                    "calendar_invite": {
-                      "description": "if any email contains a calendar invite",
-                      "type": "boolean"
-                    },
-                    "generic_sender": {
-                      "description": "if any sender in the thread is a generic email",
-                      "type": "boolean"
-                    },
-                    "known_sender": {
-                      "description": "if user has previously emailed any sender in the thread",
-                      "type": "boolean"
-                    },
-                    "tabular": {
-                      "description": "if any email contains a <table> html tag",
-                      "type": "boolean"
-                    }
-                  },
-                  "required": [
-                    "known_sender",
-                    "tabular",
-                    "calendar_invite",
-                    "generic_sender"
-                  ],
-                  "type": "object"
-                },
-                "name": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "ownerId": {
-                  "type": "string"
-                },
-                "providerId": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "senderEmail": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "senderName": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "senderPhotoUrl": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "snippet": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "sortTs": {
-                  "format": "int64",
-                  "type": "integer"
-                },
-                "updatedAt": {
-                  "format": "int64",
-                  "type": "integer"
-                },
-                "viewedAt": {
-                  "format": "int64",
-                  "type": [
-                    "integer",
-                    "null"
-                  ]
-                }
-              },
-              "required": [
-                "id",
-                "ownerId",
-                "inboxVisible",
-                "isRead",
-                "isDraft",
-                "isImportant",
-                "sortTs",
-                "createdAt",
-                "updatedAt",
-                "attachments",
-                "macroAttachments",
-                "contacts",
-                "labels",
-                "metadata"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "next_cursor": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "items"
-        ],
-        "title": "ApiPaginatedThreadCursor",
-        "type": "object"
-      }
-    },
-    {
-      "name": "ListDocuments",
-      "inputSchema": {
-        "additionalProperties": false,
-        "description": "List documents the user has access to with optional filtering and pagination. Only applies to documents, not emails, AI conversations, chat/slack threads, projects aka folders. This tool returns document metadata including access levels and supports filtering by file type, minimum access level, and pagination. Use this tool to discover and browse documents before using the Read tool to access their content. Prefer using the search tool to search on a specific matching string within the content or the name of the entity.",
-        "properties": {
-          "exhaustiveSearch": {
-            "additionalProperties": false,
-            "default": false,
-            "description": "Exhaustive search to get all results. Defaults to false. Set to true when you need all matching documents, ignoring pagination limits.",
-            "type": "boolean"
-          },
-          "fileTypes": {
-            "additionalProperties": false,
-            "description": "Document file types to include. Examples: ['pdf'], ['md', 'txt']. Leave empty to include all document types.",
-            "items": {
-              "additionalProperties": false,
-              "type": "string"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "minAccessLevel": {
-            "additionalProperties": false,
-            "description": "Minimum access level required. Defaults to 'view' if not specified.",
-            "enum": [
-              "view",
-              "comment",
-              "edit",
-              "owner",
-              null
-            ],
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "pageOffset": {
-            "additionalProperties": false,
-            "default": 0,
-            "description": "Page offset for pagination. Default is 0. Use higher values to get subsequent pages of results.",
-            "format": "int64",
-            "type": "integer"
-          },
-          "pageSize": {
-            "additionalProperties": false,
-            "default": 50,
-            "description": "Number of results per page. Max is 100, default is 50. Use smaller values for focused results.",
-            "format": "int64",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "exhaustiveSearch",
-          "fileTypes",
-          "minAccessLevel",
-          "pageOffset",
-          "pageSize"
-        ],
-        "title": "ListDocuments",
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "results": {
-            "description": "The list results (truncated to `results_returned` limit if applicable)",
-            "items": {
-              "properties": {
-                "access_level": {
-                  "description": "The user's access level to this document",
-                  "enum": [
-                    "view",
-                    "comment",
-                    "edit",
-                    "owner"
-                  ],
-                  "type": "string"
-                },
-                "created_at": {
-                  "description": "When the document was created",
-                  "format": "date-time",
-                  "type": "string"
-                },
-                "deleted_at": {
-                  "description": "When the document was deleted (null if not deleted)",
-                  "format": "date-time",
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "document_id": {
-                  "description": "The document id",
-                  "type": "string"
-                },
-                "document_name": {
-                  "description": "The document name",
-                  "type": "string"
-                },
-                "file_type": {
-                  "description": "The file type of the document",
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "owner": {
-                  "description": "The owner of the document",
-                  "type": "string"
-                },
-                "project_id": {
-                  "description": "The project id containing the document",
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "updated_at": {
-                  "description": "When the document was last updated",
-                  "format": "date-time",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "document_id",
-                "document_name",
-                "owner",
-                "created_at",
-                "updated_at",
-                "access_level"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "resultsReturned": {
-            "description": "The number of results returned",
-            "format": "uint",
-            "minimum": 0,
-            "type": "integer"
-          },
-          "totalResults": {
-            "description": "Total number of results found",
-            "format": "uint",
-            "minimum": 0,
-            "type": "integer"
-          }
-        },
-        "required": [
-          "results",
-          "totalResults",
-          "resultsReturned"
-        ],
-        "title": "ListDocumentsResponse",
         "type": "object"
       }
     },
