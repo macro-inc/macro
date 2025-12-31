@@ -24,4 +24,5 @@ export const NotificationEventType = {
   new_email: 'new_email',
   invite_to_team: 'invite_to_team',
   reject_team_invite: 'reject_team_invite',
+  task_assigned: 'task_assigned',
 } as const;

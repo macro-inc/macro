@@ -49,6 +49,8 @@ pub enum NotificationEvent {
     InviteToTeam(InviteToTeamMetadata),
     /// A team invite was rejected
     RejectTeamInvite,
+    /// A user was assigned to a task
+    TaskAssigned(TaskAssignedMetadata),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -73,6 +75,7 @@ impl NotificationEvent {
             NotificationEvent::NewEmail(meta) => serde_json::to_value(meta).ok(),
             NotificationEvent::InviteToTeam(meta) => serde_json::to_value(meta).ok(),
             NotificationEvent::RejectTeamInvite => None,
+            NotificationEvent::TaskAssigned(meta) => serde_json::to_value(meta).ok(),
         }
     }
 
@@ -116,6 +119,7 @@ impl NotificationEvent {
                 None => Ok(Self::RejectTeamInvite),
                 Some(_) => Err(anyhow::anyhow!("RejectTeamInvite should not have metadata")),
             },
+            TaskAssigned => deserialize_meta!(TaskAssigned),
         }
     }
 }

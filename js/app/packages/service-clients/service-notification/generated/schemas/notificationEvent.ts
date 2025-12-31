@@ -15,5 +15,6 @@ import type { NotificationEventOneOfOnefive } from './notificationEventOneOfOnef
 import type { NotificationEventOneOfOneseven } from './notificationEventOneOfOneseven';
 import type { NotificationEventOneOfOnenine } from './notificationEventOneOfOnenine';
 import type { NotificationEventOneOfTwoone } from './notificationEventOneOfTwoone';
+import type { NotificationEventOneOfTwothree } from './notificationEventOneOfTwothree';
 
-export type NotificationEvent = NotificationEventOneOf | NotificationEventOneOfThree | NotificationEventOneOfFive | NotificationEventOneOfSeven | NotificationEventOneOfNine | NotificationEventOneOfOneone | NotificationEventOneOfOnethree | NotificationEventOneOfOnefive | NotificationEventOneOfOneseven | NotificationEventOneOfOnenine | NotificationEventOneOfTwoone;
+export type NotificationEvent = NotificationEventOneOf | NotificationEventOneOfThree | NotificationEventOneOfFive | NotificationEventOneOfSeven | NotificationEventOneOfNine | NotificationEventOneOfOneone | NotificationEventOneOfOnethree | NotificationEventOneOfOnefive | NotificationEventOneOfOneseven | NotificationEventOneOfOnenine | NotificationEventOneOfTwoone | NotificationEventOneOfTwothree;
