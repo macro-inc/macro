@@ -1,4 +1,5 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
+import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { URL_PARAMS } from '@block-email/constants';
 import { toast } from '@core/component/Toast/Toast';
 import { createMethodRegistration } from '@core/orchestrator';
@@ -13,7 +14,10 @@ import {
   createEffectOnEntityTypeNotification,
   isNewEmail,
 } from '@notifications';
-import { useThreadQuery } from '@queries/email/thread';
+import {
+  useArchiveThreadMutation,
+  useThreadQuery,
+} from '@queries/email/thread';
 import type {
   ContactInfo,
   MessageWithBodyReplyless,
@@ -69,6 +73,7 @@ export type EmailContextValues = {
     refetch: () => void;
   };
 
+  archiveThread: () => boolean;
   initialLoadComplete: Accessor<boolean>;
   onInitialDataLoad: (callback: () => boolean) => void;
 };
@@ -269,6 +274,47 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
     return Array.from(optionsMap.values());
   };
 
+  const {
+    unifiedListContext: {
+      entitiesSignal: [entities],
+      actionRegistry,
+    },
+  } = useSplitPanelOrThrow();
+
+  const archiveMutation = useArchiveThreadMutation({
+    onError: () => {
+      toast.failure('Failed to archive thread');
+    },
+  });
+
+  const archiveThread = () => {
+    const thread = threadQuery.data;
+
+    if (!thread?.db_id) return false;
+
+    archiveMutation.mutate({
+      threadId: thread.db_id,
+      archive: thread.inbox_visible,
+    });
+
+    if (!props) return false;
+
+    const selectedEntity = entities()?.find(
+      (entity) => entity.id === thread.db_id
+    );
+
+    if (selectedEntity) {
+      actionRegistry.execute('mark_as_done', selectedEntity);
+    } else {
+      archiveMutation.mutate({
+        threadId: thread.db_id,
+        archive: thread.inbox_visible,
+      });
+    }
+
+    return true;
+  };
+
   const [messagesListRef, setMessagesListRef] = createSignal<
     HTMLDivElement | undefined
   >(undefined);
@@ -343,6 +389,7 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
           thread: createMemo(() => threadQuery.data),
           recipientOptions: createMemo(getRecipientOptions),
           onRecipientsChange,
+          archiveThread,
           messagesContainerRef,
           messagesListRef,
           query: {
