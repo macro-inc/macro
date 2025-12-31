@@ -538,344 +538,69 @@ export interface UnifiedSearchResponseOutput {
     /**
      * The search results (truncated to `results_returned` limit if applicable)
      */
-    results: (
-      | {
-          /**
-           * The document id
-           */
-          document_id: string;
-          /**
-           * The document name
-           */
-          document_name: string;
-          /**
-           * The file type
-           */
-          file_type: string;
-          /**
-           * The highlights on the document
-           */
-          highlight: {
-            /**
-             * The highlight match on the bcc (email only)
-             */
-            bcc?: string[];
-            /**
-             * The highlight match on the cc (email only)
-             */
-            cc?: string[];
-            /**
-             * The highlight match on the content field
-             */
-            content?: string[];
-            /**
-             * The highlight match on the name field
-             */
-            name?: string | null;
-            /**
-             * The highlight match on the recipients (email only)
-             */
-            recipients?: string[];
-            /**
-             * The highlight match on the sender (email only)
-             */
-            sender?: string | null;
-            /**
-             * The highlight match on the user (owner) of the entity
-             */
-            user_id?: string | null;
-          };
-          /**
-           * The node id
-           */
-          node_id: string;
-          /**
-           * The owner id
-           */
-          owner_id: string;
-          /**
-           * The raw content of the document
-           */
-          raw_content?: string | null;
-          type: 'document';
-          /**
-           * The time the document was last updated
-           */
-          updated_at: string;
-        }
-      | {
-          /**
-           * The chat id
-           */
-          chat_id: string;
-          /**
-           * The chat message id
-           */
-          chat_message_id: string;
-          /**
-           * The highlights on the chat
-           */
-          highlight: {
-            /**
-             * The highlight match on the bcc (email only)
-             */
-            bcc?: string[];
-            /**
-             * The highlight match on the cc (email only)
-             */
-            cc?: string[];
-            /**
-             * The highlight match on the content field
-             */
-            content?: string[];
-            /**
-             * The highlight match on the name field
-             */
-            name?: string | null;
-            /**
-             * The highlight match on the recipients (email only)
-             */
-            recipients?: string[];
-            /**
-             * The highlight match on the sender (email only)
-             */
-            sender?: string | null;
-            /**
-             * The highlight match on the user (owner) of the entity
-             */
-            user_id?: string | null;
-          };
-          /**
-           * The role
-           */
-          role: string;
-          /**
-           * The title
-           */
-          title: string;
-          type: 'chat';
-          /**
-           * The time the chat was last updated
-           */
-          updated_at: string;
-          /**
-           * The user id
-           */
-          user_id: string;
-        }
-      | {
-          /**
-           * The bcc
-           */
-          bcc: string[];
-          /**
-           * The cc
-           */
-          cc: string[];
-          /**
-           * The highlights on the email
-           */
-          highlight: {
-            /**
-             * The highlight match on the bcc (email only)
-             */
-            bcc?: string[];
-            /**
-             * The highlight match on the cc (email only)
-             */
-            cc?: string[];
-            /**
-             * The highlight match on the content field
-             */
-            content?: string[];
-            /**
-             * The highlight match on the name field
-             */
-            name?: string | null;
-            /**
-             * The highlight match on the recipients (email only)
-             */
-            recipients?: string[];
-            /**
-             * The highlight match on the sender (email only)
-             */
-            sender?: string | null;
-            /**
-             * The highlight match on the user (owner) of the entity
-             */
-            user_id?: string | null;
-          };
-          /**
-           * The labels
-           */
-          labels: string[];
-          /**
-           * The link id
-           */
-          link_id: string;
-          /**
-           * The message id
-           */
-          message_id: string;
-          /**
-           * The recipients
-           */
-          recipients: string[];
-          /**
-           * The sender
-           */
-          sender: string;
-          /**
-           * The time the email was sent
-           */
-          sent_at?: string | null;
-          /**
-           * The subject
-           */
-          subject?: string | null;
-          /**
-           * The thread id
-           */
-          thread_id: string;
-          type: 'email';
-          /**
-           * The time the email was last updated
-           */
-          updated_at: string;
-          /**
-           * The user id
-           */
-          user_id: string;
-        }
-      | {
-          /**
-           * The channel id
-           */
-          channel_id: string;
-          /**
-           * The channel type
-           */
-          channel_type: string;
-          /**
-           * The time the channel message was created
-           */
-          created_at: string;
-          /**
-           * The highlights on the channel message
-           */
-          highlight: {
-            /**
-             * The highlight match on the bcc (email only)
-             */
-            bcc?: string[];
-            /**
-             * The highlight match on the cc (email only)
-             */
-            cc?: string[];
-            /**
-             * The highlight match on the content field
-             */
-            content?: string[];
-            /**
-             * The highlight match on the name field
-             */
-            name?: string | null;
-            /**
-             * The highlight match on the recipients (email only)
-             */
-            recipients?: string[];
-            /**
-             * The highlight match on the sender (email only)
-             */
-            sender?: string | null;
-            /**
-             * The highlight match on the user (owner) of the entity
-             */
-            user_id?: string | null;
-          };
-          /**
-           * The mentions
-           */
-          mentions: string[];
-          /**
-           * The message id
-           */
-          message_id: string;
-          /**
-           * The org id
-           */
-          org_id?: number | null;
-          /**
-           * The sender id
-           */
-          sender_id: string;
-          /**
-           * The thread id
-           */
-          thread_id?: string | null;
-          type: 'channel';
-          /**
-           * The time the channel message was last updated
-           */
-          updated_at: string;
-        }
-      | {
-          /**
-           * The time the project was created
-           */
-          created_at: string;
-          /**
-           * The highlights on the project
-           */
-          highlight: {
-            /**
-             * The highlight match on the bcc (email only)
-             */
-            bcc?: string[];
-            /**
-             * The highlight match on the cc (email only)
-             */
-            cc?: string[];
-            /**
-             * The highlight match on the content field
-             */
-            content?: string[];
-            /**
-             * The highlight match on the name field
-             */
-            name?: string | null;
-            /**
-             * The highlight match on the recipients (email only)
-             */
-            recipients?: string[];
-            /**
-             * The highlight match on the sender (email only)
-             */
-            sender?: string | null;
-            /**
-             * The highlight match on the user (owner) of the entity
-             */
-            user_id?: string | null;
-          };
-          /**
-           * The project id
-           */
-          project_id: string;
-          /**
-           * The project name
-           */
-          project_name: string;
-          type: 'project';
-          /**
-           * The time the project was last updated
-           */
-          updated_at: string;
-          /**
-           * The id of the user who created the project
-           */
-          user_id: string;
-        }
-    )[];
+    results: {
+      entity_id: string;
+      entity_type: string;
+      goto?:
+        | (
+            | {
+                /**
+                 * The node id of the document
+                 * This can be a stringified page number 0-indexed for pdf/docx files,
+                 * or it can be a unique id that is used in lexical for markdown files.
+                 */
+                node_id: string;
+                /**
+                 * The raw content of the document
+                 */
+                raw_content?: string | null;
+              }
+            | {
+                /**
+                 * The chat message id
+                 */
+                chat_message_id: string;
+                /**
+                 * The role of the chat message
+                 */
+                role: string;
+              }
+            | {
+                bcc: string[];
+                cc: string[];
+                /**
+                 * The email message id
+                 */
+                email_message_id: string;
+                labels: string[];
+                recipients: string[];
+                sender: string;
+                sent_at?: number | null;
+              }
+            | {
+                /**
+                 * The channel message id
+                 */
+                channel_message_id: string;
+              }
+          )
+        | null;
+      /**
+       * The search service version of a highlight
+       */
+      highlight: {
+        /**
+         * If the match was on the entity content, this will provide a list of highlights
+         * for each content match
+         */
+        content?: string[];
+        /**
+         * If the match was on the entity name, this will be present with that highlight
+         */
+        name?: string | null;
+      };
+      score?: number | null;
+    }[];
     /**
      * the number of results returned
      */
