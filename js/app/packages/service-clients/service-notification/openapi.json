@@ -747,9 +747,7 @@
           {
             "type": "object",
             "required": ["invitedBy"],
-            "properties": {
-              "invitedBy": { "$ref": "#/components/schemas/String" }
-            }
+            "properties": { "invitedBy": { "type": "string" } }
           }
         ],
         "description": "Metadata for when a user is invited to a channel"
@@ -796,7 +794,7 @@
                 "description": "The message id"
               },
               "sender": {
-                "$ref": "#/components/schemas/String",
+                "type": "string",
                 "description": "The user who sent the message"
               }
             }
@@ -893,7 +891,7 @@
                 "description": "The file type of the document"
               },
               "owner": {
-                "$ref": "#/components/schemas/String",
+                "type": "string",
                 "description": "The owner of the document"
               }
             }
@@ -960,7 +958,7 @@
         "required": ["teamName", "teamId", "invitedBy"],
         "properties": {
           "invitedBy": {
-            "$ref": "#/components/schemas/String",
+            "type": "string",
             "description": "The user who sent the invitation"
           },
           "role": {
@@ -998,7 +996,7 @@
             "type": ["string", "null"],
             "description": "Permission level granted (read, write, admin, etc.)"
           },
-          "sharedBy": { "$ref": "#/components/schemas/String" },
+          "sharedBy": { "type": "string" },
           "userIds": {
             "type": "array",
             "items": { "type": "string" },
@@ -1033,7 +1031,7 @@
             "description": "Permission level granted (read, write, admin, etc.)"
           },
           "sharedBy": {
-            "$ref": "#/components/schemas/String",
+            "type": "string",
             "description": "The user who shared the item"
           }
         }
@@ -1238,6 +1236,21 @@
                 "enum": ["reject_team_invite"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "A user was assigned to a task",
+            "required": ["notificationMetadata", "notificationEventType"],
+            "properties": {
+              "notificationEventType": {
+                "type": "string",
+                "enum": ["task_assigned"]
+              },
+              "notificationMetadata": {
+                "$ref": "#/components/schemas/TaskAssignedMetadata",
+                "description": "A user was assigned to a task"
+              }
+            }
           }
         ]
       },
@@ -1255,7 +1268,8 @@
           "channel_message_document",
           "new_email",
           "invite_to_team",
-          "reject_team_invite"
+          "reject_team_invite",
+          "task_assigned"
         ]
       },
       "NotificationServiceApiVersion": { "type": "string", "enum": ["v1"] },
@@ -1288,7 +1302,25 @@
           }
         ]
       },
-      "String": { "type": "string" },
+      "TaskAssignedMetadata": {
+        "type": "object",
+        "description": "Metadata for when a user is assigned to a task",
+        "required": ["taskId", "assignedBy"],
+        "properties": {
+          "assignedBy": {
+            "type": "string",
+            "description": "The user who assigned the task"
+          },
+          "taskId": {
+            "type": "string",
+            "description": "The unique identifier of the task"
+          },
+          "taskName": {
+            "type": ["string", "null"],
+            "description": "The name of the task (optional)"
+          }
+        }
+      },
       "UnsubscribeItemPathParams": {
         "type": "object",
         "required": ["item_type", "item_id"],

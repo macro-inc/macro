@@ -1,23 +1,26 @@
 //! Task-specific property handlers.
 
+use futures::future::join_all;
+use macro_user_id::cowlike::CowLike;
 use models_properties::EntityType;
 use models_properties::api::requests::SetPropertyValue;
+use models_properties::service::property_value::PropertyValue;
 use system_properties::SystemPropertyKey;
 use uuid::Uuid;
 
 use crate::domain::error::PropertiesErr;
-use crate::domain::ports::{PermissionService, PropertiesRepo};
+use crate::domain::ports::{NotificationService, PermissionService, PropertiesRepo};
 use crate::domain::service::PropertiesService;
 use crate::domain::service_impl::PropertiesServiceImpl;
 
-impl<R, P> PropertiesServiceImpl<R, P>
+impl<R, P, N> PropertiesServiceImpl<R, P, N>
 where
     R: PropertiesRepo,
     P: PermissionService,
-    anyhow::Error: From<R::Err> + From<P::Err>,
+    N: NotificationService,
+    anyhow::Error: From<R::Err> + From<P::Err> + From<N::Err>,
 {
     /// Handle task relationship properties (Parent Task / Subtasks) with bidirectional linking.
-    /// Entity type is guaranteed to be Task (enforced by match guard).
     pub async fn handle_task_relationship_property(
         &self,
         entity_id: &str,
@@ -29,7 +32,6 @@ where
 
         match property_definition_id {
             SystemPropertyKey::PARENT_TASK_UUID => {
-                // Extract parent task ID (None to clear)
                 let parent_task_id = match &value {
                     None => None,
                     Some(SetPropertyValue::EntityReference { reference }) => {
@@ -52,7 +54,6 @@ where
                 PropertiesService::link_parent_task(self, task_id, parent_task_id).await?;
             }
             SystemPropertyKey::SUBTASKS_UUID => {
-                // Extract subtask IDs (empty to clear)
                 let subtask_ids = match &value {
                     None => vec![],
                     Some(SetPropertyValue::MultiEntityReference { references }) => {
@@ -79,7 +80,6 @@ where
                 PropertiesService::link_subtasks(self, task_id, subtask_ids).await?;
             }
             _ => {
-                // This should never happen due to the match guard, but handle it for completeness
                 return Err(PropertiesErr::Validation(
                     "Invalid property for task relationship handling".to_string(),
                 ));
@@ -90,18 +90,14 @@ where
     }
 
     /// Handle task assignees property with permissions.
-    /// Assignees is a multi-select entity property, so only accepts MultiEntityReference.
-    /// If value is None (clearing assignees), there's nothing to do for permissions.
     pub async fn handle_task_assignees_property(
         &self,
         entity_id: &str,
         value: Option<SetPropertyValue>,
+        assigned_by_user_id: &str,
     ) -> Result<(), PropertiesErr> {
-        // Clearing assignees - nothing to do for permissions
         let Some(SetPropertyValue::MultiEntityReference { references }) = &value else {
             if value.is_some() {
-                // Assignees is multi-select, so only MultiEntityReference is valid
-                // This should be caught by validate_compatibility, but handle it here for safety
                 return Err(PropertiesErr::Validation(
                     "Assignees requires multiple entity references".to_string(),
                 ));
@@ -119,11 +115,120 @@ where
 
         self.handle_task_assignee_permissions(task_id, &assignee_ids)
             .await?;
+        self.handle_task_assignee_notifications(task_id, &assignee_ids, assigned_by_user_id)
+            .await?;
+        Ok(())
+    }
+
+    /// Handle notifications when task assignees are updated.
+    pub async fn handle_task_assignee_notifications(
+        &self,
+        task_id: Uuid,
+        assignee_ids: &[String],
+        assigned_by_user_id: &str,
+    ) -> Result<(), PropertiesErr> {
+        if assignee_ids.is_empty() {
+            return Ok(());
+        }
+
+        let notification_service = match &self.notification_service {
+            Some(service) => service,
+            None => {
+                tracing::debug!("notification service not available, skipping notifications");
+                return Ok(());
+            }
+        };
+
+        let current_value = self
+            .repository
+            .get_entity_property_value(
+                &task_id.to_string(),
+                EntityType::Task,
+                SystemPropertyKey::ASSIGNEES_UUID,
+            )
+            .await
+            .map_err(anyhow::Error::from)
+            .map_err(PropertiesErr::Repo)?;
+
+        let current_assignee_ids: Vec<String> = match current_value {
+            Some(PropertyValue::EntityRef(refs)) => {
+                refs.iter().map(|r| r.entity_id.clone()).collect()
+            }
+            _ => vec![],
+        };
+
+        let recipient_ids: Vec<String> = assignee_ids
+            .iter()
+            .filter(|id| !current_assignee_ids.contains(id) && id.as_str() != assigned_by_user_id)
+            .cloned()
+            .collect();
+
+        if recipient_ids.is_empty() {
+            tracing::debug!("no new assignees to notify");
+            return Ok(());
+        }
+
+        let task_name = self
+            .repository
+            .get_document_name(&task_id.to_string())
+            .await
+            .map_err(anyhow::Error::from)
+            .map_err(PropertiesErr::Repo)?;
+
+        let assigned_by =
+            macro_user_id::user_id::MacroUserIdStr::parse_from_str(assigned_by_user_id)
+                .map_err(|e| PropertiesErr::Validation(format!("Invalid user ID format: {}", e)))?
+                .into_owned();
+
+        let metadata = model_notifications::TaskAssignedMetadata {
+            task_id: task_id.to_string(),
+            task_name: task_name.clone(),
+            assigned_by: assigned_by.clone(),
+        };
+
+        let notification_event = model_notifications::NotificationEvent::TaskAssigned(metadata);
+
+        let notification_entity =
+            model_entity::EntityType::Document.with_entity_string(task_id.to_string());
+
+        let notification_futures: Vec<_> = recipient_ids
+            .iter()
+            .map(|recipient_id| {
+                let message = model_notifications::NotificationQueueMessage {
+                    notification_entity: notification_entity.clone(),
+                    notification_event: notification_event.clone(),
+                    sender_id: Some(assigned_by.clone()),
+                    recipient_ids: Some(vec![recipient_id.clone()]),
+                };
+
+                let recipient_id_for_log = recipient_id.clone();
+                async move {
+                    let send_result = notification_service.send_notification(message).await;
+                    match send_result {
+                        Ok(notification_id) => {
+                            tracing::debug!(
+                                recipient_id = %recipient_id_for_log,
+                                notification_id = %notification_id,
+                                "sent task assignment notification"
+                            );
+                        }
+                        Err(_e) => {
+                            tracing::error!(
+                                recipient_id = %recipient_id_for_log,
+                                "failed to send task assignment notification"
+                            );
+                        }
+                    }
+                }
+            })
+            .collect();
+
+        join_all(notification_futures).await;
+
         Ok(())
     }
 
     /// Handle permissions when task assignees are updated.
-    /// Grants edit permissions to all assignees so they can edit the task.
     pub async fn handle_task_assignee_permissions(
         &self,
         task_id: Uuid,

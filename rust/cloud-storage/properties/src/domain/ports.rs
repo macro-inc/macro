@@ -86,6 +86,14 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         entity_type: EntityType,
         property_definition_id: Uuid,
     ) -> impl Future<Output = Result<Option<PropertyValue>, Self::Err>> + Send;
+
+    /// Get the name of a document.
+    /// Returns `None` if the document doesn't exist or has no name.
+    /// Tasks are stored as documents, so this works for both documents and tasks.
+    fn get_document_name(
+        &self,
+        id: &str,
+    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
 }
 
 /// Permission service trait for entity access control.
@@ -112,4 +120,20 @@ pub trait PermissionService: Send + Sync + 'static {
         user_ids: &[String],
         task_id: &str,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+}
+
+/// Notification service trait for sending notifications.
+///
+/// This trait abstracts notification operations, allowing for different implementations
+/// (e.g., macro_notify-backed, mock for testing).
+#[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
+pub trait NotificationService: Send + Sync + 'static {
+    type Err;
+
+    /// Send a notification message.
+    /// Returns the notification ID if successful.
+    fn send_notification(
+        &self,
+        message: model_notifications::NotificationQueueMessage,
+    ) -> impl Future<Output = Result<uuid::Uuid, Self::Err>> + Send;
 }

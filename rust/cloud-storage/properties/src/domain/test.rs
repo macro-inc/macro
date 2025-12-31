@@ -2,13 +2,11 @@
 
 use super::service_impl::PropertiesServiceImpl;
 use crate::domain::{
-    ports::{MockPermissionService, MockPropertiesRepo},
+    ports::{MockNotificationService, MockPermissionService, MockPropertiesRepo},
     service::PropertiesService,
 };
 use anyhow::anyhow;
-use models_properties::{
-    EntityType, service::property_value::PropertyValue, shared::EntityReference,
-};
+use models_properties::{EntityType, service::property_value::PropertyValue};
 use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
 
@@ -45,7 +43,11 @@ async fn test_set_system_property_status_complete_happy_path() {
         })
         .returning(|_, _, _, _| Box::pin(async { Ok(()) }));
 
-    let service = PropertiesServiceImpl::new(repo, Some(create_mock_permission_service()));
+    let service = PropertiesServiceImpl::new(
+        repo,
+        Some(create_mock_permission_service()),
+        None::<MockNotificationService>,
+    );
 
     let entity_id = "e1";
     let entity_type = EntityType::Document;
@@ -64,7 +66,11 @@ async fn test_set_system_property_status_complete_error_path() {
     repo.expect_update_entity_property_value_if_exists()
         .returning(|_, _, _, _| Box::pin(async { Err(anyhow!("boom")) }));
 
-    let service = PropertiesServiceImpl::new(repo, Some(create_mock_permission_service()));
+    let service = PropertiesServiceImpl::new(
+        repo,
+        Some(create_mock_permission_service()),
+        None::<MockNotificationService>,
+    );
 
     let err = service
         .set_system_property_status_complete("e1", EntityType::Document)
@@ -89,7 +95,11 @@ async fn test_link_parent_task_delegates_to_repo() {
         .withf(move |t, p| *t == task_id && *p == Some(parent_id))
         .returning(|_, _| Box::pin(async { Ok(()) }));
 
-    let service = PropertiesServiceImpl::new(repo, Some(create_mock_permission_service()));
+    let service = PropertiesServiceImpl::new(
+        repo,
+        Some(create_mock_permission_service()),
+        None::<MockNotificationService>,
+    );
 
     service
         .link_parent_task(task_id, Some(parent_id))
@@ -107,7 +117,11 @@ async fn test_link_parent_task_clear_parent() {
         .withf(move |t, p| *t == task_id && p.is_none())
         .returning(|_, _| Box::pin(async { Ok(()) }));
 
-    let service = PropertiesServiceImpl::new(repo, Some(create_mock_permission_service()));
+    let service = PropertiesServiceImpl::new(
+        repo,
+        Some(create_mock_permission_service()),
+        None::<MockNotificationService>,
+    );
 
     service.link_parent_task(task_id, None).await.unwrap();
 }
@@ -119,7 +133,11 @@ async fn test_link_parent_task_error_propagates() {
     repo.expect_link_parent_task()
         .returning(|_, _| Box::pin(async { Err(anyhow!("link failed")) }));
 
-    let service = PropertiesServiceImpl::new(repo, Some(create_mock_permission_service()));
+    let service = PropertiesServiceImpl::new(
+        repo,
+        Some(create_mock_permission_service()),
+        None::<MockNotificationService>,
+    );
 
     let err = service
         .link_parent_task(Uuid::nil(), Some(Uuid::nil()))
@@ -147,7 +165,11 @@ async fn test_link_subtasks_delegates_to_repo() {
         })
         .returning(|_, _| Box::pin(async { Ok(()) }));
 
-    let service = PropertiesServiceImpl::new(repo, Some(create_mock_permission_service()));
+    let service = PropertiesServiceImpl::new(
+        repo,
+        Some(create_mock_permission_service()),
+        None::<MockNotificationService>,
+    );
 
     service
         .link_subtasks(task_id, vec![subtask_1, subtask_2])
@@ -165,7 +187,11 @@ async fn test_link_subtasks_clear_all() {
         .withf(move |t, s| *t == task_id && s.is_empty())
         .returning(|_, _| Box::pin(async { Ok(()) }));
 
-    let service = PropertiesServiceImpl::new(repo, Some(create_mock_permission_service()));
+    let service = PropertiesServiceImpl::new(
+        repo,
+        Some(create_mock_permission_service()),
+        None::<MockNotificationService>,
+    );
 
     service.link_subtasks(task_id, vec![]).await.unwrap();
 }
@@ -176,7 +202,11 @@ async fn test_link_subtasks_error_propagates() {
 
     repo.expect_link_subtasks()
         .returning(|_, _| Box::pin(async { Err(anyhow!("subtask link failed")) }));
-    let service = PropertiesServiceImpl::new(repo, Some(create_mock_permission_service()));
+    let service = PropertiesServiceImpl::new(
+        repo,
+        Some(create_mock_permission_service()),
+        None::<MockNotificationService>,
+    );
 
     let err = service
         .link_subtasks(Uuid::nil(), vec![Uuid::nil()])
@@ -202,7 +232,11 @@ async fn test_get_property_value_returns_value_when_exists() {
         })
         .returning(|_, _, _| Box::pin(async { Ok(Some(PropertyValue::Str("hello".to_string()))) }));
 
-    let service = PropertiesServiceImpl::new(repo, Some(create_mock_permission_service()));
+    let service = PropertiesServiceImpl::new(
+        repo,
+        Some(create_mock_permission_service()),
+        None::<MockNotificationService>,
+    );
 
     let result = service
         .get_property_value("e1", EntityType::Document, prop_id)
@@ -219,7 +253,11 @@ async fn test_get_property_value_returns_none_when_not_attached() {
     repo.expect_get_entity_property_value()
         .returning(|_, _, _| Box::pin(async { Ok(None) }));
 
-    let service = PropertiesServiceImpl::new(repo, Some(create_mock_permission_service()));
+    let service = PropertiesServiceImpl::new(
+        repo,
+        Some(create_mock_permission_service()),
+        None::<MockNotificationService>,
+    );
 
     let result = service
         .get_property_value("e1", EntityType::Document, Uuid::nil())
@@ -236,7 +274,11 @@ async fn test_get_property_value_error_path() {
     repo.expect_get_entity_property_value()
         .returning(|_, _, _| Box::pin(async { Err(anyhow!("db error")) }));
 
-    let service = PropertiesServiceImpl::new(repo, Some(create_mock_permission_service()));
+    let service = PropertiesServiceImpl::new(
+        repo,
+        Some(create_mock_permission_service()),
+        None::<MockNotificationService>,
+    );
 
     let err = service
         .get_property_value("e1", EntityType::Document, Uuid::nil())
@@ -268,7 +310,11 @@ async fn test_get_system_property_value_returns_value_when_exists() {
             })
         });
 
-    let service = PropertiesServiceImpl::new(repo, Some(create_mock_permission_service()));
+    let service = PropertiesServiceImpl::new(
+        repo,
+        Some(create_mock_permission_service()),
+        None::<MockNotificationService>,
+    );
 
     let result = service
         .get_system_property_value("e1", EntityType::Document, SystemPropertyKey::Status)
@@ -290,7 +336,11 @@ async fn test_get_system_property_value_returns_none_when_not_attached() {
     repo.expect_get_entity_property_value()
         .returning(|_, _, _| Box::pin(async { Ok(None) }));
 
-    let service = PropertiesServiceImpl::new(repo, Some(create_mock_permission_service()));
+    let service = PropertiesServiceImpl::new(
+        repo,
+        Some(create_mock_permission_service()),
+        None::<MockNotificationService>,
+    );
 
     let result = service
         .get_system_property_value("e1", EntityType::Document, SystemPropertyKey::Status)
@@ -307,7 +357,11 @@ async fn test_get_system_property_value_error_path() {
     repo.expect_get_entity_property_value()
         .returning(|_, _, _| Box::pin(async { Err(anyhow!("db error")) }));
 
-    let service = PropertiesServiceImpl::new(repo, Some(create_mock_permission_service()));
+    let service = PropertiesServiceImpl::new(
+        repo,
+        Some(create_mock_permission_service()),
+        None::<MockNotificationService>,
+    );
 
     let err = service
         .get_system_property_value("e1", EntityType::Document, SystemPropertyKey::Status)
@@ -339,7 +393,8 @@ async fn test_handle_task_assignee_permissions_grants_permissions() {
         })
         .returning(|_, _| Box::pin(async { Ok(()) }));
 
-    let service = PropertiesServiceImpl::new(repo, Some(perm_service));
+    let service =
+        PropertiesServiceImpl::new(repo, Some(perm_service), None::<MockNotificationService>);
 
     service
         .handle_task_assignee_permissions(task_id, &assignee_ids)
@@ -354,7 +409,8 @@ async fn test_handle_task_assignee_permissions_empty_assignees() {
 
     let task_id = Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc);
 
-    let service = PropertiesServiceImpl::new(repo, Some(perm_service));
+    let service =
+        PropertiesServiceImpl::new(repo, Some(perm_service), None::<MockNotificationService>);
 
     // Should return Ok without calling permission service
     service
@@ -369,7 +425,11 @@ async fn test_handle_task_assignee_permissions_no_service() {
     let task_id = Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc);
     let assignee_ids = vec!["user1".to_string()];
 
-    let service = PropertiesServiceImpl::new(repo, None::<MockPermissionService>);
+    let service = PropertiesServiceImpl::new(
+        repo,
+        None::<MockPermissionService>,
+        None::<MockNotificationService>,
+    );
 
     let err = service
         .handle_task_assignee_permissions(task_id, &assignee_ids)
@@ -394,7 +454,8 @@ async fn test_handle_task_assignee_permissions_error_propagates() {
         .expect_grant_permissions_to_task()
         .returning(|_, _| Box::pin(async { Err(anyhow!("permission error")) }));
 
-    let service = PropertiesServiceImpl::new(repo, Some(perm_service));
+    let service =
+        PropertiesServiceImpl::new(repo, Some(perm_service), None::<MockNotificationService>);
 
     let err = service
         .handle_task_assignee_permissions(task_id, &assignee_ids)
@@ -405,17 +466,226 @@ async fn test_handle_task_assignee_permissions_error_propagates() {
 }
 
 // ============================================================================
+// handle_task_assignee_notifications unit tests
+// ============================================================================
+
+struct NotificationTestCase {
+    task_id: Uuid,
+    assigned_by: String,
+    assignees: Vec<String>,
+    existing_assignees: Vec<String>,
+    task_name: Option<String>,
+    expected_notification_count: usize,
+    expected_recipient_ids: Option<Vec<String>>,
+    notification_service_available: bool,
+}
+
+async fn check_notifications(test_case: NotificationTestCase) {
+    let mut repo = MockPropertiesRepo::new();
+    let mut notif_service = MockNotificationService::new();
+
+    let task_id = test_case.task_id;
+    let assigned_by = test_case.assigned_by.clone();
+    let assignees = test_case.assignees.clone();
+    let existing_assignees = test_case.existing_assignees.clone();
+    let task_name = test_case.task_name.clone();
+
+    // Mock: get current assignees
+    repo.expect_get_entity_property_value()
+        .withf(move |entity_id, entity_type, prop_id| {
+            entity_id == &task_id.to_string()
+                && *entity_type == EntityType::Task
+                && *prop_id == SystemPropertyKey::ASSIGNEES_UUID
+        })
+        .returning({
+            let existing = existing_assignees.clone();
+            move |_, _, _| {
+                if existing.is_empty() {
+                    Box::pin(async { Ok(None) })
+                } else {
+                    let refs: Vec<models_properties::shared::EntityReference> = existing
+                        .iter()
+                        .map(|id| models_properties::shared::EntityReference {
+                            entity_type: EntityType::User,
+                            entity_id: id.clone(),
+                            specific_message_id: None,
+                        })
+                        .collect();
+                    Box::pin(async { Ok(Some(PropertyValue::EntityRef(refs))) })
+                }
+            }
+        });
+
+    // Mock: get task name (only if we expect notifications)
+    if test_case.expected_notification_count > 0 {
+        let task_id_clone = task_id;
+        let task_name_result = task_name.clone();
+        repo.expect_get_document_name()
+            .withf(move |id| id == &task_id_clone.to_string())
+            .returning(move |_| {
+                let name = task_name_result.clone();
+                Box::pin(async move { Ok(name) })
+            });
+    }
+
+    // Mock: send notifications
+    if test_case.notification_service_available && test_case.expected_notification_count > 0 {
+        let expected_count = test_case.expected_notification_count;
+        let expected_recipients = test_case.expected_recipient_ids.clone();
+        notif_service
+            .expect_send_notification()
+            .times(expected_count)
+            .withf(move |message| {
+                let event_type_correct = message.notification_event.event_type()
+                    == model_notifications::NotificationEventType::TaskAssigned;
+                let recipient_correct = if let Some(expected) = &expected_recipients {
+                    message
+                        .recipient_ids
+                        .as_ref()
+                        .map(|ids| ids.len() == 1 && expected.contains(&ids[0]))
+                        .unwrap_or(false)
+                } else {
+                    message
+                        .recipient_ids
+                        .as_ref()
+                        .map(|ids| ids.len() == 1)
+                        .unwrap_or(false)
+                };
+                event_type_correct && recipient_correct
+            })
+            .returning(|_| Box::pin(async { Ok(Uuid::new_v4()) }));
+    }
+
+    let service = if test_case.notification_service_available {
+        PropertiesServiceImpl::new(repo, None::<MockPermissionService>, Some(notif_service))
+    } else {
+        PropertiesServiceImpl::new(
+            repo,
+            None::<MockPermissionService>,
+            None::<MockNotificationService>,
+        )
+    };
+
+    service
+        .handle_task_assignee_notifications(task_id, &assignees, &assigned_by)
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn test_handle_task_assignee_notifications_sends_to_new_assignees_only() {
+    check_notifications(NotificationTestCase {
+        task_id: Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc),
+        assigned_by: "macro|assigner@macro.com".to_string(),
+        assignees: vec![
+            "macro|user1@macro.com".to_string(),
+            "macro|user2@macro.com".to_string(),
+            "macro|user3@macro.com".to_string(), // existing, should not get notification
+        ],
+        existing_assignees: vec!["macro|user3@macro.com".to_string()],
+        task_name: Some("Test Task".to_string()),
+        expected_notification_count: 2, // user1 and user2, but not user3 (existing) or assigner
+        expected_recipient_ids: None,
+        notification_service_available: true,
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn test_handle_task_assignee_notifications_filters_out_assigner() {
+    check_notifications(NotificationTestCase {
+        task_id: Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc),
+        assigned_by: "macro|assigner@macro.com".to_string(),
+        assignees: vec![
+            "macro|user1@macro.com".to_string(),
+            "macro|assigner@macro.com".to_string(),
+        ],
+        existing_assignees: vec![],
+        task_name: Some("Test Task".to_string()),
+        expected_notification_count: 1, // only user1, not assigner
+        expected_recipient_ids: Some(vec!["macro|user1@macro.com".to_string()]),
+        notification_service_available: true,
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn test_handle_task_assignee_notifications_no_new_assignees() {
+    check_notifications(NotificationTestCase {
+        task_id: Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc),
+        assigned_by: "macro|assigner@macro.com".to_string(),
+        assignees: vec!["macro|user1@macro.com".to_string()],
+        existing_assignees: vec!["macro|user1@macro.com".to_string()],
+        task_name: None,                // Should not call get_entity_name
+        expected_notification_count: 0, // no new assignees
+        expected_recipient_ids: None,
+        notification_service_available: true,
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn test_handle_task_assignee_notifications_no_service() {
+    check_notifications(NotificationTestCase {
+        task_id: Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc),
+        assigned_by: "assigner".to_string(),
+        assignees: vec!["user1".to_string()],
+        existing_assignees: vec![],
+        task_name: None, // Should not call get_entity_name when no service
+        expected_notification_count: 0,
+        expected_recipient_ids: None,
+        notification_service_available: false,
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn test_handle_task_assignee_notifications_empty_assignees() {
+    check_notifications(NotificationTestCase {
+        task_id: Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc),
+        assigned_by: "assigner".to_string(),
+        assignees: vec![],
+        existing_assignees: vec![],
+        task_name: None, // Should not call get_entity_name
+        expected_notification_count: 0,
+        expected_recipient_ids: None,
+        notification_service_available: true,
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn test_handle_task_assignee_notifications_task_name_none() {
+    check_notifications(NotificationTestCase {
+        task_id: Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc),
+        assigned_by: "macro|assigner@macro.com".to_string(),
+        assignees: vec!["macro|user1@macro.com".to_string()],
+        existing_assignees: vec![],
+        task_name: None, // task doesn't exist yet
+        expected_notification_count: 1,
+        expected_recipient_ids: None,
+        notification_service_available: true,
+    })
+    .await;
+}
+
+// ============================================================================
 // handle_task_assignees_property integration tests
 // ============================================================================
 
 #[tokio::test]
-async fn test_handle_task_assignees_property_calls_permission_handler() {
+async fn test_handle_task_assignees_property_calls_both_handlers() {
     let mut repo = MockPropertiesRepo::new();
     let mut perm_service = MockPermissionService::new();
+    let mut notif_service = MockNotificationService::new();
 
     let task_id = Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc);
     let entity_id = task_id.to_string();
-    let assignees = vec!["user1".to_string(), "user2".to_string()];
+    let assigned_by = "macro|assigner@macro.com".to_string();
+    let assignees = vec![
+        "macro|user1@macro.com".to_string(),
+        "macro|user2@macro.com".to_string(),
+    ];
 
     let value = Some(
         models_properties::api::requests::SetPropertyValue::MultiEntityReference {
@@ -430,6 +700,14 @@ async fn test_handle_task_assignees_property_calls_permission_handler() {
         },
     );
 
+    // Mock: no existing assignees
+    repo.expect_get_entity_property_value()
+        .returning(|_, _, _| Box::pin(async { Ok(None) }));
+
+    // Mock: get task name
+    repo.expect_get_document_name()
+        .returning(|_| Box::pin(async { Ok(Some("Test Task".to_string())) }));
+
     // Mock: permissions should be granted to all assignees
     let entity_id_clone = entity_id.clone();
     perm_service
@@ -438,10 +716,16 @@ async fn test_handle_task_assignees_property_calls_permission_handler() {
         .withf(move |user_ids, tid| user_ids.len() == 2 && tid == &entity_id_clone)
         .returning(|_, _| Box::pin(async { Ok(()) }));
 
-    let service = PropertiesServiceImpl::new(repo, Some(perm_service));
+    // Mock: notifications should be sent
+    notif_service
+        .expect_send_notification()
+        .times(2) // user1 and user2
+        .returning(|_| Box::pin(async { Ok(Uuid::new_v4()) }));
+
+    let service = PropertiesServiceImpl::new(repo, Some(perm_service), Some(notif_service));
 
     service
-        .handle_task_assignees_property(&entity_id, value)
+        .handle_task_assignees_property(&entity_id, value, &assigned_by)
         .await
         .unwrap();
 }
@@ -450,15 +734,16 @@ async fn test_handle_task_assignees_property_calls_permission_handler() {
 async fn test_handle_task_assignees_property_clearing_assignees() {
     let repo = MockPropertiesRepo::new();
     let perm_service = MockPermissionService::new();
+    let notif_service = MockNotificationService::new();
 
     let task_id = Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc);
     let entity_id = task_id.to_string();
 
-    let service = PropertiesServiceImpl::new(repo, Some(perm_service));
+    let service = PropertiesServiceImpl::new(repo, Some(perm_service), Some(notif_service));
 
     // Should return Ok without calling any handlers
     service
-        .handle_task_assignees_property(&entity_id, None)
+        .handle_task_assignees_property(&entity_id, None, "assigner")
         .await
         .unwrap();
 }

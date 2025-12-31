@@ -11,32 +11,40 @@ use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
 
 use super::error::PropertiesErr;
-use super::ports::{PermissionService, PropertiesRepo};
+use super::ports::{NotificationService, PermissionService, PropertiesRepo};
 use super::service::PropertiesService;
 
 use helpers::{extract_option_ids_from_property_value, is_property_applicable_to};
 
 /// Implementation of PropertiesService using a repository and optional permission service.
 #[derive(Debug)]
-pub struct PropertiesServiceImpl<R, P>
+pub struct PropertiesServiceImpl<R, P, N>
 where
     R: PropertiesRepo,
     P: PermissionService,
+    N: NotificationService,
 {
     repository: R,
     permission_service: Option<P>,
+    notification_service: Option<N>,
 }
 
-impl<R, P> PropertiesServiceImpl<R, P>
+impl<R, P, N> PropertiesServiceImpl<R, P, N>
 where
     R: PropertiesRepo,
     P: PermissionService,
+    N: NotificationService,
 {
-    /// Create a new PropertiesService with an optional permission service.
-    pub fn new(repository: R, permission_service: Option<P>) -> Self {
+    /// Create a new PropertiesService with optional permission service and notification service.
+    pub fn new(
+        repository: R,
+        permission_service: Option<P>,
+        notification_service: Option<N>,
+    ) -> Self {
         Self {
             repository,
             permission_service,
+            notification_service,
         }
     }
 
@@ -79,11 +87,12 @@ where
     }
 }
 
-impl<R, P> PropertiesService for PropertiesServiceImpl<R, P>
+impl<R, P, N> PropertiesService for PropertiesServiceImpl<R, P, N>
 where
     R: PropertiesRepo,
     P: PermissionService,
-    anyhow::Error: From<R::Err> + From<P::Err>,
+    N: NotificationService,
+    anyhow::Error: From<R::Err> + From<P::Err> + From<N::Err>,
 {
     #[tracing::instrument(skip(self), fields(entity_id = %entity_id, entity_type = ?entity_type))]
     async fn set_system_property_status_complete(
@@ -248,7 +257,7 @@ where
                     .await;
             }
             SystemPropertyKey::ASSIGNEES_UUID if entity_type == EntityType::Task => {
-                self.handle_task_assignees_property(entity_id, value)
+                self.handle_task_assignees_property(entity_id, value, user_id)
                     .await?;
             }
             _ => {

@@ -5,7 +5,6 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { DocumentMentionMetadataAllOfFileType } from './documentMentionMetadataAllOfFileType';
-import type { String } from './string';
 
 export type DocumentMentionMetadataAllOf = {
   /** The name of the document */
@@ -13,5 +12,5 @@ export type DocumentMentionMetadataAllOf = {
   /** The file type of the document */
   fileType?: DocumentMentionMetadataAllOfFileType;
   /** The owner of the document */
-  owner: String;
+  owner: string;
 };
