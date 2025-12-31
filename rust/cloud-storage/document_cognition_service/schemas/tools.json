@@ -1505,7 +1505,13 @@
                       ],
                       "type": "object"
                     }
-                  ]
+                  },
+                  "required": [
+                    "entity_id",
+                    "entity_type",
+                    "highlight"
+                  ],
+                  "type": "object"
                 },
                 "type": "array"
               },
@@ -2238,6 +2244,7 @@
               "type": "object"
             },
             "type": "array"
+<<<<<<< HEAD
           },
           "next_cursor": {
             "type": [
@@ -2250,6 +2257,14 @@
           "items"
         ],
         "title": "ApiPaginatedThreadCursor",
+=======
+          }
+        },
+        "required": [
+          "diffs"
+        ],
+        "title": "AIDiffResponse",
+>>>>>>> d2486c2f6 (fix: update search service client)
         "type": "object"
       }
     },
