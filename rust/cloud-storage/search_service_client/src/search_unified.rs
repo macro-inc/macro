@@ -57,9 +57,7 @@ impl SearchServiceClient {
 
         match res.status() {
             reqwest::StatusCode::OK => {
-                let result = res
-                    .json::<models_search::SimpleSearchResponse>()
-                    .await?;
+                let result = res.json::<models_search::SimpleSearchResponse>().await?;
                 Ok(result)
             }
             status_code => {

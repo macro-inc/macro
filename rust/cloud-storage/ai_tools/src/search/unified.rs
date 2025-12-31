@@ -3,10 +3,7 @@ use std::cmp::min;
 use crate::tool_context::{RequestContext, ToolServiceContext};
 use ai::tool::{AsyncTool, ToolCallError, ToolResult};
 use async_trait::async_trait;
-use models_search::{
-    SimpleSearchResponseItem,
-    unified::UnifiedSearchRequest,
-};
+use models_search::{SimpleSearchResponseItem, unified::UnifiedSearchRequest};
 use schemars::{JsonSchema, Schema};
 use serde::{Deserialize, Serialize};
 
