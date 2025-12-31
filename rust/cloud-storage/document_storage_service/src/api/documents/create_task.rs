@@ -1,7 +1,7 @@
-use axum::{extract::State, http::StatusCode, response::IntoResponse};
+use axum::{Json, extract::State, http::StatusCode};
 use macro_middleware::cloud_storage::ensure_access::project::ProjectBodyAccessLevelExtractor;
 use model::document::FileType;
-use model::response::{GenericErrorResponse, GenericResponse};
+use model::response::ErrorResponse;
 use model_user::axum_extractor::MacroUserExtractor;
 use models_permissions::share_permission::access_level::EditAccessLevel;
 use models_properties::EntityType as PropertyEntityType;
@@ -65,10 +65,10 @@ pub struct CreateTaskResponse {
         request_body = CreateTaskRequest,
         responses(
             (status = 200, body=inline(CreateTaskResponse)),
-            (status = 401, body=GenericErrorResponse),
-            (status = 403, body=GenericErrorResponse),
-            (status = 400, body=GenericErrorResponse),
-            (status = 500, body=GenericErrorResponse),
+            (status = 401, body=ErrorResponse),
+            (status = 403, body=ErrorResponse),
+            (status = 400, body=ErrorResponse),
+            (status = 500, body=ErrorResponse),
         )
     )]
 #[tracing::instrument(skip(state, user_context, project), fields(user_id=?user_context.macro_user_id))]
@@ -77,7 +77,7 @@ pub(in crate::api) async fn create_task_handler(
     State(state): State<ApiContext>,
     user_context: MacroUserExtractor,
     project: ProjectBodyAccessLevelExtractor<EditAccessLevel, CreateTaskRequest>,
-) -> impl IntoResponse {
+) -> Result<Json<CreateTaskResponse>, (StatusCode, Json<ErrorResponse<'static>>)> {
     let req = project.into_inner();
     let user_id = user_context.user_context.user_id.clone();
 
@@ -107,10 +107,12 @@ pub(in crate::api) async fn create_task_handler(
                 tracing::info!(document_id=?document_id, "cleaning up document");
                 utils::handle_document_creation_error_cleanup(&state.db, document_id).await;
             }
-            return GenericResponse::builder()
-                .message(message.as_str())
-                .is_error(true)
-                .send(status_code);
+            return Err((
+                status_code,
+                Json(ErrorResponse {
+                    message: "failed to create task document",
+                }),
+            ));
         }
     };
 
@@ -128,7 +130,7 @@ pub(in crate::api) async fn create_task_handler(
                 continue;
             };
 
-            if let Err(e) = state
+            let _ = state
                 .properties_service
                 .set_entity_property(
                     &user_id,
@@ -138,17 +140,20 @@ pub(in crate::api) async fn create_task_handler(
                     Some(property_input.value.clone()),
                 )
                 .await
-            {
-                tracing::warn!(
-                    property_id=?property_uuid,
-                    error=?e,
-                    "failed to set property on task, continuing"
-                );
-            }
+                .inspect_err(|e| {
+                    tracing::warn!(
+                        property_id=?property_uuid,
+                        error=?e,
+                        "failed to set property on task, continuing"
+                    );
+                });
         }
     }
 
-    GenericResponse::builder()
-        .data(&CreateTaskResponse { document_id })
-        .send(StatusCode::OK)
+    utils::notify_search_service_of_document_name_update(
+        state.sqs_client.clone(),
+        document_id.clone(),
+    );
+
+    Ok(Json(CreateTaskResponse { document_id }))
 }
