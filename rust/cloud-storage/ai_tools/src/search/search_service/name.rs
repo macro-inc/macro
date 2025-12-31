@@ -1,26 +1,18 @@
+use super::types::{PAGE_SIZE, SearchResponse};
 use crate::tool_context::{RequestContext, ToolServiceContext};
 use ai::tool::{AsyncTool, ToolCallError, ToolResult};
 use async_trait::async_trait;
-use models_search::{HumanReadableTimestamp, unified::SimpleUnifiedSearchResponseBaseItem};
 use models_search::{
-    MatchType, SimpleSearchResponseItem,
+    MatchType,
     unified::{UnifiedSearchIndex, UnifiedSearchRequest},
 };
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-
-const PAGE_SIZE: i64 = 50;
-
-#[derive(Debug, JsonSchema, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct NameSearchResponse {
-    pub results: Vec<SimpleUnifiedSearchResponseBaseItem<HumanReadableTimestamp>>,
-}
+use serde::Deserialize;
 
 #[derive(Debug, JsonSchema, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 #[schemars(
-    description = "Search for items by their name or title. For documents, this searches the document name. For emails, this searches the subject line. For channels, this searches the channel name and participants. For chats, this searches the chat title. For projects (folders), this searches the project name. This tool finds items based on what they're called, not their content.",
+    description = "Search for items by their name or title. For documents, this searches the document name. For emails, this searches the subject line. For chats, this searches the chat title. For projects (folders), this searches the project name. This tool finds items based on what they're called, not their content.",
     title = "NameSearch"
 )]
 pub struct NameSearch {
@@ -38,7 +30,7 @@ pub struct NameSearch {
 
 #[async_trait]
 impl AsyncTool<ToolServiceContext, RequestContext> for NameSearch {
-    type Output = NameSearchResponse;
+    type Output = SearchResponse;
 
     #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id), err)]
     async fn call(
@@ -65,7 +57,6 @@ impl AsyncTool<ToolServiceContext, RequestContext> for NameSearch {
             include: self.entity_types.clone(),
             disable_recency: false,
         };
-        println!("{:#?}", search_request);
 
         let response = context
             .search_service_client
@@ -76,9 +67,7 @@ impl AsyncTool<ToolServiceContext, RequestContext> for NameSearch {
                 internal_error: e,
             })?;
 
-        println!("{:#?}", response);
-
-        Ok(NameSearchResponse {
+        Ok(SearchResponse {
             results: response.results,
         })
     }
