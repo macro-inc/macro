@@ -9,10 +9,13 @@ mod perplexity_search;
 /// This tool is built into anthropic so is not included in the toolset / sent in the request
 pub mod anthropic_web_search;
 
+#[allow(unused)]
 mod unified;
+
+mod name;
 
 pub fn search_toolset() -> AiToolSet {
     AsyncToolSet::new()
-        .add_tool::<unified::UnifiedSearch>()
-        .expect("failed to add unified search tool")
+        .add_tool::<name::NameSearch>()
+        .expect("failed to add name search tool")
 }
