@@ -35,7 +35,9 @@ describe('partitionByQueryCache', () => {
     ];
 
     for (const entity of entities) {
-      queryClient.setQueryData(entityQueryKey(entity), [`data-${entity.entity_id}`]);
+      queryClient.setQueryData(entityQueryKey(entity), [
+        `data-${entity.entity_id}`,
+      ]);
     }
 
     const { cached, missing } = partitionByQueryCache<EntityRef, string[]>({
@@ -61,7 +63,9 @@ describe('partitionByQueryCache', () => {
 
     // Cache A, B, C
     for (const entity of entitiesABC) {
-      queryClient.setQueryData(entityQueryKey(entity), [`data-${entity.entity_id}`]);
+      queryClient.setQueryData(entityQueryKey(entity), [
+        `data-${entity.entity_id}`,
+      ]);
     }
 
     // Now request A, B, C, D - only D should be missing

@@ -3,8 +3,7 @@ import { uniqueByKeySorted } from '../../core/util/compareUtils';
 import type { EntityReference } from '../../service-clients/service-properties/generated/schemas/entityReference';
 import type { EntityType } from '../../service-clients/service-properties/generated/schemas/entityType';
 
-const normalizeStringIds = (ids: readonly string[]) =>
-  [...new Set(ids)].sort();
+const normalizeStringIds = (ids: readonly string[]) => [...new Set(ids)].sort();
 
 const entityRefKey = (e: EntityReference) => `${e.entity_type}:${e.entity_id}`;
 
