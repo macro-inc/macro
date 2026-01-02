@@ -61,7 +61,8 @@ function titleNavigationPlugin(
       // Press enter in the title editor.
       titleEditor.registerCommand(
         KEY_ENTER_COMMAND,
-        (event: KeyboardEvent) => {
+        (event) => {
+          if (!event) return false;
           if (ignoreArrows()) return true;
           event?.preventDefault();
           // Prepend a new paragraph to the main editor.
