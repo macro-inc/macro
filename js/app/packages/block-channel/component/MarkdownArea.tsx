@@ -50,6 +50,7 @@ import {
   COMMAND_PRIORITY_HIGH,
   FORMAT_TEXT_COMMAND,
   KEY_ENTER_COMMAND,
+  KEY_ESCAPE_COMMAND,
   KEY_TAB_COMMAND,
   type LexicalEditor,
   type TextFormatType,
