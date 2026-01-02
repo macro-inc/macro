@@ -29,6 +29,36 @@ async function getRpcClient(): Promise<LegacyApiRpcClient> {
   return rpcClientInstance;
 }
 
+// TODO: bake this as middleware in the generated client
+async function withRetryOn401<T>(
+  fn: () => Promise<T>,
+  maxRetries = 3
+): Promise<T> {
+  let lastError: any;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error: any) {
+      lastError = error;
+
+      // NOTE: this is the response from the generated client for a 401 error
+      const is401 = typeof error === 'string' && error.includes('401');
+
+      if (!is401 || attempt === maxRetries) {
+        throw error;
+      }
+
+      rpcClientInstance = null;
+
+      const backoffMs = (attempt + 1) * 100;
+      await new Promise((resolve) => setTimeout(resolve, backoffMs));
+    }
+  }
+
+  throw lastError;
+}
+
 export enum MacroPermissions {
   /** Able to use editor feature */
   ReadDocxEditor = 'ReadDocxEditor',
@@ -71,8 +101,10 @@ export const gqlServiceClient = {
   getUserInfo: cache(
     async function getUserPermissions() {
       try {
-        const client = await getRpcClient();
-        const data = await client.get_legacy_user_permissions();
+        const data = await withRetryOn401(async () => {
+          const client = await getRpcClient();
+          return await client.get_legacy_user_permissions();
+        });
 
         return ok({
           id: data.userId,
@@ -97,8 +129,10 @@ export const gqlServiceClient = {
   ),
   async getOrganization() {
     try {
-      const client = await getRpcClient();
-      const result = await client.get_user_organization();
+      const result = await withRetryOn401(async () => {
+        const client = await getRpcClient();
+        return await client.get_user_organization();
+      });
 
       if (!result) {
         return {
@@ -121,8 +155,10 @@ export const gqlServiceClient = {
 
   async isUserInOrg() {
     try {
-      const client = await getRpcClient();
-      const result = await client.get_user_organization();
+      const result = await withRetryOn401(async () => {
+        const client = await getRpcClient();
+        return await client.get_user_organization();
+      });
 
       return ok({
         isInOrg: !!result,
@@ -135,8 +171,10 @@ export const gqlServiceClient = {
 
   async completeOnboarding(args: CompleteOnboardingRequest) {
     try {
-      const client = await getRpcClient();
-      await client.patch_user_onboarding(args);
+      await withRetryOn401(async () => {
+        const client = await getRpcClient();
+        return await client.patch_user_onboarding(args);
+      });
       return ok(undefined);
     } catch (error) {
       return err('NETWORK_ERROR', String(error));
@@ -144,8 +182,10 @@ export const gqlServiceClient = {
   },
   async setGroup(args: SetGroupRequest) {
     try {
-      const client = await getRpcClient();
-      await client.patch_user_group(args);
+      await withRetryOn401(async () => {
+        const client = await getRpcClient();
+        return await client.patch_user_group(args);
+      });
       return ok(undefined);
     } catch (error) {
       return err('NETWORK_ERROR', String(error));
