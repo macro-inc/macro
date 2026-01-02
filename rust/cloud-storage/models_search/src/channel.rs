@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 /// A channel message match for a given channel id
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct ChannelSearchResult {
     /// The channel message id
     /// This is only prsent if the search result is on the message content
@@ -29,7 +29,7 @@ pub struct ChannelSearchResult {
 }
 
 /// A single response item, part of the ChannelSearchResponse object
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct ChannelSearchResponseItem {
     /// Standardized fields that all item types will share.
     /// These field names are being aligned across all item types
@@ -48,7 +48,7 @@ pub struct ChannelSearchResponseItem {
 }
 
 /// Metadata for a channel fetched from the database
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct ChannelMetadata {
     pub created_at: i64,
     pub updated_at: i64,
@@ -59,7 +59,7 @@ pub struct ChannelMetadata {
 /// ChannelSearchResponseItem object with channel metadata we fetch from macrodb. we don't store these
 /// timestamps in opensearch as they would require us to update each chat message record for the chat
 /// every time the chat updates (specifically for updated_at and viewed_at and interacted_at)
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct ChannelSearchResponseItemWithMetadata {
     /// Metadata from the database. None if the channel doesn't exist in the database.
     pub metadata: Option<ChannelMetadata>,
