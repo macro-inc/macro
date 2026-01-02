@@ -8,6 +8,7 @@ import { IconButton } from '@core/component/IconButton';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import { fileDrop } from '@core/directive/fileDrop';
 import TextAa from '@icon/regular/text-aa.svg';
+import XIcon from '@icon/regular/x.svg';
 import {
   $appendWatermarkNodeToLast,
   type DocumentMentionInfo,
@@ -38,6 +39,7 @@ import {
   prepareEmailBody,
 } from '../util/prepareEmailBody';
 import { AttachMenu } from './AttachMenu';
+import { TextButton } from '@core/component/TextButton';
 
 false && fileDrop;
 
@@ -231,6 +233,18 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
             }}
             portalScope="local"
           />
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <TextButton
+            class="w-fit"
+            icon={PaperclipIcon}
+            secondaryIcon={XIcon}
+            secondaryTooltip={{ label: 'Remove attachment' }}
+            onOptionClick={() => {}}
+            theme="base"
+          >
+            Test attachment.pdf
+          </TextButton>
         </div>
       </div>
       <div class="flex flex-row w-full h-8 justify-between items-center space-x-2 allow-css-brackets mt-2">
