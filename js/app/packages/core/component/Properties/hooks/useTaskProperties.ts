@@ -17,7 +17,9 @@ const TASK_PROPERTY_DEFINITION_IDS = [
   SYSTEM_PROPERTY_IDS.PRIORITY,
 ];
 
-function isTaskEntity(entity: Entity): boolean {
+function isTaskEntity(
+  entity: Entity
+): entity is Entity & { type: 'document'; subType: 'task' } {
   return entity.type === 'document' && entity.subType === 'task';
 }
 
@@ -36,5 +38,5 @@ export function useTaskProperties(
     TASK_PROPERTY_DEFINITION_IDS
   );
 
-  return () => query.data;
+  return () => query.data ?? {};
 }

@@ -96,15 +96,6 @@ function bulkEntityPropertiesQueryOptions(
   };
 }
 
-export async function fetchAndCacheBulkEntityProperties(
-  entities: readonly EntityReference[],
-  propertyDefinitionIds: readonly string[]
-): Promise<BulkEntityPropertiesData> {
-  return await queryClient.ensureQueryData(
-    bulkEntityPropertiesQueryOptions({ entities, propertyDefinitionIds })
-  );
-}
-
 export function useBulkEntityPropertiesQuery(
   entities: Accessor<readonly EntityReference[]>,
   propertyDefinitionIds: readonly string[],
@@ -127,7 +118,7 @@ export function useBulkEntityPropertiesQuery(
       }
       return {
         initialData: placeholder,
-        staleTime: 0,
+        staleTime: 30_000,
         enabled: currentEntities.length > 0,
         ...options?.(),
         ...bulkEntityPropertiesQueryOptions({

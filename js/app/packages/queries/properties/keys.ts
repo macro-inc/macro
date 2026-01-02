@@ -4,7 +4,7 @@ import type { EntityReference } from '../../service-clients/service-properties/g
 import type { EntityType } from '../../service-clients/service-properties/generated/schemas/entityType';
 
 const normalizeStringIds = (ids: readonly string[]) =>
-  [...new Set(ids)].slice().sort();
+  [...new Set(ids)].sort();
 
 const entityRefKey = (e: EntityReference) => `${e.entity_type}:${e.entity_id}`;
 
