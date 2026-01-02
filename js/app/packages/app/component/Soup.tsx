@@ -14,6 +14,7 @@ import { fileTypeToResolvedBlockName } from '@core/constant/allBlocks';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { RegisterHotkeyReturn } from '@core/hotkey/types';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import {
   DEFAULT_VIEWS,
@@ -31,6 +32,7 @@ import {
   useQueryClient as useEntityQueryClient,
 } from '@macro-entity';
 import { createEffectOnEntityTypeNotification } from '@notifications';
+import { invalidateEntityNotifications } from '@queries/notification/user-notifications';
 import { storageServiceClient } from '@service-storage/client';
 import { Navigate } from '@solidjs/router';
 import { useMutation, useQueryClient } from '@tanstack/solid-query';
@@ -311,11 +313,7 @@ export function Soup() {
       entityQueryClient.invalidateQueries({
         queryKey: queryKeys.all.channel,
       });
-      entityQueryClient.invalidateQueries({
-        queryKey: queryKeys.notification({
-          entity_id: notification.entity_id,
-        }),
-      });
+      invalidateEntityNotifications(notification.entity_id);
     }
   );
 
@@ -465,7 +463,12 @@ export function Soup() {
           />
         </Show>
       </div>
-      <Show when={showHelpDrawer().has(selectedView() as DefaultView)}>
+      <Show
+        when={
+          showHelpDrawer().has(selectedView() as DefaultView) &&
+          !isNativeMobilePlatform()
+        }
+      >
         <HelpDrawer viewId={view().id} />
       </Show>
     </div>

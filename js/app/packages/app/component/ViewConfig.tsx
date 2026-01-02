@@ -64,6 +64,7 @@ export type FilterOptions = {
   documentTypeFilter: DocumentTypeFilter[];
   projectFilter?: string;
   fromFilter?: WithCustomUserInput<'user' | 'contact'>[];
+  focusFilters?: ('signal' | 'noise')[];
 };
 
 export type SystemSortOption =
@@ -177,6 +178,7 @@ const ALL_VIEWCONFIG_DEFAULTS = {
     view: 'Signal',
     filters: {
       notificationFilter: 'notDone',
+      focusFilters: ['signal'],
     },
     sort: {
       sortBy: 'updated_at',
@@ -203,6 +205,7 @@ const ALL_VIEWCONFIG_DEFAULTS = {
     view: 'Noise',
     filters: {
       notificationFilter: 'notDone',
+      focusFilters: ['noise'],
     },
     sort: {
       sortBy: 'updated_at',

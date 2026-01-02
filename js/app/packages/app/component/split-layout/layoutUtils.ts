@@ -3,9 +3,14 @@ import type { BlockAlias, BlockName } from '@core/block';
 import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
 import type { ViewId } from '@core/types/view';
 import { createCallback } from '@solid-primitives/rootless';
-import { useContext } from 'solid-js';
+import { type Accessor, createMemo, useContext } from 'solid-js';
 import { SplitLayoutContext, SplitPanelContext } from './context';
-import type { SplitContent, SplitManager } from './layoutManager';
+import type {
+  SplitContent,
+  SplitContentType,
+  SplitHandle,
+  SplitManager,
+} from './layoutManager';
 
 export function decodePairs(segments: string[]): SplitContent[] {
   const pairs: SplitContent[] = [];
@@ -126,9 +131,47 @@ export function focusAdjacentSplit(direction: 'left' | 'right') {
 }
 
 /**
- * Check if there's a unified-list split with a particular view open.
+ * Check if there's a unified-list split with a particular view open. Note: not necessarily the active split.
  */
-export function isViewOpen(manager: SplitManager, viewId: ViewId): boolean {
+export function isViewOpen(manager: SplitManager | undefined, viewId: ViewId) {
+  if (!manager) return false;
   const split = manager.getSplitByContent('component', 'unified-list');
   return split?.meta()?.viewId === viewId;
+}
+
+/**
+ * Reactive accessor indicating whether there's a unified-list split with a particular view open. Note: not necessarily the active split.
+ */
+export function createIsViewOpenMemo(
+  manager: SplitManager | undefined,
+  viewId: ViewId
+) {
+  return createMemo(() => isViewOpen(manager, viewId));
+}
+
+/**
+ * Reactive accessor for the currently active split (via the global split manager).
+ */
+export function createActiveSplitMemo(manager?: SplitManager) {
+  return createMemo<SplitHandle | undefined>(() => {
+    const resolvedManager = manager ?? globalSplitManager();
+    if (!resolvedManager) return;
+    const activeSplitId = resolvedManager.activeSplitId();
+    return activeSplitId ? resolvedManager.getSplit(activeSplitId) : undefined;
+  });
+}
+
+/**
+ * Reactive boolean accessor indicating whether the active split is currently
+ * showing a specific component content id.
+ */
+export function createIsActiveSplitContentMemo(
+  activeSplit: Accessor<SplitHandle | undefined>,
+  contentType: SplitContentType,
+  id: string
+) {
+  return createMemo(() => {
+    const content = activeSplit()?.content();
+    return content?.type === contentType && content.id === id;
+  });
 }

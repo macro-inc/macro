@@ -4,7 +4,6 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { String } from './string';
 
 export type ChannelMessageSendMetadataAllOf = {
   /** The content of the message */
@@ -12,5 +11,5 @@ export type ChannelMessageSendMetadataAllOf = {
   /** The message id */
   messageId: string;
   /** The user who sent the message */
-  sender: String;
+  sender: string;
 };

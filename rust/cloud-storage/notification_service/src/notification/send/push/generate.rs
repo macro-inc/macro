@@ -6,7 +6,7 @@ use model::document::{FileType, FileTypeExt};
 use model_notifications::NotificationWithRecipient;
 use model_notifications::{
     ChannelInviteMetadata, ChannelMentionMetadata, ChannelMessageSendMetadata,
-    ChannelReplyMetadata, DocumentMentionMetadata,
+    ChannelReplyMetadata, DocumentMentionMetadata, TaskAssignedMetadata,
 };
 use models_comms::ChannelType;
 use sns_client::{APNSPushNotification, Aps};
@@ -179,6 +179,13 @@ pub fn generate_apns_notification<T: XmlFormatter>(
         model_notifications::NotificationEvent::NewEmail(_new_email_metadata) => None,
         model_notifications::NotificationEvent::InviteToTeam(_invite_to_team_metadata) => None,
         model_notifications::NotificationEvent::RejectTeamInvite => None,
+        model_notifications::NotificationEvent::TaskAssigned(task_assigned_metadata) => Some(
+            task_assigned_metadata
+                .build_apns_notification::<T>(parse_user()?)?
+                .map(|()| {
+                    create_push_data(Route(format!("/task/{}", task_assigned_metadata.task_id)))
+                }),
+        ),
     })
 }
 
@@ -306,6 +313,36 @@ impl BuildNotification for ChannelInviteMetadata {
                         "{} invited you to join the channel",
                         self.invited_by
                     )),
+                    ..Default::default()
+                })),
+                ..Default::default()
+            },
+            push_notification_data: (),
+        })
+    }
+}
+
+impl BuildNotification for TaskAssignedMetadata {
+    type Ctx<'a> = MacroUserIdStr<'a>;
+
+    fn build_apns_notification<T: XmlFormatter>(
+        &self,
+        ctx: Self::Ctx<'_>,
+    ) -> Result<APNSPushNotification<()>, NotificationErr> {
+        let assigner_email = ctx.email_part().email_str().to_string();
+        let title = assigner_email;
+
+        let body = if let Some(ref task_name) = self.task_name {
+            format!("assigned you to {}", task_name)
+        } else {
+            "assigned you a task".to_string()
+        };
+
+        Ok(APNSPushNotification {
+            aps: Aps {
+                alert: Some(sns_client::Alert::Dictionary(sns_client::AlertDictionary {
+                    title: Some(title),
+                    body: Some(body.to_string()),
                     ..Default::default()
                 })),
                 ..Default::default()

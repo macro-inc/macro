@@ -35,7 +35,7 @@ async fn main() -> anyhow::Result<()> {
 
     if matches!(config.environment, Environment::Local) {
         let tool_schemas =
-            serde_json::to_string_pretty(&api::tools::tool_schemas()).expect("tool schemas");
+            serde_json::to_string_pretty(&ai_tools::all_tool_schemas()).expect("tool schemas");
         std::fs::write("schemas/tools.json", tool_schemas).expect("write_tool_schema");
     }
 

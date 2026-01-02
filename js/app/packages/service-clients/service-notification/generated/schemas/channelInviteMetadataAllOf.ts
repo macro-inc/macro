@@ -4,8 +4,7 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { String } from './string';
 
 export type ChannelInviteMetadataAllOf = {
-  invitedBy: String;
+  invitedBy: string;
 };

@@ -229,11 +229,11 @@ export function AttachMenu(props: AttachMenuProps) {
             >
               <OldMenuItem
                 text={
-                  isTouchDevice
+                  isTouchDevice()
                     ? 'Upload from your device'
                     : 'Upload from your computer'
                 }
-                icon={isTouchDevice ? DeviceMobileIcon : LaptopIcon}
+                icon={isTouchDevice() ? DeviceMobileIcon : LaptopIcon}
               />
             </div>
           </OldMenu>

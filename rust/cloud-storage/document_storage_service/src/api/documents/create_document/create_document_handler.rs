@@ -15,12 +15,8 @@ use model::{
     response::{GenericErrorResponse, GenericResponse},
 };
 use model_user::axum_extractor::MacroUserExtractor;
-use models_opensearch::SearchEntityType;
 use models_permissions::share_permission::access_level::EditAccessLevel;
-use sqs_client::search::SearchQueueMessage;
-use sqs_client::search::name::EntityName;
 use std::str::FromStr;
-use tracing::Instrument;
 
 /// Handles creating a document
 #[utoipa::path(
@@ -117,37 +113,14 @@ pub(in crate::api) async fn create_document_handler(
         }
     };
 
-    tokio::spawn({
-        let sqs_client = state.sqs_client.clone();
-        let document_id = response_data
+    utils::notify_search_service_of_document_name_update(
+        state.sqs_client.clone(),
+        response_data
             .document_response
             .document_metadata
             .document_id
-            .clone();
-        async move {
-            tracing::trace!("sending message to search extractor queue");
-            let document_id = match macro_uuid::string_to_uuid(&document_id) {
-                Ok(document_id) => document_id,
-                Err(err) => {
-                    tracing::error!(error=?err, "failed to convert document_id to uuid");
-                    return;
-                }
-            };
-
-            let _ = sqs_client
-                .send_message_to_search_event_queue(SearchQueueMessage::UpdateEntityName(
-                    EntityName {
-                        entity_id: document_id,
-                        entity_type: SearchEntityType::Documents,
-                    },
-                ))
-                .await
-                .inspect_err(|e| {
-                    tracing::error!(error=?e, "SEARCH_QUEUE unable to enqueue message");
-                });
-        }
-        .in_current_span()
-    });
+            .clone(),
+    );
 
     return GenericResponse::builder()
         .data(&response_data)

@@ -120,6 +120,8 @@ export * from './projectSearchResult';
 export * from './projectSearchResultScore';
 export * from './searchHighlight';
 export * from './searchHighlightName';
+export * from './searchHighlightSender';
+export * from './searchHighlightUserId';
 export * from './searchOn';
 export * from './searchResponse';
 export * from './simpleChannelSearchParams';

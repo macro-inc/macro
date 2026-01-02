@@ -24,7 +24,7 @@ const [renderStore, setRenderStore] = createStore<
 
 const toolHandlers: ToolHandlerMap<RenderContext> = {
   UnifiedSearch: unifiedSearchHandler,
-  WebSearch: webSearchHandler,
+  web_search: webSearchHandler,
   MarkdownRewrite: rewriteHandler,
   Read: readHandler,
   ListDocuments: listDocumentsHandler,

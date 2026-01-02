@@ -1,6 +1,7 @@
 import { useChannelsContext } from '@core/component/ChannelsProvider';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { ENABLE_SEARCH_SERVICE } from '@core/constant/featureFlags';
+import { emailToId } from '@core/user';
 import { isErr } from '@core/util/maybeResult';
 import {
   extractSearchSnippet,
@@ -108,6 +109,9 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
         return contents.map((content) => ({
           type: 'email' as const,
           content: mergeAdjacentMacroEmTags(content),
+          sender: r.pretty_sender!,
+          senderId: emailToId(r.sender),
+          sentAt: r.sent_at!,
           location: {
             type: 'email' as const,
             messageId: r.message_id!,
