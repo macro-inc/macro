@@ -115,8 +115,6 @@ function registerNormalizeEnterPlugin(editor: LexicalEditor) {
       (e) => {
         if (e?.shiftKey) {
           if ($isAtStartOfEmptyParagraph()) {
-            const sel = $getSelection();
-            if (!sel) return false;
             e.preventDefault();
             editor.dispatchCommand(KEY_ENTER_COMMAND, null);
             return true;
