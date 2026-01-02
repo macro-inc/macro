@@ -636,7 +636,7 @@ export function Email(props: EmailProps) {
     >
       <EmailFormContextProvider>
         <div class="w-full h-full bg-panel select-none overscroll-none overflow-hidden flex flex-col">
-          <TopBar title={props.title()} />
+          <TopBar id={props.threadId()} title={props.title()} />
           <div
             class="w-full flex-1 flex flex-col items-center justify-center overflow-hidden"
             ref={setMessagesContainerRef}
