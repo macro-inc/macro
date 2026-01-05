@@ -783,6 +783,11 @@ export function ShareOptions(props: {
   const options = createMemo(() => {
     const optionsList: { value: string; label: string }[] = [];
 
+    // Add no access option if not hidden
+    if (!props.hideNoAccess) {
+      optionsList.push({ value: 'none', label: accessLevelText(null) });
+    }
+
     // Add comment option if applicable
     if (blockName !== 'md' || ENABLE_MARKDOWN_COMMENTS) {
       optionsList.push({ value: 'comment', label: accessLevelText('comment') });
@@ -794,11 +799,6 @@ export function ShareOptions(props: {
     // Add edit option if enabled
     if (editPermissionEnabled) {
       optionsList.push({ value: 'edit', label: accessLevelText('edit') });
-    }
-
-    // Add no access option if not hidden
-    if (!props.hideNoAccess) {
-      optionsList.push({ value: 'none', label: accessLevelText(null) });
     }
 
     return optionsList;
