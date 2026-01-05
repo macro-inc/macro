@@ -109,16 +109,19 @@ export function EntityRowProvider(
 
   let rafId: number | null = null;
 
-  const resetEntityState = () => {
+  const resetRowState = () => {
     const els = touchState.elements;
     const id = touchState.entityId;
     if (!els || !id) return;
     // if row has not been collapsed, reset its styling.
     setTimeout(() => {
       if (!isAtLeastPhase(stateById()[id]?.phase, 'collapsing')) {
-        setState(id, { direction: null, phase: 'idle' });
-        els.contentEl.style.transition = ``;
+        els.contentEl.style.transition = `transform ${SPRING_BACK_SPEED}ms ease-out`;
         els.contentEl.style.transform = 'translateX(0px)';
+        setTimeout(() => {
+          els.contentEl.style.transition = ``;
+          setState(id, { direction: null, phase: 'idle' });
+        }, SPRING_BACK_SPEED);
       }
     }, COLLAPSE_SPEED);
   };
@@ -168,7 +171,8 @@ export function EntityRowProvider(
     if (!els) return;
     const direction = stateById()[entityId]?.direction;
     if (!direction) return;
-    const onSwipe = direction === 'left' ? props.onSwipeLeft : props.onSwipeRight;
+    const onSwipe =
+      direction === 'left' ? props.onSwipeLeft : props.onSwipeRight;
     if (!onSwipe) return;
 
     // Cancel any pending animation frame
@@ -188,7 +192,9 @@ export function EntityRowProvider(
       els.contentEl.style.transition = ``;
       els.contentEl.style.transform = 'translateX(0px)';
     }, COLLAPSE_SPEED);
-  }
+
+    resetRowState();
+  };
 
   const canSwipeRight = (entityId: string) => {
     if (!props.onSwipeRight) return false;
@@ -334,12 +340,10 @@ export function EntityRowProvider(
       !touchState.entityId ||
       !touchState.isSwipeGesture
     ) {
-      resetEntityState();
       resetTouchState();
       return;
     }
     if (isAtLeastPhase(stateById()[touchState.entityId]?.phase, 'triggered')) {
-      resetEntityState();
       resetTouchState();
       return;
     }
@@ -359,13 +363,13 @@ export function EntityRowProvider(
       springBack();
     }
 
-    resetEntityState();
+    resetRowState();
     resetTouchState();
   };
 
   const onTouchCancel = (_e: TouchEvent) => {
     springBack();
-    resetEntityState();
+    resetRowState();
     resetTouchState();
   };
 

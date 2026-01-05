@@ -444,7 +444,7 @@ export function createNavigationEntityListShortcut({
               mode: 'step',
             });
           }
-        } else {
+        } else if (!isTouchModality()) {
           if (isEntityLastItem()) {
             navigateThroughList({ axis: 'start', mode: 'step' });
           } else {
