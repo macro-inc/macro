@@ -299,6 +299,7 @@ where
     V: EmailService,
     C: ChannelsService,
 {
+    #[tracing::instrument(err, skip(self))]
     async fn get_user_soup(&self, req: SoupRequest) -> Result<SoupOutput, SoupErr> {
         let limit = req.limit.clamp(20, 500);
         let paginate_filter = req.cursor.filter().cloned();
