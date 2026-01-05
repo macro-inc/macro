@@ -409,15 +409,16 @@ export function createUnifiedInfiniteList<T extends EntityData>({
     hasRefinementsFromBase?: boolean;
     viewId?: ViewId;
     searchText?: string;
+    entityMinHeight?: number;
   }) => {
     const [scrollParentRef, setScrollParentRef] =
       createSignal<HTMLDivElement>();
 
     // Estimate items per viewport and derive overscan and page size
-    // Keep a conservative default item size for estimation; virtua will auto-measure precisely.
-    const ENTITY_HEIGHT = 40;
+    // Keep a conservative default item size for estimation;
+    const entityHeight = props.entityMinHeight ?? 40;
     const viewportItemCount = createMemo(() =>
-      Math.max(1, Math.ceil(containerHeight() / ENTITY_HEIGHT))
+      Math.max(1, Math.ceil(containerHeight() / entityHeight))
     );
     const computedOverscan = createMemo(() =>
       Math.max(6, Math.ceil(viewportItemCount() * 0.5))
@@ -426,7 +427,7 @@ export function createUnifiedInfiniteList<T extends EntityData>({
       get count() {
         return sortedEntitiesStore.length;
       },
-      estimateSize: () => ENTITY_HEIGHT,
+      estimateSize: () => entityHeight,
       getScrollElement: () => scrollParentRef() as Element,
       overscan: computedOverscan(),
     });

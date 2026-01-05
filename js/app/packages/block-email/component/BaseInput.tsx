@@ -5,7 +5,6 @@ import { useHasPaidAccess } from '@core/auth';
 import { useBlockId } from '@core/block';
 import { BrightJoins } from '@core/component/BrightJoins';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import type { UserMentionRecord } from '@core/component/LexicalMarkdown/component/menu/MentionsMenu';
@@ -18,17 +17,17 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { trackMention } from '@core/signal/mention';
 import { useDisplayName } from '@core/user';
+import ArrowUp from '@icon/bold/arrow-up-bold.svg';
 import Spinner from '@icon/bold/spinner-gap-bold.svg';
 import ReplyAll from '@icon/regular/arrow-bend-double-up-left.svg';
 import Reply from '@icon/regular/arrow-bend-up-left.svg';
 import Forward from '@icon/regular/arrow-bend-up-right.svg';
-import CaretDown from '@icon/regular/caret-down.svg';
-import CheckIcon from '@icon/regular/check.svg';
-import DotsThree from '@icon/regular/dots-three.svg';
 import Plus from '@icon/regular/plus.svg';
+import Quotes from '@icon/regular/quotes.svg';
 import TextAa from '@icon/regular/text-aa.svg';
 import Trash from '@icon/regular/trash.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import { ToggleButton as KToggleButton } from '@kobalte/core/toggle-button';
 import {
   $appendWatermarkNodeToLast,
   $removeAllWatermarkNodes,
@@ -80,12 +79,12 @@ import { handleFileUpload } from '../util/handleFileUpload';
 import { makeAttachmentPublic } from '../util/makeAttachmentPublic';
 import { getFirstName } from '../util/name';
 import {
-  APPEND_PREVIOUS_EMAIL_COMMAND,
   appendItemsAsMacroMentions,
   clearEmailBody,
   prepareEmailBody,
   prepareMacroBody,
-  registerAppendPreviousEmail,
+  registerToggleAppendedThread,
+  TOGGLE_APPEND_EMAIL_THREAD_COMMAND,
 } from '../util/prepareEmailBody';
 import { convertEmailRecipientToContactInfo } from '../util/recipientConversion';
 import { getReplyTypeFromDraft } from '../util/replyType';
@@ -231,7 +230,7 @@ export function BaseInput(props: {
   });
 
   lazyRegister(editor, (editor) => {
-    return registerAppendPreviousEmail(editor);
+    return registerToggleAppendedThread(editor);
   });
 
   const userEmail = useEmail();
@@ -559,7 +558,7 @@ export function BaseInput(props: {
       attachComposeHotkeys(composeContainerRef);
 
       registerHotkey({
-        hotkey: 'shift+cmd+enter',
+        hotkey: 'cmd+enter',
         scopeId: composeHotkeyScope,
         description: 'Send email',
         keyDownHandler: () => {
@@ -572,7 +571,7 @@ export function BaseInput(props: {
       });
 
       registerHotkey({
-        hotkey: 'cmd+enter',
+        hotkey: 'shift+cmd+enter',
         scopeId: composeHotkeyScope,
         description: 'Send and mark done',
         keyDownHandler: () => {
@@ -848,24 +847,6 @@ export function BaseInput(props: {
             domRef={props.markdownDomRef}
           />
         </div>
-        <Show when={!form().replyAppended()}>
-          <div class="px-2 flex flex-row items-center space-x-2">
-            <DeprecatedIconButton
-              theme="clear"
-              icon={DotsThree}
-              onclick={() => {
-                form().setReplyAppended(true);
-                editor()?.dispatchCommand(APPEND_PREVIOUS_EMAIL_COMMAND, {
-                  replyingTo: props.replyingTo(),
-                  replyType: effectiveReplyType(),
-                });
-                editor()?.update(() => {
-                  $getRoot().getFirstChild()?.selectStart();
-                });
-              }}
-            />
-          </div>
-        </Show>
         <div class="flex flex-row w-full h-8 justify-between items-center py-2 px-2 mb-2 space-x-2 allow-css-brackets">
           <div class="flex flex-row items-center gap-2">
             <div class="relative" ref={attachButtonRef}>
@@ -892,6 +873,43 @@ export function BaseInput(props: {
                 setShowFormatRibbon(!showFormatRibbon());
               }}
             />
+
+            <Tooltip
+              tooltip={
+                form().replyAppended() ? 'Hide quoted text' : 'Show quoted text'
+              }
+            >
+              <KToggleButton
+                class={
+                  'w-fit disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none [&:focus]:disabled:[--focus-border-inset:0] [&:focus]:[--focus-border-inset:-3px] group'
+                }
+                pressed={form().replyAppended()}
+                onChange={() => {
+                  const replyingToID = props.replyingTo()?.replying_to_id;
+                  if (!replyingToID) return;
+
+                  const currentlyAppended = form().replyAppended();
+                  form().setReplyAppended(!currentlyAppended);
+
+                  editor()?.dispatchCommand(
+                    TOGGLE_APPEND_EMAIL_THREAD_COMMAND,
+                    {
+                      replyingTo: props.replyingTo(),
+                      replyType: effectiveReplyType(),
+                      visible: !currentlyAppended,
+                    }
+                  );
+
+                  editor()?.update(() => {
+                    $getRoot().getFirstChild()?.selectStart();
+                  });
+                }}
+              >
+                <div class="min-w-[22px] text-xs font-medium font-mono text-ink-muted text-center uppercase leading-none whitespace-nowrap group-data-[pressed]:bg-accent/10 group-data-[pressed]:hover:bg-accent/20 group-data-[pressed='false']:hover:text-ink hover:bg-edge-muted hover-transition-bg group-data-[pressed]:text-accent-ink p-1">
+                  <Quotes class="inline size-4" />
+                </div>
+              </KToggleButton>
+            </Tooltip>
             <Show when={savedDraftId()}>
               <DeprecatedIconButton
                 theme="base"
@@ -902,45 +920,22 @@ export function BaseInput(props: {
             </Show>
           </div>
           <div class="flex flex-row items-center">
-            <DeprecatedTextButton
-              theme="base"
+            <button
               disabled={isPendingUpload() || sendMutation.isPending}
-              onClick={() => {
-                sendEmail(true);
-              }}
-              tooltip={{
-                label: 'Send and mark done',
-                hotkeyToken: TOKENS.email.sendAndMarkDone,
-              }}
+              onClick={() => sendEmail()}
+              class="text-ink-muted hover:scale-115 transition ease-in-out flex flex-col justify-center items-center size-6 rounded-full"
             >
               <Show
                 when={!isPendingUpload() && !sendMutation.isPending}
                 fallback={
-                  <Spinner class="w-5 h-5 animate-spin cursor-disabled" />
+                  <Spinner class="size-6 animate-spin cursor-disabled" />
                 }
               >
-                <div class="flex fles-row items-center gap-0.5">
-                  <span>Send +</span>
-                  <CheckIcon class="size-4" />
+                <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center">
+                  <ArrowUp class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
                 </div>
               </Show>
-            </DeprecatedTextButton>
-            <DropdownMenu>
-              <DropdownMenu.Trigger>
-                <div class="w-8 min-h-8 flex justify-center items-center h-full border-r border-t border-b border-ink hover:bg-hover">
-                  <CaretDown class="size-4 text-ink transition-transform [[data-expanded]_&]:scale-y-[-1]" />
-                </div>
-              </DropdownMenu.Trigger>
-              <DropdownMenuContent>
-                <MenuItem
-                  text="Send without marking done"
-                  onClick={() => {
-                    sendEmail();
-                  }}
-                  hotkeyToken={TOKENS.email.send}
-                />
-              </DropdownMenuContent>
-            </DropdownMenu>
+            </button>
           </div>
         </div>
       </div>

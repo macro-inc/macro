@@ -13,6 +13,7 @@ import { isInteractiveElement } from '@core/util/isInteractiveElement';
 import { filterMap } from '@core/util/list';
 import { isErr } from '@core/util/maybeResult';
 import { getScrollParent } from '@core/util/scrollParent';
+import { scrollToKeepGap } from '@core/util/scrollToKeepGap';
 import { waitForFrames } from '@core/util/sleep';
 import { type EntityData, isTaskEntity } from '@macro-entity';
 import { entityHasUnreadNotifications } from '@notifications';
@@ -45,6 +46,7 @@ import {
   type SetStoreFunction,
   type Store,
 } from 'solid-js/store';
+import { ENTITY_HEIGHT } from '../../macro-entity/src/components/EntityWithEverything';
 import { useUserId } from '../../macro-entity/src/queries/auth';
 import { createBulkCopyDssEntityMutation } from '../../macro-entity/src/queries/dss';
 import { playSound } from '../util/sound';
@@ -192,6 +194,10 @@ function createViewData(
         viewProps?.filters?.fromFilter ??
         VIEWCONFIG_BASE.filters.fromFilter ??
         [],
+      focusFilters:
+        viewProps?.filters?.focusFilters ??
+        VIEWCONFIG_BASE.filters.focusFilters ??
+        [],
     },
     display: {
       layout: viewProps?.display?.layout ?? VIEWCONFIG_BASE.display.layout,
@@ -271,6 +277,7 @@ export function createNavigationEntityListShortcut({
   const isViewingList = createMemo(() => {
     return splitHandle.content().id === 'unified-list';
   });
+  let lastMultiNavigationInput: NavigationInput;
 
   // `gg` to jump to top of list (legacy behavior) via command-scope hotkeys.
   const goScope = registerHotkey({
@@ -386,22 +393,44 @@ export function createNavigationEntityListShortcut({
 
   actionRegistry.register(
     'mark_as_done',
-    async (entities) => {
+    async (multiSelectEntities) => {
       const handler =
         VIEWCONFIG_DEFAULTS[selectedView() as DefaultView]?.hotkeyOptions?.e;
 
-      const hasSupportedEntity = entities.some(
+      const hasSupportedEntity = multiSelectEntities.some(
         (entity) => getPropertiesEntityType(entity) !== undefined
       );
 
       if (handler || hasSupportedEntity) {
-        if (isEntityLastItem()) {
-          navigateThroughList({ axis: 'start', mode: 'step' });
+        if (multiSelectEntities.length > 1) {
+          const selectedEntityData = getSelectedEntity();
+          const selectedEntityIncludedInMultiSelectedEntities =
+            multiSelectEntities.find(
+              (entity) => selectedEntityData?.entity.id === entity.id
+            );
+
+          // update selected entity to current selected entity's neighbor, before/after neighbor is based on last navigation direction.
+          // if selected entity is not from multi selected list, don't update selected entity
+          if (selectedEntityIncludedInMultiSelectedEntities) {
+            const index = selectedEntityData?.index ?? 0;
+
+            const newSelectedEntity = entities()?.at(index);
+            setSelectedEntity(newSelectedEntity);
+
+            navigateThroughList({
+              axis: lastMultiNavigationInput.axis,
+              mode: 'step',
+            });
+          }
         } else {
-          navigateThroughList({ axis: 'end', mode: 'step' });
+          if (isEntityLastItem()) {
+            navigateThroughList({ axis: 'start', mode: 'step' });
+          } else {
+            navigateThroughList({ axis: 'end', mode: 'step' });
+          }
         }
 
-        for (const entity of entities) {
+        for (const entity of multiSelectEntities) {
           if (handler) {
             handler(entity, {
               soupContext: unifiedListContext,
@@ -964,6 +993,7 @@ export function createNavigationEntityListShortcut({
           container: scrollParent,
           target: newSelectedEntityEl.parentElement!,
           align: axis === 'start' ? 'top' : 'bottom',
+          gap: ENTITY_HEIGHT,
         });
       }
 
@@ -1119,6 +1149,7 @@ export function createNavigationEntityListShortcut({
     hotkeyToken: TOKENS.entity.select.end,
     keyDownHandler: () => {
       const navigationInput: NavigationInput = { axis: 'end', mode: 'step' };
+      lastMultiNavigationInput = navigationInput;
       return handleNavigationSelection(navigationInput);
     },
     canExecuteKeyDownHandler: () => isViewingList(),
@@ -1145,6 +1176,7 @@ export function createNavigationEntityListShortcut({
     description: 'Select up',
     keyDownHandler: () => {
       const navigationInput: NavigationInput = { axis: 'start', mode: 'step' };
+      lastMultiNavigationInput = navigationInput;
       return handleNavigationSelection(navigationInput);
     },
     canExecuteKeyDownHandler: () => isViewingList(),
@@ -1460,61 +1492,6 @@ const useAllViews = ({
 
   return [viewsData, setViewsData] as const;
 };
-
-type AlignMode = 'top' | 'bottom';
-
-/**
- * Conditionally scrolls the container to align the target element
- * near either the container's top or bottom based on the align parameter.
- *
- * @param container - The scrollable container
- * @param target - The element to bring into view
- * @param threshold - Distance from the viewport edge within which to trigger scroll
- * @param gap - Desired distance from the aligned edge after scrolling
- * @param align - "top" or "bottom" (default: "bottom")
- */
-export function scrollToKeepGap({
-  container,
-  target,
-  threshold,
-  gap,
-  align = 'bottom',
-}: {
-  container: Element;
-  target: Element;
-  threshold?: number; // px distance from edge to trigger scroll
-  gap?: number; // px distance from edge after scrolling
-  align?: AlignMode; // "top" | "bottom"
-}) {
-  const containerRect = container.getBoundingClientRect();
-  const targetRect = target.getBoundingClientRect();
-
-  // Relative positions (in container scroll coordinates)
-  const targetTop = targetRect.top - containerRect.top + container.scrollTop;
-  const targetBottom =
-    targetRect.bottom - containerRect.top + container.scrollTop;
-
-  gap = targetRect.height ?? 50;
-  threshold = targetRect.height ?? 50;
-
-  if (align === 'bottom') {
-    const containerBottom = container.scrollTop + container.clientHeight;
-    const distanceToBottom = containerBottom - targetBottom;
-
-    if (distanceToBottom <= threshold) {
-      const newScrollTop = targetBottom - container.clientHeight + gap;
-      container.scrollTo({ top: newScrollTop, behavior: 'auto' });
-    }
-  } else {
-    // align = "top"
-    const distanceToTop = targetTop - container.scrollTop;
-
-    if (distanceToTop <= threshold) {
-      const newScrollTop = targetTop - gap;
-      container.scrollTo({ top: newScrollTop, behavior: 'auto' });
-    }
-  }
-}
 
 let globalKeyboardEvent: KeyboardEvent | undefined;
 

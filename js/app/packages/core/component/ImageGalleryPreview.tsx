@@ -97,13 +97,13 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
   };
 
   const handleTouchStart = (e: TouchEvent) => {
-    if (!isMobileWidth() || !isTouchDevice) return;
+    if (!isMobileWidth() || !isTouchDevice()) return;
     setTouchStartX(e.touches[0].clientX);
     setIsSwiping(false);
   };
 
   const handleTouchMove = (e: TouchEvent) => {
-    if (!isMobileWidth() || !isTouchDevice) return;
+    if (!isMobileWidth() || !isTouchDevice()) return;
     setTouchEndX(e.touches[0].clientX);
 
     const diffX = Math.abs(touchStartX() - e.touches[0].clientX);
@@ -113,7 +113,7 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
   };
 
   const handleTouchEnd = () => {
-    if (!isMobileWidth() || !isTouchDevice || !isSwiping()) return;
+    if (!isMobileWidth() || !isTouchDevice() || !isSwiping()) return;
 
     const swipeThreshold = 50;
     const diff = touchStartX() - touchEndX();
@@ -172,7 +172,7 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
   };
 
   const handleMouseMove = () => {
-    if (isMobileWidth() || isTouchDevice) return;
+    if (isMobileWidth() || isTouchDevice()) return;
 
     setIsToolbarVisible(true);
 
@@ -188,7 +188,7 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
   const copyToClipboard = async () => {
     const imageUrl = currentImageUrl();
     if (!imageUrl) return;
-    if (isTouchDevice) {
+    if (isTouchDevice()) {
       try {
         const blob = await platformFetch(imageUrl).then((res) => res.blob());
         const file = new File([blob], 'image.png', { type: blob.type });
@@ -253,7 +253,7 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
   };
 
   const copyToClipboardById = async (id: string) => {
-    if (isTouchDevice) {
+    if (isTouchDevice()) {
       try {
         const blob = await platformFetch(getImageUrl(id)).then((res) =>
           res.blob()
@@ -358,7 +358,7 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
 
     window.addEventListener('keydown', handleKeyDown);
 
-    if (!isMobileWidth() && !isTouchDevice) {
+    if (!isMobileWidth() && !isTouchDevice()) {
       setTimeout(() => {
         window.addEventListener('mousemove', handleMouseMove);
       }, 500);
@@ -388,7 +388,7 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
       }
     };
 
-    if (isMobileWidth() && isTouchDevice) {
+    if (isMobileWidth() && isTouchDevice()) {
       image.addEventListener('touchstart', handleTouchStartWrapper, {
         passive: true,
       });
@@ -411,7 +411,7 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
         clearTimeout(hideToolbarTimeout);
       }
 
-      if (isMobileWidth() && isTouchDevice) {
+      if (isMobileWidth() && isTouchDevice()) {
         image.removeEventListener('touchstart', handleTouchStartWrapper);
         image.removeEventListener('touchmove', handleTouchMoveWrapper);
         image.removeEventListener('touchend', handleTouchEndWrapper);
@@ -509,7 +509,7 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
                       '-ms-user-select': 'none',
                       'user-select': 'none',
                     }}
-                    draggable={!isTouchDevice}
+                    draggable={!isTouchDevice()}
                   />
                 </Dialog.Trigger>
               </div>
@@ -518,20 +518,17 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
         </For>
       </div>
       <Dialog.Portal>
-        <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay backdrop-blur-md" />
+        <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay pattern-edge-muted pattern-diagonal-4" />
         <div class="fixed inset-0 z-modal w-screen h-screen flex items-center justify-center p-2 pb-6 sm:p-12">
-          <Dialog.Content
-            class="relative flex items-center justify-center w-full h-full sm:w-auto sm:h-auto"
-            onOpenAutoFocus={(e) => e.preventDefault()}
-          >
+          <Dialog.Content class="relative flex items-center justify-center w-full h-full sm:w-auto sm:h-auto bg-panel">
             {/* Top toolbar */}
             <div
               class="absolute top-4 right-4 bg-dialog backdrop-blur-sm rounded-lg border border-edge p-1 flex flex-row items-center gap-1 shadow-md transition-opacity duration-300"
               classList={{
                 'opacity-100':
-                  isMobileWidth() || isTouchDevice || isToolbarVisible(),
+                  isMobileWidth() || isTouchDevice() || isToolbarVisible(),
                 'opacity-0 pointer-events-none':
-                  !isMobileWidth() && !isTouchDevice && !isToolbarVisible(),
+                  !isMobileWidth() && !isTouchDevice() && !isToolbarVisible(),
               }}
               style={{ 'z-index': stackingContext.zModal + 1 }}
             >
@@ -558,15 +555,18 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
             </div>
 
             {/* Navigation arrows */}
-            <Show when={!isMobileWidth() || !isTouchDevice}>
-              <Show when={props.images.length > 1 && hasPrevious()}>
+            <Show when={!isMobileWidth() || !isTouchDevice()}>
+              <Show when={props.images.length > 1}>
                 <button
                   class="absolute left-4 top-1/2 -translate-y-1/2 bg-dialog backdrop-blur-sm rounded-lg border border-edge p-2 shadow-md hover:bg-button transition-opacity duration-300"
                   classList={{
+                    hidden: !hasPrevious(),
                     'opacity-100':
-                      isMobileWidth() || isTouchDevice || isToolbarVisible(),
+                      isMobileWidth() || isTouchDevice() || isToolbarVisible(),
                     'opacity-0 pointer-events-none':
-                      !isMobileWidth() && !isTouchDevice && !isToolbarVisible(),
+                      !isMobileWidth() &&
+                      !isTouchDevice() &&
+                      !isToolbarVisible(),
                   }}
                   style={{ 'z-index': stackingContext.zModal + 1 }}
                   onClick={navigatePrevious}
@@ -576,14 +576,17 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
                 </button>
               </Show>
 
-              <Show when={props.images.length > 1 && hasNext()}>
+              <Show when={props.images.length > 1}>
                 <button
                   class="absolute right-4 top-1/2 -translate-y-1/2 bg-dialog backdrop-blur-sm rounded-lg border border-edge p-2 shadow-md hover:bg-button transition-opacity duration-300"
                   classList={{
+                    hidden: !hasNext(),
                     'opacity-100':
-                      isMobileWidth() || isTouchDevice || isToolbarVisible(),
+                      isMobileWidth() || isTouchDevice() || isToolbarVisible(),
                     'opacity-0 pointer-events-none':
-                      !isMobileWidth() && !isTouchDevice && !isToolbarVisible(),
+                      !isMobileWidth() &&
+                      !isTouchDevice() &&
+                      !isToolbarVisible(),
                   }}
                   style={{ 'z-index': stackingContext.zModal + 1 }}
                   onClick={navigateNext}
@@ -600,9 +603,9 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
                 class="absolute top-4 left-4 bg-dialog backdrop-blur-sm rounded-lg border border-edge px-3 py-1.5 shadow-md transition-opacity duration-300"
                 classList={{
                   'opacity-100':
-                    isMobileWidth() || isTouchDevice || isToolbarVisible(),
+                    isMobileWidth() || isTouchDevice() || isToolbarVisible(),
                   'opacity-0 pointer-events-none':
-                    !isMobileWidth() && !isTouchDevice && !isToolbarVisible(),
+                    !isMobileWidth() && !isTouchDevice() && !isToolbarVisible(),
                 }}
                 style={{ 'z-index': stackingContext.zModal + 1 }}
               >

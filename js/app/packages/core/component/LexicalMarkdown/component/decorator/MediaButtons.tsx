@@ -127,7 +127,9 @@ export function MediaButtons(props: MediaButtonsProps) {
                     }}
                   />
                 </Show>
-                <Show when={props.newTab && !isMobileWidth() && !isTouchDevice}>
+                <Show
+                  when={props.newTab && !isMobileWidth() && !isTouchDevice()}
+                >
                   <MenuItem
                     text="Open in new tab"
                     icon={NewTab}

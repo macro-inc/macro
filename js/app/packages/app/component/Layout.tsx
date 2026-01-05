@@ -3,6 +3,7 @@ import { useIsAuthenticated } from '@core/auth';
 import { Resize } from '@core/component/Resize';
 import { useABTest } from '@core/constant/ABTest';
 import { usePaywallState } from '@core/constant/PaywallState';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import {
   LAYOUT_CONTEXT_ID,
@@ -146,7 +147,7 @@ export function Layout(props: RouteSectionProps) {
       <Show when={paywallOpen()}>
         <Paywall />
       </Show>
-      <div class="p-[var(--gutter-size)] grow-1">
+      <div class="p-[var(--gutter-size)] ios:p-0 grow-1">
         <Resize.Zone
           gutter={8}
           direction="horizontal"
@@ -166,7 +167,9 @@ export function Layout(props: RouteSectionProps) {
         <Show
           when={isAuthenticated() && !AUTH_URLS.includes(location.pathname)}
         >
-          <Dock />
+          <Show when={!isNativeMobilePlatform()}>
+            <Dock />
+          </Show>
           <Launcher open={createMenuOpen()} onOpenChange={setCreateMenuOpen} />
         </Show>
       </Suspense>

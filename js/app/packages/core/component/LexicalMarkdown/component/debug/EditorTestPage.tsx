@@ -1,4 +1,5 @@
-import { Bar } from '@core/component/TopBar/Bar';
+import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
+import { StaticSplitLabel } from '@app/component/split-layout/components/SplitLabel';
 import { buildMentionMarkdownString } from '@lexical-core/utils/mentions';
 import type { LexicalEditor } from 'lexical';
 import {
@@ -122,13 +123,21 @@ export default function EditorTestPage() {
 
   return (
     <div class="flex flex-col h-full w-full">
-      <Bar
-        left={
-          <div class="p-2 text-sm w-2xl truncate">Markdown Editor Test</div>
-        }
-        center={<div></div>}
-      ></Bar>
+      <SplitHeaderLeft>
+        <StaticSplitLabel label="Markdown Test Page" />
+      </SplitHeaderLeft>
       <div class="w-full h-full p-8 flex-1 flex flex-row flex-wrap gap-4 overflow-y-auto items-start justify-center content-start">
+        <Container label="With Suspense">
+          <Suspense
+            fallback={
+              <div class="flex items-center justify-center h-full text-ink-muted">
+                Loading markdown editor...
+              </div>
+            }
+          >
+            <DelayedMarkdownComponent />
+          </Suspense>
+        </Container>
         <Container label="regular markdown editor">
           <MarkdownTextarea type="markdown" editable={() => true} />
         </Container>
@@ -233,17 +242,6 @@ export default function EditorTestPage() {
               }),
             ].join('\n\n')}
           />
-        </Container>
-        <Container label="With Suspense">
-          <Suspense
-            fallback={
-              <div class="flex items-center justify-center h-full text-ink-muted">
-                Loading markdown editor...
-              </div>
-            }
-          >
-            <DelayedMarkdownComponent />
-          </Suspense>
         </Container>
       </div>
     </div>

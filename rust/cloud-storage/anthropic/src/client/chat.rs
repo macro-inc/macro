@@ -6,7 +6,7 @@ use std::pin::Pin;
 use super::Client;
 use crate::error::AnthropicError;
 use crate::types::request::CreateMessageRequestBody;
-use crate::types::stream_response::StreamEvent;
+use crate::types::response::StreamEvent;
 
 pub type MessageCompletionResponseStream =
     Pin<Box<dyn Stream<Item = Result<StreamEvent, AnthropicError>> + Send>>;

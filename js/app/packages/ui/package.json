@@ -1,0 +1,13 @@
+{
+  "name": "@ui",
+  "private": true,
+  "scripts": {
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build"
+  },
+  "devDependencies": {
+    "@storybook/addon-docs": "^9.1.5",
+    "storybook": "^9.1.5",
+    "storybook-solidjs-vite": "^9.0.3"
+  }
+}

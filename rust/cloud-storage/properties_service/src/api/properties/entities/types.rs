@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
+use uuid::Uuid;
 
 use models_properties::EntityReference;
 use models_properties::api::SetPropertyValue;
@@ -28,4 +29,7 @@ pub struct SetEntityPropertyRequest {
 pub struct BulkEntityPropertiesRequest {
     /// Array of entity references (entity_id and entity_type pairs)
     pub entities: Vec<EntityReference>,
+    /// Optional: only return properties with these definition IDs. If empty, returns all.
+    #[serde(default)]
+    pub property_ids: Vec<Uuid>,
 }

@@ -9,21 +9,21 @@ import * as schemas from './schemas';
 import type * as types from './types';
 
 type ToolParserMap = {
-ListDocuments: { call: types.ListDocumentsInput, response: types.ListDocumentsOutput }
-ListEmails: { call: types.ListEmailsInput, response: types.ListEmailsOutput }
-MarkdownRewrite: { call: types.MarkdownRewriteInput, response: types.MarkdownRewriteOutput }
-Read: { call: types.ReadInput, response: types.ReadOutput }
-UnifiedSearch: { call: types.UnifiedSearchInput, response: types.UnifiedSearchOutput }
-WebSearch: { call: types.WebSearchInput, response: types.WebSearchOutput }
+ListDocuments: { call: types.ListDocuments, response: types.ListDocumentsResponse }
+ListEmails: { call: types.ListEmails, response: types.ApiPaginatedThreadCursor }
+MarkdownRewrite: { call: types.MarkdownRewrite, response: types.AIDiffResponse }
+Read: { call: types.Read, response: types.ReadResponse }
+UnifiedSearch: { call: types.UnifiedSearch, response: types.UnifiedSearchResponseOutput }
+web_search: { call: types.WebSearchToolCall, response: types.WebSearchResponse }
 };
 
 const toolParserMap = {
-ListDocuments: { call: schemas.ListDocumentsInputSchema, response: schemas.ListDocumentsOutputSchema },
-ListEmails: { call: schemas.ListEmailsInputSchema, response: schemas.ListEmailsOutputSchema },
-MarkdownRewrite: { call: schemas.MarkdownRewriteInputSchema, response: schemas.MarkdownRewriteOutputSchema },
-Read: { call: schemas.ReadInputSchema, response: schemas.ReadOutputSchema },
-UnifiedSearch: { call: schemas.UnifiedSearchInputSchema, response: schemas.UnifiedSearchOutputSchema },
-WebSearch: { call: schemas.WebSearchInputSchema, response: schemas.WebSearchOutputSchema }
+ListDocuments: { call: schemas.ListDocuments, response: schemas.ListDocumentsResponse },
+ListEmails: { call: schemas.ListEmails, response: schemas.ApiPaginatedThreadCursor },
+MarkdownRewrite: { call: schemas.MarkdownRewrite, response: schemas.AIDiffResponse },
+Read: { call: schemas.Read, response: schemas.ReadResponse },
+UnifiedSearch: { call: schemas.UnifiedSearch, response: schemas.UnifiedSearchResponseOutput },
+web_search: { call: schemas.WebSearchToolCall, response: schemas.WebSearchResponse }
 };
 
 export type ToolName = keyof ToolParserMap;
@@ -35,12 +35,12 @@ type NamedRawTool = {
 };
 
 type ToolDataMap = {
-ListDocuments: { call: types.ListDocumentsInput, response: types.ListDocumentsOutput };
-ListEmails: { call: types.ListEmailsInput, response: types.ListEmailsOutput };
-MarkdownRewrite: { call: types.MarkdownRewriteInput, response: types.MarkdownRewriteOutput };
-Read: { call: types.ReadInput, response: types.ReadOutput };
-UnifiedSearch: { call: types.UnifiedSearchInput, response: types.UnifiedSearchOutput };
-WebSearch: { call: types.WebSearchInput, response: types.WebSearchOutput };
+ListDocuments: { call: types.ListDocuments, response: types.ListDocumentsResponse };
+ListEmails: { call: types.ListEmails, response: types.ApiPaginatedThreadCursor };
+MarkdownRewrite: { call: types.MarkdownRewrite, response: types.AIDiffResponse };
+Read: { call: types.Read, response: types.ReadResponse };
+UnifiedSearch: { call: types.UnifiedSearch, response: types.UnifiedSearchResponseOutput };
+web_search: { call: types.WebSearchToolCall, response: types.WebSearchResponse };
 };
 
 export type NamedTool<

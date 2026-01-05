@@ -2,6 +2,7 @@ import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
 } from '@app/component/GlobalAppState';
+import { noiseFilter, signalFilter } from '@app/component/soupFilters';
 import type { BlockChannelProps } from '@block-channel/component/Block';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { URL_PARAMS as EMAIL_PARAMS } from '@block-email/constants';
@@ -14,6 +15,7 @@ import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { ToggleButton } from '@core/component/FormControls/ToggleButton';
 import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
 import { ContextMenuContent, MenuSeparator } from '@core/component/Menu';
+import { useTaskProperties } from '@core/component/Properties/hooks';
 import { getSuggestedProperties } from '@core/component/Properties/utils';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import {
@@ -111,7 +113,10 @@ import {
   type SetStoreFunction,
   unwrap,
 } from 'solid-js/store';
-import { EntityWithEverything } from '../../macro-entity/src/components/EntityWithEverything';
+import {
+  ENTITY_HEIGHT,
+  EntityWithEverything,
+} from '../../macro-entity/src/components/EntityWithEverything';
 import {
   resetCommandCategoryIndex,
   searchCategories,
@@ -135,7 +140,6 @@ import {
 import { useSplitLayout } from './split-layout/layout';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 import {
-  applyClientFilters,
   type DisplayOptions,
   type DocumentTypeFilter,
   type FilterOptions,
@@ -227,6 +231,10 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     entitiesSignal: [entities_, setEntities],
     emailViewSignal: [emailView],
   } = unifiedListContext;
+
+  // Properties for task entities
+  const [taskPropertiesStore] = useTaskProperties(entities_);
+
   const view = createMemo(() => viewsData[selectedView()]);
   const selectedEntity = createMemo(() => view()?.selectedEntity);
 
@@ -259,7 +267,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
           return;
         }
 
-        if (isTouchDevice) return;
+        if (isTouchDevice()) return;
         if (!firstEntity) return;
 
         setSelectedEntity(firstEntity);
@@ -281,6 +289,24 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       'notificationFilter',
       notificationFilter
     );
+  };
+
+  const focusFilters = createMemo(
+    () => view()?.filters?.focusFilters ?? defaultFilterOptions.focusFilters
+  );
+
+  const toggleFocusFilter = (
+    filter: NonNullable<FilterOptions['focusFilters']>[number]
+  ) => {
+    setViewDataStore(selectedView(), 'filters', 'focusFilters', (prev) => {
+      if (!prev) return [filter];
+
+      if (prev.includes(filter)) {
+        return prev.filter((value) => value !== filter);
+      }
+
+      return [...prev, filter];
+    });
   };
 
   const importantFilter = createMemo(
@@ -609,13 +635,19 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
     if (notificationFilter() === 'notDone') filterFns.push(notDoneFilterFn);
 
-    const clientFilterFn = (entity: WithNotification<EntityData>) => {
-      const filtered = applyClientFilters([entity], selectedView(), {
-        soupContext: unifiedListContext,
-      });
-      return filtered.length > 0;
-    };
-    filterFns.push(clientFilterFn);
+    const focusFilters_ = focusFilters();
+    const hasSignalFilter = focusFilters_?.includes('signal') === true;
+    const hasNoiseFilter = focusFilters_?.includes('noise') === true;
+
+    // We only want to apply these filters when their opposite is not in the list
+    // because the filters negate each other
+    if (hasSignalFilter && !hasNoiseFilter) {
+      filterFns.push(signalFilter.predicate);
+    }
+
+    if (hasNoiseFilter && !hasSignalFilter) {
+      filterFns.push(noiseFilter.predicate);
+    }
 
     setRequiredFilters(filterFns);
   });
@@ -1280,6 +1312,26 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       value={notificationFilter()}
                       onChange={setNotificationFilter}
                     />
+
+                    <div class="flex items-center justify-between">
+                      <span class="font-medium text-xs">Focus</span>
+                      <div class="flex items-center gap-1">
+                        <ToggleButton
+                          size="SM"
+                          pressed={focusFilters()?.includes('signal')}
+                          onChange={() => toggleFocusFilter('signal')}
+                        >
+                          <span class="uppercase">Signal</span>
+                        </ToggleButton>
+                        <ToggleButton
+                          size="SM"
+                          pressed={focusFilters()?.includes('noise')}
+                          onChange={() => toggleFocusFilter('noise')}
+                        >
+                          <span class="uppercase">Noise</span>
+                        </ToggleButton>
+                      </div>
+                    </div>
                   </section>
                   <section class="gap-1 p-2">
                     <span class="font-medium text-xs">Type</span>
@@ -1460,6 +1512,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
             viewId={view()?.id}
             searchText={searchText()}
             hasRefinementsFromBase={isViewConfigChanged()}
+            entityMinHeight={ENTITY_HEIGHT}
           >
             {(innerProps) => {
               const displayDoneButton = () => {
@@ -1495,6 +1548,11 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                     });
                   }}
                   entity={innerProps.entity}
+                  properties={
+                    isTaskEntity(innerProps.entity)
+                      ? taskPropertiesStore[innerProps.entity.id]
+                      : undefined
+                  }
                   timestamp={timestamp()}
                   onClick={entityClickHandler}
                   onClickRowAction={
@@ -1650,7 +1708,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
             <Show when={contextAndModalState.selectedEntity}>
               {(selectedEntity) => (
                 <ContextMenuContent mobileFullScreen>
-                  <Show when={isTouchDevice && isMobileWidth()}>
+                  <Show when={isTouchDevice() && isMobileWidth()}>
                     <Entity
                       entity={selectedEntity()}
                       timestamp={

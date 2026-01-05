@@ -204,6 +204,43 @@
         }
       }
     },
+    "/properties/entities/bulk": {
+      "post": {
+        "tags": ["Properties"],
+        "summary": "Get properties for multiple entities in bulk (public endpoint with user auth)",
+        "description": "Only returns properties for entities the user has view permission for.\nEntities without permission are silently omitted from the response.",
+        "operationId": "get_bulk_entity_properties",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkEntityPropertiesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Bulk entity properties retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/EntityPropertiesResponse"
+                  },
+                  "propertyNames": { "type": "string" }
+                }
+              }
+            }
+          },
+          "400": { "description": "Invalid request body" },
+          "403": { "description": "Forbidden - User does not have permission" },
+          "500": { "description": "Internal server error" }
+        }
+      }
+    },
     "/properties/entities/{entity_type}/{entity_id}": {
       "get": {
         "tags": ["Properties"],
@@ -381,6 +418,11 @@
             "type": "array",
             "items": { "$ref": "#/components/schemas/EntityReference" },
             "description": "Array of entity references (entity_id and entity_type pairs)"
+          },
+          "property_ids": {
+            "type": ["array", "null"],
+            "items": { "type": "string", "format": "uuid" },
+            "description": "Optional: only return properties with these definition IDs. If empty/None, returns all."
           }
         }
       },

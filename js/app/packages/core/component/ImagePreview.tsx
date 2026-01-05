@@ -139,7 +139,7 @@ export function ImagePreview(props: ImagePreviewProps) {
   };
 
   const handleMouseMove = () => {
-    if (isMobileWidth() || isTouchDevice) return;
+    if (isMobileWidth() || isTouchDevice()) return;
 
     setIsToolbarVisible(true);
 
@@ -191,7 +191,7 @@ export function ImagePreview(props: ImagePreviewProps) {
       const blob = await getBlob();
       if (!blob) throw new Error('No blob');
 
-      if (isTouchDevice && navigator.share) {
+      if (isTouchDevice() && navigator.share) {
         const file = new File([blob], 'image.png', { type: blob.type });
         await navigator.share({
           files: [file],
@@ -241,7 +241,7 @@ export function ImagePreview(props: ImagePreviewProps) {
     image.addEventListener('panzoomchange', updateCursor);
     image.addEventListener('wheel', panzoom.zoomWithWheel);
 
-    if (!isMobileWidth() && !isTouchDevice) {
+    if (!isMobileWidth() && !isTouchDevice()) {
       setTimeout(() => {
         window.addEventListener('mousemove', handleMouseMove);
       }, 500);
@@ -319,25 +319,22 @@ export function ImagePreview(props: ImagePreviewProps) {
                 '-ms-user-select': 'none',
                 'user-select': 'none',
               }}
-              draggable={!isTouchDevice}
+              draggable={!isTouchDevice()}
             />
           </Show>
         </Dialog.Trigger>
       </div>
       <Dialog.Portal>
-        <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay backdrop-blur-md" />
+        <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay pattern-edge-muted pattern-diagonal-4" />
         <div class="fixed inset-0 z-modal w-screen h-screen flex items-center justify-center p-2 pb-6 sm:p-12">
-          <Dialog.Content
-            class="relative flex items-center justify-center w-full h-full sm:w-auto sm:h-auto"
-            onOpenAutoFocus={(e) => e.preventDefault()}
-          >
+          <Dialog.Content class="relative flex items-center justify-center w-full h-full sm:w-auto sm:h-auto bg-panel">
             <div
-              class="absolute top-4 right-4 bg-dialog backdrop-blur-sm rounded-lg border border-edge p-1 flex flex-row items-center gap-1 shadow-md transition-opacity duration-300"
+              class="absolute top-4 right-4 bg-dialog rounded-lg border border-edge p-1 flex flex-row items-center gap-1 shadow-md transition-opacity duration-300"
               classList={{
                 'opacity-100':
-                  isMobileWidth() || isTouchDevice || isToolbarVisible(),
+                  isMobileWidth() || isTouchDevice() || isToolbarVisible(),
                 'opacity-0 pointer-events-none':
-                  !isMobileWidth() && !isTouchDevice && !isToolbarVisible(),
+                  !isMobileWidth() && !isTouchDevice() && !isToolbarVisible(),
               }}
               style={{ 'z-index': stackingContext.zModal + 1 }}
             >

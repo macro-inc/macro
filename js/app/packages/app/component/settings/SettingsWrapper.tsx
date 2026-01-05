@@ -16,7 +16,7 @@ export const SettingsWrapper = () => {
         hidden={() => !isSettingsPanelOpen()}
         persistent={true}
       >
-        <SettingsPanel />
+        <SettingsPanel hide={!isSettingsPanelOpen()} />
       </Resize.Panel>
     </Show>
   );

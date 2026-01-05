@@ -23,6 +23,14 @@ export default defineConfig({
           name: 'core',
         },
       },
+      {
+        // Queries package tests
+        extends: './packages/queries/vitest.config.ts',
+        test: {
+          include: ['packages/queries/**/*.{test,spec}.{ts,tsx}'],
+          name: 'queries',
+        },
+      },
     ],
   },
 });

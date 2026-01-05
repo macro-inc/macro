@@ -316,7 +316,7 @@ export function HelpDrawerInner(props: HelpDrawerInnerProps) {
             </Show>
           </div>
           <Show
-            when={props.hotkeyExamples && !(isTouchDevice && isMobileWidth())}
+            when={props.hotkeyExamples && !(isTouchDevice() && isMobileWidth())}
           >
             <div class="hotkey-examples-container px-4 py-8 h-full basis-1/2">
               <div class="grid grid-cols-[min-content_1fr] gap-x-8 gap-y-4">
