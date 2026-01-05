@@ -4,7 +4,7 @@ export function downloadFile(file: File | Blob, name?: string): void {
   try {
     anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = name || (file as any).name || 'download';
+    anchor.download = name || (file instanceof File ? file.name : undefined) || 'download';
     anchor.ariaLabel = 'hidden-download-link';
     anchor.style.display = 'none';
 
