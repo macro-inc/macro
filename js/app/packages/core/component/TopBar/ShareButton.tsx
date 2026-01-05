@@ -593,12 +593,15 @@ export function ShareModal(props: ShareModalProps) {
               </Show>
 
               <Show when={props.userPermissions === Permissions.OWNER}>
-                <div class="flex gap-2 border-t-1 items-center px-2 border-edge-muted h-[40px]">
+                <div class="flex border-t-1 items-center px-2 border-edge-muted h-[40px] justify-between">
+                  <div class="flex gap-2 items-center">
+                    <IconLink class="w-[16px] h-[16px]"/>
+                    <div class="font-medium text-sm">Public&nbspLink</div>
+                  </div>
                   <ShareOptions
                     permissions={publicAccessLevel() ?? null}
                     hideNoAccess={props.itemType === 'chat'}
                     setPermissions={setPublicPermissions}
-                    label="Link&nbsp;Permission"
                   />
                 </div>
               </Show>
@@ -819,7 +822,6 @@ export function ShareOptions(props: {
       disabled={props.disabled}
       onChange={handleChange}
       value={currentValue()}
-      label={props.label}
       list={options()}
       size="SM"
     />

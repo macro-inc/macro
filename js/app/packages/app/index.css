@@ -114,7 +114,6 @@
   --color-ink-disabled: var(--c3);
   --color-ink-placeholder: var(--c4);
 
-
   /* accent */
   --color-accent: var(--a0);
   --color-accent-bg: oklch(from (var(--a0)) / .15);
@@ -577,7 +576,7 @@
         @apply overflow-clip overscroll-none relative m-0 p-0 font-sans optical-auto;
 
         /* SCUFFED; surface might change to surface2  */
-        background-color: var(--b3);
+        background-color: var(--color-page);
 
         width: 100dvw;
         height: 100dvh;
