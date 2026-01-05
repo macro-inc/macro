@@ -125,12 +125,14 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
     return true;
   });
 
+  const blockName = useBlockAliasedName();
+  const blockId = useBlockId();
   const asAttachment = () => {
-    const name = useBlockAliasedName();
-    const itemType = name === 'email' ? 'thread' : blockNameToItemType(name);
+    const itemType =
+      blockName === 'email' ? 'thread' : blockNameToItemType(blockName);
     return {
       entity_type: itemType ?? 'unknown',
-      entity_id: useBlockId(),
+      entity_id: blockId,
     };
   };
 
