@@ -1,5 +1,5 @@
 import { Dialog } from '@kobalte/core/dialog';
-import { TextButton } from './TextButton';
+import { DeprecatedTextButton } from './DeprecatedTextButton';
 
 type DeleteConfimationDialogProps = {
   open: boolean;
@@ -23,9 +23,13 @@ export function DeleteConfimationDialog(props: DeleteConfimationDialogProps) {
           />
           <div class="flex justify-end gap-3 mt-4">
             <Dialog.CloseButton>
-              <TextButton text="Cancel" theme="clear" />
+              <DeprecatedTextButton text="Cancel" theme="clear" />
             </Dialog.CloseButton>
-            <TextButton text="Delete" theme="red" onClick={props.onDelete} />
+            <DeprecatedTextButton
+              text="Delete"
+              theme="red"
+              onClick={props.onDelete}
+            />
           </div>
         </Dialog.Content>
       </Dialog.Portal>

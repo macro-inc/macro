@@ -8,6 +8,8 @@ import type {
 } from '@service-email/generated/schemas';
 import {
   type InfiniteData,
+  type SolidInfiniteQueryOptions,
+  type UseInfiniteQueryResult,
   useInfiniteQuery,
   useMutation,
 } from '@tanstack/solid-query';
@@ -17,6 +19,23 @@ import { type MutationCallbacks, withCallbacks } from '../utils';
 import { emailKeys } from './keys';
 
 const THREAD_STALE_TIME = 5 * 60 * 1000;
+
+type ThreadQueryOptions = SolidInfiniteQueryOptions<
+  Thread,
+  Error,
+  any,
+  ReturnType<typeof emailKeys.threadMessages>['queryKey'],
+  number
+>;
+
+type UseThreadQueryOptions = Omit<
+  ThreadQueryOptions,
+  | 'queryFn'
+  | 'queryKey'
+  | 'initialData'
+  | 'getNextPageParam'
+  | 'initialPageParam'
+>;
 
 /**
  * Shared infinite query options for thread fetching.
@@ -96,7 +115,22 @@ export type ThreadQueryData = {
 /**
  * Query hook for fetching a thread with paginated messages.
  */
-export function useThreadQuery(threadId: Accessor<string>) {
+export function useThreadQuery(
+  threadId: Accessor<string>
+): UseInfiniteQueryResult<ThreadQueryData, Error>;
+export function useThreadQuery<Options extends UseThreadQueryOptions>(
+  threadId: Accessor<string>,
+  options: Accessor<Options>
+): UseInfiniteQueryResult<
+  Options['select'] extends undefined
+    ? ThreadQueryData
+    : ReturnType<NonNullable<Options['select']>>,
+  Error
+>;
+export function useThreadQuery<Options extends UseThreadQueryOptions>(
+  threadId: Accessor<string>,
+  options?: Accessor<Options>
+): UseInfiniteQueryResult<ThreadQueryData, Error> {
   return useInfiniteQuery(() => ({
     ...threadQueryOptions(threadId()),
     select: (data: InfiniteData<Thread, number>): ThreadQueryData => {
@@ -106,6 +140,7 @@ export function useThreadQuery(threadId: Accessor<string>) {
         hasMore: lastPage.messages.length === DEFAULT_THREAD_MESSAGES_LIMIT,
       };
     },
+    ...(options?.() ?? {}),
   }));
 }
 

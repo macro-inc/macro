@@ -136,6 +136,7 @@
     "solid-transition-group": "^0.2.3",
     "tab-election": "^4.2.8",
     "tabbable": "^6.2.0",
+    "tailwind-merge": "^3.4.0",
     "tailwindcss": "^4.1.14",
     "tauri-plugin-safe-area-insets": "^0.1.0",
     "three": "^0.178.0",

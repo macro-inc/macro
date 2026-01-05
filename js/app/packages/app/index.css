@@ -105,7 +105,29 @@
   --transition: 0.s;
   /*--transition: 0.15s;*/
 
-/* Semantic Color names, use these when writing tailwind */
+
+  --color-*: initial; /* Disable default tailwind color palette */
+
+  /* Semantic Color names, use these when writing tailwind */
+
+  /* Generic */
+  --color-accent-0 : var(--a0);
+  --color-accent-1 : var(--a1);
+  --color-accent-2 : var(--a2);
+  --color-accent-3 : var(--a3);
+  --color-accent-4 : var(--a4);
+
+  --color-surface-0 : var(--b0);
+  --color-surface-1 : var(--b1);
+  --color-surface-2 : var(--b2);
+  --color-surface-3 : var(--b3);
+  --color-surface-4 : var(--b4);
+
+  --color-contrast-0 : var(--c0);
+  --color-contrast-1 : var(--c1);
+  --color-contrast-2 : var(--c2);
+  --color-contrast-3 : var(--c3);
+  --color-contrast-4 : var(--c4);
 
   /* text */
   --color-ink: var(--c0);
@@ -119,12 +141,6 @@
   --color-accent: var(--a0);
   --color-accent-bg: oklch(from (var(--a0)) / .15);
   --color-accent-ink: var(--a0);
-
-  --color-accent-1 : var(--a1);
-  --color-accent-2 : var(--a2);
-  --color-accent-3 : var(--a3);
-  --color-accent-4 : var(--a4);
-
 
   --color-focus: var(--color-accent);
   /* page background */
@@ -153,15 +169,15 @@
 
 
   /* Below are hardcoded colors */
-  --color-failure: var(--color-red-500);
+  --color-failure: oklch(0.637 0.237 25.331);
   --color-failure-bg: oklch(from var(--color-failure) l c h / 0.15);
   --color-failure-ink: oklch(from var(--color-failure) var(--c1l) c h);
 
-  --color-success: var(--color-emerald-500);
+  --color-success: oklch(0.696 0.17 162.48);
   --color-success-bg: oklch(from var(--color-success) l c h / 0.15);
   --color-success-ink: oklch(from var(--color-success) var(--c0l) c h);
 
-  --color-alert: var(--color-amber-500);
+  --color-alert: oklch(0.769 0.188 70.08);
   --color-alert-bg: oklch(from var(--color-alert) l c h / 0.15);
   --color-alert-ink: oklch(from var(--color-alert) var(--c1l) c h);
 
@@ -403,8 +419,8 @@
 }
 
 @utility text-glow-sm {
-    text-shadow: 0 0 0.2em rgb( from currentColor r g b / 15%), 0 0 0.05em rgb( from currentColor r g b / 25%);
-  }
+  text-shadow: 0 0 0.2em rgb( from currentColor r g b / 15%), 0 0 0.05em rgb( from currentColor r g b / 25%);
+}
 
 @utility optical-* {
   font-optical-sizing: none;

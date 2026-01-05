@@ -1,4 +1,4 @@
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import Trash from '@icon/regular/x.svg';
 import type { HorizontalRuleDecoratorProps } from '@lexical-core';
 import { debounce } from '@solid-primitives/scheduled';
@@ -86,7 +86,7 @@ export function HorizontalRule(props: HorizontalRuleDecoratorProps) {
       {(isSelectedAsNode() || ruleHover()) && (
         <div class="absolute h-full top-0 right-2 flex flex-row gap-1 items-center">
           {editor()?.isEditable() && (
-            <IconButton
+            <DeprecatedIconButton
               class="m-0"
               theme="clear"
               icon={() => <Trash class="size-4" />}

@@ -1,5 +1,5 @@
 import { reactToMessage } from '@block-channel/signal/reactions';
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import clickOutside from '@core/directive/clickOutside';
 import { createCallback } from '@solid-primitives/rootless';
 import { type Component, For, type Setter } from 'solid-js';
@@ -30,7 +30,7 @@ export function ActionMenu(props: {
     <div class="flex flex-row bg-menu items-center allow-css-brackets">
       <For each={defaultEmojis}>
         {(emoji) => (
-          <IconButton
+          <DeprecatedIconButton
             onMouseDown={() => react(emoji)}
             icon={() => <span>{emoji}</span>}
             tabIndex={0}
@@ -50,7 +50,7 @@ export function ActionMenu(props: {
 
       <For each={props.actions.filter((a) => a.enabled)}>
         {(a) => (
-          <IconButton
+          <DeprecatedIconButton
             onMouseDown={a.onClick}
             icon={a.icon}
             tooltip={{ label: a.text, delayOverride: 0 }}

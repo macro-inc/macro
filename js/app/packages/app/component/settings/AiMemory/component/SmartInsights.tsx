@@ -1,4 +1,4 @@
-import { TextButton } from '@core/component/TextButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { EDITABLE_SMART_INSIGHTS } from '@core/constant/featureFlags';
 import { formatDate } from '@core/util/date';
 import Flag from '@icon/regular/flag-pennant.svg';
@@ -22,13 +22,13 @@ export function SmartInsight(props: SmartInsightProps) {
             <div class="px-1">{prettyDate()}</div>
           </div>
           <Show when={EDITABLE_SMART_INSIGHTS}>
-            <TextButton
+            <DeprecatedTextButton
               onClick={() => {}}
               icon={Flag}
               text="Mark Wrong"
               theme="red"
             />
-            <TextButton
+            <DeprecatedTextButton
               onClick={() => {}}
               icon={Pencil}
               text="Suggest Improvement"

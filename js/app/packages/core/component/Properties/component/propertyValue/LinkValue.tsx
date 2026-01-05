@@ -1,4 +1,4 @@
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { useUnfurl } from '@core/signal/unfurl';
 import DeleteIcon from '@icon/bold/x-bold.svg';
 import LinkIcon from '@icon/regular/link.svg';
@@ -286,7 +286,7 @@ const LinkDisplay: Component<LinkDisplayProps> = (props) => {
       </button>
       <Show when={props.canEdit && isHovered() && !props.isRemoving}>
         <div class="absolute right-1 inset-y-0 flex items-center">
-          <IconButton
+          <DeprecatedIconButton
             icon={DeleteIcon}
             theme="clear"
             size="xs"

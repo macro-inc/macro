@@ -1,4 +1,4 @@
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import {
   DropdownMenuContent,
   MenuItem,
@@ -51,7 +51,7 @@ export function MediaButtons(props: MediaButtonsProps) {
     <>
       <Show when={props.enlarge}>
         <Dialog.Trigger>
-          <IconButton
+          <DeprecatedIconButton
             class="m-0"
             icon={() => <ArrowsOut class="size-5" />}
             tooltip={{ label: 'View full screen' }}
@@ -62,8 +62,8 @@ export function MediaButtons(props: MediaButtonsProps) {
           />
         </Dialog.Trigger>
       </Show>
-      <Show when={props.newTab && !isMobileWidth() && !isTouchDevice()}>
-        <IconButton
+      <Show when={props.newTab && !isMobileWidth() && !isTouchDevice}>
+        <DeprecatedIconButton
           class="m-0"
           icon={() => <NewTab class="size-5" />}
           tooltip={{ label: 'Open in new tab' }}
@@ -74,7 +74,7 @@ export function MediaButtons(props: MediaButtonsProps) {
         />
       </Show>
       <Show when={props.delete}>
-        <IconButton
+        <DeprecatedIconButton
           class="m-0"
           icon={() => <Trash class="size-5" />}
           tooltip={{ label: 'Remove' }}
@@ -99,7 +99,7 @@ export function MediaButtons(props: MediaButtonsProps) {
           placement="bottom-end"
         >
           <DropdownMenu.Trigger>
-            <IconButton
+            <DeprecatedIconButton
               class="m-0"
               icon={() => <ThreeDotsIcon class="size-4" />}
               tooltip={{ label: 'More options' }}

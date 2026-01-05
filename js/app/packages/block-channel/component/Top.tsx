@@ -7,7 +7,7 @@ import { SplitLabel } from '@app/component/split-layout/components/SplitLabel';
 import { SplitToolbarRight } from '@app/component/split-layout/components/SplitToolbar';
 import { useBlockId } from '@core/block';
 import { useChannelName } from '@core/component/ChannelsProvider';
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import { NotificationsModal } from '@core/component/NotificationsModal';
 import { toast } from '@core/component/Toast/Toast';
@@ -101,7 +101,7 @@ export function Top(props: { channelID: string }) {
       <SplitToolbarRight>
         <div class="p-1 flex flex-row gap-1 items-center h-full">
           <Show when={channelType() === 'public'}>
-            <IconButton
+            <DeprecatedIconButton
               theme="clear"
               size="sm"
               tooltip={{ label: 'Copy Link to Public Channel' }}

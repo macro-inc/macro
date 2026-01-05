@@ -1,4 +1,4 @@
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import ArrowLeft from '@icon/regular/arrow-left.svg';
 import ArrowRight from '@icon/regular/arrow-right.svg';
 import SplitIcon from '@icon/regular/square-half.svg';
@@ -10,7 +10,7 @@ export function SplitBackButton() {
   const context = useContext(SplitPanelContext);
   if (!context) return '';
   return (
-    <IconButton
+    <DeprecatedIconButton
       icon={ArrowLeft}
       tooltip={{ label: 'Go Back' }}
       disabled={!context.handle.canGoBack()}
@@ -24,7 +24,7 @@ export function SplitForwardButton() {
   const context = useContext(SplitPanelContext);
   if (!context) return '';
   return (
-    <IconButton
+    <DeprecatedIconButton
       icon={ArrowRight}
       tooltip={{ label: 'Go Forward' }}
       disabled={!context.handle.canGoForward()}
@@ -38,7 +38,7 @@ export function SplitCreateButton() {
   const context = useContext(SplitLayoutContext);
   if (!context) return '';
   return (
-    <IconButton
+    <DeprecatedIconButton
       icon={SplitIcon}
       theme="clear"
       tooltip={{ label: 'Create new split' }}
@@ -56,7 +56,7 @@ export function SplitCloseButton() {
   const context = useContext(SplitPanelContext);
   if (!context) return '';
   return (
-    <IconButton
+    <DeprecatedIconButton
       icon={CloseIcon}
       theme="clear"
       tooltip={{ label: 'Close' }}
