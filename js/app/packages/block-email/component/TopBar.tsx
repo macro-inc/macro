@@ -25,16 +25,17 @@ export function TopBar(props: { id: string; title: string }) {
         </div>
       </SplitToolbarLeft>
       <SplitToolbarRight>
-        <ShareButton
-          id={props.id}
-          name={props.title}
-          itemType="email"
-          userPermissions={Permissions.NO_ACCESS}
-        />
-
-        <Show when={ENABLE_PROPERTIES_METADATA}>
-          <EmailPropertiesModal buttonSize="sm" subject={props.title} />
-        </Show>
+        <div class="flex items-center gap-2">
+          <Show when={ENABLE_PROPERTIES_METADATA}>
+            <EmailPropertiesModal buttonSize="sm" subject={props.title} />
+          </Show>
+          <ShareButton
+            id={props.id}
+            name={props.title}
+            itemType="email"
+            userPermissions={Permissions.OWNER}
+          />
+        </div>
       </SplitToolbarRight>
     </>
   );
