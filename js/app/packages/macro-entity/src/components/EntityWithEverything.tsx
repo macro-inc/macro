@@ -432,6 +432,7 @@ interface EntityProps<T extends WithNotification<EntityData>>
   focused?: boolean;
   timestamp?: number;
   onClick?: EntityClickHandler<T>;
+  onPointerDown?: EntityClickHandler<T>;
   onClickRowAction?: (entity: T, type: 'done') => void;
   onClickNotification?: NotificationClickHandler<T>;
   onMouseOver?: () => void;
@@ -900,6 +901,10 @@ export function EntityWithEverything(
         onMouseDown={(e) => {
           if (blocksNavigation(e)) return;
           e.preventDefault();
+        }}
+        onPointerDown={(e) => {
+          if (blocksNavigation(e)) return;
+          props.onPointerDown?.(props.entity, e);
         }}
         // Action List is also rendered based on focus, but when focused via Shift+Tab, parent is focused due to Action List dom not present. Here we check if current browser task has captured Shift+Tab focus on Action List
         onFocusIn={(e) => {

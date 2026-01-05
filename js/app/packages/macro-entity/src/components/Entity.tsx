@@ -11,9 +11,18 @@ import type { SearchLocation } from '../types/search';
 export type EntityClickEvent = Parameters<
   JSX.EventHandler<HTMLDivElement, MouseEvent>
 >[0];
+type EntityPointerDownEvent = Parameters<
+  JSX.EventHandler<HTMLDivElement, PointerEvent>
+>[0];
 export type EntityClickHandler<T extends EntityData> = (
   entity: T,
   event: EntityClickEvent,
+  location?: SearchLocation,
+  options?: { ignorePreview?: boolean }
+) => void;
+export type EntityPointerDownHandler<T extends EntityData> = (
+  entity: T,
+  event: EntityPointerDownEvent,
   location?: SearchLocation,
   options?: { ignorePreview?: boolean }
 ) => void;
