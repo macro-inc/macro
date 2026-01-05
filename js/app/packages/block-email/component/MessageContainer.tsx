@@ -206,6 +206,11 @@ export function MessageContainer(props: MessageContainerProps) {
               setFocusedMessageId={context.messages.setFocused}
               setShowReply={setShowReply}
               isLastMessage={props.isLastMessage}
+              hiddenActions={
+                !context.permissions().isOwner
+                  ? ['reply', 'reply-all', 'forward']
+                  : undefined
+              }
             />
           </Message.TopBar>
           <Message.Body>
