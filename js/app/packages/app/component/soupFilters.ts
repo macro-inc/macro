@@ -247,7 +247,7 @@ export const signalFilter: ClientFilter = {
   predicate: (entity, _ctx) => {
     switch (entity.type) {
       case 'channel': {
-        return hasRecentlyViewed(entity);
+        return true;
       }
       case 'chat': {
         return hasRecentlyViewed(entity);

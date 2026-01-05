@@ -14,8 +14,9 @@ pub mod domain;
 pub mod outbound;
 
 pub use domain::error::PropertiesErr;
-pub use domain::ports::{PermissionService, PropertiesRepo};
+pub use domain::ports::{NotificationService, PermissionService, PropertiesRepo};
 pub use domain::service::PropertiesService;
 pub use domain::service_impl::PropertiesServiceImpl;
+pub use outbound::notification_service::NotificationServiceImpl;
 pub use outbound::permission_service::PermissionServiceImpl;
 pub use outbound::properties_pg_repo::PropertiesPgRepo;

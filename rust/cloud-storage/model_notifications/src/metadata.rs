@@ -186,6 +186,22 @@ pub struct NewEmailMetadata {
     pub snippet: String,
 }
 
+/// Metadata for when a user is assigned to a task
+#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskAssignedMetadata {
+    /// The unique identifier of the task
+    #[serde(alias = "task_id")]
+    pub task_id: String,
+    /// The name of the task (optional)
+    #[serde(alias = "task_name")]
+    pub task_name: Option<String>,
+    /// The user who assigned the task
+    #[serde(alias = "assigned_by")]
+    #[schema(value_type = String)]
+    pub assigned_by: MacroUserIdStr<'static>,
+}
+
 pub trait NotificationMetadata: Serialize + DeserializeOwned + Clone + Sized {
     fn event_type() -> NotificationEventType;
 
@@ -232,3 +248,4 @@ impl_notification_metadata!(
     NotificationEventType::ChannelMessageReply
 );
 impl_notification_metadata!(NewEmailMetadata, NotificationEventType::NewEmail);
+impl_notification_metadata!(TaskAssignedMetadata, NotificationEventType::TaskAssigned);

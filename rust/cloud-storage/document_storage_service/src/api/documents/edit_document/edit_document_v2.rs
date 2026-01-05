@@ -1,4 +1,7 @@
-use crate::{api::context::ApiContext, model::request::documents::edit::EditDocumentRequestV2};
+use crate::{
+    api::{context::ApiContext, documents::utils},
+    model::request::documents::edit::EditDocumentRequestV2,
+};
 use anyhow::Context;
 use axum::{
     http::StatusCode,
@@ -10,11 +13,8 @@ use model::{
     response::{ErrorResponse, GenericSuccessResponse, SuccessResponse},
     user::UserContext,
 };
-use models_opensearch::SearchEntityType;
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use models_permissions::share_permission::access_level::AccessLevel;
-use sqs_client::search::{SearchQueueMessage, name::EntityName};
-use tracing::Instrument;
 
 pub async fn edit_document(
     ctx: &ApiContext,
@@ -84,33 +84,10 @@ pub async fn edit_document(
 
     // If an important attribute is updated we will need to send a message to the search extractor
     if document_name.is_some() {
-        tokio::spawn({
-            let sqs_client = ctx.sqs_client.clone();
-            let document_id = document_context.document_id.clone();
-            async move {
-                tracing::trace!("sending message to search extractor queue");
-                let document_id = match macro_uuid::string_to_uuid(&document_id) {
-                    Ok(document_id) => document_id,
-                    Err(err) => {
-                        tracing::error!(error=?err, "failed to convert document_id to uuid");
-                        return;
-                    }
-                };
-
-                let _ = sqs_client
-                    .send_message_to_search_event_queue(SearchQueueMessage::UpdateEntityName(
-                        EntityName {
-                            entity_id: document_id,
-                            entity_type: SearchEntityType::Documents,
-                        },
-                    ))
-                    .await
-                    .inspect_err(|e| {
-                        tracing::error!(error=?e, "SEARCH_QUEUE unable to enqueue message");
-                    });
-            }
-            .in_current_span()
-        });
+        utils::notify_search_service_of_document_name_update(
+            ctx.sqs_client.clone(),
+            document_context.document_id.clone(),
+        );
     }
 
     Ok((

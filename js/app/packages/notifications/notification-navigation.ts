@@ -138,6 +138,12 @@ function getSupportedHandler(
       },
       () => null
     )
+    .with(
+      { notificationEventType: 'task_assigned' },
+      (n) => async (lm: SplitManager) => {
+        openSplitIfNotOpen(lm, 'task', n.notificationMetadata.taskId);
+      }
+    )
     .exhaustive();
 }
 

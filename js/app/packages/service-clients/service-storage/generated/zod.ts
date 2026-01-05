@@ -616,6 +616,67 @@ export const createDocumentHandlerResponse = zod.object({
 })
 
 
+/**
+ * This endpoint creates task metadata and sets properties atomically.
+Task content should be set separately via the sync service.
+
+NOTE: Ideally content initialization would happen here on the backend, but that requires
+adding Loro/Lexical support to initialize sync service documents server-side. Deferring
+for now — client must call `syncServiceClient.initializeFromSnapshot()` after this returns.
+ * @summary Creates a task document with properties in a single call.
+ */
+export const createTaskHandlerBody = zod.object({
+  "projectId": zod.string().nullish().describe('Optional project id to associate the task with'),
+  "propertyValues": zod.array(zod.object({
+  "propertyId": zod.string().describe('The property definition ID'),
+  "value": zod.union([zod.object({
+  "type": zod.enum(['boolean']),
+  "value": zod.boolean()
+}).describe('Boolean true/false value'),zod.object({
+  "type": zod.enum(['date']),
+  "value": zod.string().datetime({})
+}).describe('Date and time value'),zod.object({
+  "type": zod.enum(['number']),
+  "value": zod.number()
+}).describe('Numeric value'),zod.object({
+  "type": zod.enum(['string']),
+  "value": zod.string()
+}).describe('String/text value'),zod.object({
+  "option_id": zod.string().uuid(),
+  "type": zod.enum(['select_option'])
+}).describe('Select option by ID (for select-type properties)'),zod.object({
+  "option_ids": zod.array(zod.string().uuid()),
+  "type": zod.enum(['multi_select_option'])
+}).describe('Multiple select options by ID (for multi-select properties)'),zod.object({
+  "reference": zod.object({
+  "entity_id": zod.string(),
+  "entity_type": zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.'),
+  "specific_message_id": zod.string().uuid().nullish().describe('For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread/channel/chat.')
+}).describe('Entity reference for entity-type property values.'),
+  "type": zod.enum(['entity_reference'])
+}).describe('Entity reference'),zod.object({
+  "references": zod.array(zod.object({
+  "entity_id": zod.string(),
+  "entity_type": zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.'),
+  "specific_message_id": zod.string().uuid().nullish().describe('For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread/channel/chat.')
+}).describe('Entity reference for entity-type property values.')),
+  "type": zod.enum(['multi_entity_reference'])
+}).describe('Multiple entity references (for multi-select entity properties)'),zod.object({
+  "type": zod.enum(['link']),
+  "url": zod.string()
+}).describe('Link value'),zod.object({
+  "type": zod.enum(['multi_link']),
+  "urls": zod.array(zod.string())
+}).describe('Multiple link values (for multi-select link properties)')]).describe('Type-safe enum for setting entity property values - provides compile-time validation.')
+}).describe('Property input for setting a property value on the task')).nullish().describe('Optional property values to set on the task'),
+  "taskName": zod.string().describe('The name of the task')
+}).describe('Request body for create_task')
+
+export const createTaskHandlerResponse = zod.object({
+  "documentId": zod.string().describe('The document id of the created task')
+}).describe('Response for create_task')
+
+
 export const initializeUserDocumentsResponse = zod.object({
   "success": zod.boolean().describe('Indicates if the request was successful')
 })

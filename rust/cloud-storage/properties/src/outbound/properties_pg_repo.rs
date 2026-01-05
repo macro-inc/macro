@@ -132,4 +132,21 @@ impl PropertiesRepo for PropertiesPgRepo {
             },
         }
     }
+
+    #[tracing::instrument(skip(self))]
+    async fn get_document_name(&self, id: &str) -> Result<Option<String>, Self::Err> {
+        // Tasks are stored as documents, so this works for both documents and tasks
+        match macro_db_client::document::get_document_name(&self.pool, id).await {
+            Ok(name) => Ok(Some(name)),
+            Err(e) => {
+                // If document doesn't exist, return None instead of error
+                if let Some(db_err) = e.downcast_ref::<sqlx::Error>()
+                    && matches!(db_err, sqlx::Error::RowNotFound)
+                {
+                    return Ok(None);
+                }
+                Err(e)
+            }
+        }
+    }
 }
