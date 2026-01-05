@@ -80,6 +80,7 @@ import {
   type ViewData,
   type ViewDataMap,
 } from './ViewConfig';
+import { isTouchModality } from '@core/mobile/inputModality';
 
 type NavigateListFn = (input: NavigationInput) => Promise<NavigationResult>;
 
@@ -431,7 +432,8 @@ export function createNavigationEntityListShortcut({
 
           // update selected entity to current selected entity's neighbor, before/after neighbor is based on last navigation direction.
           // if selected entity is not from multi selected list, don't update selected entity
-          if (selectedEntityIncludedInMultiSelectedEntities) {
+          // we don't want to update the selected entity when user is using touch modality because it will cause the list to scroll in unexpected ways when swiping to mark done
+          if (selectedEntityIncludedInMultiSelectedEntities && !isTouchModality()) {
             const index = selectedEntityData?.index ?? 0;
 
             const newSelectedEntity = entities()?.at(index);

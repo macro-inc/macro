@@ -21,12 +21,30 @@ const renderApp = () => {
   document.documentElement.dataset.platform = getPlatform();
 
   // Used for :focus-visible, which focus-bracket utility uses, to prevent input elements triggering :focus-visible on mouse click
-  document.addEventListener('keydown', () => {
-    document.documentElement.dataset.modality = 'keyboard';
-  });
-  document.addEventListener('mousedown', () => {
-    document.documentElement.dataset.modality = 'mouse';
-  });
+  // Use capture phase to ensure we catch events even if they're stopped by handlers
+  document.addEventListener(
+    'keydown',
+    () => {
+      document.documentElement.dataset.modality = 'keyboard';
+    },
+    { capture: true }
+  );
+
+  document.addEventListener(
+    'mousedown',
+    () => {
+      document.documentElement.dataset.modality = 'mouse';
+    },
+    { capture: true }
+  );
+
+  document.addEventListener(
+    'touchstart',
+    () => {
+      document.documentElement.dataset.modality = 'touch';
+    },
+    { capture: true, passive: true }
+  );
 
   if (import.meta.env.MODE === 'development') {
     return render(

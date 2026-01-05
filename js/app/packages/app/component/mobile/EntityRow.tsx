@@ -109,6 +109,20 @@ export function EntityRowProvider(
 
   let rafId: number | null = null;
 
+  const resetEntityState = () => {
+    const els = touchState.elements;
+    const id = touchState.entityId;
+    if (!els || !id) return;
+    // if row has not been collapsed, reset its styling.
+    setTimeout(() => {
+      if (!isAtLeastPhase(stateById()[id]?.phase, 'collapsing')) {
+        setState(id, { direction: null, phase: 'idle' });
+        els.contentEl.style.transition = ``;
+        els.contentEl.style.transform = 'translateX(0px)';
+      }
+    }, COLLAPSE_SPEED);
+  };
+
   const resetTouchState = () => {
     touchState = {
       startX: 0,
@@ -149,48 +163,24 @@ export function EntityRowProvider(
     props.onCollapseReady?.(collapseEntity);
   });
 
-  const handleSwipeRight = async (entityId: string) => {
+  const handleSwipe = (entityId: string) => {
     const els = touchState.elements;
     if (!els) return;
-    const onSwipeRight = props.onSwipeRight;
-    if (!onSwipeRight) return;
-
-    if (rafId)
-      // Cancel any pending animation frame
-      cancelAnimationFrame(rafId);
-
-    els.contentEl.style.transition = `transform ${TRANSLATE_AFTER_TRIGGERED_SPEED}ms ease-out`;
-    els.contentEl.style.transform = 'translateX(100%)';
-
-    setState(entityId, { direction: 'right', phase: 'triggered' });
-
-    setTimeout(() => {
-      onSwipeRight(entityId);
-    }, TRANSLATE_AFTER_TRIGGERED_SPEED);
-
-    // If row has not been removed, reset it:
-    setTimeout(() => {
-      els.contentEl.style.transition = ``;
-      els.contentEl.style.transform = 'translateX(0px)';
-    }, COLLAPSE_SPEED);
-  };
-
-  const handleSwipeLeft = async (entityId: string) => {
-    const els = touchState.elements;
-    if (!els) return;
-    const onSwipeLeft = props.onSwipeLeft;
-    if (!onSwipeLeft) return;
+    const direction = stateById()[entityId]?.direction;
+    if (!direction) return;
+    const onSwipe = direction === 'left' ? props.onSwipeLeft : props.onSwipeRight;
+    if (!onSwipe) return;
 
     // Cancel any pending animation frame
     if (rafId) cancelAnimationFrame(rafId);
 
     els.contentEl.style.transition = `transform ${TRANSLATE_AFTER_TRIGGERED_SPEED}ms ease-out`;
-    els.contentEl.style.transform = 'translateX(-100%)';
+    els.contentEl.style.transform = `translateX(${direction === 'left' ? '-100%' : '100%'})`;
 
-    setState(entityId, { direction: 'left', phase: 'triggered' });
+    setState(entityId, { phase: 'triggered' });
 
     setTimeout(() => {
-      onSwipeLeft(entityId);
+      onSwipe(entityId);
     }, TRANSLATE_AFTER_TRIGGERED_SPEED);
 
     // If row has not been removed, reset it:
@@ -198,7 +188,7 @@ export function EntityRowProvider(
       els.contentEl.style.transition = ``;
       els.contentEl.style.transform = 'translateX(0px)';
     }, COLLAPSE_SPEED);
-  };
+  }
 
   const canSwipeRight = (entityId: string) => {
     if (!props.onSwipeRight) return false;
@@ -328,12 +318,12 @@ export function EntityRowProvider(
       // Auto-activate swipe if threshold is reached
       const containerWidth = touchState.elements.swipeEl.clientWidth;
       if (allowRight && dx > containerWidth * AUTO_ACTIVATION_PERCENTAGE) {
-        handleSwipeRight(touchState.entityId);
+        handleSwipe(touchState.entityId);
       } else if (
         allowLeft &&
         dx < -containerWidth * AUTO_ACTIVATION_PERCENTAGE
       ) {
-        handleSwipeLeft(touchState.entityId);
+        handleSwipe(touchState.entityId);
       }
     }
   };
@@ -344,10 +334,12 @@ export function EntityRowProvider(
       !touchState.entityId ||
       !touchState.isSwipeGesture
     ) {
+      resetEntityState();
       resetTouchState();
       return;
     }
     if (isAtLeastPhase(stateById()[touchState.entityId]?.phase, 'triggered')) {
+      resetEntityState();
       resetTouchState();
       return;
     }
@@ -360,18 +352,20 @@ export function EntityRowProvider(
     const allowLeft = canSwipeLeft(entityId);
 
     if (allowRight && deltaX > SWIPE_ACTIVATION_DISTANCE) {
-      void handleSwipeRight(entityId);
+      void handleSwipe(entityId);
     } else if (allowLeft && deltaX < -SWIPE_ACTIVATION_DISTANCE) {
-      void handleSwipeLeft(entityId);
+      void handleSwipe(entityId);
     } else {
       springBack();
     }
 
+    resetEntityState();
     resetTouchState();
   };
 
   const onTouchCancel = (_e: TouchEvent) => {
     springBack();
+    resetEntityState();
     resetTouchState();
   };
 
