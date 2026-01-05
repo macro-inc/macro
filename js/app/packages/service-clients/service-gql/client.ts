@@ -11,16 +11,19 @@ import { LegacyApiRpcClient } from '../../codegen/auth_service/auth_service_rpc'
 
 // Create a singleton instance of the RPC client
 let rpcClientInstance: LegacyApiRpcClient | null = null;
+let headers: Headers | null = null;
 
 async function getRpcClient(): Promise<LegacyApiRpcClient> {
-  if (!rpcClientInstance) {
-    const headers = new Headers();
+  if (headers == null) {
+    headers = new Headers();
 
     if (ENABLE_BEARER_TOKEN_AUTH) {
       const token = await getAccessToken();
       if (token) headers.set('Authorization', `Bearer ${token}`);
     }
+  }
 
+  if (!rpcClientInstance) {
     rpcClientInstance = LegacyApiRpcClient.construct_with_headers(
       `${SERVER_HOSTS['auth-service']}/user`,
       () => headers
@@ -49,7 +52,7 @@ async function withRetryOn401<T>(
         throw error;
       }
 
-      rpcClientInstance = null;
+      headers = null;
 
       const backoffMs = (attempt + 1) * 100;
       await new Promise((resolve) => setTimeout(resolve, backoffMs));
