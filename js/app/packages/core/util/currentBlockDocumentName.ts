@@ -45,6 +45,6 @@ export const useBlockDocumentDownloadName = (defaultName?: string) => {
     if (!current) current = 'download';
 
     const fileType = blockMetadataSignal()?.fileType;
-    return formatDocumentName(current, fileType, true);
+    return formatDocumentName(current, fileType);
   });
 };

@@ -65,13 +65,13 @@ export const reverseFormatDocumentName = (
 export const formatDocumentName = (
   originalName: string,
   fileType?: string | null,
-  ignorePreviewBlockRestriction?: boolean
+  options?: { fullyQualifiedBlockName?: boolean }
 ) => {
   if (!fileType) return originalName;
 
   const blockName = fileTypeToBlockName(fileType);
   if (
-    !ignorePreviewBlockRestriction &&
+    options?.fullyQualifiedBlockName &&
     !FULLY_QUALIFIED_DOCUMENT_NAME_BLOCKS.includes(blockName)
   )
     return originalName;

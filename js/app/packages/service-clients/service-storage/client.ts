@@ -147,7 +147,9 @@ export function isItemType(str: string): str is ItemType {
 const mapMetadataDocumentName = (
   metadata: DocumentMetadata
 ): DocumentMetadata => {
-  const name = formatDocumentName(metadata.documentName, metadata.fileType);
+  const name = formatDocumentName(metadata.documentName, metadata.fileType, {
+    fullyQualifiedBlockName: true,
+  });
 
   return {
     ...metadata,
@@ -158,7 +160,9 @@ const mapMetadataDocumentName = (
 const mapItemDocumentName = (item: Item): Item => {
   if (item.type !== 'document') return item;
 
-  const name = formatDocumentName(item.name, item.fileType);
+  const name = formatDocumentName(item.name, item.fileType, {
+    fullyQualifiedBlockName: true,
+  });
 
   return {
     ...item,
@@ -169,7 +173,9 @@ const mapItemDocumentName = (item: Item): Item => {
 const mapPreviewDocumentName = (preview: DocumentPreview): DocumentPreview => {
   if (!('document_name' in preview)) return preview;
 
-  const name = formatDocumentName(preview.document_name, preview.file_type);
+  const name = formatDocumentName(preview.document_name, preview.file_type, {
+    fullyQualifiedBlockName: true,
+  });
   return {
     ...preview,
     document_name: name,
