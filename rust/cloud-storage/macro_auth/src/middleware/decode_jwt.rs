@@ -130,7 +130,7 @@ pub fn validate_macro_access_token(
     )
 }
 
-const TOKEN_EXPIRATION_BUFFER_SECONDS: Duration = Duration::from_secs(30);
+const TOKEN_EXPIRATION_BUFFER_SECONDS: Duration = Duration::from_secs(0);
 
 fn validate_macro_access_token_inner(
     macro_access_token: &str,
