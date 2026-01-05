@@ -71,7 +71,7 @@ pub async fn fetchium(
             AttachmentType::Document => {
                 let document = scribe
                     .document
-                    .fetch_with_auth(attachment.attachment_id.clone(), jwt)
+                    .fetch_with_auth(attachment.attachment_id.clone(), jwt.to_string())
                     .document_content()
                     .await?;
                 if document.file_type().is_image() {
