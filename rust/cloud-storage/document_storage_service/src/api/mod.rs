@@ -142,7 +142,6 @@ fn api_router(state: ApiContext) -> Router {
                 }),
             )),
         )
-        .nest("/mentions", mentions::router(state.clone()))
         .nest(
             "/annotations",
             annotations::router(state.clone()).layer(axum::middleware::from_fn(
