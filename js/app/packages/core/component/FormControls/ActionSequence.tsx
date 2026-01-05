@@ -80,7 +80,7 @@ export function ActionSequence(props: ActionSequenceProps) {
                 'text-ink-disabled': step.disabled && !step.completed,
               }}
             >
-              <Button
+              <Step
                 label={step.label}
                 onClick={step.onClick}
                 disabled={step.disabled}
@@ -94,7 +94,7 @@ export function ActionSequence(props: ActionSequenceProps) {
   );
 }
 
-function Button(props: ButtonProps) {
+function Step(props: ButtonProps) {
   return (
     <button
       type="button"

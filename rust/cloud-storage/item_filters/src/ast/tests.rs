@@ -44,42 +44,42 @@ fn it_expands_filters() {
 
     let json = serde_json::to_value(ast).unwrap();
     let exp = json!({
-        "And": [
+        "&": [
             {
-                "And": [
+                "&": [
                     {
-                        "And": [
+                        "&": [
                             {
-                                "Or": [
+                                "|": [
                                     {
-                                        "Literal": {
-                                            "FileType": "pdf",
+                                        "l": {
+                                            "ft": "pdf",
                                         }
                                     },
                                     {
-                                        "Literal": {
-                                            "FileType": "txt"
+                                        "l": {
+                                            "ft": "txt"
                                         }
                                     }
                                 ]
                             },
                             {
-                                "Literal": {
-                                    "Id": document_id
+                                "l": {
+                                    "id": document_id
                                 }
                             }
                         ]
                     },
                     {
-                        "Literal": {
-                            "ProjectId": project_id
+                        "l": {
+                            "pid": project_id
                         }
                     }
                 ]
             },
             {
-                "Literal": {
-                    "Owner": "macro|hello@test.com"
+                "l": {
+                    "o": "macro|hello@test.com"
                 }
             }
         ]
@@ -113,42 +113,42 @@ fn it_expands_file_associations() {
     println!("{}", serde_json::to_string_pretty(&json).unwrap());
 
     let exp = serde_json::json!({
-      "Or": [
+      "|": [
         {
-          "Or": [
+          "|": [
             {
-              "Or": [
+              "|": [
                 {
-                  "Or": [
+                  "|": [
                     {
-                      "Literal": {
-                        "FileType": "ai"
+                      "l": {
+                        "ft": "ai"
                       }
                     },
                     {
-                      "Literal": {
-                        "FileType": "eps"
+                      "l": {
+                        "ft": "eps"
                       }
                     }
                   ]
                 },
                 {
-                  "Literal": {
-                    "FileType": "ps"
+                  "l": {
+                    "ft": "ps"
                   }
                 }
               ]
             },
             {
-              "Literal": {
-                "FileType": "dxf"
+              "l": {
+                "ft": "dxf"
               }
             }
           ]
         },
         {
-          "Literal": {
-            "FileType": "dwg"
+          "l": {
+            "ft": "dwg"
           }
         }
       ]

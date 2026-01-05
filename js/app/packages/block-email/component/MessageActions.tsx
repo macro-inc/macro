@@ -1,4 +1,4 @@
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import ArrowBendDoubleUpLeft from '@icon/regular/arrow-bend-double-up-left.svg';
 import ArrowBendUpLeft from '@icon/regular/arrow-bend-up-left.svg';
 import ArrowBendUpRight from '@icon/regular/arrow-bend-up-right.svg';
@@ -49,7 +49,7 @@ export function MessageActions(props: {
           }
           fallback={
             <Show when={!props.hiddenActions?.includes('reply')}>
-              <IconButton
+              <DeprecatedIconButton
                 icon={ArrowBendUpLeft}
                 theme="clear"
                 onClick={() => {
@@ -69,7 +69,7 @@ export function MessageActions(props: {
             </Show>
           }
         >
-          <IconButton
+          <DeprecatedIconButton
             icon={ArrowBendDoubleUpLeft}
             theme="clear"
             onClick={() => {
@@ -86,7 +86,7 @@ export function MessageActions(props: {
           />
         </Show>
         <Show when={!props.hiddenActions?.includes('forward')}>
-          <IconButton
+          <DeprecatedIconButton
             icon={ArrowBendUpRight}
             theme="clear"
             onClick={() => {

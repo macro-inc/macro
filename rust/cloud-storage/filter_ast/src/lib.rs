@@ -66,9 +66,13 @@ pub enum ExprFrame<A, B> {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Expr<B> {
+    #[serde(rename = "&")]
     And(Box<Self>, Box<Self>),
+    #[serde(rename = "|")]
     Or(Box<Self>, Box<Self>),
+    #[serde(rename = "!")]
     Not(Box<Self>),
+    #[serde(rename = "l")]
     Literal(B),
 }
 

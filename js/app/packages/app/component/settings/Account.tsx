@@ -2,7 +2,7 @@ import { uploadProfilePicture } from '@core/component/ProfilePicture';
 import { TabContentRow } from '@core/component/TabContent';
 import EditableField from '@core/component/EditableField';
 import { capitalize } from '@block-pdf/util/StringUtils';
-import { TextButton } from '@core/component/TextButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { useHasPaidAccess } from '@core/auth/license';
 import { UserIcon } from '@core/component/UserIcon';
 import { useLogout } from '@core/auth/logout';
@@ -144,7 +144,7 @@ export function Account() {
                     },
                   }}
                 >
-                  <TextButton text="Upload" icon={IconUpload} theme="accent" />
+                  <DeprecatedTextButton text="Upload" icon={IconUpload} theme="accent" />
                 </div>
               </div>
             </Show>
@@ -188,7 +188,7 @@ export function Account() {
             subtext={capitalize(licenseStatus() ?? '')}
           />
           <Show when={!hasPaidAccess()}>
-            <TextButton
+            <DeprecatedTextButton
               theme="accent"
               text="Upgrade"
               onClick={() => showPaywall()}
@@ -204,7 +204,7 @@ export function Account() {
             <Show
               when={!emailActive() && DEV_MODE_ENV}
               fallback={
-                <TextButton
+                <DeprecatedTextButton
                   theme="base"
                   text="Disable"
                   onClick={() => {
@@ -224,7 +224,7 @@ export function Account() {
                       setShowTooltip(false);
                     }}
                   >
-                    <TextButton
+                    <DeprecatedTextButton
                       theme="base"
                       text="Enable"
                       onClick={connectEmail}
@@ -250,7 +250,7 @@ export function Account() {
               Disabling will clear all email data from Macro
             </div>
             <div class="ml-auto flex flex-row">
-              <TextButton
+              <DeprecatedTextButton
                 theme="clear"
                 text="Confirm"
                 onClick={() => {
@@ -258,7 +258,7 @@ export function Account() {
                   setShowEmailModal(false);
                 }}
               />
-              <TextButton
+              <DeprecatedTextButton
                 theme="clear"
                 text="Cancel"
                 onClick={() => {
@@ -303,7 +303,7 @@ function NotificationSettings(props: {
   return (
     <div class="flex items-center justify-between mb-[18px]">
       <div class="text-sm">Notifications</div>
-      <TextButton
+      <DeprecatedTextButton
         theme="base"
         text={props.settings.isEnabled() ? "Disable" : "Enable"}
         onClick={() => props.settings.toggle(!props.settings.isEnabled())}

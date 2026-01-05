@@ -1,4 +1,4 @@
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { toast } from '@core/component/Toast/Toast';
 import { fileSelector } from '@core/directive/fileSelector';
 import { useEmailLinks, useEmailLinksStatus } from '@core/email-link';
@@ -286,7 +286,7 @@ export function HelpDrawerInner(props: HelpDrawerInnerProps) {
       <div class="absolute pattern-edge pattern-diagonal-4 opacity-100 w-full h-4 top-0 -translate-y-[calc(100%_+_1px)] mask-t-from-0" />
       <div class="content bg-dialog min-h-[16rem]">
         <div class="absolute top-3 right-3">
-          <IconButton
+          <DeprecatedIconButton
             icon={CloseIcon}
             theme="clear"
             size="sm"

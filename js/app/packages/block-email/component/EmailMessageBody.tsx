@@ -1,4 +1,4 @@
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
@@ -235,7 +235,7 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
         </Switch>
         <Show when={!showFullHTML() && hasHiddenReplyStructure()}>
           <div class="flex items-center gap-2">
-            <IconButton
+            <DeprecatedIconButton
               theme="clear"
               icon={DotsThree}
               onclick={() => setShowFullHTML(true)}

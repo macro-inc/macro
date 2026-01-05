@@ -8,12 +8,12 @@ import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { URL_PARAMS as EMAIL_PARAMS } from '@block-email/constants';
 import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/signal/location';
-import { Button } from '@core/component/FormControls/Button';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
+import { DeprecatedButton } from '@core/component/FormControls/DeprecatedButton';
 import DropdownMenu from '@core/component/FormControls/DropdownMenu';
 import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { ToggleButton } from '@core/component/FormControls/ToggleButton';
 import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
-import { IconButton } from '@core/component/IconButton';
 import { ContextMenuContent, MenuSeparator } from '@core/component/Menu';
 import { useTaskProperties } from '@core/component/Properties/hooks';
 import { getSuggestedProperties } from '@core/component/Properties/utils';
@@ -1245,7 +1245,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                   triggerLabel={<span class="font-extrabold">⋮</span>}
                 >
                   <div class="flex flex-col gap-2 p-2">
-                    <Button
+                    <DeprecatedButton
                       size="SM"
                       classList={{
                         '!border-ink/25 !text-ink !bg-panel hover:!text-ink font-normal': true,
@@ -1253,8 +1253,8 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       onClick={onClickResetViewConfigChanges}
                     >
                       CLEAR
-                    </Button>
-                    <Button
+                    </DeprecatedButton>
+                    <DeprecatedButton
                       size="SM"
                       classList={{
                         '!border-ink/25 !text-ink !bg-panel hover:!text-ink font-normal': true,
@@ -1262,12 +1262,12 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       onClick={onClickSaveViewConfigChanges}
                     >
                       SAVE CHANGES
-                    </Button>
+                    </DeprecatedButton>
                   </div>
                 </DropdownMenu>
               </Show>
               <Show when={!preview()}>
-                <Button
+                <DeprecatedButton
                   size="SM"
                   classList={{
                     '!border-ink/25 !text-ink !bg-panel hover:!text-ink ml-1.5 font-normal': true,
@@ -1275,8 +1275,8 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                   onClick={onClickResetViewConfigChanges}
                 >
                   CLEAR
-                </Button>
-                <Button
+                </DeprecatedButton>
+                <DeprecatedButton
                   size="SM"
                   classList={{
                     '!border-ink/25 !text-ink !bg-panel hover:!text-ink mx-1.5 font-normal': true,
@@ -1284,7 +1284,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                   onClick={onClickSaveViewConfigChanges}
                 >
                   SAVE CHANGES
-                </Button>
+                </DeprecatedButton>
               </Show>
             </Show>
             <DropdownMenu
@@ -1926,7 +1926,7 @@ function SearchBar(props: {
             <Show
               when={searchText()}
               fallback={
-                <IconButton
+                <DeprecatedIconButton
                   size="sm"
                   icon={SearchIcon}
                   theme="clear"
@@ -1937,7 +1937,7 @@ function SearchBar(props: {
                 />
               }
             >
-              <IconButton
+              <DeprecatedIconButton
                 size="sm"
                 icon={XIcon}
                 theme="clear"
@@ -1950,7 +1950,7 @@ function SearchBar(props: {
             </Show>
           }
         >
-          <IconButton
+          <DeprecatedIconButton
             size="sm"
             icon={LoadingSpinner}
             theme="clear"

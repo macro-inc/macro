@@ -5,7 +5,7 @@ import {
   showTabBarSignal,
 } from '@block-pdf/signal/placeables';
 import { isThreadPlaceable } from '@block-pdf/store/comments/freeComments';
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { Tooltip } from '@core/component/Tooltip';
 import {
   useCanComment,
@@ -54,7 +54,7 @@ export function MarkupToolbar() {
   const dynamicButton = createMemo(() => ({
     cancel: () => (
       <Tooltip tooltip={'Cancel'}>
-        <IconButton
+        <DeprecatedIconButton
           size="sm"
           theme="red"
           icon={Cancel}
@@ -66,7 +66,7 @@ export function MarkupToolbar() {
     ),
     delete: () => (
       <Tooltip tooltip={'Delete'}>
-        <IconButton
+        <DeprecatedIconButton
           size="sm"
           theme="red"
           icon={Trash}
@@ -80,7 +80,7 @@ export function MarkupToolbar() {
     ),
     placeholder: () => (
       <div class="invisible">
-        <IconButton size="sm" icon={Cancel} />
+        <DeprecatedIconButton size="sm" icon={Cancel} />
       </div>
     ),
   }));
@@ -94,7 +94,7 @@ export function MarkupToolbar() {
         }}
       >
         <Show when={canEdit()}>
-          <IconButton
+          <DeprecatedIconButton
             size="sm"
             tooltip={{
               label: showTabBar() ? 'Hide Tabs' : 'Show Tabs',
@@ -106,7 +106,7 @@ export function MarkupToolbar() {
             }}
           />
           <div class="w-px h-5 bg-edge mx-2" />
-          <IconButton
+          <DeprecatedIconButton
             size="sm"
             tooltip={{
               label: 'Text Box',
@@ -117,7 +117,7 @@ export function MarkupToolbar() {
               setMode(PayloadMode.FreeTextAnnotation);
             }}
           />
-          <IconButton
+          <DeprecatedIconButton
             size="sm"
             tooltip={{
               label: 'Signature',
@@ -127,7 +127,7 @@ export function MarkupToolbar() {
             onClick={() => setMode(PayloadMode.Signature)}
           />
         </Show>
-        <IconButton
+        <DeprecatedIconButton
           size="sm"
           tooltip={{
             label: 'Comment',

@@ -159,9 +159,11 @@ const deduplicateEntities = <T extends EntityData>(entities: T[]): T[] => {
  * Sorts entities for search mode
  */
 const sortEntitiesForSearch = <T extends EntityData>(a: T, b: T): number => {
-  const channelsFirst = (a: WithSearch<T>, b: WithSearch<T>) => {
-    if (a.type === 'channel' && b.type !== 'channel') return -1;
-    if (a.type !== 'channel' && b.type === 'channel') return 1;
+  const channelsWithNameMatchesFirst = (a: WithSearch<T>, b: WithSearch<T>) => {
+    if (a.type === 'channel' && b.type !== 'channel' && a.search.nameHighlight)
+      return -1;
+    if (a.type !== 'channel' && b.type === 'channel' && b.search.nameHighlight)
+      return 1;
     return 0;
   };
 
@@ -172,7 +174,7 @@ const sortEntitiesForSearch = <T extends EntityData>(a: T, b: T): number => {
   };
 
   if (isSearchEntity(a) && isSearchEntity(b)) {
-    return channelsFirst(a, b) || localFirst(a, b);
+    return channelsWithNameMatchesFirst(a, b) || localFirst(a, b);
   }
 
   return 0;
