@@ -34,7 +34,9 @@ function SplitBackButton() {
   return (
     <Button
       class="p-1 *:h-4"
-      tooltip={<LabelAndHotKey label='Go Back' hotkeyToken={TOKENS.split.go.back} />}
+      tooltip={
+        <LabelAndHotKey label="Go Back" hotkeyToken={TOKENS.split.go.back} />
+      }
       disabled={!context.handle.canGoBack()}
       onClick={context.handle.goBack}
     >
@@ -49,7 +51,12 @@ function SplitForwardButton() {
   return (
     <Button
       class="p-1 *:h-4"
-      tooltip={<LabelAndHotKey label='Go Forward' hotkeyToken={TOKENS.split.go.forward} />}
+      tooltip={
+        <LabelAndHotKey
+          label="Go Forward"
+          hotkeyToken={TOKENS.split.go.forward}
+        />
+      }
       disabled={!context.handle.canGoForward()}
       onClick={context.handle.goForward}
     >
@@ -66,7 +73,16 @@ function SplitSpotlightButton() {
     <Show when={canSpotlight(layout.manager)}>
       <Button
         class="p-1 *:h-4"
-        tooltip={<LabelAndHotKey label={context.handle.isSpotLight() ? 'Minimize Split' : 'Spotlight Split'} hotkeyToken={TOKENS.window.spotlight.toggle} />}
+        tooltip={
+          <LabelAndHotKey
+            label={
+              context.handle.isSpotLight()
+                ? 'Minimize Split'
+                : 'Spotlight Split'
+            }
+            hotkeyToken={TOKENS.window.spotlight.toggle}
+          />
+        }
         onClick={() => context.handle.toggleSpotlight()}
       >
         {context.handle.isSpotLight() ? <CollapseIcon /> : <ExpandIcon />}
@@ -81,7 +97,9 @@ function SplitCloseButton() {
   return (
     <Button
       class="p-1 *:h-4"
-      tooltip={<LabelAndHotKey label='Close' hotkeyToken={TOKENS.window.close} />}
+      tooltip={
+        <LabelAndHotKey label="Close" hotkeyToken={TOKENS.window.close} />
+      }
       onClick={context.handle.close}
     >
       <CloseIcon />
@@ -107,9 +125,14 @@ function SplitPreviewToggle() {
         <Button
           class="p-1 *:h-4"
           classList={{
-            "bg-accent/20 text-accent": preview(),
+            'bg-accent/20 text-accent': preview(),
           }}
-          tooltip={<LabelAndHotKey label={!preview() ? 'Split View (Preview)' : 'Full View (List)'} hotkeyToken={TOKENS.unifiedList.togglePreview} />}
+          tooltip={
+            <LabelAndHotKey
+              label={!preview() ? 'Split View (Preview)' : 'Full View (List)'}
+              hotkeyToken={TOKENS.unifiedList.togglePreview}
+            />
+          }
           onClick={() => setPreview((prev) => !prev)}
         >
           <SplitIcon />
@@ -144,9 +167,14 @@ function SplitSettingsButton() {
     <Button
       class="p-1 *:h-4"
       classList={{
-        "bg-accent/20 text-accent": isSettingsSplitOpen(),
+        'bg-accent/20 text-accent': isSettingsSplitOpen(),
       }}
-      tooltip={<LabelAndHotKey label={isSettingsSplitOpen() ? 'Close Settings' : 'Open Settings'} hotkeyToken={TOKENS.global.toggleSettings} />}
+      tooltip={
+        <LabelAndHotKey
+          label={isSettingsSplitOpen() ? 'Close Settings' : 'Open Settings'}
+          hotkeyToken={TOKENS.global.toggleSettings}
+        />
+      }
       onClick={() => {
         if (isSettingsSplitOpen()) {
           activeSplit()?.goBack();
