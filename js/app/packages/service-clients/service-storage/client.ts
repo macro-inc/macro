@@ -1284,6 +1284,18 @@ export const storageServiceClient = {
       });
     },
   },
+  async editThread(params) {
+    const { threadId, ...body } = params;
+
+    return mapOk(
+      await dssFetch<SuccessResponse>(`/threads/${threadId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      }),
+
+      (result) => result.data
+    );
+  },
 } satisfies StorageServiceClient & typeof enhancements;
 
 export const uploadFileToPresignedUrl = async (
