@@ -44,6 +44,7 @@ import type {
 import { useEmail, useUserId } from '@service-gql/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import type { Item } from '@service-storage/generated/schemas/item';
+import { Button } from '@ui/components/Button';
 import {
   defaultSelectionData,
   lazyRegister,
@@ -90,7 +91,6 @@ import { getReplyTypeFromDraft } from '../util/replyType';
 import { AttachMenu } from './AttachMenu';
 import { type EmailRecipient, useEmailContext } from './EmailContext';
 import { getOrInitEmailFormContext } from './EmailFormContext';
-import { Button } from '@ui/components/Button';
 
 false && fileDrop;
 
@@ -223,7 +223,7 @@ export function BaseInput(props: {
       getReplyTypeFromDraft(props.draft) ??
       ((props.replyingTo()?.to.length ?? 0) +
         (props.replyingTo()?.cc.length ?? 0) >
-        1
+      1
         ? 'reply-all'
         : 'reply')
     );
@@ -600,17 +600,18 @@ export function BaseInput(props: {
   });
 
   const ReplyIcon = createMemo(() => {
-    let Icon = effectiveReplyType() === 'reply' ?
-                Reply
-              : effectiveReplyType() === 'reply-all' ?
-                ReplyAll
-              : Forward;
+    let Icon =
+      effectiveReplyType() === 'reply'
+        ? Reply
+        : effectiveReplyType() === 'reply-all'
+          ? ReplyAll
+          : Forward;
 
     return (
       <Button showChevron>
         <Icon class="h-7 p-1" />
       </Button>
-    )
+    );
   });
 
   return (
@@ -637,7 +638,7 @@ export function BaseInput(props: {
               <Show
                 when={
                   (props.replyingTo()?.to.length ?? 0) +
-                  (props.replyingTo()?.cc.length ?? 0) >
+                    (props.replyingTo()?.cc.length ?? 0) >
                   1
                 }
               >
@@ -665,8 +666,8 @@ export function BaseInput(props: {
               <Show
                 when={
                   form().recipients.to.length +
-                  form().recipients.cc.length +
-                  form().recipients.bcc.length >
+                    form().recipients.cc.length +
+                    form().recipients.bcc.length >
                   0
                 }
                 fallback={
@@ -862,7 +863,6 @@ export function BaseInput(props: {
                 <Plus />
               </Button>
 
-
               <AttachMenu
                 open={attachMenuOpen()}
                 close={() => setAttachMenuOpen(false)}
@@ -938,9 +938,7 @@ export function BaseInput(props: {
           >
             <Show
               when={!isPendingUpload() && !sendMutation.isPending}
-              fallback={
-                <Spinner class="size-6 animate-spin cursor-disabled" />
-              }
+              fallback={<Spinner class="size-6 animate-spin cursor-disabled" />}
             >
               <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center p-0">
                 <ArrowUp class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />

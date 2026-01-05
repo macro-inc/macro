@@ -334,7 +334,7 @@ export function Dock() {
 
               <Show when={ENABLE_JACK_IN && !isTauri()}>
                 <Button
-                  tooltip={<LabelAndHotKey label={isPresentMode() ? 'Exit Present Mode' : 'Enter Present Mode'} hotkeyToken={TOKENS.global.togglePresentMode} />}
+                  tooltip={isPresentMode() ? 'Exit Present Mode' : 'Enter Present Mode'}
                   onClick={togglePresentMode}
                   class="p-1 size-6"
                   classList={{

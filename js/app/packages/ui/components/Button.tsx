@@ -1,5 +1,5 @@
-import { Tooltip } from 'core/component/Tooltip';
 import CaretDown from '@phosphor-icons/core/regular/caret-down.svg';
+import { Tooltip } from 'core/component/Tooltip';
 import { type JSX, type ParentComponent, Show, splitProps } from 'solid-js';
 import { twMerge } from 'tailwind-merge';
 
@@ -42,7 +42,7 @@ export const Button: ParentComponent<ButtonProps> = (props) => {
     'classList',
     'tooltip',
     'showChevron',
-    'type'
+    'type',
   ]);
 
   const classes = twMerge(
@@ -65,7 +65,7 @@ export const Button: ParentComponent<ButtonProps> = (props) => {
 
   return maybeWrapInTooltip(
     <button
-      type={local.type ?? "button"}
+      type={local.type ?? 'button'}
       class={classes}
       classList={{
         'bg-ink border-ink text-panel hover:bg-accent! hover:opacity-80 active:opacity-100':

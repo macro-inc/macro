@@ -1,4 +1,5 @@
 import EntityNavigationIndicator from '@app/component/EntityNavigationIndicator';
+import { LabelAndHotKey } from '@core/component/Tooltip';
 import { ENABLE_PREVIEW } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
 import CollapseIcon from '@icon/regular/arrows-in.svg';
@@ -8,6 +9,7 @@ import CaretRight from '@icon/regular/caret-right.svg';
 import SplitIcon from '@icon/regular/square-split-horizontal.svg';
 import CloseIcon from '@icon/regular/x.svg';
 import IconGear from '@macro-icons/macro-gear.svg';
+import { Button } from '@ui/components/Button';
 import {
   createEffect,
   createMemo,
@@ -25,8 +27,6 @@ import {
   createIsActiveSplitContentMemo,
 } from '../layoutUtils';
 import { canSpotlight } from '../utils/canSpotlight';
-import { Button } from '@ui/components/Button';
-import { LabelAndHotKey } from '@core/component/Tooltip';
 
 function SplitBackButton() {
   const context = useContext(SplitPanelContext);
