@@ -20,7 +20,7 @@ const TRANSLATE_AFTER_TRIGGERED_SPEED = 100; // ms;
 const SPRING_BACK_SPEED = 250; // ms;
 const COLLAPSE_SPEED = 250; // ms;
 
-const SWIPE_PHASES = [
+const ROW_PHASES = [
   'idle',
   'dragging',
   'threshold',
@@ -29,9 +29,9 @@ const SWIPE_PHASES = [
   'complete',
 ] as const;
 
-type SwipePhase = (typeof SWIPE_PHASES)[number];
+type RowPhase = (typeof ROW_PHASES)[number];
 
-const SWIPE_PHASE_RANK: Record<SwipePhase, number> = {
+const ROW_PHASE_RANK: Record<RowPhase, number> = {
   idle: 0,
   dragging: 1,
   threshold: 2,
@@ -40,17 +40,17 @@ const SWIPE_PHASE_RANK: Record<SwipePhase, number> = {
   complete: 5,
 };
 
-const isAtLeastPhase = (phase: SwipePhase, minInclusive: SwipePhase) =>
-  SWIPE_PHASE_RANK[phase] >= SWIPE_PHASE_RANK[minInclusive];
+const isAtLeastPhase = (phase: RowPhase, minInclusive: RowPhase) =>
+  ROW_PHASE_RANK[phase] >= ROW_PHASE_RANK[minInclusive];
 
 type SwipeDirection = 'left' | 'right' | null;
 
-type SwipeActivationState = {
+type EntityRowState = {
   direction: SwipeDirection;
-  phase: SwipePhase;
+  phase: RowPhase;
 };
 
-type SwipeRowElements = {
+type RowElements = {
   rowEl: HTMLDivElement;
   swipeEl: HTMLDivElement;
   contentEl: HTMLDivElement;
@@ -65,35 +65,36 @@ type SwipeTouchState = {
   currentY: number;
   isSwipeGesture: boolean | null;
   entityId: string | null;
-  elements: SwipeRowElements | undefined;
+  elements: RowElements | undefined;
 };
 
-type SwipeGestureContextValue = {
-  activationStateFor: (entityId: string) => SwipeActivationState;
+type EntityRowContextValue = {
+  stateFor: (entityId: string) => EntityRowState;
+  collapseEntity: (entityId: string) => Promise<void>;
 };
 
-const SwipeGestureContext = createContext<SwipeGestureContextValue>();
+export const EntityRowContext = createContext<EntityRowContextValue>();
 
-export function SwipeGestureProvider(
+export function EntityRowProvider(
   props: ParentProps<{
     container: Accessor<HTMLElement | undefined>;
     canSwipeRight?: (entityId: string) => boolean;
     canSwipeLeft?: (entityId: string) => boolean;
     onSwipeRight?: (entityId: string) => void;
     onSwipeLeft?: (entityId: string) => void;
+    onCollapseReady?: (
+      collapseEntity: (entityId: string) => Promise<void>
+    ) => void;
   }>
 ) {
-  const [activationStateById, setActivationStateById] = createSignal<
-    Record<string, SwipeActivationState>
+  const [stateById, setStateById] = createSignal<
+    Record<string, EntityRowState>
   >(Object.create(null));
 
-  const setActivationState = (
-    entityId: string,
-    activationState: SwipeActivationState
-  ) => {
-    setActivationStateById((prev) => ({
+  const setState = (entityId: string, state: Partial<EntityRowState>) => {
+    setStateById((prev) => ({
       ...prev,
-      [entityId]: activationState,
+      [entityId]: { ...prev[entityId], ...state },
     }));
   };
   let touchState: SwipeTouchState = {
@@ -129,9 +130,24 @@ export function SwipeGestureProvider(
 
     setTimeout(() => {
       contentEl.style.transition = '';
-      setActivationState(entityId, { direction: null, phase: 'idle' });
+      setState(entityId, { direction: null, phase: 'idle' });
     }, SPRING_BACK_SPEED);
   }
+
+  const collapseEntity = (entityId: string): Promise<void> => {
+    return new Promise((resolve) => {
+      setState(entityId, { phase: 'collapsing' });
+      setTimeout(() => {
+        setState(entityId, { phase: 'complete' });
+        resolve();
+      }, COLLAPSE_SPEED);
+    });
+  };
+
+  // Notify parent when collapse function is ready
+  createEffect(() => {
+    props.onCollapseReady?.(collapseEntity);
+  });
 
   const handleSwipeRight = async (entityId: string) => {
     const els = touchState.elements;
@@ -139,18 +155,24 @@ export function SwipeGestureProvider(
     const onSwipeRight = props.onSwipeRight;
     if (!onSwipeRight) return;
 
+    if (rafId)
+      // Cancel any pending animation frame
+      cancelAnimationFrame(rafId);
+
     els.contentEl.style.transition = `transform ${TRANSLATE_AFTER_TRIGGERED_SPEED}ms ease-out`;
     els.contentEl.style.transform = 'translateX(100%)';
 
-    setActivationState(entityId, { direction: 'right', phase: 'triggered' });
+    setState(entityId, { direction: 'right', phase: 'triggered' });
 
     setTimeout(() => {
-      setActivationState(entityId, { direction: 'right', phase: 'collapsing' });
-      setTimeout(() => {
-        onSwipeRight(entityId);
-        setActivationState(entityId, { direction: 'right', phase: 'complete' });
-      }, COLLAPSE_SPEED);
+      onSwipeRight(entityId);
     }, TRANSLATE_AFTER_TRIGGERED_SPEED);
+
+    // If row has not been removed, reset it:
+    setTimeout(() => {
+      els.contentEl.style.transition = ``;
+      els.contentEl.style.transform = 'translateX(0px)';
+    }, COLLAPSE_SPEED);
   };
 
   const handleSwipeLeft = async (entityId: string) => {
@@ -158,22 +180,24 @@ export function SwipeGestureProvider(
     if (!els) return;
     const onSwipeLeft = props.onSwipeLeft;
     if (!onSwipeLeft) return;
-    
+
     // Cancel any pending animation frame
     if (rafId) cancelAnimationFrame(rafId);
 
     els.contentEl.style.transition = `transform ${TRANSLATE_AFTER_TRIGGERED_SPEED}ms ease-out`;
     els.contentEl.style.transform = 'translateX(-100%)';
 
-    setActivationState(entityId, { direction: 'left', phase: 'triggered' });
+    setState(entityId, { direction: 'left', phase: 'triggered' });
 
     setTimeout(() => {
-      setActivationState(entityId, { direction: 'left', phase: 'collapsing' });
-      setTimeout(() => {
-        onSwipeLeft(entityId);
-        setActivationState(entityId, { direction: 'left', phase: 'complete' });
-      }, COLLAPSE_SPEED);
+      onSwipeLeft(entityId);
     }, TRANSLATE_AFTER_TRIGGERED_SPEED);
+
+    // If row has not been removed, reset it:
+    setTimeout(() => {
+      els.contentEl.style.transition = ``;
+      els.contentEl.style.transform = 'translateX(0px)';
+    }, COLLAPSE_SPEED);
   };
 
   const canSwipeRight = (entityId: string) => {
@@ -207,7 +231,7 @@ export function SwipeGestureProvider(
     const allowLeft = canSwipeLeft(entityId);
     if (!allowRight && !allowLeft) return;
 
-    const phase = activationStateById()[entityId]?.phase ?? 'idle';
+    const phase = stateById()[entityId]?.phase ?? 'idle';
     if (phase === 'triggered' || phase === 'collapsing') return;
 
     const touch = e.touches[0];
@@ -234,12 +258,7 @@ export function SwipeGestureProvider(
 
   const onTouchMove = (e: TouchEvent) => {
     if (!touchState.elements || !touchState.entityId) return;
-    if (
-      isAtLeastPhase(
-        activationStateById()[touchState.entityId]?.phase,
-        'triggered'
-      )
-    ) {
+    if (isAtLeastPhase(stateById()[touchState.entityId]?.phase, 'triggered')) {
       return;
     }
 
@@ -280,7 +299,7 @@ export function SwipeGestureProvider(
       });
 
       // set activation state
-      const phase = activationStateById()[touchState.entityId]?.phase ?? 'idle';
+      const phase = stateById()[touchState.entityId]?.phase ?? 'idle';
       const thesholdCrossed =
         (allowRight && dx > SWIPE_ACTIVATION_DISTANCE) ||
         (allowLeft && dx < -SWIPE_ACTIVATION_DISTANCE);
@@ -288,7 +307,7 @@ export function SwipeGestureProvider(
       if (thesholdCrossed) {
         if (phase !== 'threshold') {
           impactFeedback('light');
-          setActivationState(touchState.entityId, {
+          setState(touchState.entityId, {
             direction: dx > 0 ? 'right' : 'left',
             phase: 'threshold',
           });
@@ -299,7 +318,7 @@ export function SwipeGestureProvider(
             impactFeedback('light');
           }
           impactFeedback('light');
-          setActivationState(touchState.entityId, {
+          setState(touchState.entityId, {
             direction: dx > 0 ? 'right' : 'left',
             phase: 'dragging',
           });
@@ -328,12 +347,7 @@ export function SwipeGestureProvider(
       resetTouchState();
       return;
     }
-    if (
-      isAtLeastPhase(
-        activationStateById()[touchState.entityId]?.phase,
-        'triggered'
-      )
-    ) {
+    if (isAtLeastPhase(stateById()[touchState.entityId]?.phase, 'triggered')) {
       resetTouchState();
       return;
     }
@@ -378,19 +392,20 @@ export function SwipeGestureProvider(
     });
   });
 
-  const ctx: SwipeGestureContextValue = {
-    activationStateFor: (entityId) =>
-      activationStateById()[entityId] ?? { phase: 'idle', direction: null },
+  const ctx: EntityRowContextValue = {
+    stateFor: (entityId) =>
+      stateById()[entityId] ?? { phase: 'idle', direction: null },
+    collapseEntity,
   };
 
   return (
-    <SwipeGestureContext.Provider value={ctx}>
+    <EntityRowContext.Provider value={ctx}>
       {props.children}
-    </SwipeGestureContext.Provider>
+    </EntityRowContext.Provider>
   );
 }
 
-export function SwipeGestureRow(
+export function EntityRow(
   props: ParentProps<{
     entityId: string;
     LeftReveal?: JSX.Element;
@@ -399,14 +414,12 @@ export function SwipeGestureRow(
     swipeRightColor?: string;
   }>
 ) {
-  const ctx = useContext(SwipeGestureContext);
+  const ctx = useContext(EntityRowContext);
   if (!ctx) {
-    throw new Error('SwipeGestureRow must be used within SwipeGestureProvider');
+    throw new Error('EntityRow must be used within EntityRowProvider');
   }
 
-  const activationState = createMemo(() =>
-    ctx.activationStateFor(props.entityId)
-  );
+  const rowState = createMemo(() => ctx.stateFor(props.entityId));
 
   return (
     <div
@@ -414,19 +427,12 @@ export function SwipeGestureRow(
       data-swipe-entity-id={props.entityId}
       class="w-full grid grid-cols-1 relative overflow-hidden transition-[grid-template-rows] duration-[250ms] ease-in-out"
       classList={{
-        'bg-transparent': activationState()?.phase === 'idle',
+        'bg-transparent': rowState()?.phase === 'idle',
         [props.swipeLeftColor ?? 'bg-edge-muted']:
-          activationState()?.direction === 'left',
-        [props.swipeRightColor ?? 'bg-edge']:
-          activationState()?.direction === 'right',
-        'grid-rows-[0fr]': isAtLeastPhase(
-          activationState()?.phase,
-          'collapsing'
-        ),
-        'grid-rows-[1fr]': !isAtLeastPhase(
-          activationState()?.phase,
-          'collapsing'
-        ),
+          rowState()?.direction === 'left',
+        [props.swipeRightColor ?? 'bg-edge']: rowState()?.direction === 'right',
+        'grid-rows-[0fr]': isAtLeastPhase(rowState()?.phase, 'collapsing'),
+        'grid-rows-[1fr]': !isAtLeastPhase(rowState()?.phase, 'collapsing'),
       }}
     >
       {/* Left Reveal */}
@@ -438,8 +444,8 @@ export function SwipeGestureRow(
           data-left-reveal
           class="transition-transform duration-300 ease-in-out"
           classList={{
-            'scale-50': !isAtLeastPhase(activationState()?.phase, 'threshold'),
-            'scale-100': isAtLeastPhase(activationState()?.phase, 'threshold'),
+            'scale-50': !isAtLeastPhase(rowState()?.phase, 'threshold'),
+            'scale-100': isAtLeastPhase(rowState()?.phase, 'threshold'),
           }}
         >
           {props.LeftReveal}
@@ -455,8 +461,8 @@ export function SwipeGestureRow(
           data-right-reveal
           class="transition-transform duration-300 ease-in-out"
           classList={{
-            'scale-50': !isAtLeastPhase(activationState()?.phase, 'threshold'),
-            'scale-100': isAtLeastPhase(activationState()?.phase, 'threshold'),
+            'scale-50': !isAtLeastPhase(rowState()?.phase, 'threshold'),
+            'scale-100': isAtLeastPhase(rowState()?.phase, 'threshold'),
           }}
         >
           {props.RightReveal}

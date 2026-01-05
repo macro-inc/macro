@@ -131,7 +131,7 @@ import {
 import { EntityActionsMenuItems } from './EntityActionsMenuItems';
 import { EntityModal } from './EntityModal/EntityModal';
 import { EntitySelectionToolbarModal } from './EntitySelectionToolbarModal';
-import { SwipeGestureProvider, SwipeGestureRow } from './mobile/SwipeGesture';
+import { EntityRow, EntityRowProvider } from './mobile/EntityRow';
 import { PropertyDisplayControl } from './PropertyDisplayControl';
 import { useUpsertSavedViewMutation } from './Soup';
 import {
@@ -187,7 +187,6 @@ export type UnifiedListViewProps = {
   defaultDisplayOptions?: Partial<DisplayOptions>;
   hideToolbar?: true;
 };
-
 export function UnifiedListView(props: UnifiedListViewProps) {
   const [contextAndModalState, setContextAndModalState] = createStore<{
     modalOpen: boolean;
@@ -1516,7 +1515,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
         }}
       >
         <ContextMenu.Trigger class="size-full unified-list-root">
-          <SwipeGestureProvider
+          <EntityRowProvider
             container={localEntityListRef}
             canSwipeLeft={(entityId) => {
               const entity = entityById().get(entityId);
@@ -1531,6 +1530,9 @@ export function UnifiedListView(props: UnifiedListViewProps) {
               if (!entity) return false;
 
               unifiedListContext.actionRegistry.execute('mark_as_done', entity);
+            }}
+            onCollapseReady={(collapseEntity) => {
+              unifiedListContext.collapseEntity = collapseEntity;
             }}
           >
             <UnifiedListComponent
@@ -1560,7 +1562,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                   }
                 };
                 return (
-                  <SwipeGestureRow
+                  <EntityRow
                     entityId={innerProps.entity.id}
                     RightReveal={<div>Right Reveal</div>}
                   >
@@ -1707,11 +1709,11 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                         }
                       }}
                     />
-                  </SwipeGestureRow>
+                  </EntityRow>
                 );
               }}
             </UnifiedListComponent>
-          </SwipeGestureProvider>
+          </EntityRowProvider>
 
           <EntityModal
             isOpen={() =>

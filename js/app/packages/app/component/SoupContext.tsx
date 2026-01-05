@@ -98,6 +98,7 @@ export type UnifiedListContext = {
   navigateThroughList: NavigateListFn;
   // this is a private method that should be registered once by createNavigationEntityListShortcut
   _setNavigateThroughList: (fn: NavigateListFn) => void;
+  collapseEntity?: (entityId: string) => Promise<void>;
 };
 
 export function createStubSoupContext(): UnifiedListContext {
@@ -119,6 +120,7 @@ export function createStubSoupContext(): UnifiedListContext {
       entity: undefined,
     }),
     _setNavigateThroughList: () => {},
+    collapseEntity: undefined,
   };
 }
 
@@ -165,6 +167,7 @@ export function createSoupContext(): UnifiedListContext {
       }
       navigateThroughListFn = fn;
     },
+    collapseEntity: undefined,
   };
 }
 
@@ -403,6 +406,22 @@ export function createNavigationEntityListShortcut({
       );
 
       if (handler || hasSupportedEntity) {
+        // Check if current view filters out completed items
+        const currentViewConfig =
+          unifiedListContext.viewsDataStore[selectedView()];
+        const shouldCollapse =
+          currentViewConfig?.filters?.notificationFilter === 'notDone' &&
+          unifiedListContext.collapseEntity !== undefined;
+
+        // If the view hides completed items, collapse the entities first
+        if (shouldCollapse && unifiedListContext.collapseEntity) {
+          await Promise.all(
+            multiSelectEntities.map((entity) =>
+              unifiedListContext.collapseEntity!(entity.id)
+            )
+          );
+        }
+
         if (multiSelectEntities.length > 1) {
           const selectedEntityData = getSelectedEntity();
           const selectedEntityIncludedInMultiSelectedEntities =
