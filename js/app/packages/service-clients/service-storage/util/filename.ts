@@ -64,12 +64,16 @@ export const reverseFormatDocumentName = (
 
 export const formatDocumentName = (
   originalName: string,
-  fileType?: string | null
+  fileType?: string | null,
+  ignorePreviewBlockRestriction?: boolean
 ) => {
   if (!fileType) return originalName;
 
   const blockName = fileTypeToBlockName(fileType);
-  if (!FULLY_QUALIFIED_DOCUMENT_NAME_BLOCKS.includes(blockName))
+  if (
+    !ignorePreviewBlockRestriction &&
+    !FULLY_QUALIFIED_DOCUMENT_NAME_BLOCKS.includes(blockName)
+  )
     return originalName;
 
   const suffix = `.${fileType}`;

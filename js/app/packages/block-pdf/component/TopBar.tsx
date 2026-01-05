@@ -127,7 +127,6 @@ export function TopBar() {
         type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       });
 
-      // Use your existing downloadFile utility
       downloadFile(blob, `${fileName()}.docx`);
 
       toast.success('File downloaded successfully');
