@@ -228,7 +228,7 @@ export function Thread(props: {
                       .createComment({
                         threadId: props.comment.threadId,
                         text: content,
-                        mentions: getCommentMentions(mentionsSignal)?.mentions,
+                        mentions: getCommentMentions(mentionsSignal),
                       });
                   }}
                   isNewThread
@@ -282,11 +282,10 @@ export function Thread(props: {
                           }
                           updateReply={(content) => {
                             Promise.all([
-                              commentOperations.updateComment({
+                              commentOperations.updateComment(props.comment.threadId, {
                                 text: content,
-                                commentId: replyId,
                                 threadId: props.comment.threadId,
-                                mentions: getCommentMentions(mentionsSignal)?.mentions,
+                                mentions: getCommentMentions(mentionsSignal),
                               }),
                             ]);
                           }}
@@ -307,7 +306,7 @@ export function Thread(props: {
                       .createComment({
                         threadId: props.comment.threadId,
                         text: content,
-                        mentions: getCommentMentions(mentionsSignal)?.mentions,
+                        mentions: getCommentMentions(mentionsSignal),
                       });
                   }}
                   isEditing={isEditingNewReply()}

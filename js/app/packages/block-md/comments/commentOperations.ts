@@ -2,9 +2,7 @@ import { mdStore } from '@block-md/signal/markdownBlockData';
 import { withAnalytics } from '@coparse/analytics';
 import { useBlockId } from '@core/block';
 import type {
-  CreateCommentInfo,
   DeleteCommentInfo,
-  UpdateCommentInfo,
 } from '@core/collab/comments/commentType';
 import { threadMeasureContainerId } from '@core/collab/comments/Thread';
 import {
@@ -28,6 +26,7 @@ import {
   useDeleteCommentResource,
   useEditCommentResource,
 } from './commentsResource';
+import type { CreateCommentRequest, EditCommentRequest } from '@service-storage/generated/schemas';
 
 const { track, TrackingEvents } = withAnalytics();
 
@@ -41,7 +40,7 @@ export function useCreateComment() {
   const editor = mdStore.get.editor;
 
   return createCallback(
-    async (info: CreateCommentInfo & { markId: string }) => {
+    async (info: CreateCommentRequest & { threadId: number }) => {
       track(TrackingEvents.BLOCKMARKDOWN.COMMENT.CREATE);
       const { threadId, text, mentions } = info;
 
@@ -71,7 +70,7 @@ export function useCreateComment() {
         return response;
       }
 
-      return await createThreadReply(text, threadId, mentions);
+      return await createThreadReply(info);
     }
   );
 }
@@ -79,14 +78,10 @@ export function useCreateComment() {
 export function useUpdateComment() {
   const editComment = useEditCommentResource();
 
-  return createCallback((info: UpdateCommentInfo) => {
+  return createCallback((commentId: number, info: EditCommentRequest) => {
     track(TrackingEvents.BLOCKMARKDOWN.COMMENT.UPDATE);
 
-    return editComment(info.commentId, {
-      text: info.text,
-      mentions: info.mentions,
-      threadId: info.threadId,
-    });
+    return editComment(commentId, info);
   });
 }
 

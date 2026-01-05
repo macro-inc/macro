@@ -6,8 +6,8 @@ export const getCommentMentions = (mentionsSignal: Signal<UserMentionRecord[]>) 
     const mentions_ = mentions();
     setMentions([]);
     return typeof mentions_[0] === 'undefined' ? undefined : {
-      mentions: mentions_.flatMap((m) => m.mentions),
-      mention_id: mentions_[0].metadata.mention_id,
+      users: mentions_.flatMap((m) => m.mentions),
+      mentionId: mentions_[0].metadata.mention_id,
     };
 };
 

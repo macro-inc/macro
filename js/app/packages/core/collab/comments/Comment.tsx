@@ -120,11 +120,10 @@ export function Comment(
           setIsEditing(false);
           setTextValue(newText);
           Promise.all([
-            commentOperations.updateComment({
+            commentOperations.updateComment(props.comment.id, {
               text: newText,
-              commentId: props.comment.id,
               threadId: props.comment.threadId,
-              mentions: getCommentMentions(mentionsSignal).mentions,
+              mentions: getCommentMentions(mentionsSignal),
             }),
             sendMentions(
               {

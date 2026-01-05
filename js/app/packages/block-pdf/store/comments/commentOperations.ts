@@ -4,10 +4,8 @@ import type { PdfRootLayout } from '@block-pdf/type/comments';
 import { withAnalytics } from '@coparse/analytics';
 import { useBlockId } from '@core/block';
 import {
-  type CreateCommentInfo,
   type DeleteCommentInfo,
   isRoot,
-  type UpdateCommentInfo,
 } from '@core/collab/comments/commentType';
 import { threadMeasureContainerId } from '@core/collab/comments/Thread';
 import { blockElementSignal } from '@core/signal/blockElement';
@@ -24,6 +22,7 @@ import {
 import { highlightsUuidMap } from '../highlight';
 import { newThreadPlaceable, useDeleteNewFreeComment } from './freeComments';
 import { useDeleteNewHighlightComment } from './highlightComments';
+import type { CreateCommentRequest, EditCommentRequest } from '@service-storage/generated/schemas';
 
 const { track, TrackingEvents } = withAnalytics();
 
@@ -34,7 +33,7 @@ export function useCreateComment() {
   const attachHighlightComment = useAttachHighlightCommentResource();
   const createThreadReply = useCreateThreadReplyResource();
 
-  return createCallback(async (info: CreateCommentInfo) => {
+  return createCallback(async (info: CreateCommentRequest & { threadId: number }) => {
     track(TrackingEvents.BLOCKPDF.COMMENT.CREATE);
     const { threadId, text } = info;
 
@@ -85,20 +84,16 @@ export function useCreateComment() {
       return response;
     }
 
-    return await createThreadReply(text, threadId);
+    return await createThreadReply(info);
   });
 }
 
 export function useUpdateComment() {
   const editComment = useEditCommentResource();
 
-  return createCallback((info: UpdateCommentInfo) => {
+  return createCallback((commentId: number, info: EditCommentRequest) => {
     track(TrackingEvents.BLOCKPDF.COMMENT.UPDATE);
-    return editComment(info.commentId, {
-      text: info.text,
-      mentions: info.mentions,
-      threadId: info.threadId,
-    });
+    return editComment(commentId, info)
   });
 }
 
