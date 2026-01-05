@@ -5,34 +5,15 @@ use crate::{
 use aws_sdk_sns::operation::publish::PublishOutput;
 use futures::{Stream, StreamExt};
 use macro_user_id::user_id::MacroUserIdStr;
-use model_notifications::{DeviceEndpoint, NotificationWithRecipient, UserNotification};
-use sns_client::{NotifCollapseKey, SnsTarget};
+use model_notifications::{
+    DeviceEndpoint, NotificationEvent, NotificationWithRecipient, UserNotification,
+};
+use sns_client::SnsTarget;
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
     hash::{DefaultHasher, Hash, Hasher},
 };
-
-trait NotifCollapseKeyExt {
-    fn collapse_key(&self) -> NotifCollapseKey<'static>;
-}
-
-impl NotifCollapseKeyExt for UserNotification {
-    fn collapse_key(&self) -> NotifCollapseKey<'static> {
-        let collapse_key = format!(
-            "{}{}",
-            self.notification_entity.entity_id,
-            self.notification_event.event_type()
-        );
-
-        // hash the collapse key to shorten it
-        let mut hasher = DefaultHasher::new();
-        collapse_key.hash(&mut hasher);
-        let hash = hasher.finish();
-        let collapse_key = format!("{:x}", hash);
-        NotifCollapseKey(Cow::Owned(collapse_key))
-    }
-}
 
 pub type NotificationsForDevices<'a> = HashMap<&'a NotificationWithRecipient, Vec<DeviceEndpoint>>;
 pub type NotificationResult = (PublishOutput, MacroUserIdStr<'static>, DeviceEndpoint);
@@ -66,7 +47,7 @@ pub fn stream_push_notifs_to_user<'a>(
                     sns_client::MessageAttributes {
                         push_type: sns_client::PushType::Alert,
                         apns_bundle_id: &APPLE_BUNDLE_ID,
-                        collapse_key: notif.inner.collapse_key(),
+                        collapse_key: notif.inner.build_key().into_hashed().into_inner(),
                     },
                 )
                 .await;

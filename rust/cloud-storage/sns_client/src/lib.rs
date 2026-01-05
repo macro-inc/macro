@@ -1,6 +1,9 @@
 use aws_sdk_sns::{operation::publish::PublishOutput, types::MessageAttributeValue};
 use serde::{Serialize, Serializer};
-use std::{borrow::Cow, collections::HashMap};
+use std::{
+    collections::HashMap,
+    hash::{DefaultHasher, Hasher},
+};
 
 #[derive(Clone, Debug)]
 pub struct SNS {
@@ -105,12 +108,13 @@ pub enum InterruptionLevel {
     Critical,
 }
 
-// Your updated struct
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct APNSPushNotification<T> {
     pub aps: Aps,
 
+    /// custom data payload to send to the client.
+    /// This data has no effect on 'how' the notification is delivered
     #[serde(flatten)]
     pub push_notification_data: T,
 }
@@ -258,22 +262,13 @@ impl PushType {
 }
 
 #[derive(Debug, Clone)]
-pub struct NotifCollapseKey<'a>(pub Cow<'a, str>);
-
-impl<'a> NotifCollapseKey<'a> {
-    pub fn new_str(s: &'a str) -> Self {
-        NotifCollapseKey(Cow::Borrowed(s))
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct MessageAttributes<'a> {
+pub struct MessageAttributes {
     pub push_type: PushType,
     pub apns_bundle_id: &'static str,
-    pub collapse_key: NotifCollapseKey<'a>,
+    pub collapse_key: String,
 }
 
-impl<'a> MessageAttributes<'a> {
+impl MessageAttributes {
     pub fn into_json(self) -> HashMap<String, MessageAttributeValue> {
         HashMap::from([
             (
@@ -304,7 +299,7 @@ impl<'a> MessageAttributes<'a> {
                 "AWS.SNS.MOBILE.APNS.COLLAPSE_ID".to_string(),
                 MessageAttributeValue::builder()
                     .data_type("String")
-                    .string_value(self.collapse_key.0.into_owned())
+                    .string_value(self.collapse_key)
                     .build()
                     .unwrap(),
             ),
@@ -410,7 +405,7 @@ impl SNS {
         &self,
         endpoint_arn: &str,
         message_json: &SnsTarget<T>,
-        message_attributes: MessageAttributes<'_>,
+        message_attributes: MessageAttributes,
     ) -> anyhow::Result<PublishOutput>
     where
         T: Serialize + std::fmt::Debug,
