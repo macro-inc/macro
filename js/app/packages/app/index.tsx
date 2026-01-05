@@ -4,6 +4,7 @@ import './index.css';
 
 import * as analytics from '@coparse/analytics';
 import { initializeLexical } from '@core/component/LexicalMarkdown/init';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getPlatform } from '@core/util/platform';
 import * as Observability from '@observability';
 import { ErrorBoundary, render } from 'solid-js/web';
@@ -19,6 +20,9 @@ const renderApp = () => {
   const root = document.getElementById('root');
   if (!root) return console.error('Root element not found');
   document.documentElement.dataset.platform = getPlatform();
+  document.documentElement.dataset.touchDevice = isTouchDevice()
+    ? 'true'
+    : 'false';
 
   // Used for :focus-visible, which focus-bracket utility uses, to prevent input elements triggering :focus-visible on mouse click
   // Use capture phase to ensure we catch events even if they're stopped by handlers

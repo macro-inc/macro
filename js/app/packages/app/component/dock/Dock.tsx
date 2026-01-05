@@ -310,7 +310,7 @@ export function Dock() {
                 size="sm"
               />
 
-              <div class="ios:hidden">
+              <div class="mobile-width:hidden">
                 <IconButton
                   tooltip={{
                     hotkeyToken: TOKENS.global.createNewSplit,
