@@ -4,7 +4,6 @@ import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
 import { useHasPaidAccess } from '@core/auth';
 import { useBlockId } from '@core/block';
 import { BrightJoins } from '@core/component/BrightJoins';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import type { UserMentionRecord } from '@core/component/LexicalMarkdown/component/menu/MentionsMenu';
@@ -91,6 +90,7 @@ import { getReplyTypeFromDraft } from '../util/replyType';
 import { AttachMenu } from './AttachMenu';
 import { type EmailRecipient, useEmailContext } from './EmailContext';
 import { getOrInitEmailFormContext } from './EmailFormContext';
+import { Button } from '@ui/components/Button';
 
 false && fileDrop;
 
@@ -223,7 +223,7 @@ export function BaseInput(props: {
       getReplyTypeFromDraft(props.draft) ??
       ((props.replyingTo()?.to.length ?? 0) +
         (props.replyingTo()?.cc.length ?? 0) >
-      1
+        1
         ? 'reply-all'
         : 'reply')
     );
@@ -600,13 +600,17 @@ export function BaseInput(props: {
   });
 
   const ReplyIcon = createMemo(() => {
-    if (effectiveReplyType() === 'reply') {
-      return <DeprecatedIconButton icon={Reply} showChevron />;
-    } else if (effectiveReplyType() === 'reply-all') {
-      return <DeprecatedIconButton icon={ReplyAll} showChevron />;
-    } else {
-      return <DeprecatedIconButton icon={Forward} showChevron />;
-    }
+    let Icon = effectiveReplyType() === 'reply' ?
+                Reply
+              : effectiveReplyType() === 'reply-all' ?
+                ReplyAll
+              : Forward;
+
+    return (
+      <Button showChevron>
+        <Icon class="h-7 p-1" />
+      </Button>
+    )
   });
 
   return (
@@ -633,7 +637,7 @@ export function BaseInput(props: {
               <Show
                 when={
                   (props.replyingTo()?.to.length ?? 0) +
-                    (props.replyingTo()?.cc.length ?? 0) >
+                  (props.replyingTo()?.cc.length ?? 0) >
                   1
                 }
               >
@@ -661,8 +665,8 @@ export function BaseInput(props: {
               <Show
                 when={
                   form().recipients.to.length +
-                    form().recipients.cc.length +
-                    form().recipients.bcc.length >
+                  form().recipients.cc.length +
+                  form().recipients.bcc.length >
                   0
                 }
                 fallback={
@@ -850,12 +854,15 @@ export function BaseInput(props: {
         <div class="flex flex-row w-full h-8 justify-between items-center py-2 px-2 mb-2 space-x-2 allow-css-brackets">
           <div class="flex flex-row items-center gap-2">
             <div class="relative" ref={attachButtonRef}>
-              <DeprecatedIconButton
-                theme="base"
-                icon={Plus}
-                tooltip={{ label: 'Attach' }}
-                onClick={() => setAttachMenuOpen(true)}
-              />
+              <Button
+                onclick={() => setAttachMenuOpen(true)}
+                tooltip="Attach"
+                class="aspect-square *:h-5 p-1"
+              >
+                <Plus />
+              </Button>
+
+
               <AttachMenu
                 open={attachMenuOpen()}
                 close={() => setAttachMenuOpen(false)}
@@ -866,13 +873,16 @@ export function BaseInput(props: {
                 setIsPending={setIsPendingUpload}
               />
             </div>
-            <DeprecatedIconButton
-              theme="base"
-              icon={TextAa}
+
+            <Button
               onclick={() => {
                 setShowFormatRibbon(!showFormatRibbon());
               }}
-            />
+              tooltip="Show formatting toolbar"
+              class="aspect-square *:h-5 p-1"
+            >
+              <TextAa />
+            </Button>
 
             <Tooltip
               tooltip={
@@ -911,32 +921,32 @@ export function BaseInput(props: {
               </KToggleButton>
             </Tooltip>
             <Show when={savedDraftId()}>
-              <DeprecatedIconButton
-                theme="base"
-                icon={Trash}
+              <Button
                 onclick={deleteDraftAndReset}
-                tooltip={{ label: 'Delete draft' }}
-              />
+                tooltip="Delete draft"
+                class="aspect-square *:h-5 p-1"
+              >
+                <Trash />
+              </Button>
             </Show>
           </div>
-          <div class="flex flex-row items-center">
-            <button
-              disabled={isPendingUpload() || sendMutation.isPending}
-              onClick={() => sendEmail()}
-              class="text-ink-muted hover:scale-115 transition ease-in-out flex flex-col justify-center items-center size-6 rounded-full"
+
+          <Button
+            disabled={isPendingUpload() || sendMutation.isPending}
+            onClick={() => sendEmail()}
+            class="text-ink-muted hover:scale-115 transition ease-in-out flex-col items-center rounded-full p-[0.25lh] hover:bg-transparent"
+          >
+            <Show
+              when={!isPendingUpload() && !sendMutation.isPending}
+              fallback={
+                <Spinner class="size-6 animate-spin cursor-disabled" />
+              }
             >
-              <Show
-                when={!isPendingUpload() && !sendMutation.isPending}
-                fallback={
-                  <Spinner class="size-6 animate-spin cursor-disabled" />
-                }
-              >
-                <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center">
-                  <ArrowUp class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
-                </div>
-              </Show>
-            </button>
-          </div>
+              <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center p-0">
+                <ArrowUp class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
+              </div>
+            </Show>
+          </Button>
         </div>
       </div>
     </div>
