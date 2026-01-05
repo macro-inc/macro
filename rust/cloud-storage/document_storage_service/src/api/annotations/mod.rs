@@ -159,6 +159,8 @@ struct Location {
     thread_id: i64,
     text: String,
 }
+
+// TODO: This is consumed in the frontend. It should be shared.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Metadata {
@@ -182,15 +184,18 @@ fn build_mention_notif(
         document_name: document_context.document_name.clone(),
         owner: document_context.owner.clone(),
         file_type: document_context.file_type.clone(),
-        metadata: Some(serde_json::json!({
-            "mention_id": mention_id,
-            "location": {
-                r#"type"#: notif_location_type,
-                "commentId": comment.and_then(|c| Some(c.comment_id)),
-                "threadId": thread_id,
-                "text": text,
-            }
-        })),
+        metadata: Some(
+            serde_json::to_value(Metadata {
+                mention_id: mention_id.to_string(),
+                location: Location {
+                    r#type: notif_location_type,
+                    comment_id: comment.map(|c| c.comment_id),
+                    thread_id,
+                    text,
+                },
+            })
+            .expect("always works"),
+        ),
     };
 
     NotificationQueueMessage {
@@ -218,16 +223,19 @@ mod tests {
     #[test]
     fn check_ser_meta() -> Result<(), Box<dyn std::error::Error>> {
         let m = Metadata {
-            mention_id: "fooo",
+            mention_id: "xxx".to_string(),
             location: Location {
                 r#type: NotifLocationType::EditComment,
                 thread_id: 42,
                 comment_id: Some(99),
-                text: "boooooo".to_string(),
+                text: "yy".to_string(),
             },
         };
-        let res = serde_json::to_string(m).unwrap();
-        println!("{res}");
+        let res = serde_json::to_string(&m).unwrap();
+        assert!(res.contains(r#"mentionId":"xxx""#));
+        assert!(res.contains(r#"threadId":42"#));
+        assert!(res.contains(r#"commentId":99"#));
+        assert!(res.contains(r#""type":"edit-comment""#));
         Ok(())
     }
 }
