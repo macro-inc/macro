@@ -35,7 +35,7 @@ type ButtonProps = JSX.ButtonHTMLAttributes<HTMLButtonElement> & {
  *
  */
 export const Button: ParentComponent<ButtonProps> = (props) => {
-  const [local, ...buttonAttributes] = splitProps(props, [
+  const [local, buttonAttributes] = splitProps(props, [
     'variant',
     'class',
     'children',
