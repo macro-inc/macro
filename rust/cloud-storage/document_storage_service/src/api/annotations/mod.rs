@@ -151,6 +151,21 @@ impl Display for NotifLocationType {
     }
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Location {
+    r#type: NotifLocationType,
+    comment_id: Option<i64>,
+    thread_id: i64,
+    text: String,
+}
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Metadata {
+    mention_id: String,
+    location: Location,
+}
+
 #[allow(clippy::too_many_arguments)]
 fn build_mention_notif(
     notif_location_type: NotifLocationType,
@@ -188,16 +203,31 @@ fn build_mention_notif(
 
 #[cfg(test)]
 mod tests {
-    use crate::api::annotations::NotifLocationType;
+    use super::*;
 
     #[test]
-    fn check_deser() -> Result<(), Box<dyn std::error::Error>> {
+    fn check_ser_notif_type() -> Result<(), Box<dyn std::error::Error>> {
         let a = NotifLocationType::CreateComment;
         let res = serde_json::json!({
             r#"type"#: a,
         })
         .to_string();
         assert_eq!(res, r#"{"type":"create-comment"}"#);
+        Ok(())
+    }
+    #[test]
+    fn check_ser_meta() -> Result<(), Box<dyn std::error::Error>> {
+        let m = Metadata {
+            mention_id: "fooo",
+            location: Location {
+                r#type: NotifLocationType::EditComment,
+                thread_id: 42,
+                comment_id: Some(99),
+                text: "boooooo".to_string(),
+            },
+        };
+        let res = serde_json::to_string(m).unwrap();
+        println!("{res}");
         Ok(())
     }
 }
