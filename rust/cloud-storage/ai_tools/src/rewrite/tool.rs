@@ -41,7 +41,7 @@ impl AsyncTool<ToolServiceContext, RequestContext> for MarkdownRewrite {
             self.clone(),
             &sc.scribe,
             &request_context.user_id,
-            &request_context.jwt_token,
+            request_context.jwt_token.clone(),
         )
         .await
         .map_err(|err| ToolCallError {
@@ -55,11 +55,11 @@ pub async fn rewrite_markdown(
     request: MarkdownRewrite,
     scribe: &ToolScribe,
     _user_id: &str,
-    jwt: &str,
+    jwt: String,
 ) -> Result<AIDiffResponse, Error> {
     let document = scribe
         .document
-        .fetch_with_auth(request.markdown_file_id.clone(), jwt.to_owned())
+        .fetch_with_auth(request.markdown_file_id.clone(), jwt)
         .document_content()
         .await?;
     if document.file_type() != FileType::Md {
