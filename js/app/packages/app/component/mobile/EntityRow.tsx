@@ -70,6 +70,7 @@ type SwipeTouchState = {
 
 type EntityRowContextValue = {
   stateFor: (entityId: string) => EntityRowState;
+  clearState: (entityId: string) => void;
   collapseEntity: (entityId: string) => Promise<void>;
 };
 
@@ -97,6 +98,13 @@ export function EntityRowProvider(
       [entityId]: { ...prev[entityId], ...state },
     }));
   };
+  const clearState = (entityId: string) => {
+    setStateById((prev) => {
+      const newState = { ...prev };
+      delete newState[entityId];
+      return newState;
+    });
+  };
   let touchState: SwipeTouchState = {
     startX: 0,
     startY: 0,
@@ -120,7 +128,7 @@ export function EntityRowProvider(
         els.contentEl.style.transform = 'translateX(0px)';
         setTimeout(() => {
           els.contentEl.style.transition = ``;
-          setState(id, { direction: null, phase: 'idle' });
+          clearState(id);
         }, SPRING_BACK_SPEED);
       }
     }, COLLAPSE_SPEED);
@@ -393,6 +401,7 @@ export function EntityRowProvider(
   const ctx: EntityRowContextValue = {
     stateFor: (entityId) =>
       stateById()[entityId] ?? { phase: 'idle', direction: null },
+    clearState: (entityId) => clearState(entityId),
     collapseEntity,
   };
 
@@ -418,6 +427,10 @@ export function EntityRow(
   }
 
   const rowState = createMemo(() => ctx.stateFor(props.entityId));
+
+  onCleanup(() => {
+    ctx.clearState(props.entityId);
+  });
 
   return (
     <div
