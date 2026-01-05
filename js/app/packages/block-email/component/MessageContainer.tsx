@@ -1,4 +1,9 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
+import { EmailAttachmentPill } from '@block-email/component/AttachmentPill';
+import { useEmailContext } from '@block-email/component/EmailContext';
+import { EmailInput } from '@block-email/component/EmailInput';
+import { EmailMessageBody } from '@block-email/component/EmailMessageBody';
+import { EmailMessageTopBar } from '@block-email/component/EmailMessageTopBar';
 import { ImageGalleryPreview } from '@core/component/ImageGalleryPreview';
 import { ImagePreview } from '@core/component/ImagePreview';
 import { Message } from '@core/component/Message';
@@ -28,11 +33,6 @@ import {
 } from 'solid-js';
 import type { SetStoreFunction } from 'solid-js/store';
 import { Portal } from 'solid-js/web';
-import { EmailAttachmentPill } from './AttachmentPill';
-import { useEmailContext } from './EmailContext';
-import { EmailInput } from './EmailInput';
-import { EmailMessageBody } from './EmailMessageBody';
-import { EmailMessageTopBar } from './EmailMessageTopBar';
 
 interface MessageContainerProps {
   message: MessageWithBodyReplyless;
@@ -42,14 +42,13 @@ interface MessageContainerProps {
   isLastMessage: boolean;
   isFocused: boolean;
   isTarget: boolean;
-  threadMessageIndex: number;
 }
 
 export function MessageContainer(props: MessageContainerProps) {
   const context = useEmailContext();
   const draftChild = createMemo(() => {
     if (!props.message.db_id) return undefined;
-    const draft = context.messageDbIdToDraftChildren[props.message.db_id];
+    const draft = context.drafts.getDraftForMessage(props.message.db_id);
     if (!draft) return undefined;
     return draft;
   });
@@ -203,7 +202,7 @@ export function MessageContainer(props: MessageContainerProps) {
               isBodyExpanded={isBodyExpanded}
               expandedHeader={expandedHeader}
               setExpandedHeader={setExpandedHeader}
-              setFocusedMessageId={context.setFocusedMessageId}
+              setFocusedMessageId={context.messages.setFocused}
               setShowReply={setShowReply}
               isLastMessage={props.isLastMessage}
             />
@@ -215,8 +214,8 @@ export function MessageContainer(props: MessageContainerProps) {
               setExpandedMessageBody={(id) =>
                 props.setExpandedMessageBodyIds(id, true)
               }
-              setFocusedMessageId={context.setFocusedMessageId}
-              threadMessageIndex={props.threadMessageIndex}
+              setFocusedMessageId={context.messages.setFocused}
+              isFirstMessageInThread={props.isFirstMessage}
             />
           </Message.Body>
           {/* Image attachments */}

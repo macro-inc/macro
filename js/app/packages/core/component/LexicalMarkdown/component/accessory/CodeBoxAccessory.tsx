@@ -4,9 +4,9 @@
  */
 
 import { isInBlock, useIsNestedBlock } from '@core/block';
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
-import { TextButton } from '@core/component/TextButton';
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_SVG_PREVIEW } from '@core/constant/featureFlags';
 import Braces from '@icon/regular/brackets-curly.svg';
@@ -107,7 +107,7 @@ export function CodeLanguageSelector(props: {
           when={editable()}
           fallback={<StaticLabel language={validCurrentLanguage()} />}
         >
-          <TextButton
+          <DeprecatedTextButton
             // TODO: Icon mapping moved to frontend package
             icon={LanguageIcons[validCurrentLanguage()]}
             theme="extraMuted"
@@ -251,7 +251,7 @@ export function CodeBoxAccessory(props: {
                 </Switch>
               </div>
             </Show>
-            <IconButton
+            <DeprecatedIconButton
               theme="extraMuted"
               icon={Copy}
               tooltip={{ label: 'Copy Code' }}
@@ -416,7 +416,7 @@ export const StaticCodeBoxAccessory = (props: {
               </Switch>
             </div>
           </Show>
-          <IconButton
+          <DeprecatedIconButton
             theme="extraMuted"
             icon={() => <Copy class={`size-5 ${textColor()}`} />}
             tooltip={{ label: 'Copy Code' }}

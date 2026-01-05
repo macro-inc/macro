@@ -1,7 +1,7 @@
 import { useBlockId } from '@core/block';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { getPermissions, Permissions } from '@core/component/SharePermissions';
-import { TextButton } from '@core/component/TextButton';
 import { ShareModal } from '@core/component/TopBar/ShareButton';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
@@ -60,14 +60,14 @@ const Unknown = () => {
         </div>
 
         <div class="flex flex-row gap-2 items-center">
-          <TextButton
+          <DeprecatedTextButton
             text="Share"
             theme="accent"
             icon={ShareFat}
             onClick={() => setIsSharePermOpen(true)}
           />
 
-          <TextButton
+          <DeprecatedTextButton
             text="Download"
             theme="accent"
             icon={DownloadSimple}

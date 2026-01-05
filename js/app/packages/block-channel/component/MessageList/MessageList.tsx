@@ -18,7 +18,7 @@ import {
   type MessageListContextLookup,
 } from '@block-channel/utils/listContext';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
-import { TextButton } from '@core/component/TextButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { toast } from '@core/component/Toast/Toast';
 import { observedSize } from '@core/directive/observedSize';
 import type { InputAttachment } from '@core/store/cacheChannelInput';
@@ -824,7 +824,7 @@ function MessageListImpl(props: MessageListProps) {
         </Switch>
         <Show when={showJumpToUnviewedMessages() && unviewedMessages()}>
           {(messages) => (
-            <TextButton
+            <DeprecatedTextButton
               icon={ArrowDownIcon}
               theme="base"
               onMouseDown={jumpToUnviewedMessages}
@@ -844,7 +844,7 @@ function MessageListImpl(props: MessageListProps) {
             !isNearBottom()
           }
         >
-          <TextButton
+          <DeprecatedTextButton
             icon={ArrowDownIcon}
             theme="base"
             text="Jump to latest"

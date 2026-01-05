@@ -1,3 +1,4 @@
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import FunnelIcon from '@phosphor-icons/core/assets/regular/funnel-simple.svg';
 import FunnelClearIcon from '@phosphor-icons/core/assets/regular/funnel-simple-x.svg';
@@ -6,7 +7,6 @@ import {
   MenuItem,
   MenuSeparator,
 } from 'core/component/Menu';
-import { TextButton } from 'core/component/TextButton';
 import {
   createMemo,
   createSignal,
@@ -233,7 +233,7 @@ export function FilterOptions(props: FilterOptionsProps) {
         class="flex items-center justify-end gap-2 px-1 align-middle"
         as="div"
       >
-        <TextButton
+        <DeprecatedTextButton
           theme="clear"
           icon={FunnelIcon}
           class={`${hasFilters() ? 'text-accent-ink!' : ''} ${isOpen() ? 'bg-active!' : ''}`}

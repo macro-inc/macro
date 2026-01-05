@@ -38,25 +38,34 @@ impl<Id, S: Sortable, F> CursorExtractor<Id, S, F> {
 /// represents an error that can occur while extracting a [CursorExtractor]
 /// from the axum request parts
 #[derive(Debug, Error)]
-pub enum CusorExtractErr {
+pub enum CursorExtractErr {
     /// an error occurred while decoding the input value
     #[error(transparent)]
     DecodeErr(Base64SerdeErr<serde_json::Error>),
+    /// The query was too large to deserialize
+    #[error("Query is too large, must be < 16kb")]
+    SizeErr,
 }
 
-impl IntoResponse for CusorExtractErr {
+impl IntoResponse for CursorExtractErr {
     fn into_response(self) -> axum::response::Response {
         match self {
-            CusorExtractErr::DecodeErr(Base64SerdeErr::DecodeErr(_e)) => (
+            CursorExtractErr::DecodeErr(Base64SerdeErr::DecodeErr(_e)) => (
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
                     message: "failed to decode cursor value",
                 }),
             ),
-            CusorExtractErr::DecodeErr(Base64SerdeErr::SerdeErr(_e)) => (
+            CursorExtractErr::DecodeErr(Base64SerdeErr::SerdeErr(_e)) => (
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
                     message: "the cursor contained unexpected data",
+                }),
+            ),
+            CursorExtractErr::SizeErr => (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    message: "Query is too large, must be <16kb",
                 }),
             ),
         }
@@ -73,7 +82,7 @@ where
     Id: DeserializeOwned,
     F: DeserializeOwned,
 {
-    type Rejection = CusorExtractErr;
+    type Rejection = CursorExtractErr;
 
     #[tracing::instrument(err, skip(parts, state))]
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
@@ -85,12 +94,25 @@ where
         else {
             return Ok(CursorExtractor::None);
         };
+
         let encoded: Base64Str<CursorWithValAndFilter<Id, Sort, F>> =
             Base64Str::new_from_string(cursor);
 
+        let bytes = encoded.len();
+        if bytes > 16_000 {
+            return Err(CursorExtractErr::SizeErr);
+        }
+
         let decoded = encoded
-            .decode(|bytes| serde_json::from_slice(&bytes))
-            .map_err(CusorExtractErr::DecodeErr)?;
+            .decode(|bytes| {
+                let mut deserializer = serde_json::Deserializer::from_slice(&bytes);
+                deserializer.disable_recursion_limit();
+                <CursorWithValAndFilter<Id, Sort, F>>::deserialize(&mut deserializer)
+            })
+            .inspect_err(|e| {
+                dbg!(e);
+            })
+            .map_err(CursorExtractErr::DecodeErr)?;
 
         Ok(CursorExtractor::Some(decoded))
     }

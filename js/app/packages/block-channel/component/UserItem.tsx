@@ -1,6 +1,6 @@
 import { BozzyBracket } from '@core/component/BozzyBracket';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { TruncatedText } from '@core/component/FileList/TruncatedText';
-import { IconButton } from '@core/component/IconButton';
 import { UserIcon } from '@core/component/UserIcon';
 import { idToEmail } from '@core/user';
 import IconX from '@icon/regular/x.svg';
@@ -37,7 +37,7 @@ export function UserItem(props: UserItemProps) {
         <Show
           when={props.currentUserId !== props.id && props.editable && hovered()}
         >
-          <IconButton
+          <DeprecatedIconButton
             tooltip={{ label: 'Remove participant' }}
             icon={IconX}
             iconSize={16}

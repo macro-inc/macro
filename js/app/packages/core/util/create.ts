@@ -8,6 +8,7 @@ import { cognitionApiServiceClient } from '@service-cognition/client';
 import type { CreateChatRequest } from '@service-cognition/generated/schemas';
 import { staticFileClient } from '@service-static-files/client';
 import { storageServiceClient } from '@service-storage/client';
+import type { PropertyInput } from '@service-storage/generated/schemas/propertyInput';
 import { postNewHistoryItem } from '@service-storage/history';
 import { uploadToPresignedUrl } from '@service-storage/util/uploadToPresignedUrl';
 import { syncServiceClient } from '@service-sync/client';
@@ -84,15 +85,50 @@ type CreateTaskArgs = {
   title?: string;
   content?: string;
   projectId?: string;
+  propertyValues?: PropertyInput[];
 };
 
 /**
- * Initializes a new task (markdown file with isTask flag) in dss & sync_service
+ * Creates a task with optional properties using the create_task endpoint.
+ * Content is initialized via sync service.
  */
 export async function createTask(
   args?: CreateTaskArgs
 ): Promise<string | undefined> {
-  return createMarkdownFile({ ...args, isTask: true });
+  // Convert content to loro snapshot for sync service
+  const markdownState = await createMarkdownStateFromContent(args?.content);
+  const snapshot = await rawStateToLoroSnapshot(
+    MARKDOWN_LORO_SCHEMA,
+    markdownState as any
+  );
+
+  if (!snapshot) return;
+
+  // Create task with properties in one call
+  const result = await storageServiceClient.createTask({
+    taskName: args?.title ?? '',
+    projectId: args?.projectId,
+    propertyValues: args?.propertyValues,
+  });
+
+  invalidateUserQuota();
+
+  if (isErr(result)) return;
+
+  const { documentId } = result[1];
+
+  // Initialize sync service with content
+  const syncRes = await syncServiceClient.initializeFromSnapshot({
+    snapshot,
+    documentId,
+  });
+
+  if (isErr(syncRes)) {
+    console.error('Failed to initialize task content in sync service');
+    // Task was created, just without content - still return the id
+  }
+
+  return documentId;
 }
 
 export async function createCodeFileFromText({

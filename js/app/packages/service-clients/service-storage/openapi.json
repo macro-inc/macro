@@ -680,6 +680,74 @@
         }
       }
     },
+    "/documents/create_task": {
+      "post": {
+        "tags": ["document"],
+        "summary": "Creates a task document with properties in a single call.",
+        "description": "This endpoint creates task metadata and sets properties atomically.\nTask content should be set separately via the sync service.\n\nNOTE: Ideally content initialization would happen here on the backend, but that requires\nadding Loro/Lexical support to initialize sync service documents server-side. Deferring\nfor now — client must call `syncServiceClient.initializeFromSnapshot()` after this returns.",
+        "operationId": "create_task_handler",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateTaskRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Response for create_task",
+                  "required": ["documentId"],
+                  "properties": {
+                    "documentId": {
+                      "type": "string",
+                      "description": "The document id of the created task"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents/initialize_user_documents": {
       "post": {
         "tags": ["document"],
@@ -4507,6 +4575,37 @@
           }
         }
       },
+      "CreateTaskRequest": {
+        "type": "object",
+        "description": "Request body for create_task",
+        "required": ["taskName"],
+        "properties": {
+          "projectId": {
+            "type": ["string", "null"],
+            "description": "Optional project id to associate the task with"
+          },
+          "propertyValues": {
+            "type": ["array", "null"],
+            "items": { "$ref": "#/components/schemas/PropertyInput" },
+            "description": "Optional property values to set on the task"
+          },
+          "taskName": {
+            "type": "string",
+            "description": "The name of the task"
+          }
+        }
+      },
+      "CreateTaskResponse": {
+        "type": "object",
+        "description": "Response for create_task",
+        "required": ["documentId"],
+        "properties": {
+          "documentId": {
+            "type": "string",
+            "description": "The document id of the created task"
+          }
+        }
+      },
       "CreateUnthreadedAnchorRequest": {
         "oneOf": [
           {
@@ -5114,6 +5213,34 @@
             "description": "the bundled [ProjectFilters]"
           }
         }
+      },
+      "EntityReference": {
+        "type": "object",
+        "description": "Entity reference for entity-type property values.",
+        "required": ["entity_id", "entity_type"],
+        "properties": {
+          "entity_id": { "type": "string" },
+          "entity_type": { "$ref": "#/components/schemas/EntityType" },
+          "specific_message_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread/channel/chat."
+          }
+        }
+      },
+      "EntityType": {
+        "type": "string",
+        "description": "Type of entity that can be referenced by entity properties.",
+        "enum": [
+          "CHANNEL",
+          "CHAT",
+          "COMPANY",
+          "DOCUMENT",
+          "PROJECT",
+          "TASK",
+          "THREAD",
+          "USER"
+        ]
       },
       "ErrorResponse": {
         "type": "object",
@@ -6645,6 +6772,21 @@
           "updatedAt": { "type": "integer", "format": "int64" }
         }
       },
+      "PropertyInput": {
+        "type": "object",
+        "description": "Property input for setting a property value on the task",
+        "required": ["propertyId", "value"],
+        "properties": {
+          "propertyId": {
+            "type": "string",
+            "description": "The property definition ID"
+          },
+          "value": {
+            "$ref": "#/components/schemas/SetPropertyValue",
+            "description": "The value to set for the property"
+          }
+        }
+      },
       "RecentlyDeletedResponseData": {
         "type": "object",
         "required": ["items"],
@@ -6741,6 +6883,107 @@
             "description": "If the document is an editable file, we provide a presigned url to save the updated file to."
           }
         }
+      },
+      "SetPropertyValue": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Boolean true/false value",
+            "required": ["value", "type"],
+            "properties": {
+              "type": { "type": "string", "enum": ["boolean"] },
+              "value": { "type": "boolean" }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Date and time value",
+            "required": ["value", "type"],
+            "properties": {
+              "type": { "type": "string", "enum": ["date"] },
+              "value": { "type": "string", "format": "date-time" }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Numeric value",
+            "required": ["value", "type"],
+            "properties": {
+              "type": { "type": "string", "enum": ["number"] },
+              "value": { "type": "number", "format": "double" }
+            }
+          },
+          {
+            "type": "object",
+            "description": "String/text value",
+            "required": ["value", "type"],
+            "properties": {
+              "type": { "type": "string", "enum": ["string"] },
+              "value": { "type": "string" }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Select option by ID (for select-type properties)",
+            "required": ["option_id", "type"],
+            "properties": {
+              "option_id": { "type": "string", "format": "uuid" },
+              "type": { "type": "string", "enum": ["select_option"] }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Multiple select options by ID (for multi-select properties)",
+            "required": ["option_ids", "type"],
+            "properties": {
+              "option_ids": {
+                "type": "array",
+                "items": { "type": "string", "format": "uuid" }
+              },
+              "type": { "type": "string", "enum": ["multi_select_option"] }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Entity reference",
+            "required": ["reference", "type"],
+            "properties": {
+              "reference": { "$ref": "#/components/schemas/EntityReference" },
+              "type": { "type": "string", "enum": ["entity_reference"] }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Multiple entity references (for multi-select entity properties)",
+            "required": ["references", "type"],
+            "properties": {
+              "references": {
+                "type": "array",
+                "items": { "$ref": "#/components/schemas/EntityReference" }
+              },
+              "type": { "type": "string", "enum": ["multi_entity_reference"] }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Link value",
+            "required": ["url", "type"],
+            "properties": {
+              "type": { "type": "string", "enum": ["link"] },
+              "url": { "type": "string" }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Multiple link values (for multi-select link properties)",
+            "required": ["urls", "type"],
+            "properties": {
+              "type": { "type": "string", "enum": ["multi_link"] },
+              "urls": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        ],
+        "description": "Type-safe enum for setting entity property values - provides compile-time validation."
       },
       "SharePermissionV2": {
         "type": "object",

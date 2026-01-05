@@ -7,11 +7,11 @@ import {
   useRemoveParticipantsFromChannel,
 } from '@block-channel/signal/participants';
 import { ClippedPanel } from '@core/component/ClippedPanel';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { DialogWrapper } from '@core/component/DialogWrapper';
-import { IconButton } from '@core/component/IconButton';
 import { getDestinationFromOptions } from '@core/component/NewMessage';
 import { RecipientSelector } from '@core/component/RecipientSelector';
-import { TextButton } from '@core/component/TextButton';
 import { Tooltip } from '@core/component/Tooltip';
 import {
   idToEmail,
@@ -92,7 +92,7 @@ export function ParticipantManager(props: { participantCount: number }) {
             <ClippedPanel tl={!beveledCorners()} active>
               <div class="flex flex-row items-center px-2 h-[40px] gap-2 border-b-1 border-b-edge-muted">
                 <Dialog.CloseButton>
-                  <IconButton
+                  <DeprecatedIconButton
                     tooltip={{ label: 'Close' }}
                     icon={CloseIcon}
                     iconSize={16}
@@ -118,7 +118,7 @@ export function ParticipantManager(props: { participantCount: number }) {
                     hideBorder
                     noPadding
                   />
-                  <TextButton
+                  <DeprecatedTextButton
                     disabled={usersToInvite().length === 0}
                     onClick={handleAddParticipants}
                     icon={InvitedIcon}

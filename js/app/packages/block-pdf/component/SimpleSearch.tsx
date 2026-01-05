@@ -1,5 +1,5 @@
 import { searchLocationPendingSignal } from '@block-pdf/signal/location';
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { IS_MAC } from '@core/constant/isMac';
 import { blockElementSignal } from '@core/signal/blockElement';
 import CaretDown from '@icon/regular/caret-down.svg';
@@ -172,17 +172,17 @@ export function SimpleSearch() {
             }}
           </Show>
         </div>
-        <IconButton
+        <DeprecatedIconButton
           icon={CaretUp}
           theme="clear"
           onClick={() => jumpTo('prev')}
         />
-        <IconButton
+        <DeprecatedIconButton
           icon={CaretDown}
           theme="clear"
           onClick={() => jumpTo('next')}
         />
-        <IconButton icon={X} theme="clear" onClick={closeSearch} />
+        <DeprecatedIconButton icon={X} theme="clear" onClick={closeSearch} />
       </div>
     </Show>
   );

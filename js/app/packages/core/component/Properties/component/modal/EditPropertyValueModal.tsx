@@ -1,4 +1,4 @@
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import {
   constrainModalToViewport,
@@ -196,7 +196,7 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
                 </p>
               </div>
               <div class="flex items-center gap-2">
-                <IconButton
+                <DeprecatedIconButton
                   icon={XIcon}
                   theme="clear"
                   size="sm"

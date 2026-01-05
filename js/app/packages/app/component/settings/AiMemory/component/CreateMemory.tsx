@@ -1,4 +1,4 @@
-import { TextButton } from '@core/component/TextButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import clickOutside from '@core/directive/clickOutside';
 import CheckIcon from '@icon/bold/check-bold.svg';
 import XIcon from '@icon/regular/x.svg';
@@ -76,13 +76,13 @@ export function CreateMemory() {
       >
         {memoryExamples[activeExample()]}
       </div>
-      <TextButton
+      <DeprecatedTextButton
         icon={XIcon}
         text="Cancel"
         theme="clear"
         onClick={() => setCreating(false)}
       />
-      <TextButton
+      <DeprecatedTextButton
         icon={CheckIcon}
         text="Create"
         theme="accent"

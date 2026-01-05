@@ -70,9 +70,19 @@ async fn main() -> anyhow::Result<()> {
     let properties_repository = properties::PropertiesPgRepo::new(db.clone());
     let permission_service =
         properties::PermissionServiceImpl::new(db.clone(), comms_service_client.clone());
+
+    // Initialize notification service
+    let notification_queue = std::env::var("NOTIFICATION_QUEUE")
+        .unwrap_or_else(|_| "local-notification-queue".to_string());
+    let macro_notify_client =
+        macro_notify::MacroNotify::new(notification_queue, "properties_service".to_string()).await;
+    let notification_service =
+        properties::NotificationServiceImpl::new(Arc::new(macro_notify_client));
+
     let properties_service = Arc::new(properties::PropertiesServiceImpl::new(
         properties_repository,
         Some(permission_service),
+        Some(notification_service),
     ));
     tracing::info!("initialized properties service");
 

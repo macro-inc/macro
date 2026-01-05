@@ -82,4 +82,31 @@ impl PermissionService for PermissionServiceImpl {
             Some(_) | None => anyhow::bail!("Access denied"),
         }
     }
+
+    #[tracing::instrument(skip(self), fields(task_id = %task_id, user_count = user_ids.len()), err)]
+    async fn grant_permissions_to_task(
+        &self,
+        user_ids: &[String],
+        task_id: &str,
+    ) -> Result<(), Self::Err> {
+        if user_ids.is_empty() {
+            return Ok(());
+        }
+
+        // Tasks are stored as "document" type in the permission system
+        let item_type = "document";
+
+        // Grant edit permissions to all users
+        macro_db_client::item_access::insert::upsert_user_item_access_bulk(
+            &self.db,
+            user_ids,
+            task_id,
+            item_type,
+            AccessLevel::Edit,
+            None, // No channel association for direct task assignee permissions
+        )
+        .await?;
+
+        Ok(())
+    }
 }

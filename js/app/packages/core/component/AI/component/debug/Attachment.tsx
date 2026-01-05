@@ -5,7 +5,7 @@ import type {
   Model,
   Send,
 } from '@core/component/AI/types';
-import { TextButton } from '@core/component/TextButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { isErr } from '@core/util/maybeResult';
 import { getMacroApiToken } from '@service-auth/fetch';
 import {
@@ -118,7 +118,11 @@ export default function DebugAttachments() {
       <div class="flex flex-1 justify-center w-full ">
         <div class="w-4/5 grid grid-cols-2 border border-accent divide-accent divide-y divide-x">
           <Item>
-            <TextButton theme="accent" text="Send All" onClick={sendAll} />
+            <DeprecatedTextButton
+              theme="accent"
+              text="Send All"
+              onClick={sendAll}
+            />
           </Item>
           <For each={components}>
             {(component) => <Dynamic component={component} />}
@@ -217,7 +221,7 @@ function RequestDebugger(props: {
 
   return (
     <Item label={props.label} col class="max-h-[600px] overflow-y-auto">
-      <TextButton
+      <DeprecatedTextButton
         text="Send"
         theme="accent"
         onClick={() => {

@@ -14,6 +14,7 @@ import {
   $convertToMarkdownString,
   type Transformer,
 } from '@lexical/markdown';
+import { $isHeadingNode, $isQuoteNode } from '@lexical/rich-text';
 import {
   $dfsIterator,
   $findMatchingParent,
@@ -1184,7 +1185,7 @@ function takeInlineUntilLineBreak(parent: ElementNode): LexicalNode[] {
     if ($isLineBreakNode(child)) {
       break;
     }
-    if ($isTextNode(child) && child.getTextContent().trim() === '') {
+    if ($isTextNode(child) && child.getTextContent() === '') {
       continue;
     }
     out.push(child);
@@ -1193,7 +1194,7 @@ function takeInlineUntilLineBreak(parent: ElementNode): LexicalNode[] {
 }
 
 const $singleLineNode = (node: ElementNode): ElementNode | null => {
-  if ($isParagraphNode(node)) {
+  if ($isParagraphNode(node) || $isHeadingNode(node) || $isQuoteNode(node)) {
     const inline = takeInlineUntilLineBreak(node);
     if (!inline.length) return null;
     node.clear();

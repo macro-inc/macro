@@ -5,4 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type String = string;
+/**
+ * The name of the task (optional)
+ */
+export type TaskAssignedMetadataTaskName = string | null;
