@@ -17,10 +17,7 @@ use axum::{
 };
 use macro_db_client::annotations::CommentError;
 use model::{
-    annotations::{Comment, create::CreateCommentResponse},
-    document::DocumentBasic,
-    response::ErrorResponse,
-    user::UserContext,
+    annotations::Comment, document::DocumentBasic, response::ErrorResponse, user::UserContext,
 };
 use model_entity::EntityType;
 use model_notifications::{DocumentMentionMetadata, NotificationQueueMessage};
