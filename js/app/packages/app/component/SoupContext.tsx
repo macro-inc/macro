@@ -8,6 +8,7 @@ import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { runCommand } from '@core/hotkey/utils';
+import { isTouchModality } from '@core/mobile/inputModality';
 import { DEFAULT_VIEWS, type DefaultView, type ViewId } from '@core/types/view';
 import { getActualTarget } from '@core/util/getActualTarget';
 import { isInteractiveElement } from '@core/util/isInteractiveElement';
@@ -80,7 +81,6 @@ import {
   type ViewData,
   type ViewDataMap,
 } from './ViewConfig';
-import { isTouchModality } from '@core/mobile/inputModality';
 
 type NavigateListFn = (input: NavigationInput) => Promise<NavigationResult>;
 
@@ -433,7 +433,10 @@ export function createNavigationEntityListShortcut({
           // update selected entity to current selected entity's neighbor, before/after neighbor is based on last navigation direction.
           // if selected entity is not from multi selected list, don't update selected entity
           // we don't want to update the selected entity when user is using touch modality because it will cause the list to scroll in unexpected ways when swiping to mark done
-          if (selectedEntityIncludedInMultiSelectedEntities && !isTouchModality()) {
+          if (
+            selectedEntityIncludedInMultiSelectedEntities &&
+            !isTouchModality()
+          ) {
             const index = selectedEntityData?.index ?? 0;
 
             const newSelectedEntity = entities()?.at(index);
