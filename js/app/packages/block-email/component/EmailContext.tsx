@@ -19,9 +19,9 @@ import {
   useThreadQuery,
 } from '@queries/email/thread';
 import type {
+  APIThread,
   ContactInfo,
   MessageWithBodyReplyless,
-  Thread,
 } from '@service-email/generated/schemas';
 import { useSearchParams } from '@solidjs/router';
 import {
@@ -64,7 +64,7 @@ export type EmailContextValues = {
     focusedID: Accessor<string | undefined>;
     setFocused: (messageID: string | undefined) => void;
   };
-  thread: Accessor<Thread | undefined>;
+  thread: Accessor<APIThread | undefined>;
 
   query: {
     hasMore: Accessor<boolean>;
