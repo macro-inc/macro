@@ -16,9 +16,8 @@ use axum::{
     routing::{delete, get, patch, post},
 };
 use macro_db_client::annotations::CommentError;
-use model::{
-    annotations::Comment, document::DocumentBasic, response::ErrorResponse, user::UserContext,
-};
+use macro_user_id::user_id::MacroUserIdStr;
+use model::{annotations::Comment, document::DocumentBasic, response::ErrorResponse};
 use model_entity::EntityType;
 use model_notifications::{DocumentMentionMetadata, NotificationQueueMessage};
 use serde::Serialize;
@@ -160,7 +159,7 @@ fn build_mention_notif(
     thread_id: i64,
     mentions: &[String],
     document_context: &DocumentBasic,
-    user_context: &UserContext,
+    sender_id: Option<MacroUserIdStr<'static>>,
     document_id: String,
     mention_id: &str,
 ) -> NotificationQueueMessage {
@@ -182,7 +181,7 @@ fn build_mention_notif(
     NotificationQueueMessage {
         notification_entity: EntityType::Document.with_entity_string(document_id),
         notification_event: metadata.into(),
-        sender_id: Some(user_context.user_id.clone().try_into().unwrap()),
+        sender_id,
         recipient_ids: Some(mentions.to_vec()),
     }
 }

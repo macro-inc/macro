@@ -12,6 +12,7 @@ use axum::{
 };
 use connection_gateway_client::ConnectionGatewayClient;
 use macro_db_client::annotations::edit_comment::edit_document_comment;
+use macro_user_id::user_id::MacroUserIdStr;
 use model::{
     annotations::{
         AnnotationIncrementalUpdate, Mentions,
@@ -61,6 +62,8 @@ pub async fn edit_comment_handler(
         Ok(res) => {
             let document_id = res.document_id.as_str();
             if let Some(Mentions { users, mention_id }) = req.mentions {
+                let sender_id: Option<MacroUserIdStr> =
+                    user_context.user_id.clone().try_into().ok();
                 let notif = build_mention_notif(
                     NotifLocationType::EditComment,
                     req.text.clone().unwrap_or_else(|| "".to_string()),
@@ -68,7 +71,7 @@ pub async fn edit_comment_handler(
                     req.thread_id,
                     &users,
                     &document_context,
-                    &user_context,
+                    sender_id,
                     document_id.to_string(),
                     &mention_id,
                 );

@@ -15,6 +15,7 @@ use axum::{
 };
 use connection_gateway_client::ConnectionGatewayClient;
 use macro_db_client::annotations::create_comment::create_document_comment;
+use macro_user_id::user_id::MacroUserIdStr;
 use model::{
     annotations::{
         AnnotationIncrementalUpdate, Mentions,
@@ -73,6 +74,8 @@ pub async fn create_comment_handler(
     match create_document_comment(&db, document_id, user_id, &req).await {
         Ok(res) => {
             if let Some(Mentions { users, mention_id }) = &req.mentions {
+                let sender_id: Option<MacroUserIdStr> =
+                    user_context.user_id.clone().try_into().ok();
                 let notif = build_mention_notif(
                     NotifLocationType::CreateComment,
                     req.text,
@@ -80,7 +83,7 @@ pub async fn create_comment_handler(
                     res.comment_thread.thread.thread_id,
                     users,
                     &document_context,
-                    &user_context,
+                    sender_id,
                     document_id.to_string(),
                     mention_id,
                 );
