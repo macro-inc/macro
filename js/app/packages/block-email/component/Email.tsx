@@ -344,7 +344,7 @@ function EmailContent(props: EmailViewProps) {
         </div>
         <Show
           when={
-            hasPermissions(context.permissions(), Permissions.OWNER) &&
+            context.permissions().isOwner &&
             context.drafts.initialDraftsSettled() &&
             context.messages.list().at(-1)
           }

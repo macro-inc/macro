@@ -287,7 +287,7 @@ export function MessageContainer(props: MessageContainerProps) {
             <Message.TopBar name={currentUserName()} />
             <div class="h-4" />
           </Message>
-          <Show when={hasPermissions(context.permissions(), Permissions.OWNER)}>
+          <Show when={context.permissions().isOwner}>
             <Portal mount={threadAppendMountTarget()}>
               <EmailInput
                 replyingTo={() => props.message}

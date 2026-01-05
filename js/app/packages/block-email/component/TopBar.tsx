@@ -34,7 +34,7 @@ export function TopBar(props: { id: string; title: string }) {
               buttonSize="sm"
               subject={props.title}
               canEdit={hasPermissions(
-                email.permissions(),
+                email.permissions().type,
                 Permissions.CAN_EDIT
               )}
             />
@@ -43,7 +43,7 @@ export function TopBar(props: { id: string; title: string }) {
             id={props.id}
             name={props.title}
             itemType="email"
-            userPermissions={email.permissions()}
+            userPermissions={email.permissions().type}
           />
         </div>
       </SplitToolbarRight>

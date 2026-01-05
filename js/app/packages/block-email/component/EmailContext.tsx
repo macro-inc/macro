@@ -1,7 +1,11 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { URL_PARAMS } from '@block-email/constants';
-import { getPermissions, Permissions } from '@core/component/SharePermissions';
+import {
+  getPermissions,
+  hasPermissions,
+  Permissions,
+} from '@core/component/SharePermissions';
 import { toast } from '@core/component/Toast/Toast';
 import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
@@ -66,7 +70,10 @@ export type EmailContextValues = {
     setFocused: (messageID: string | undefined) => void;
   };
   thread: Accessor<APIThread | undefined>;
-  permissions: Accessor<Permissions>;
+  permissions: Accessor<{
+    type: Permissions;
+    isOwner: boolean;
+  }>;
 
   query: {
     hasMore: Accessor<boolean>;
@@ -413,9 +420,13 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
             list: createMemo(() => threadQuery.data?.filtered ?? []),
             unfiltered: createMemo(() => threadQuery.data?.messages ?? []),
           },
-          permissions: createMemo(() =>
-            getPermissions(threadQuery.data?.access_level)
-          ),
+          permissions: createMemo(() => {
+            const perms = getPermissions(threadQuery.data?.access_level);
+            return {
+              type: perms,
+              isOwner: hasPermissions(perms, Permissions.OWNER),
+            };
+          }),
           initialLoadComplete: hasHandledTarget,
           onInitialDataLoad,
         }}
