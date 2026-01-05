@@ -541,9 +541,9 @@ export function ShareModal(props: ShareModalProps) {
                     <Show when={recipients()}>
                       <For each={recipients()!}>
                         {(recipient) => (
-                          <div class="flex justify-between p-2 bg-panel hover:bg-hover hover-transition-bg group">
+                          <div class="flex justify-between p-2 bg-panel">
                             <div
-                              class="flex items-center gap-2 overflow-hidden cursor-pointer group-hover:bg-hover"
+                              class="flex items-center gap-2 overflow-hidden cursor-pointer"
                               onClick={() =>
                                 navigateToChannel(recipient.channel_id)
                               }
@@ -565,7 +565,7 @@ export function ShareModal(props: ShareModalProps) {
                                   ?.name || recipient.channel_id}
                               </div>
                             </div>
-                            <div class="flex items-center group-hover:bg-hover">
+                            <div class="flex items-center">
                               <div class="font-medium text-ink-muted text-xs">
                                 <ShareOptions
                                   permissions={recipient.access_level}
