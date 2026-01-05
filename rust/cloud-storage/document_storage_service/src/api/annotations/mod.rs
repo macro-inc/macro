@@ -6,6 +6,8 @@ pub mod edit_anchor;
 pub mod edit_comment;
 pub mod get;
 
+use std::fmt::Display;
+
 use super::context::ApiContext;
 use axum::{
     Json, Router,
@@ -14,8 +16,17 @@ use axum::{
     routing::{delete, get, patch, post},
 };
 use macro_db_client::annotations::CommentError;
-use model::response::ErrorResponse;
+use model::{
+    annotations::{Comment, create::CreateCommentResponse},
+    document::DocumentBasic,
+    response::ErrorResponse,
+    user::UserContext,
+};
+use model_entity::EntityType;
+use model_notifications::{DocumentMentionMetadata, NotificationQueueMessage};
+use serde::Serialize;
 use tower::ServiceBuilder;
+use utoipa::ToSchema;
 
 pub fn router(state: ApiContext) -> Router<ApiContext> {
     Router::new()
@@ -113,5 +124,82 @@ pub fn comment_error_response(e: anyhow::Error, default_msg: &str) -> Result<Res
             )
                 .into_response())
         }
+    }
+}
+
+#[derive(ToSchema)]
+pub enum NotifLocationType {
+    CreateComment,
+    EditComment,
+}
+impl Serialize for NotifLocationType {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.collect_str(self)
+    }
+}
+
+impl Display for NotifLocationType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                NotifLocationType::CreateComment => "create-comment",
+                NotifLocationType::EditComment => "edit-comment",
+            }
+        )
+    }
+}
+
+fn build_mention_notif(
+    notif_location_type: NotifLocationType,
+    text: String,
+    comment: Option<&Comment>,
+    thread_id: i64,
+    mentions: &[String],
+    document_context: &DocumentBasic,
+    user_context: &UserContext,
+    document_id: String,
+    mention_id: &str,
+) -> NotificationQueueMessage {
+    let metadata = DocumentMentionMetadata {
+        document_name: document_context.document_name.clone(),
+        owner: document_context.owner.clone(),
+        file_type: document_context.file_type.clone(),
+        metadata: Some(serde_json::json!({
+            "mention_id": mention_id,
+            "location": {
+                r#"type"#: notif_location_type,
+                "commentId": comment,
+                "threadId": thread_id,
+                "text": text,
+            }
+        })),
+    };
+
+    NotificationQueueMessage {
+        notification_entity: EntityType::Document.with_entity_string(document_id),
+        notification_event: metadata.into(),
+        sender_id: Some(user_context.user_id.clone().try_into().unwrap()),
+        recipient_ids: Some(mentions.to_vec()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::api::annotations::NotifLocationType;
+
+    #[test]
+    fn check_deser() -> Result<(), Box<dyn std::error::Error>> {
+        let a = NotifLocationType::CreateComment;
+        let res = serde_json::json!({
+            r#"type"#: a,
+        })
+        .to_string();
+        assert_eq!(res, r#"{"type":"create-comment"}"#);
+        Ok(())
     }
 }

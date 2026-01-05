@@ -1,6 +1,12 @@
 use std::sync::Arc;
 
-use crate::{api::context::ApiContext, service::conn_gateway::update_live_comment_state};
+use crate::{
+    api::{
+        annotations::{NotifLocationType, build_mention_notif},
+        context::ApiContext,
+    },
+    service::conn_gateway::update_live_comment_state,
+};
 use axum::{
     Json,
     extract::{Extension, Path, State},
@@ -12,15 +18,13 @@ use macro_db_client::annotations::create_comment::create_document_comment;
 use macro_middleware::cloud_storage::ensure_access::document::DocumentAccessExtractor;
 use model::{
     annotations::{
-        AnnotationIncrementalUpdate,
-        create::{CreateCommentRequest, CreateCommentResponse, Mentions},
+        AnnotationIncrementalUpdate, Mentions,
+        create::{CreateCommentRequest, CreateCommentResponse},
     },
     document::DocumentBasic,
     response::ErrorResponse,
     user::UserContext,
 };
-use model_entity::EntityType;
-use model_notifications::{DocumentMentionMetadata, NotificationQueueMessage};
 use models_permissions::share_permission::access_level::CommentAccessLevel;
 use sqlx::PgPool;
 
@@ -73,8 +77,10 @@ pub async fn create_comment_handler(
         Ok(res) => {
             if let Some(Mentions { users, mention_id }) = &req.mentions {
                 let notif = build_mention_notif(
-                    &req,
-                    &res,
+                    NotifLocationType::CreateComment,
+                    req.text,
+                    res.comment_thread.comments.first(),
+                    res.comment_thread.thread.thread_id,
                     users,
                     &document_context,
                     &user_context,
@@ -99,37 +105,5 @@ pub async fn create_comment_handler(
             Ok((StatusCode::OK, Json(res)).into_response())
         }
         Err(e) => comment_error_response(e, "Error creating comment"),
-    }
-}
-
-fn build_mention_notif(
-    req: &CreateCommentRequest,
-    response: &CreateCommentResponse,
-    mentions: &[String],
-    document_context: &DocumentBasic,
-    user_context: &UserContext,
-    document_id: String,
-    mention_id: &str,
-) -> NotificationQueueMessage {
-    let metadata = DocumentMentionMetadata {
-        document_name: document_context.document_name.clone(),
-        owner: document_context.owner.clone(),
-        file_type: document_context.file_type.clone(),
-        metadata: Some(serde_json::json!({
-            "mention_id": mention_id,
-            "location": {
-                r#"type"#: "create-comment",
-                "commentId": response.comment_thread.comments.first(),
-                "threadId": response.comment_thread.thread.thread_id,
-                "text": req.text.clone(),
-            }
-        })),
-    };
-
-    NotificationQueueMessage {
-        notification_entity: EntityType::Document.with_entity_string(document_id),
-        notification_event: metadata.into(),
-        sender_id: Some(user_context.user_id.clone().try_into().unwrap()),
-        recipient_ids: Some(mentions.to_vec()),
     }
 }

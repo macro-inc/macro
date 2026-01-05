@@ -80,9 +80,10 @@ mod tests {
         let req = EditCommentRequest {
             text: Some("Updated comment text".to_string()),
             metadata: None,
+            mentions: None,
         };
 
-        let result = edit_document_comment(&pool, comment_id, owner, req).await;
+        let result = edit_document_comment(&pool, comment_id, owner, &req).await;
         let EditCommentResponse {
             comment,
             document_id,
@@ -99,11 +100,12 @@ mod tests {
         let comment_id = 6543024; // should not exist
         let owner = "macro|user@user.com";
         let req = EditCommentRequest {
+            mentions: None,
             text: Some("Updated comment text".to_string()),
             metadata: None,
         };
 
-        let result = edit_document_comment(&pool, comment_id, owner, req).await;
+        let result = edit_document_comment(&pool, comment_id, owner, &req).await;
         assert_eq!(result.unwrap_err().to_string(), "Comment not found");
     }
 
@@ -115,11 +117,12 @@ mod tests {
         let comment_id = 10007;
         let document_owner = "macro|user@user.com";
         let req = EditCommentRequest {
+            mentions: None,
             text: Some("Updated comment text".to_string()),
             metadata: None,
         };
 
-        let result = edit_document_comment(&pool, comment_id, document_owner, req).await;
+        let result = edit_document_comment(&pool, comment_id, document_owner, &req).await;
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().to_string(), "Invalid permissions");
     }
@@ -132,11 +135,12 @@ mod tests {
         let comment_id = 10007;
         let owner = "macro|user2@user.com";
         let req = EditCommentRequest {
+            mentions: None,
             text: Some("Updated comment text".to_string()),
             metadata: None,
         };
 
-        let result = edit_document_comment(&pool, comment_id, owner, req).await;
+        let result = edit_document_comment(&pool, comment_id, owner, &req).await;
         assert!(result.is_ok());
         assert_eq!(result.unwrap().comment.text, "Updated comment text");
     }
@@ -149,11 +153,12 @@ mod tests {
         let comment_id = 10007;
         let non_owner = "macro|user3@user.com";
         let req = EditCommentRequest {
+            mentions: None,
             text: Some("Updated comment text".to_string()),
             metadata: None,
         };
 
-        let result = edit_document_comment(&pool, comment_id, non_owner, req).await;
+        let result = edit_document_comment(&pool, comment_id, non_owner, &req).await;
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().to_string(), "Invalid permissions");
     }
