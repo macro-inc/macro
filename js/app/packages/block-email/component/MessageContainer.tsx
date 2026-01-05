@@ -7,7 +7,6 @@ import { EmailMessageTopBar } from '@block-email/component/EmailMessageTopBar';
 import { ImageGalleryPreview } from '@core/component/ImageGalleryPreview';
 import { ImagePreview } from '@core/component/ImagePreview';
 import { Message } from '@core/component/Message';
-import { hasPermissions, Permissions } from '@core/component/SharePermissions';
 import { toast } from '@core/component/Toast/Toast';
 import { VideoPreview } from '@core/component/VideoPreview';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';

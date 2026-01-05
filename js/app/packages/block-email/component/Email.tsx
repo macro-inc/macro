@@ -25,7 +25,6 @@ import { EmailFormContextProvider } from './EmailFormContext';
 import { EmailInput } from './EmailInput';
 import { MessageList } from './MessageList';
 import { TopBar } from './TopBar';
-import { hasPermissions, Permissions } from '@core/component/SharePermissions';
 
 type EmailViewProps = {
   title: Accessor<string>;
