@@ -321,7 +321,6 @@ export function EntityRowProvider(
           if (phase === 'threshold') {
             impactFeedback('light');
           }
-          impactFeedback('light');
           setState(touchState.entityId, {
             direction: dx > 0 ? 'right' : 'left',
             phase: 'dragging',
@@ -448,7 +447,10 @@ export function EntityRow(
     >
       {/* Left Reveal */}
       <div
-        class="absolute left-[10px] top-0 h-full w-[40px] flex items-center justify-center z-[1]"
+        class="absolute top-0 left-0 h-full flex items-center justify-center z-[1]"
+        style={{
+          width: `${SWIPE_ACTIVATION_DISTANCE}px`,
+        }}
         aria-hidden="true"
       >
         <div
@@ -465,7 +467,10 @@ export function EntityRow(
 
       {/* Right Reveal */}
       <div
-        class="absolute right-[10px] top-0 h-full w-[40px] flex items-center justify-center z-[1]"
+        class="absolute top-0 right-0 h-full flex items-center justify-center z-[1]"
+        style={{
+          width: `${SWIPE_ACTIVATION_DISTANCE}px`,
+        }}
         aria-hidden="true"
       >
         <div

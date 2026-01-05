@@ -35,7 +35,7 @@ import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import { debouncedDependent } from '@core/util/debounce';
 import { fuzzyMatch } from '@core/util/fuzzy';
-import CheckCircleIcon from '@icon/regular/check-circle.svg?component-solid';
+import CheckIcon from '@icon/bold/check-bold.svg';
 import SearchIcon from '@icon/regular/magnifying-glass.svg?component-solid';
 import LoadingSpinner from '@icon/regular/spinner.svg?component-solid';
 import XIcon from '@icon/regular/x.svg?component-solid';
@@ -1566,7 +1566,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                   <EntityRow
                     entityId={innerProps.entity.id}
                     swipeLeftColor="bg-success"
-                    RightReveal={<CheckCircleIcon class="size-12 text-panel" />}
+                    RightReveal={<CheckIcon class="size-8 text-panel" />}
                   >
                     <EntityWithEverything
                       onContextMenu={() => {
