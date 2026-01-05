@@ -4,6 +4,7 @@ import { GlitchText } from './GlitchText';
 const meta = {
   title: 'GlitchText',
   component: GlitchText,
+  tags: ['autodocs'],
   parameters: {
     backgrounds: {
       default: 'dark',
@@ -61,7 +62,7 @@ export const Default: Story = {
     cycles: 2,
     framerate: 12,
     delay: 1000,
-    class: 'font-mono',
+    class: 'font-mono text-ink-extra-muted',
   },
   parameters: {
     docs: {

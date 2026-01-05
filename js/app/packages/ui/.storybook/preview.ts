@@ -1,4 +1,5 @@
 import '../../app/index.css';
+import './preview.css';
 import type { Preview } from 'storybook-solidjs-vite';
 
 // Set up focus-visible modality tracking
@@ -25,6 +26,7 @@ const preview: Preview = {
       codePanel: true,
     },
   },
+  tags: ['autodocs']
 };
 
 export default preview;

@@ -1,12 +1,21 @@
 {
   "name": "@ui",
+  "type": "module",
   "private": true,
   "scripts": {
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build"
   },
   "devDependencies": {
+    "@storybook/addon-a11y": "^10.1.11",
+    "@storybook/addon-console": "^3.0.0",
+    "@storybook/addon-designs": "^11.1.1",
     "@storybook/addon-docs": "^10.1.11",
+    "@storybook/addon-themes": "^10.1.11",
+    "@storybook/addon-vitest": "^10.1.11",
+    "@vitest/browser": "^3.2.4",
+    "@vitest/coverage-v8": "^3.2.4",
+    "playwright": "^1.57.0",
     "storybook": "^10.1.11",
     "storybook-solidjs-vite": "^10.0.9"
   }

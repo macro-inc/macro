@@ -1,0 +1,5 @@
+@layer base {
+  body {
+    overflow: auto !important;
+  }
+}
