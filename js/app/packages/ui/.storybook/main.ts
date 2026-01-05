@@ -1,22 +1,23 @@
 import { Features } from 'lightningcss';
+import path from 'node:path';
 import type { StorybookConfig } from 'storybook-solidjs-vite';
 import solidSvg from 'vite-plugin-solid-svg';
 import wasm from 'vite-plugin-wasm';
 import tsconfigpaths from 'vite-tsconfig-paths';
 
+const getAbsolutePath = (packageName: string): string =>
+    path.dirname(import.meta.resolve(path.join(packageName, 'package.json'))).replace(/^file:\/\//, '');
+
 const config: StorybookConfig = {
-  stories: [
-    // @ui package stories
-    '../**/*.mdx',
-    '../**/*.stories.@(js|jsx|mjs|ts|tsx)',
-    // Other packages stories
-    '../../core/**/*.mdx',
-    '../../core/**/*.stories.@(js|jsx|mjs|ts|tsx)',
+  stories: ['../**/*.mdx', '../**/*.stories.@(js|jsx|mjs|ts|tsx)'],
+  addons: [
+    getAbsolutePath('@storybook/addon-docs')
   ],
-  addons: ['@storybook/addon-docs'],
   framework: {
-    name: 'storybook-solidjs-vite',
-    options: {},
+    name: getAbsolutePath("storybook-solidjs-vite"),
+    options: {
+      docgen: true
+    },
   },
   viteFinal: async (config) => {
     // Use the same CSS setup as the main app
