@@ -152,6 +152,7 @@ impl Display for NotifLocationType {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_mention_notif(
     notif_location_type: NotifLocationType,
     text: String,

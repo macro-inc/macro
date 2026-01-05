@@ -15,7 +15,6 @@ use axum::{
 };
 use connection_gateway_client::ConnectionGatewayClient;
 use macro_db_client::annotations::create_comment::create_document_comment;
-use macro_middleware::cloud_storage::ensure_access::document::DocumentAccessExtractor;
 use model::{
     annotations::{
         AnnotationIncrementalUpdate, Mentions,
@@ -25,7 +24,6 @@ use model::{
     response::ErrorResponse,
     user::UserContext,
 };
-use models_permissions::share_permission::access_level::CommentAccessLevel;
 use sqlx::PgPool;
 
 use super::comment_error_response;
@@ -53,7 +51,6 @@ pub struct Params {
     )]
 #[axum::debug_handler(state = ApiContext)]
 pub async fn create_comment_handler(
-    _access: DocumentAccessExtractor<CommentAccessLevel>,
     State(macro_notify_client): State<Arc<macro_notify::MacroNotify>>,
     State(db): State<PgPool>,
     State(conn_gateway_client): State<Arc<ConnectionGatewayClient>>,
