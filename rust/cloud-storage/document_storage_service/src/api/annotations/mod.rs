@@ -171,7 +171,7 @@ fn build_mention_notif(
             "mention_id": mention_id,
             "location": {
                 r#"type"#: notif_location_type,
-                "commentId": comment,
+                "commentId": comment.and_then(|c| Some(c.comment_id)),
                 "threadId": thread_id,
                 "text": text,
             }
