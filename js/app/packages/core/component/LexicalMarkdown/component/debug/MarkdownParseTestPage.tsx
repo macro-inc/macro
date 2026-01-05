@@ -44,6 +44,7 @@ const KEYS = {
   targetType: 'internal-markdown-target-type',
   inputType: 'internal-markdown-input-type',
   themeType: 'internal-markdown-theme-type',
+  singleLine: 'internal-markdown-single-line',
 };
 
 const getSavedStringFromLocalStorage = () => {
@@ -109,6 +110,14 @@ const getSavedThemeType = (): ThemeType => {
     }
   } catch (_) {}
   return 'default';
+};
+
+const getSavedSingleLine = (): boolean => {
+  try {
+    const saved = localStorage.getItem(KEYS.singleLine);
+    return saved === 'true';
+  } catch (_) {}
+  return false;
 };
 
 const getThemeByType = (themeType: ThemeType) => {
@@ -260,6 +269,9 @@ export default function MarkdownParseTestPage() {
   const [themeType, setThemeType] = createSignal<ThemeType>(
     getSavedThemeType()
   );
+  const [singleLine, setSingleLine] = createSignal<boolean>(
+    getSavedSingleLine()
+  );
 
   const debouncedLocalSave = debounce(() => {
     const content = rawContent();
@@ -267,6 +279,7 @@ export default function MarkdownParseTestPage() {
     const target = targetType();
     const input = inputType();
     const theme = themeType();
+    const single = singleLine();
 
     try {
       localStorage.setItem(KEYS.content, content);
@@ -274,6 +287,7 @@ export default function MarkdownParseTestPage() {
       localStorage.setItem(KEYS.targetType, target);
       localStorage.setItem(KEYS.inputType, input);
       localStorage.setItem(KEYS.themeType, theme);
+      localStorage.setItem(KEYS.singleLine, single.toString());
     } catch (_) {}
   });
 
@@ -283,6 +297,7 @@ export default function MarkdownParseTestPage() {
     targetType();
     inputType();
     themeType();
+    singleLine();
     debouncedLocalSave();
   });
 
@@ -388,6 +403,20 @@ export default function MarkdownParseTestPage() {
               </select>
             </div>
 
+            <Show when={outputType() === 'static'}>
+              <div class="flex items-center gap-2 mb-4">
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={singleLine()}
+                    onChange={(e) => setSingleLine(e.target.checked)}
+                    class="rounded border-edge"
+                  />
+                  <span class="text-sm text-ink-extra-muted">Single Line</span>
+                </label>
+              </div>
+            </Show>
+
             <div class="flex-1 overflow-auto bg-input border border-edge rounded p-4">
               <Show when={outputType() === 'static'}>
                 <StaticMarkdownContext theme={getThemeByType(themeType())}>
@@ -395,6 +424,7 @@ export default function MarkdownParseTestPage() {
                     <StaticMarkdown
                       markdown={rawContent()}
                       target={targetType()}
+                      singleLine={singleLine()}
                     />
                   </Show>
                   <Show when={inputType() === 'lexical-json'}>

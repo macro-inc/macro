@@ -116,14 +116,12 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
       break;
     }
     case 'email': {
-      console.log('EMAIL RESULTS', data.results);
       contentHitData = data.results.flatMap((r) => {
         const contents = r.highlight.content ?? [];
         return contents.map((content) => ({
           type: 'email' as const,
           content: truncateSearchMatch(
-            // mergeAdjacentMacroEmTags(content),
-            content,
+            mergeAdjacentMacroEmTags(content),
             SEARCH_MATCH_LENGTH
           ),
           sender: r.pretty_sender!,
