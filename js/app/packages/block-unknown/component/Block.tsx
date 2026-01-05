@@ -3,7 +3,6 @@ import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { getPermissions, Permissions } from '@core/component/SharePermissions';
 import { TextButton } from '@core/component/TextButton';
 import { ShareModal } from '@core/component/TopBar/ShareButton';
-import { blockMetadataSignal } from '@core/signal/load';
 import {
   useBlockDocumentDownloadName,
   useBlockDocumentName,

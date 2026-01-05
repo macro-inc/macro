@@ -24,7 +24,6 @@ import { downloadFile } from '@filesystem/download';
 import Download from '@icon/regular/download.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { toast } from 'core/component/Toast/Toast';
-import { createMemo } from 'solid-js';
 import { useGetFileBlob } from '../signal/blockData';
 
 export function TopBar() {
