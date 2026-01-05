@@ -16,7 +16,7 @@ pub async fn handler(
 
     let user_id = user_context.user_id.clone();
 
-    if matches!(user_id.as_str(), "" | "INTERNAL") {
+    if matches!(user_id.as_str(), "" | "macro|INTERNAL@macro.com") {
         return Err((
             StatusCode::UNAUTHORIZED,
             "No user id found in context".to_string(),

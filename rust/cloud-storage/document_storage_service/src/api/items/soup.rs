@@ -148,7 +148,10 @@ where
         }: Params,
         cursor: Option<CursorWithVal<String, SimpleSortMethod>>,
     ) -> Result<PaginatedOpaqueCursor<FrecencySoupItem>, SoupHandlerErr> {
-        if matches!(user_context.user_id.as_str(), "" | "INTERNAL") {
+        if matches!(
+            user_context.user_id.as_str(),
+            "" | "macro|INTERNAL@macro.com"
+        ) {
             return Err(SoupHandlerErr::Unauthorized);
         }
 
