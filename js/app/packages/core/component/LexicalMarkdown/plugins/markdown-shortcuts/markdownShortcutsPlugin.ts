@@ -48,7 +48,7 @@ function registerMarkdownShortcutsPlugins(
     registerMarkdownShortcuts(editor, transformers),
     editor.registerCommand(
       KEY_ENTER_COMMAND,
-      (e: KeyboardEvent) => {
+      (e) => {
         const selection = $getSelection();
         if (!$isRangeSelection(selection)) return false;
         const anchor = selection.anchor;
@@ -67,12 +67,12 @@ function registerMarkdownShortcutsPlugins(
                 if (transformer.type === 'multiline-element') {
                   transformer.replace(parent, [node], match, null, null, false);
                   node.remove();
-                  e.preventDefault();
+                  e?.preventDefault();
                   return true;
                 } else if (transformer.type === 'element') {
                   transformer.replace(parent, [node], match, false);
                   node.remove();
-                  e.preventDefault();
+                  e?.preventDefault();
                   return true;
                 }
               }
