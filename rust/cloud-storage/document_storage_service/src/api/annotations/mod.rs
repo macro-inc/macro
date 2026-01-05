@@ -141,6 +141,7 @@ impl Serialize for NotifLocationType {
     }
 }
 
+// NB: We ulse this Display impl for `impl Serialize for NotifLocationType`.
 impl Display for NotifLocationType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(

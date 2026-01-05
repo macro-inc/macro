@@ -1,5 +1,3 @@
-use crate::api::extractors::ParticipantAccess;
-use crate::api::mentions::{CreateEntityMentionRequest, CreateEntityMentionResponse};
 use crate::api::{
     activity::post_activity::PostActivityRequest,
     channels::{
@@ -15,7 +13,11 @@ use crate::api::{
         post_typing::PostTypingRequest,
         remove_participants::RemoveParticipantsRequest,
     },
-    mentions::{DeleteEntityMentionRequest, DeleteEntityMentionResponse},
+    extractors::ParticipantAccess,
+    mentions::{
+        CreateEntityMentionRequest, CreateEntityMentionResponse, DeleteEntityMentionRequest,
+        DeleteEntityMentionResponse,
+    },
     preview::get_batch_preview::{GetBatchChannelPreviewRequest, GetBatchChannelPreviewResponse},
 };
 use comms::inbound::{ApiActivity, ApiChannelWithLatest};

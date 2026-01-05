@@ -78,7 +78,6 @@ struct NotificationMessageAttributes(
 );
 
 impl NotificationMessageAttributes {
-    // TODO make infalible
     fn from_message(
         notification_id: &str,
         message: &NotificationQueueMessage,
