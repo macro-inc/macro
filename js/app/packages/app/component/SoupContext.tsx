@@ -1,5 +1,6 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useChannelsContext } from '@core/component/ChannelsProvider';
+import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { ENABLE_PROPERTIES_METADATA } from '@core/constant/featureFlags';
 import { HotkeyTags } from '@core/hotkey/constants';
@@ -451,6 +452,8 @@ export function createNavigationEntityListShortcut({
         }
 
         setViewDataStore(selectedView(), 'multiSelectEntities', []);
+
+        toast.success('Marked as done');
       }
 
       return { success: true };
