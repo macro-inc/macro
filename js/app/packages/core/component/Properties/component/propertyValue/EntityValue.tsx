@@ -84,7 +84,7 @@ export const EntityValue: Component<EntityValueProps> = (props) => {
         when={!isReadOnly()}
         fallback={
           <Show when={entities.length === 0}>
-            <div class="text-ink-muted text-xs px-2 py-1 border border-edge bg-transparent inline-block shrink-0">
+            <div class="text-ink-muted px-2 py-1 border border-edge bg-transparent inline-block shrink-0">
               <EmptyValue />
             </div>
           </Show>

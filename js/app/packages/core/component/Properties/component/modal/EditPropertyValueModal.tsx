@@ -1,15 +1,17 @@
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { ScopedPortal } from '@core/component/ScopedPortal';
+import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import {
   constrainModalToViewport,
   MODAL_VIEWPORT_CLASSES,
 } from '@core/util/modalUtils';
-import XIcon from '@icon/regular/x.svg';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
+import { mergeRefs } from '@solid-primitives/refs';
 import {
   createEffect,
   createMemo,
   createSignal,
+  onCleanup,
   onMount,
   Show,
 } from 'solid-js';
@@ -17,7 +19,6 @@ import { MODAL_DIMENSIONS } from '../../constants';
 import { usePropertiesContext } from '../../context/PropertiesContext';
 import { usePropertyEditor } from '../../hooks/usePropertyEditor';
 import type { PropertyApiValues, PropertyEditorProps } from '../../types';
-import { getValueTypeDisplay } from '../../utils';
 import {
   entityReferencesToIdSet,
   updateEntityReferences,
@@ -28,10 +29,16 @@ import { PropertyOptionSelector } from './shared/PropertyOptionSelector';
 // Common CSS classes
 const MODAL_BASE =
   'absolute bg-menu border border-edge-muted max-h-96 overflow-hidden flex flex-col w-full max-w-md';
-const HEADER_CLASSES = 'flex items-center justify-between pt-3 pb-2 px-4';
 
 export function EditPropertyValueModal(props: PropertyEditorProps) {
   const { saveHandler } = usePropertiesContext();
+
+  let modalRef!: HTMLDivElement;
+
+  const [attachHotkeys, modalScopeId] = useHotkeyDOMScope(
+    'property-edit-modal',
+    false
+  );
 
   const [selectedEntityRefs, setSelectedEntityRefs] = createSignal<
     EntityReference[]
@@ -126,8 +133,6 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
     }
   };
 
-  let modalRef!: HTMLDivElement;
-
   onMount(() => {
     initializeSelectedOptions();
     if (
@@ -136,6 +141,21 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
     ) {
       fetchOptions();
     }
+
+    // Attach hotkeys to modal element
+    attachHotkeys(modalRef);
+
+    // Register escape key handler
+    registerHotkey({
+      hotkey: 'escape',
+      scopeId: modalScopeId,
+      description: 'Close property modal',
+      keyDownHandler: () => {
+        handleClose();
+        return true;
+      },
+      runWithInputFocused: true,
+    });
   });
 
   createEffect(() => {
@@ -153,15 +173,18 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
     };
 
     window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    onCleanup(() => window.removeEventListener('resize', handleResize));
   });
 
   return (
     <ScopedPortal scope="local">
       <div class="fixed inset-0 z-modal" onClick={handleClose}>
         <div
-          ref={modalRef}
+          ref={mergeRefs((ref) => {
+            modalRef = ref;
+          })}
           class={`${MODAL_BASE} ${MODAL_VIEWPORT_CLASSES}`}
+          tabIndex={-1}
           style={createMemo(() => {
             if (!props.position) {
               return {
@@ -228,6 +251,7 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
                         setSelectedEntityRefs(updatedRefs);
                       }}
                       setHasChanges={() => {}} // Not needed with new hook
+                      onClose={handleClose}
                     />
                   </Show>
                 }
@@ -243,6 +267,7 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
                   onAddOption={
                     props.property.isSystemProperty ? undefined : addOption
                   }
+                  onClose={handleClose}
                 />
               </Show>
             </div>

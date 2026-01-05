@@ -8,7 +8,7 @@ import type { Component, JSX } from 'solid-js';
 /** CSS classes for common property value UI patterns */
 const STYLES = {
   addButton:
-    'text-ink-muted hover:text-ink text-xs hover:bg-hover px-2 py-1 cursor-pointer border border-edge bg-transparent inline-block shrink-0',
+    'text-ink-muted hover:text-ink hover:bg-hover px-2 py-0.5 cursor-pointer border border-edge-muted inline-block shrink-0',
 } as const;
 
 /**

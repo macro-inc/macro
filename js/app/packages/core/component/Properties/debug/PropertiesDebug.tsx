@@ -40,7 +40,7 @@ function extractPropertyValue(
     if (Array.isArray(value)) {
       return filterMap(value as string[], (id) => {
         const opt = opts.find((opt) => opt.id === id);
-        return opt ? opt.value.value : undefined;
+        return opt ? opt.id : undefined;
       });
     }
   } else {
@@ -49,7 +49,7 @@ function extractPropertyValue(
 }
 
 const PropertiesDebug: Component = () => {
-  const [refreshKey, setRefreshKey] = createSignal(0);
+  const [refreshKey] = createSignal(0);
 
   // Local property state (like ComposeTask)
   const [propertyValues, setPropertyValues] = createStore<
@@ -68,7 +68,6 @@ const PropertiesDebug: Component = () => {
         throw new Error('Failed to fetch system properties');
       }
       const [, data] = result;
-      console.log('QUERY DATA', data);
       return data;
     },
     staleTime: 1000 * 60 * 10,
@@ -165,7 +164,7 @@ const PropertiesDebug: Component = () => {
             <Show
               when={systemPropertiesQuery.isSuccess && properties().length > 0}
             >
-              <div class="border border-edge-muted p-2">
+              <div class="border border-edge-muted p-2 text-sm">
                 <div class="bg-surface-secondary rounded-lg">
                   <PropertiesProvider
                     entityType="DOCUMENT"
@@ -187,7 +186,7 @@ const PropertiesDebug: Component = () => {
                 </div>
               </div>
 
-              <div class="border border-edge-muted p-2">
+              <div class="border border-edge-muted p-2 text-sm">
                 <div class="bg-surface-secondary rounded-lg">
                   <PropertiesProvider
                     entityType="DOCUMENT"

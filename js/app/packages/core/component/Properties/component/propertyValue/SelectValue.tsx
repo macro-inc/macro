@@ -8,6 +8,7 @@ import { PROPERTY_STYLES } from '../../styles/styles';
 import type { Property } from '../../types';
 import { formatPropertyValue, getSelectValues } from '../../utils';
 import { ERROR_MESSAGES, handlePropertyError } from '../../utils/errorHandling';
+import { PropertyValueIcon } from './PropertyValueIcon';
 import { AddPropertyValueButton, EmptyValue } from './ValueComponents';
 
 type SelectValueProps = {
@@ -70,9 +71,7 @@ export const SelectValue: Component<SelectValueProps> = (props) => {
   const displayValues = getSelectValues(props.property);
 
   return (
-    <div
-      class={`flex flex-wrap gap-1 justify-start items-start w-full min-w-0`}
-    >
+    <div class="flex flex-wrap gap-2 justify-start items-start w-full min-w-0">
       <For each={displayValues}>
         {(value) => {
           const formatted = formatPropertyValue(props.property, value);
@@ -84,6 +83,7 @@ export const SelectValue: Component<SelectValueProps> = (props) => {
               onMouseLeave={() => setHoveredValue(null)}
             >
               <div class={PROPERTY_STYLES.value.multiButton} title={formatted}>
+                <PropertyValueIcon optionId={value} />
                 <span class="block truncate">{formatted}</span>
               </div>
               <Show when={!isReadOnly() && isHovered() && !isSaving()}>

@@ -30,7 +30,7 @@ export const EntityIcon: Component<EntityValueDisplayProps> = (props) => {
   const content = (
     <div class="flex items-center gap-2">
       <div class="flex-shrink-0">{icon()}</div>
-      <span class="truncate font-mono">{name()}</span>
+      <span class="truncate">{name()}</span>
     </div>
   );
 
@@ -54,9 +54,7 @@ export const EntityIcon: Component<EntityValueDisplayProps> = (props) => {
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <div
-        class={`text-xs px-2 py-1 border border-edge hover:bg-hover cursor-pointer bg-transparent text-ink inline-flex items-center w-full min-h-[24px]`}
-      >
+      <div class="px-2 py-0.5 border border-edge-muted hover:bg-hover cursor-pointer bg-transparent text-ink inline-flex items-center w-full">
         <span class="truncate flex-1">{innerContent}</span>
         <Show
           when={

@@ -31,6 +31,8 @@ import {
   createSignal,
   For,
   on,
+  onCleanup,
+  onMount,
   Show,
 } from 'solid-js';
 import { usePropertiesContext } from '../../../context/PropertiesContext';
@@ -46,12 +48,14 @@ type EntityInputProps = {
     entityInfo?: { id: string; entity_type: string }[]
   ) => void;
   setHasChanges: (hasChanges: boolean) => void;
+  onClose?: () => void;
 };
 
 const INPUT_CLASSES = PROPERTY_STYLES.input.search;
 const ENTITY_ITEM_BASE =
-  'flex items-center justify-between gap-2 py-1.5 px-2 border border-edge cursor-pointer min-w-0';
-const CHECKBOX_BASE = 'w-4 h-4 border flex items-center justify-center';
+  'flex items-center justify-between gap-2 py-1.5 px-2 cursor-pointer min-w-0 h-8';
+const CHECKBOX_BASE =
+  'w-4 h-4 border border-edge-muted bg-transparent flex items-center justify-center';
 const ICON_CLASSES = 'size-4 text-ink-muted';
 
 function getEntityTypePluralLabel(
@@ -198,6 +202,9 @@ function getEntityIcon(entity: CombinedEntity) {
 export function PropertyEntitySelector(props: EntityInputProps) {
   const [inputValue, setInputValue] = createSignal('');
   const [searchTerm, setSearchTerm] = createSignal('');
+  const [selectedIndex, setSelectedIndex] = createSignal(0);
+  const [keyboardNavigationTimeout, setKeyboardNavigationTimeout] =
+    createSignal<number | null>(null);
 
   // Debounce search term updates (60ms like MentionsMenu)
   const debouncedSetSearchTerm = debounce(
@@ -456,47 +463,130 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     props.setHasChanges(true);
   };
 
+  // Reset selected index when sortedEntities change
+  createEffect(() => {
+    const entities = sortedEntities();
+    if (entities.length === 0) {
+      setSelectedIndex(0);
+    } else {
+      setSelectedIndex(Math.min(selectedIndex(), entities.length - 1));
+    }
+  });
+
+  const isKeyboardNavigating = () => {
+    const timeout = keyboardNavigationTimeout();
+    return timeout !== null && Date.now() - timeout < 150;
+  };
+
+  const scrollSelectedIntoView = () => {
+    const entities = sortedEntities();
+    const currentIndex = selectedIndex();
+    if (currentIndex >= 0 && currentIndex < entities.length) {
+      const element = document.querySelector(
+        `[data-entity-index="${currentIndex}"]`
+      );
+      if (element) {
+        element.scrollIntoView({ block: 'nearest' });
+      }
+    }
+  };
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    const entities = sortedEntities();
+    if (entities.length === 0) return;
+
+    if (e.key === 'ArrowDown' || (e.ctrlKey && e.key === 'j')) {
+      e.preventDefault();
+      setKeyboardNavigationTimeout(Date.now());
+      setSelectedIndex((prev) => (prev + 1) % entities.length);
+      scrollSelectedIntoView();
+    } else if (e.key === 'ArrowUp' || (e.ctrlKey && e.key === 'k')) {
+      e.preventDefault();
+      setKeyboardNavigationTimeout(Date.now());
+      setSelectedIndex(
+        (prev) => (prev - 1 + entities.length) % entities.length
+      );
+      scrollSelectedIntoView();
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const selectedEntity = entities[selectedIndex()];
+      if (selectedEntity) {
+        toggleEntity(selectedEntity);
+      }
+    }
+  };
+
+  onMount(() => {
+    document.addEventListener('keydown', handleKeyDown);
+  });
+
+  onCleanup(() => {
+    document.removeEventListener('keydown', handleKeyDown);
+  });
+
   useSearchInputFocus(() => searchInputRef);
 
   return (
-    <div class="space-y-3">
-      <div class="space-y-2" data-entity-search>
-        <div class="relative">
-          <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none z-10">
-            <SearchIcon class="h-4 w-4 text-ink-muted" />
-          </div>
+    <div>
+      <div class="relative">
+        <div class="flex w-full items-center py-1 gap-2 px-2 border-b border-edge-muted">
+          <SearchIcon class="h-4 w-4 text-ink-muted" />
           <input
+            class="w-full caret-accent"
             ref={searchInputRef}
             type="text"
             value={inputValue()}
             onInput={(e) => setInputValue(e.currentTarget.value)}
-            placeholder={`Search ${props.property.valueType === 'ENTITY' ? 'entities' : props.property.valueType + 's'}...`}
-            class={`${INPUT_CLASSES} relative z-0`}
+            onKeyDown={(e) => {
+              console.log('KEY IS', e.key);
+              if (e.key === 'Escape') {
+                console.log('ESCAPE DOWN IN');
+                e.preventDefault();
+                e.stopPropagation();
+                if (props.onClose) {
+                  props.onClose();
+                }
+              }
+            }}
+            placeholder={`${props.property.isMultiSelect ? 'Add' : 'Change'} ${props.property.displayName.toLowerCase()}...`}
           />
         </div>
+      </div>
 
-        <Show when={sortedEntities().length > 0}>
-          <div class="max-h-48 overflow-y-auto overflow-x-hidden space-y-1">
+      <Show when={sortedEntities().length > 0}>
+        <div class="p-1">
+          <div class="max-h-48 overflow-y-auto overflow-x-hidden scrollbar-hidden">
             <For each={sortedEntities()}>
-              {(entity, _index) => {
+              {(entity, index) => {
                 const isSelected = () => props.selectedOptions().has(entity.id);
+                const isKeyboardSelected = () => index() === selectedIndex();
 
                 return (
                   <div
-                    class={`${ENTITY_ITEM_BASE} ${isSelected() ? 'bg-active text-accent-ink' : 'hover:bg-hover text-ink'}`}
+                    data-entity-index={index()}
+                    class={`${ENTITY_ITEM_BASE} ${
+                      isKeyboardSelected()
+                        ? 'bg-hover'
+                        : isSelected()
+                          ? 'bg-hover'
+                          : ''
+                    }`}
                     onClick={() => toggleEntity(entity)}
                     onKeyDown={(e) => e.key === 'Enter' && toggleEntity(entity)}
+                    onMouseEnter={() => {
+                      if (!isKeyboardNavigating()) {
+                        setSelectedIndex(index());
+                      }
+                    }}
                   >
                     <div class="flex items-center gap-2 flex-1 min-w-0">
                       <div class="flex-shrink-0">{getEntityIcon(entity)}</div>
-                      <span class="text-sm truncate min-w-0">
+                      <span class="truncate min-w-0">
                         {getEntityName(entity)}
                       </span>
                     </div>
                     <div class="flex-shrink-0">
-                      <div
-                        class={`${CHECKBOX_BASE} border-edge bg-transparent`}
-                      >
+                      <div class={CHECKBOX_BASE}>
                         <Show when={isSelected()}>
                           <CheckIcon class="w-3 h-3 text-accent" />
                         </Show>
@@ -507,20 +597,17 @@ export function PropertyEntitySelector(props: EntityInputProps) {
               }}
             </For>
           </div>
-        </Show>
+        </div>
+      </Show>
 
-        <Show when={sortedEntities().length === 0}>
-          <div class="text-center py-4 text-ink-muted text-sm">
-            <Show
-              when={!isLoadingEntities()}
-              fallback={<span>Loading...</span>}
-            >
-              No {getEntityTypePluralLabel(props.property.specificEntityType)}{' '}
-              found
-            </Show>
-          </div>
-        </Show>
-      </div>
+      <Show when={sortedEntities().length === 0}>
+        <div class="text-center py-4 text-ink-muted text-sm">
+          <Show when={!isLoadingEntities()} fallback={<span>Loading...</span>}>
+            No {getEntityTypePluralLabel(props.property.specificEntityType)}{' '}
+            found
+          </Show>
+        </div>
+      </Show>
     </div>
   );
 }
