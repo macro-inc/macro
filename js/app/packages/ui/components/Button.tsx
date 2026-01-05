@@ -57,32 +57,34 @@ export const Button: ParentComponent<ButtonProps> = (props) => {
     local.class
   );
 
-  function maybeWrapInTooltip(children: JSX.Element) {
-    if (!local.tooltip) return children;
+  function MaybeWrapInTooltip(props: { children: JSX.Element }) {
+    if (!local.tooltip) return props.children;
 
-    return <Tooltip tooltip={local.tooltip}>{children}</Tooltip>;
+    return <Tooltip tooltip={local.tooltip}>{props.children}</Tooltip>;
   }
 
-  return maybeWrapInTooltip(
-    <button
-      type={local.type ?? 'button'}
-      class={classes}
-      classList={{
-        'bg-ink border-ink text-panel hover:bg-accent! hover:opacity-80 active:opacity-100':
-          'primary' === local.variant,
-        'border-ink!': 'secondary' === local.variant,
-        'border-failure! text-failure active:bg-failure hover:bg-failure-bg!':
-          'destructive' === local.variant,
-        'p-0! gap-0! items-stretch': !!local.showChevron,
-        ...(local.classList ?? {}),
-      }}
-      {...buttonAttributes}
-    >
-      {local.children}
+  return (
+    <MaybeWrapInTooltip>
+      <button
+        type={local.type ?? 'button'}
+        class={classes}
+        classList={{
+          'bg-ink border-ink text-panel hover:bg-accent! hover:opacity-80 active:opacity-100':
+            'primary' === local.variant,
+          'border-ink!': 'secondary' === local.variant,
+          'border-failure! text-failure active:bg-failure hover:bg-failure-bg!':
+            'destructive' === local.variant,
+          'p-0! gap-0! items-stretch': !!local.showChevron,
+          ...(local.classList ?? {}),
+        }}
+        {...buttonAttributes}
+      >
+        {local.children}
 
-      <Show when={!!local.showChevron}>
-        <CaretDown class="flex w-3 hover:bg-panel" />
-      </Show>
-    </button>
+        <Show when={!!local.showChevron}>
+          <CaretDown class="flex w-3 hover:bg-panel" />
+        </Show>
+      </button>
+    </MaybeWrapInTooltip>
   );
 };
