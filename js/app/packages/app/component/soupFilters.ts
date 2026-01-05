@@ -254,8 +254,7 @@ export const signalFilter: ClientFilter = {
       }
       case 'document': {
         if (isTaskEntity(entity)) {
-          // TODO: once we have task.isCompleted, we should consider filtering on
-          // that.
+          // TODO (seamus) : filter on isCompleted
           return true;
         }
         return hasRecentlyViewed(entity);

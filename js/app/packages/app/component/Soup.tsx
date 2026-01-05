@@ -325,6 +325,19 @@ export function Soup() {
     });
   });
 
+  createEffectOnEntityTypeNotification(
+    notificationSource,
+    'document',
+    (notification) => {
+      if (notification.notificationEventType === 'task_assigned') {
+        entityQueryClient.invalidateQueries({
+          queryKey: queryKeys.all.dss,
+        });
+        invalidateEntityNotifications(notification.entity_id);
+      }
+    }
+  );
+
   const saveViewMutation = useUpsertSavedViewMutation();
 
   let tabsRef: HTMLDivElement | undefined;
