@@ -1,8 +1,8 @@
+import { useEmailContext } from '@block-email/component/EmailContext';
 import { isScrollingToMessage } from '@block-email/signal/scrollState';
 import { CircleSpinner } from '@core/component/CircleSpinner';
-import { createSelector, For, Show } from 'solid-js';
+import { createMemo, createSelector, For, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import { useEmailContext } from './EmailContext';
 import { MessageContainer } from './MessageContainer';
 
 interface MessageListProps {
@@ -16,53 +16,82 @@ export function MessageList(props: MessageListProps) {
     Record<string, boolean>
   >({});
   const isFocusedSelector = createSelector(
-    context.focusedMessageId,
+    context.messages.focusedID,
     (a, b) => !!a && !!b && a === b
   );
   const isTargetSelector = createSelector(
-    context.activeTargetMessageId,
-    (a, b) => !!a && !!b && a === b
+    context.messages.targetMessageID,
+    (a, b) => a === b
   );
 
   return (
     <div
-      class="pt-3 w-full flex-1 flex flex-col items-center overflow-y-scroll overflow-x-hidden suppress-css-brackets"
-      ref={context.setMessagesRef}
+      class="pt-3 w-full flex flex-col-reverse items-center overflow-y-scroll overflow-x-hidden suppress-css-brackets"
+      ref={context.registerMessagesList}
       onscroll={(e) => {
         // Don't load more if we're programmatically scrolling to a message
         if (getIsScrollingToMessage() || !props.initialLoadComplete) return;
 
         const threshold = 300;
-        const isNearBeginning = e.currentTarget.scrollTop <= threshold;
 
-        if (isNearBeginning && !context.isFetching() && context.hasMore()) {
-          context.fetchNextPage();
+        // Since the list is reversed, the scrollTop is negative. So we get the scroll position
+        // from the bottom up using the scrollHeight and clientHeight
+        const currentScrollPosition =
+          e.currentTarget.scrollHeight +
+          e.currentTarget.scrollTop -
+          e.currentTarget.clientHeight;
+
+        const isNearBeginning = currentScrollPosition <= threshold;
+
+        if (
+          isNearBeginning &&
+          !context.query.isFetching() &&
+          context.query.hasMore()
+        ) {
+          context.query.fetchNextPage();
         }
       }}
     >
-      <Show when={context.isFetching()}>
-        <div class="flex items-center justify-center h-16">
-          <CircleSpinner />
-        </div>
-      </Show>
-      <For each={context.filteredMessages()}>
+      <For each={context.messages.list().toReversed()}>
         {(message, index) => {
+          // We need the index as if the list was not reversed
+          const normalizedIndex = createMemo(() => {
+            const listLength = context.messages.list().length;
+
+            const normalized = listLength - 1 - index();
+
+            // The element at the 0th index isn't actually the first message
+            // if there is more data to load so we return -1 so that `isFirstMessage`
+            // evaluates to false. This fixes an issue with the "first" message' full
+            // html to show in `EmailMessageBody`
+            if (normalized === 0 && context.query.hasMore()) {
+              return -1;
+            }
+
+            return normalized;
+          });
+
           return (
             <MessageContainer
-              isFirstMessage={index() === 0}
+              isFirstMessage={normalizedIndex() === 0}
               isLastMessage={
-                index() === (context.filteredMessages().length ?? 0) - 1
+                normalizedIndex() === (context.messages.list().length ?? 0) - 1
               }
               isFocused={isFocusedSelector(message.db_id ?? undefined)}
               isTarget={isTargetSelector(message.db_id ?? undefined)}
               message={message}
               expandedMessageBodyIds={expandedMessageBodyIds}
               setExpandedMessageBodyIds={setExpandedMessageBodyIds}
-              threadMessageIndex={index()}
             />
           );
         }}
       </For>
+
+      <Show when={context.query.isFetching()}>
+        <div class="flex items-center justify-center h-16">
+          <CircleSpinner />
+        </div>
+      </Show>
     </div>
   );
 }

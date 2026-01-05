@@ -2725,6 +2725,7 @@ dependencies = [
 name = "document_sub_type"
 version = "0.1.0"
 dependencies = [
+ "schemars",
  "serde",
  "sqlx",
  "strum",

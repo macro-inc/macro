@@ -121,7 +121,7 @@ impl Default for UnifiedSearchFilters {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
 #[serde(rename_all = "camelCase", tag = "type")]
 pub enum UnifiedSearchResponseItem {
     Document(DocumentSearchResponseItemWithMetadata),

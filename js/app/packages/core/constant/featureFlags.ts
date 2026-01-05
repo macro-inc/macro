@@ -110,7 +110,7 @@ export const USE_PIXEL_BLOCK_ICONS = false;
 
 export const USE_WIDE_ICONS = true;
 
-export const ENABLE_PROPERTIES_METADATA = DEV_MODE_ENV;
+export const ENABLE_PROPERTIES_METADATA = true;
 export const ENABLE_PROPERTY_DISPLAY_CONTROL =
   ENABLE_PROPERTIES_METADATA && DEV_MODE_ENV;
 
@@ -132,5 +132,5 @@ export const ENABLE_CUSTOM_CURSOR = false;
 // uses javascript to detect selectable text to switch to "text" cursor type (ibeam)
 export const ENABLE_CUSTOM_CURSOR_TEXT_GLYPH_DETECTION = true;
 
-export const ENABLE_CREATE_TASK = DEV_MODE_ENV;
-export const ENABLE_TASKS_TABS = DEV_MODE_ENV;
+export const ENABLE_CREATE_TASK = true;
+export const ENABLE_TASKS_TABS = true;

@@ -1,7 +1,8 @@
+use schemars::JsonSchema;
 use utoipa::ToSchema;
 
 /// The search service version of a highlight
-#[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema, JsonSchema)]
 pub struct Highlight {
     /// If the match was on the entity name, this will be present with that highlight
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -12,7 +13,7 @@ pub struct Highlight {
     pub content: Vec<String>,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, ToSchema)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, ToSchema, JsonSchema)]
 pub struct SearchGotoDocument {
     /// The node id of the document
     /// This can be a stringified page number 0-indexed for pdf/docx files,
@@ -22,7 +23,7 @@ pub struct SearchGotoDocument {
     pub raw_content: Option<String>,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, ToSchema)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, ToSchema, JsonSchema)]
 pub struct SearchGotoChat {
     /// The chat message id
     pub chat_message_id: uuid::Uuid,
@@ -30,7 +31,7 @@ pub struct SearchGotoChat {
     pub role: String,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, ToSchema)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, ToSchema, JsonSchema)]
 pub struct SearchGotoEmail {
     /// The email message id
     pub email_message_id: uuid::Uuid,
@@ -42,14 +43,14 @@ pub struct SearchGotoEmail {
     pub recipients: Vec<String>,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, ToSchema)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, ToSchema, JsonSchema)]
 pub struct SearchGotoChannel {
     /// The channel message id
     pub channel_message_id: uuid::Uuid,
 }
 
 /// The search service version of a goto
-#[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema, JsonSchema)]
 #[serde(untagged)]
 pub enum SearchGotoContent {
     Documents(SearchGotoDocument),
@@ -94,7 +95,7 @@ impl From<opensearch_client::search::model::SearchGotoContent> for SearchGotoCon
 }
 
 /// Simple response item to mimic what we get back from opensearch
-#[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema, JsonSchema)]
 pub struct SimpleSearchResponseItem {
     pub entity_id: uuid::Uuid,
     pub entity_type: String,
@@ -105,7 +106,7 @@ pub struct SimpleSearchResponseItem {
 }
 
 /// The response for simple search
-#[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema, JsonSchema)]
 pub struct SimpleSearchResponse {
     pub results: Vec<SimpleSearchResponseItem>,
 }

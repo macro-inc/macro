@@ -93,7 +93,7 @@ export function keyboardShortcutsPlugin(props: KeyboardShortcutPluginProps) {
 
 export const DefaultShortcuts: Shortcut[] = [
   {
-    label: META_OR_CTRL + '+shift+x',
+    label: `${META_OR_CTRL}+shift+x`,
     test: (e) => {
       return (
         e.code === 'KeyX' && e.shiftKey && metaOrCtrl(e.metaKey, e.ctrlKey)
@@ -105,7 +105,7 @@ export const DefaultShortcuts: Shortcut[] = [
     priority: 0,
   },
   {
-    label: META_OR_CTRL + 'e',
+    label: `${META_OR_CTRL}+e`,
     test: (e) => {
       return e.code === 'KeyE' && metaOrCtrl(e.metaKey, e.ctrlKey);
     },
@@ -115,7 +115,7 @@ export const DefaultShortcuts: Shortcut[] = [
     priority: 0,
   },
   {
-    label: META_OR_CTRL + '+shift+h',
+    label: `${META_OR_CTRL}+shift+h`,
     test: (e) => {
       return e.code === 'KeyH' && metaOrCtrl(e.metaKey, e.ctrlKey);
     },

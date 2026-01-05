@@ -16,7 +16,7 @@ interface EmailMessageTopBarProps {
   isBodyExpanded: Accessor<boolean>;
   expandedHeader: Accessor<boolean>;
   setExpandedHeader: Setter<boolean>;
-  setFocusedMessageId: Setter<string | undefined>;
+  setFocusedMessageId: (messageId: string | undefined) => void;
   setShowReply: Setter<boolean>;
   isLastMessage?: boolean;
 }

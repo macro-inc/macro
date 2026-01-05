@@ -73,7 +73,7 @@ import {
   Show,
   untrack,
 } from 'solid-js';
-import { createStore, produce } from 'solid-js/store';
+import { createStore } from 'solid-js/store';
 import { deleteEmailDraft, saveEmailDraft } from '../signal/emailDraft';
 import { handleFileUpload } from '../util/handleFileUpload';
 import { makeAttachmentPublic } from '../util/makeAttachmentPublic';
@@ -281,7 +281,7 @@ export function BaseInput(props: {
       setSavedDraftId(undefined);
       return;
     }
-    const currentThread = ctx.threadData();
+    const currentThread = ctx.thread();
     const newMessage = props.newMessage ?? false;
 
     if (!currentThread && !newMessage) {
@@ -412,7 +412,7 @@ export function BaseInput(props: {
       return;
     }
 
-    const currentThread = ctx.threadData();
+    const currentThread = ctx.thread();
     const newMessage = props.newMessage ?? false;
 
     if (!currentThread && !newMessage) {
@@ -506,11 +506,7 @@ export function BaseInput(props: {
     }
     const replyingToId = props.replyingTo()?.db_id;
     if (replyingToId) {
-      ctx.setMessageDbIdToDraftChildren(
-        produce((state) => {
-          delete state[replyingToId];
-        })
-      );
+      ctx.drafts.deleteDraftForMessage(replyingToId);
     }
     resetState();
     props.setShowReply?.(false);
