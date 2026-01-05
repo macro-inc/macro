@@ -26,10 +26,6 @@ export function EmailPropertiesModal(props: {
       />
       <SplitDrawer id={DRAWER_ID} side="right" size={550} title="Properties">
         <Suspense fallback={<LoadingFallback />}>
-          {/* canEdit is always true for email:
-              - Email threads have no sharing mechanism (unlike documents)
-              - If user can view the thread, it's from their connected account
-              - This component only renders after email loads (Show guards in Block.tsx) */}
           <EmailPropertiesContent
             canEdit={props.canEdit}
             subject={props.subject}
