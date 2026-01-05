@@ -4,16 +4,6 @@ import { GlitchText } from './GlitchText';
 const meta = {
   title: 'GlitchText',
   component: GlitchText,
-  tags: ['autodocs'],
-  parameters: {
-    backgrounds: {
-      default: 'dark',
-      values: [
-        { name: 'light', value: '#ffffff' },
-        { name: 'dark', value: '#1a1a1a' },
-      ],
-    },
-  },
   argTypes: {
     from: {
       control: 'text',

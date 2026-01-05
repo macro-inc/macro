@@ -1,17 +1,13 @@
+import * as React from 'react';
+
 import '../../app/index.css';
 import './preview.css';
 import type { Preview } from 'storybook-solidjs-vite';
+import { DocsContainer } from '@storybook/addon-docs/blocks';
 
-// Set up focus-visible modality tracking
-if (typeof document !== 'undefined') {
-  document.addEventListener('keydown', () => {
-    document.documentElement.dataset.modality = 'keyboard';
-  });
-
-  document.addEventListener('mousedown', () => {
-    document.documentElement.dataset.modality = 'mouse';
-  });
-}
+const CustomDocsContainer = ({ children, ...props }) => {
+  return <DocsContainer {...props} context={props.context!}>{children}</DocsContainer>;
+};
 
 const preview: Preview = {
   parameters: {
@@ -24,6 +20,7 @@ const preview: Preview = {
     layout: 'centered',
     docs: {
       codePanel: true,
+      container: CustomDocsContainer
     },
   },
   tags: ['autodocs']
