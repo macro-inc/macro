@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT\n                d.id as entity_id,\n                d.name -- If there is a name match name obviously name exists\n                FROM \"Document\" d\n                WHERE d.id = ANY($1)\n                    AND d.\"deletedAt\" IS NULL\n                    AND d.name ILIKE $2\n                ORDER BY d.\"updatedAt\" DESC\n                LIMIT $3\n                OFFSET $4\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entity_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "40d28ef413a0039d95bf6e05d5981db7d36f67f5e529774c8e7535cf97a02f9b"
+}

@@ -76,6 +76,7 @@ members = [
   "models_sfs",
   "models_soup",
   "models_team",
+  "name_search",
   "non_empty",
   "notification_db_client",
   "notification_service",
