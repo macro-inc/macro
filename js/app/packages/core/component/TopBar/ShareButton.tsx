@@ -595,7 +595,7 @@ export function ShareModal(props: ShareModalProps) {
               <Show when={props.userPermissions === Permissions.OWNER}>
                 <div class="flex border-t-1 items-center px-2 border-edge-muted h-[40px] justify-between">
                   <div class="flex gap-2 items-center">
-                    <IconLink class="w-[16px] h-[16px]"/>
+                    <IconLink class="w-[16px] h-[16px]" />
                     <div class="font-medium text-sm">Public&nbspLink</div>
                   </div>
                   <ShareOptions

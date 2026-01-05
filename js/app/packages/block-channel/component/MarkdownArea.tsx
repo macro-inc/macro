@@ -356,9 +356,7 @@ function MarkdownArea(props: MarkdownAreaProps & ConsumableMarkdownAreaProps) {
         <NodeAccessoryRenderer editor={editor} store={accessories} />
         <Show when={showPlaceholder()}>
           <div class="pointer-events-none text-ink-placeholder absolute top-0">
-            <p class="p-0 m-0">
-              {props.placeholder ?? '...'}
-            </p>
+            <p class="p-0 m-0">{props.placeholder ?? '...'}</p>
           </div>
         </Show>
         <EmojiMenu

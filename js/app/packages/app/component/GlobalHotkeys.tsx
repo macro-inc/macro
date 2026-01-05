@@ -9,9 +9,9 @@ import { createMemo } from 'solid-js';
 import {
   beveledCorners,
   blackBezels,
-  setBlackBezels,
   monochromeIcons,
   setBeveledCorners,
+  setBlackBezels,
   setDarkModeTheme,
   setLightModeTheme,
   setMonochromeIcons,
