@@ -259,7 +259,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
             noPadding
           />
         </div>
-        <div class="flex flex-col w-full h-[150px] overflow-y-auto border-t-1 border-edge-muted/50">
+        <div class="flex flex-col w-full h-[100px] overflow-y-auto border-t-1 border-edge-muted/50">
           <div
             class="flex-1 px-[12px] py-[6px] w-full text-sm"
             onClick={() => focusMarkdownArea()}

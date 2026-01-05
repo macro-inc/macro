@@ -470,7 +470,7 @@ export function ShareModal(props: ShareModalProps) {
                 </div>
 
                 <div class="flex flex-row items-center gap-2">
-                  <Show when={props.userPermissions === Permissions.OWNER}>
+                  {/*<Show when={props.userPermissions === Permissions.OWNER}>
                     <ShareOptions
                       setPermissions={(accessLevel) => {
                         setSubmitAccessLevel(accessLevel);
@@ -482,7 +482,7 @@ export function ShareModal(props: ShareModalProps) {
                       label="Permission"
                       hideNoAccess
                     />
-                  </Show>
+                  </Show>*/}
 
                   <TextButton
                     onClick={() => {
@@ -516,6 +516,22 @@ export function ShareModal(props: ShareModalProps) {
                 refetch={refetch}
                 name={props.name}
               />
+
+              <Show when={props.userPermissions === Permissions.OWNER}>
+                <div class="w-full p-2 flex justify-end">
+                <ShareOptions
+                  setPermissions={(accessLevel) => {
+                    setSubmitAccessLevel(accessLevel);
+                    forwardToChannelRef()?.setSubmitAccessLevel(
+                      accessLevel
+                    );
+                  }}
+                  permissions={submitAccessLevel()}
+                  label="Permission"
+                  hideNoAccess
+                />
+                </div>
+              </Show>
 
               <Show when={recipients() || props.owner}>
                 <div class="border-t-1 border-edge-muted w-full h-fit max-h-[120px] overflow-y-auto">
