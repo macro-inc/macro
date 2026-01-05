@@ -30,7 +30,6 @@ mod health;
 mod history;
 mod instructions;
 mod internal;
-mod mentions;
 mod notification;
 mod pins;
 mod projects;
