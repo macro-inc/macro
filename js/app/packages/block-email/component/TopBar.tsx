@@ -7,23 +7,15 @@ import {
   SplitToolbarLeft,
   SplitToolbarRight,
 } from '@app/component/split-layout/components/SplitToolbar';
-import {
-  getPermissions,
-  hasPermissions,
-  Permissions,
-} from '@core/component/SharePermissions';
+import { hasPermissions, Permissions } from '@core/component/SharePermissions';
 import { ShareButton } from '@core/component/TopBar/ShareButton';
 import { ENABLE_PROPERTIES_METADATA } from '@core/constant/featureFlags';
-import { createMemo, Show } from 'solid-js';
+import { Show } from 'solid-js';
 import { useEmailContext } from './EmailContext';
 import { EmailPropertiesModal } from './EmailPropertiesModal';
 
 export function TopBar(props: { id: string; title: string }) {
   const email = useEmailContext();
-
-  const permissions = createMemo(() => {
-    return getPermissions(email.thread()?.access_level);
-  });
 
   return (
     <>
@@ -41,14 +33,17 @@ export function TopBar(props: { id: string; title: string }) {
             <EmailPropertiesModal
               buttonSize="sm"
               subject={props.title}
-              canEdit={hasPermissions(permissions(), Permissions.CAN_EDIT)}
+              canEdit={hasPermissions(
+                email.permissions(),
+                Permissions.CAN_EDIT
+              )}
             />
           </Show>
           <ShareButton
             id={props.id}
             name={props.title}
             itemType="email"
-            userPermissions={permissions()}
+            userPermissions={email.permissions()}
           />
         </div>
       </SplitToolbarRight>
