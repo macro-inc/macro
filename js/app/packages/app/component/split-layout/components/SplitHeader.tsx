@@ -146,7 +146,7 @@ function SplitSettingsButton() {
   );
 
   return (
-    <IconButton
+    <DeprecatedIconButton
       theme={isSettingsSplitOpen() ? 'accent' : 'clear'}
       onClick={() => {
         if (isSettingsSplitOpen()) {

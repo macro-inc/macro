@@ -1,4 +1,4 @@
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { toast } from '@core/component/Toast/Toast';
 import { Tooltip } from '@core/component/Tooltip';
 import { idToDisplayName, idToEmail } from '@core/user';
@@ -145,7 +145,7 @@ export function UserIcon(props: UserIconProps) {
               <span class="text-xs select-all flex items-center gap-1">
                 {email()}
 
-                <IconButton
+                <DeprecatedIconButton
                   icon={copied() ? IconCheck : IconCopy}
                   iconSize={16}
                   class="transition-all duration-300"
