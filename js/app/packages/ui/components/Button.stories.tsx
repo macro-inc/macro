@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from 'storybook-solidjs-vite';
-import { EntityIcon } from '../EntityIcon';
-import { Hotkey } from '../Hotkey';
-import { LabelAndHotKey } from '../Tooltip';
 import { Button } from './Button';
+import { EntityIcon } from 'core/component/EntityIcon';
+import { LabelAndHotKey } from 'core/component/Tooltip';
+import { Hotkey } from 'core/component/Hotkey';
 
 const meta = {
   title: 'Buttons',

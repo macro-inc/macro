@@ -1,10 +1,12 @@
-import { type JSX, type ParentComponent, splitProps } from 'solid-js';
+import { Tooltip } from 'core/component/Tooltip';
+import CaretDown from '@phosphor-icons/core/regular/caret-down.svg';
+import { type JSX, type ParentComponent, Show, splitProps } from 'solid-js';
 import { twMerge } from 'tailwind-merge';
-import { Tooltip } from '../Tooltip';
 
 type ButtonProps = JSX.ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: 'primary' | 'secondary' | 'tertiary' | 'destructive';
   tooltip?: JSX.Element;
+  showChevron?: boolean;
 };
 
 /**
@@ -13,6 +15,7 @@ type ButtonProps = JSX.ButtonHTMLAttributes<HTMLButtonElement> & {
  * @param props.variant - Primary, secondary, tertiary (aka the default), or destructive.
  * @param props.tooltip - Optional tooltip content to display when hovering over the button.
  * @param props.class - Use for custom styling. Tailwind will be merged automatically, be granular as you like.
+ * @param props.showChevron - Show an indicator
  * @param props.children - Labels, icons, hotkey hints, etc. The body of the button.
  *
  * @example
@@ -32,12 +35,14 @@ type ButtonProps = JSX.ButtonHTMLAttributes<HTMLButtonElement> & {
  *
  */
 export const Button: ParentComponent<ButtonProps> = (props) => {
-  const [local, ...rest] = splitProps(props, [
+  const [local, ...buttonAttributes] = splitProps(props, [
     'variant',
     'class',
     'children',
     'classList',
     'tooltip',
+    'showChevron',
+    'type'
   ]);
 
   const classes = twMerge(
@@ -46,7 +51,7 @@ export const Button: ParentComponent<ButtonProps> = (props) => {
     'hover:bg-surface-4',
     'focus:[--focus-border-inset:-4px]',
     'active:border-accent active:bg-accent active:text-panel',
-    'disabled:opacity-50  disabled:cursor-not-allowed',
+    'disabled:opacity-50 disabled:cursor-not-allowed',
 
     // Anything added by the caller will granularly override
     local.class
@@ -60,6 +65,7 @@ export const Button: ParentComponent<ButtonProps> = (props) => {
 
   return maybeWrapInTooltip(
     <button
+      type={local.type ?? "button"}
       class={classes}
       classList={{
         'bg-ink border-ink text-panel hover:bg-accent! hover:opacity-80 active:opacity-100':
@@ -67,11 +73,16 @@ export const Button: ParentComponent<ButtonProps> = (props) => {
         'border-ink!': 'secondary' === local.variant,
         'border-failure! text-failure active:bg-failure hover:bg-failure-bg!':
           'destructive' === local.variant,
+        'p-0! gap-0! items-stretch': !!local.showChevron,
         ...(local.classList ?? {}),
       }}
-      {...rest}
+      {...buttonAttributes}
     >
       {local.children}
+
+      <Show when={!!local.showChevron}>
+        <CaretDown class="flex w-3 hover:bg-panel" />
+      </Show>
     </button>
   );
 };
