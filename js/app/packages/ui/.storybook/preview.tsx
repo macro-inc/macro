@@ -9,19 +9,29 @@ import {
   type DocsContainerProps,
 } from '@storybook/addon-docs/blocks';
 import type { Renderer } from 'storybook/internal/types';
+import {
+  generateAllThemesCSS,
+  generateThemeClassMapping,
+} from '../../block-theme/utils/generateThemeCSS';
 
-// Theme class mapping - matches CSS classes in preview.css
-const THEME_CLASSES = {
-  'Macro Dark': 'theme-macro-dark',
-  'Macro Light': 'theme-macro-light',
-  Bleach: 'theme-bleach',
-  Sleepless: 'theme-sleepless',
-  Briar: 'theme-briar',
-  Flare: 'theme-flare',
-  Spell: 'theme-spell',
-} as const;
+// Theme class mapping - auto-generated from DEFAULT_THEMES
+const THEME_CLASSES = generateThemeClassMapping();
 
 type ThemeName = keyof typeof THEME_CLASSES;
+
+// Inject generated theme CSS into the document
+const injectThemeCSS = () => {
+  const styleId = 'storybook-theme-css';
+  if (!document.getElementById(styleId)) {
+    const style = document.createElement('style');
+    style.id = styleId;
+    style.textContent = generateAllThemesCSS();
+    document.head.appendChild(style);
+  }
+};
+
+// Inject theme CSS on module load
+injectThemeCSS();
 
 interface ThemedDocsContainerProps extends DocsContainerProps<Renderer> {
   children: React.ReactNode;
@@ -46,6 +56,9 @@ const ThemedDocsContainer = ({
     THEME_CLASSES[selectedTheme] || THEME_CLASSES['Macro Dark'];
 
   React.useEffect(() => {
+    // Ensure theme CSS is injected (for docs pages loaded separately)
+    injectThemeCSS();
+
     // Apply theme class to html element for docs pages
     const html = document.documentElement;
     // Remove all theme classes first

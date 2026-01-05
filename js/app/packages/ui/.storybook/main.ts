@@ -10,6 +10,11 @@ const getAbsolutePath = (packageName: string): string =>
 
 const config: StorybookConfig = {
   stories: ['../**/*.mdx', '../**/*.stories.@(js|jsx|mjs|ts|tsx)'],
+  staticDirs: [
+    { from: '../../app/asset/fonts', to: '/fonts' },
+    // Also serve at the path that index.css @font-face rules expect after Vite transforms them
+    { from: '../../app/asset/fonts', to: '/asset/fonts' },
+  ],
   addons: [
     getAbsolutePath('@storybook/addon-docs'),
     getAbsolutePath("@storybook/addon-vitest"),

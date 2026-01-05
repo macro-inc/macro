@@ -5,17 +5,23 @@
 >
 > — [Addy Osmani](https://addyosmani.com/blog/21-lessons/)
 
----
+<br />
 
-<br/><br/>
+# Welcome to the `@UI` package.
 
-## Component Do's
+**This is our lego set.** We'll add parts over time, but if it "just renders a thing", it should probably live here.
+
+If it "composes other things or provides state", or it's some major singleton application surface (eg `Dock.tsx`), then it should probably live in `@core`.
+
+## Guidelines for Good Components
+
+### Do
 1. Be [SOLID](https://en.wikipedia.org/wiki/SOLID)
 1. Be pure functions – for the same props, they render the same results.
 4. Use tailwind, and twMerge
 5. Be as simple as possible and no simpler
 6. Use Kobalte as a last resort
 
-## Component Don'ts
-1. Have external margins
+### Don't
+1. [Ever have external margins](https://mxstbr.com/thoughts/margin)
 2. Use inline styles
