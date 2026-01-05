@@ -1,5 +1,411 @@
+/* =============================================================================
+   THEME PRESETS
+   Generated from packages/block-theme/constants.ts DEFAULT_THEMES
+   These classes are applied to the html element by ThemedDocsContainer
+   and to the story root by withThemeByClassName
+   ============================================================================= */
+
+/* Macro Dark */
+.theme-macro-dark {
+  --a0l: 0.8853; --a0c: 0.2012; --a0h: 145.34deg;
+  --a1l: 0.8853; --a1c: 0.2012; --a1h: 185.34deg;
+  --a2l: 0.8853; --a2c: 0.2012; --a2h: 225.34deg;
+  --a3l: 0.8853; --a3c: 0.2012; --a3h: 265.34deg;
+  --a4l: 0.8853; --a4c: 0.2012; --a4h: 305.34deg;
+  --b0l: 0.26; --b0c: 0; --b0h: 158deg;
+  --b1l: 0.22; --b1c: 0; --b1h: 158deg;
+  --b2l: 0.24; --b2c: 0; --b2h: 158deg;
+  --b3l: 0.1; --b3c: 0; --b3h: 158deg;
+  --b4l: 0.48; --b4c: 0; --b4h: 158deg;
+  --c0l: 0.96; --c0c: 0; --c0h: 158deg;
+  --c1l: 0.93; --c1c: 0; --c1h: 158deg;
+  --c2l: 0.9; --c2c: 0; --c2h: 158deg;
+  --c3l: 0.87; --c3c: 0; --c3h: 158deg;
+  --c4l: 0.85; --c4c: 0; --c4h: 158deg;
+}
+
+/* Macro Light */
+.theme-macro-light {
+  --a0l: 0.7; --a0c: 0.3; --a0h: 145.34deg;
+  --a1l: 0.7; --a1c: 0.3; --a1h: 185.34deg;
+  --a2l: 0.7; --a2c: 0.3; --a2h: 225.34deg;
+  --a3l: 0.7; --a3c: 0.3; --a3h: 265.34deg;
+  --a4l: 0.7; --a4c: 0.3; --a4h: 305.34deg;
+  --b0l: 1; --b0c: 0; --b0h: 158deg;
+  --b1l: 0.99; --b1c: 0; --b1h: 158deg;
+  --b2l: 0.97; --b2c: 0; --b2h: 158deg;
+  --b3l: 0.97; --b3c: 0; --b3h: 158deg;
+  --b4l: 0.82; --b4c: 0; --b4h: 158deg;
+  --c0l: 0.14; --c0c: 0; --c0h: 153deg;
+  --c1l: 0.5; --c1c: 0; --c1h: 153deg;
+  --c2l: 0.6; --c2c: 0; --c2h: 153deg;
+  --c3l: 0.7; --c3c: 0; --c3h: 153deg;
+  --c4l: 0.7; --c4c: 0; --c4h: 153deg;
+}
+
+/* Bleach */
+.theme-bleach {
+  --a0l: 0.61; --a0c: 0.37; --a0h: 14deg;
+  --a1l: 0.61; --a1c: 0.37; --a1h: 54deg;
+  --a2l: 0.61; --a2c: 0.37; --a2h: 94deg;
+  --a3l: 0.61; --a3c: 0.37; --a3h: 134deg;
+  --a4l: 0.61; --a4c: 0.37; --a4h: 174deg;
+  --b0l: 0.97; --b0c: 0; --b0h: 14deg;
+  --b1l: 0.94; --b1c: 0; --b1h: 14deg;
+  --b2l: 0.9; --b2c: 0; --b2h: 14deg;
+  --b3l: 0.89; --b3c: 0; --b3h: 14deg;
+  --b4l: 0.72; --b4c: 0; --b4h: 14deg;
+  --c0l: 0.34; --c0c: 0; --c0h: 14deg;
+  --c1l: 0.48; --c1c: 0; --c1h: 14deg;
+  --c2l: 0.58; --c2c: 0; --c2h: 14deg;
+  --c3l: 0.62; --c3c: 0; --c3h: 14deg;
+  --c4l: 0.71; --c4c: 0; --c4h: 14deg;
+}
+
+/* Sleepless */
+.theme-sleepless {
+  --a0l: 0.9; --a0c: 0.37; --a0h: 24deg;
+  --a1l: 0.9; --a1c: 0.37; --a1h: 64deg;
+  --a2l: 0.9; --a2c: 0.37; --a2h: 104deg;
+  --a3l: 0.9; --a3c: 0.37; --a3h: 144deg;
+  --a4l: 0.9; --a4c: 0.37; --a4h: 184deg;
+  --b0l: 0.15; --b0c: 0; --b0h: 158deg;
+  --b1l: 0; --b1c: 0; --b1h: 158deg;
+  --b2l: 0.2; --b2c: 0; --b2h: 158deg;
+  --b3l: 0; --b3c: 0; --b3h: 158deg;
+  --b4l: 0.4; --b4c: 0; --b4h: 158deg;
+  --c0l: 0.9; --c0c: 0; --c0h: 88deg;
+  --c1l: 0.8; --c1c: 0; --c1h: 88deg;
+  --c2l: 0.78; --c2c: 0; --c2h: 88deg;
+  --c3l: 0.75; --c3c: 0; --c3h: 88deg;
+  --c4l: 0.75; --c4c: 0; --c4h: 88deg;
+}
+
+/* Briar */
+.theme-briar {
+  --a0l: 0.78; --a0c: 0.37; --a0h: 180deg;
+  --a1l: 0.78; --a1c: 0.37; --a1h: 220deg;
+  --a2l: 0.78; --a2c: 0.37; --a2h: 260deg;
+  --a3l: 0.78; --a3c: 0.37; --a3h: 300deg;
+  --a4l: 0.78; --a4c: 0.37; --a4h: 340deg;
+  --b0l: 0.3; --b0c: 0.009; --b0h: 0deg;
+  --b1l: 0.27; --b1c: 0.009; --b1h: 0deg;
+  --b2l: 0.23; --b2c: 0.009; --b2h: 0deg;
+  --b3l: 0.2; --b3c: 0.009; --b3h: 0deg;
+  --b4l: 0.6; --b4c: 0.02; --b4h: 0deg;
+  --c0l: 0.96; --c0c: 0; --c0h: 158deg;
+  --c1l: 0.93; --c1c: 0; --c1h: 158deg;
+  --c2l: 0.9; --c2c: 0; --c2h: 158deg;
+  --c3l: 0.87; --c3c: 0; --c3h: 158deg;
+  --c4l: 0.85; --c4c: 0; --c4h: 158deg;
+}
+
+/* Flare */
+.theme-flare {
+  --a0l: 0.76; --a0c: 0.37; --a0h: 88deg;
+  --a1l: 0.76; --a1c: 0.37; --a1h: 128deg;
+  --a2l: 0.76; --a2c: 0.37; --a2h: 208deg;
+  --a3l: 0.76; --a3c: 0.37; --a3h: 248deg;
+  --a4l: 0.76; --a4c: 0.37; --a4h: 288deg;
+  --b0l: 0.42; --b0c: 0; --b0h: 88deg;
+  --b1l: 0.37; --b1c: 0; --b1h: 88deg;
+  --b2l: 0.35; --b2c: 0; --b2h: 88deg;
+  --b3l: 0.32; --b3c: 0; --b3h: 88deg;
+  --b4l: 0.54; --b4c: 0; --b4h: 88deg;
+  --c0l: 0.9; --c0c: 0; --c0h: 88deg;
+  --c1l: 0.8; --c1c: 0; --c1h: 88deg;
+  --c2l: 0.78; --c2c: 0; --c2h: 88deg;
+  --c3l: 0.75; --c3c: 0; --c3h: 88deg;
+  --c4l: 0.75; --c4c: 0; --c4h: 88deg;
+}
+
+/* Spell */
+.theme-spell {
+  --a0l: 0.88; --a0c: 0.1427; --a0h: 71deg;
+  --a1l: 0.88; --a1c: 0.1427; --a1h: 111deg;
+  --a2l: 0.88; --a2c: 0.1427; --a2h: 151deg;
+  --a3l: 0.88; --a3c: 0.1427; --a3h: 191deg;
+  --a4l: 0.88; --a4c: 0.1427; --a4h: 231deg;
+  --b0l: 0.34; --b0c: 0.1; --b0h: 287deg;
+  --b1l: 0.27; --b1c: 0.05; --b1h: 287deg;
+  --b2l: 0.24; --b2c: 0.0697; --b2h: 287deg;
+  --b3l: 0.2; --b3c: 0.05; --b3h: 287deg;
+  --b4l: 0.6; --b4c: 0.2; --b4h: 287deg;
+  --c0l: 0.9; --c0c: 0.192; --c0h: 287deg;
+  --c1l: 0.83; --c1c: 0.22; --c1h: 287deg;
+  --c2l: 0.78; --c2c: 0.192; --c2h: 287deg;
+  --c3l: 0.63; --c3c: 0.192; --c3h: 287deg;
+  --c4l: 0.63; --c4c: 0.192; --c4h: 287deg;
+}
+
+/* =============================================================================
+   STORYBOOK OVERRIDES
+   ============================================================================= */
+
 @layer base {
   body {
     overflow: auto !important;
   }
+}
+
+/* =============================================================================
+   MDX DOCS STYLING
+   Style the docs pages to use theme variables instead of default white.
+   Theme classes are applied to the html element, so CSS variables cascade down.
+   ============================================================================= */
+
+/* Main docs wrapper - background and text */
+.sbdocs-wrapper,
+html[class*="theme-"] .sbdocs-wrapper {
+  background-color: var(--color-page) !important;
+  color: var(--color-ink) !important;
+  font-family: var(--font-sans) !important;
+}
+
+/* Docs content area */
+.sbdocs-content,
+html[class*="theme-"] .sbdocs-content {
+  background-color: transparent !important;
+  color: var(--color-ink) !important;
+  max-width: 1000px !important;
+}
+
+/* Title and headings */
+.sbdocs-title,
+html[class*="theme-"] .sbdocs-title {
+  color: var(--color-ink) !important;
+  font-family: var(--font-sans) !important;
+}
+
+.sbdocs h1,
+.sbdocs h2,
+.sbdocs h3,
+.sbdocs h4,
+.sbdocs h5,
+.sbdocs h6,
+html[class*="theme-"] .sbdocs h1,
+html[class*="theme-"] .sbdocs h2,
+html[class*="theme-"] .sbdocs h3,
+html[class*="theme-"] .sbdocs h4,
+html[class*="theme-"] .sbdocs h5,
+html[class*="theme-"] .sbdocs h6 {
+  color: var(--color-ink) !important;
+  font-family: var(--font-sans) !important;
+  border-bottom-color: var(--color-edge) !important;
+}
+
+/* Paragraphs and text */
+.sbdocs p,
+.sbdocs li,
+.sbdocs span,
+html[class*="theme-"] .sbdocs p,
+html[class*="theme-"] .sbdocs li,
+html[class*="theme-"] .sbdocs span {
+  color: var(--color-ink) !important;
+  font-family: var(--font-sans) !important;
+}
+
+/* Muted/secondary text */
+.sbdocs-subtitle,
+.sbdocs .docblock-argstable-head th,
+html[class*="theme-"] .sbdocs-subtitle,
+html[class*="theme-"] .sbdocs .docblock-argstable-head th {
+  color: var(--color-ink-muted) !important;
+}
+
+/* Links */
+.sbdocs a,
+html[class*="theme-"] .sbdocs a {
+  color: var(--color-accent) !important;
+}
+
+.sbdocs a:hover,
+html[class*="theme-"] .sbdocs a:hover {
+  color: var(--color-accent) !important;
+  opacity: 0.8;
+}
+
+/* Code blocks */
+.sbdocs pre,
+.sbdocs code,
+html[class*="theme-"] .sbdocs pre,
+html[class*="theme-"] .sbdocs code {
+  font-family: var(--font-mono) !important;
+  background-color: var(--color-panel) !important;
+  color: var(--color-ink) !important;
+  border-color: var(--color-edge) !important;
+}
+
+.sbdocs pre,
+html[class*="theme-"] .sbdocs pre {
+  border: 1px solid var(--color-edge) !important;
+}
+
+/* Inline code */
+.sbdocs :not(pre) > code,
+html[class*="theme-"] .sbdocs :not(pre) > code {
+  background-color: var(--color-hover) !important;
+  color: var(--color-ink) !important;
+  padding: 0.125em 0.25em !important;
+  border-radius: 3px !important;
+}
+
+/* Tables */
+.sbdocs table,
+html[class*="theme-"] .sbdocs table {
+  border-color: var(--color-edge) !important;
+}
+
+.sbdocs th,
+.sbdocs td,
+html[class*="theme-"] .sbdocs th,
+html[class*="theme-"] .sbdocs td {
+  border-color: var(--color-edge) !important;
+  color: var(--color-ink) !important;
+  background-color: transparent !important;
+}
+
+.sbdocs th,
+html[class*="theme-"] .sbdocs th {
+  background-color: var(--color-panel) !important;
+  color: var(--color-ink-muted) !important;
+}
+
+.sbdocs tr:nth-child(even),
+html[class*="theme-"] .sbdocs tr:nth-child(even) {
+  background-color: var(--color-hover) !important;
+}
+
+/* Blockquotes */
+.sbdocs blockquote,
+html[class*="theme-"] .sbdocs blockquote {
+  border-left-color: var(--color-accent) !important;
+  background-color: var(--color-panel) !important;
+  color: var(--color-ink-muted) !important;
+}
+
+/* Args table (controls) */
+.docblock-argstable,
+html[class*="theme-"] .docblock-argstable {
+  background-color: var(--color-panel) !important;
+  border-color: var(--color-edge) !important;
+}
+
+.docblock-argstable-head,
+html[class*="theme-"] .docblock-argstable-head {
+  background-color: var(--color-menu) !important;
+}
+
+.docblock-argstable-body tr,
+html[class*="theme-"] .docblock-argstable-body tr {
+  border-color: var(--color-edge) !important;
+  background-color: var(--color-panel) !important;
+}
+
+.docblock-argstable-body tr:hover,
+html[class*="theme-"] .docblock-argstable-body tr:hover {
+  background-color: var(--color-hover) !important;
+}
+
+/* Story preview wrapper */
+.docs-story,
+html[class*="theme-"] .docs-story {
+  background-color: var(--color-page) !important;
+  border-color: var(--color-edge) !important;
+}
+
+/* Source code panel */
+.docblock-source,
+html[class*="theme-"] .docblock-source {
+  background-color: var(--color-panel) !important;
+  border-color: var(--color-edge) !important;
+}
+
+/* Description */
+.sbdocs-description,
+html[class*="theme-"] .sbdocs-description {
+  color: var(--color-ink-muted) !important;
+}
+
+/* Primary story container */
+.sbdocs-preview,
+html[class*="theme-"] .sbdocs-preview {
+  background-color: var(--color-page) !important;
+  border-color: var(--color-edge) !important;
+}
+
+/* Toolbar in docs */
+.os-content,
+html[class*="theme-"] .os-content {
+  background-color: var(--color-page) !important;
+}
+
+/* Dividers / HRs */
+.sbdocs hr,
+html[class*="theme-"] .sbdocs hr {
+  border-color: var(--color-edge) !important;
+}
+
+/* Doc blocks */
+.docblock-icongallery,
+.docblock-typeset,
+.docblock-colorpalette,
+html[class*="theme-"] .docblock-icongallery,
+html[class*="theme-"] .docblock-typeset,
+html[class*="theme-"] .docblock-colorpalette {
+  background-color: var(--color-panel) !important;
+  border-color: var(--color-edge) !important;
+}
+
+/* Canvas/preview area in docs */
+#storybook-docs .sb-bar,
+html[class*="theme-"] #storybook-docs .sb-bar {
+  background-color: var(--color-menu) !important;
+  border-color: var(--color-edge) !important;
+}
+
+#storybook-docs .sb-bar button,
+html[class*="theme-"] #storybook-docs .sb-bar button {
+  color: var(--color-ink-muted) !important;
+}
+
+#storybook-docs .sb-bar button:hover,
+html[class*="theme-"] #storybook-docs .sb-bar button:hover {
+  color: var(--color-ink) !important;
+}
+
+/* MDX custom elements styling */
+.sbdocs .custom-block,
+html[class*="theme-"] .sbdocs .custom-block {
+  background-color: var(--color-panel) !important;
+  border-color: var(--color-edge) !important;
+}
+
+/* Ensure proper scrollbar styling */
+.sbdocs-wrapper::-webkit-scrollbar,
+html[class*="theme-"] .sbdocs-wrapper::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.sbdocs-wrapper::-webkit-scrollbar-thumb,
+html[class*="theme-"] .sbdocs-wrapper::-webkit-scrollbar-thumb {
+  background: var(--color-edge);
+  border-radius: 4px;
+}
+
+.sbdocs-wrapper::-webkit-scrollbar-track,
+html[class*="theme-"] .sbdocs-wrapper::-webkit-scrollbar-track {
+  background: var(--color-panel);
+}
+
+/* =============================================================================
+   STORY CANVAS STYLING
+   Also apply theme styles to the story canvas iframe body
+   ============================================================================= */
+
+/* Story canvas body inherits theme */
+body[class*="theme-"] {
+  background-color: var(--color-page) !important;
+  color: var(--color-ink) !important;
 }
