@@ -15,7 +15,6 @@ use axum::{
 };
 use connection_gateway_client::ConnectionGatewayClient;
 use macro_db_client::annotations::create_comment::create_document_comment;
-use macro_user_id::user_id::MacroUserIdStr;
 use model::{
     annotations::{
         AnnotationIncrementalUpdate, Mentions,
@@ -55,7 +54,7 @@ pub async fn create_comment_handler(
     State(macro_notify_client): State<Arc<macro_notify::MacroNotify>>,
     State(db): State<PgPool>,
     State(conn_gateway_client): State<Arc<ConnectionGatewayClient>>,
-    user_context: Extension<UserContext>,
+    Extension(UserContext { user_id, .. }): Extension<UserContext>,
     document_context: Extension<DocumentBasic>,
     Path(Params { document_id }): Path<Params>,
     Json(req): Json<CreateCommentRequest>,
@@ -69,13 +68,9 @@ pub async fn create_comment_handler(
         )
             .into_response());
     }
-    let user_id = user_context.user_id.as_str();
-    let document_id = document_id.as_str();
-    match create_document_comment(&db, document_id, user_id, &req).await {
+    match create_document_comment(&db, &document_id, &user_id, &req).await {
         Ok(res) => {
             if let Some(Mentions { users, mention_id }) = &req.mentions {
-                let sender_id: Option<MacroUserIdStr> =
-                    user_context.user_id.clone().try_into().ok();
                 let notif = build_mention_notif(
                     NotifLocationType::CreateComment,
                     req.text,
@@ -83,7 +78,7 @@ pub async fn create_comment_handler(
                     res.comment_thread.thread.thread_id,
                     users,
                     &document_context,
-                    sender_id,
+                    user_id.clone().try_into().ok(),
                     document_id.to_string(),
                     mention_id,
                 );
@@ -94,10 +89,10 @@ pub async fn create_comment_handler(
             }
             update_live_comment_state(
                 &conn_gateway_client,
-                document_id,
+                &document_id,
                 AnnotationIncrementalUpdate::CreateComment {
-                    sender: user_id,
-                    document_id,
+                    sender: &user_id,
+                    document_id: &document_id,
                     response: &res,
                 },
             )
