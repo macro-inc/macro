@@ -413,8 +413,8 @@ export function EntityRowProvider(
 export function EntityRow(
   props: ParentProps<{
     entityId: string;
-    LeftReveal?: JSX.Element;
-    RightReveal?: JSX.Element;
+    swipeRightRevealedComponent?: JSX.Element;
+    swipeLeftRevealedComponent?: JSX.Element;
     swipeLeftColor?: string;
     swipeRightColor?: string;
   }>
@@ -444,7 +444,7 @@ export function EntityRow(
         'grid-rows-[1fr]': !isAtLeastPhase(rowState()?.phase, 'collapsing'),
       }}
     >
-      {/* Left Reveal */}
+      {/* Swipe Right Revealed Component */}
       <div
         class="absolute top-0 left-0 h-full flex items-center justify-center z-[1]"
         style={{
@@ -460,11 +460,11 @@ export function EntityRow(
             'scale-100': isAtLeastPhase(rowState()?.phase, 'threshold'),
           }}
         >
-          {props.LeftReveal}
+          {props.swipeRightRevealedComponent}
         </div>
       </div>
 
-      {/* Right Reveal */}
+      {/* Swipe Left Revealed Component */}
       <div
         class="absolute top-0 right-0 h-full flex items-center justify-center z-[1]"
         style={{
@@ -480,7 +480,7 @@ export function EntityRow(
             'scale-100': isAtLeastPhase(rowState()?.phase, 'threshold'),
           }}
         >
-          {props.RightReveal}
+          {props.swipeLeftRevealedComponent}
         </div>
       </div>
 

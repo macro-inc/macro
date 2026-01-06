@@ -1566,7 +1566,9 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                   <EntityRow
                     entityId={innerProps.entity.id}
                     swipeLeftColor="bg-success"
-                    RightReveal={<CheckIcon class="size-8 text-panel" />}
+                    swipeLeftRevealedComponent={
+                      <CheckIcon class="size-8 text-panel" />
+                    }
                   >
                     <EntityWithEverything
                       onContextMenu={() => {
