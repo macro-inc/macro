@@ -20,7 +20,7 @@ import {
   STATIC_IMAGE,
   STATIC_VIDEO,
 } from '@core/store/cacheChannelInput';
-import { useDisplayName } from '@core/user';
+import { tryMacroId, useDisplayName } from '@core/user';
 import { formatRelativeDate, isSameDay } from '@core/util/time';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { usePatchMessageMutation } from '@queries/channel/message';
@@ -149,11 +149,11 @@ export function MessageContainer(props: MessageProps) {
   };
 
   const userId = useUserId();
-  const [currentUserName] = useDisplayName(userId());
+  const [currentUserName] = useDisplayName(tryMacroId(userId() ?? ''));
 
   const attachmentStore = messageAttachmentsStore.get;
 
-  const [displayName] = useDisplayName(message.sender_id);
+  const [displayName] = useDisplayName(tryMacroId(message.sender_id));
 
   let messageContainerRef!: HTMLDivElement;
 

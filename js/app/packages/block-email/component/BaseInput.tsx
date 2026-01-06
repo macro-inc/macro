@@ -19,7 +19,7 @@ import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { trackMention } from '@core/signal/mention';
-import { useDisplayName } from '@core/user';
+import { tryMacroId, useDisplayName } from '@core/user';
 import { handleFileFolderDrop } from '@core/util/upload';
 import ArrowUp from '@icon/bold/arrow-up-bold.svg';
 import Spinner from '@icon/bold/spinner-gap-bold.svg';
@@ -244,7 +244,7 @@ export function BaseInput(props: {
 
   const userEmail = useEmail();
   const userId = useUserId();
-  const [userName] = useDisplayName(userId());
+  const [userName] = useDisplayName(tryMacroId(userId() ?? ''));
 
   let bodyDiv!: HTMLDivElement;
   let attachButtonRef!: HTMLDivElement;

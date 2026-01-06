@@ -10,7 +10,7 @@ import { Message } from '@core/component/Message';
 import { toast } from '@core/component/Toast/Toast';
 import { VideoPreview } from '@core/component/VideoPreview';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import { useDisplayName } from '@core/user';
+import { tryMacroId, useDisplayName } from '@core/user';
 import { isErr } from '@core/util/maybeResult';
 import { queryKeys, useQueryClient } from '@macro-entity';
 import { logger } from '@observability';
@@ -60,7 +60,7 @@ export function MessageContainer(props: MessageContainerProps) {
   const [showReply, setShowReply] = createSignal<boolean>(false);
 
   const userId = useUserId();
-  const [currentUserName] = useDisplayName(userId());
+  const [currentUserName] = useDisplayName(tryMacroId(userId() ?? ''));
 
   const isBodyExpanded = createMemo(() => {
     return props.expandedMessageBodyIds[props.message.db_id ?? ''];

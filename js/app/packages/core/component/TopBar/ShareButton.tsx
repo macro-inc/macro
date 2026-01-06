@@ -835,20 +835,25 @@ export function ShareOptions(props: {
           left
         />
       </DropdownMenu.Trigger>
-      <DropdownMenuContent>
-        <DropdownMenu.RadioGroup value={currentValue()} onChange={handleChange}>
-          <For each={options()}>
-            {(option) => (
-              <MenuItem
-                groupValue={currentValue()}
-                value={option.value}
-                selectorType="radio"
-                text={option.label}
-              />
-            )}
-          </For>
-        </DropdownMenu.RadioGroup>
-      </DropdownMenuContent>
+      <DropdownMenu.Portal>
+        <DropdownMenuContent>
+          <DropdownMenu.RadioGroup
+            value={currentValue()}
+            onChange={handleChange}
+          >
+            <For each={options()}>
+              {(option) => (
+                <MenuItem
+                  groupValue={currentValue()}
+                  value={option.value}
+                  selectorType="radio"
+                  text={option.label}
+                />
+              )}
+            </For>
+          </DropdownMenu.RadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu.Portal>
     </DropdownMenu>
   );
 }

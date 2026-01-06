@@ -14,7 +14,7 @@ import { getIconConfig } from 'core/component/EntityIcon';
 import { StaticMarkdown } from 'core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from 'core/component/LexicalMarkdown/theme';
 import { UserIcon } from 'core/component/UserIcon';
-import { emailToId, useDisplayName } from 'core/user';
+import { emailToMacroId, tryMacroId, useDisplayName } from 'core/user';
 import type { ParentProps, Ref } from 'solid-js';
 import {
   createDeferred,
@@ -96,7 +96,7 @@ function GenericContentHit(props: { data: ContentHitData }) {
 }
 
 function ChannelMessageContentHit(props: { data: ChannelContentHitData }) {
-  const [userName] = useDisplayName(props.data.senderId);
+  const [userName] = useDisplayName(tryMacroId(props.data.senderId));
 
   return (
     <div class="flex gap-2 items-center min-w-0">
@@ -268,7 +268,9 @@ function NotificationRow(props: {
   onClick?: NotificationClickHandler;
   entity: EntityData;
 }) {
-  const [userName] = useDisplayName(props.notification.senderId);
+  const [userName] = useDisplayName(
+    tryMacroId(props.notification.senderId ?? '')
+  );
 
   const ActionContent = () => {
     if (
@@ -537,7 +539,7 @@ export function EntityWithEverything(
           if (!participant.email) return;
           if (me && participant.email === me) return;
           const macroDisplayName = useDisplayName(
-            emailToId(participant.email)
+            emailToMacroId(participant.email)
           )[0]?.();
           const participantFullName = participant.name ?? '';
           if (macroDisplayName && !isLikelyEmail(macroDisplayName)) {
@@ -687,7 +689,7 @@ export function EntityWithEverything(
     const userNameFromSender = createMemo(() => {
       const senderId = channelEntity()?.latestMessage?.senderId;
       if (!senderId) return;
-      const [userName] = useDisplayName(senderId);
+      const [userName] = useDisplayName(tryMacroId(senderId));
       return userName();
     });
 
@@ -844,7 +846,7 @@ export function EntityWithEverything(
       return false;
     }
     return {
-      ownerDisplayName: useDisplayName(props.entity.ownerId)[0],
+      ownerDisplayName: useDisplayName(tryMacroId(props.entity.ownerId))[0],
       ownerId: props.entity.ownerId,
     };
   };
