@@ -29,6 +29,10 @@ path = "src/bin/backfill_sfs_attachments/backfill_sfs_attachments.rs"
 name = "pubsub_workers"
 path = "src/bin/pubsub_workers/pubsub_workers.rs"
 
+[[bin]]
+name = "openapi"
+path = "src/openapi.rs"
+
 [features]
 attachment_upload = []
 connection_gateway = []
