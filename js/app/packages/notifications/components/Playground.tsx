@@ -713,7 +713,9 @@ export const BrowserNotificationPreview: Component<NotificationProps> = (
           <div class="w-10 h-10 rounded-lg overflow-hidden bg-[oklch(0.278_0.033_256.848)] flex items-center justify-center">
             <Show
               when={props.icon}
-              fallback={<div class="w-6 h-6 bg-[oklch(0.446_0.03_256.802)] rounded" />}
+              fallback={
+                <div class="w-6 h-6 bg-[oklch(0.446_0.03_256.802)] rounded" />
+              }
             >
               <img src={props.icon} alt="" class="w-full h-full object-cover" />
             </Show>
@@ -730,7 +732,9 @@ export const BrowserNotificationPreview: Component<NotificationProps> = (
           <div class="text-white font-medium text-sm mb-1 truncate">
             {props.title}
           </div>
-          <div class="text-[oklch(0.707_0.022_261.325)] text-sm line-clamp-2">{props.body}</div>
+          <div class="text-[oklch(0.707_0.022_261.325)] text-sm line-clamp-2">
+            {props.body}
+          </div>
         </div>
 
         {/* Close button */}
