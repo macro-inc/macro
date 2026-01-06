@@ -485,23 +485,7 @@ export function ShareModal(props: ShareModalProps) {
                 </div>
 
                 <div class="flex flex-row items-center gap-2">
-                  <TextButton
-                    onClick={() => {
-                      const selectedOptions =
-                        forwardToChannelRef()?.getSelectedOptions();
-                      if (selectedOptions && selectedOptions.length > 0) {
-                        forwardToChannelRef()?.handleSubmit();
-                      }
-                    }}
-                    theme={
-                      forwardToChannelRef()?.getSelectedOptions()?.length > 0
-                        ? 'accent'
-                        : 'disabled'
-                    }
-                    icon={PaperPlaneRight}
-                    height="h-[22px]"
-                    text="Share"
-                  />
+
                 </div>
               </div>
 

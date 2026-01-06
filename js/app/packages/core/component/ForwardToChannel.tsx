@@ -6,6 +6,7 @@ import { useBlockAliasedName, useBlockId, useBlockName } from '@core/block';
 import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
 import { RecipientSelector } from '@core/component/RecipientSelector';
+import { TextButton } from '@core/component/TextButton';
 import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
 import { blockEditPermissionEnabledSignal } from '@core/signal/load';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
@@ -14,6 +15,7 @@ import { useSendMessageToPeople } from '@core/util/channels';
 import { blockNameToItemType } from '@service-storage/client';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { SharePermissionV2ChannelSharePermissions } from '@service-storage/generated/schemas/sharePermissionV2ChannelSharePermissions';
+import PaperPlaneRight from '@phosphor-icons/core/fill/paper-plane-right-fill.svg?component-solid';
 import {
   createEffect,
   createMemo,
@@ -312,6 +314,23 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
                 />
               </div>
             </Show>
+
+            <TextButton
+              onClick={() => {
+                const options = selectedOptions();
+                if (options && options.length > 0) {
+                  handleSubmit();
+                }
+              }}
+              theme={
+                selectedOptions().length > 0
+                  ? 'accent'
+                  : 'disabled'
+              }
+              icon={PaperPlaneRight}
+              height="h-[22px]"
+              text="Share"
+            />
           </div>
         </div>
       </div>
