@@ -729,6 +729,8 @@ export function UnifiedListView(props: UnifiedListViewProps) {
             const documentFileTypes = fileTypeFilter().flatMap((fileType) => {
               if (fileType === 'code')
                 return type === 'soup' ? ['assoc:code'] : codeFileExtensions;
+              if (fileType === 'image')
+                return type === 'soup' ? ['assoc:image'] : [GARBAGE_UUID];
               if (fileType === 'unknown')
                 return type === 'soup' ? ['assoc:other'] : [GARBAGE_UUID];
               return [fileType];
