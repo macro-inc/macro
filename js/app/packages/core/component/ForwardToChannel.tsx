@@ -18,7 +18,6 @@ import {
   createEffect,
   createMemo,
   createSignal,
-  onMount,
   Show,
 } from 'solid-js';
 import { getDestinationFromOptions } from './NewMessage';
@@ -37,15 +36,7 @@ interface ForwardToChannelProps {
   onSubmit?: () => void;
   refetch?: () => void;
   projectId?: string;
-  name: string;
-  ref?: (ref: {
-    getSelectedOptions: () => WithCustomUserInput<
-      'user' | 'contact' | 'channel'
-    >[];
-    setSubmitAccessLevel: (level: AccessLevel | null) => void;
-    getSubmitAccessLevel: () => AccessLevel | null;
-    handleSubmit: () => void;
-  }) => void;
+  name?: string;
 }
 
 export function ForwardToChannel(props: ForwardToChannelProps) {
@@ -235,16 +226,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
     props.onSubmit?.();
   }
 
-  onMount(() => {
-    if (props.ref) {
-      props.ref({
-        getSubmitAccessLevel: submitAccessLevel,
-        getSelectedOptions: selectedOptions,
-        setSubmitAccessLevel,
-        handleSubmit,
-      });
-    }
-  });
+
 
   return (
     <Show when={isAuthenticated()}>
@@ -275,9 +257,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
                 return true;
               }}
               initialValue={markdownState()}
-              onTab={() => {
-                return true;
-              }}
+              onTab={() => {return true}}
               useBlockBoundary={false}
               portalScope="local"
               dontFocusOnMount
@@ -313,12 +293,12 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
               />
 
               <Show when={props.submitPermissionInfo?.userPermissions === Permissions.OWNER}>
-                  <ShareOptions
-                    setPermissions={(accessLevel) => {setSubmitAccessLevel(accessLevel)}}
-                    permissions={submitAccessLevel()}
-                    label="Permission"
-                    hideNoAccess
-                  />
+                <ShareOptions
+                  setPermissions={(accessLevel) => {setSubmitAccessLevel(accessLevel)}}
+                  permissions={submitAccessLevel()}
+                  label="Permission"
+                  hideNoAccess
+                />
               </Show>
             </div>
           </div>

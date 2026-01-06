@@ -34,7 +34,6 @@ import IconUsers from '@icon/regular/users.svg';
 import CloseIcon from '@icon/regular/x.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import PaperPlaneRight from '@phosphor-icons/core/fill/paper-plane-right-fill.svg?component-solid';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { commsServiceClient } from '@service-comms/client';
 import { useUserId } from '@service-gql/client';
@@ -47,7 +46,6 @@ import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
 import {
-  createEffect,
   createMemo,
   createResource,
   createSignal,
@@ -147,9 +145,7 @@ export function ShareModal(props: ShareModalProps) {
   const { track } = withAnalytics();
   const [permissionsResource, { refetch }] = permissionsBlockResource;
   const userId = useUserId();
-  const [submitAccessLevel, setSubmitAccessLevel] =
-    createSignal<AccessLevel | null>(null);
-  const [forwardToChannelRef, setForwardToChannelRef] = createSignal<any>(null);
+
 
   const copyPublicLink = createCallback(() => {
     const url = buildSimpleEntityUrl(
@@ -166,13 +162,7 @@ export function ShareModal(props: ShareModalProps) {
     );
   });
 
-  createEffect(() => {
-    const ref = forwardToChannelRef();
-    if (ref && ref.getSubmitAccessLevel) {
-      const currentLevel = ref.getSubmitAccessLevel();
-      setSubmitAccessLevel(currentLevel);
-    }
-  });
+
 
   const [channelNamesResource] = createResource(
     () => {
@@ -498,7 +488,7 @@ export function ShareModal(props: ShareModalProps) {
                   channelSharePermissions: recipients(),
                 }}
                 onSubmit={() => props.setIsSharePermOpen(false)}
-                ref={setForwardToChannelRef}
+
                 refetch={refetch}
                 name={props.name}
               />
@@ -582,11 +572,11 @@ export function ShareModal(props: ShareModalProps) {
                 <div class="flex border-t-1 items-center px-2 border-edge-muted h-[40px] justify-between">
                   <TextButton
                     onClick={() => copyPublicLink()}
+                    text="Public Link"
+                    height="h-[22px]"
+                    icon={IconLink}
                     theme="accent"
                     outline
-                    icon={IconLink}
-                    height="h-[22px]"
-                    text="Public Link"
                   />
                   <ShareOptions
                     permissions={publicAccessLevel() ?? null}
@@ -817,12 +807,12 @@ export function ShareOptions(props: {
     <DropdownMenu>
       <DropdownMenu.Trigger disabled={props.disabled}>
         <TextButton
-          theme="base"
           text={currentValueText()}
-          showChevron
           disabled={props.disabled}
-          height='22px'
           width='w-[67px]'
+          height='22px'
+          theme="base"
+          showChevron
           left
         />
       </DropdownMenu.Trigger>
@@ -834,10 +824,10 @@ export function ShareOptions(props: {
           <For each={options()}>
             {(option) => (
               <MenuItem
-                text={option.label}
-                selectorType="radio"
+              groupValue={currentValue()}
                 value={option.value}
-                groupValue={currentValue()}
+                selectorType="radio"
+                text={option.label}
               />
             )}
           </For>
