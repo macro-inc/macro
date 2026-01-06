@@ -97,13 +97,14 @@ export interface NodeDecoratorMap {
   };
 }
 
-export type NodeClassToProps<T extends LexicalNode> =
-  T extends InstanceType<NodeDecoratorMap[keyof NodeDecoratorMap]['klass']>
-    ? Extract<
-        NodeDecoratorMap[keyof NodeDecoratorMap],
-        { klass: new (...args: any) => T }
-      >['props']
-    : never;
+export type NodeClassToProps<T extends LexicalNode> = T extends InstanceType<
+  NodeDecoratorMap[keyof NodeDecoratorMap]['klass']
+>
+  ? Extract<
+      NodeDecoratorMap[keyof NodeDecoratorMap],
+      { klass: new (...args: any) => T }
+    >['props']
+  : never;
 
 const decoratorRegistry = new Map<
   Klass<LexicalNode>,
