@@ -151,6 +151,7 @@ import {
   VIEWCONFIG_BASE,
   VIEWCONFIG_DEFAULTS_IDS,
   VIEWCONFIG_DEFAULTS_IDS_ENUM,
+  VIEWCONFIG_FILTER_DOCUMENT_TYPE_FILTER,
   type ViewConfigBase,
   type ViewData,
 } from './ViewConfig';
@@ -725,7 +726,11 @@ export function UnifiedListView(props: UnifiedListViewProps) {
         }
 
         if (entityTypeFilter().includes('document')) {
-          if (fileTypeFilter().length > 0) {
+          if (
+            fileTypeFilter().length > 0 &&
+            fileTypeFilter().length <
+              VIEWCONFIG_FILTER_DOCUMENT_TYPE_FILTER.length
+          ) {
             const documentFileTypes = fileTypeFilter().flatMap((fileType) => {
               if (fileType === 'code')
                 return type === 'soup' ? ['assoc:code'] : codeFileExtensions;
