@@ -34,10 +34,6 @@ const meta = {
       control: { type: 'range', min: 0, max: 1000, step: 50 },
       description: 'Delay for initial start and holding clear text (ms)',
     },
-    class: {
-      control: 'text',
-      description: 'CSS class name',
-    },
   },
   render: (args: GlitchTextProps) => <GlitchText {...args} />,
 } satisfies Meta<typeof GlitchText>;

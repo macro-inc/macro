@@ -140,6 +140,12 @@
 }
 
 .docblock-argstable-body {
+
+  /* Value chips under descriptions  */
+  td:nth-child(2) span[class] {
+    @apply bg-surface-0 font-mono;
+  }
+
   label:has(input[role="switch"]) {
     @apply bg-page! focus:outline-accent!;
     span {

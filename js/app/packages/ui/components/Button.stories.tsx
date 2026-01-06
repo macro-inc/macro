@@ -10,37 +10,37 @@ const meta = {
     variant: {
       control: { type: 'radio' },
       options: {
+        // @ts-ignore
         None: undefined,
         Primary: 'primary',
         Secondary: 'secondary',
         Tertiary: 'tertiary',
         Destructive: 'destructive',
       },
-      defaultValue: 'tertiary',
-      table: {
-        type: { summary: 'primary | secondary | tertiary | destructive' },
-        defaultValue: { summary: 'tertiary' },
-      },
+      defaultValue: undefined,
+      description:
+        'Variants provide shortcuts to common stylings, ommision is equivalent to "tertiary"',
     },
     children: {
       control: { type: 'text' },
       defaultValue: 'Click Here',
+      description:
+        'Anything can go inside buttons, eg icons, hotkey hints, etc.',
     },
     tooltip: {
       control: { type: 'text' },
       defaultValue: 'Tooltip',
+      description:
+        'Tooltips are so common, we made a slot. This supports any JSX, such as `<LabelAndHotkey />`',
     },
     showChevron: {
       control: { type: 'boolean' },
       defaultValue: false,
     },
-    class: {
-      control: { type: 'text' },
-      defaultValue: '',
-    },
     disabled: {
       control: { type: 'boolean' },
       defaultValue: false,
+      description: 'Button supports anything a regular HTML button tag would.',
     },
   },
   args: {

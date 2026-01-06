@@ -100,6 +100,13 @@ const preview: Preview = {
       defaultTheme: 'Macro Dark',
     }),
   ],
+  argTypes: {
+    class: {
+      control: { type: 'text' },
+      defaultValue: '',
+      description: 'Any overriding tailwind classes',
+    },
+  },
 };
 
 export default preview;
