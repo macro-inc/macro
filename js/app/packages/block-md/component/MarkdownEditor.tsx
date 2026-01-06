@@ -130,7 +130,7 @@ import {
   type PeerIdValidator,
   peerIdPlugin,
 } from '@lexical-core';
-import type { MarkdownRewriteOutput } from '@service-cognition/generated/tools/types';
+import { onElementConnect } from '@solid-primitives/lifecycle';
 import { createCallback } from '@solid-primitives/rootless';
 import { debounce, throttle } from '@solid-primitives/scheduled';
 import { useSearchParams } from '@solidjs/router';
@@ -149,7 +149,6 @@ import {
   createMemo,
   createSignal,
   onCleanup,
-  onMount,
   Show,
   untrack,
 } from 'solid-js';
@@ -162,6 +161,7 @@ import {
   isGeneratingSignal,
 } from '../signal/generateSignal';
 import { blockDataSignal, mdStore } from '../signal/markdownBlockData';
+import type { MarkdownRewriteOutput } from '../signal/rewriteSignal';
 import { useBlockSave, useSaveMarkdownDocument } from '../signal/save';
 import { MarkdownCollabProvider } from './MarkdownCollabProvider';
 import { MarkdownPopup } from './MarkdownPopup';
@@ -222,7 +222,6 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     return blockSave_;
   }, undefined);
 
-  let mountRef!: HTMLDivElement;
   let editorContainerRef!: HTMLDivElement;
 
   const [clickTargetHeight, setClickTargetHeight] = createSignal(0);
@@ -585,13 +584,14 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
 
   const observeClickTargetHeight = () => {
     const blockEl = blockElement();
-    if (!blockEl) {
+    const rootEl = editor.getRootElement();
+    if (!blockEl || !rootEl) {
       setClickTargetHeight(EDITOR_PADDING_BOTTOM);
       return;
     }
     const blockBottom = blockEl.getBoundingClientRect().bottom;
     const targetHeight =
-      blockBottom - mountRef.getBoundingClientRect().bottom - 40;
+      blockBottom - rootEl.getBoundingClientRect().bottom - 40;
     setClickTargetHeight(Math.max(targetHeight, EDITOR_PADDING_BOTTOM));
   };
 
@@ -599,9 +599,9 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     registerInternalLayoutShiftListener(editor, observeClickTargetHeight)
   );
 
-  onMount(() => {
+  const onConnect = (el: HTMLDivElement) => {
     setMdStore('selection', lexicalWrapper.selection);
-    editor.setRootElement(mountRef);
+    editor.setRootElement(el);
 
     // Register this plugin once we have the ref.
     plugins.use(
@@ -613,11 +613,11 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
 
     const editorRefObserver = new ResizeObserver(observeClickTargetHeight);
 
-    editorRefObserver.observe(mountRef);
+    editorRefObserver.observe(el);
     onCleanup(() => {
       editorRefObserver.disconnect();
     });
-  });
+  };
 
   const additionalCleanups: Array<() => void> = [];
 
@@ -859,7 +859,11 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
         use:droppable
       >
         <div
-          ref={mountRef}
+          ref={(el) => {
+            onElementConnect(el, () => {
+              onConnect(el);
+            });
+          }}
           contentEditable={isContentEditable()}
           class="w-full max-w-full"
           classList={{

@@ -39,11 +39,14 @@ async fn main() {
         content: RequestContent::Text("what's the weather today in shenzen?".into()),
         role: Role::User,
     }];
-    request.tools = Some(vec![Tool {
-        description: Some("get the weather".into()),
-        name: "check_weather".into(),
-        input_schema: weather_tool,
-    }]);
+    request.tools = Some(vec![
+        ClientTool {
+            description: Some("get the weather".into()),
+            name: "check_weather".into(),
+            input_schema: weather_tool,
+        }
+        .into(),
+    ]);
     let mut out = std::io::stdout();
     let mut stream = client.chat().create_stream(request).await;
     let mut tool_json = String::new();

@@ -5,7 +5,7 @@ use anthropic::client::Client;
 use anthropic::types::request::{
     CreateMessageRequestBody, RequestContent, RequestMessage, Role, SystemPrompt,
 };
-use anthropic::types::stream_response::{ContentDeltaEvent, StreamEvent};
+use anthropic::types::response::{ContentDeltaEvent, StreamEvent};
 use futures::StreamExt;
 
 #[tokio::main]

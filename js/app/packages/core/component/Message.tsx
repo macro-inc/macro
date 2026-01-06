@@ -15,12 +15,12 @@ import {
   useContext,
 } from 'solid-js';
 import { BozzyBracket } from './BozzyBracket';
+import { DeprecatedIconButton } from './DeprecatedIconButton';
 import {
   CustomEntityIcon,
   EntityIcon,
   type EntityWithValidIcon,
 } from './EntityIcon';
-import { IconButton } from './IconButton';
 import { UserIcon } from './UserIcon';
 
 false && observedSize;
@@ -327,7 +327,7 @@ const Root: Component<MessageRootProps> = (props) => {
             </div>
           </div>
         </BozzyBracket>
-        <Show when={props.hoverActions && !isTouchDevice}>
+        <Show when={props.hoverActions && !isTouchDevice()}>
           <div
             class="absolute right-2 -top-2 border border-edge bg-panel"
             classList={{
@@ -363,7 +363,7 @@ const Root: Component<MessageRootProps> = (props) => {
                   }}
                   onMouseEnter={() => setHover(false)}
                 >
-                  <IconButton
+                  <DeprecatedIconButton
                     icon={IconPlus}
                     theme="base"
                     iconSize={16}

@@ -1,11 +1,11 @@
 use crate::SQS;
 use models_email::email::service::backfill::BackfillPubsubMessage;
-use models_email::email::service::pubsub::RefreshMessage;
+use models_email::email::service::pubsub::LinkManagerMessage;
 use models_email::service::pubsub::{SFSUploaderMessage, ScheduledPubsubMessage};
 
 impl SQS {
-    pub fn email_refresh_queue(mut self, email_refresh_queue: &str) -> Self {
-        self.email_refresh_queue = Some(email_refresh_queue.to_string());
+    pub fn email_link_manager_queue(mut self, link_manager_queue: &str) -> Self {
+        self.link_manager_queue = Some(link_manager_queue.to_string());
         self
     }
 
@@ -28,12 +28,12 @@ impl SQS {
     #[tracing::instrument(skip(self))]
     pub async fn enqueue_email_refresh_notification(
         &self,
-        message: RefreshMessage,
+        message: LinkManagerMessage,
     ) -> anyhow::Result<()> {
-        if let Some(email_refresh_queue) = &self.email_refresh_queue {
-            return enqueue_refresh_notification(&self.inner, email_refresh_queue, message).await;
+        if let Some(link_manager_queue) = &self.link_manager_queue {
+            return enqueue_refresh_notification(&self.inner, link_manager_queue, message).await;
         }
-        Err(anyhow::anyhow!("email_refresh_queue is not configured"))
+        Err(anyhow::anyhow!("link_manager_queue is not configured"))
     }
 
     /// Sends a message to the email backfill queue
@@ -79,7 +79,7 @@ impl SQS {
 pub async fn enqueue_refresh_notification(
     sqs_client: &aws_sdk_sqs::Client,
     queue_url: &str,
-    message: RefreshMessage,
+    message: LinkManagerMessage,
 ) -> anyhow::Result<()> {
     let message_str = serde_json::to_string(&message)?;
 

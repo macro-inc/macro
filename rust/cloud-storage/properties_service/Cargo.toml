@@ -33,6 +33,7 @@ macro_middleware = { path = "../macro_middleware", default-features = false, fea
   "auth",
   "cloud_storage",
 ] }
+macro_notify = { path = "../macro_notify" }
 macro_uuid = { path = "../macro_uuid" }
 model = { path = "../model" }
 models_permissions = { path = "../models_permissions" }

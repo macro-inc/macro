@@ -7,7 +7,7 @@ use utoipa::ToSchema;
 use crate::{MatchType, SearchHighlight, SearchOn};
 
 /// A document match for a given node
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct DocumentSearchResult {
     /// The node id for the document.
     /// This is only useful for markdown at the moment
@@ -24,7 +24,7 @@ pub struct DocumentSearchResult {
 }
 
 /// A single response item, part of the DocumentSearchResponse object
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct DocumentSearchResponseItem {
     /// Standardized fields that all item types will share.
     /// These field names are being aligned across all item types
@@ -46,7 +46,7 @@ pub struct DocumentSearchResponseItem {
 }
 
 /// Metadata for a document fetched from the database
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct DocumentMetadata {
     pub created_at: i64,
     pub updated_at: i64,
@@ -58,7 +58,7 @@ pub struct DocumentMetadata {
 /// DocumentSearchResponseItem object with document metadata we fetch from macrodb. we don't store these
 /// timestamps in opensearch as they would require us to update document page record
 /// every time the document updates (specifically for updated_at and viewed_at)
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct DocumentSearchResponseItemWithMetadata {
     /// Metadata from the database. None if the document doesn't exist in the database.
     pub metadata: Option<DocumentMetadata>,

@@ -38,10 +38,10 @@ export function Appearance() {
         "
         class="appearance-container"
       >
-        <div style="grid-area: tools;"><ThemeTools /></div>
-        <div style="grid-area: basic;"><ThemeEditorBasic /></div>
+        <div class="ios:hidden" style="grid-area: tools;"><ThemeTools /></div>
+        <div class="ios:hidden" style="grid-area: basic;"><ThemeEditorBasic /></div>
         <div style="grid-area: list; overflow: hidden;"><ThemeList/></div>
-        <div style="grid-area: advanced; overflow: hidden;"><ThemeEditorAdvanced /></div>
+        <div class="ios:hidden" style="grid-area: advanced; overflow: hidden;"><ThemeEditorAdvanced /></div>
 
         {/*<Show when={ENABLE_CUSTOM_CURSOR}>
           <div

@@ -57,28 +57,28 @@ export function createEmailSource(
     disabled?: Accessor<boolean>;
   }
 ): EmailSource {
-  const [_store, setStore] = singletonEmailStore;
+  const [store, setStore] = singletonEmailStore;
   const [sortedView, setSortedView] = createStore<EmailBySortedView>({});
   const [queryParams, setQueryParams] =
     createStore<FetchPaginatedEmailsParams>(initialQueryParams);
 
-  const _query =
+  const query =
     maybeQuery ??
     createEmailsInfiniteQuery(() => ({ ...queryParams }), {
       disabled: options?.disabled,
     });
 
-  const emails = createMemo(() => Object.values(_store));
+  const emails = createMemo(() => Object.values(store));
 
   const getByParams = (params: EmailQueryParams) => {
     const viewKey = getViewKey(params);
     const emailIds = trackStore(sortedView[viewKey]) ?? [];
 
     // Map IDs to actual email entities from the store
-    return emailIds.map((id) => _store[id]).filter((email) => !!email);
+    return emailIds.map((id) => store[id]).filter((email) => !!email);
   };
 
-  const isLoading = () => _query.isLoading;
+  const isLoading = () => query.isLoading;
 
   /** Reconcile new emails into the store and update view */
   const reconcileEmails = (emails: EmailEntity[], viewKey: string) =>
@@ -97,22 +97,22 @@ export function createEmailSource(
 
   // TODO: if something needs emails it needs to be using search query
   const canBackgroundFetch = createDeferred(
-    () => false && _query.isSuccess && _query.hasNextPage && !_query.isFetching
+    () => false && query.isSuccess && query.hasNextPage && !query.isFetching
   );
   createEffect(() => {
     // don't background fetch for all view, there are too many emails to fetch
     if (queryParams.view === 'all') return;
 
-    if (canBackgroundFetch()) _query.fetchNextPage();
+    if (canBackgroundFetch()) query.fetchNextPage();
   });
 
   createEffect(() => {
-    if (_query.isSuccess) reconcileEmails(_query.data, getViewKey(queryParams));
+    if (query.isSuccess) reconcileEmails(query.data, getViewKey(queryParams));
   });
 
   const archiveEmail = async (id: string, value: boolean) => {
     // Optimistically update
-    const previousValue = _store[id]?.done;
+    const previousValue = store[id]?.done;
     setStore(id, 'done', value);
 
     try {
@@ -130,7 +130,7 @@ export function createEmailSource(
 
   const markAsRead = async (id: string) => {
     // Optimistically update
-    const previousValue = _store[id]?.isRead;
+    const previousValue = store[id]?.isRead;
     setStore(id, 'isRead', true);
 
     try {
@@ -147,12 +147,12 @@ export function createEmailSource(
   };
 
   const refetch = async () => {
-    await _query.refetch();
+    await query.refetch();
   };
 
   return {
-    _store,
-    _query,
+    _store: store,
+    _query: query,
     emails,
     isLoading,
     setQueryParams,

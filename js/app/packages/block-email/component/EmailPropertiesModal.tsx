@@ -1,6 +1,6 @@
 import { SplitDrawer } from '@app/component/split-layout/components/SplitDrawer';
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { PropertiesView } from '@core/component/Properties/PropertiesView';
 import TagIcon from '@icon/regular/tag.svg';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
@@ -16,7 +16,7 @@ export function EmailPropertiesModal(props: {
 
   return (
     <>
-      <IconButton
+      <DeprecatedIconButton
         icon={TagIcon}
         theme={drawerControl.isOpen() ? 'accent' : 'clear'}
         size={props.buttonSize ?? 'base'}

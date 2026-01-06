@@ -1,5 +1,5 @@
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { EntityIcon } from '@core/component/EntityIcon';
-import { TextButton } from '@core/component/TextButton';
 import CheckIcon from '@icon/regular/arrow-right.svg';
 
 export type JoinChannelDialogProps = {
@@ -27,7 +27,7 @@ export function JoinChannelDialog(props: JoinChannelDialogProps) {
             {props.participantCount === 1 ? 'participant' : 'participants'}
           </p>
         </div>
-        <TextButton
+        <DeprecatedTextButton
           theme="base"
           icon={() => <CheckIcon class="w-4 h-4" />}
           text="Join Channel"

@@ -1,12 +1,11 @@
 use crate::{api::context::ApiContext, model::notification::CreateNotification};
 use axum::{
-    Extension, Json,
+    Json,
     extract::{self, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use model::response::ErrorResponse;
-use model::user::UserContext;
+use model::{response::ErrorResponse, user::axum_extractor::MacroUserExtractor};
 use model_notifications::{
     Notification, NotificationEvent, NotificationEventType, RawNotification,
 };
@@ -22,10 +21,10 @@ use std::str::FromStr;
             (status = 200, body=Notification),
         )
     )]
-#[tracing::instrument(skip(ctx, user_context, req))]
+#[tracing::instrument(skip(ctx, macro_user, req))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    macro_user: MacroUserExtractor,
     extract::Json(req): extract::Json<CreateNotification>,
 ) -> Result<Response, Response> {
     let id = macro_uuid::generate_uuid_v7();
@@ -60,7 +59,7 @@ pub async fn handler(
         id,
         notification_entity: req.entity,
         service_sender: req.service_sender,
-        sender_id: Some(user_context.user_id.clone()),
+        sender_id: Some(macro_user.macro_user_id),
         temporal: Default::default(),
         notification_event,
     };

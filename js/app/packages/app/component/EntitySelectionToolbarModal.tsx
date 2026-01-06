@@ -4,7 +4,7 @@ import type { EntityData } from '@macro-entity';
 import CloseIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 
 interface EntitySelectionToolbarModalProps {
-  selectedEntities: EntityData[];
+  multiSelectEntities: EntityData[];
   onClose: VoidFunction;
   onAction: VoidFunction;
 }
@@ -26,7 +26,7 @@ export const EntitySelectionToolbarModal = (
               <CloseIcon class="shrink-0 size-full" />
             </button>
             <span class="text-ink font-regular w-full whitespace-nowrap">
-              {props.selectedEntities.length} selected
+              {props.multiSelectEntities.length} selected
             </span>
           </div>
           <button

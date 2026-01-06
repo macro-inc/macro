@@ -1,15 +1,17 @@
 import type { ChannelData } from '@block-channel/definition';
 import { withAnalytics } from '@coparse/analytics';
 import { TrackingEvents } from '@coparse/analytics/src/types/TrackingEvents';
-import { type BlockName, createBlockMemo, createBlockStore } from '@core/block';
+import { createBlockMemo, createBlockStore } from '@core/block';
 import { useChannelsContext } from '@core/component/ChannelsProvider';
 import {
   type InputAttachment,
   isStaticAttachmentType,
 } from '@core/store/cacheChannelInput';
 import { isErr } from '@core/util/maybeResult';
-import { invalidateChannelWithID } from '@queries/channel/channel';
+import { getImageDimensions, getVideoDimensions } from '@core/util/media';
+import { useSendMessageMutation } from '@queries/channel/message';
 import { commsServiceClient } from '@service-comms/client';
+import type { NewAttachment } from '@service-comms/generated/models';
 import type { Attachment } from '@service-comms/generated/models/attachment';
 import type { Channel } from '@service-comms/generated/models/channel';
 import type { ChannelParticipant } from '@service-comms/generated/models/channelParticipant';
@@ -21,6 +23,7 @@ import { useUserId } from '@service-gql/client';
 import { blockNameToItemType } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { toast } from 'core/component/Toast/Toast';
+import type { Accessor } from 'solid-js';
 import { updateActivityOnMessageReceived } from './activity';
 import { initializeAttachments, messageAttachmentsStore } from './attachment';
 import { messageToReactionStore } from './reactions';
@@ -191,36 +194,6 @@ function optimisticChannelMessage({
   }
 }
 
-export async function deleteMessage(messageId: string) {
-  const channelId = channelStore.get.id;
-  if (!channelId) return;
-
-  try {
-    await commsServiceClient.deleteMessage({
-      channel_id: channelId,
-      message_id: messageId,
-    });
-  } catch (e) {
-    console.error(e);
-  }
-}
-
-export async function editMessage(messageId: string, content: string) {
-  const channelId = channelStore.get.id;
-  if (content.trim().length === 0) return;
-  if (!channelId) return;
-
-  try {
-    await commsServiceClient.patchMessage({
-      message_id: messageId,
-      channel_id: channelId,
-      content,
-    });
-  } catch (e) {
-    console.error(e);
-  }
-}
-
 function isMessageSendable(
   content: string | undefined,
   attachments: InputAttachment[]
@@ -228,72 +201,100 @@ function isMessageSendable(
   return (content && content.trim().length > 0) || attachments.length > 0;
 }
 
-export async function sendMessage({
-  content,
-  attachments,
-  threadId,
-  mentions,
-}: {
+export type SendMessageArgs = {
   content: string | undefined;
   attachments: InputAttachment[];
   threadId?: string;
   mentions?: SimpleMention[];
-}) {
+};
+
+export function useSendChannelMessageAction(channelID: Accessor<string>) {
   const optimisticSend = createCallback(optimisticChannelMessage);
   const channelsContext = useChannelsContext();
   const userId = useUserId();
-  if (!userId) return;
-  if (!isMessageSendable(content, attachments)) return;
-  const channelId = channelStore.get.id;
-  if (!channelId) return;
 
-  let attachmentsToSend = attachments
-    .map((a) => ({
-      entity_id: a.id,
-      entity_type: isStaticAttachmentType(a.blockName)
-        ? a.blockName
-        : blockNameToItemType(a.blockName as BlockName),
-    }))
-    .filter((a) => a.entity_type !== undefined) as {
-    entity_id: string;
-    entity_type: string;
-  }[];
-
-  let result = await commsServiceClient.postMessage({
-    channel_id: channelId,
-    message: {
-      attachments: attachmentsToSend,
-      content: content ?? '',
-      thread_id: threadId,
-      mentions: mentions ?? [],
+  const mutation = useSendMessageMutation({
+    onSettled() {
+      channelsContext.refetchChannels();
+    },
+    onSuccess(_, variables) {
+      const message = variables.message;
+      track(TrackingEvents.BLOCKCHANNEL.MESSAGE.SEND, {
+        channelId: variables.channelID,
+        contentLength: message.content?.length ?? 0,
+        attachmentsLength: message.attachments.length,
+        inThread: message.thread_id !== undefined,
+      });
     },
   });
 
-  channelsContext.refetchChannels();
-  invalidateChannelWithID(channelId);
-
-  if (isErr(result)) {
-    console.error('failed to send message', result[0]);
-    toast.failure('Failed to send message');
-    return Promise.reject(result[0] ?? new Error('Failed to send message'));
-  }
-
-  const { id } = result[1]!;
-
-  track(TrackingEvents.BLOCKCHANNEL.MESSAGE.SEND, {
-    channelId,
-    contentLength: content?.length ?? 0,
-    attachmentsLength: attachmentsToSend.length,
-    inThread: threadId !== undefined,
-  });
-
-  optimisticSend({
-    channelId,
-    messageId: id,
-    content: content ?? '',
+  return async ({
+    content,
+    attachments,
     threadId,
-    senderId: userId()!,
-  });
+    mentions,
+  }: SendMessageArgs) => {
+    if (!userId) return;
+    if (!isMessageSendable(content, attachments)) return;
+
+    const channelId = channelID();
+
+    const attachmentsToSend = await Promise.allSettled(
+      attachments.map(async (a) => {
+        const attachmentType = isStaticAttachmentType(a.blockName)
+          ? a.blockName
+          : blockNameToItemType(a.blockName);
+
+        if (!attachmentType) return;
+
+        let attachment: NewAttachment = {
+          entity_id: a.id,
+          entity_type: attachmentType,
+        };
+
+        if (!a.file) return attachment;
+
+        if (
+          attachmentType !== 'static/image' &&
+          attachmentType !== 'static/video'
+        ) {
+          return attachment;
+        }
+
+        const dimensions =
+          attachmentType === 'static/image'
+            ? await getImageDimensions(a.file)
+            : await getVideoDimensions(a.file);
+
+        attachment.width = dimensions.width;
+        attachment.height = dimensions.height;
+
+        return attachment;
+      })
+    );
+
+    const filteredAttachements = attachmentsToSend
+      .map((r) => (r.status === 'fulfilled' ? r.value : undefined))
+      .filter((r) => r !== undefined);
+
+    const data = await mutation.mutateAsync({
+      channelID: channelId,
+      message: {
+        attachments: filteredAttachements,
+        content: content ?? '',
+        thread_id: threadId,
+        mentions: mentions ?? [],
+      },
+    });
+
+    optimisticSend({
+      channelId,
+      messageId: data.id,
+      content: content ?? '',
+      threadId,
+      senderId: userId()!,
+    });
+  };
 }
 
 createConnectionBlockWebsocketEffect((msg) => {

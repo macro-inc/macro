@@ -1,3 +1,4 @@
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use sqlx::{Pool, Postgres, Transaction};
 
 use document_sub_type::DocumentSubType;
@@ -129,8 +130,7 @@ pub async fn get_basic_document(
     db: &Pool<Postgres>,
     document_id: &str,
 ) -> Result<DocumentBasic, sqlx::Error> {
-    let document: DocumentBasic = sqlx::query_as!(
-        DocumentBasic,
+    let document: DocumentBasic = sqlx::query!(
         r#"
         SELECT
             d.id as "document_id",
@@ -150,6 +150,21 @@ pub async fn get_basic_document(
     "#,
         document_id,
     )
+    .try_map(|row| {
+        Ok(DocumentBasic {
+            document_id: row.document_id,
+            document_name: row.document_name,
+            owner: MacroUserIdStr::parse_from_str(&row.owner)
+                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
+                .into_owned(),
+            file_type: row.file_type,
+            branched_from_id: row.branched_from_id,
+            branched_from_version_id: row.branched_from_version_id,
+            document_family_id: row.document_family_id,
+            project_id: row.project_id,
+            deleted_at: row.deleted_at,
+        })
+    })
     .fetch_one(db)
     .await?;
 
@@ -164,8 +179,7 @@ pub async fn get_basic_documents(
         return Ok(Vec::new());
     }
 
-    let documents: Vec<DocumentBasic> = sqlx::query_as!(
-        DocumentBasic,
+    let documents: Vec<DocumentBasic> = sqlx::query!(
         r#"
         SELECT
             d.id as "document_id",
@@ -184,6 +198,21 @@ pub async fn get_basic_documents(
         "#,
         document_ids,
     )
+    .try_map(|row| {
+        Ok(DocumentBasic {
+            document_id: row.document_id,
+            document_name: row.document_name,
+            owner: MacroUserIdStr::parse_from_str(&row.owner)
+                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
+                .into_owned(),
+            file_type: row.file_type,
+            branched_from_id: row.branched_from_id,
+            branched_from_version_id: row.branched_from_version_id,
+            document_family_id: row.document_family_id,
+            project_id: row.project_id,
+            deleted_at: row.deleted_at,
+        })
+    })
     .fetch_all(db)
     .await?;
 
@@ -195,8 +224,7 @@ pub async fn get_deleted_document_info(
     db: &Pool<Postgres>,
     document_id: &str,
 ) -> Result<DocumentBasic, sqlx::Error> {
-    let document: DocumentBasic = sqlx::query_as!(
-        DocumentBasic,
+    let document: DocumentBasic = sqlx::query!(
         r#"
         SELECT
             d.id as "document_id",
@@ -215,6 +243,21 @@ pub async fn get_deleted_document_info(
     "#,
         document_id,
     )
+    .try_map(|row| {
+        Ok(DocumentBasic {
+            document_id: row.document_id,
+            document_name: row.document_name,
+            owner: MacroUserIdStr::parse_from_str(&row.owner)
+                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
+                .into_owned(),
+            file_type: row.file_type,
+            branched_from_id: row.branched_from_id,
+            branched_from_version_id: row.branched_from_version_id,
+            document_family_id: row.document_family_id,
+            project_id: row.project_id,
+            deleted_at: row.deleted_at,
+        })
+    })
     .fetch_one(db)
     .await?;
 
@@ -227,8 +270,7 @@ pub async fn get_document(
     db: &Pool<Postgres>,
     document_id: &str,
 ) -> anyhow::Result<DocumentMetadata> {
-    let document_metadata: DocumentMetadata = sqlx::query_as!(
-        DocumentMetadata,
+    let document_metadata: DocumentMetadata = sqlx::query!(
         r#"
         SELECT
             d.id as "document_id",
@@ -309,6 +351,28 @@ pub async fn get_document(
     "#,
         document_id,
     )
+    .try_map(|row| {
+        Ok(DocumentMetadata {
+            document_id: row.document_id,
+            document_version_id: row.document_version_id,
+            owner: MacroUserIdStr::parse_from_str(&row.owner)
+                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
+                .into_owned(),
+            document_name: row.document_name,
+            file_type: row.file_type,
+            sha: row.sha,
+            project_id: row.project_id,
+            project_name: row.project_name,
+            branched_from_id: row.branched_from_id,
+            branched_from_version_id: row.branched_from_version_id,
+            document_family_id: row.document_family_id,
+            document_bom: row.document_bom,
+            modification_data: row.modification_data,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            sub_type: row.sub_type,
+        })
+    })
     .fetch_one(db)
     .await?;
 
@@ -321,8 +385,7 @@ pub async fn get_document_version(
     document_id: &str,
     document_version_id: i64,
 ) -> anyhow::Result<DocumentMetadata> {
-    let document_metadata: DocumentMetadata = sqlx::query_as!(
-        DocumentMetadata,
+    let document_metadata: DocumentMetadata = sqlx::query!(
         r#"
         SELECT
             d.id as "document_id",
@@ -402,6 +465,28 @@ pub async fn get_document_version(
         document_id,
         document_version_id,
     )
+    .try_map(|row| {
+        Ok(DocumentMetadata {
+            document_id: row.document_id,
+            document_version_id: row.document_version_id,
+            owner: MacroUserIdStr::parse_from_str(&row.owner)
+                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
+                .into_owned(),
+            document_name: row.document_name,
+            file_type: row.file_type,
+            sha: row.sha,
+            project_id: row.project_id,
+            project_name: row.project_name,
+            branched_from_id: row.branched_from_id,
+            branched_from_version_id: row.branched_from_version_id,
+            document_family_id: row.document_family_id,
+            document_bom: row.document_bom,
+            modification_data: row.modification_data,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            sub_type: row.sub_type,
+        })
+    })
     .fetch_one(db)
     .await?;
 
@@ -537,8 +622,9 @@ mod tests {
             get_basic_document(&pool, "document-one")
                 .await
                 .unwrap()
-                .owner,
-            "macro|user@user.com".to_string(),
+                .owner
+                .as_ref(),
+            "macro|user@user.com",
         );
     }
 
@@ -561,7 +647,7 @@ mod tests {
             document_metadata.document_name,
             "test_document_name".to_string()
         );
-        assert_eq!(document_metadata.owner, "macro|user@user.com".to_string());
+        assert_eq!(document_metadata.owner.as_ref(), "macro|user@user.com");
     }
 
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("basic_user_with_documents")))]
@@ -576,7 +662,7 @@ mod tests {
             document_metadata.document_name,
             "test_document_name".to_string()
         );
-        assert_eq!(document_metadata.owner, "macro|user@user.com".to_string());
+        assert_eq!(document_metadata.owner.as_ref(), "macro|user@user.com");
     }
 
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("basic_user_with_documents")))]
@@ -593,7 +679,7 @@ mod tests {
             document_metadata.document_name,
             "test_document_name".to_string()
         );
-        assert_eq!(document_metadata.owner, "macro|user@user.com".to_string());
+        assert_eq!(document_metadata.owner.as_ref(), "macro|user@user.com");
     }
 
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("basic_user_with_documents")))]

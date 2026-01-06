@@ -7,7 +7,6 @@
 import type { ItemSharedMetadataItemName } from './itemSharedMetadataItemName';
 import type { EntityType } from './entityType';
 import type { ItemSharedMetadataPermissionLevel } from './itemSharedMetadataPermissionLevel';
-import type { String } from './string';
 
 /**
  * Metadata for when a item is shared with a user
@@ -21,7 +20,7 @@ export interface ItemSharedMetadata {
   itemType: EntityType;
   /** Permission level granted (read, write, admin, etc.) */
   permissionLevel?: ItemSharedMetadataPermissionLevel;
-  sharedBy: String;
+  sharedBy: string;
   /** List of user IDs that the item is shared with */
   userIds: string[];
 }

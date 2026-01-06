@@ -86,6 +86,8 @@ export const PropertyGrid: Component<PropertiesListProps> = (props) => {
               <PropertyRow
                 property={property}
                 onValueClick={handleValueClick}
+                withDelete
+                withPin
               />
             )}
           </For>
@@ -103,6 +105,8 @@ export const PropertyGrid: Component<PropertiesListProps> = (props) => {
               <PropertyRow
                 property={property}
                 onValueClick={handleValueClick}
+                withDelete
+                withPin
               />
             )}
           </For>
@@ -120,6 +124,8 @@ export const PropertyGrid: Component<PropertiesListProps> = (props) => {
               <PropertyRow
                 property={property}
                 onValueClick={handleValueClick}
+                withDelete
+                withPin
               />
             )}
           </For>

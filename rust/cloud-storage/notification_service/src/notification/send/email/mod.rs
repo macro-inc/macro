@@ -5,6 +5,7 @@ use anyhow::Context;
 use filter::filter_emails;
 use futures::StreamExt;
 use macro_env::Environment;
+use macro_user_id::email::ReadEmailParts;
 use model_notifications::{NotificationEventType, NotificationWithRecipient};
 
 use crate::{env::SENDER_ADDRESS, notification::context::QueueWorkerContext};
@@ -36,7 +37,7 @@ pub async fn process_email_notifications(
                 return Ok(());
             }
 
-            if !sender_id.unwrap().ends_with("@macro.com") {
+            if sender_id.unwrap().email_part().domain_part() != "macro.com" {
                 tracing::info!(
                     "not sending notification emails for non-macro users in non-prod environment"
                 );
@@ -72,7 +73,7 @@ pub async fn process_email_notifications(
             .inner
             .sender_id
             .as_ref()
-            .map(|s| s.replace("macro|", ""))
+            .map(|s| s.email_part().email_str().to_string())
             .context("sender id should exist")?;
 
         notification_db_client::channel_notification_email_sent::upsert::upsert_channel_notification_email_sent_bulk(

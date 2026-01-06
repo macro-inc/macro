@@ -1,5 +1,6 @@
 use crate::model::Message;
 use anyhow::{Context, Result};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
@@ -11,8 +12,7 @@ pub async fn get_messages(
     since: Option<chrono::DateTime<chrono::Utc>>,
     limit: Option<i64>,
 ) -> Result<Vec<Message>> {
-    let messages = sqlx::query_as!(
-        Message,
+    let messages = sqlx::query!(
         r#"
         SELECT
             id,
@@ -34,6 +34,21 @@ pub async fn get_messages(
         since,
         limit
     )
+    .try_map(|row| {
+        Ok(Message {
+            id: row.id,
+            channel_id: row.channel_id,
+            thread_id: row.thread_id,
+            sender_id: MacroUserIdStr::parse_from_str(&row.sender_id)
+                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
+                .into_owned(),
+            content: row.content,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            edited_at: row.edited_at,
+            deleted_at: row.deleted_at,
+        })
+    })
     .fetch_all(db)
     .await
     .context("unable to get messages")?;

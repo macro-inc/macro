@@ -1,10 +1,9 @@
-import { useBlockId } from '@core/block';
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import DeleteIcon from '@icon/bold/x-bold.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { Component } from 'solid-js';
 import { createSignal, For, Show } from 'solid-js';
-import { saveEntityProperty } from '../../api';
+import { usePropertiesContext } from '../../context/PropertiesContext';
 import { PROPERTY_STYLES } from '../../styles/styles';
 import type { Property } from '../../types';
 import { formatPropertyValue, getSelectValues } from '../../utils';
@@ -24,7 +23,7 @@ type SelectValueProps = {
  * Opens options modal on click
  */
 export const SelectValue: Component<SelectValueProps> = (props) => {
-  const blockId = useBlockId();
+  const { saveHandler } = usePropertiesContext();
   const [hoveredValue, setHoveredValue] = createSignal<string | null>(null);
   const [isSaving, setIsSaving] = createSignal(false);
 
@@ -48,15 +47,10 @@ export const SelectValue: Component<SelectValueProps> = (props) => {
         return;
       }
 
-      const result = await saveEntityProperty(
-        blockId,
-        props.entityType,
-        props.property,
-        {
-          valueType,
-          values: newValues.length > 0 ? newValues : null,
-        }
-      );
+      const result = await saveHandler.saveProperty(props.property, {
+        valueType,
+        values: newValues.length > 0 ? newValues : null,
+      });
 
       if (
         handlePropertyError(
@@ -94,7 +88,7 @@ export const SelectValue: Component<SelectValueProps> = (props) => {
               </div>
               <Show when={!isReadOnly() && isHovered() && !isSaving()}>
                 <div class="absolute right-1 inset-y-0 flex items-center">
-                  <IconButton
+                  <DeprecatedIconButton
                     icon={DeleteIcon}
                     theme="clear"
                     size="xs"

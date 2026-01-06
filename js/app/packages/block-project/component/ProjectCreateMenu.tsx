@@ -1,7 +1,7 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import type { BlockName } from '@core/block';
 import { EntityIcon, getIconConfig } from '@core/component/EntityIcon';
-import { Button } from '@core/component/FormControls/Button';
+import { DeprecatedButton } from '@core/component/FormControls/DeprecatedButton';
 import { toast } from '@core/component/Toast/Toast';
 import { pressedKeys } from '@core/hotkey/state';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
@@ -195,9 +195,9 @@ export function ProjectCreateMenu(props: { id: string }) {
     <DropdownMenu open={open()} onOpenChange={setOpen}>
       <div class="flex items-center">
         <DropdownMenu.Trigger class="h-min">
-          <Button size="XS" active={open()}>
+          <DeprecatedButton size="XS" active={open()}>
             Create
-          </Button>
+          </DeprecatedButton>
         </DropdownMenu.Trigger>
       </div>
       <DropdownMenu.Portal>

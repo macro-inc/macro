@@ -4,6 +4,7 @@ use crate::{
 };
 use anyhow::Context;
 use chrono::{DateTime, serde::ts_seconds_option};
+use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
 use models_pagination::{CreatedAt, CursorVal, Identify, SortOn};
 use serde::{Deserialize, Serialize};
@@ -32,7 +33,8 @@ pub struct RawNotification {
     /// Custom metadata that may be needed for the notification
     pub metadata: Option<serde_json::Value>,
     /// user id of the macro user who generated the notification
-    pub sender_id: Option<String>,
+    #[schema(value_type = Option<String>)]
+    pub sender_id: Option<MacroUserIdStr<'static>>,
 }
 
 /// NOTE: This should only be used for deserialization from the db
@@ -68,7 +70,8 @@ pub struct RawUserNotification {
     /// Custom metadata that may be provided from the notification
     pub notification_metadata: Option<serde_json::Value>,
     /// user id of the macro user who generated the notification
-    pub sender_id: Option<String>,
+    #[schema(value_type = Option<String>)]
+    pub sender_id: Option<MacroUserIdStr<'static>>,
     /// The time the notification was updated.
     /// This is the exact same as created_at and only used to make soup
     /// bettter on the frontend.

@@ -13,7 +13,7 @@ use crate::{
 use anyhow::Context;
 use axum::{
     Json,
-    extract::{Extension, State},
+    extract::State,
     http::StatusCode,
     response::{IntoResponse, Response},
 };
@@ -21,8 +21,8 @@ use macro_db_client::dcs::create_chat;
 use macro_middleware::cloud_storage::ensure_access::{
     get_users_access_level_v2, project::ProjectBodyAccessLevelExtractor,
 };
-use model::chat::NewChatAttachment;
-use model::{chat::AttachmentType, response::StringIDResponse, user::UserContext};
+use model::{chat::AttachmentType, response::StringIDResponse};
+use model::{chat::NewChatAttachment, user::axum_extractor::MacroUserExtractor};
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::EditAccessLevel;
 use sqs_client::search::SearchQueueMessage;
@@ -38,10 +38,10 @@ use tracing::Instrument;
             (status = 500, body=String),
         )
     )]
-#[tracing::instrument(skip(state, user_context), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(state, user_context), fields(user_id=%user_context.macro_user_id))]
 pub(in crate::api) async fn create_chat_handler(
     State(state): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    user_context: MacroUserExtractor,
     project: ProjectBodyAccessLevelExtractor<EditAccessLevel, CreateChatRequest>,
 ) -> Result<Response, Response> {
     let req = project.into_inner();
@@ -51,7 +51,7 @@ pub(in crate::api) async fn create_chat_handler(
             get_users_access_level_v2(
                 &state.db,
                 &state.comms_service_client,
-                &user_context.user_id,
+                user_context.macro_user_id.as_ref(),
                 &attachment.attachment_id,
                 "document",
             )
@@ -59,7 +59,7 @@ pub(in crate::api) async fn create_chat_handler(
             .map_err(|err| {
                 tracing::error!(
                     error = ?err,
-                    user_id = %user_context.user_id,
+                    user_id = %user_context.macro_user_id,
                     attachment_id = %attachment.attachment_id,
                     "failed to verify document access"
                 );
@@ -71,7 +71,7 @@ pub(in crate::api) async fn create_chat_handler(
             })?
             .ok_or_else(|| {
                 tracing::error!(
-                    user_id = %user_context.user_id,
+                    user_id = %user_context.macro_user_id,
                     attachment_id = %attachment.attachment_id,
                     "user has no access to document"
                 );
@@ -94,7 +94,7 @@ pub(in crate::api) async fn create_chat_handler(
 #[tracing::instrument(
     skip(ctx, user_context, req),
     fields(
-        user_id = %user_context.user_id,
+        user_id = %user_context.macro_user_id,
         project_id = ?req.project_id,
         model = ?req.model,
         attachment_count = req.attachments.as_ref().map(|a| a.len()).unwrap_or(0),
@@ -102,7 +102,7 @@ pub(in crate::api) async fn create_chat_handler(
 )]
 pub async fn create_user_chat_v2(
     ctx: &ApiContext,
-    user_context: Extension<UserContext>,
+    user_context: MacroUserExtractor,
     req: CreateChatRequest,
 ) -> Result<StringIDResponse, (StatusCode, String)> {
     let chat_name = req.name.unwrap_or(DEFAULT_CHAT_NAME.to_string());
@@ -141,7 +141,7 @@ pub async fn create_user_chat_v2(
 
     let chat = create_chat::create_chat_v2(
         &ctx.db,
-        &user_context.user_id,
+        user_context.macro_user_id.clone(),
         &chat_name,
         req.model.unwrap_or(FALLBACK_MODEL),
         req.project_id.as_deref(),
@@ -174,7 +174,7 @@ pub async fn create_user_chat_v2(
         macro_project_utils::ProjectModifiedArgs {
             project_id: req.project_id.clone(),
             old_project_id: None,
-            user_id: user_context.user_id.clone(),
+            user_id: user_context.macro_user_id.to_string(),
         },
     )
     .await;

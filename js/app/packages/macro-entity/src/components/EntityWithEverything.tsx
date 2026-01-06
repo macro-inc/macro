@@ -2,6 +2,7 @@ import { EntityIcon } from '@core/component/EntityIcon';
 import type { Property } from '@core/component/Properties/types';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import { TOKENS } from '@core/hotkey/tokens';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { matches } from '@core/util/match';
 import CheckIcon from '@icon/regular/check.svg';
 import { tryToTypedNotification } from '@notifications';
@@ -14,7 +15,6 @@ import { StaticMarkdown } from 'core/component/LexicalMarkdown/component/core/St
 import { unifiedListMarkdownTheme } from 'core/component/LexicalMarkdown/theme';
 import { UserIcon } from 'core/component/UserIcon';
 import { emailToId, useDisplayName } from 'core/user';
-import { onKeyDownClick, onKeyUpClick } from 'core/util/click';
 import type { ParentProps, Ref } from 'solid-js';
 import {
   createDeferred,
@@ -22,10 +22,12 @@ import {
   createMemo,
   createSignal,
   For,
+  Match,
   onCleanup,
   onMount,
   Show,
   Suspense,
+  Switch,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import {
@@ -43,11 +45,14 @@ import type { Notification, WithNotification } from '../types/notification';
 import type {
   ChannelContentHitData,
   ContentHitData,
+  EmailContentHitData,
   SearchLocation,
   WithSearch,
 } from '../types/search';
 import type { EntityClickEvent, EntityClickHandler } from './Entity';
 import { PropertyPills } from './PropertyPills';
+
+export const ENTITY_HEIGHT = 40;
 
 function UnreadIndicator(props: { active?: boolean }) {
   return (
@@ -92,7 +97,6 @@ function GenericContentHit(props: { data: ContentHitData }) {
 
 function ChannelMessageContentHit(props: { data: ChannelContentHitData }) {
   const [userName] = useDisplayName(props.data.senderId);
-  const formattedDate = createFormattedDate(props.data.sentAt);
 
   return (
     <div class="flex gap-2 items-center min-w-0">
@@ -104,8 +108,58 @@ function ChannelMessageContentHit(props: { data: ChannelContentHitData }) {
           {userName()}
         </div>
         <div class="shrink-0 font-mono text-xs uppercase text-ink-extra-muted">
-          {formattedDate()}
+          {createFormattedDate(props.data.sentAt)}
         </div>
+        <div class="text-sm text-ink-muted truncate flex items-center flex-1 min-w-0">
+          <StaticMarkdown
+            markdown={props.data.content}
+            theme={unifiedListMarkdownTheme}
+            singleLine={true}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EmailMessageContentHit(props: {
+  allData: EmailContentHitData[];
+  data: EmailContentHitData;
+}) {
+  const isSingleMatch = createMemo(() => {
+    return props.allData.length === 1;
+  });
+  const isSingleSender = createMemo(() => {
+    const senders = props.allData.map((d) => d.sender);
+    if (senders.length === 1) return true;
+    if (new Set(senders).size === 1) return true;
+    return false;
+  });
+  const isSingleSentAt = createMemo(() => {
+    const sentAts = props.allData.map((d) => d.sentAt);
+    if (sentAts.length === 1) return true;
+    if (new Set(sentAts).size === 1) return true;
+    const formattedDates = sentAts.map(createFormattedDate);
+    if (new Set(formattedDates).size === 1) return true;
+    return false;
+  });
+
+  return (
+    <div class="flex gap-2 items-center min-w-0">
+      <div class="flex size-5 shrink-0 items-center justify-center">
+        <UserIcon id={props.data.senderId} size="xs" />
+      </div>
+      <div class="flex gap-2 text-sm w-full min-w-0 overflow-hidden items-baseline">
+        <Show when={!isSingleMatch() && !isSingleSender()}>
+          <div class="text-sm shrink-0 truncate min-w-0 font-medium">
+            {props.data.sender}
+          </div>
+        </Show>
+        <Show when={!isSingleMatch() && !isSingleSentAt()}>
+          <div class="shrink-0 font-mono text-xs uppercase text-ink-extra-muted">
+            {createFormattedDate(props.data.sentAt)}
+          </div>
+        </Show>
         <div class="text-sm text-ink-muted truncate flex items-center flex-1 min-w-0">
           <StaticMarkdown
             markdown={props.data.content}
@@ -215,7 +269,6 @@ function NotificationRow(props: {
   entity: EntityData;
 }) {
   const [userName] = useDisplayName(props.notification.senderId);
-  const formattedDate = createFormattedDate(props.notification.createdAt);
 
   const ActionContent = () => {
     if (
@@ -300,13 +353,14 @@ function NotificationRow(props: {
         <MessageContent />
       </div>
       <div class="shrink-0 font-mono text-xs uppercase text-ink-extra-muted ml-2">
-        {formattedDate()}
+        {createFormattedDate(props.notification.createdAt)}
       </div>
     </CollapsibleListRow>
   );
 }
 
 function ContentHitRow(props: {
+  allData: ContentHitData[];
   data: ContentHitData;
   onClick: (e: EntityClickEvent, location?: SearchLocation) => void;
   index?: number;
@@ -323,9 +377,19 @@ function ContentHitRow(props: {
       onClick={(e) => props.onClick(e, props.data.location)}
       showThreadBorder={props.data.type === 'channel'}
     >
-      <Show
-        when={props.data.type === 'channel' && props.data}
-        fallback={
+      <Switch>
+        <Match when={props.data.type === 'channel' && props.data}>
+          {(data) => <ChannelMessageContentHit data={data()} />}
+        </Match>
+        <Match when={props.data.type === 'email' && props.data}>
+          {(data) => (
+            <EmailMessageContentHit
+              allData={props.allData as EmailContentHitData[]}
+              data={data()}
+            />
+          )}
+        </Match>
+        <Match when={true}>
           <div class="flex gap-2 items-center min-w-0 w-full">
             <div class="flex size-5 shrink-0 items-center justify-center">
               <div class="h-4/5 border-l border-b w-2 border-edge-muted -translate-y-2 translate-x-[calc(0.25em-1px)]"></div>
@@ -341,10 +405,8 @@ function ContentHitRow(props: {
             </Show>
             <GenericContentHit data={props.data} />
           </div>
-        }
-      >
-        {(data) => <ChannelMessageContentHit data={data()} />}
-      </Show>
+        </Match>
+      </Switch>
     </CollapsibleListRow>
   );
 }
@@ -390,6 +452,8 @@ interface EntityProps<T extends WithNotification<EntityData>>
   onChecked?: (checked: boolean, shiftKey?: boolean) => void;
   checked?: boolean;
 }
+
+const [hoveredEntityId, setHoveredEntityId] = createSignal<string | null>(null);
 
 export function EntityWithEverything(
   props: EntityProps<WithNotification<EntityData | WithSearch<EntityData>>>
@@ -458,7 +522,7 @@ export function EntityWithEverything(
       const isLikelyEmail = (value?: string) =>
         typeof value === 'string' && value.includes('@');
 
-      const combinedParticipantFirstNames = createMemo(() => {
+      const combinedParticipantNames = createMemo(() => {
         if (props.entity.type !== 'email') return [];
         const me = userEmail();
         if (
@@ -475,15 +539,14 @@ export function EntityWithEverything(
           const macroDisplayName = useDisplayName(
             emailToId(participant.email)
           )[0]?.();
-          const macroFirstName = macroDisplayName?.split(' ')[0];
-          const participantFirstName = participant.name?.split(' ')[0] ?? '';
-          if (macroFirstName && !isLikelyEmail(macroFirstName)) {
-            namesSet.add(macroFirstName);
+          const participantFullName = participant.name ?? '';
+          if (macroDisplayName && !isLikelyEmail(macroDisplayName)) {
+            namesSet.add(macroDisplayName);
           } else if (
-            participantFirstName &&
-            !isLikelyEmail(participantFirstName)
+            participantFullName &&
+            !isLikelyEmail(participantFullName)
           ) {
-            namesSet.add(participantFirstName);
+            namesSet.add(participantFullName);
           } else {
             const emailName = participant.email.split('@')[0];
             namesSet.add(emailName);
@@ -493,25 +556,67 @@ export function EntityWithEverything(
       });
 
       const displayedNames = () => {
-        const names = combinedParticipantFirstNames();
+        const names = combinedParticipantNames();
         if (!names || names.length === 0) return undefined;
-        if (names.length <= 3) return names.join(', ');
-        return `${names[0]} .. ${names[names.length - 2]}, ${names[names.length - 1]}`;
+        if (names.length === 1) return names[0];
+        // For multiple participants, use first names only
+        const firstNames = names.map((name) => name.split(' ')[0]);
+        if (firstNames.length <= 3) return firstNames.join(', ');
+        return `${firstNames[0]} .. ${firstNames[firstNames.length - 2]}, ${firstNames[firstNames.length - 1]}`;
       };
 
       const isSearch = () => isSearchEntity(props.entity);
 
       return (
-        <div class="flex gap-1 items-center text-sm min-w-0 w-full truncate overflow-hidden">
+        <div class="flex gap-1 items-center text-sm min-w-0 w-full truncate overflow-hidden @max-md/split:flex-col @max-md/split:items-start @max-md/split:gap-1 @max-md/split:truncate-none">
           {/* sometimes senderName and senderEmail are the same */}
           <div
-            class="flex gap-2 font-semibold shrink-0"
+            class="flex gap-2 items-center font-semibold shrink-0 @max-md/split:w-full @max-md/split:truncate"
             classList={{
               'w-[20cqw]': !isSearch(),
             }}
           >
+            {/* Icon inline with sender in narrow mode */}
+            <div class="hidden @max-md/split:flex size-[1em] shrink-0 items-center justify-center relative group/icon-checkbox">
+              {/* Checkbox for narrow mode - shown on hover or when checked */}
+              <button
+                type="button"
+                class="absolute inset-0 flex items-center justify-center opacity-0 group-hover/icon-checkbox:opacity-100 transition-opacity"
+                classList={{
+                  'opacity-100': props.checked,
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  props.onChecked?.(!props.checked, e.shiftKey);
+                }}
+                data-blocks-navigation
+              >
+                <div
+                  class="size-[0.875em] flex items-center justify-center rounded-xs border border-edge-muted pointer-events-none"
+                  classList={{
+                    'bg-accent border-accent': props.checked,
+                  }}
+                >
+                  <Show when={props.checked}>
+                    <CheckIcon class="w-full h-full text-panel" />
+                  </Show>
+                </div>
+              </button>
+              {/* Icon - hidden on hover in narrow mode when not checked */}
+              <div
+                class="flex items-center justify-center group-hover/icon-checkbox:opacity-0 transition-opacity"
+                classList={{
+                  'opacity-0': props.checked,
+                }}
+              >
+                <Dynamic
+                  component={getIcon().icon}
+                  class={`flex size-full ${getIcon().foreground}`}
+                />
+              </div>
+            </div>
             {/* Sender Name */}
-            <div class="truncate">
+            <div class="truncate @max-md/split:min-w-0">
               {displayedNames() ??
                 props.entity.senderName ??
                 props.entity.senderEmail?.split('@')[0]}
@@ -529,27 +634,43 @@ export function EntityWithEverything(
           </div>
           {/* Subject */}
           {/*<ImportantBadge active={props.importantIndicatorActive} />*/}
-          <div class="flex items-center w-full gap-2 flex-1 min-w-0">
-            <div
-              class="shrink-0 truncate"
-              classList={{
-                'font-regular text-ink-disabled': isSearch(),
-                'font-medium': !isSearch(),
-              }}
-            >
-              <Show when={isSearch()}> – </Show>
-              <Show when={searchHighlightName()} fallback={props.entity.name}>
-                {(name) => (
-                  <StaticMarkdown
-                    markdown={name()}
-                    theme={unifiedListMarkdownTheme}
-                    singleLine={true}
-                  />
+          <div class="flex items-center w-full gap-2 flex-1 min-w-0 @max-md/split:flex-col @max-md/split:items-start @max-md/split:w-full @max-md/split:gap-1">
+            <div class="flex items-center gap-2 flex-1 min-w-0 @max-md/split:w-full @max-md/split:justify-between @max-md/split:min-w-0">
+              <div
+                class="shrink-0 truncate @max-md/split:min-w-0 @max-md/split:flex-1"
+                classList={{
+                  'font-regular text-ink-disabled': isSearch(),
+                  'font-medium': !isSearch(),
+                }}
+              >
+                <Show when={isSearch()}>
+                  <span class="@max-md/split:hidden"> – </span>
+                </Show>
+                <Show when={searchHighlightName()} fallback={props.entity.name}>
+                  {(name) => (
+                    <StaticMarkdown
+                      markdown={name()}
+                      theme={unifiedListMarkdownTheme}
+                      singleLine={true}
+                    />
+                  )}
+                </Show>
+              </div>
+              {/* Body snippet - inline in wide mode */}
+              <div class="truncate shrink grow opacity-60 @max-md/split:hidden">
+                {props.entity.snippet}
+              </div>
+              {/* Timestamp inline with subject in narrow mode */}
+              <Show when={props.timestamp ?? props.entity.updatedAt}>
+                {(date) => (
+                  <span class="hidden @max-md/split:inline shrink-0 whitespace-nowrap text-xs font-mono uppercase text-ink-extra-muted">
+                    {createFormattedDate(date())}
+                  </span>
                 )}
               </Show>
             </div>
-            {/* Body  */}
-            <div class="truncate shrink grow opacity-60">
+            {/* Body snippet - below subject in narrow mode */}
+            <div class="hidden @max-md/split:block truncate w-full text-xs opacity-60">
               {props.entity.snippet}
             </div>
           </div>
@@ -579,55 +700,114 @@ export function EntityWithEverything(
     };
 
     return (
-      <div class="flex gap-2 items-center min-w-0 w-fit max-w-full overflow-hidden">
-        <span class="flex gap-1 truncate font-medium text-sm shrink-0 items-center">
-          <span
-            class="font-semibold truncate"
-            classList={{
-              'w-[20cqw]': !props.showUnrollNotifications,
-            }}
-          >
-            <Show when={searchHighlightName()} fallback={props.entity.name}>
-              {(name) => (
-                <StaticMarkdown
-                  markdown={name()}
-                  theme={unifiedListMarkdownTheme}
-                  singleLine={true}
-                />
-              )}
-            </Show>
-          </span>
-
-          <Show when={showLatestMessageInfo()}>
-            <div class="flex items-center gap-1">
-              {/*<ImportantBadge active={props.importantIndicatorActive} />*/}
-              <span class="font-medium shrink-0 truncate">
-                {userNameFromSender()}
-              </span>
-            </div>
-            <Show when={latestMessage()}>
-              {(lastMessage) => (
-                <div class="truncate shrink grow opacity-60 flex items-center">
-                  {/* TODO (seamus): Channels endpoint does not return any information about attachments. If we have an empty message, assume it's attachments.*/}
-                  <Show
-                    when={lastMessage().content.trim()}
-                    fallback={
-                      <span class="italic text-ink-disabled">
-                        Attached items
-                      </span>
-                    }
-                  >
-                    {(content) => (
-                      <StaticMarkdown
-                        markdown={content()}
-                        theme={unifiedListMarkdownTheme}
-                        singleLine={true}
-                      />
-                    )}
+      <div class="flex gap-2 items-center min-w-0 w-fit max-w-full overflow-hidden @max-md/split:flex-col @max-md/split:items-start @max-md/split:w-full @max-md/split:gap-1">
+        <span class="flex gap-1 truncate font-medium text-sm shrink-0 items-center @max-md/split:w-full @max-md/split:flex-col @max-md/split:items-start @max-md/split:gap-1">
+          <div class="flex items-center gap-2 w-full @max-md/split:justify-between @max-md/split:min-w-0">
+            {/* Icon inline with title in narrow mode */}
+            <div class="hidden @max-md/split:flex size-[1em] shrink-0 items-center justify-center relative group/icon-checkbox-nonemail">
+              {/* Checkbox for narrow mode - shown on hover or when checked */}
+              <button
+                type="button"
+                class="absolute inset-0 flex items-center justify-center opacity-0 group-hover/icon-checkbox-nonemail:opacity-100 transition-opacity"
+                classList={{
+                  'opacity-100': props.checked,
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  props.onChecked?.(!props.checked, e.shiftKey);
+                }}
+                data-blocks-navigation
+              >
+                <div
+                  class="size-[0.875em] flex items-center justify-center rounded-xs border border-edge-muted pointer-events-none"
+                  classList={{
+                    'bg-accent border-accent': props.checked,
+                  }}
+                >
+                  <Show when={props.checked}>
+                    <CheckIcon class="w-full h-full text-panel" />
                   </Show>
                 </div>
+              </button>
+              {/* Icon - hidden on hover in narrow mode when not checked */}
+              <div
+                class="flex items-center justify-center group-hover/icon-checkbox-nonemail:opacity-0 transition-opacity"
+                classList={{
+                  'opacity-0': props.checked,
+                }}
+              >
+                <Show
+                  when={
+                    props.entity.type === 'channel' &&
+                    props.entity.channelType === 'direct_message'
+                  }
+                  fallback={
+                    <Dynamic
+                      component={getIcon().icon}
+                      class={`flex size-full ${getIcon().foreground}`}
+                    />
+                  }
+                >
+                  <DirectMessageIcon entity={props.entity} />
+                </Show>
+              </div>
+            </div>
+            <span
+              class="font-semibold truncate @max-md/split:min-w-0 @max-md/split:flex-1"
+              classList={{
+                'w-[20cqw]': !props.showUnrollNotifications,
+              }}
+            >
+              <Show when={searchHighlightName()} fallback={props.entity.name}>
+                {(name) => (
+                  <StaticMarkdown
+                    markdown={name()}
+                    theme={unifiedListMarkdownTheme}
+                    singleLine={true}
+                  />
+                )}
+              </Show>
+            </span>
+            {/* Timestamp inline with title in narrow mode */}
+            <Show when={props.timestamp ?? props.entity.updatedAt}>
+              {(date) => (
+                <span class="hidden @max-md/split:inline shrink-0 whitespace-nowrap text-xs font-mono uppercase text-ink-extra-muted">
+                  {createFormattedDate(date())}
+                </span>
               )}
             </Show>
+          </div>
+
+          <Show when={showLatestMessageInfo()}>
+            <div class="flex items-center gap-1 @max-md/split:w-full @max-md/split:flex-col @max-md/split:items-start @max-md/split:gap-1">
+              {/*<ImportantBadge active={props.importantIndicatorActive} />*/}
+              <span class="font-medium shrink-0 truncate @max-md/split:w-full">
+                {userNameFromSender()}
+              </span>
+              <Show when={latestMessage()}>
+                {(lastMessage) => (
+                  <div class="truncate shrink grow opacity-60 flex items-center @max-md/split:w-full @max-md/split:text-xs">
+                    {/* TODO (seamus): Channels endpoint does not return any information about attachments. If we have an empty message, assume it's attachments.*/}
+                    <Show
+                      when={lastMessage().content.trim()}
+                      fallback={
+                        <span class="italic text-ink-disabled">
+                          Attached items
+                        </span>
+                      }
+                    >
+                      {(content) => (
+                        <StaticMarkdown
+                          markdown={content()}
+                          theme={unifiedListMarkdownTheme}
+                          singleLine={true}
+                        />
+                      )}
+                    </Show>
+                  </div>
+                )}
+              </Show>
+            </div>
           </Show>
         </span>
       </div>
@@ -683,17 +863,26 @@ export function EntityWithEverything(
       use:draggable
       use:droppable
       data-checked={props.checked}
-      class="everything-entity relative group/entity"
+      class="everything-entity relative group/entity hover:bg-hover/30"
+      style={{
+        'min-height': `${ENTITY_HEIGHT}px`,
+      }}
       classList={{
-        'bg-hover/30': props.highlighted && !props.checked,
-        'bg-accent/5': props.checked,
+        'outline outline-accent/20 outline-offset-[-1px]':
+          !isTouchDevice() && props.selected && !props.checked,
+        '!bg-accent/5 outline outline-accent/20 outline-offset-[-1px]':
+          props.checked,
         'bracket outline outline-accent/20 outline-offset-[-1px]':
-          props.selected,
+          !isTouchDevice() && props.selected,
+        'active:bracket active:outline active:outline-accent/20 active:outline-offset-[-1px]':
+          isTouchDevice() && !props.checked,
       }}
       onMouseOver={(e) => {
+        if (isTouchDevice()) return;
         if (!didCursorMove(e)) {
           return;
         }
+        setHoveredEntityId(props.entity.id);
         props.onMouseOver?.();
       }}
       onContextMenu={() => {
@@ -703,7 +892,7 @@ export function EntityWithEverything(
       <div
         data-entity
         data-entity-id={props.entity.id}
-        class="w-full min-w-0 grid flex-1 items-center suppress-css-bracket grid-cols-[2rem_1fr_auto] pr-2"
+        class="w-full min-w-0 grid flex-1 items-center suppress-css-bracket grid-cols-[2rem_1fr_auto] @max-md/split:flex @max-md/split:flex-col pr-2 @max-md/split:px-2 @max-md/split:py-2"
         onClick={(e) => {
           if (blocksNavigation(e)) return;
           props.onClick?.(props.entity, e);
@@ -725,17 +914,13 @@ export function EntityWithEverything(
 
           actionButtonRef()?.focus();
         }}
-        onKeyDown={onKeyDownClick((e) =>
-          props.onClick?.(props.entity, e as any)
-        )}
-        onKeyUp={onKeyUpClick((e) => props.onClick?.(props.entity, e as any))}
         role="button"
         tabIndex={0}
         ref={mergeRefs(setEntityDivRef, props.ref)}
       >
         <button
           type="button"
-          class="col-1 size-full relative group/button flex items-center justify-center bracket-never"
+          class="col-1 size-full relative group/button flex items-center justify-center bracket-never @max-md/split:hidden"
           onClick={(e) => {
             props.onChecked?.(!props.checked, e.shiftKey);
           }}
@@ -744,8 +929,8 @@ export function EntityWithEverything(
           <div
             class="size-4 p-0.5 flex items-center justify-center rounded-xs group-hover/button:border-accent group-hover/button:border pointer-events-none"
             classList={{
-              'ring ring-edge-muted': props.selected,
-              'bg-panel': !props.checked && props.selected,
+              'ring ring-edge-muted': props.highlighted,
+              'bg-panel': !props.checked && props.highlighted,
               'bg-accent border border-accent': props.checked,
             }}
           >
@@ -754,7 +939,7 @@ export function EntityWithEverything(
             </Show>
           </div>
           <Show when={props.showLeftColumnIndicator && !props.checked}>
-            <div class="absolute inset-0 flex items-center justify-center -z-1">
+            <div class="absolute inset-0 flex items-center justify-center -z-1 @max-md/split:hidden">
               <UnreadIndicator active={props.unreadIndicatorActive} />
             </div>
           </Show>
@@ -762,38 +947,72 @@ export function EntityWithEverything(
         {/* Left Column Indicator(s) */}
         {/* Icon and name - top left on mobile, first item on desktop */}
         <div
-          class="min-h-10 min-w-[50px] flex flex-row items-center gap-2 col-2"
+          class="min-h-10 min-w-[50px] flex flex-row items-center gap-2 col-2 @max-md/split:col-auto @max-md/split:w-full @max-md/split:min-h-0 @max-md/split:items-start"
           classList={{
             grow: props.contentPlacement === 'bottom-row',
             'opacity-70': props.fadeIfRead && !props.unreadIndicatorActive,
           }}
         >
-          <div class="flex size-5 shrink-0 items-center justify-center">
-            <Show
-              when={
-                props.entity.type === 'channel' &&
-                props.entity.channelType === 'direct_message'
-              }
-              fallback={
-                <Dynamic
-                  component={getIcon().icon}
-                  class={`flex size-full ${getIcon().foreground}`}
-                />
-              }
+          {/* Icon/Checkbox container - in narrow mode, shows icon by default, checkbox on hover */}
+          {/* For emails, icon is inline with sender, so hide this container in narrow mode */}
+          <div class="flex size-5 shrink-0 items-center justify-center relative group/icon-checkbox @max-md/split:hidden">
+            {/* Checkbox for narrow mode - shown on hover or when checked, hidden at larger widths */}
+            <button
+              type="button"
+              class="hidden @max-md/split:flex @min-md/split:hidden absolute inset-0 items-center justify-center opacity-0 group-hover/icon-checkbox:opacity-100 transition-opacity"
+              classList={{
+                'opacity-100': props.checked,
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                props.onChecked?.(!props.checked, e.shiftKey);
+              }}
+              data-blocks-navigation
             >
-              <DirectMessageIcon entity={props.entity} />
-            </Show>
+              <div
+                class="size-4 p-0.5 flex items-center justify-center rounded-xs border border-edge-muted pointer-events-none"
+                classList={{
+                  'bg-accent border-accent': props.checked,
+                }}
+              >
+                <Show when={props.checked}>
+                  <CheckIcon class="w-full h-full text-panel" />
+                </Show>
+              </div>
+            </button>
+            {/* Icon - hidden on hover in narrow mode when not checked */}
+            <div
+              class="flex items-center justify-center @max-md/split:group-hover/icon-checkbox:opacity-0 @max-md/split:transition-opacity"
+              classList={{
+                '@max-md/split:opacity-0': props.checked,
+              }}
+            >
+              <Show
+                when={
+                  props.entity.type === 'channel' &&
+                  props.entity.channelType === 'direct_message'
+                }
+                fallback={
+                  <Dynamic
+                    component={getIcon().icon}
+                    class={`flex size-full ${getIcon().foreground}`}
+                  />
+                }
+              >
+                <DirectMessageIcon entity={props.entity} />
+              </Show>
+            </div>
           </div>
           <EntityTitle />
         </div>
         {/* Date and user - top right on mobile, end on desktop  */}
         <div
-          class="row-1 ml-2 @md:ml-4 self-center min-w-0 col-3"
+          class="row-1 ml-2 @md:ml-4 self-center min-w-0 col-3 @max-md/split:col-auto @max-md/split:row-auto @max-md/split:ml-0 @max-md/split:mt-1 @max-md/split:self-start @max-md/split:w-full"
           classList={{
             'opacity-50': props.fadeIfRead && !props.unreadIndicatorActive,
           }}
         >
-          <div class="flex flex-row items-center justify-end gap-2 min-w-0">
+          <div class="flex flex-row items-center justify-end gap-2 min-w-0 @max-md/split:justify-start @max-md/split:flex-wrap">
             <Show when={properties().length > 0}>
               <div class="pr-2 overflow-hidden shrink min-w-0">
                 <PropertyPills properties={properties()} />
@@ -814,17 +1033,19 @@ export function EntityWithEverything(
               )}
             </Show>
             <Show when={props.timestamp ?? props.entity.updatedAt}>
-              {(date) => {
-                const formattedDate = createFormattedDate(date());
-                return (
-                  <span class="shrink-0 whitespace-nowrap text-xs font-mono uppercase text-ink-extra-muted">
-                    {formattedDate()}
-                  </span>
-                );
-              }}
+              {(date) => (
+                <span class="shrink-0 whitespace-nowrap text-xs font-mono uppercase text-ink-extra-muted @max-md/split:hidden">
+                  {createFormattedDate(date())}
+                </span>
+              )}
             </Show>
-            <Show when={props.highlighted && props.onClickRowAction}>
-              <div class="absolute top-1 right-1 items-center flex">
+            <Show
+              when={
+                (props.selected || hoveredEntityId() === props.entity.id) &&
+                props.onClickRowAction
+              }
+            >
+              <div class="absolute top-1 right-1 items-center flex @max-sm/split:hidden">
                 <Tooltip
                   tooltip={
                     <LabelAndHotKey
@@ -851,10 +1072,11 @@ export function EntityWithEverything(
         </div>
         {/* Content Hits from Search */}
         <Show when={contentHitData().length > 0}>
-          <div class="relative row-2 col-2 col-end-4 pb-2">
+          <div class="relative row-2 col-2 col-end-4 pb-2 @max-md/split:row-auto @max-md/split:col-auto @max-md/split:w-full @max-md/split:mt-1">
             <CollapsibleList items={contentHitData()} threadBorder>
               {(data, index, count) => (
                 <ContentHitRow
+                  allData={contentHitData()}
                   data={data}
                   onClick={(e, location) => {
                     props.onClick?.(props.entity, e, location);
@@ -874,7 +1096,7 @@ export function EntityWithEverything(
             contentHitData().length === 0
           }
         >
-          <div class="relative col-2 col-end-4 pb-2">
+          <div class="relative col-2 col-end-4 pb-2 @max-md/split:col-auto @max-md/split:w-full @max-md/split:mt-1">
             <CollapsibleList items={notDoneNotifications()} threadBorder>
               {(notification) => (
                 <NotificationRow
@@ -1070,39 +1292,38 @@ const trackKeydownDuringTask = () => {
 const startOfDay = (d: Date) =>
   new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
 
-const createFormattedDate = (timestamp: number) =>
-  createMemo(() => {
-    const ts = timestamp < 1e12 ? timestamp * 1000 : timestamp;
+const createFormattedDate = (timestamp: number) => {
+  const ts = timestamp < 1e12 ? timestamp * 1000 : timestamp;
 
-    const date = new Date(ts);
-    const now = new Date();
+  const date = new Date(ts);
+  const now = new Date();
 
-    const dateDay = startOfDay(date);
-    const todayDay = startOfDay(now);
+  const dateDay = startOfDay(date);
+  const todayDay = startOfDay(now);
 
-    // Today → show time
-    if (dateDay === todayDay) {
-      return date.toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-    }
-
-    // Same year → show Month Day
-    if (date.getFullYear() === now.getFullYear()) {
-      return date.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-      });
-    }
-
-    // Older → show numeric date
-    return date.toLocaleDateString('en-US', {
-      month: 'numeric',
-      day: 'numeric',
-      year: '2-digit',
+  // Today → show time
+  if (dateDay === todayDay) {
+    return date.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
     });
+  }
+
+  // Same year → show Month Day
+  if (date.getFullYear() === now.getFullYear()) {
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+    });
+  }
+
+  // Older → show numeric date
+  return date.toLocaleDateString('en-US', {
+    month: 'numeric',
+    day: 'numeric',
+    year: '2-digit',
   });
+};
 
 let lastMouseX: number | null = null;
 let lastMouseY: number | null = null;

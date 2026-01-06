@@ -210,6 +210,7 @@ export const FileType = {
   rbi: 'rbi',
   rs: 'rs',
   scss: 'scss',
+  sass: 'sass',
   shader: 'shader',
   sh: 'sh',
   bash: 'bash',

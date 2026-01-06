@@ -1,10 +1,9 @@
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
-import { isErr } from '@core/util/maybeResult';
+import { SERVER_HOSTS } from '@core/constant/servers';
 import DotsThree from '@icon/regular/dots-three.svg';
-import { emailClient } from '@service-email/client';
 import type { MessageWithBodyReplyless } from '@service-email/generated/schemas';
 import { useEmail } from '@service-gql/client';
 import {
@@ -13,7 +12,6 @@ import {
   createMemo,
   createSignal,
   Match,
-  type Setter,
   Show,
   Switch,
   untrack,
@@ -27,8 +25,8 @@ interface EmailMessageBodyProps {
   message: MessageWithBodyReplyless;
   isBodyExpanded: Accessor<boolean>;
   setExpandedMessageBody: (id: string) => void;
-  setFocusedMessageId: Setter<string | undefined>;
-  threadMessageIndex: number;
+  setFocusedMessageId: (messageID: string | undefined) => void;
+  isFirstMessageInThread: boolean;
 }
 
 export function EmailMessageBody(props: EmailMessageBodyProps) {
@@ -85,7 +83,7 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
   });
 
   const source = () => {
-    return showFullHTML() || props.threadMessageIndex === 0
+    return showFullHTML() || props.isFirstMessageInThread
       ? parsedBodyHtml()
       : parsedBodyReplyless();
   };
@@ -127,41 +125,34 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
     return hostContainer;
   });
 
-  // Get the attachment URLs for inline images that reference attachments via cid: URLs
+  // Resolve inline images that reference attachments via cid: URLs
   createEffect(() => {
     const root = host().shadowRoot;
     if (root) {
-      // Resolve inline images that reference attachments via cid: URLs
-      queueMicrotask(async () => {
-        // Build a map from normalized content-id => attachment db_id
-        const contentIdToDbId = new Map<string, string>();
+      queueMicrotask(() => {
+        // Build a map from normalized content-id => sfs_id
+        const contentIdToSfsId = new Map<string, string>();
         for (const att of props.message.attachments ?? []) {
           const contentId = att.content_id;
-          const dbId = att.db_id;
-          if (!contentId || !dbId) continue;
+          const sfsId = att.sfs_id;
+          if (!contentId || !sfsId) continue;
           const normalized = contentId.replace(/[<>]/g, '');
-          contentIdToDbId.set(normalized, dbId);
+          contentIdToSfsId.set(normalized, sfsId);
         }
 
         const images = root.querySelectorAll('img[src^="cid:"]');
-        await Promise.all(
-          Array.from(images).map(async (img) => {
-            if (!(img instanceof HTMLImageElement)) return;
-            if (img.dataset.cidResolved === 'true') return;
-            const src = img.getAttribute('src');
-            if (!src?.startsWith('cid:')) return;
-            const rawCid = src.slice(4);
-            const normalizedCid = rawCid.replace(/[<>]/g, '');
-            const dbId = contentIdToDbId.get(normalizedCid);
-            if (!dbId) return;
-            const res = await emailClient.getAttachmentUrl({ id: dbId });
-            if (isErr(res)) return;
-            const dataUrl = res[1].attachment.data_url;
-            if (!dataUrl) return;
-            img.src = dataUrl;
-            img.dataset.cidResolved = 'true';
-          })
-        );
+        for (const img of images) {
+          if (!(img instanceof HTMLImageElement)) continue;
+          if (img.dataset.cidResolved === 'true') continue;
+          const src = img.getAttribute('src');
+          if (!src?.startsWith('cid:')) continue;
+          const rawCid = src.slice(4);
+          const normalizedCid = rawCid.replace(/[<>]/g, '');
+          const sfsId = contentIdToSfsId.get(normalizedCid);
+          if (!sfsId) continue;
+          img.src = `${SERVER_HOSTS['static-file']}/file/${sfsId}`;
+          img.dataset.cidResolved = 'true';
+        }
       });
     }
   });
@@ -244,7 +235,7 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
         </Switch>
         <Show when={!showFullHTML() && hasHiddenReplyStructure()}>
           <div class="flex items-center gap-2">
-            <IconButton
+            <DeprecatedIconButton
               theme="clear"
               icon={DotsThree}
               onclick={() => setShowFullHTML(true)}

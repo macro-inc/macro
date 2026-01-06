@@ -1,12 +1,12 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { ImagePreview } from '@core/component/ImagePreview';
-import { TextButton } from '@core/component/TextButton';
+import { VideoPreview } from '@core/component/VideoPreview';
 import {
   blockNameToDefaultFile,
   fileTypeToBlockName,
 } from '@core/constant/allBlocks';
-import { staticFileIdEndpoint } from '@core/constant/servers';
 import {
   type InputAttachment,
   isStaticAttachmentType,
@@ -72,16 +72,14 @@ export function Attachment(props: AttachmentProps) {
         </Match>
         <Match when={props.attachment.blockName === STATIC_IMAGE}>
           <ImagePreview
-            id={props.attachment.id}
+            image={{
+              id: props.attachment.id,
+            }}
             variant="small"
-            isCurrentUser={true}
           />
         </Match>
         <Match when={props.attachment.blockName === STATIC_VIDEO}>
-          <video
-            src={staticFileIdEndpoint(props.attachment.id)}
-            class="size-15"
-          />
+          <VideoPreview id={props.attachment.id} variant="small" />
         </Match>
         <Match
           when={matches(
@@ -90,7 +88,7 @@ export function Attachment(props: AttachmentProps) {
           )}
         >
           {(blockName) => (
-            <TextButton
+            <DeprecatedTextButton
               theme="base"
               disabled={props.attachment.pending}
               icon={() =>

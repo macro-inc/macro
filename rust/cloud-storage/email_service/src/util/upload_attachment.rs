@@ -1,6 +1,5 @@
-use crate::pubsub::util::check_gmail_rate_limit;
 use crate::util::redis::RedisClient;
-use anyhow::{Context, anyhow};
+use crate::util::redis::rate_limit::RateLimitArgs;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use document_storage_service_client::DocumentStorageServiceClient;
@@ -20,7 +19,46 @@ use system_properties::{
     EmailAttachmentInput, EmailAttachmentProperty, PgSystemPropertiesRepository, SourceEntity,
     SystemPropertiesService, SystemPropertiesServiceImpl,
 };
+use thiserror::Error;
 use uuid::Uuid;
+
+#[derive(Error, Debug)]
+pub enum UploadAttachmentError {
+    #[error("Rate limit check failed: {0}")]
+    RateLimitCheckFailed(String),
+
+    #[error("Failed to fetch attachment data from Gmail: {0}")]
+    GmailFetchFailed(String),
+
+    #[error("Failed to upload media to SFS: {0}")]
+    SfsUploadFailed(String),
+
+    #[error("Parse error: {0}")]
+    ParseError(String),
+
+    #[error("Database error: {0}")]
+    DatabaseError(String),
+
+    #[error("Attachment filename is missing")]
+    FilenameMissing,
+
+    #[error(
+        "Failed to determine file extension from mime type ({mime_type}) or filename ({filename})"
+    )]
+    FileExtensionDeterminationFailed { mime_type: String, filename: String },
+
+    #[error("Failed to create document record in DSS: {0}")]
+    DssCreateFailed(String),
+
+    #[error("DSS response did not include a presigned URL")]
+    PresignedUrlMissing,
+
+    #[error("Failed to upload attachment to presigned URL. Status: {0}, Body: {1}")]
+    PresignedUrlUploadFailed(reqwest::StatusCode, String),
+
+    #[error("Failed to set email attachment properties: {0}")]
+    SystemPropertiesSetFailed(String),
+}
 
 /// Context required for uploading an email attachment.
 pub struct UploadAttachmentContext<'a> {
@@ -36,20 +74,25 @@ pub struct UploadAttachmentContext<'a> {
 }
 
 /// Upload an email attachment to DSS as a document or SFS as media.
-#[tracing::instrument(skip(ctx, args), err)]
+#[tracing::instrument(skip(ctx), err)]
 pub async fn upload_attachment(
     ctx: UploadAttachmentContext<'_>,
     args: &AttachmentUploadArgs,
-) -> anyhow::Result<String> {
+) -> Result<String, UploadAttachmentError> {
     // 1. Check rate limits before making a Gmail API call.
-    check_gmail_rate_limit(
-        ctx.redis_client,
-        ctx.link.id,
-        GmailApiOperation::MessagesAttachmentsGet,
-        true,
-    )
-    .await
-    .context("Rate limit check failed")?;
+    if ctx
+        .redis_client
+        .is_rate_limited(RateLimitArgs {
+            user_id: ctx.link.id,
+            operation: GmailApiOperation::MessagesAttachmentsGet,
+            is_backfill: args.backfill,
+        })
+        .await
+    {
+        return Err(UploadAttachmentError::RateLimitCheckFailed(
+            "Gmail API rate limit exceeded".to_string(),
+        ));
+    }
 
     // 2. Fetch the raw attachment data from Gmail.
     let attachment_data = fetch_gmail_attachment_data(
@@ -78,17 +121,19 @@ async fn upload_media_attachment(
     args: &AttachmentUploadArgs,
     attachment_data: Vec<u8>,
     mime_type: String,
-) -> anyhow::Result<String> {
+) -> Result<String, UploadAttachmentError> {
     // Upload to SFS
     let sfs_response = ctx
         .sfs_client
         .put_file_with_bytes("a", bytes::Bytes::from(attachment_data), mime_type)
         .await
-        .context("Failed to upload media to SFS")?;
+        .map_err(|e| UploadAttachmentError::SfsUploadFailed(e.to_string()))?;
 
     // Store metadata in email_attachments_sfs table
     let attachment_sfs_id = macro_uuid::generate_uuid_v7();
-    let sfs_id = Uuid::parse_str(&sfs_response.id).context("Failed to parse SFS ID as UUID")?;
+    let sfs_id = Uuid::parse_str(&sfs_response.id).map_err(|e| {
+        UploadAttachmentError::ParseError(format!("Failed to parse SFS ID as UUID: {}", e))
+    })?;
 
     email_db_client::attachments::sfs::insert_attachment_sfs(
         ctx.db,
@@ -98,7 +143,8 @@ async fn upload_media_attachment(
             sfs_id,
         },
     )
-    .await?;
+    .await
+    .map_err(|e| UploadAttachmentError::DatabaseError(e.to_string()))?;
 
     Ok(sfs_response.id)
 }
@@ -109,7 +155,7 @@ async fn upload_document_attachment(
     ctx: &UploadAttachmentContext<'_>,
     args: &AttachmentUploadArgs,
     attachment_data: Vec<u8>,
-) -> anyhow::Result<String> {
+) -> Result<String, UploadAttachmentError> {
     // 1. Calculate hashes required for the upload process.
     let (hex_hash, base64_hash) = calculate_hashes(&attachment_data);
 
@@ -150,7 +196,7 @@ async fn fetch_gmail_attachment_data(
     gmail_client: &GmailClient,
     access_token: &str,
     p: &AttachmentUploadMetadata,
-) -> anyhow::Result<Vec<u8>> {
+) -> Result<Vec<u8>, UploadAttachmentError> {
     gmail_client
         .get_attachment_data(
             access_token,
@@ -158,7 +204,7 @@ async fn fetch_gmail_attachment_data(
             &p.provider_attachment_id,
         )
         .await
-        .context("Failed to fetch attachment data from Gmail")
+        .map_err(|e| UploadAttachmentError::GmailFetchFailed(e.to_string()))
 }
 
 /// Calculates the SHA256 hash of the attachment data in both hex and base64 formats.
@@ -174,12 +220,14 @@ fn calculate_hashes(data: &[u8]) -> (String, String) {
 }
 
 /// Determines the file name (without extension) and file type (extension) from the payload.
-fn determine_file_metadata(p: &AttachmentUploadMetadata) -> anyhow::Result<(String, String)> {
+fn determine_file_metadata(
+    p: &AttachmentUploadMetadata,
+) -> Result<(String, String), UploadAttachmentError> {
     // documents must have a file name to be inserted into Document table.
     let original_file_name = p
         .filename
         .as_deref()
-        .context("attachment filename is missing")?;
+        .ok_or(UploadAttachmentError::FilenameMissing)?;
 
     let file_name = original_file_name
         .split('.')
@@ -204,12 +252,9 @@ fn determine_file_metadata(p: &AttachmentUploadMetadata) -> anyhow::Result<(Stri
                     .filter(|ext| !ext.is_empty())
                     .map(|ext| ext.to_string())
             })
-            .ok_or_else(|| {
-                anyhow!(
-                    "Failed to determine file extension from mime type ({}) or filename ({})",
-                    p.mime_type,
-                    original_file_name
-                )
+            .ok_or_else(|| UploadAttachmentError::FileExtensionDeterminationFailed {
+                mime_type: p.mime_type.clone(),
+                filename: original_file_name.to_string(),
             })?,
     };
 
@@ -226,7 +271,7 @@ async fn create_dss_document_record(
     file_name: &str,
     file_type: &str,
     backfill: bool,
-) -> anyhow::Result<CreateDocumentResponse> {
+) -> Result<CreateDocumentResponse, UploadAttachmentError> {
     // if we are backfilling, use the email timestamp. if it's an on-demand upload, use the current
     // time so the document shows up at the top of soup views.
     let created_at = backfill.then_some(p.internal_date_ts);
@@ -250,7 +295,7 @@ async fn create_dss_document_record(
     dss_client
         .create_document_internal(request, link.macro_id.0.as_ref())
         .await
-        .map_err(|e| anyhow::anyhow!("Failed to create document record in DSS: {}", e))
+        .map_err(|e| UploadAttachmentError::DssCreateFailed(e.to_string()))
 }
 
 /// Uploads the provided data to the presigned URL from the DSS response.
@@ -258,13 +303,13 @@ async fn upload_data_to_presigned_url(
     dss_response: &CreateDocumentResponse,
     attachment_data: Vec<u8>,
     base64_hash: &str,
-) -> anyhow::Result<()> {
+) -> Result<(), UploadAttachmentError> {
     let presigned_url = dss_response
         .data
         .document_response
         .presigned_url
         .as_ref()
-        .context("DSS response did not include a presigned URL")?;
+        .ok_or(UploadAttachmentError::PresignedUrlMissing)?;
 
     let response = reqwest::Client::new()
         .put(presigned_url)
@@ -273,15 +318,18 @@ async fn upload_data_to_presigned_url(
         .body(attachment_data)
         .send()
         .await
-        .context("HTTP PUT request to presigned URL failed")?;
+        .map_err(|e| {
+            UploadAttachmentError::PresignedUrlUploadFailed(
+                reqwest::StatusCode::INTERNAL_SERVER_ERROR,
+                e.to_string(),
+            )
+        })?;
 
     if !response.status().is_success() {
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
-        return Err(anyhow!(
-            "Failed to upload attachment to presigned url: {} {}",
-            status,
-            body
+        return Err(UploadAttachmentError::PresignedUrlUploadFailed(
+            status, body,
         ));
     }
 
@@ -294,14 +342,14 @@ async fn set_email_attachment_properties(
     system_properties_service: &Arc<SystemPropertiesServiceImpl<PgSystemPropertiesRepository>>,
     document_id: &str,
     p: &AttachmentUploadArgs,
-) -> anyhow::Result<()> {
+) -> Result<(), UploadAttachmentError> {
     let sender_email = format!("macro|{}", p.attachment_metadata.sender_email);
     let sender = MacroUserId::parse_from_str(&sender_email)
-        .with_context(|| {
-            format!(
-                "Failed to parse sender email {} into macro user id",
-                p.attachment_metadata.sender_email
-            )
+        .map_err(|e| {
+            UploadAttachmentError::ParseError(format!(
+                "Failed to parse sender email {} into macro user id: {}",
+                p.attachment_metadata.sender_email, e
+            ))
         })?
         .lowercase();
 
@@ -315,11 +363,11 @@ async fn set_email_attachment_properties(
     let recipients: Result<Vec<MacroUserId<ArcCowStr>>, _> = prefixed_emails
         .iter()
         .map(|email| {
-            MacroUserId::parse_from_str(email).with_context(|| {
-                format!(
-                    "Failed to parse recipient email {} into macro user id",
-                    email
-                )
+            MacroUserId::parse_from_str(email).map_err(|e| {
+                UploadAttachmentError::ParseError(format!(
+                    "Failed to parse recipient email {} into macro user id: {}",
+                    email, e
+                ))
             })
         })
         .collect();
@@ -343,7 +391,7 @@ async fn set_email_attachment_properties(
             },
         }])
         .await
-        .context("Failed to set email attachment properties")?;
+        .map_err(|e| UploadAttachmentError::SystemPropertiesSetFailed(e.to_string()))?;
 
     Ok(())
 }

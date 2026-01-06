@@ -10,6 +10,7 @@ import {
   Suspense,
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
+import { Dynamic } from 'solid-js/web';
 import {
   type BlockAliasContext,
   Block as BlockComponent,
@@ -208,7 +209,7 @@ function createBlockElement({
           handle={ownedHandle}
         />
         <Suspense>
-          <definition.component {...(opts?.params ?? {})} />
+          <Dynamic component={definition.component} {...opts?.params} />
         </Suspense>
         <BlockEffectRunner />
       </BlockComponent>

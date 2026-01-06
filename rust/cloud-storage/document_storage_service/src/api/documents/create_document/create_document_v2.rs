@@ -2,6 +2,8 @@ use crate::api::context::ApiContext;
 use axum::http::StatusCode;
 use chrono::{DateTime, Utc};
 use document_sub_type::DocumentSubType;
+use macro_user_id::cowlike::CowLike;
+use macro_user_id::user_id::MacroUserIdStr;
 use model::document::response::CreateDocumentResponseData;
 use model::document::response::{DocumentResponse, DocumentResponseMetadata};
 use model::document::{ContentType, FileType, build_cloud_storage_bucket_document_key};
@@ -14,7 +16,7 @@ pub struct CreateDocumentParams<'a> {
     pub id: Option<&'a str>,
     pub sha: &'a str,
     pub document_name: &'a str,
-    pub owner: &'a str,
+    pub owner: MacroUserIdStr<'a>,
     pub file_type: Option<FileType>,
     pub job_id: Option<&'a str>,
     pub project_id: Option<&'a str>,
@@ -45,6 +47,8 @@ pub async fn create_document(
         is_task,
     } = params;
 
+    let owner = owner.into_owned();
+
     tracing::trace!("creating document v2");
 
     let share_permission = SharePermissionV2::new_document_share_permission(file_type);
@@ -56,7 +60,7 @@ pub async fn create_document(
             id,
             sha,
             document_name,
-            user_id: owner,
+            user_id: owner.clone(),
             file_type,
             project_id,
             project_name: None,
@@ -105,7 +109,7 @@ pub async fn create_document(
     }
 
     let key = build_cloud_storage_bucket_document_key(
-        &document_metadata.owner,
+        document_metadata.owner.as_ref(),
         &document_metadata.document_id,
         document_metadata.document_version_id,
         file_type.as_ref().map(|s| s.as_str()),

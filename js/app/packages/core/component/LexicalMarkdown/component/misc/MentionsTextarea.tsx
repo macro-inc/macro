@@ -118,8 +118,8 @@ export function MentionsTextarea(props: MentionsTextareaProps) {
     cleanupEnterListener();
     cleanupEnterListener = editor.registerCommand(
       KEY_ENTER_COMMAND,
-      (e: KeyboardEvent) => {
-        e.preventDefault();
+      (e) => {
+        e?.preventDefault();
         return true;
       },
       // Run at HIGH here so that the mentions menu can run at CRITICAL

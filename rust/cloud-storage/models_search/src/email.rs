@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 /// A email message match for a given thread id
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct EmailSearchResult {
     /// The email message id.
     /// This is only present if the search result is on the message content
@@ -36,7 +36,7 @@ pub struct EmailSearchResult {
 }
 
 /// A single response item, part of the EmailSearchResponse object
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct EmailSearchResponseItem {
     /// Standardized fields that all item types will share.
     /// These field names are being aligned across all item types
@@ -62,7 +62,7 @@ pub struct EmailSearchResponseItem {
 /// EmailSearchResponseItem object with email metadata we fetch from email service. we don't store these
 /// timestamps in opensearch as they would require us to update each email message record for the thread
 /// every time the thread updates (specifically for updated_at and viewed_at)
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct EmailSearchResponseItemWithMetadata {
     pub created_at: i64,
     pub updated_at: i64,

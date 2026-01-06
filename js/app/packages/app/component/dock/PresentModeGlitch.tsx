@@ -1,5 +1,5 @@
-import { GlitchText } from '@core/component/GlitchText';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
+import { GlitchText } from '@ui/components/GlitchText';
 import { createEffect, createSignal, For, onCleanup, Show } from 'solid-js';
 
 interface PresentModeGlitchProps {

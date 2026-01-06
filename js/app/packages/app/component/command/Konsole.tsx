@@ -1,28 +1,25 @@
 import { useChannelsContext } from '@core/component/ChannelsProvider';
 import { ClippedPanel } from '@core/component/ClippedPanel';
+import { DialogWrapper } from '@core/component/DialogWrapper';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { ENABLE_SEARCH_PAGINATION } from '@core/constant/featureFlags';
 import type { CommandWithInfo } from '@core/hotkey/getCommands';
 import { createFreshSearch } from '@core/util/freshSort';
-import { Popover } from '@kobalte/core';
+import { Dialog } from '@kobalte/core/dialog';
 import { Command as CommandK, useCommandState } from 'cmdk-solid';
-import {
-  registerHotkey,
-  runCommand,
-  useHotkeyDOMScope,
-} from 'core/hotkey/hotkeys';
+import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
   type Accessor,
   createEffect,
   createMemo,
   createSignal,
   For,
-  type JSXElement,
   onMount,
   Show,
   untrack,
 } from 'solid-js';
 import { VList } from 'virtua/solid';
+import { beveledCorners } from '../../../block-theme/signals/themeSignals';
 import { KonsoleFilter } from './KonsoleFilter';
 import {
   COMMAND_ITEM_HEIGHT,
@@ -45,6 +42,7 @@ import {
   konsoleOpen,
   lastCommandTime,
   rawQuery,
+  setKonsoleOpen,
   setLastCommandTime,
   setRawQuery,
   toggleKonsoleVisibility,
@@ -76,36 +74,25 @@ export function KommandMenu() {
     }
   });
 
-  const CommandWindow = (props: { children?: JSXElement }) => {
-    return (
-      <div
-        class="z-50 fixed inset-0 flex flex-row justify-center items-center bg-modal-overlay pattern-edge-muted pattern-diagonal-4"
-        ref={setCommandKRef}
-      >
-        {props.children}
-      </div>
-    );
-  };
-
   return (
     <StaticMarkdownContext>
-      <Popover.Root
+      <Dialog
         open={konsoleOpen()}
         onOpenChange={(_) => toggleKonsoleVisibility()}
       >
-        <Popover.Anchor />
-        <Popover.Portal>
-          <CommandWindow>
-            <Popover.Content>
-              <div class="mt-[25vh] w-6xl max-w-[90vw] max-h-[75vh] overflow-hidden">
-                <ClippedPanel tl active>
+        <Dialog.Portal>
+          <Dialog.Overlay class="fixed inset-0 z-modal bg-transparent" />
+          <DialogWrapper>
+            <div ref={setCommandKRef}>
+              <Dialog.Content>
+                <ClippedPanel tl={!beveledCorners()} active>
                   <KommandMenuInner commandKRef={commandKRef} />
                 </ClippedPanel>
-              </div>
-            </Popover.Content>
-          </CommandWindow>
-        </Popover.Portal>
-      </Popover.Root>
+              </Dialog.Content>
+            </div>
+          </DialogWrapper>
+        </Dialog.Portal>
+      </Dialog>
     </StaticMarkdownContext>
   );
 }
@@ -130,16 +117,7 @@ export function KommandMenuInner(props: {
           data: {
             id: description.replaceAll(' ', '-'),
             name: description,
-            hotkeys: command.hotkeys ?? [],
-            handler: () => {
-              runCommand({
-                keyDownHandler: command.keyDownHandler,
-                activateCommandScopeId: command.activateCommandScopeId,
-              });
-              setCommandScopeCommands([]);
-              return true;
-            },
-            activateCommandScopeId: command.activateCommandScopeId,
+            command: command,
           },
         };
       });
@@ -259,6 +237,18 @@ export function KommandMenuInner(props: {
     runWithInputFocused: true,
   });
 
+  registerHotkey({
+    hotkey: 'escape',
+    scopeId: konsoleHotkeyScopeId,
+    description: 'Close command menu',
+    keyDownHandler: () => {
+      setKonsoleOpen(false);
+      return true;
+    },
+    runWithInputFocused: true,
+    hide: true,
+  });
+
   const CommandKItemWrapper = (props: {
     index: number;
     item: CommandItemCard;
@@ -324,7 +314,7 @@ export function KommandMenuInner(props: {
       <div class="flex items-center gap-2 bg-panel px-2 h-[40px] border-b border-edge-muted">
         <span class="pl-2 pointer-events-none">❯</span>
         <CommandK.Input
-          class="flex-1 border-0 outline-none! focus:outline-none ring-0! focus:ring-0 font-mono"
+          class="flex-1 border-0 outline-none! focus:outline-none ring-0! focus:ring-0"
           onValueChange={setRawQuery}
           placeholder="Search"
           value={rawQuery()}

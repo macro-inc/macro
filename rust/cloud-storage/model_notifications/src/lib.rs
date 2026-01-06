@@ -49,6 +49,8 @@ pub enum NotificationEvent {
     InviteToTeam(InviteToTeamMetadata),
     /// A team invite was rejected
     RejectTeamInvite,
+    /// A user was assigned to a task
+    TaskAssigned(TaskAssignedMetadata),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -73,6 +75,7 @@ impl NotificationEvent {
             NotificationEvent::NewEmail(meta) => serde_json::to_value(meta).ok(),
             NotificationEvent::InviteToTeam(meta) => serde_json::to_value(meta).ok(),
             NotificationEvent::RejectTeamInvite => None,
+            NotificationEvent::TaskAssigned(meta) => serde_json::to_value(meta).ok(),
         }
     }
 
@@ -116,6 +119,7 @@ impl NotificationEvent {
                 None => Ok(Self::RejectTeamInvite),
                 Some(_) => Err(anyhow::anyhow!("RejectTeamInvite should not have metadata")),
             },
+            TaskAssigned => deserialize_meta!(TaskAssigned),
         }
     }
 }
@@ -151,7 +155,8 @@ pub struct UserNotification {
     /// If the notification is "done"
     pub done: bool,
     /// user id of the macro user who generated the notification
-    pub sender_id: Option<String>,
+    #[schema(value_type = Option<String>)]
+    pub sender_id: Option<MacroUserIdStr<'static>>,
     #[serde(flatten)]
     pub temporal: NotificationTemporalData,
     #[serde(flatten)]
@@ -197,7 +202,8 @@ pub struct Notification {
     #[serde(flatten)]
     pub notification_entity: Entity<'static>,
     pub service_sender: String,
-    pub sender_id: Option<String>,
+    #[schema(value_type = Option<String>)]
+    pub sender_id: Option<MacroUserIdStr<'static>>,
     #[serde(flatten)]
     pub temporal: NotificationTemporalData,
     #[serde(flatten)]
@@ -237,7 +243,7 @@ pub struct NotificationQueueMessage {
     pub notification_entity: Entity<'static>,
     #[serde(flatten, rename = "metadata")]
     pub notification_event: NotificationEvent,
-    pub sender_id: Option<String>,
+    pub sender_id: Option<MacroUserIdStr<'static>>,
     pub recipient_ids: Option<Vec<String>>,
 }
 

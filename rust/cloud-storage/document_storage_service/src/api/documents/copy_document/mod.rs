@@ -19,7 +19,7 @@ use model::{
         DocumentBasic, DocumentMetadata, FileType, FileTypeExt, response::GetDocumentResponse,
     },
     response::{ErrorResponse, GenericErrorResponse, GenericResponse},
-    user::UserContext,
+    user::axum_extractor::MacroUserExtractor,
 };
 
 use models_permissions::share_permission::access_level::ViewAccessLevel;
@@ -52,11 +52,11 @@ pub struct Params {
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(state, user_context, document_context, req, _access), fields(user_id=?user_context.user_id, document_version_id=?params.version_id))]
+#[tracing::instrument(skip(state, user_context, document_context, req, _access), fields(user_id=%user_context.macro_user_id, document_version_id=?params.version_id))]
 pub(in crate::api) async fn copy_document_handler(
     _access: DocumentAccessExtractor<ViewAccessLevel>,
     State(state): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    user_context: MacroUserExtractor,
     document_context: Extension<DocumentBasic>,
     Path(Params { document_id }): Path<Params>,
     Query(params): Query<CopyDocumentQueryParams>,
@@ -121,7 +121,7 @@ pub(in crate::api) async fn copy_document_handler(
                 .send(StatusCode::INTERNAL_SERVER_ERROR)
         })?;
 
-        if !project.user_id.eq(&user_context.user_id) {
+        if !project.user_id.eq(&user_context.macro_user_id) {
             // Do not copy the project id of the document
             document_metadata.project_id = None;
             document_metadata.project_name = None;
@@ -144,7 +144,7 @@ pub(in crate::api) async fn copy_document_handler(
 
     match copy_document_v2::copy_document(
         &state,
-        user_context.user_id.as_str(),
+        user_context.macro_user_id.clone(),
         &document_metadata,
         &req.document_name,
         file_type.as_ref(),
@@ -161,7 +161,7 @@ pub(in crate::api) async fn copy_document_handler(
                 copy_document_cleanup::copy_document_cleanup(
                     &state.db,
                     &state.s3_client,
-                    user_context.user_id.clone(),
+                    user_context.macro_user_id.to_string(),
                     document_id,
                 )
                 .await;

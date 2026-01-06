@@ -1,7 +1,7 @@
 use std::{marker::PhantomData, sync::Arc};
 
 use axum::{
-    Extension, async_trait,
+    Extension, RequestPartsExt, async_trait,
     extract::{FromRef, FromRequestParts},
     http::request::Parts,
 };
@@ -10,7 +10,7 @@ use sqlx::PgPool;
 
 use super::get_users_access_level_v2;
 use crate::cloud_storage::ensure_access::{AccessLevelErr, BuildAccessLevel};
-use model::{document::DocumentBasic, user::UserContext};
+use model::{document::DocumentBasic, user::axum_extractor::MacroUserExtractor};
 use models_permissions::share_permission::access_level::AccessLevel;
 
 #[derive(Debug)]
@@ -34,16 +34,20 @@ where
         let db = PgPool::from_ref(state);
         let comms_client = <Arc<CommsServiceClient>>::from_ref(state);
 
-        let user_context: Extension<UserContext> =
-            <Extension<UserContext>>::from_request_parts(parts, state)
-                .await
-                .map_err(|_| AccessLevelErr::InternalErr)?;
+        let MacroUserExtractor {
+            macro_user_id,
+            user_context,
+            ..
+        } = parts
+            .extract()
+            .await
+            .map_err(|_| AccessLevelErr::InternalErr)?;
         let document_context: Extension<DocumentBasic> =
             <Extension<DocumentBasic>>::from_request_parts(parts, state)
                 .await
                 .map_err(|_| AccessLevelErr::InternalErr)?;
 
-        if document_context.owner == user_context.user_id {
+        if document_context.owner == macro_user_id {
             return Ok(Self {
                 access_level: AccessLevel::Owner,
                 desired: PhantomData,

@@ -58,6 +58,25 @@ pub(crate) fn create_highlight_field<'a>(
         .number_of_fragments(number_of_fragments)
 }
 
+/// Creates sort vec to sort by the updated_at with a fallback to score sort
+pub(crate) fn updated_at_sort<'a>() -> Vec<SortType<'a>> {
+    vec![
+        SortType::ScriptSort(ScriptSort::new(
+            Script::new(
+                r#"if (doc.containsKey('sent_at_seconds') && doc['sent_at_seconds'].size() > 0) {
+                    return doc['sent_at_seconds'].value.toInstant().toEpochMilli();
+                } else if (doc.containsKey('updated_at_seconds') && doc['updated_at_seconds'].size() > 0) {
+                    return doc['updated_at_seconds'].value.toInstant().toEpochMilli();
+                } else {
+                    return 0L;  // Or Long.MAX_VALUE to push to end
+                }"#,
+            ),
+            ScriptSortType::Number,
+            SortOrder::Desc,
+        )),
+        SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
+    ]
+}
 pub trait SearchQueryConfig {
     /// Key for item id
     const ID_KEY: &'static str = "entity_id";
@@ -73,10 +92,9 @@ pub trait SearchQueryConfig {
     /// Returns the default sort types that are used on the search query.
     /// Override this method if you need custom sort logic
     fn default_sort_types<'a>() -> Vec<SortType<'a>> {
-        vec![
-            SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
-            SortType::Field(FieldSort::new(Self::ID_KEY, SortOrder::Asc)),
-        ]
+        println!("CALLED");
+        // Use the updated_at_sort by default
+        updated_at_sort()
     }
 
     /// Override this method if you need custom highlight logic
@@ -197,6 +215,45 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
         self
     }
 
+    /// Creates the filter query to filter results to only those a user has
+    /// access to/has requested.
+    /// This could either be a single term/terms query for ids_only or just user_id
+    /// Or a bool query that contains both of these items
+    fn build_filter_query<'a>(&'a self, user_id_key: &str) -> Result<QueryType<'a>> {
+        if self.ids_only {
+            // We only need to search over the entity ids provided
+            if self.ids.is_empty() {
+                return Err(OpensearchClientError::EmptyIdsWithIdsOnly(T::ENTITY_INDEX));
+            }
+
+            // Return just the id query to filter over
+            Ok(QueryType::terms(T::ID_KEY.to_string(), self.ids.to_vec()))
+        } else {
+            let user_id_query = QueryType::term(user_id_key.to_string(), self.user_id.clone());
+
+            // If there are no ids provided we can return only the user id query to filter over
+            if self.ids.is_empty() {
+                return Ok(user_id_query);
+            }
+
+            // otherwise we need to build the filter bool query to contain both entity ids and user_id
+            // Create a filter bool query that will ensure we only search over items that the user has access to
+            let mut filter_bool_query = BoolQueryBuilder::new();
+
+            // We should have either an entity_id match OR a user_id match
+            filter_bool_query.minimum_should_match(1);
+
+            filter_bool_query.should(QueryType::terms(T::ID_KEY.to_string(), self.ids.to_vec()));
+
+            filter_bool_query.should(QueryType::term(
+                user_id_key.to_string(),
+                self.user_id.clone(),
+            ));
+
+            Ok(filter_bool_query.build().into())
+        }
+    }
+
     /// Builds a content and name bool query
     pub fn build_content_and_name_bool_query<'a>(
         &'a self,
@@ -212,10 +269,6 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
             SearchOn::Name => None,
             SearchOn::NameContent | SearchOn::Content => {
                 let mut access_bool_query = BoolQueryBuilder::new();
-
-                // Currently, the minimum should match is always one.
-                // This should of the bool query contains the ids and potentially the user_id
-                access_bool_query.minimum_should_match(1);
 
                 // For name OR content queries, we can build a much more simple bool query
                 let term_must_array: Vec<QueryType<'a>> =
@@ -305,21 +358,12 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
                 // Add in the inner bool query on content + owner to must of access bool query
                 access_bool_query.must(inner_bool_query.build().into());
 
-                // Add any ids to the should array if provided
-                if !self.ids.is_empty() {
-                    access_bool_query
-                        .should(QueryType::terms(T::ID_KEY.to_string(), self.ids.to_vec()));
-                }
+                // Filter over only items you have access to
+                let filter_bool_query = self.build_filter_query(T::USER_ID_KEY)?;
+                access_bool_query.filter(filter_bool_query);
 
-                // If we are not searching over the ids, we need to add the user_id to the should array
-                if !self.ids_only {
-                    access_bool_query.should(QueryType::term(
-                        T::USER_ID_KEY.to_string(),
-                        self.user_id.clone(),
-                    ));
-                }
-
-                access_bool_query.must(QueryType::term("_index", T::ENTITY_INDEX.as_ref()));
+                // Only search on the provided index
+                access_bool_query.filter(QueryType::term("_index", T::ENTITY_INDEX.as_ref()));
 
                 Some(access_bool_query)
             }
@@ -330,10 +374,6 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
             SearchOn::Name | SearchOn::NameContent => {
                 let mut bool_query = BoolQueryBuilder::new();
 
-                // Currently, the minimum should match is always one.
-                // This should of the bool query contains the ids and potentially the user_id
-                bool_query.minimum_should_match(1);
-
                 // For name OR content queries, we can build a much more simple bool query
                 let term_must_array: Vec<QueryType<'a>> =
                     self.build_must_term_query(SearchOn::Name)?;
@@ -343,26 +383,19 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
                     bool_query.must(must);
                 }
 
-                // Add any ids to the should array if provided
-                if !self.ids.is_empty() {
-                    bool_query.should(QueryType::terms(T::ID_KEY.to_string(), self.ids.to_vec()));
-                }
-
-                // If we are not searching over the ids, we need to add the user_id to the should array
-                if !self.ids_only {
-                    bool_query.should(QueryType::term(
-                        "user_id", // the names index only has user_id
-                        self.user_id.clone(),
-                    ));
-                }
+                // Filter over only items you have access to
+                // For name index queries we want to always use user_id as the user id key
+                let filter_bool_query = self.build_filter_query("user_id")?;
+                bool_query.filter(filter_bool_query);
 
                 match T::ENTITY_INDEX {
                     SearchEntityType::Projects => {
-                        bool_query.must(QueryType::term("_index", SearchIndex::Projects.as_ref()));
+                        bool_query
+                            .filter(QueryType::term("_index", SearchIndex::Projects.as_ref()));
                     }
                     _ => {
-                        bool_query.must(QueryType::term("_index", SearchIndex::Names.as_ref()));
-                        bool_query.must(QueryType::term("entity_type", T::ENTITY_INDEX.as_ref()));
+                        bool_query.filter(QueryType::term("_index", SearchIndex::Names.as_ref()));
+                        bool_query.filter(QueryType::term("entity_type", T::ENTITY_INDEX.as_ref()));
                     }
                 }
 

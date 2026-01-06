@@ -1,7 +1,7 @@
 use crate::GmailClient;
 use anyhow::Context;
 use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode};
-use models_email::gmail::webhook::{
+use models_email::gmail::inbox_sync::{
     GoogleJwtClaims, GooglePublicKeys, JwksResponse, JwtVerificationError, KeyMap,
 };
 use std::collections::HashMap;

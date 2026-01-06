@@ -1,4 +1,5 @@
 use document_sub_type::DocumentSubType;
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model::{chat::Chat, document::BasicDocument, project::Project};
 
 /// Gets all deleted sub-projects of a given project.
@@ -119,12 +120,14 @@ pub async fn get_sub_documents(
         "#,
         project_id,
     )
-    .map(|row| {
-        BasicDocument {
+    .try_map(|row| {
+        Ok(BasicDocument {
             document_id: row.document_id,
             document_name: row.document_name,
             document_version_id: row.document_version_id,
-            owner: row.owner,
+            owner: MacroUserIdStr::parse_from_str(&row.owner)
+                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
+                .into_owned(),
             file_type: row.file_type,
             project_id: row.project_id,
             sha: None,
@@ -135,7 +138,7 @@ pub async fn get_sub_documents(
             updated_at: row.updated_at,
             deleted_at: None, // Don't care about the deleted_at
             sub_type: row.sub_type,
-        }
+        })
     })
     .fetch_all(transaction.as_mut())
     .await?;

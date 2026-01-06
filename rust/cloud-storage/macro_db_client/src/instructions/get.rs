@@ -1,10 +1,11 @@
+use macro_user_id::user_id::MacroUserIdStr;
 use tracing::instrument;
 
 /// Gets the instructions document ID for a user
 #[instrument(skip(db))]
 pub async fn get_instructions_document(
     db: &sqlx::Pool<sqlx::Postgres>,
-    user_id: &str,
+    user_id: MacroUserIdStr<'_>,
 ) -> anyhow::Result<Option<String>> {
     tracing::trace!("getting instructions document");
 
@@ -15,7 +16,7 @@ pub async fn get_instructions_document(
             JOIN "Document" d ON d."id" = id."documentId"
             WHERE "userId" = $1 AND d."deletedAt" IS NULL
         "#,
-        user_id,
+        user_id.as_ref(),
     )
     .fetch_optional(db)
     .await
@@ -31,14 +32,15 @@ pub async fn get_instructions_document(
 mod tests {
     use super::*;
     use crate::instructions::create::create_instructions_document;
+    use macro_user_id::cowlike::CowLike;
     use sqlx::{Pool, Postgres};
 
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("basic_user_with_documents")))]
     async fn test_get_instructions_document_exists(pool: Pool<Postgres>) -> anyhow::Result<()> {
-        let user_id = "macro|user@user.com";
+        let user_id = MacroUserIdStr::parse_from_str("macro|user@user.com").unwrap();
 
         // First create an instructions document
-        let created_document_id = create_instructions_document(&pool, user_id)
+        let created_document_id = create_instructions_document(&pool, user_id.clone())
             .await
             .map_err(|e| anyhow::anyhow!("Failed to create instructions document: {:?}", e))?;
 
@@ -53,7 +55,7 @@ mod tests {
 
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("basic_user_with_documents")))]
     async fn test_get_instructions_document_not_exists(pool: Pool<Postgres>) -> anyhow::Result<()> {
-        let user_id = "macro|user@user.com";
+        let user_id = MacroUserIdStr::parse_from_str("macro|user@user.com").unwrap();
 
         // Try to get instructions document without creating one first
         let result = get_instructions_document(&pool, user_id).await?;
@@ -67,20 +69,20 @@ mod tests {
     async fn test_get_instructions_document_different_users(
         pool: Pool<Postgres>,
     ) -> anyhow::Result<()> {
-        let user1 = "macro|user@user.com";
-        let user2 = "macro|user2@user.com";
+        let user1 = MacroUserIdStr::parse_from_str("macro|user@user.com").unwrap();
+        let user2 = MacroUserIdStr::parse_from_str("macro|user2@user.com").unwrap();
 
         // Add second user to the database (only if it doesn't exist)
         let _ = sqlx::query!(
             r#"INSERT INTO "User" (id, email) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING"#,
-            user2,
+            user2.as_ref(),
             "user2@user.com"
         )
         .execute(&pool)
         .await;
 
         // Create instructions document for user1 only
-        let user1_document_id = create_instructions_document(&pool, user1)
+        let user1_document_id = create_instructions_document(&pool, user1.clone())
             .await
             .map_err(|e| anyhow::anyhow!("Failed to create instructions document: {:?}", e))?;
 
@@ -100,7 +102,7 @@ mod tests {
     async fn test_get_instructions_document_nonexistent_user(
         pool: Pool<Postgres>,
     ) -> anyhow::Result<()> {
-        let nonexistent_user = "nonexistent|user@fake.com";
+        let nonexistent_user = MacroUserIdStr::parse_from_str("macro|user@fake.com").unwrap();
 
         // Should return None for non-existent user
         let result = get_instructions_document(&pool, nonexistent_user).await?;

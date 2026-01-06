@@ -69,10 +69,6 @@ export function DatePicker(props: DatePickerProps) {
     props.onChange(newDate);
   };
 
-  const _handleQuickSelect = (date: Date) => {
-    props.onChange(date);
-  };
-
   const isToday = (day: number) => {
     const today = new Date();
     return (

@@ -81,6 +81,7 @@ name = "ai_tools"
 version = "0.1.0"
 dependencies = [
  "ai",
+ "anthropic",
  "anyhow",
  "async-trait",
  "chrono",
@@ -228,12 +229,13 @@ dependencies = [
 
 [[package]]
 name = "anthropic"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "async-openai",
  "async-stream",
  "chrono",
  "futures",
+ "lazy_static",
  "rand 0.9.0",
  "reqwest",
  "reqwest-eventsource",
@@ -531,6 +533,7 @@ dependencies = [
  "model",
  "model-entity",
  "model_notifications",
+ "model_user",
  "models_team",
  "native_app_service",
  "non_empty",
@@ -1782,6 +1785,7 @@ dependencies = [
  "chrono",
  "futures",
  "macro_db_migrator",
+ "macro_user_id",
  "macro_uuid",
  "model",
  "serde",
@@ -2667,10 +2671,12 @@ dependencies = [
  "model",
  "model-entity",
  "model_notifications",
+ "model_user",
  "models_bulk_upload",
  "models_opensearch",
  "models_pagination",
  "models_permissions",
+ "models_properties",
  "models_soup",
  "ordered-float",
  "properties",
@@ -2719,6 +2725,7 @@ dependencies = [
 name = "document_sub_type"
 version = "0.1.0"
 dependencies = [
+ "schemars",
  "serde",
  "sqlx",
  "strum",
@@ -4512,9 +4519,11 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "cool_asserts",
+ "either",
  "filter_ast",
  "macro_user_id",
  "model_file_type",
+ "nom 8.0.0",
  "non_empty",
  "schemars",
  "serde",
@@ -5049,6 +5058,7 @@ dependencies = [
  "anyhow",
  "comms_service_client",
  "macro_db_client",
+ "macro_user_id",
  "model",
  "model-entity",
  "model_notifications",
@@ -5394,6 +5404,7 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "document_sub_type",
+ "macro_user_id",
  "model-error-response",
  "model_file_type",
  "model_user",
@@ -5439,6 +5450,8 @@ name = "model_file_type"
 version = "0.1.0"
 dependencies = [
  "serde",
+ "serde_json",
+ "strum",
  "thiserror 2.0.17",
  "utoipa",
 ]
@@ -5606,6 +5619,7 @@ dependencies = [
  "sqlx",
  "strum",
  "thiserror 2.0.17",
+ "tracing",
  "utoipa",
  "uuid",
 ]
@@ -6010,9 +6024,9 @@ dependencies = [
 
 [[package]]
 name = "opensearch_query_builder"
-version = "0.2.4"
+version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2be0ec85f59a03d8bc068a79c4397f48695d89d6129a3bfec8712b378bc5b73c"
+checksum = "88471616dad533248e2ed35df90a076887afcbc000b0913739797fa7fea5df1a"
 dependencies = [
  "serde",
  "serde_json",
@@ -6580,13 +6594,24 @@ name = "properties"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "comms_service_client",
+ "email_db_client",
+ "futures",
+ "macro_db_client",
  "macro_db_migrator",
+ "macro_middleware",
+ "macro_notify",
+ "macro_user_id",
  "macro_uuid",
  "mockall",
+ "model-entity",
+ "model_notifications",
+ "models_permissions",
  "models_properties",
  "serde_json",
  "sqlx",
  "system_properties",
+ "thiserror 2.0.17",
  "tokio",
  "tracing",
  "uuid",
@@ -6630,6 +6655,7 @@ dependencies = [
  "macro_entrypoint",
  "macro_env",
  "macro_middleware",
+ "macro_notify",
  "macro_uuid",
  "model",
  "models_permissions",
@@ -7545,9 +7571,11 @@ dependencies = [
  "macro_entrypoint",
  "macro_env",
  "macro_middleware",
+ "macro_user_id",
  "macro_uuid",
  "mention_utils",
  "model",
+ "model_file_type",
  "models_opensearch",
  "models_search",
  "nom 8.0.0",

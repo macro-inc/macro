@@ -161,7 +161,7 @@ pub async fn save_document_handler(
     // If the document is a monaco file, we will need to generate a presigned url to save the file
     let presigned_url: Option<String> = if file_type == FileType::Py || file_type == FileType::Js {
         let key = build_cloud_storage_bucket_document_key(
-            &document_metadata.owner,
+            document_metadata.owner.as_ref(),
             &document_metadata.document_id,
             document_metadata.document_version_id,
             Some(file_type.as_str()),

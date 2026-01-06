@@ -9,7 +9,7 @@ const VALID_PLATFORMS: ReadonlyArray<MacroPlatform> = [
 ];
 
 function resolveBuildPlatform(): MacroPlatform {
-  const platform = import.meta?.env?.VITE_PLATFORM as MacroPlatform | undefined;
+  const platform = import.meta.env.VITE_PLATFORM;
   if (platform && VALID_PLATFORMS.includes(platform)) return platform;
   return 'web';
 }
@@ -27,18 +27,23 @@ export function isPlatform(target: MacroPlatform | MacroPlatform[]): boolean {
     : platform === target;
 }
 
-export function isMobilePlatform(): boolean {
-  return isPlatform(['ios', 'android']);
+export function isMobilePlatform(): boolean;
+export function isMobilePlatform(
+  platform: MacroPlatform
+): platform is NativeMobilePlatform;
+export function isMobilePlatform(
+  platform: MacroPlatform = getPlatform()
+): boolean {
+  return platform === 'ios' || platform === 'android';
 }
 
 export function isDesktopPlatform(): boolean {
   return isPlatform('desktop');
 }
 
-export function getNativeMobilePlatform(): NativeMobilePlatform | undefined {
-  return isMobilePlatform()
-    ? (getPlatform() as NativeMobilePlatform)
-    : undefined;
+export function getNativeMobilePlatform() {
+  const platform = getPlatform();
+  return isMobilePlatform(platform) ? platform : undefined;
 }
 
 export function isTauri(): boolean {

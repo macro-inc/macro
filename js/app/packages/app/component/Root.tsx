@@ -1,14 +1,16 @@
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
+import { setHotkeyRoot, useSubscribeToKeypress } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { withAnalytics } from '@coparse/analytics';
 import { useIsAuthenticated } from '@core/auth';
 import { ChannelsContextProvider } from '@core/component/ChannelsProvider';
-import { TextButton } from '@core/component/TextButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { toast } from '@core/component/Toast/Toast';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import { WebsocketDebugger } from '@core/component/WebsocketDebugger';
 import {
   ENABLE_WEBSOCKET_DEBUGGER,
+  ENABLE_WHICHKEY_OVERLAY,
   PROD_MODE_ENV,
 } from '@core/constant/featureFlags';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
@@ -49,7 +51,6 @@ import {
   onMount,
   type ParentProps,
   Show,
-  Suspense,
 } from 'solid-js';
 import { currentThemeId } from '../../block-theme/signals/themeSignals';
 import {
@@ -67,7 +68,10 @@ import { GlobalAppStateProvider } from './GlobalAppState';
 import { Layout } from './Layout';
 import MacroJump from './MacroJump';
 import Onboarding from './Onboarding';
+import { SuspenseContextComp } from './SuspenseContext';
 import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
+import Visor from './Visor';
+import { setOpenWhichKey, WhichKey } from './WhichKey';
 
 const { track, identify, TrackingEvents } = withAnalytics();
 
@@ -159,7 +163,7 @@ function BasePathComponent() {
   }
 
   const authenticated = useIsAuthenticated();
-  if (!authenticated()) return <Navigate href="/onboarding" />;
+  if (!authenticated()) return <Navigate href="/signup" />;
 
   // Preserve existing query parameters when redirecting
   const params = new URLSearchParams(window.location.search);
@@ -215,7 +219,7 @@ const ROUTES: RouteDefinition[] = [
       return (
         <div class="h-full overflow-y-hidden">
           <div class="relative flex flex-row items-center pt-4 h-full">
-            <TextButton
+            <DeprecatedTextButton
               theme="base"
               text="Close"
               onClick={() => {
@@ -295,7 +299,14 @@ const clearBodyInlineStyleColor = () => {
 
 export function Root() {
   const isAuthenticated = useIsAuthenticated();
-  useHotKeyRoot();
+  setHotkeyRoot(useHotKeyRoot());
+
+  useSubscribeToKeypress((context) => {
+    if (ENABLE_WHICHKEY_OVERLAY && context.commandScopeActivated) {
+      setOpenWhichKey(true);
+    }
+  });
+
   useSoundHover();
 
   clearBodyInlineStyleColor();
@@ -348,6 +359,24 @@ export function Root() {
   const tabTitle = () => formatTabTitle(tabInfo());
   const routerBase = isTauri() ? '/' : '/app';
 
+  let runRootWarningLog = false;
+  const RootSuspenseFallback = () => {
+    const runWarningLog = () => {
+      if (!runRootWarningLog) {
+        setTimeout(() => {
+          runRootWarningLog = true;
+        });
+        return;
+      }
+
+      console.warn('Root Suspsense Triggered');
+    };
+
+    runWarningLog();
+
+    return '';
+  };
+
   return (
     <MaybeTauriProvider>
       <MetaProvider>
@@ -356,7 +385,11 @@ export function Root() {
             <ChannelsContextProvider>
               <Title>{tabTitle()}</Title>
               <MacroJump />
-              <Suspense fallback={''}>
+              <Visor />
+              <Show when={ENABLE_WHICHKEY_OVERLAY}>
+                <WhichKey />
+              </Show>
+              <SuspenseContextComp fallback={<RootSuspenseFallback />}>
                 <IsomorphicRouter
                   transformUrl={transformShortIdInUrlPathname}
                   root={Layout}
@@ -369,7 +402,7 @@ export function Root() {
                     children: ROUTES,
                   }}
                 </IsomorphicRouter>
-              </Suspense>
+              </SuspenseContextComp>
               <ToastRegion />
               <Show when={ENABLE_WEBSOCKET_DEBUGGER}>
                 <WebsocketDebugger />

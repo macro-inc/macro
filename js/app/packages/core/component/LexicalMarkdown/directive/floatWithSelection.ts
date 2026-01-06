@@ -79,9 +79,9 @@ export function floatWithSelection(
     if (anchor) {
       setCurrentAnchor(anchor);
       const { placement } = await computePosition(anchor, floatingEl, {
-        placement: isTouchDevice ? 'top-start' : 'bottom-start',
+        placement: isTouchDevice() ? 'top-start' : 'bottom-start',
         middleware: [
-          isTouchDevice
+          isTouchDevice()
             ? null
             : flip({
                 fallbackStrategy: 'initialPlacement',

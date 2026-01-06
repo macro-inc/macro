@@ -26,7 +26,10 @@ import {
 } from '@core/constant/featureFlags';
 import { blockFileSignal, blockMetadataSignal } from '@core/signal/load';
 import { useGetPermissions } from '@core/signal/permissions';
-import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
+import {
+  useBlockDocumentDownloadName,
+  useBlockDocumentName,
+} from '@core/util/currentBlockDocumentName';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { downloadFile } from '@filesystem/download';
 import DownloadSimple from '@icon/regular/download-simple.svg';
@@ -48,6 +51,7 @@ export function TopBar() {
   const getCurrentSavedFile = currentSavedFile.get;
   const documentId = useBlockId();
   const fileName = useBlockDocumentName('Unknown Filename');
+  const downloadName = useBlockDocumentDownloadName('Unknown Filename');
   const canvasFile = blockFileSignal.get;
   const userPermissions = useGetPermissions();
 
@@ -58,10 +62,9 @@ export function TopBar() {
 
   const downloadDocument = createCallback(async () => {
     const file = getCurrentSavedFile() ?? canvasFile();
-    const name = fileName();
     if (!file) return;
 
-    downloadFile(file, `${name}.canvas`);
+    downloadFile(file, downloadName());
     track(TrackingEvents.BLOCKCANVAS.FILEMENU.DOWNLOAD);
   });
 

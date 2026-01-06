@@ -1,4 +1,5 @@
 use crate::{document::v2::create::create_document, instructions::get::get_instructions_document};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model::document::FileType;
 use models_dcs::constants::INSTRUCTIONS_FILE_NAME;
 use models_permissions::share_permission::SharePermissionV2;
@@ -16,7 +17,7 @@ pub enum CreateInstructionsError {
 #[instrument(skip(db))]
 pub async fn create_instructions_document(
     db: &sqlx::Pool<sqlx::Postgres>,
-    user_id: &str,
+    user_id: MacroUserIdStr<'static>,
 ) -> Result<String, CreateInstructionsError> {
     tracing::trace!("creating instructions document");
 
@@ -26,7 +27,7 @@ pub async fn create_instructions_document(
             id: None,
             sha: "",
             document_name: INSTRUCTIONS_FILE_NAME,
-            user_id,
+            user_id: user_id.clone(),
             file_type: Some(FileType::Md),
             project_id: None,
             project_name: None,
@@ -41,7 +42,7 @@ pub async fn create_instructions_document(
 
     let document_id = document_metadata.document_id;
 
-    let insert_result = insert_instructions_document(db, user_id, &document_id).await;
+    let insert_result = insert_instructions_document(db, user_id.copied(), &document_id).await;
 
     match insert_result {
         Ok(_) => (),
@@ -49,7 +50,7 @@ pub async fn create_instructions_document(
             match err {
                 CreateInstructionsError::UserAlreadyHasInstructions => {
                     // Check if the instructions document has been deleted but the instructions table row still exists
-                    let exists = get_instructions_document(db, user_id)
+                    let exists = get_instructions_document(db, user_id.copied())
                         .await
                         .map(|doc_id| doc_id.is_some())?;
 
@@ -61,7 +62,7 @@ pub async fn create_instructions_document(
                     // Otherwise we can safely delete the instructions row
                     sqlx::query!(
                         r#"DELETE FROM "InstructionsDocuments" WHERE "userId" = $1"#,
-                        user_id
+                        user_id.as_ref()
                     )
                     .execute(db)
                     .await
@@ -87,7 +88,7 @@ pub async fn create_instructions_document(
 #[instrument(skip(db))]
 pub async fn insert_instructions_document(
     db: &sqlx::Pool<sqlx::Postgres>,
-    user_id: &str,
+    user_id: MacroUserIdStr<'_>,
     document_id: &str,
 ) -> Result<(), CreateInstructionsError> {
     tracing::trace!("inserting instructions document");
@@ -98,7 +99,7 @@ pub async fn insert_instructions_document(
             VALUES ($1, $2)
         "#,
         document_id,
-        user_id,
+        user_id.as_ref(),
     )
     .execute(db)
     .await;
@@ -132,9 +133,9 @@ mod tests {
 
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("basic_user_with_documents")))]
     async fn test_create_instructions_document_success(pool: Pool<Postgres>) -> anyhow::Result<()> {
-        let user_id = "macro|user@user.com";
+        let user_id = MacroUserIdStr::parse_from_str("macro|user@user.com").unwrap();
 
-        let result = create_instructions_document(&pool, user_id).await;
+        let result = create_instructions_document(&pool, user_id.clone()).await;
 
         match result {
             Ok(document_id) => {
@@ -144,7 +145,7 @@ mod tests {
                 // Verify it's in the instructions table
                 let instructions_doc = sqlx::query!(
                     r#"SELECT "documentId" as "document_id" FROM "InstructionsDocuments" WHERE "userId" = $1"#,
-                    user_id
+                    user_id.as_ref()
                 )
                 .fetch_one(&pool)
                 .await?;
@@ -161,7 +162,7 @@ mod tests {
 
                 assert_eq!(document.name, INSTRUCTIONS_FILE_NAME);
                 assert_eq!(document.file_type.as_deref(), Some("md"));
-                assert_eq!(document.owner, user_id);
+                assert_eq!(document.owner.as_str(), user_id.as_ref());
 
                 Ok(())
             }
@@ -173,10 +174,10 @@ mod tests {
     async fn test_create_instructions_document_duplicate_user(
         pool: Pool<Postgres>,
     ) -> anyhow::Result<()> {
-        let user_id = "macro|user@user.com";
+        let user_id = MacroUserIdStr::parse_from_str("macro|user@user.com").unwrap();
 
         // First creation should succeed
-        let result1 = create_instructions_document(&pool, user_id).await;
+        let result1 = create_instructions_document(&pool, user_id.clone()).await;
         match result1 {
             Ok(document_id) => {
                 // Verify the document exists
@@ -205,13 +206,13 @@ mod tests {
     async fn test_create_instructions_document_different_users(
         pool: Pool<Postgres>,
     ) -> anyhow::Result<()> {
-        let user1 = "macro|user@user.com";
-        let user2 = "macro|user2@user.com";
+        let user1 = MacroUserIdStr::parse_from_str("macro|user@user.com").unwrap();
+        let user2 = MacroUserIdStr::parse_from_str("macro|user2@user.com").unwrap();
 
         // Add second user to the database (only if it doesn't exist)
         let _ = sqlx::query!(
             r#"INSERT INTO "User" (id, email) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING"#,
-            user2,
+            user2.as_ref(),
             "user2@user.com"
         )
         .execute(&pool)

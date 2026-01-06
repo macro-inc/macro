@@ -25,7 +25,7 @@ export type TooltipProps = ParentProps<{
  * @param props.floatingOptions - A optional floating ui options object.
  * @example
  * <Tooltip tooltip={<div class="text-xs">Hello</div>}>
- *     <Button>Hover over me</Button>
+ *     <DeprecatedButton>Hover over me</DeprecatedButton>
  * </Tooltip>
  */
 export function Tooltip(props: TooltipProps) {

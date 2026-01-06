@@ -308,7 +308,7 @@ export function ChatAttachMenu(props: ChatAttachMenuProps) {
                 <VList
                   ref={setVlistRef}
                   data={rankedHistory()}
-                  overscan={10}
+                  bufferSize={10 * 40}
                   itemSize={40}
                   style={{ height: '100%', contain: 'content' }}
                 >
@@ -349,11 +349,11 @@ export function ChatAttachMenu(props: ChatAttachMenuProps) {
             >
               <OldMenuItem
                 text={
-                  isTouchDevice
+                  isTouchDevice()
                     ? 'Upload from your device'
                     : 'Upload from your computer'
                 }
-                icon={isTouchDevice ? DeviceMobileIcon : LaptopIcon}
+                icon={isTouchDevice() ? DeviceMobileIcon : LaptopIcon}
                 spacerTop
               />
             </div>

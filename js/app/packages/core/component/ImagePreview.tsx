@@ -13,24 +13,25 @@ import { Dialog } from '@kobalte/core/dialog';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import Panzoom from '@panzoom/panzoom';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
-import { commsServiceClient } from '@service-comms/client';
 import { storageServiceClient } from '@service-storage/client';
 import { fetchBinary } from '@service-storage/util/fetchBinary';
 import { createEffect, createSignal, onCleanup, Show } from 'solid-js';
 import { platformFetch } from '../util/platformFetch';
-import { IconButton } from './IconButton';
+import { DeprecatedIconButton } from './DeprecatedIconButton';
 import { DropdownMenuContent, MenuItem, MenuSeparator } from './Menu';
 import { toast } from './Toast/Toast';
 
-export type ImagePreviewProps = {
+type ImageData = {
   id: string;
+  width?: string | number | undefined;
+  height?: string | number | undefined;
+};
+
+export type ImagePreviewProps = {
+  image: ImageData;
   variant: 'small' | 'dynamic';
   square?: boolean;
-  channelId?: string;
-  messageId?: string;
-  attachmentId?: string;
-  isCurrentUser: boolean;
-  content?: string;
+  onDelete?: () => void;
   isContext?: boolean;
   isDss?: boolean;
   onError?: (err: any) => void;
@@ -71,7 +72,7 @@ export function ImagePreview(props: ImagePreviewProps) {
       console.error('do not access sfs image url for dss images');
       return '';
     }
-    return `${SERVER_HOSTS['static-file']}/file/${props.id}`;
+    return `${SERVER_HOSTS['static-file']}/file/${props.image.id}`;
   };
 
   const imageSrc = () => {
@@ -85,7 +86,7 @@ export function ImagePreview(props: ImagePreviewProps) {
   createEffect(() => {
     if (!props.isDss) return;
 
-    getDssImageBlob(props.id)
+    getDssImageBlob(props.image.id)
       .then((blob) => {
         if (!blob) {
           throw new Error('Failed to download DSS image');
@@ -121,7 +122,7 @@ export function ImagePreview(props: ImagePreviewProps) {
       if (!url) throw new Error('No blob url');
       const a = document.createElement('a');
       a.href = url;
-      a.download = `image-${props.id}.png`;
+      a.download = `image-${props.image.id}.png`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -133,27 +134,12 @@ export function ImagePreview(props: ImagePreviewProps) {
     }
   };
 
-  const showDeleteMediaButton = () => {
-    return (
-      props.channelId &&
-      props.messageId &&
-      props.attachmentId &&
-      props.isCurrentUser
-    );
-  };
-
-  const handleDeleteChannelMedia = async () => {
-    if (!props.channelId || !props.messageId || !props.attachmentId) return;
-    await commsServiceClient.patchMessage({
-      channel_id: props.channelId,
-      message_id: props.messageId,
-      content: props.content,
-      attachment_ids_to_delete: [props.attachmentId],
-    });
+  const handleDelete = () => {
+    props.onDelete?.();
   };
 
   const handleMouseMove = () => {
-    if (isMobileWidth() || isTouchDevice) return;
+    if (isMobileWidth() || isTouchDevice()) return;
 
     setIsToolbarVisible(true);
 
@@ -205,7 +191,7 @@ export function ImagePreview(props: ImagePreviewProps) {
       const blob = await getBlob();
       if (!blob) throw new Error('No blob');
 
-      if (isTouchDevice && navigator.share) {
+      if (isTouchDevice() && navigator.share) {
         const file = new File([blob], 'image.png', { type: blob.type });
         await navigator.share({
           files: [file],
@@ -255,7 +241,7 @@ export function ImagePreview(props: ImagePreviewProps) {
     image.addEventListener('panzoomchange', updateCursor);
     image.addEventListener('wheel', panzoom.zoomWithWheel);
 
-    if (!isMobileWidth() && !isTouchDevice) {
+    if (!isMobileWidth() && !isTouchDevice()) {
       setTimeout(() => {
         window.addEventListener('mousemove', handleMouseMove);
       }, 500);
@@ -277,11 +263,11 @@ export function ImagePreview(props: ImagePreviewProps) {
         <Show when={props.variant !== 'small'}>
           <div class="group-hover:visible invisible absolute top-2 right-2 bg-button rounded-2xl border border-edge flex flex-row items-center gap-1 z-10">
             <Dialog.Trigger disabled={props.isContext}>
-              <IconButton icon={ExpandIcon} theme="clear" />
+              <DeprecatedIconButton icon={ExpandIcon} theme="clear" />
             </Dialog.Trigger>
             <DropdownMenu>
               <DropdownMenu.Trigger disabled={props.isContext}>
-                <IconButton icon={ThreeDotsIcon} theme="clear" />
+                <DeprecatedIconButton icon={ThreeDotsIcon} theme="clear" />
               </DropdownMenu.Trigger>
               <DropdownMenu.Portal>
                 <div class="fixed inset-0 z-modal-overlay bg-transparent" />
@@ -296,12 +282,12 @@ export function ImagePreview(props: ImagePreviewProps) {
                     icon={DownloadIcon}
                     onClick={downloadImage}
                   />
-                  <Show when={showDeleteMediaButton()}>
+                  <Show when={props.onDelete}>
                     <MenuSeparator />
                     <MenuItem
                       text="Delete image"
                       icon={TrashIcon}
-                      onClick={handleDeleteChannelMedia}
+                      onClick={handleDelete}
                     />
                   </Show>
                 </DropdownMenuContent>
@@ -322,6 +308,8 @@ export function ImagePreview(props: ImagePreviewProps) {
               class={`${THEMES[props.variant]} select-none`}
               src={imageSrc()}
               alt="preview"
+              width={props.image.width}
+              height={props.image.height}
               // Prevent long press on image ios behavior
               style={{
                 '-webkit-touch-callout': 'none',
@@ -331,43 +319,40 @@ export function ImagePreview(props: ImagePreviewProps) {
                 '-ms-user-select': 'none',
                 'user-select': 'none',
               }}
-              draggable={!isTouchDevice}
+              draggable={!isTouchDevice()}
             />
           </Show>
         </Dialog.Trigger>
       </div>
       <Dialog.Portal>
-        <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay backdrop-blur-md" />
+        <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay pattern-edge-muted pattern-diagonal-4" />
         <div class="fixed inset-0 z-modal w-screen h-screen flex items-center justify-center p-2 pb-6 sm:p-12">
-          <Dialog.Content
-            class="relative flex items-center justify-center w-full h-full sm:w-auto sm:h-auto"
-            onOpenAutoFocus={(e) => e.preventDefault()}
-          >
+          <Dialog.Content class="relative flex items-center justify-center w-full h-full sm:w-auto sm:h-auto bg-panel">
             <div
-              class="absolute top-4 right-4 bg-dialog backdrop-blur-sm rounded-lg border border-edge p-1 flex flex-row items-center gap-1 shadow-md transition-opacity duration-300"
+              class="absolute top-4 right-4 bg-dialog rounded-lg border border-edge p-1 flex flex-row items-center gap-1 shadow-md transition-opacity duration-300"
               classList={{
                 'opacity-100':
-                  isMobileWidth() || isTouchDevice || isToolbarVisible(),
+                  isMobileWidth() || isTouchDevice() || isToolbarVisible(),
                 'opacity-0 pointer-events-none':
-                  !isMobileWidth() && !isTouchDevice && !isToolbarVisible(),
+                  !isMobileWidth() && !isTouchDevice() && !isToolbarVisible(),
               }}
               style={{ 'z-index': stackingContext.zModal + 1 }}
             >
-              <IconButton
+              <DeprecatedIconButton
                 icon={ClipboardIcon}
                 theme="clear"
                 onClick={copyToClipboard}
                 onTouchEnd={copyToClipboard}
                 tooltip={{ label: 'Copy image' }}
               />
-              <IconButton
+              <DeprecatedIconButton
                 icon={DownloadIcon}
                 theme="clear"
                 onClick={downloadImage}
                 tooltip={{ label: 'Download image' }}
               />
               <Dialog.CloseButton>
-                <IconButton
+                <DeprecatedIconButton
                   icon={XIcon}
                   theme="clear"
                   tooltip={{ label: 'Close' }}
@@ -390,6 +375,8 @@ export function ImagePreview(props: ImagePreviewProps) {
                   class={THEMES['expanded']}
                   src={imageSrc()}
                   alt="preview"
+                  width={props.image.width}
+                  height={props.image.height}
                 />
               </Show>
             </div>

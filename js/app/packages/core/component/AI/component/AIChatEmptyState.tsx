@@ -9,16 +9,6 @@ export function AiChatEmptyState() {
       <div class="grid justify-start grid-cols-[max-content_auto] gap-y-1 grid-template items-center">
         <span class="p-1 bg-accent text-panel mr-2 text-center">@</span>
         <span>To attach, files, emails, and channel</span>
-        <span class="p-1 bg-accent text-panel mr-2 text-center">Agent</span>
-        <span>
-          <span>
-            Let AI think and search through your files, emails, and channels
-          </span>
-        </span>
-        <span class="p-1 bg-accent text-panel mr-2 text-center">Ask</span>
-        <span>
-          Quick answers to quick quesions with access to any files @ mentioned
-        </span>
       </div>
       <div>
         Change the

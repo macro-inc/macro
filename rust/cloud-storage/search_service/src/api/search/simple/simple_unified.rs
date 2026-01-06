@@ -57,6 +57,10 @@ pub(in crate::api::search) async fn perform_unified_search(
         _ => vec![],
     };
 
+    if terms.is_empty() {
+        return Err(SearchError::NoQueryOrTermsProvided);
+    }
+
     let match_type = req.match_type;
     let disable_recency = req.disable_recency;
 

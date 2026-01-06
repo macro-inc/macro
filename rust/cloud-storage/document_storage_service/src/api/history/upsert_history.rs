@@ -2,6 +2,7 @@ use crate::api::context::ApiContext;
 use axum::extract::State;
 use axum::{Extension, extract::Path, http::StatusCode, response::IntoResponse};
 use macro_middleware::cloud_storage::ensure_access::history::HistoryAccessExtractor;
+use macro_user_id::user_id::MacroUserIdStr;
 use model::response::{
     GenericErrorResponse, GenericResponse, GenericSuccessResponse, SuccessResponse,
 };
@@ -76,13 +77,20 @@ pub async fn upsert_history_handler(
 
     // If a user id is present in the UserContext, add the item to the user's history
     if !user_id.is_empty()
-        && let Err(e) = macro_db_client::history::upsert_user_history(
-            &mut transaction,
-            &user_context.user_id,
-            item_id.as_str(),
-            item_type.as_str(),
-        )
-        .await
+        && let Err(e) = {
+            match MacroUserIdStr::parse_from_str(&user_context.user_id) {
+                Ok(id) => {
+                    macro_db_client::history::upsert_user_history(
+                        &mut transaction,
+                        id,
+                        item_id.as_str(),
+                        item_type.as_str(),
+                    )
+                    .await
+                }
+                Err(e) => Err(anyhow::Error::from(e)),
+            }
+        }
     {
         tracing::error!(error=?e, "unable to upsert history");
         return GenericResponse::builder()

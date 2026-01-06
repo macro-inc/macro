@@ -3,10 +3,7 @@ use std::cmp::min;
 use crate::tool_context::{RequestContext, ToolServiceContext};
 use ai::tool::{AsyncTool, ToolCallError, ToolResult};
 use async_trait::async_trait;
-use models_search::{
-    HumanReadableTimestamp,
-    unified::{SimpleUnifiedSearchResponseBaseItem, UnifiedSearchRequest},
-};
+use models_search::unified::{UnifiedSearchRequest, UnifiedSearchResponseItem};
 use schemars::{JsonSchema, Schema};
 use serde::{Deserialize, Serialize};
 
@@ -34,7 +31,7 @@ fn default_page_size() -> i64 {
 #[serde(rename_all = "camelCase")]
 pub struct TruncatedUnifiedSearchResponse {
     /// The search results (truncated to `results_returned` limit if applicable)
-    pub results: Vec<SimpleUnifiedSearchResponseBaseItem<HumanReadableTimestamp>>,
+    pub results: Vec<UnifiedSearchResponseItem>,
     /// total number of results from search
     pub total_results: usize,
     /// the number of results returned
@@ -92,7 +89,7 @@ async fn fetch_all_pages_simple(
     context: &ToolServiceContext,
     request_context: &RequestContext,
     search_request: &UnifiedSearchRequest,
-) -> Result<Vec<SimpleUnifiedSearchResponseBaseItem<HumanReadableTimestamp>>, ToolCallError> {
+) -> Result<Vec<UnifiedSearchResponseItem>, ToolCallError> {
     const BATCH_SIZE: usize = 4;
     let mut page = 0;
     let mut all_results = vec![];
@@ -121,7 +118,7 @@ async fn fetch_all_pages_simple(
             let task = tokio::spawn(async move {
                 let result = context
                     .search_service_client
-                    .search_simple_unified(
+                    .search_unified(
                         &request_context.user_id,
                         search_request,
                         current_page,
@@ -291,7 +288,7 @@ impl AsyncTool<ToolServiceContext, RequestContext> for UnifiedSearch {
 
         match context
             .search_service_client
-            .search_simple_unified(&request_context.user_id, search_request, page, page_size)
+            .search_unified(&request_context.user_id, search_request, page, page_size)
             .await
         {
             Ok(response) => {
@@ -323,7 +320,7 @@ impl AsyncTool<ToolServiceContext, RequestContext> for UnifiedSearch {
 mod tests {
     use super::*;
     use ai::generate_tool_input_schema;
-    use ai::tool::types::toolset::tool_object::validate_tool_schema;
+    use ai::tool::types::tool_object::validate_tool_schema;
 
     // run `cargo test -p ai_tools unified::tests::print_output_schema -- --nocapture --include-ignored`
     #[test]

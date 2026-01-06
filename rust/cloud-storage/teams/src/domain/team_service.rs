@@ -2,7 +2,7 @@
 
 use std::{collections::HashSet, str::FromStr};
 
-use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserId};
+use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr};
 use roles_and_permissions::domain::{model::RoleId, port::UserRolesAndPermissionsService};
 
 use crate::domain::{
@@ -59,7 +59,7 @@ where
 {
     async fn create_team(
         &self,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: &MacroUserIdStr<'_>,
         team_name: &str,
     ) -> Result<Team, CreateTeamError> {
         self.team_repository.create_team(user_id, team_name).await
@@ -68,7 +68,7 @@ where
     async fn invite_users_to_team(
         &self,
         team_id: &uuid::Uuid,
-        invited_by: &MacroUserId<Lowercase<'_>>,
+        invited_by: &MacroUserIdStr<'_>,
         emails: non_empty::NonEmpty<&[Email<Lowercase<'_>>]>,
     ) -> Result<Vec<TeamInvite<'_>>, InviteUsersToTeamError> {
         let invited = self
@@ -130,7 +130,7 @@ where
     async fn remove_user_from_team(
         &self,
         team_id: &uuid::Uuid,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: &MacroUserIdStr<'_>,
     ) -> Result<(), RemoveUserFromTeamError> {
         let result = self
             .team_repository
@@ -168,7 +168,7 @@ where
 
     async fn reject_invitation(
         &self,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: &MacroUserIdStr<'_>,
         team_invite_id: &uuid::Uuid,
     ) -> Result<(), RemoveTeamInviteError> {
         let team_invite = self
@@ -277,7 +277,7 @@ where
     async fn join_team(
         &self,
         team_invite_id: &uuid::Uuid,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: &MacroUserIdStr<'_>,
     ) -> Result<TeamMember<'_>, JoinTeamError> {
         let team_member = self
             .team_repository
@@ -307,8 +307,7 @@ where
             return Ok(());
         }
 
-        let members: Vec<MacroUserId<Lowercase<'_>>> =
-            members.into_iter().map(|m| m.user_id).collect();
+        let members: Vec<MacroUserIdStr<'_>> = members.into_iter().map(|m| m.user_id).collect();
 
         // Ignore the current team
         let ignore_team_ids = vec![*team_id];
@@ -323,7 +322,7 @@ where
 
         let members_of_team: HashSet<&str> = members_of_team.iter().map(|m| m.as_ref()).collect();
         // Get all members that are not in the other team
-        let members_to_revoke: Vec<MacroUserId<Lowercase<'_>>> = members
+        let members_to_revoke: Vec<_> = members
             .into_iter()
             .filter(|m| !members_of_team.contains(m.as_ref()))
             .collect();

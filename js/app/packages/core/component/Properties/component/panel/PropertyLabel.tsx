@@ -1,5 +1,5 @@
-import { useBlockAliasedName } from '@core/block';
-import { IconButton } from '@core/component/IconButton';
+import { useMaybeBlockAliasedName } from '@core/block';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import DeleteIcon from '@icon/bold/x-bold.svg';
 import PinIcon from '@icon/regular/push-pin.svg';
 import UnpinIcon from '@icon/regular/push-pin-slash.svg';
@@ -17,6 +17,8 @@ import { PropertyDataTypeIcon } from '../../utils';
 
 type PropertyLabelProps = {
   property: Property;
+  withPin?: boolean;
+  withDelete?: boolean;
 };
 
 export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
@@ -28,13 +30,17 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
     onPropertyUnpinned,
     pinnedPropertyIds,
   } = usePropertiesContext();
-  const blockName = useBlockAliasedName();
-  const isBuiltin = getBuiltinPropertyIds(blockName).includes(
-    props.property.propertyDefinitionId
-  );
-  const isDefaultPinned = getDefaultPinnedProperties(blockName).includes(
-    props.property.propertyDefinitionId
-  );
+  const blockName = useMaybeBlockAliasedName();
+  const isBuiltin =
+    blockName &&
+    getBuiltinPropertyIds(blockName).includes(
+      props.property.propertyDefinitionId
+    );
+  const isDefaultPinned =
+    blockName &&
+    getDefaultPinnedProperties(blockName).includes(
+      props.property.propertyDefinitionId
+    );
 
   const isPinned = createMemo(
     () => pinnedPropertyIds?.()?.includes(props.property.propertyId) ?? false
@@ -94,14 +100,19 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
           fallback={<div class="w-3 h-3 flex-shrink-0" />}
         >
           <Show
-            when={onPropertyPinned && onPropertyUnpinned && !isDefaultPinned}
+            when={
+              onPropertyPinned &&
+              onPropertyUnpinned &&
+              !isDefaultPinned &&
+              props.withPin
+            }
           >
             <div
               class={`flex-shrink-0 transition-opacity ${
                 isHovered() ? 'opacity-100' : 'opacity-0'
               }`}
             >
-              <IconButton
+              <DeprecatedIconButton
                 icon={isPinned() ? UnpinIcon : PinIcon}
                 theme="clear"
                 size="xs"
@@ -113,13 +124,13 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
             </div>
           </Show>
 
-          <Show when={!isBuiltin}>
+          <Show when={!isBuiltin && props.withDelete}>
             <div
               class={`flex-shrink-0 transition-opacity ${
                 isHovered() ? 'opacity-100' : 'opacity-0'
               }`}
             >
-              <IconButton
+              <DeprecatedIconButton
                 icon={DeleteIcon}
                 theme="clear"
                 size="xs"
@@ -144,7 +155,7 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
                 <Dialog.Title class="text-lg font-semibold text-ink">
                   Delete Property
                 </Dialog.Title>
-                <IconButton
+                <DeprecatedIconButton
                   icon={XIcon}
                   theme="clear"
                   size="sm"

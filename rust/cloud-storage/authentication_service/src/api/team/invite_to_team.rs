@@ -4,8 +4,11 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use macro_user_id::{cowlike::CowLike, email::Email, lowercased::Lowercase, user_id::MacroUserId};
+use macro_user_id::{
+    cowlike::CowLike, email::Email, lowercased::Lowercase, user_id::MacroUserIdStr,
+};
 use model_entity::EntityType;
+use model_user::axum_extractor::MacroUserExtractor;
 use teams::domain::{
     model::{InviteUsersToTeamError, TeamInvite},
     team_repo::TeamService,
@@ -20,7 +23,7 @@ use crate::api::{
     team::TeamPathParam,
 };
 
-use model::{response::ErrorResponse, tracking::IPContext, user::UserContext};
+use model::{response::ErrorResponse, tracking::IPContext};
 
 use model_notifications::{InviteToTeamMetadata, NotificationEvent, NotificationQueueMessage};
 
@@ -35,8 +38,6 @@ pub struct InviteToTeamRequest {
 pub enum InviteToTeamError {
     #[error("unable to invite users to team")]
     InviteUsersToTeamError(#[from] InviteUsersToTeamError),
-    #[error("unable to parse user id")]
-    InvalidMacroUserId,
     #[error("unable to parse email")]
     InvalidEmails,
     #[error("no valid emails provided")]
@@ -46,12 +47,6 @@ pub enum InviteToTeamError {
 impl IntoResponse for InviteToTeamError {
     fn into_response(self) -> Response {
         match self {
-            InviteToTeamError::InvalidMacroUserId => (
-                StatusCode::BAD_REQUEST,
-                Json(ErrorResponse {
-                    message: "invalid user id",
-                }),
-            ),
             InviteToTeamError::InvalidEmails => (
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
@@ -101,21 +96,17 @@ impl IntoResponse for InviteToTeamError {
             (status = 500, body=ErrorResponse),
         ),
     )]
-#[tracing::instrument(skip(ctx, ip_context, user_context, req), fields(client_ip=%ip_context.client_ip, user_id=%user_context.user_id, fusion_user_id=%user_context.fusion_user_id))]
+#[tracing::instrument(skip(ctx, ip_context, user_context, req), fields(client_ip=%ip_context.client_ip, user_id=%user_context.macro_user_id, fusion_user_id=%user_context.user_context.fusion_user_id))]
 pub async fn handler(
     access: TeamAccessRoleExtractor<OwnerRole>,
     stripe_customer: StripeCustomerExtractor,
     State(ctx): State<ApiContext>,
     ip_context: Extension<IPContext>,
-    user_context: Extension<UserContext>,
+    user_context: MacroUserExtractor,
     Path(TeamPathParam { team_id }): Path<TeamPathParam>,
     extract::Json(req): extract::Json<InviteToTeamRequest>,
 ) -> Result<StatusCode, InviteToTeamError> {
     tracing::info!("invite_to_team");
-
-    let user_id: MacroUserId<Lowercase> = MacroUserId::parse_from_str(&user_context.user_id)
-        .map_err(|_| InviteToTeamError::InvalidMacroUserId)?
-        .lowercase();
 
     let emails: Vec<Result<Email<Lowercase>, _>> = req
         .emails
@@ -134,7 +125,7 @@ pub async fn handler(
 
     let team_invites = ctx
         .teams_service
-        .invite_users_to_team(&team_id, &user_id, emails)
+        .invite_users_to_team(&team_id, &user_context.macro_user_id, emails)
         .await
         .map_err(InviteToTeamError::InviteUsersToTeamError)?;
 
@@ -156,14 +147,14 @@ pub async fn handler(
         let db = ctx.db.clone();
         let macro_notify_client = ctx.macro_notify_client.clone();
         let team_invites = team_invites.clone();
-        let invited_by = user_context.user_id.clone();
+        let invited_by = user_context.macro_user_id;
         async move {
             let _ = notify_team_invite(
                 &db,
                 &macro_notify_client,
                 &team_id,
                 team_invites,
-                &invited_by,
+                invited_by,
             )
             .await
             .inspect_err(|e| tracing::error!(error=?e, "unable to send notification"));
@@ -178,12 +169,12 @@ pub(in crate::api::team) async fn notify_team_invite(
     macro_notify_client: &macro_notify::MacroNotify,
     team_id: &uuid::Uuid,
     team_invites: Vec<TeamInvite<'_>>,
-    invited_by: &str,
+    invited_by: MacroUserIdStr<'static>,
 ) -> anyhow::Result<()> {
     let team_name = macro_db_client::team::get::get_team_name(db, team_id).await?;
 
     let notification_metadata = InviteToTeamMetadata {
-        invited_by: invited_by.to_string(),
+        invited_by: invited_by.clone(),
         team_name: team_name.clone(),
         team_id: team_id.to_string(),
         role: None,
@@ -194,7 +185,7 @@ pub(in crate::api::team) async fn notify_team_invite(
             notification_entity: EntityType::Team
                 .with_entity_string(team_invite.team_invite_id.to_string()),
             notification_event: NotificationEvent::InviteToTeam(notification_metadata.clone()),
-            sender_id: Some(invited_by.to_string()),
+            sender_id: Some(invited_by.clone()),
             recipient_ids: Some(vec![format!("macro|{}", team_invite.email.as_ref())]),
         };
 

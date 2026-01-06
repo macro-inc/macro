@@ -2,7 +2,7 @@
 
 use std::collections::HashSet;
 
-use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserId};
+use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr};
 
 use crate::domain::model::{Permission, RoleId, SubscriptionStatus, UserRolesAndPermissionsError};
 
@@ -15,7 +15,7 @@ pub trait UserRepository: Clone + Send + Sync + 'static {
     fn get_user_id_by_email(
         &self,
         email: &Email<Lowercase<'_>>,
-    ) -> impl Future<Output = Result<MacroUserId<Lowercase<'_>>, UserRolesAndPermissionsError>> + Send;
+    ) -> impl Future<Output = Result<MacroUserIdStr<'_>, UserRolesAndPermissionsError>> + Send;
 }
 
 /// The UserRolesAndPermissionsRepository defines a set of actions to perform on the users roles and permissions
@@ -23,18 +23,18 @@ pub trait UserRolesAndPermissionsRepository: Clone + Send + Sync + 'static {
     /// Gets the permissiosn for a MacroUserID
     fn get_user_permissions(
         &self,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<HashSet<Permission>, UserRolesAndPermissionsError>> + Send;
     /// Adds roles with the provided ids to a user
     fn add_roles_to_user(
         &self,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: &MacroUserIdStr<'_>,
         role_ids: &[RoleId],
     ) -> impl Future<Output = Result<(), UserRolesAndPermissionsError>> + Send;
     /// Removes roles from a user
     fn remove_roles_from_user(
         &self,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: &MacroUserIdStr<'_>,
         role_ids: &[RoleId],
     ) -> impl Future<Output = Result<(), UserRolesAndPermissionsError>> + Send;
 }
@@ -51,14 +51,14 @@ pub trait UserRolesAndPermissionsService: Clone + Send + Sync + 'static {
     /// Given a user id, upserts the roles for the user
     fn dangerous_upsert_roles_for_user(
         &self,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: &MacroUserIdStr<'_>,
         role_ids: non_empty::NonEmpty<&[RoleId]>,
     ) -> impl Future<Output = Result<(), UserRolesAndPermissionsError>> + Send;
 
     /// Removes roles from a user
     fn dangerous_remove_roles_from_user(
         &self,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: &MacroUserIdStr<'_>,
         role_ids: &non_empty::NonEmpty<&[RoleId]>,
     ) -> impl Future<Output = Result<(), UserRolesAndPermissionsError>> + Send;
 }
