@@ -56,8 +56,7 @@ impl DocumentQueryBuilder {
     }
 
     pub fn build_bool_query<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
-        self.inner
-            .build_bool_query(self.inner.build_content_and_name_bool_query()?)
+        self.inner.build_content_bool_query()
     }
 
     fn build_search_request<'a>(&'a self) -> Result<SearchRequest<'a>> {

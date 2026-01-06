@@ -1,7 +1,7 @@
 use crate::{
     OpensearchClient, Result,
     delete::project::{delete_project_bulk_ids, delete_project_by_id, delete_projects_by_user_id},
-        upsert::project::{UpsertProjectArgs, upsert_project},
+    upsert::project::{UpsertProjectArgs, upsert_project},
 };
 
 impl OpensearchClient {
