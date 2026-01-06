@@ -489,7 +489,9 @@ export function ShareModal(props: ShareModalProps) {
 
               <Show when={(recipients()?.length ?? 0) > 0}>
                 <div class="border-t-1 border-edge-muted w-full h-fit max-h-[160px] relative">
-                  <div class="absolute top-0 left-0 border-b border-edge-muted/50 bg-panel w-full h-[40px] flex items-center px-3">Share Recipients</div>
+                  <div class="absolute top-0 left-0 border-b border-edge-muted/50 bg-panel w-full h-[40px] flex items-center px-3">
+                    Share Recipients
+                  </div>
                   <div class="grid gap-3 text-ink text-sm select-none overflow-y-auto scrollbar-hidden pt-[52px] pb-3 px-3 max-h-[159px] h-min">
                     <Show when={props.owner}>
                       <div class="contents rounded-md">
@@ -563,7 +565,9 @@ export function ShareModal(props: ShareModalProps) {
 
               <Show when={props.userPermissions === Permissions.OWNER}>
                 <div class="border-t-1 border-edge-muted flex flex-col">
-                  <div class="border-b border-edge-muted/50 bg-panel w-full h-[40px] flex items-center px-3">Public Link</div>
+                  <div class="border-b border-edge-muted/50 bg-panel w-full h-[40px] flex items-center px-3">
+                    Public Link
+                  </div>
                   <div class="flex items-center p-3 justify-between">
                     <TextButton
                       onClick={() => copyPublicLink()}
