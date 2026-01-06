@@ -1,3 +1,4 @@
+import type { PlayContext } from '@ui/types/storybook';
 import { Button } from '@ui/components/Button';
 import { expect, fn } from 'storybook/test';
 import type { Meta, StoryObj } from 'storybook-solidjs-vite';
@@ -7,9 +8,19 @@ const meta = {
   component: Button,
   argTypes: {
     variant: {
-      control: { type: 'select' },
-      options: ['primary', 'secondary', 'tertiary', 'destructive'],
+      control: { type: 'radio' },
+      options: {
+        None: undefined,
+        Primary: 'primary',
+        Secondary: 'secondary',
+        Tertiary: 'tertiary',
+        Destructive: 'destructive',
+      },
       defaultValue: 'tertiary',
+      table: {
+        type: { summary: 'primary | secondary | tertiary | destructive' },
+        defaultValue: { summary: 'tertiary' },
+      },
     },
     children: {
       control: { type: 'text' },
@@ -52,7 +63,7 @@ export const Default: Story = {
     tooltip: 'Tooltip',
     children: 'Click Here',
   },
-  play: async ({ canvas, userEvent, args }) => {
+  play: async ({ canvas, userEvent, args }: PlayContext<Story>) => {
     const button = canvas.getByText('Click Here');
     await userEvent.click(button);
     await expect(args.onClick).toHaveBeenCalled();
@@ -78,7 +89,7 @@ export const PrimaryDisabled: Story = {
     disabled: true,
     children: 'I am Disabled',
   },
-  play: async ({ canvas, userEvent, args }) => {
+  play: async ({ canvas, userEvent, args }: PlayContext<Story>) => {
     const button = canvas.getByText('I am Disabled');
     await userEvent.click(button);
     await expect(button).toBeDisabled();
