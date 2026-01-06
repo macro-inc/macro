@@ -3,12 +3,9 @@ use crate::api::{
     search::{
         SearchPaginationParams,
         simple::{
-            SearchError,
-            simple_document::search_documents,
-            simple_chat::search_chats,
-            simple_email::search_emails,
+            SearchError, simple_channel::search_channels, simple_chat::search_chats,
+            simple_document::search_documents, simple_email::search_emails,
             simple_project::search_projects,
-            simple_channel::search_channels,
         },
     },
 };
@@ -20,14 +17,12 @@ use axum::{
 use model::{response::ErrorResponse, user::UserContext};
 use models_search::{
     SimpleSearchResponse,
-    unified::{
-        SimpleUnifiedSearchResponse, UnifiedSearchIndex, UnifiedSearchRequest,
-    },
-    document::DocumentSearchRequest,
+    channel::ChannelSearchRequest,
     chat::ChatSearchRequest,
+    document::DocumentSearchRequest,
     email::EmailSearchRequest,
     project::ProjectSearchRequest,
-    channel::ChannelSearchRequest,
+    unified::{SimpleUnifiedSearchResponse, UnifiedSearchIndex, UnifiedSearchRequest},
 };
 
 /// Creates a unified search request and performs the search
@@ -158,7 +153,14 @@ pub(in crate::api::search) async fn perform_unified_search(
         },
         async {
             if should_include_channels {
-                search_channels(ctx, user_id, user_context.organization_id, &query_params, channel_request).await
+                search_channels(
+                    ctx,
+                    user_id,
+                    user_context.organization_id,
+                    &query_params,
+                    channel_request,
+                )
+                .await
             } else {
                 Ok(vec![])
             }
