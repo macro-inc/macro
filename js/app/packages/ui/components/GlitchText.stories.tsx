@@ -1,5 +1,5 @@
+import { GlitchText, type GlitchTextProps } from '@ui/components/GlitchText';
 import type { Meta, StoryObj } from 'storybook-solidjs-vite';
-import { GlitchText } from './GlitchText';
 
 const meta = {
   title: 'GlitchText',
@@ -16,6 +16,7 @@ const meta = {
     continuous: {
       control: 'boolean',
       description: 'Loop animation continuously',
+      defaultValue: true,
     },
     chars: {
       control: 'text',
@@ -38,6 +39,7 @@ const meta = {
       description: 'CSS class name',
     },
   },
+  render: (args: GlitchTextProps) => <GlitchText {...args} />,
 } satisfies Meta<typeof GlitchText>;
 
 export default meta;
@@ -54,14 +56,6 @@ export const Default: Story = {
     delay: 1000,
     class: 'font-mono text-ink-extra-muted',
   },
-  parameters: {
-    docs: {
-      description: {
-        story:
-          'Basic transform animation using default settings. Shows the component transitioning from source text to target text with default glitch characters, then stopping.',
-      },
-    },
-  },
 };
 
 export const Binary: Story = {
@@ -72,14 +66,6 @@ export const Binary: Story = {
     framerate: 60,
     delay: 100,
     class: 'font-mono text-success',
-  },
-  parameters: {
-    docs: {
-      description: {
-        story:
-          'Binary-themed decode animation using only "0" and "1" characters. Perfect for cyberpunk or tech-themed interfaces. Uses `to` only for a pure decode effect.',
-      },
-    },
   },
 };
 
@@ -94,14 +80,6 @@ export const Blocks: Story = {
     delay: 800,
     class: 'font-mono text-accent text-4xl',
   },
-  parameters: {
-    docs: {
-      description: {
-        story:
-          'Block character animation creating a distinctive chunky glitch effect. Uses Unicode block characters for a retro terminal aesthetic with continuous looping.',
-      },
-    },
-  },
 };
 
 export const Chess: Story = {
@@ -113,13 +91,5 @@ export const Chess: Story = {
     framerate: 12,
     delay: 1000,
     class: 'font-serif text-failure text-4xl',
-  },
-  parameters: {
-    docs: {
-      description: {
-        story:
-          'Block character animation creating a distinctive chunky glitch effect. Uses Unicode block characters for a retro terminal aesthetic with continuous looping.',
-      },
-    },
   },
 };

@@ -1,6 +1,6 @@
+import { Button } from '@ui/components/Button';
 import { expect, fn } from 'storybook/test';
 import type { Meta, StoryObj } from 'storybook-solidjs-vite';
-import { Button } from './Button';
 
 const meta = {
   title: 'Buttons',

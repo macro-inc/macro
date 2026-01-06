@@ -1,3 +1,4 @@
+# Welcome to the `@UI` package.
 
 > *Cleverness is overhead.*\
 > *The best code is the code you never had to write.*\
@@ -5,23 +6,33 @@
 >
 > — [Addy Osmani](https://addyosmani.com/blog/21-lessons/)
 
-<br />
-
-# Welcome to the `@UI` package.
 
 **This is our lego set.** We'll add parts over time, but if it "just renders a thing", it should probably live here.
 
 If it "composes other things or provides state", or it's some major singleton application surface (eg `Dock.tsx`), then it should probably live in `@core`.
+
+## Package Structure
+
+<pre className="*:leading-normal! whitespace-pre px-2!">
+├ .storybook/
+│ └ *Configuration for [storybook](https://storybook.js.org/docs) itself*
+└ components/
+&nbsp;&nbsp;├ *The actual `Component.tsx` files*
+&nbsp;&nbsp;└ *Documentation && spec `Component.stories.tsx` files*
+
+</pre>
 
 ## Guidelines for Good Components
 
 ### Do
 1. Be [SOLID](https://en.wikipedia.org/wiki/SOLID)
 1. Be pure functions – for the same props, they render the same results.
-4. Use tailwind, and twMerge
-5. Be as simple as possible and no simpler
-6. Use Kobalte as a last resort
+1. Use tailwind, and twMerge
+1. Be as simple as possible and no simpler
+1. Have a [story](https://storybook.js.org/docs/api/csf/index) with a [play function](https://storybook.js.org/docs/api/csf/index#play-function) (vitest!)
+1. Use Kobalte as a last resort
 
 ### Don't
 1. [Ever have external margins](https://mxstbr.com/thoughts/margin)
-2. Use inline styles
+1. Use inline styles
+

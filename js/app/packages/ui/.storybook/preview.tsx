@@ -1,11 +1,11 @@
 import '../../app/index.css';
 import './preview.css';
-import * as React from 'react';
 import {
   DocsContainer,
   type DocsContainerProps,
 } from '@storybook/addon-docs/blocks';
 import { withThemeByClassName } from '@storybook/addon-themes';
+import * as React from 'react';
 import type { Renderer } from 'storybook/internal/types';
 import type { Preview } from 'storybook-solidjs-vite';
 import {
