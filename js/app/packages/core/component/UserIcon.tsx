@@ -1,16 +1,14 @@
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { toast } from '@core/component/Toast/Toast';
-import { Tooltip } from '@core/component/Tooltip';
-import { idToDisplayName, idToEmail } from '@core/user';
+import { idToDisplayName, idToEmail, useDisplayName } from '@core/user';
 import { isOk } from '@core/util/maybeResult';
-import IconCheck from '@icon/regular/check.svg';
-import IconCopy from '@icon/regular/copy.svg';
+import Tooltip from '@corvu/tooltip';
 import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
 import { commsServiceClient } from '@service-comms/client';
 import { debounce } from '@solid-primitives/scheduled';
 import { createMemo, createSignal, Match, Show, Switch } from 'solid-js';
 import { useSplitLayout } from '../../app/component/split-layout/layout';
 import { ProfilePicture } from './ProfilePicture';
+import { UserTooltip } from './UserTooltip';
 
 export type UserIconProps = {
   isDeleted?: boolean;
@@ -28,7 +26,8 @@ export type SizeClass = {
 };
 
 export function UserIcon(props: UserIconProps) {
-  const displayName = createMemo(() => idToDisplayName(props.id!));
+  console.log('USER ICON', props.id);
+  const [displayName] = useDisplayName(props.id!);
   const email = createMemo(() => {
     if (!props.id) {
       return props.email;
@@ -125,7 +124,8 @@ export function UserIcon(props: UserIconProps) {
 
   const resetCopied = debounce(() => setCopied(false), 800);
 
-  function handleCopyEmail() {
+  function handleCopyEmail(e: MouseEvent) {
+    e.stopPropagation();
     const email_ = email();
     if (!email_) return;
 
@@ -137,29 +137,22 @@ export function UserIcon(props: UserIconProps) {
 
   return (
     <Show when={displayName().length > 0 || email()} fallback={icon()}>
-      <Tooltip
-        tooltip={
-          <div>
-            <span class="text-xs">{displayName()}</span>
-            <Show when={email()}>
-              <span class="text-xs select-all flex items-center gap-1">
-                {email()}
-
-                <DeprecatedIconButton
-                  icon={copied() ? IconCheck : IconCopy}
-                  iconSize={16}
-                  class="transition-all duration-300"
-                  theme={copied() ? 'accent' : 'contrast'}
-                  size="sm"
-                  onDeepClick={handleCopyEmail}
-                />
-              </span>
-            </Show>
-          </div>
-        }
-        class={sizeClasses().container}
-      >
-        {icon()}
+      <Tooltip>
+        <Tooltip.Trigger as="div" class={sizeClasses().container}>
+          {icon()}
+        </Tooltip.Trigger>
+        <Tooltip.Portal>
+          <Tooltip.Content class="z-tool-tip">
+            <UserTooltip
+              displayName={displayName()}
+              email={email()}
+              id={props.id}
+              isDeleted={props.isDeleted}
+              copied={copied()}
+              onCopyEmail={handleCopyEmail}
+            />
+          </Tooltip.Content>
+        </Tooltip.Portal>
       </Tooltip>
     </Show>
   );
