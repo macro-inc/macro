@@ -160,7 +160,7 @@ import {
 const SEARCH_SERVICE_DEBOUNCE_MS = 200;
 const LOCAL_FUZZY_SEARCH_DEBOUNCE_MS = 20;
 
-const GARBAGE_UUID = '00000000-0000-0000-0000-000000000000';
+const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 
 const FILE_TYPE_DISPLAY_LABELS: Record<DocumentTypeFilter, string> = {
   md: 'NOTE',
@@ -745,9 +745,9 @@ export function UnifiedListView(props: UnifiedListViewProps) {
               if (fileType === 'code')
                 return type === 'soup' ? ['assoc:code'] : codeFileExtensions;
               if (fileType === 'image')
-                return type === 'soup' ? ['assoc:image'] : [GARBAGE_UUID];
+                return type === 'soup' ? ['assoc:image'] : [NIL_UUID];
               if (fileType === 'unknown')
-                return type === 'soup' ? ['assoc:other'] : [GARBAGE_UUID];
+                return type === 'soup' ? ['assoc:other'] : [NIL_UUID];
               return [fileType];
             });
             fileTypes.push(...documentFileTypes);
@@ -850,7 +850,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const dssQueryRequestBody = createMemo(
     (): PostSoupRequest => ({
       channel_filters: {
-        channel_ids: [GARBAGE_UUID],
+        channel_ids: [NIL_UUID],
       },
       document_filters: {
         document_ids:
@@ -858,7 +858,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
           entityTypeFilter().includes('task') ||
           entityTypeFilter().length === 0
             ? []
-            : [GARBAGE_UUID],
+            : [NIL_UUID],
         project_ids: view().viewType === 'project' ? [view().id] : [],
         file_types: joinedSoupFileTypeFilter(),
       },
@@ -866,7 +866,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
         chat_ids:
           entityTypeFilter().includes('chat') || entityTypeFilter().length === 0
             ? []
-            : [GARBAGE_UUID],
+            : [NIL_UUID],
         project_ids: view().viewType === 'project' ? [view().id] : [],
       },
       email_filters: {
@@ -877,7 +877,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
           (entityTypeFilter().includes('email') ||
             entityTypeFilter().length === 0)
             ? []
-            : [GARBAGE_UUID],
+            : [NIL_UUID],
       },
       project_filters: {
         project_ids:
@@ -886,7 +886,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
             : entityTypeFilter().includes('project') ||
                 entityTypeFilter().length === 0
               ? []
-              : [GARBAGE_UUID],
+              : [NIL_UUID],
       },
       limit: props.defaultDisplayOptions?.limit ?? 100,
       emailView: importantFilter()
