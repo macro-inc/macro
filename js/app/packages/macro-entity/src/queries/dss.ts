@@ -27,6 +27,7 @@ import { SERVER_HOSTS } from 'core/constant/servers';
 import { platformFetch } from 'core/util/platformFetch';
 import type { Accessor } from 'solid-js';
 import type {
+  ChannelEntity,
   ChatEntity,
   DocumentEntity,
   EmailEntity,
@@ -198,10 +199,13 @@ const selectData: (
   options: {
     instructionsIdQuery: UseQueryResult<string | null | undefined, Error>;
   }
-) => (DocumentEntity | ChatEntity | ProjectEntity | EmailEntity)[] = (
-  data,
-  options
-) => {
+) => (
+  | DocumentEntity
+  | ChatEntity
+  | ProjectEntity
+  | EmailEntity
+  | ChannelEntity
+)[] = (data, options) => {
   return data.pages.flatMap(({ items }) =>
     items
       .filter(
@@ -211,7 +215,14 @@ const selectData: (
           item.data.id !== options.instructionsIdQuery.data
       )
       .map(
-        (item): DocumentEntity | ChatEntity | ProjectEntity | EmailEntity => {
+        (
+          item
+        ):
+          | DocumentEntity
+          | ChatEntity
+          | ProjectEntity
+          | EmailEntity
+          | ChannelEntity => {
           if (item.tag === 'chat') {
             return {
               ...item.data,
@@ -255,6 +266,18 @@ const selectData: (
               viewedAt: item.data.viewedAt ?? undefined,
               participants,
             };
+          }
+
+          if (item.tag === 'channel') {
+            const out: ChannelEntity = {
+              ...item.data.channel,
+              channelType: item.data.channel.channel_type,
+              type: 'channel',
+              id: item.data.channel.id,
+              name: item.data.channel.name || 'New Channel',
+              ownerId: item.data.channel.owner_id,
+            };
+            return out;
           }
 
           return {
