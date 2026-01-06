@@ -757,7 +757,7 @@ function MessageListImpl(props: MessageListProps) {
                 display: 'flex',
                 'flex-direction': 'column-reverse',
               }}
-              class="scrollbar-hidden"
+              class="scrollbar-hidden [&>div]:mb-auto"
               data-channel-message-list
               data={rows() ?? []}
               shift={isPrepend()}
