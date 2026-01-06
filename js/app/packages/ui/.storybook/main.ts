@@ -24,6 +24,9 @@ const config: StorybookConfig = {
     getAbsolutePath('@storybook/addon-designs'),
     getAbsolutePath('@storybook/addon-themes'),
   ],
+  docs: {
+    defaultName: 'Overview',
+  },
   framework: {
     name: getAbsolutePath('storybook-solidjs-vite'),
     options: {
