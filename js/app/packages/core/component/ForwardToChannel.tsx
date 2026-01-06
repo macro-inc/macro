@@ -284,7 +284,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
             />
           </div>
 
-          <div class="flex w-full items-center pl-3 pr-2">
+          <div class="flex w-full items-center pl-3">
             <div class="w-min">
               <Show when={canSendAsGroup()}>
                 <ToggleSwitch
@@ -300,35 +300,27 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
               </Show>
             </div>
 
-            <Show when={props.submitPermissionInfo?.userPermissions === Permissions.OWNER}>
-              <div class="w-full p-2 flex justify-end">
-                <ShareOptions
-                  setPermissions={(accessLevel) => {
-                    setSubmitAccessLevel(accessLevel);
-                  }}
-                  permissions={submitAccessLevel()}
-                  label="Permission"
-                  hideNoAccess
-                />
-              </div>
-            </Show>
+            <div class="w-full p-2 gap-2 flex justify-end">
+              <TextButton
+                onClick={() => {
+                  const options = selectedOptions();
+                  if(options && options.length > 0){handleSubmit()}
+                }}
+                theme={selectedOptions().length > 0 ? 'accent' : 'disabled'}
+                icon={PaperPlaneRight}
+                height="h-[22px]"
+                text="Share"
+              />
 
-            <TextButton
-              onClick={() => {
-                const options = selectedOptions();
-                if (options && options.length > 0) {
-                  handleSubmit();
-                }
-              }}
-              theme={
-                selectedOptions().length > 0
-                  ? 'accent'
-                  : 'disabled'
-              }
-              icon={PaperPlaneRight}
-              height="h-[22px]"
-              text="Share"
-            />
+              <Show when={props.submitPermissionInfo?.userPermissions === Permissions.OWNER}>
+                  <ShareOptions
+                    setPermissions={(accessLevel) => {setSubmitAccessLevel(accessLevel)}}
+                    permissions={submitAccessLevel()}
+                    label="Permission"
+                    hideNoAccess
+                  />
+              </Show>
+            </div>
           </div>
         </div>
       </div>

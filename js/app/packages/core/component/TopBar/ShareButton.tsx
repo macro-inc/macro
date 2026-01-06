@@ -822,6 +822,8 @@ export function ShareOptions(props: {
           showChevron
           disabled={props.disabled}
           height='22px'
+          width='w-[67px]'
+          left
         />
       </DropdownMenu.Trigger>
       <DropdownMenuContent>
