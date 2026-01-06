@@ -33,8 +33,6 @@ import {
   type DocumentMentionInfo,
 } from '@lexical-core';
 import { logger } from '@observability';
-import { queryClient } from '@queries/client';
-import { emailKeys } from '@queries/email/keys';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { useSendMessageMutation } from '@queries/email/thread';
 import type {
