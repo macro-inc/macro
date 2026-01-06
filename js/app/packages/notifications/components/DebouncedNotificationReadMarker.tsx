@@ -116,11 +116,6 @@ export function EmailDebouncedReadMarker(props: {
     <DebouncedMarker
       debounceTime={props.debounceTime}
       debouncedFn={() => {
-        const hasUnreadNotification = props.notificationSource
-          .notifications()
-          .find((e) => e.entity_id === props.threadId);
-        if (!hasUnreadNotification) return;
-
         markSeenMutation.mutate({ threadId: props.threadId });
       }}
     />

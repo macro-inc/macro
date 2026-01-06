@@ -147,6 +147,33 @@ export function useThreadQuery<Options extends UseThreadQueryOptions>(
 type MarkThreadAsSeenParams = { threadId: string };
 
 /**
+ * When marking a thread as seen we optimistically flip the `is_read` field to true
+ */
+async function threadSeenOnMutate(params: MarkThreadAsSeenParams) {
+  await queryClient.cancelQueries({
+    queryKey: emailKeys.threadMessages(params.threadId).queryKey,
+  });
+
+  const previousData = queryClient.getQueryData<InfiniteData<Thread, number>>(
+    emailKeys.threadMessages(params.threadId).queryKey
+  );
+
+  queryClient.setQueryData<InfiniteData<Thread, number>>(
+    emailKeys.threadMessages(params.threadId).queryKey,
+    (old) =>
+      old && {
+        ...old,
+        pages: old.pages.map((page) => ({
+          ...page,
+          is_read: true,
+        })),
+      }
+  );
+
+  return { previousData };
+}
+
+/**
  * Mutation to mark a thread as seen.
  */
 export function useMarkThreadAsSeenMutation(
@@ -162,6 +189,8 @@ export function useMarkThreadAsSeenMutation(
       )),
     ...withCallbacks<void, Error, MarkThreadAsSeenParams>(
       {
+        onMutate: async (params: MarkThreadAsSeenParams) =>
+          await threadSeenOnMutate(params),
         onSuccess: (_, params) => {
           queryClient.invalidateQueries({
             queryKey: emailKeys.threadMessages(params.threadId).queryKey,
@@ -177,6 +206,33 @@ type ArchiveThreadParams = { threadId: string; archive: boolean };
 type ArchiveThreadContext = {
   previousData: InfiniteData<Thread, number> | undefined;
 };
+
+/*
+ * When archiving a thread we optimistically set `inbox_visible` to the new value
+ */
+async function threadArchiveOnMutate(params: ArchiveThreadParams) {
+  await queryClient.cancelQueries({
+    queryKey: emailKeys.threadMessages(params.threadId).queryKey,
+  });
+
+  const previousData = queryClient.getQueryData<InfiniteData<Thread, number>>(
+    emailKeys.threadMessages(params.threadId).queryKey
+  );
+
+  queryClient.setQueryData<InfiniteData<Thread, number>>(
+    emailKeys.threadMessages(params.threadId).queryKey,
+    (old) =>
+      old && {
+        ...old,
+        pages: old.pages.map((page) => ({
+          ...page,
+          inbox_visible: !params.archive,
+        })),
+      }
+  );
+
+  return { previousData };
+}
 
 /**
  * Mutation to archive or unarchive a thread.
@@ -201,29 +257,7 @@ export function useArchiveThreadMutation(
       ),
     ...withCallbacks<void, Error, ArchiveThreadParams, ArchiveThreadContext>(
       {
-        onMutate: async (params) => {
-          await queryClient.cancelQueries({
-            queryKey: emailKeys.threadMessages(params.threadId).queryKey,
-          });
-
-          const previousData = queryClient.getQueryData<
-            InfiniteData<Thread, number>
-          >(emailKeys.threadMessages(params.threadId).queryKey);
-
-          queryClient.setQueryData<InfiniteData<Thread, number>>(
-            emailKeys.threadMessages(params.threadId).queryKey,
-            (old) =>
-              old && {
-                ...old,
-                pages: old.pages.map((page) => ({
-                  ...page,
-                  inbox_visible: !params.archive,
-                })),
-              }
-          );
-
-          return { previousData };
-        },
+        onMutate: async (params) => await threadArchiveOnMutate(params),
         onError: (_err, params, context) => {
           if (context?.previousData) {
             queryClient.setQueryData(
