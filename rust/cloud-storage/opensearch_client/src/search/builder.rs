@@ -92,7 +92,6 @@ pub trait SearchQueryConfig {
     /// Returns the default sort types that are used on the search query.
     /// Override this method if you need custom sort logic
     fn default_sort_types<'a>() -> Vec<SortType<'a>> {
-        println!("CALLED");
         // Use the updated_at_sort by default
         updated_at_sort()
     }
