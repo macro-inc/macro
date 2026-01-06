@@ -17,6 +17,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import {
   type ContactInfo,
+  tryMacroId,
   useDisplayName,
   type WithCustomUserInput,
 } from '@core/user';
@@ -211,7 +212,7 @@ export function EmailCompose() {
     } else if (recipients.length === 1) {
       const recipientName =
         recipients[0].kind === 'user'
-          ? useDisplayName(recipients[0].data.id)[0]()
+          ? useDisplayName(tryMacroId(recipients[0].data.id))[0]()
           : recipients[0].data.email;
       return recipientName ? `Email to ${recipientName}` : 'Draft email';
     } else {
@@ -219,7 +220,7 @@ export function EmailCompose() {
         .slice(0, 2)
         .map((r) => {
           if (r.kind === 'user') {
-            return useDisplayName(r.data.id)[0]();
+            return useDisplayName(tryMacroId(r.data.id))[0]();
           }
           return r.data.email || 'Unknown';
         })
