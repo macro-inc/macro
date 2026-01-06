@@ -1,5 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
-import { idToDisplayName, idToEmail, useDisplayName } from '@core/user';
+import { idToEmail, useDisplayName } from '@core/user';
 import { isOk } from '@core/util/maybeResult';
 import Tooltip from '@corvu/tooltip';
 import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
