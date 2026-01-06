@@ -927,7 +927,7 @@ export function EntityWithEverything(
           data-blocks-navigation
         >
           <div
-            class="size-4 p-0.5 flex items-center justify-center rounded-xs group-hover/button:border-accent group-hover/button:border pointer-events-none"
+            class="relative z-1 size-4 p-0.5 flex items-center justify-center rounded-xs group-hover/button:bg-panel group-hover/button:border-accent group-hover/button:border pointer-events-none"
             classList={{
               'ring ring-edge-muted': props.highlighted,
               'bg-panel': !props.checked && props.highlighted,
@@ -939,7 +939,7 @@ export function EntityWithEverything(
             </Show>
           </div>
           <Show when={props.showLeftColumnIndicator && !props.checked}>
-            <div class="absolute inset-0 flex items-center justify-center -z-1 @max-md/split:hidden">
+            <div class="absolute inset-0 flex items-center justify-center @max-md/split:hidden">
               <UnreadIndicator active={props.unreadIndicatorActive} />
             </div>
           </Show>
