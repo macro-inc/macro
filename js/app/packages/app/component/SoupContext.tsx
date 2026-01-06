@@ -407,7 +407,7 @@ export function createNavigationEntityListShortcut({
       );
 
       if (handler || hasSupportedEntity) {
-        // Check if current view filters out completed items
+        // Check if current view filters out completed items. More robustly we would have the list of entitites itself trigger entity removal animation when the list changes, but this is complicated by our usage of queries and virtualized lists.
         const currentViewConfig =
           unifiedListContext.viewsDataStore[selectedView()];
         const shouldCollapse =
