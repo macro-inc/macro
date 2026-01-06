@@ -1,14 +1,13 @@
-import * as React from 'react';
-import { withThemeByClassName } from '@storybook/addon-themes';
-
 import '../../app/index.css';
 import './preview.css';
-import type { Preview } from 'storybook-solidjs-vite';
+
 import {
   DocsContainer,
   type DocsContainerProps,
 } from '@storybook/addon-docs/blocks';
+import { withThemeByClassName } from '@storybook/addon-themes';
 import type { Renderer } from 'storybook/internal/types';
+import type { Preview } from 'storybook-solidjs-vite';
 import {
   generateAllThemesCSS,
   generateThemeClassMapping,
@@ -73,6 +72,7 @@ const ThemedDocsContainer = ({
   }, [themeClass]);
 
   return (
+    // biome-ignore lint: noSolidDestructuredProps: This is a React component (Storybook docs), not SolidJS
     <DocsContainer context={context} {...props}>
       {children}
     </DocsContainer>

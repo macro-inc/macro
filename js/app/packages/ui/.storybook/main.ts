@@ -1,12 +1,14 @@
-import { Features } from 'lightningcss';
 import path from 'node:path';
+import { Features } from 'lightningcss';
 import type { StorybookConfig } from 'storybook-solidjs-vite';
 import solidSvg from 'vite-plugin-solid-svg';
 import wasm from 'vite-plugin-wasm';
 import tsconfigpaths from 'vite-tsconfig-paths';
 
 const getAbsolutePath = (packageName: string): string =>
-    path.dirname(import.meta.resolve(path.join(packageName, 'package.json'))).replace(/^file:\/\//, '');
+  path
+    .dirname(import.meta.resolve(path.join(packageName, 'package.json')))
+    .replace(/^file:\/\//, '');
 
 const config: StorybookConfig = {
   stories: ['../**/*.mdx', '../**/*.stories.@(js|jsx|mjs|ts|tsx)'],
@@ -17,15 +19,15 @@ const config: StorybookConfig = {
   ],
   addons: [
     getAbsolutePath('@storybook/addon-docs'),
-    getAbsolutePath("@storybook/addon-vitest"),
-    getAbsolutePath("@storybook/addon-a11y"),
-    getAbsolutePath("@storybook/addon-designs"),
-    getAbsolutePath("@storybook/addon-themes"),
+    getAbsolutePath('@storybook/addon-vitest'),
+    getAbsolutePath('@storybook/addon-a11y'),
+    getAbsolutePath('@storybook/addon-designs'),
+    getAbsolutePath('@storybook/addon-themes'),
   ],
   framework: {
-    name: getAbsolutePath("storybook-solidjs-vite"),
+    name: getAbsolutePath('storybook-solidjs-vite'),
     options: {
-      docgen: true
+      docgen: true,
     },
   },
   viteFinal: async (config) => {

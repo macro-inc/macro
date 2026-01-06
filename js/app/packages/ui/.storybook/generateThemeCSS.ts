@@ -1,4 +1,7 @@
-import { DEFAULT_DARK_THEME, DEFAULT_THEMES } from '../../block-theme/constants';
+import {
+  DEFAULT_DARK_THEME,
+  DEFAULT_THEMES,
+} from '../../block-theme/constants';
 import type { ThemeV1 } from '../../block-theme/types/themeTypes';
 
 /**
@@ -34,7 +37,9 @@ export function themeToCSS(theme: ThemeV1): string {
  * This ensures CSS variables are always available even without a theme class.
  */
 export function generateRootThemeCSS(): string {
-  const defaultTheme = DEFAULT_THEMES.find((t) => t.name === DEFAULT_DARK_THEME);
+  const defaultTheme = DEFAULT_THEMES.find(
+    (t) => t.name === DEFAULT_DARK_THEME
+  );
   if (!defaultTheme) return '';
   return `:root {\n${generateTokenVars(defaultTheme.tokens)}\n}`;
 }
@@ -44,7 +49,9 @@ export function generateRootThemeCSS(): string {
  */
 export function generateAllThemesCSS(): string {
   const rootCSS = generateRootThemeCSS();
-  const themeCSS = DEFAULT_THEMES.map((theme) => themeToCSS(theme)).join('\n\n');
+  const themeCSS = DEFAULT_THEMES.map((theme) => themeToCSS(theme)).join(
+    '\n\n'
+  );
   return `${rootCSS}\n\n${themeCSS}`;
 }
 
@@ -57,4 +64,3 @@ export function generateThemeClassMapping(): Record<string, string> {
     DEFAULT_THEMES.map((theme) => [theme.name, themeToClassName(theme.name)])
   );
 }
-

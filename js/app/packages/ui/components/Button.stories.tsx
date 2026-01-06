@@ -1,6 +1,6 @@
+import { expect, fn } from 'storybook/test';
 import type { Meta, StoryObj } from 'storybook-solidjs-vite';
 import { Button } from './Button';
-import { expect, fn } from 'storybook/test';
 
 const meta = {
   title: 'Buttons',
@@ -34,6 +34,7 @@ const meta = {
   },
   args: {
     onClick: fn(),
+    children: 'Click Here',
   },
   render: (args) => <Button {...args}>{args.children}</Button>,
 } satisfies Meta<typeof Button>;
