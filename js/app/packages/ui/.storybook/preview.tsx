@@ -1,6 +1,6 @@
 import '../../app/index.css';
 import './preview.css';
-
+import * as React from 'react';
 import {
   DocsContainer,
   type DocsContainerProps,
