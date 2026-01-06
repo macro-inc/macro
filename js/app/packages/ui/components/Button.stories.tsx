@@ -1,63 +1,98 @@
-import { EntityIcon } from 'core/component/EntityIcon';
-import { Hotkey } from 'core/component/Hotkey';
-import { LabelAndHotKey } from 'core/component/Tooltip';
 import type { Meta, StoryObj } from 'storybook-solidjs-vite';
 import { Button } from './Button';
+import { expect, fn } from 'storybook/test';
 
 const meta = {
   title: 'Buttons',
+  component: Button,
   argTypes: {
-    disabled: {
-      control: { type: 'boolean', defaultValue: false },
+    variant: {
+      control: { type: 'select' },
+      options: ['primary', 'secondary', 'tertiary', 'destructive'],
+      defaultValue: 'tertiary',
+    },
+    children: {
+      control: { type: 'text' },
+      defaultValue: 'Click Here',
+    },
+    tooltip: {
+      control: { type: 'text' },
+      defaultValue: 'Tooltip',
+    },
+    showChevron: {
+      control: { type: 'boolean' },
+      defaultValue: false,
     },
     class: {
-      control: { type: 'text', defaultValue: '' },
+      control: { type: 'text' },
+      defaultValue: '',
+    },
+    disabled: {
+      control: { type: 'boolean' },
+      defaultValue: false,
     },
   },
+  args: {
+    onClick: fn(),
+  },
+  render: (args) => <Button {...args}>{args.children}</Button>,
 } satisfies Meta<typeof Button>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Buttons: Story = {
-  name: 'Button Variations',
-  render: () => (
-    <div class="space-y-4">
-      <div class="flex gap-4">
-        <Button variant="primary">Primary</Button>
-        <Button variant="secondary">Secondary</Button>
-        <Button variant="tertiary">Tertiary / default</Button>
-        <Button variant="destructive">Destructive</Button>
-      </div>
-      <div class="flex gap-4">
-        <Button variant="primary" disabled>
-          Disabled Primary
-        </Button>
-        <Button variant="secondary" disabled>
-          Disabled Secondary
-        </Button>
-        <Button variant="destructive" disabled>
-          Disabled Destructive
-        </Button>
-      </div>
-      <div class="flex gap-4 text-xl items-center">
-        <Button variant="primary">
-          With shortcut <Hotkey shortcut="cmd+s" />
-        </Button>
+export const Default: Story = {
+  args: {
+    variant: undefined,
+    disabled: false,
+    class: undefined,
+    showChevron: false,
+    type: 'button',
+    tooltip: 'Tooltip',
+    children: 'Click Here',
+  },
+  play: async ({ canvas, userEvent, args }) => {
+    const button = canvas.getByText('Click Here');
+    await userEvent.click(button);
+    await expect(args.onClick).toHaveBeenCalled();
+  },
+};
 
-        <Button variant="primary">
-          <EntityIcon theme="monochrome" /> With Icon
-        </Button>
+export const Primary: Story = {
+  args: {
+    variant: 'primary',
+  },
+};
 
-        <Button
-          class="aspect-square"
-          tooltip={
-            <LabelAndHotKey label="With custom styling" shortcut="cmd+s" />
-          }
-        >
-          <EntityIcon targetType="pdf" theme="monochrome" size="md" />
-        </Button>
-      </div>
-    </div>
-  ),
+export const PrimaryWithChevron: Story = {
+  args: {
+    variant: 'primary',
+    showChevron: true,
+  },
+};
+
+export const PrimaryDisabled: Story = {
+  args: {
+    variant: 'primary',
+    disabled: true,
+    children: 'I am Disabled',
+  },
+  play: async ({ canvas, userEvent, args }) => {
+    const button = canvas.getByText('I am Disabled');
+    await userEvent.click(button);
+    await expect(button).toBeDisabled();
+    await expect(args.onClick).not.toHaveBeenCalled();
+  },
+};
+
+export const Secondary: Story = {
+  args: {
+    variant: 'secondary',
+  },
+};
+
+export const Tertiary: Story = {
+  args: {
+    variant: 'tertiary',
+  },
 };
