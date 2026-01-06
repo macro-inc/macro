@@ -90,6 +90,14 @@ const config: StorybookConfig = {
     const { default: tailwind } = await import('@tailwindcss/vite');
     config.plugins.push(tailwind());
 
+    // Ignore sourcemaps from dist folders to prevent errors from stale build artifacts
+    config.server = {
+      ...config.server,
+      sourcemapIgnoreList: (sourcePath) => {
+        return sourcePath.includes('/dist/');
+      },
+    };
+
     return config;
   },
 };
