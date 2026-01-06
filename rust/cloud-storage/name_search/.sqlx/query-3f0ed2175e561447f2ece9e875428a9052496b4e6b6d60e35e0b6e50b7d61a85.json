@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH oldest_messages AS (\n                SELECT DISTINCT ON (thread_id)\n                    thread_id,\n                    subject\n                FROM email_messages\n                WHERE thread_id = ANY($1)\n                ORDER BY thread_id, internal_date_ts ASC\n            )\n            SELECT\n                t.id as entity_id,\n                om.subject as \"name!\"\n            FROM email_threads t\n            INNER JOIN oldest_messages om ON om.thread_id = t.id\n            WHERE om.subject ILIKE $2\n            ORDER BY t.latest_non_spam_message_ts DESC\n            LIMIT $3\n            OFFSET $4\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entity_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "3f0ed2175e561447f2ece9e875428a9052496b4e6b6d60e35e0b6e50b7d61a85"
+}
