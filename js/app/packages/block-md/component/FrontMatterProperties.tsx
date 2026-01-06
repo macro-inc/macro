@@ -220,7 +220,7 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
                 emptyMessage="No properties pinned yet"
               />
 
-              <div class="pl-2 pt-4 pb-2">
+              <div class="pt-4 pb-2">
                 <button
                   class="flex items-center gap-1 cursor-pointer opacity-75 hover:opacity-50 transition-opacity"
                   onClick={toggleExpanded}

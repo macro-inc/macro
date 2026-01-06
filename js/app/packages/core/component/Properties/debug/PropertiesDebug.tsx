@@ -124,6 +124,54 @@ const PropertiesDebug: Component = () => {
     });
   };
 
+  // Spoof properties for testing string, boolean, and link types
+  const spoofProperties = (): Property[] => {
+    return [
+      {
+        propertyId: 'spoof-string-input',
+        propertyDefinitionId: 'spoof-string-input',
+        displayName: 'Test String Input',
+        isMultiSelect: false,
+        owner: 'system',
+        specificEntityType: null,
+        updatedAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        valueType: 'STRING',
+        value: propertyValues['spoof-string-input']?.value || null,
+        options: [],
+        isMetadata: false,
+      },
+      {
+        propertyId: 'spoof-boolean-checkbox',
+        propertyDefinitionId: 'spoof-boolean-checkbox',
+        displayName: 'Test Boolean Checkbox',
+        isMultiSelect: false,
+        owner: 'system',
+        specificEntityType: null,
+        updatedAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        valueType: 'BOOLEAN',
+        value: propertyValues['spoof-boolean-checkbox']?.value || false,
+        options: [],
+        isMetadata: false,
+      },
+      {
+        propertyId: 'spoof-link-url',
+        propertyDefinitionId: 'spoof-link-url',
+        displayName: 'Test Link URL',
+        isMultiSelect: false,
+        owner: 'system',
+        specificEntityType: null,
+        updatedAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        valueType: 'LINK',
+        value: propertyValues['spoof-link-url']?.value || null,
+        options: [],
+        isMetadata: false,
+      },
+    ];
+  };
+
   const saveHandler: PropertySaveHandler = {
     saveProperty: async (property: Property, value: PropertyApiValues) => {
       console.log('Properties Debug - Saving property:', {
@@ -208,6 +256,34 @@ const PropertiesDebug: Component = () => {
                 </div>
               </div>
             </Show>
+
+            {/* Spoof Properties Section */}
+            <div class="border border-edge-muted p-2 text-sm">
+              <h3 class="text-text-primary font-medium mb-2">
+                Spoof Properties (String, Boolean & Link)
+              </h3>
+              <div class="bg-surface-secondary rounded-lg">
+                <PropertiesProvider
+                  entityType="DOCUMENT"
+                  canEdit={true}
+                  documentName="Spoof Playground"
+                  properties={() => spoofProperties()}
+                  onRefresh={() =>
+                    console.log('Spoof properties refresh callback')
+                  }
+                  onPropertyAdded={() =>
+                    console.log('Spoof property added callback')
+                  }
+                  onPropertyDeleted={() =>
+                    console.log('Spoof property deleted callback')
+                  }
+                  saveHandler={saveHandler}
+                >
+                  <PropertyGrid properties={spoofProperties()} />
+                  <Modals />
+                </PropertiesProvider>
+              </div>
+            </div>
 
             <Show
               when={

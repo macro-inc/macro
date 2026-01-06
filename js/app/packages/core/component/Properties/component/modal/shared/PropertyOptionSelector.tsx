@@ -1,5 +1,4 @@
 import { Hotkey } from '@core/component/Hotkey';
-import CheckIcon from '@icon/bold/check-bold.svg';
 import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import PlusIcon from '@icon/regular/plus.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
@@ -18,6 +17,7 @@ import type { Property } from '../../../types';
 import { formatOptionValue, useSearchInputFocus } from '../../../utils';
 import { ERROR_MESSAGES } from '../../../utils/errorHandling';
 import { PropertyValueIcon } from '../../propertyValue';
+import { OptionCheckBox } from './OptionCheckBox';
 
 type PropertyOption = z.infer<typeof schemas.getPropertyOptionsResponseItem>;
 
@@ -232,7 +232,7 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
   }) => (
     <div
       onClick={handleAddOption}
-      class={`flex flex-row w-full justify-between items-center gap-2 cursor-pointer py-1.5 px-2 ${
+      class={`flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2 ${
         props.isSelected ? 'bg-hover' : ''
       }`}
     >
@@ -250,13 +250,6 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
           </Show>
         </div>
         <p class="text-sm font-medium">Add "{searchQuery().trim()}"</p>
-      </div>
-      <div class="flex items-center gap-2 flex-shrink-0">
-        <Show when={shouldShowHotkeys() && props.hotkeyNumber !== undefined}>
-          <div class="text-[0.625rem] p-1 border border-edge-muted text-ink-muted font-mono rounded-xs">
-            <Hotkey shortcut={`${props.hotkeyNumber}`} />
-          </div>
-        </Show>
       </div>
     </div>
   );
@@ -352,7 +345,7 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
                         when={item.type === 'add'}
                         fallback={
                           <div
-                            class={`flex flex-row w-full justify-between items-center gap-2 cursor-pointer py-1.5 px-2 ${
+                            class={`flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2 ${
                               index() === selectedIndex() ? 'bg-hover' : ''
                             }`}
                             onClick={() => {
@@ -381,15 +374,16 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
                             </div>
                             <div class="flex items-center gap-2 flex-shrink-0">
                               <Show when={shouldShowHotkeys() && index() < 9}>
-                                <div class="text-[11px] px-1 py-0.5 border border-edge-muted bg-dialog text-ink-muted font-mono rounded-xs">
+                                <div class="text-[0.625rem] px-1.5 py-0.5 border border-edge-muted text-ink-muted font-mono rounded-xs">
                                   <Hotkey shortcut={`${index() + 1}`} />
                                 </div>
                               </Show>
-                              <div class="w-4 h-4 border border-edge-muted bg-transparent flex items-center justify-center">
-                                <Show when={isOptionSelected(item.option!.id)}>
-                                  <CheckIcon class="w-3 h-3 text-accent" />
-                                </Show>
-                              </div>
+                              <Show when={props.property.isMultiSelect}>
+                                <OptionCheckBox
+                                  checked={isOptionSelected(item.option!.id)}
+                                  multiselect={props.property.isMultiSelect}
+                                />
+                              </Show>
                             </div>
                           </div>
                         }
@@ -403,11 +397,6 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
                         >
                           <AddOptionButton
                             isSelected={index() === selectedIndex()}
-                            hotkeyNumber={
-                              shouldShowHotkeys() && index() < 9
-                                ? index() + 1
-                                : undefined
-                            }
                           />
                         </div>
                       </Show>

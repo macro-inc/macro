@@ -80,7 +80,7 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
   return (
     <>
       <div
-        class="flex items-center gap-1.5 min-w-0 py-0.5 border border-red-400/10"
+        class="flex items-center gap-1.5 min-w-0 py-0.5"
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >

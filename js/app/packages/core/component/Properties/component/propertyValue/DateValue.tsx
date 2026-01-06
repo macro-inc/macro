@@ -31,11 +31,11 @@ export const DateValue: Component<DateValueProps> = (props) => {
   return (
     <button
       onClick={handleClick}
-      class={`text-left text-xs px-2 py-1 border border-edge ${
-        isReadOnly()
-          ? 'bg-transparent text-ink-muted cursor-default'
-          : 'hover:bg-hover cursor-pointer bg-transparent text-ink'
-      } inline-block max-w-full break-words`}
+      class="text-left px-2 py-0.5 border border-edge-muted bg-transparent inline-block max-w-full break-words shrink-0"
+      classList={{
+        'text-ink-muted cursor-default': isReadOnly(),
+        'hover:bg-hover text-ink': !isReadOnly(),
+      }}
     >
       <Show when={displayValue} fallback={<EmptyValue />}>
         <span class="block truncate max-w-full">{displayValue}</span>

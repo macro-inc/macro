@@ -104,7 +104,7 @@ export const PropertyGrid: Component<PropertiesListProps> = (props) => {
         <Show when={propertyGroups().builtinProperties.length > 0}>
           {/* Separator above builtin */}
           <Show when={showSeparatorAboveBuiltin()}>
-            <div class="col-span-2 border-t border-edge my-4" />
+            <div class="col-span-2 border-t border-edge-muted my-4" />
           </Show>
 
           <For each={propertyGroups().builtinProperties}>
@@ -123,7 +123,7 @@ export const PropertyGrid: Component<PropertiesListProps> = (props) => {
         <Show when={propertyGroups().userProperties.length > 0}>
           {/* Separator between above user */}
           <Show when={showSeparatorAboveUser()}>
-            <div class="col-span-2 border-t border-edge my-4" />
+            <div class="col-span-2 border-t border-edge-muted my-4" />
           </Show>
 
           <For each={propertyGroups().userProperties}>

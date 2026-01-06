@@ -1,5 +1,3 @@
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
-import DeleteIcon from '@icon/bold/x-bold.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { Component } from 'solid-js';
 import { createSignal, For, Show } from 'solid-js';
@@ -9,7 +7,11 @@ import type { Property } from '../../types';
 import { formatPropertyValue, getSelectValues } from '../../utils';
 import { ERROR_MESSAGES, handlePropertyError } from '../../utils/errorHandling';
 import { PropertyValueIcon } from './PropertyValueIcon';
-import { AddPropertyValueButton, EmptyValue } from './ValueComponents';
+import {
+  AddPropertyValueButton,
+  EmptyValue,
+  PropertyValueDeleteButton,
+} from './ValueComponents';
 
 type SelectValueProps = {
   property: Property;
@@ -88,12 +90,9 @@ export const SelectValue: Component<SelectValueProps> = (props) => {
               </div>
               <Show when={!isReadOnly() && isHovered() && !isSaving()}>
                 <div class="absolute right-1 inset-y-0 flex items-center">
-                  <DeprecatedIconButton
-                    icon={DeleteIcon}
-                    theme="clear"
-                    size="xs"
-                    class="!text-failure !bg-[#2a2a2a] hover:!bg-[#444444] !cursor-pointer !w-4 !h-4 !min-w-4 !min-h-4"
+                  <PropertyValueDeleteButton
                     onClick={() => handleRemoveValue(value)}
+                    disabled={isSaving()}
                   />
                 </div>
               </Show>
@@ -105,7 +104,7 @@ export const SelectValue: Component<SelectValueProps> = (props) => {
         when={!isReadOnly()}
         fallback={
           <Show when={displayValues.length === 0}>
-            <div class="text-ink-muted text-xs px-2 py-1 border border-edge bg-transparent inline-block shrink-0">
+            <div class="text-ink-muted px-2 py-0.5 border border-edge-muted bg-transparent inline-block shrink-0">
               <EmptyValue />
             </div>
           </Show>

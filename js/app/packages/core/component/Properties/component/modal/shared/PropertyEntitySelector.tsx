@@ -6,7 +6,6 @@ import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import type { ChannelWithParticipants, IUser } from '@core/user';
 import { idToEmail, tryMacroId, useContacts, useDisplayName } from '@core/user';
 import { createFreshSearch } from '@core/util/freshSort';
-import CheckIcon from '@icon/bold/check-bold.svg';
 import CompanyIcon from '@icon/duotone/building-duotone.svg';
 import ChannelBuildingIcon from '@icon/duotone/building-office-duotone.svg';
 import ThreadIcon from '@icon/duotone/envelope-duotone.svg';
@@ -36,9 +35,9 @@ import {
   Show,
 } from 'solid-js';
 import { usePropertiesContext } from '../../../context/PropertiesContext';
-import { PROPERTY_STYLES } from '../../../styles/styles';
 import type { Property } from '../../../types';
 import { useSearchInputFocus } from '../../../utils';
+import { OptionCheckBox } from './OptionCheckBox';
 
 type EntityInputProps = {
   property: Property;
@@ -51,11 +50,6 @@ type EntityInputProps = {
   onClose?: () => void;
 };
 
-const INPUT_CLASSES = PROPERTY_STYLES.input.search;
-const ENTITY_ITEM_BASE =
-  'flex items-center justify-between gap-2 py-1.5 px-2 cursor-pointer min-w-0 h-8';
-const CHECKBOX_BASE =
-  'w-4 h-4 border border-edge-muted bg-transparent flex items-center justify-center';
 const ICON_CLASSES = 'size-4 text-ink-muted';
 
 function getEntityTypePluralLabel(
@@ -461,6 +455,10 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       },
     ]);
     props.setHasChanges(true);
+
+    if (!props.property.isMultiSelect && props.onClose) {
+      props.onClose();
+    }
   };
 
   // Reset selected index when sortedEntities change
@@ -564,13 +562,11 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                 return (
                   <div
                     data-entity-index={index()}
-                    class={`${ENTITY_ITEM_BASE} ${
-                      isKeyboardSelected()
-                        ? 'bg-hover'
-                        : isSelected()
-                          ? 'bg-hover'
-                          : ''
-                    }`}
+                    class="flex items-center justify-between gap-2 py-1.5 px-2 min-w-0 h-8"
+                    classList={{
+                      'bg-hover': isKeyboardSelected(),
+                      'bg-accent/10': isSelected(),
+                    }}
                     onClick={() => toggleEntity(entity)}
                     onKeyDown={(e) => e.key === 'Enter' && toggleEntity(entity)}
                     onMouseEnter={() => {
@@ -586,11 +582,10 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                       </span>
                     </div>
                     <div class="flex-shrink-0">
-                      <div class={CHECKBOX_BASE}>
-                        <Show when={isSelected()}>
-                          <CheckIcon class="w-3 h-3 text-accent" />
-                        </Show>
-                      </div>
+                      <OptionCheckBox
+                        checked={isSelected()}
+                        multiselect={props.property.isMultiSelect}
+                      />
                     </div>
                   </div>
                 );

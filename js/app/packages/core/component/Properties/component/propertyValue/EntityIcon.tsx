@@ -1,10 +1,9 @@
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { BlockLink } from '@core/component/LexicalMarkdown/component/core/BlockLink';
-import DeleteIcon from '@icon/bold/x-bold.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { type Component, createSignal, type ParentProps, Show } from 'solid-js';
 import { usePropertyEntityDisplay } from '../../hooks';
 import type { Property } from '../../types';
+import { PropertyValueDeleteButton } from './ValueComponents';
 
 type EntityValueDisplayProps = ParentProps<{
   property: Property;
@@ -54,7 +53,7 @@ export const EntityIcon: Component<EntityValueDisplayProps> = (props) => {
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <div class="px-2 py-0.5 border border-edge-muted hover:bg-hover cursor-pointer bg-transparent text-ink inline-flex items-center w-full">
+      <div class="px-2 py-0.5 border border-edge-muted hover:bg-hover bg-transparent text-ink inline-flex items-center w-full">
         <span class="truncate flex-1">{innerContent}</span>
         <Show
           when={
@@ -62,12 +61,10 @@ export const EntityIcon: Component<EntityValueDisplayProps> = (props) => {
           }
         >
           <div class="absolute right-1 inset-y-0 flex items-center">
-            <DeprecatedIconButton
-              icon={DeleteIcon}
-              theme="clear"
-              size="xs"
-              class="!text-failure !bg-[#2a2a2a] hover:!bg-[#444444] !cursor-pointer !w-4 !h-4 !min-w-4 !min-h-4"
-              onClick={props.onRemove}
+            <PropertyValueDeleteButton
+              onClick={props.onRemove!}
+              variant="modern"
+              disabled={props.isSaving}
             />
           </div>
         </Show>

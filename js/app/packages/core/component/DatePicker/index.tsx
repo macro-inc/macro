@@ -141,7 +141,7 @@ export function DatePicker(props: DatePickerProps) {
 
   return (
     <div
-      class="absolute z-action-menu bg-dialog ring-1 ring-edge shadow-xl p-4 w-80 font-mono"
+      class="absolute z-action-menu bg-dialog ring-1 ring-edge-muted p-4 w-80 font-mono"
       use:floatWithElement={{ element: () => props.anchorRef }}
       use:clickOutside={props.onClose}
     >

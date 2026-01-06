@@ -1,4 +1,8 @@
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
+import DeleteIcon from '@icon/bold/x-bold.svg';
+import { Button } from '@ui/components/Button';
 import type { Component, JSX } from 'solid-js';
+import { twMerge } from 'tailwind-merge';
 
 /**
  * Shared UI primitives for property value display components
@@ -8,7 +12,7 @@ import type { Component, JSX } from 'solid-js';
 /** CSS classes for common property value UI patterns */
 const STYLES = {
   addButton:
-    'text-ink-muted hover:text-ink hover:bg-hover px-2 py-0.5 cursor-pointer border border-edge-muted inline-block shrink-0',
+    'text-ink-muted hover:text-ink hover:bg-hover px-2 py-0.5 border border-edge-muted inline-block shrink-0',
 } as const;
 
 /**
@@ -16,7 +20,7 @@ const STYLES = {
  * Consistent component used everywhere
  */
 export const EmptyValue: Component = () => {
-  return <>—</>;
+  return <span class="opacity-20">Empty</span>;
 };
 
 /**
@@ -55,13 +59,53 @@ export const PropertyValueButton: Component<{
       onClick={props.onClick}
       disabled={props.disabled}
       title={props.title}
-      class={`text-left text-xs px-2 py-1 border border-edge ${
-        props.isReadOnly
-          ? 'bg-transparent text-ink-muted cursor-default'
-          : 'hover:bg-hover cursor-pointer bg-transparent text-ink'
-      } ${props.class || ''}`}
+      class={twMerge(
+        'text-left px-2 py-0.5 border border-edge-muted bg-transparent',
+        props.class
+      )}
+      classList={{
+        'text-ink-muted cursor-default': props.isReadOnly,
+        'hover:bg-hover text-ink': !props.isReadOnly,
+      }}
     >
       {props.children}
     </button>
+  );
+};
+
+/**
+ * Delete button for removing property values
+ * Consistent styling and behavior for all property types
+ */
+export const PropertyValueDeleteButton: Component<{
+  onClick: () => void;
+  variant?: 'icon' | 'modern';
+  disabled?: boolean;
+}> = (props) => {
+  if (props.variant === 'modern') {
+    return (
+      <Button
+        onClick={props.onClick}
+        disabled={props.disabled}
+        class={twMerge(
+          'bg-panel floating-failure-bg size-4 p-0.5 border border-edge-muted text-failure-ink',
+          'hover:bg-panel hover:floating-failure-bg',
+          'active:bg-failure-ink active:border-failure-ink active:text-panel'
+        )}
+      >
+        <DeleteIcon class="size-3" />
+      </Button>
+    );
+  }
+
+  return (
+    <DeprecatedIconButton
+      icon={DeleteIcon}
+      theme="clear"
+      size="xs"
+      class="!text-failure !bg-[#2a2a2a] hover:!bg-[#444444] !w-4 !h-4 !min-w-4 !min-h-4"
+      onClick={props.onClick}
+      disabled={props.disabled}
+    />
   );
 };
