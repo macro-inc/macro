@@ -3,8 +3,11 @@ import { withAnalytics } from '@coparse/analytics';
 import { TrackingEvents } from '@coparse/analytics/src/types/TrackingEvents';
 import { useIsAuthenticated } from '@core/auth';
 import { useBlockAliasedName, useBlockId, useBlockName } from '@core/block';
+import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
 import { RecipientSelector } from '@core/component/RecipientSelector';
+import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
+import { blockEditPermissionEnabledSignal } from '@core/signal/load';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { WithCustomUserInput } from '@core/user';
 import { useSendMessageToPeople } from '@core/util/channels';
@@ -19,7 +22,7 @@ import {
   Show,
 } from 'solid-js';
 import { getDestinationFromOptions } from './NewMessage';
-import type { Permissions } from './SharePermissions';
+import { Permissions } from './SharePermissions';
 import { toast } from './Toast/Toast';
 
 interface ForwardToChannelProps {
@@ -281,22 +284,114 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
             />
           </div>
 
-          <Show when={canSendAsGroup()}>
-            <div class="p-2 w-min">
-              <ToggleSwitch
-                switchRootClass={canSendAsGroup() ? '' : 'cursor-not-allowed'}
-                checked={sendAsGroupMessage() && canSendAsGroup()}
-                onChange={setSendAsGroupMessage}
-                disabled={!canSendAsGroup()}
-                label={'Send In Channel'}
-                falseLabel="FALSE"
-                trueLabel="TRUE"
-                size="SM"
-              />
+          <div class="flex w-full items-center">
+            <div class="px-3 w-min">
+              <Show when={canSendAsGroup()}>
+                <ToggleSwitch
+                  switchRootClass={canSendAsGroup() ? '' : 'cursor-not-allowed'}
+                  checked={sendAsGroupMessage() && canSendAsGroup()}
+                  onChange={setSendAsGroupMessage}
+                  disabled={!canSendAsGroup()}
+                  label={'Send In Channel'}
+                  falseLabel="FALSE"
+                  trueLabel="TRUE"
+                  size="SM"
+                />
+              </Show>
             </div>
-          </Show>
+
+            <Show when={props.submitPermissionInfo?.userPermissions === Permissions.OWNER}>
+              <div class="w-full p-2 flex justify-end">
+                <ShareOptions
+                  setPermissions={(accessLevel) => {
+                    setSubmitAccessLevel(accessLevel);
+                  }}
+                  permissions={submitAccessLevel()}
+                  label="Permission"
+                  hideNoAccess
+                />
+              </div>
+            </Show>
+          </div>
         </div>
       </div>
     </Show>
+  );
+}
+
+const accessLevelText = (accessLevel?: AccessLevel | null) => {
+  const blockName = useBlockName();
+  switch (accessLevel) {
+    case 'comment':
+      if (blockName === 'md' && !ENABLE_MARKDOWN_COMMENTS) {
+        return 'View';
+      }
+      return 'Comment';
+    case 'view':
+      return 'View';
+    case 'edit':
+      return 'Edit';
+    case 'owner':
+      return 'Owner';
+    default:
+      return 'No Access';
+  }
+};
+
+export function ShareOptions(props: {
+  setPermissions: (accessLevel: AccessLevel | null) => void;
+  permissions?: AccessLevel | null;
+  hideNoAccess?: boolean;
+  label?: string | '';
+  disabled?: boolean;
+}) {
+  const editPermissionEnabled = blockEditPermissionEnabledSignal();
+  const blockName = useBlockName();
+
+  const options = createMemo(() => {
+    const optionsList: { value: string; label: string }[] = [];
+
+    // Add no access option if not hidden
+    if (!props.hideNoAccess) {
+      optionsList.push({ value: 'none', label: accessLevelText(null) });
+    }
+
+    // Add comment option if applicable
+    if (blockName !== 'md' || ENABLE_MARKDOWN_COMMENTS) {
+      optionsList.push({ value: 'comment', label: accessLevelText('comment') });
+    }
+
+    // Always add view option
+    optionsList.push({ value: 'view', label: accessLevelText('view') });
+
+    // Add edit option if enabled
+    if (editPermissionEnabled) {
+      optionsList.push({ value: 'edit', label: accessLevelText('edit') });
+    }
+
+    return optionsList;
+  });
+
+  const currentValue = createMemo(() => {
+    if (props.permissions === null) return 'none';
+    return props.permissions || 'none';
+  });
+
+  const handleChange = (value: string) => {
+    if (value === 'none') {
+      props.setPermissions(null);
+    } else {
+      props.setPermissions(value as AccessLevel);
+    }
+  };
+
+  return (
+    <SegmentedControl
+      disabled={props.disabled}
+      onChange={handleChange}
+      value={currentValue()}
+      list={options()}
+      size="SM"
+    />
   );
 }

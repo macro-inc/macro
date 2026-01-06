@@ -150,6 +150,21 @@ export function ShareModal(props: ShareModalProps) {
     createSignal<AccessLevel | null>(null);
   const [forwardToChannelRef, setForwardToChannelRef] = createSignal<any>(null);
 
+  const copyPublicLink = createCallback(() => {
+    const url = buildSimpleEntityUrl(
+      {
+        type: props.itemType,
+        id: props.id,
+      },
+      {}
+    );
+    navigator.clipboard.writeText(url);
+    toast.success(
+      'Link copied to clipboard.',
+      'Sending this link in a Macro message will automatically update permissions to include recipients.'
+    );
+  });
+
   createEffect(() => {
     const ref = forwardToChannelRef();
     if (ref && ref.getSubmitAccessLevel) {
@@ -517,22 +532,6 @@ export function ShareModal(props: ShareModalProps) {
                 name={props.name}
               />
 
-              <Show when={props.userPermissions === Permissions.OWNER}>
-                <div class="w-full p-2 flex justify-end">
-                <ShareOptions
-                  setPermissions={(accessLevel) => {
-                    setSubmitAccessLevel(accessLevel);
-                    forwardToChannelRef()?.setSubmitAccessLevel(
-                      accessLevel
-                    );
-                  }}
-                  permissions={submitAccessLevel()}
-                  label="Permission"
-                  hideNoAccess
-                />
-                </div>
-              </Show>
-
               <Show when={recipients() || props.owner}>
                 <div class="border-t-1 border-edge-muted w-full h-fit max-h-[120px] overflow-y-auto">
                   <div class="grid gap-[1px] bg-edge-muted/50 text-ink text-sm select-none">
@@ -610,10 +609,14 @@ export function ShareModal(props: ShareModalProps) {
 
               <Show when={props.userPermissions === Permissions.OWNER}>
                 <div class="flex border-t-1 items-center px-2 border-edge-muted h-[40px] justify-between">
-                  <div class="flex gap-2 items-center">
-                    <IconLink class="w-[16px] h-[16px]" />
-                    <div class="font-medium text-sm">Public&nbspLink</div>
-                  </div>
+                  <TextButton
+                    onClick={() => copyPublicLink()}
+                    theme="accent"
+                    outline
+                    icon={IconLink}
+                    height="h-[22px]"
+                    text="Public Link"
+                  />
                   <ShareOptions
                     permissions={publicAccessLevel() ?? null}
                     hideNoAccess={props.itemType === 'chat'}
