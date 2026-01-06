@@ -459,7 +459,7 @@ async fn cursor_with_assoc_works() {
 }
 
 #[tokio::test]
-async fn cursor_with_code_works() {
+async fn cursor_with_all_works() {
     let soup = MockSoup::new();
     let inner_counter = soup.called.clone();
     let router: Router = soup_router(SoupRouterState::new(
@@ -482,7 +482,7 @@ async fn cursor_with_code_works() {
         .body(axum::body::Body::from(
             serde_json::to_vec(&serde_json::json!({
                 "document_filters": {
-                    "file_types": ["assoc:code"]
+                    "file_types": ["assoc:code", "assoc:other", "assoc:image", "md", "pdf", "canvas"]
                 }
             }))
             .unwrap(),
