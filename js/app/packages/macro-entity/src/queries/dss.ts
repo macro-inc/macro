@@ -272,62 +272,6 @@ const selectData: (
   );
 };
 
-export function createDocumentsInfiniteQuery(
-  args?: GetItemsSoupParams | Accessor<GetItemsSoupParams>
-) {
-  const params = () => {
-    const argParams = typeof args === 'function' ? args() : args;
-    const limit =
-      argParams?.limit && argParams.limit > 0 && argParams.limit <= 500
-        ? argParams.limit
-        : 500;
-    return {
-      ...argParams,
-      limit,
-    };
-  };
-
-  const authQuery = createApiTokenQuery();
-  const instructionsIdQuery = useInstructionsMdIdQuery();
-
-  return useInfiniteQuery(() => ({
-    queryKey: queryKeys.document({
-      infinite: true,
-      ...params(),
-    }),
-    queryHash: dssQueryKeyHashFn(
-      queryKeys.document({
-        infinite: true,
-        ...params(),
-      }) as DssQueryKey
-    ),
-    queryFn: ({ pageParam }) =>
-      fetchPaginatedDocumentsGet({ apiToken: authQuery.data, ...pageParam }),
-    initialPageParam: params(),
-    getNextPageParam: ({ next_cursor: cursor }) =>
-      cursor ? { ...params(), cursor } : undefined,
-    select: (data) =>
-      data.pages.flatMap(({ items }) =>
-        items
-          .filter((item) => item.tag === 'document')
-          .filter((item) => item.data.id !== instructionsIdQuery.data)
-          .map(
-            (item): DocumentEntity => ({
-              ...item.data,
-              type: item.tag,
-              frecencyScore: item.frecency_score,
-              viewedAt: item.data.viewedAt ?? undefined,
-              fileType: item.data.fileType ?? undefined,
-              projectId: item.data.projectId ?? undefined,
-              subType: item.data.subType ?? undefined,
-              name: resolveDocumentEntityName(item.data),
-            })
-          )
-      ),
-    enabled: authQuery.isSuccess,
-  }));
-}
-
 export function createChatsInfiniteQuery(
   args?: GetItemsSoupParams | Accessor<GetItemsSoupParams>
 ) {

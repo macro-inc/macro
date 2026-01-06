@@ -5,6 +5,7 @@ import {
 import { noiseFilter, signalFilter } from '@app/component/soupFilters';
 import type { BlockChannelProps } from '@block-channel/component/Block';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
+import { codeFileExtensions } from '@block-code/util/languageSupport';
 import { URL_PARAMS as EMAIL_PARAMS } from '@block-email/constants';
 import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/signal/location';
@@ -33,13 +34,13 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
+import { arrayEquals } from '@core/util/compareUtils';
 import { debouncedDependent } from '@core/util/debounce';
 import { fuzzyMatch } from '@core/util/fuzzy';
 import SearchIcon from '@icon/regular/magnifying-glass.svg?component-solid';
 import LoadingSpinner from '@icon/regular/spinner.svg?component-solid';
 import XIcon from '@icon/regular/x.svg?component-solid';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import { supportedExtensions } from '@lexical-core/utils';
 import {
   createChannelsQuery,
   createDssInfiniteQuery,
@@ -98,6 +99,7 @@ import {
   createRoot,
   createSelector,
   createSignal,
+  For,
   mergeProps,
   on,
   onCleanup,
@@ -150,12 +152,24 @@ import {
   VIEWCONFIG_BASE,
   VIEWCONFIG_DEFAULTS_IDS,
   VIEWCONFIG_DEFAULTS_IDS_ENUM,
+  VIEWCONFIG_FILTER_DOCUMENT_TYPE_FILTER,
   type ViewConfigBase,
   type ViewData,
 } from './ViewConfig';
 
 const SEARCH_SERVICE_DEBOUNCE_MS = 200;
 const LOCAL_FUZZY_SEARCH_DEBOUNCE_MS = 20;
+
+const NIL_UUID = '00000000-0000-0000-0000-000000000000';
+
+const FILE_TYPE_DISPLAY_LABELS: Record<DocumentTypeFilter, string> = {
+  md: 'NOTE',
+  pdf: 'PDF',
+  canvas: 'CANVAS',
+  code: 'CODE',
+  image: 'IMAGE',
+  unknown: 'OTHER',
+};
 
 const sortOptions = [
   {
@@ -681,46 +695,84 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     setOptionalFilters(filterFns);
   });
 
-  const unifiedSearchIncludeArray = createMemo<UnifiedSearchIndex[]>(() => {
-    let types = entityTypeFilter();
-    // NOTE: empty array means search all
-    if (types.length === 0) types = [];
-    const includeArray: UnifiedSearchIndex[] = [];
-    for (const type of types) {
-      switch (type) {
-        case 'document':
-        case 'task':
-          includeArray.push('documents');
-          break;
-        case 'chat':
-          includeArray.push('chats');
-          break;
-        case 'channel':
-          includeArray.push('channels');
-          break;
-        case 'email':
-          includeArray.push('emails');
-          break;
-        case 'project':
-          includeArray.push('projects');
-          break;
+  const unifiedSearchIncludeArray = createMemo<UnifiedSearchIndex[]>(
+    () => {
+      let types = entityTypeFilter();
+      // NOTE: empty array means search all
+      if (types.length === 0) types = [];
+      const includeArray: UnifiedSearchIndex[] = [];
+      for (const type of types) {
+        switch (type) {
+          case 'document':
+          case 'task':
+            includeArray.push('documents');
+            break;
+          case 'chat':
+            includeArray.push('chats');
+            break;
+          case 'channel':
+            includeArray.push('channels');
+            break;
+          case 'email':
+            includeArray.push('emails');
+            break;
+          case 'project':
+            includeArray.push('projects');
+            break;
+        }
       }
-    }
-    return includeArray;
-  });
+      return Array.from(new Set(includeArray));
+    },
+    [],
+    { equals: arrayEquals }
+  );
+
+  const createFileTypeFilterMemo = (type: 'soup' | 'search') =>
+    createMemo<string[]>(
+      () => {
+        let fileTypes = [];
+        if (entityTypeFilter().includes('task')) {
+          fileTypes.push('md');
+        }
+
+        if (entityTypeFilter().includes('document')) {
+          if (
+            fileTypeFilter().length > 0 &&
+            fileTypeFilter().length <
+              VIEWCONFIG_FILTER_DOCUMENT_TYPE_FILTER.length
+          ) {
+            const documentFileTypes = fileTypeFilter().flatMap((fileType) => {
+              if (fileType === 'code')
+                return type === 'soup' ? ['assoc:code'] : codeFileExtensions;
+              if (fileType === 'image')
+                return type === 'soup' ? ['assoc:image'] : [NIL_UUID];
+              if (fileType === 'unknown')
+                return type === 'soup' ? ['assoc:other'] : [NIL_UUID];
+              return [fileType];
+            });
+            fileTypes.push(...documentFileTypes);
+          } else {
+            // if we have task + document and no file type filter, we want to include all file types
+            fileTypes = [];
+          }
+        }
+
+        return Array.from(new Set(fileTypes));
+      },
+      [],
+      {
+        equals: arrayEquals,
+      }
+    );
+
+  const joinedSoupFileTypeFilter = createFileTypeFilterMemo('soup');
+  const joinedSearchFileTypeFilter = createFileTypeFilterMemo('search');
 
   const unifiedSearchFilters = createMemo<UnifiedSearchRequestFilters>(() => {
     let documentFilters: DocumentFilters | null = null;
-    if (fileTypeFilter().length > 0) {
-      const fileTypes = fileTypeFilter().flatMap((fileType) => {
-        // not ideal but it works for most cases
-        if (fileType === 'code') return supportedExtensions;
-        return [fileType];
-      });
-      documentFilters = {
-        file_types: fileTypes,
-      };
-    }
+    documentFilters = {
+      file_types: joinedSearchFileTypeFilter(),
+    };
 
     let emailFilters: EmailFilters | null = null;
     if (shouldFilterEmails()) {
@@ -794,11 +846,11 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       sort_method: sortType(),
     })
   );
-  const GARBAGE_UUID = '00000000-0000-0000-0000-000000000000';
+
   const dssQueryRequestBody = createMemo(
     (): PostSoupRequest => ({
       channel_filters: {
-        channel_ids: [GARBAGE_UUID],
+        channel_ids: [NIL_UUID],
       },
       document_filters: {
         document_ids:
@@ -806,14 +858,15 @@ export function UnifiedListView(props: UnifiedListViewProps) {
           entityTypeFilter().includes('task') ||
           entityTypeFilter().length === 0
             ? []
-            : [GARBAGE_UUID],
+            : [NIL_UUID],
         project_ids: view().viewType === 'project' ? [view().id] : [],
+        file_types: joinedSoupFileTypeFilter(),
       },
       chat_filters: {
         chat_ids:
           entityTypeFilter().includes('chat') || entityTypeFilter().length === 0
             ? []
-            : [GARBAGE_UUID],
+            : [NIL_UUID],
         project_ids: view().viewType === 'project' ? [view().id] : [],
       },
       email_filters: {
@@ -824,7 +877,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
           (entityTypeFilter().includes('email') ||
             entityTypeFilter().length === 0)
             ? []
-            : [GARBAGE_UUID],
+            : [NIL_UUID],
       },
       project_filters: {
         project_ids:
@@ -833,7 +886,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
             : entityTypeFilter().includes('project') ||
                 entityTypeFilter().length === 0
               ? []
-              : [GARBAGE_UUID],
+              : [NIL_UUID],
       },
       limit: props.defaultDisplayOptions?.limit ?? 100,
       emailView: importantFilter()
@@ -1374,48 +1427,17 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                   <section class="gap-1 p-2">
                     <span class="font-medium text-xs">Filetype</span>
                     <div class="flex flex-row flex-wrap items-center gap-1">
-                      <ToggleButton
-                        size="SM"
-                        pressed={fileTypeFilter().includes('md')}
-                        onChange={() => toggleFileTypeFilter('md')}
-                      >
-                        NOTE
-                      </ToggleButton>
-                      <ToggleButton
-                        size="SM"
-                        pressed={fileTypeFilter().includes('pdf')}
-                        onChange={() => toggleFileTypeFilter('pdf')}
-                      >
-                        PDF
-                      </ToggleButton>
-                      <ToggleButton
-                        size="SM"
-                        pressed={fileTypeFilter().includes('canvas')}
-                        onChange={() => toggleFileTypeFilter('canvas')}
-                      >
-                        CANVAS
-                      </ToggleButton>
-                      <ToggleButton
-                        size="SM"
-                        pressed={fileTypeFilter().includes('code')}
-                        onChange={() => toggleFileTypeFilter('code')}
-                      >
-                        CODE
-                      </ToggleButton>
-                      <ToggleButton
-                        size="SM"
-                        pressed={fileTypeFilter().includes('image')}
-                        onChange={() => toggleFileTypeFilter('image')}
-                      >
-                        IMAGE
-                      </ToggleButton>
-                      <ToggleButton
-                        size="SM"
-                        pressed={fileTypeFilter().includes('unknown')}
-                        onChange={() => toggleFileTypeFilter('unknown')}
-                      >
-                        Other
-                      </ToggleButton>
+                      <For each={[...VIEWCONFIG_FILTER_DOCUMENT_TYPE_FILTER]}>
+                        {(fileType) => (
+                          <ToggleButton
+                            size="SM"
+                            pressed={fileTypeFilter().includes(fileType)}
+                            onChange={() => toggleFileTypeFilter(fileType)}
+                          >
+                            {FILE_TYPE_DISPLAY_LABELS[fileType]}
+                          </ToggleButton>
+                        )}
+                      </For>
                     </div>
                   </section>
                   <Show when={ENABLE_SOUP_FROM_FILTER && showFromFilter()}>
