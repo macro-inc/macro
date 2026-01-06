@@ -70,6 +70,7 @@ setup_test_envs:
     echo "DATABASE_URL={{ MACRODB }}" >> ./email_contact_search/.env 
 
 setup_macrodb:
+    just macro_db_client/create_db
     just macro_db_client/migrate_db
     just document_cognition_service/prepare-test
 
