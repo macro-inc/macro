@@ -348,11 +348,7 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
         let mut search_request: SearchRequestBuilder<'a> = SearchRequestBuilder::new();
 
         // Collapse on the ID_KEY if collapse is true
-        // or if we are searchign on Name or NameContent
-        if self.collapse
-            || self.search_on == SearchOn::Name
-            || self.search_on == SearchOn::NameContent
-        {
+        if self.collapse {
             search_request.collapse(Collapse::new(T::ID_KEY));
         }
 
