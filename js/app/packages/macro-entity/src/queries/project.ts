@@ -5,20 +5,25 @@ import type {
   ProjectPreviewData,
 } from '@service-storage/generated/schemas';
 import { useQuery } from '@tanstack/solid-query';
-import type { ChatEntity, DocumentEntity, EntityData } from '../types/entity';
+import {
+  type ChatEntity,
+  type DocumentEntity,
+  type EntityData,
+  getEntityProjectId,
+  type ProjectEntity,
+} from '../types/entity';
 import { createApiTokenQuery } from './auth';
 import { queryKeys } from './key';
 
 export type ProjectContainedEntity = WithRequired<
-  Extract<EntityData, DocumentEntity | ChatEntity>,
+  Extract<EntityData, DocumentEntity | ChatEntity | ProjectEntity>,
   'projectId'
 >;
 
 export const isProjectContainedEntity = (
   entity: EntityData
 ): entity is ProjectContainedEntity => {
-  if (entity.type !== 'chat' && entity.type !== 'document') return false;
-  return !!entity.projectId;
+  return getEntityProjectId(entity) !== false;
 };
 
 const fetchProjectData = async (
@@ -103,18 +108,20 @@ const fetchProjectData = async (
   }
 };
 
-export function createProjectQuery<T extends ProjectContainedEntity>(
-  entity: T
-) {
+export function createProjectQuery(projectId: string) {
   const authQuery = createApiTokenQuery();
 
-  const projectQuery = useQuery(() => ({
-    queryKey: queryKeys.project({ projectId: entity.projectId }),
-    queryFn: () => fetchProjectData(entity.projectId, authQuery.data),
-    enabled: authQuery.isSuccess,
-    gcTime: 1000 * 60 * 10, // 10 minutes
-    staleTime: 1000 * 60 * 5, // 5 minutes
-  }));
+  const projectQuery = useQuery(() => {
+    return {
+      queryKey: queryKeys.project({
+        projectId,
+      }),
+      queryFn: () => fetchProjectData(projectId, authQuery.data),
+      enabled: authQuery.isSuccess && !!projectId,
+      gcTime: 1000 * 60 * 10, // 10 minutes
+      staleTime: 1000 * 60 * 5, // 5 minutes
+    };
+  });
 
   return projectQuery;
 }

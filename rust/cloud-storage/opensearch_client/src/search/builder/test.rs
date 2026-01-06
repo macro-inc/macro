@@ -8,6 +8,78 @@ impl SearchQueryConfig for TestSearchConfig {
     const USER_ID_KEY: &'static str = "test_user_id";
     const TITLE_KEY: &'static str = "test_title";
     const ENTITY_INDEX: SearchEntityType = SearchEntityType::Documents;
+
+    fn append_owner_highlights<'a>(
+        highlight: opensearch_query_builder::Highlight<'a>,
+    ) -> opensearch_query_builder::Highlight<'a> {
+        highlight.field("test_user_id", create_highlight_field("plain", 1))
+    }
+}
+
+#[test]
+fn test_build_filter_query() -> anyhow::Result<()> {
+    // Test ids only
+    let ids = vec!["id1".to_string(), "id2".to_string()];
+    let builder = SearchQueryBuilder::<TestSearchConfig>::new(vec!["test".to_string()])
+        .user_id("user123")
+        .ids(ids.clone())
+        .ids_only(true);
+
+    let result = builder.build_filter_query(TestSearchConfig::USER_ID_KEY)?;
+
+    let expected = serde_json::json!({
+        "terms": {
+            "entity_id": ["id1", "id2"]
+        }
+    });
+
+    assert_eq!(result.to_json(), expected);
+
+    // Test !ids_only with no ids
+    let builder = SearchQueryBuilder::<TestSearchConfig>::new(vec!["test".to_string()])
+        .user_id("user123")
+        .ids(vec![])
+        .ids_only(false);
+
+    let result = builder.build_filter_query(TestSearchConfig::USER_ID_KEY)?;
+
+    let expected = serde_json::json!({
+        "term": {
+            "test_user_id": "user123"
+        }
+    });
+
+    assert_eq!(result.to_json(), expected);
+
+    // Test !ids_only with ids
+    let builder = SearchQueryBuilder::<TestSearchConfig>::new(vec!["test".to_string()])
+        .user_id("user123")
+        .ids(ids.clone())
+        .ids_only(false);
+
+    let result = builder.build_filter_query(TestSearchConfig::USER_ID_KEY)?;
+
+    let expected = serde_json::json!({
+        "bool": {
+            "minimum_should_match": 1,
+            "should": [
+                {
+                    "terms": {
+                        "entity_id": ["id1", "id2"]
+                    }
+                },
+                {
+                    "term": {
+                        "test_user_id": "user123"
+                    }
+                }
+            ]
+        }
+    });
+
+    assert_eq!(result.to_json(), expected);
+
+    Ok(())
 }
 
 #[test]
@@ -33,7 +105,7 @@ fn test_build_search_request() -> anyhow::Result<()> {
             "field": "entity_id"
         },
         "sort": TestSearchConfig::default_sort_types().iter().map(|s| s.to_json()).collect::<Vec<_>>(),
-        "highlight": TestSearchConfig::default_highlight().to_json(),
+        "highlight": TestSearchConfig::append_owner_highlights(TestSearchConfig::default_highlight()).to_json(),
         "query": {
             "bool": {}
         }
@@ -66,14 +138,7 @@ fn test_build_search_request() -> anyhow::Result<()> {
         "collapse": {
             "field": "entity_id"
         },
-        "sort": [
-            {
-                "_score": "desc"
-            },
-            {
-                "entity_id": "asc"
-            }
-        ],
+       "sort": TestSearchConfig::default_sort_types().iter().map(|s| s.to_json()).collect::<Vec<_>>(),
         "highlight": {
             "require_field_match": false,
             "fields": {
@@ -84,6 +149,12 @@ fn test_build_search_request() -> anyhow::Result<()> {
                     "post_tags": ["</macro_em>"],
                 },
                 "test_title": {
+                    "type": "plain",
+                    "number_of_fragments": 1,
+                    "pre_tags": ["<macro_em>"],
+                    "post_tags": ["</macro_em>"],
+                },
+                "test_user_id": {
                     "type": "plain",
                     "number_of_fragments": 1,
                     "pre_tags": ["<macro_em>"],
@@ -135,14 +206,7 @@ fn test_build_search_request() -> anyhow::Result<()> {
         "collapse": {
             "field": "entity_id"
         },
-        "sort": [
-            {
-                "_score": "desc"
-            },
-            {
-                "entity_id": "asc"
-            }
-        ],
+        "sort": TestSearchConfig::default_sort_types().iter().map(|s| s.to_json()).collect::<Vec<_>>(),
         "highlight": {
             "require_field_match": false,
             "fields": {
@@ -157,6 +221,12 @@ fn test_build_search_request() -> anyhow::Result<()> {
                     "number_of_fragments": 1,
                     "pre_tags": ["<macro_em>"],
                     "post_tags": ["</macro_em>"],
+                },
+                "test_user_id": {
+                    "type": "plain",
+                    "number_of_fragments": 1,
+                    "pre_tags": ["<macro_em>"],
+                    "post_tags": ["</macro_em>"],
                 }
             }
         },
@@ -166,6 +236,49 @@ fn test_build_search_request() -> anyhow::Result<()> {
     });
 
     assert_eq!(result.to_json(), expected);
+
+    Ok(())
+}
+
+#[test]
+fn test_build_content_and_name_query_empty_ids() -> anyhow::Result<()> {
+    // Empty ids ok with ids only false
+    let term = vec!["test".to_string()];
+    let ids: Vec<String> = vec![];
+    let user_id = "user123";
+    let page = 1;
+    let page_size = 20;
+
+    let builder = SearchQueryBuilder::<TestSearchConfig>::new(term.clone())
+        .match_type("exact")
+        .page_size(page_size)
+        .page(page)
+        .user_id(user_id)
+        .search_on(SearchOn::Content)
+        .ids(ids.clone())
+        .ids_only(false);
+
+    let result = builder.build_content_and_name_bool_query()?;
+
+    assert!(result.name_bool_query.is_none());
+    assert!(result.content_bool_query.is_some());
+
+    // Empty ids fails with ids only true
+    let builder = SearchQueryBuilder::<TestSearchConfig>::new(term.clone())
+        .match_type("exact")
+        .page_size(page_size)
+        .page(page)
+        .user_id(user_id)
+        .search_on(SearchOn::Content)
+        .ids(ids.clone())
+        .ids_only(true);
+
+    let error = builder.build_content_and_name_bool_query().err().unwrap();
+
+    assert_eq!(
+        OpensearchClientError::EmptyIdsWithIdsOnly(SearchEntityType::Documents),
+        error
+    );
 
     Ok(())
 }
@@ -198,8 +311,9 @@ fn test_build_bool_query() -> anyhow::Result<()> {
                         {
                             "wildcard": {
                                 "test_user_id": {
-                                    "value": "*test*",
+                                    "value": "macro|test*",
                                     "case_insensitive": true,
+                                    "boost": 5000.0
                                 }
                             }
                         },
@@ -211,21 +325,19 @@ fn test_build_bool_query() -> anyhow::Result<()> {
                     ],
                 }
             },
-                {"term": {"_index": "documents"}},
             ],
-            "should": [
-                {
-                    "terms": {
-                        "entity_id": ["id1", "id2"]
-                    }
-                },
-                {
-                    "term": {
-                        "test_user_id": "user123"
-                    }
-                }
-            ],
-            "minimum_should_match": 1,
+            "filter": [
+              {
+              "bool": {
+              "minimum_should_match": 1,
+              "should": [
+                {"terms": {"entity_id": ["id1", "id2"]}},
+                {"term": {"test_user_id": "user123"}}
+              ]
+            }
+          },
+          {"term": {"_index": "documents"}}
+        ]
         }
     });
 
@@ -252,8 +364,9 @@ fn test_build_bool_query() -> anyhow::Result<()> {
                         {
                             "wildcard": {
                                 "test_user_id": {
-                                    "value": "*test*",
+                                    "value": "macro|test*",
                                     "case_insensitive": true,
+                                    "boost": 5000.0
                                 }
                             }
                         },
@@ -267,17 +380,12 @@ fn test_build_bool_query() -> anyhow::Result<()> {
                     ],
                 }
             },
-                {"term": {"_index": "documents"}},
             ],
-            "should": [
-                {
-                    "terms": {
-                        "entity_id": ["id1", "id2"]
-                    }
-                },
-            ],
-            "minimum_should_match": 1,
-        }
+            "filter": [
+                {"terms": {"entity_id": ["id1", "id2"]}},
+                {"term": {"_index": "documents"}}
+        ]
+    }
     });
 
     assert_eq!(query.build().to_json(), expected);
@@ -299,7 +407,6 @@ fn test_build_bool_query() -> anyhow::Result<()> {
       "should": [
         {
           "bool": {
-            "minimum_should_match": 1,
             "must": [
               {
                 "bool": {
@@ -309,7 +416,8 @@ fn test_build_bool_query() -> anyhow::Result<()> {
                       "wildcard": {
                         "test_user_id": {
                           "case_insensitive": true,
-                          "value": "*test*"
+                          "value": "macro|test*",
+                          "boost": 5000.0
                         }
                       }
                     },
@@ -323,24 +431,23 @@ fn test_build_bool_query() -> anyhow::Result<()> {
                   ]
                 }
               },
-              {
-                "term": {
-                  "_index": "documents"
-                }
-              }
             ],
-            "should": [
+            "filter": [
               {
                 "terms": {
                   "entity_id": ["id1", "id2"]
                 }
+              },
+              {
+                  "term": {
+                      "_index": "documents",
+                  }
               }
             ]
           }
         },
         {
           "bool": {
-            "minimum_should_match": 1,
             "must": [
               {
                 "match_phrase_prefix": {
@@ -349,25 +456,25 @@ fn test_build_bool_query() -> anyhow::Result<()> {
                   }
                 }
               },
-              {
-                "term": {
-                  "_index": "names"
-                }
-              },
-              {
-                "term": {
-                  "entity_type": "documents"
-                }
-              }
-            ],
-            "should": [
+           ],
+           "filter": [
               {
                 "terms": {
                   "entity_id": ["id1", "id2"]
                 }
+              },
+              {
+                  "term": {
+                      "_index": "names",
+                  }
+              },
+              {
+                  "term": {
+                      "entity_type": "documents"
+                  }
               }
             ]
-          }
+         }
         }
       ]
     }

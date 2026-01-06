@@ -5,10 +5,22 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { SearchHighlightName } from './searchHighlightName';
+import type { SearchHighlightSender } from './searchHighlightSender';
+import type { SearchHighlightUserId } from './searchHighlightUserId';
 
 export interface SearchHighlight {
+  /** The highlight match on the bcc (email only) */
+  bcc?: string[];
+  /** The highlight match on the cc (email only) */
+  cc?: string[];
   /** The highlight match on the content field */
   content?: string[];
   /** The highlight match on the name field */
   name?: SearchHighlightName;
+  /** The highlight match on the recipients (email only) */
+  recipients?: string[];
+  /** The highlight match on the sender (email only) */
+  sender?: SearchHighlightSender;
+  /** The highlight match on the user (owner) of the entity */
+  user_id?: SearchHighlightUserId;
 }

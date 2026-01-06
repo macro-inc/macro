@@ -316,7 +316,6 @@ where
     T: SoupService,
     U: EmailService,
 {
-    dbg!(&post_soup_request);
     let link = match email_link {
         Ok(l) => Some(l.0.0),
         Err(EmailLinkErr::NotFound) => None,

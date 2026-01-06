@@ -1,6 +1,6 @@
 import { useGlobalBlockOrchestrator } from '@app/component/GlobalAppState';
 import { useSplitLayout } from '@app/component/split-layout/layout';
-import type { BlockName } from '@core/block';
+import type { BlockAlias, BlockName } from '@core/block';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import {
@@ -93,7 +93,10 @@ export function References(props: ReferenceProps) {
     messageLocation(channelId, messageId, threadId);
   };
 
-  const navigateToItem = (blockName: BlockName, blockId: string) => {
+  const navigateToItem = (
+    blockName: BlockName | BlockAlias,
+    blockId: string
+  ) => {
     replaceOrInsertSplit({
       type: blockName,
       id: blockId,
@@ -103,7 +106,7 @@ export function References(props: ReferenceProps) {
   const navigateToGenericReference = (item: PreviewItem) => {
     if (isAccessiblePreviewItem(item) && isDocumentPreviewItem(item)) {
       const blockId = item.id;
-      const blockType = fileTypeToBlockName(item.fileType) as BlockName;
+      const blockType = fileTypeToBlockName(item.fileType);
       navigateToItem(blockType, blockId);
     } else {
       toast.failure('Failed to open reference');

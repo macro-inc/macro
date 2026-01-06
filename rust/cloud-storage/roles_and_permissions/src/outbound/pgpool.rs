@@ -9,7 +9,7 @@ use macro_user_id::{
     cowlike::CowLike,
     email::{Email, ReadEmailParts},
     lowercased::Lowercase,
-    user_id::MacroUserId,
+    user_id::MacroUserIdStr,
 };
 use sqlx::PgPool;
 
@@ -35,7 +35,7 @@ impl MacroDB {
     async fn get_user_id_from_email<'a>(
         &self,
         email: &Email<Lowercase<'a>>,
-    ) -> Result<MacroUserId<Lowercase<'a>>, anyhow::Error> {
+    ) -> Result<MacroUserIdStr<'a>, anyhow::Error> {
         let email: &str = email.email_str();
         let user_id = sqlx::query!(
             r#"
@@ -47,13 +47,13 @@ impl MacroDB {
         .fetch_one(&self.pool)
         .await?;
 
-        Ok(MacroUserId::parse_from_str(user_id.as_str()).map(|id| id.into_owned().lowercase())?)
+        Ok(MacroUserIdStr::parse_from_str(user_id.as_str()).map(|id| id.into_owned())?)
     }
 
     /// Add roles to the user
     async fn add_roles_to_user(
         &self,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: &MacroUserIdStr<'_>,
         roles: &[impl ToString],
     ) -> Result<(), UserRolesAndPermissionsError> {
         let roles = roles.iter().map(|r| r.to_string()).collect::<Vec<_>>();
@@ -76,7 +76,7 @@ impl MacroDB {
     /// Remove roles from the user
     async fn remove_roles_from_user(
         &self,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: &MacroUserIdStr<'_>,
         roles: &[impl ToString],
     ) -> Result<(), UserRolesAndPermissionsError> {
         let roles = roles.iter().map(|r| r.to_string()).collect::<Vec<_>>();
@@ -97,7 +97,7 @@ impl MacroDB {
     /// Get the current permissions for a user
     async fn get_user_permissions(
         &self,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: &MacroUserIdStr<'_>,
     ) -> Result<HashSet<Permission>, UserRolesAndPermissionsError> {
         let user_permissions: Vec<Permission> = sqlx::query!(
             r#"
@@ -139,14 +139,14 @@ impl From<sqlx::Error> for UserRolesAndPermissionsError {
 impl UserRolesAndPermissionsRepository for MacroDB {
     async fn get_user_permissions(
         &self,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: &MacroUserIdStr<'_>,
     ) -> Result<HashSet<Permission>, UserRolesAndPermissionsError> {
         self.get_user_permissions(user_id).await
     }
 
     async fn add_roles_to_user(
         &self,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: &MacroUserIdStr<'_>,
         role_ids: &[RoleId],
     ) -> Result<(), UserRolesAndPermissionsError> {
         self.add_roles_to_user(user_id, role_ids).await
@@ -154,7 +154,7 @@ impl UserRolesAndPermissionsRepository for MacroDB {
 
     async fn remove_roles_from_user(
         &self,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: &MacroUserIdStr<'_>,
         role_ids: &[RoleId],
     ) -> Result<(), UserRolesAndPermissionsError> {
         self.remove_roles_from_user(user_id, role_ids).await
@@ -166,7 +166,7 @@ impl UserRepository for MacroDB {
     async fn get_user_id_by_email(
         &self,
         email: &Email<Lowercase<'_>>,
-    ) -> Result<MacroUserId<Lowercase<'_>>, UserRolesAndPermissionsError> {
+    ) -> Result<MacroUserIdStr<'_>, UserRolesAndPermissionsError> {
         self.get_user_id_from_email(email)
             .await
             .map(|id| id.into_owned())

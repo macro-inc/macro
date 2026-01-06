@@ -4,6 +4,7 @@ import './index.css';
 
 import * as analytics from '@coparse/analytics';
 import { initializeLexical } from '@core/component/LexicalMarkdown/init';
+import { getPlatform } from '@core/util/platform';
 import * as Observability from '@observability';
 import { ErrorBoundary, render } from 'solid-js/web';
 import { FatalError } from './component/FatalError';
@@ -17,6 +18,7 @@ initializeLexical();
 const renderApp = () => {
   const root = document.getElementById('root');
   if (!root) return console.error('Root element not found');
+  document.documentElement.dataset.platform = getPlatform();
 
   // Used for :focus-visible, which focus-bracket utility uses, to prevent input elements triggering :focus-visible on mouse click
   document.addEventListener('keydown', () => {

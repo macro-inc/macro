@@ -6,9 +6,12 @@ import {
   useAddParticipantsToChannel,
   useRemoveParticipantsFromChannel,
 } from '@block-channel/signal/participants';
+import { ClippedPanel } from '@core/component/ClippedPanel';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
+import { DialogWrapper } from '@core/component/DialogWrapper';
 import { getDestinationFromOptions } from '@core/component/NewMessage';
 import { RecipientSelector } from '@core/component/RecipientSelector';
-import { TextButton } from '@core/component/TextButton';
 import { Tooltip } from '@core/component/Tooltip';
 import {
   idToEmail,
@@ -18,7 +21,7 @@ import {
 } from '@core/user';
 import InvitedIcon from '@icon/regular/paper-plane-tilt.svg';
 import UsersIcon from '@icon/regular/users.svg';
-import XIcon from '@icon/regular/x.svg';
+import CloseIcon from '@icon/regular/x.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import BracketLeft from '@macro-icons/macro-group-bracket-left.svg';
 import type { ChannelParticipant } from '@service-comms/generated/models/channelParticipant';
@@ -26,6 +29,7 @@ import { ChannelType } from '@service-comms/generated/models/channelType';
 import { useUserId } from '@service-gql/client';
 import { createMemo, createSignal, Show } from 'solid-js';
 import { VList } from 'virtua/solid';
+import { beveledCorners } from '../../block-theme/signals/themeSignals';
 import { UserItem } from './UserItem';
 
 export function ParticipantManager(props: { participantCount: number }) {
@@ -82,61 +86,62 @@ export function ParticipantManager(props: { participantCount: number }) {
       </Dialog.Trigger>
 
       <Dialog.Portal>
-        <Dialog.Overlay class="fixed flex inset-0 z-modal bg-modal-overlay items-center justify-content" />
-        <div class="fixed inset-0 z-modal w-screen h-screen flex items-center justify-center bg-transparent">
-          <Dialog.Content class="w-[512px] bg-dialog rounded-lg border-edge-muted border-1 shadow-lg">
-            <div class="flex flex-row justify-between items-center p-4">
-              <Dialog.Title class="font-medium text-2xl text-ink-muted">
-                {title()}
-              </Dialog.Title>
-              <Dialog.CloseButton class="text-ink-muted hover:bg-hover hover-transition-bg rounded-md p-1">
-                <XIcon class="w-5 h-5" />
-              </Dialog.CloseButton>
-            </div>
-            <Show
-              when={
-                channelType() &&
-                ['private'].includes(channelType()!) &&
-                isChannelAdminOrOwnerMemo()
-              }
-            >
-              <div class="flex flex-col justify-between items-start px-4 gap-2 py-1 pt-2 text-ink-muted">
-                <h1 class="justify-start items-start text-ink-muted text-sm font-medium font-sans">
-                  Invite Participants
-                </h1>
-                <RecipientSelector<'user'>
-                  placeholder={'Add participant'}
-                  options={options}
-                  selectedOptions={usersToInvite}
-                  setSelectedOptions={setUsersToInvite}
-                />
-                <div class="flex w-full flex-row justify-end items-center">
-                  <TextButton
-                    theme="accent"
+        <Dialog.Overlay class="fixed inset-0 z-modal bg-transparent" />
+        <DialogWrapper>
+          <Dialog.Content>
+            <ClippedPanel tl={!beveledCorners()} active>
+              <div class="flex flex-row items-center px-2 h-[40px] gap-2 border-b-1 border-b-edge-muted">
+                <Dialog.CloseButton>
+                  <DeprecatedIconButton
+                    tooltip={{ label: 'Close' }}
+                    icon={CloseIcon}
+                    iconSize={16}
+                    theme="clear"
+                    size="sm"
+                  />
+                </Dialog.CloseButton>
+                <Dialog.Title class="text-sm">{title()}</Dialog.Title>
+              </div>
+              <Show
+                when={
+                  channelType() &&
+                  ['private'].includes(channelType()!) &&
+                  isChannelAdminOrOwnerMemo()
+                }
+              >
+                <div class="flex flex-row justify-between gap-2 min-h-[40px] text-ink-muted border-b border-edge-muted/50 p-2 items-center">
+                  <RecipientSelector<'user'>
+                    setSelectedOptions={setUsersToInvite}
+                    selectedOptions={usersToInvite}
+                    placeholder={'Search'}
+                    options={options}
+                    hideBorder
+                    noPadding
+                  />
+                  <DeprecatedTextButton
                     disabled={usersToInvite().length === 0}
-                    icon={InvitedIcon}
-                    text="Add Users"
                     onClick={handleAddParticipants}
+                    icon={InvitedIcon}
+                    text={
+                      usersToInvite().length > 1
+                        ? 'Add Participants'
+                        : 'Add Participant'
+                    }
+                    theme="accent"
                   />
                 </div>
-              </div>
-            </Show>
+              </Show>
 
-            <div class="flex flex-col">
-              <h1 class="justify-start items-start px-4 text-ink-muted text-sm font-medium font-sans">
-                Participants{' '}
-                <span class="text-ink-muted font-regular">
-                  ({channel?.participants.length})
-                </span>
-              </h1>
-              <ParticipantList
-                editable={editable()}
-                participants={channel.participants}
-                userId={userId()!}
-              />
-            </div>
+              <div class="flex flex-col">
+                <ParticipantList
+                  editable={editable()}
+                  participants={channel.participants}
+                  userId={userId()!}
+                />
+              </div>
+            </ClippedPanel>
           </Dialog.Content>
-        </div>
+        </DialogWrapper>
       </Dialog.Portal>
     </Dialog>
   );
@@ -176,16 +181,16 @@ export function ParticipantList(props: {
   });
 
   return (
-    <div ref={ref} class="flex flex-col px-4 py-2 w-full">
+    <div ref={ref} class="flex flex-col w-full">
       <Show when={props.participants.length > 10}>
         <input
-          placeholder="Search participants..."
-          class="w-full rounded-md border-edge-muted border-solid border p-2 text-sm text-ink-muted"
+          placeholder="Search"
+          class="w-full border-edge-muted/50 border-b-1 px-2 h-[40px] text-sm text-ink-muted"
           value={searchQuery()}
           onInput={(e) => setSearchQuery(e.currentTarget.value)}
         />
       </Show>
-      <div class="flex flex-col gap-3 max-h-[300px] w-full overflow-y-auto mt-1 overflow-x-hidden">
+      <div class="flex flex-col gap-3 max-h-[300px] w-full overflow-y-auto overflow-x-hidden">
         <Show
           when={filteredParticipants().length > 0}
           fallback={<EmptyParticipantList query={searchQuery()} />}
@@ -193,10 +198,11 @@ export function ParticipantList(props: {
           <VList
             data={filteredParticipants()}
             style={{
+              'scrollbar-width': 'none',
               height: '300px',
               width: '100%',
             }}
-            overscan={10}
+            bufferSize={500}
           >
             {(participant) => (
               <UserItem

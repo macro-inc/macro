@@ -23,6 +23,7 @@ aws-sdk-secretsmanager = { workspace = true }
 axum = { workspace = true, features = ["tower-log", "ws"] }
 chrono = { workspace = true }
 comms_service_client = { path = "../comms_service_client" }
+email_db_client = { path = "../email_db_client" }
 http-body-util = { workspace = true }
 macro_auth = { path = "../macro_auth" }
 macro_cors = { path = "../macro_cors" }
@@ -32,6 +33,7 @@ macro_middleware = { path = "../macro_middleware", default-features = false, fea
   "auth",
   "cloud_storage",
 ] }
+macro_notify = { path = "../macro_notify" }
 macro_uuid = { path = "../macro_uuid" }
 model = { path = "../model" }
 models_permissions = { path = "../models_permissions" }

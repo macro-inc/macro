@@ -16,6 +16,22 @@ runs:
     - name: Setup Bun
       uses: oven-sh/setup-bun@v2
 
+    - name: Setup Rust
+      uses: ./.github/actions/setup-rust
+
+    - name: Install wasm-pack
+      shell: bash
+      run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+    - name: Install just
+      shell: bash
+      run: cargo install just
+
+    - name: Build auth_service_rpc WASM
+      shell: bash
+      working-directory: rust/cloud-storage/rpc-interface/auth_service
+      run: just generate
+
     - name: Setup bunfig.toml
       working-directory: js/app
       shell: bash

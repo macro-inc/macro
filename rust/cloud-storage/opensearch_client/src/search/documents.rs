@@ -2,7 +2,7 @@ use crate::{
     Result, delegate_methods,
     error::{OpensearchClientError, ResponseExt},
     search::{
-        builder::{SearchQueryBuilder, SearchQueryConfig},
+        builder::{SearchQueryBuilder, SearchQueryConfig, create_highlight_field},
         model::{
             DefaultSearchResponse, NameIndex, SearchGotoContent, SearchGotoDocument, SearchHit,
             parse_highlight_hit,
@@ -13,10 +13,7 @@ use crate::{
 
 use crate::SearchOn;
 use models_opensearch::{SearchEntityType, SearchIndex};
-use opensearch_query_builder::{
-    BoolQueryBuilder, FieldSort, ScoreWithOrderSort, SearchRequest, SortOrder, SortType,
-    ToOpenSearchJson,
-};
+use opensearch_query_builder::{BoolQueryBuilder, SearchRequest, ToOpenSearchJson};
 use serde_json::Value;
 
 #[derive(Clone)]
@@ -27,12 +24,10 @@ impl SearchQueryConfig for DocumentSearchConfig {
     const TITLE_KEY: &'static str = "name";
     const ENTITY_INDEX: SearchEntityType = SearchEntityType::Documents;
 
-    fn default_sort_types<'a>() -> Vec<SortType<'a>> {
-        vec![
-            SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
-            SortType::Field(FieldSort::new(Self::ID_KEY, SortOrder::Asc)),
-            SortType::Field(FieldSort::new("node_id", SortOrder::Asc)),
-        ]
+    fn append_owner_highlights<'a>(
+        highlight: opensearch_query_builder::Highlight<'a>,
+    ) -> opensearch_query_builder::Highlight<'a> {
+        highlight.field("owner_id", create_highlight_field("plain", 1))
     }
 }
 
@@ -86,7 +81,6 @@ pub(crate) struct DocumentIndex {
     pub content: String,
     pub owner_id: String,
     pub file_type: String,
-    pub updated_at_seconds: i64,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]

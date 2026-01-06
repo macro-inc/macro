@@ -61,7 +61,7 @@ mod tests {
             "icon",
             "red",
             Some(3),
-            SharePermissionV2::default(),
+            SharePermissionV2::new_chat_share_permission(),
         )
         .await
         .unwrap();

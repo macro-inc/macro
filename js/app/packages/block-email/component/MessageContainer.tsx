@@ -1,6 +1,14 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
+import { EmailAttachmentPill } from '@block-email/component/AttachmentPill';
+import { useEmailContext } from '@block-email/component/EmailContext';
+import { EmailInput } from '@block-email/component/EmailInput';
+import { EmailMessageBody } from '@block-email/component/EmailMessageBody';
+import { EmailMessageTopBar } from '@block-email/component/EmailMessageTopBar';
+import { ImageGalleryPreview } from '@core/component/ImageGalleryPreview';
+import { ImagePreview } from '@core/component/ImagePreview';
 import { Message } from '@core/component/Message';
 import { toast } from '@core/component/Toast/Toast';
+import { VideoPreview } from '@core/component/VideoPreview';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { useDisplayName } from '@core/user';
 import { isErr } from '@core/util/maybeResult';
@@ -14,14 +22,17 @@ import type {
 import { useUserId } from '@service-gql/client';
 import { storageServiceClient } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
-import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js';
 import type { SetStoreFunction } from 'solid-js/store';
 import { Portal } from 'solid-js/web';
-import { EmailAttachmentPill } from './AttachmentPill';
-import { useEmailContext } from './EmailContext';
-import { EmailInput } from './EmailInput';
-import { EmailMessageBody } from './EmailMessageBody';
-import { EmailMessageTopBar } from './EmailMessageTopBar';
 
 interface MessageContainerProps {
   message: MessageWithBodyReplyless;
@@ -37,7 +48,7 @@ export function MessageContainer(props: MessageContainerProps) {
   const context = useEmailContext();
   const draftChild = createMemo(() => {
     if (!props.message.db_id) return undefined;
-    const draft = context.messageDbIdToDraftChildren[props.message.db_id];
+    const draft = context.drafts.getDraftForMessage(props.message.db_id);
     if (!draft) return undefined;
     return draft;
   });
@@ -87,6 +98,27 @@ export function MessageContainer(props: MessageContainerProps) {
       const normalized = contentId.replace(/[<>]/g, '').trim();
       return !inlineContentIds().has(normalized);
     });
+  });
+
+  const imageAttachmentsWithSfs = createMemo(() => {
+    return visibleAttachments().filter(
+      (a) => a.mime_type?.startsWith('image/') && a.sfs_id
+    );
+  });
+
+  const videoAttachmentsWithSfs = createMemo(() => {
+    return visibleAttachments().filter(
+      (a) => a.mime_type?.startsWith('video/') && a.sfs_id
+    );
+  });
+
+  const otherAttachments = createMemo(() => {
+    return visibleAttachments().filter(
+      (a) =>
+        !a.sfs_id ||
+        (!a.mime_type?.startsWith('image/') &&
+          !a.mime_type?.startsWith('video/'))
+    );
   });
 
   // expand appropriate messages
@@ -170,7 +202,7 @@ export function MessageContainer(props: MessageContainerProps) {
               isBodyExpanded={isBodyExpanded}
               expandedHeader={expandedHeader}
               setExpandedHeader={setExpandedHeader}
-              setFocusedMessageId={context.setFocusedMessageId}
+              setFocusedMessageId={context.messages.setFocused}
               setShowReply={setShowReply}
               isLastMessage={props.isLastMessage}
             />
@@ -182,21 +214,58 @@ export function MessageContainer(props: MessageContainerProps) {
               setExpandedMessageBody={(id) =>
                 props.setExpandedMessageBodyIds(id, true)
               }
-              setFocusedMessageId={context.setFocusedMessageId}
+              setFocusedMessageId={context.messages.setFocused}
+              isFirstMessageInThread={props.isFirstMessage}
             />
           </Message.Body>
-          <Show when={visibleAttachments().length > 0}>
-            <div class="flex flex-row overflow-x-scroll my-1">
-              <For each={visibleAttachments()}>
-                {(attachment) => {
-                  if (attachment.db_id)
-                    return (
-                      <EmailAttachmentPill
-                        attachment={attachment}
-                        onClick={onClickAttachment}
-                      />
-                    );
-                }}
+          {/* Image attachments */}
+          <Show when={imageAttachmentsWithSfs().length > 0}>
+            <Switch>
+              <Match when={imageAttachmentsWithSfs().length === 1}>
+                <div class="max-w-[400px] w-fit mt-2">
+                  <ImagePreview
+                    image={{
+                      id: imageAttachmentsWithSfs()[0].sfs_id!,
+                    }}
+                    variant="dynamic"
+                  />
+                </div>
+              </Match>
+              <Match when={imageAttachmentsWithSfs().length > 1}>
+                <div class="flex flex-wrap gap-2 mt-2">
+                  <ImageGalleryPreview
+                    images={imageAttachmentsWithSfs().map((a) => ({
+                      id: a.sfs_id!,
+                    }))}
+                    variant="dynamic"
+                    attachmentIds={imageAttachmentsWithSfs().map(
+                      (a) => a.db_id!
+                    )}
+                  />
+                </div>
+              </Match>
+            </Switch>
+          </Show>
+
+          {/* Video attachments */}
+          <Show when={videoAttachmentsWithSfs().length > 0}>
+            <For each={videoAttachmentsWithSfs()}>
+              {(attachment) => (
+                <VideoPreview id={attachment.sfs_id!} variant="dynamic" />
+              )}
+            </For>
+          </Show>
+
+          {/* Other attachments (non-media or without sfs_id) */}
+          <Show when={otherAttachments().length > 0}>
+            <div class="flex flex-row overflow-x-scroll mt-2 gap-2">
+              <For each={otherAttachments()}>
+                {(attachment) => (
+                  <EmailAttachmentPill
+                    attachment={attachment}
+                    onClick={onClickAttachment}
+                  />
+                )}
               </For>
             </div>
           </Show>

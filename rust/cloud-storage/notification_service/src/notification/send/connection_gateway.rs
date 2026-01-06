@@ -1,4 +1,5 @@
 use connection_gateway_client::model::sender::MessageReceipt;
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model_notifications::NotificationWithRecipient;
 use std::collections::HashSet;
 
@@ -7,7 +8,7 @@ use std::collections::HashSet;
 pub async fn send_connection_gateway(
     conn_gateway_client: &connection_gateway_client::client::ConnectionGatewayClient,
     notifications: &[NotificationWithRecipient],
-) -> anyhow::Result<HashSet<String>> {
+) -> anyhow::Result<HashSet<MacroUserIdStr<'static>>> {
     let start_time = std::time::Instant::now();
     let batch_send_results: Vec<MessageReceipt> = {
         #[cfg(not(feature = "connection_gateway"))]
@@ -60,12 +61,14 @@ pub async fn send_connection_gateway(
         .iter()
         .filter_map(|r| {
             if r.delivery_count != 0 && r.active {
-                Some(r.user_id.clone())
+                MacroUserIdStr::parse_from_str(&r.user_id)
+                    .ok()
+                    .map(CowLike::into_owned)
             } else {
                 None
             }
         })
-        .collect::<HashSet<String>>();
+        .collect::<HashSet<_>>();
 
     Ok(users_sent_connection_gateway)
 }

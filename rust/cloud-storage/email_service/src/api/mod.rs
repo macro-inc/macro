@@ -2,7 +2,7 @@ use anyhow::Context;
 use axum::Router;
 use context::ApiContext;
 use tower::ServiceBuilder;
-use tower_http::trace::TraceLayer;
+use tower_http::{compression::CompressionLayer, trace::TraceLayer};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
@@ -19,16 +19,18 @@ mod middleware;
 mod swagger;
 
 pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
-    let cors = macro_cors::cors_layer();
-
     let env = state.config.environment;
     let port = state.config.port;
     let app = api_router(state.clone())
         .with_state(state)
-        .layer(cors.clone())
-        .layer(ServiceBuilder::new().layer(TraceLayer::new_for_http()))
+        .merge(health::router())
+        .layer(
+            ServiceBuilder::new()
+                .layer(TraceLayer::new_for_http())
+                .layer(macro_cors::cors_layer())
+                .layer(CompressionLayer::new().gzip(true).br(true)),
+        )
         // The health router is attached here so we don't attach the logging middleware to it
-        .merge(health::router().layer(cors))
         .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()));
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))

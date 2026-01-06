@@ -1,6 +1,6 @@
 use crate::util::redis::RedisClient;
 use anyhow::Context;
-use models_email::gmail::webhook::{GooglePublicKeys, KeyMap};
+use models_email::gmail::inbox_sync::{GooglePublicKeys, KeyMap};
 use models_email::service::cache::TokenCacheKey;
 use redis::AsyncCommands;
 

@@ -40,6 +40,7 @@ export const NOTIFICATION_LABEL_BY_TYPE: Record<NotificationType, string> = {
   [NotificationType.new_email]: 'EMAIL',
   [NotificationType.invite_to_team]: 'INVITE',
   [NotificationType.reject_team_invite]: 'REJECTED',
+  [NotificationType.task_assigned]: 'ASSIGNED',
 } as const;
 
 const extractors: {
@@ -96,7 +97,7 @@ const extractors: {
       action: 'mentioned you in',
       target: {
         type: 'channel',
-        id: n.eventItemId,
+        id: n.entity_id,
         show: n.notificationMetadata.channelType !== 'direct_message',
       },
       content: m.messageContent,
@@ -112,7 +113,7 @@ const extractors: {
       type: n.notificationEventType,
       actor: n.senderId ? { id: n.senderId! } : undefined,
       action: 'mentioned you in',
-      target: { type: 'document', id: n.eventItemId, name: m.documentName },
+      target: { type: 'document', id: n.entity_id, name: m.documentName },
       content: m.documentName,
       meta: {
         fileType: m.fileType,
@@ -126,7 +127,7 @@ const extractors: {
       type: n.notificationEventType,
       actor: m.invitedBy ? { id: m.invitedBy! } : undefined,
       action: 'invited you to',
-      target: { type: 'channel', id: n.eventItemId, name: m.channelName },
+      target: { type: 'channel', id: n.entity_id, name: m.channelName },
       content: m.channelName,
     };
   },
@@ -139,7 +140,7 @@ const extractors: {
       action: 'sent a message in',
       target: {
         type: 'channel',
-        id: n.eventItemId,
+        id: n.entity_id,
         show: n.notificationMetadata.channelType !== 'direct_message',
       },
       content: m.messageContent,
@@ -157,7 +158,7 @@ const extractors: {
       action: 'replied in',
       target: {
         type: 'channel',
-        id: n.eventItemId,
+        id: n.entity_id,
         show: n.notificationMetadata.channelType !== 'direct_message',
       },
       content: m.messageContent,
@@ -174,7 +175,7 @@ const extractors: {
       type: n.notificationEventType,
       actor: m.owner ? { id: m.owner! } : undefined,
       action: 'shared with you',
-      target: { type: 'document', id: n.eventItemId, name: m.documentName },
+      target: { type: 'document', id: n.entity_id, name: m.documentName },
       content: m.documentName,
       meta: {
         fileType: m.fileType,
@@ -188,7 +189,7 @@ const extractors: {
       type: n.notificationEventType,
       actor: m.sender ? { id: m.sender! } : undefined,
       action: 'sent a new email',
-      target: { type: 'email', id: n.eventItemId, show: false },
+      target: { type: 'email', id: n.entity_id, show: false },
       content: m.subject,
       meta: {
         sender: m.sender,
@@ -204,7 +205,7 @@ const extractors: {
       type: n.notificationEventType,
       actor: m.invitedBy ? { id: m.invitedBy! } : undefined,
       action: 'invited you to',
-      target: { type: 'team', id: n.eventItemId, name: m.teamName },
+      target: { type: 'team', id: n.entity_id, name: m.teamName },
       content: m.teamName,
     };
   },
@@ -215,8 +216,27 @@ const extractors: {
       type: n.notificationEventType,
       actor: undefined,
       action: 'rejected your team invitation',
-      target: { type: 'team', id: n.eventItemId },
+      target: { type: 'team', id: n.entity_id },
       content: undefined,
+    };
+  },
+  task_assigned: (n) => {
+    const m = n.notificationMetadata;
+    if (!m) return null;
+    return {
+      type: n.notificationEventType,
+      actor: m.assignedBy ? { id: m.assignedBy } : undefined,
+      action: 'assigned you a task',
+      target: {
+        type: 'document' as EntityType, // Tasks are stored as documents
+        id: m.taskId,
+        name: m.taskName ?? undefined,
+        show: true, // Show task name in platform notification title
+      },
+      content: m.taskName ?? undefined,
+      meta: {
+        itemId: m.taskId,
+      },
     };
   },
 };

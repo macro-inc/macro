@@ -100,10 +100,28 @@ pub async fn get_entity_properties(
             async {
                 match entity_type {
                     EntityType::Document | EntityType::Task => {
-                        super::super::metadata::get_document_metadata_properties(
+                        crate::api::properties::metadata::get_document_metadata_properties(
                             &context.db,
                             &entity_id,
                             entity_type,
+                        )
+                        .await
+                    }
+                    EntityType::Thread => {
+                        let thread_id = uuid::Uuid::parse_str(&entity_id).map_err(|e| {
+                            tracing::error!(error = ?e, entity_id = %entity_id, "invalid thread UUID");
+                            crate::api::properties::metadata::MetadataError::NotFound
+                        })?;
+                        crate::api::properties::metadata::get_thread_metadata_properties(
+                            &context.db,
+                            thread_id,
+                        )
+                        .await
+                    }
+                    EntityType::Project => {
+                        super::super::metadata::get_project_metadata_properties(
+                            &context.db,
+                            &entity_id,
                         )
                         .await
                     }
@@ -130,7 +148,7 @@ pub async fn get_entity_properties(
             tracing::error!(
                 error = ?e,
                 entity_id = %entity_id,
-                "failed to get document system properties"
+                "failed to get metadata properties"
             );
         })?;
 

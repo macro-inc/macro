@@ -1,13 +1,4 @@
 //! Implementation for TeamRepository using MacroDB.
-
-#[cfg(test)]
-mod test;
-
-use std::str::FromStr;
-
-use macro_user_id::{cowlike::CowLike, email::Email, lowercased::Lowercase, user_id::MacroUserId};
-use sqlx::PgPool;
-
 use crate::domain::{
     model::{
         CreateTeamError, InviteUsersToTeamError, RemoveTeamInviteError, RemoveUserFromTeamError,
@@ -15,6 +6,14 @@ use crate::domain::{
     },
     team_repo::TeamRepository,
 };
+use macro_user_id::{
+    cowlike::CowLike, email::Email, lowercased::Lowercase, user_id::MacroUserIdStr,
+};
+use sqlx::PgPool;
+use std::str::FromStr;
+
+#[cfg(test)]
+mod test;
 
 /// The TeamRepositoryImpl struct is a wrapper around sqlx::PgPool connected to macrodb.
 #[derive(Clone)]
@@ -35,7 +34,7 @@ impl TeamRepositoryImpl {
     async fn get_team_owner(
         &self,
         team_id: &uuid::Uuid,
-    ) -> Result<MacroUserId<Lowercase<'_>>, anyhow::Error> {
+    ) -> Result<MacroUserIdStr<'_>, anyhow::Error> {
         let owner_id = sqlx::query!(
             r#"
             SELECT owner_id
@@ -48,12 +47,12 @@ impl TeamRepositoryImpl {
         .fetch_one(&self.pool)
         .await?;
 
-        Ok(MacroUserId::parse_from_str(owner_id.as_str()).map(|id| id.into_owned().lowercase())?)
+        Ok(MacroUserIdStr::parse_from_str(owner_id.as_str()).map(|id| id.into_owned())?)
     }
 
     async fn create_team_inner(
         &self,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: &MacroUserIdStr<'_>,
         team_name: &str,
     ) -> Result<Team, sqlx::Error> {
         let mut transaction = self.pool.begin().await?;
@@ -127,7 +126,7 @@ impl From<sqlx::Error> for RemoveTeamInviteError {
 impl TeamRepository for TeamRepositoryImpl {
     async fn get_stripe_customer_id(
         &self,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: &MacroUserIdStr<'_>,
     ) -> Result<Option<stripe::CustomerId>, TeamError> {
         let stripe_customer_id = sqlx::query!(
             r#"
@@ -184,7 +183,7 @@ impl TeamRepository for TeamRepositoryImpl {
 
     async fn create_team(
         &self,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: &MacroUserIdStr<'_>,
         team_name: &str,
     ) -> Result<Team, CreateTeamError> {
         if team_name.is_empty() || team_name.len() > 50 {
@@ -199,7 +198,7 @@ impl TeamRepository for TeamRepositoryImpl {
     async fn invite_users_to_team(
         &self,
         team_id: &uuid::Uuid,
-        invited_by: &MacroUserId<Lowercase<'_>>,
+        invited_by: &MacroUserIdStr<'_>,
         emails: non_empty::NonEmpty<&[Email<Lowercase<'_>>]>,
     ) -> Result<Vec<TeamInvite<'_>>, InviteUsersToTeamError> {
         // Convert emails to strings and macro_user_ids once
@@ -289,7 +288,7 @@ impl TeamRepository for TeamRepositoryImpl {
     async fn remove_user_from_team(
         &self,
         team_id: &uuid::Uuid,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: &MacroUserIdStr<'_>,
     ) -> Result<(), RemoveUserFromTeamError> {
         let owner_id = self.get_team_owner(team_id).await?;
 
@@ -455,7 +454,7 @@ impl TeamRepository for TeamRepositoryImpl {
             .into_iter()
             .map(|row| {
                 let user_id =
-                    MacroUserId::parse_from_str(&row.user_id).map(|id| id.into_owned().lowercase());
+                    MacroUserIdStr::parse_from_str(&row.user_id).map(|id| id.into_owned());
 
                 if let Ok(user_id) = user_id {
                     Ok(TeamMember {
@@ -479,7 +478,7 @@ impl TeamRepository for TeamRepositoryImpl {
     async fn accept_team_invite(
         &self,
         team_invite_id: &uuid::Uuid,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: &MacroUserIdStr<'_>,
     ) -> Result<TeamMember<'static>, TeamError> {
         let mut transaction = self.pool.begin().await?;
 
@@ -535,7 +534,7 @@ impl TeamRepository for TeamRepositoryImpl {
 
     async fn is_user_member_of_team(
         &self,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: &MacroUserIdStr<'_>,
     ) -> Result<bool, TeamError> {
         let team_member: Option<()> = sqlx::query!(
             r#"
@@ -571,7 +570,7 @@ impl TeamRepository for TeamRepositoryImpl {
             .into_iter()
             .map(|row| {
                 let user_id =
-                    MacroUserId::parse_from_str(&row.user_id).map(|id| id.into_owned().lowercase());
+                    MacroUserIdStr::parse_from_str(&row.user_id).map(|id| id.into_owned());
 
                 if let Ok(user_id) = user_id {
                     Ok(TeamMember {
@@ -595,8 +594,8 @@ impl TeamRepository for TeamRepositoryImpl {
     async fn bulk_is_member_of_other_team(
         &self,
         ignore_team_ids: non_empty::NonEmpty<&[uuid::Uuid]>,
-        users: non_empty::NonEmpty<&[MacroUserId<Lowercase<'_>>]>,
-    ) -> Result<Vec<MacroUserId<Lowercase<'_>>>, TeamError> {
+        users: non_empty::NonEmpty<&[MacroUserIdStr<'_>]>,
+    ) -> Result<Vec<MacroUserIdStr<'_>>, TeamError> {
         let result = sqlx::query!(
             r#"
             SELECT user_id
@@ -617,11 +616,9 @@ impl TeamRepository for TeamRepositoryImpl {
         .fetch_all(&self.pool)
         .await?;
 
-        let members: Vec<Result<MacroUserId<Lowercase<'_>>, _>> = result
+        let members: Vec<Result<_, _>> = result
             .into_iter()
-            .map(|row| {
-                MacroUserId::parse_from_str(&row.user_id).map(|id| id.into_owned().lowercase())
-            })
+            .map(|row| MacroUserIdStr::parse_from_str(&row.user_id).map(|id| id.into_owned()))
             .collect();
 
         let members = members

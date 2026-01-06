@@ -28,8 +28,10 @@
           cargo-lambda
           cargo-deny
           cargo-nextest
-          bacon
+          cargo-expand
+          wasm-pack
           pkg-config
+          bacon
           just
           just-lsp
           taplo
@@ -52,6 +54,7 @@
               complete.clippy
               complete.rustfmt
               complete.rust-analyzer
+              targets.wasm32-unknown-unknown.latest.rust-std
             ]
           )
         ];

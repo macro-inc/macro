@@ -38,7 +38,7 @@ jobs:
           version: 2.2.6
       - name: Run Biome
         working-directory: infra
-        run: biome ci --changed --no-errors-on-unmatched
+        run: biome ci --changed --no-errors-on-unmatched --error-on-warnings
 
   check:
     needs: path-check

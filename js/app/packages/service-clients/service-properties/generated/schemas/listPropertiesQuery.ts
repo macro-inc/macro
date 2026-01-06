@@ -4,12 +4,14 @@
  * properties_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ListPropertiesQueryForEntityType } from './listPropertiesQueryForEntityType';
 import type { PropertyScope } from './propertyScope';
 
 /**
  * Query parameters for listing properties
  */
 export interface ListPropertiesQuery {
+  for_entity_type?: ListPropertiesQueryForEntityType;
   /** Whether to include property options in the response */
   include_options?: boolean;
   /** Scope filter for properties */

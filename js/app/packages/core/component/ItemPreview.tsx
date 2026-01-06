@@ -23,12 +23,12 @@ import {
 import { Match, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { useSplitLayout } from '../../app/component/split-layout/layout';
+import { DeprecatedTextButton } from './DeprecatedTextButton';
 import {
   ENTITY_ICON_CONFIGS,
   EntityIcon,
   ICON_SIZE_CLASSES,
 } from './EntityIcon';
-import { TextButton } from './TextButton';
 
 type ItemPreviewProps = {
   itemId: string;
@@ -127,7 +127,7 @@ function useItemPreviewData(props: ItemPreviewProps) {
 
 function ButtonNoAccess() {
   return (
-    <TextButton
+    <DeprecatedTextButton
       theme="base"
       icon={() => <EyeSlash class="text-ink-muted w-4 h-4" />}
       disabled
@@ -149,7 +149,7 @@ function InlineNoAccess() {
 
 function ButtonDeleted() {
   return (
-    <TextButton
+    <DeprecatedTextButton
       theme="base"
       icon={() => <TrashSimple class="text-ink-muted w-4 h-4" />}
       disabled
@@ -171,7 +171,7 @@ function InlineDeleted() {
 
 function ButtonLoading() {
   return (
-    <TextButton
+    <DeprecatedTextButton
       theme="base"
       icon={() => (
         <div class="w-4 h-4 animate-spin">
@@ -223,7 +223,7 @@ export function ItemPreview(props: ItemPreviewProps) {
                     )
                   );
                 return (
-                  <TextButton
+                  <DeprecatedTextButton
                     theme="base"
                     icon={() => {
                       if (itemData.type === 'channel') {

@@ -10,7 +10,7 @@ import {
   type ParentComponent,
   Show,
 } from 'solid-js';
-import { Button } from './Button';
+import { DeprecatedButton } from './DeprecatedButton';
 
 type Size = 'SM' | 'Base';
 type Theme = 'primary' | 'secondary';
@@ -104,7 +104,7 @@ const DropdownMenu: ParentComponent<
         classList={{
           '!block': true,
         }}
-        as={Button}
+        as={DeprecatedButton}
         theme={props.theme}
         ref={triggerEl}
       >

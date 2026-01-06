@@ -1,4 +1,4 @@
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import Trash from '@icon/regular/x.svg';
 import type { HorizontalRuleDecoratorProps } from '@lexical-core';
 import { debounce } from '@solid-primitives/scheduled';
@@ -25,10 +25,10 @@ export function HorizontalRule(props: HorizontalRuleDecoratorProps) {
   };
 
   const clickRuleHandler = () => {
-    const _editor = editor();
-    if (_editor === undefined) return;
+    const currentEditor = editor();
+    if (currentEditor === undefined) return;
     if (isSelectedAsNode()) return;
-    _editor.update(() => {
+    currentEditor.update(() => {
       const sel = $createNodeSelection();
       sel.add(props.key);
       $setSelection(sel);
@@ -36,9 +36,9 @@ export function HorizontalRule(props: HorizontalRuleDecoratorProps) {
   };
 
   const deleteRule = () => {
-    const _editor = editor();
-    if (_editor === undefined) return;
-    _editor.update(() => {
+    const currentEditor = editor();
+    if (currentEditor === undefined) return;
+    currentEditor.update(() => {
       let node = $getNodeByKey(props.key);
       if (!node) return;
       const nextSibling = node.getNextSibling();
@@ -86,7 +86,7 @@ export function HorizontalRule(props: HorizontalRuleDecoratorProps) {
       {(isSelectedAsNode() || ruleHover()) && (
         <div class="absolute h-full top-0 right-2 flex flex-row gap-1 items-center">
           {editor()?.isEditable() && (
-            <IconButton
+            <DeprecatedIconButton
               class="m-0"
               theme="clear"
               icon={() => <Trash class="size-4" />}

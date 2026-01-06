@@ -137,7 +137,7 @@ pub async fn send_handler(
     }
 
     // if we are creating a new thread, we need to have a ts for the message in the db less than
-    // the actual sent time. this is so the value gets updated in the webhook when gmail sends us the
+    // the actual sent time. this is so the value gets updated in the inbox sync when gmail sends us the
     // processed message post-send
     let before_send_ts = Utc::now();
 

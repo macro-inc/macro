@@ -1,4 +1,4 @@
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins/mentions/mentionsPlugin';
 import PaperPlaneRight from '@icon/fill/paper-plane-right-fill.svg';
@@ -14,13 +14,13 @@ export function EditBottomRow(props: {
 }) {
   return (
     <div class="absolute bottom-1 right-1 flex items-center">
-      <IconButton
+      <DeprecatedIconButton
         tooltip={{ label: 'Delete Draft' }}
         icon={XIcon}
         on:click={props.handleCancel}
         theme="muted"
       />
-      <IconButton
+      <DeprecatedIconButton
         tooltip={{ label: 'Send Comment' }}
         icon={PaperPlaneRight}
         on:click={props.handleSend}

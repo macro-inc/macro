@@ -1,10 +1,8 @@
+import { useMessageListContext } from '@block-channel/component/MessageList/MessageList';
 import { COLLAPSED_THREAD_INDEX_CUTOFF } from '@block-channel/constants';
 import { messageAttachmentsStore } from '@block-channel/signal/attachment';
-import { editMessage } from '@block-channel/signal/channel';
 import { reactToMessage } from '@block-channel/signal/reactions';
-import type { ThreadViewData } from '@block-channel/type/threadView';
 import type { MessageListContext } from '@block-channel/utils/listContext';
-import { scrollIntoViewAndFocus } from '@block-channel/utils/scrollAndFocus';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
 import {
@@ -18,7 +16,6 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import {
-  type InputAttachment,
   isStaticAttachmentType,
   STATIC_IMAGE,
   STATIC_VIDEO,
@@ -26,6 +23,7 @@ import {
 import { useDisplayName } from '@core/user';
 import { formatRelativeDate, isSameDay } from '@core/util/time';
 import { ContextMenu } from '@kobalte/core/context-menu';
+import { usePatchMessageMutation } from '@queries/channel/message';
 import type { Message as MessageType } from '@service-comms/generated/models/message';
 import { useUserId } from '@service-gql/client';
 import { createCallback } from '@solid-primitives/rootless';
@@ -43,7 +41,6 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import type { SetStoreFunction } from 'solid-js/store';
 import type { VirtualizerHandle } from 'virtua/solid';
 import { TypingIndicator } from '../MessageList/TypingIndicator';
 import {
@@ -101,19 +98,11 @@ function NewMessageIndicator(props: NewIndicatorProps) {
 type MessageProps = {
   message: MessageType;
   lastViewed: Accessor<string | null | undefined>;
-  newMessageIndex: Accessor<number | undefined>;
   isFocused: boolean;
-  setFocusedMessageId: Setter<string | undefined>;
   index: Accessor<number>;
   orderedMessages: Accessor<MessageType[]>;
   threadChildren?: MessageType[];
   threadSiblings?: MessageType[];
-  threadViewStore: ThreadViewData;
-  setThreadViewStore: SetStoreFunction<ThreadViewData>;
-  threadInputAttachmentsStore: Record<string, InputAttachment[]>;
-  setThreadInputAttachmentsStore: SetStoreFunction<
-    Record<string, InputAttachment[]>
-  >;
   newIndicatorShown: Accessor<number | undefined>;
   setNewIndicatorShown: Setter<number | undefined>;
   virtualHandle: VirtualizerHandle;
@@ -126,12 +115,16 @@ type MessageProps = {
 
 export function MessageContainer(props: MessageProps) {
   const { message } = props;
+
+  const listContext = useMessageListContext();
+
   const [editing, setEditing] = createSignal(false);
   const [contextMenuOpen, setContextMenuOpen] = createSignal(false);
   const [reactionSearchOpen, setReactionSearchOpen] = createSignal(false);
   const [topBarEmojiMenuOpen, setTopBarEmojiMenuOpen] = createSignal(false);
   const [messageBodyRef, setMessageBodyRefInner] =
     createSignal<HTMLDivElement>();
+
   const setMessageBodyRef = ((
     value?:
       | HTMLDivElement
@@ -143,7 +136,17 @@ export function MessageContainer(props: MessageProps) {
     }
     return undefined;
   }) satisfies typeof setMessageBodyRefInner;
-  const editMessage_ = createCallback(editMessage);
+
+  const editMessageMutation = usePatchMessageMutation();
+
+  const editMessage = (content: string) => {
+    if (content.trim().length === 0) return;
+    editMessageMutation.mutate({
+      channelID: message.channel_id,
+      messageID: message.id,
+      content,
+    });
+  };
 
   const userId = useUserId();
   const [currentUserName] = useDisplayName(userId());
@@ -156,9 +159,8 @@ export function MessageContainer(props: MessageProps) {
 
   // Scroll message to have editing input visible
   createEffect(() => {
-    if (editing() && props.virtualHandle) {
-      const handle = props.virtualHandle!;
-
+    const handle = props.virtualHandle;
+    if (editing() && handle) {
       requestAnimationFrame(() => {
         const messageBounds = messageContainerRef.getBoundingClientRect();
         const containerBounds = props.container?.getBoundingClientRect();
@@ -193,8 +195,11 @@ export function MessageContainer(props: MessageProps) {
       : undefined;
   });
 
-  const previousNonThreadMessage = () =>
-    props.listContext?.previousNonThreadedMessage;
+  const newDayPreviousNonThreadMessage = createMemo(() => {
+    const prev = props.listContext?.previousNonThreadedMessage;
+    if (!prev) return false;
+    return !isSameDay(new Date(message.created_at), new Date(prev.created_at));
+  });
 
   // We consider a message consecutive if it's from the same user and the same day and has the same thread id.
   const isConsecutive = createMemo(() => {
@@ -208,6 +213,17 @@ export function MessageContainer(props: MessageProps) {
     );
   });
 
+  const threadState = createMemo(() => {
+    const threadID = message.thread_id;
+    if (!threadID) return;
+
+    return listContext.getThreadState(threadID);
+  });
+
+  const messageState = createMemo(() => {
+    return listContext.getThreadState(message.id);
+  });
+
   const isFirstMessage = createMemo(() => {
     return props.index() === 0;
   });
@@ -217,7 +233,7 @@ export function MessageContainer(props: MessageProps) {
     return (
       props.index() === props.orderedMessages().length - 1 ||
       (props.listContext.isInLastThread &&
-        !props.threadViewStore[message.thread_id ?? '']?.threadExpanded &&
+        !threadState()?.threadExpanded &&
         props.listContext.threadIndex === COLLAPSED_THREAD_INDEX_CUTOFF)
     );
   });
@@ -245,7 +261,7 @@ export function MessageContainer(props: MessageProps) {
 
   const isLastInCollapsedThread = createMemo(() => {
     return (
-      !props.threadViewStore[message.thread_id ?? '']?.threadExpanded &&
+      !threadState()?.threadExpanded &&
       props.threadSiblings &&
       props.threadSiblings.length > COLLAPSED_THREAD_INDEX_CUTOFF + 1 &&
       props.listContext.threadIndex === COLLAPSED_THREAD_INDEX_CUTOFF
@@ -253,14 +269,11 @@ export function MessageContainer(props: MessageProps) {
   });
 
   const shouldShowThreadAppendInput = createMemo(() => {
-    return props.threadViewStore[message.thread_id ?? '']?.hasActiveReply;
+    return threadState()?.hasActiveReply === true;
   });
 
   const shouldShowFirstReply = createMemo(() => {
-    return (
-      !props.threadChildren?.length &&
-      props.threadViewStore[message.id ?? '']?.hasActiveReply
-    );
+    return !props.threadChildren?.length && messageState()?.hasActiveReply;
   });
 
   const collapsedThreadMessages = createMemo(() => {
@@ -312,31 +325,21 @@ export function MessageContainer(props: MessageProps) {
   const onThreadAppend = () => {
     const threadId = message.thread_id;
     if (!threadId) return;
-    props.setThreadViewStore(threadId, (prev) => {
-      return {
-        ...prev,
-        hasActiveReply: true,
-        threadExpanded: true,
-        replyInputShouldFocus: true,
-      };
-    });
-    props.virtualHandle.scrollToIndex(props.index(), {
+    listContext.createReply(threadId, true);
+    listContext.scrollToIndex(props.index(), {
       align: 'nearest',
     });
   };
 
   const onCreateReply = () => {
-    props.setThreadViewStore(message.id ?? '', () => {
-      return {
-        threadExpanded: true,
-        hasActiveReply: true,
-        replyInputShouldFocus: true,
-      };
+    listContext.createReply(message.id, true);
+    listContext.scrollToIndex(props.index(), {
+      align: 'end',
     });
-    props.virtualHandle.scrollToIndex(props.index());
   };
 
   const actions = createMessageActions({
+    channelId: message.channel_id,
     messageId: message.id,
     messageContent: message.content ?? '',
     threadId: message.thread_id ?? undefined,
@@ -383,10 +386,8 @@ export function MessageContainer(props: MessageProps) {
         .orderedMessages()
         .findIndex((m) => m.id === message.id);
       if (focusedIndex === -1) return false;
-      props.setThreadViewStore(message.id ?? '', () => {
-        return { threadExpanded: true, hasActiveReply: true };
-      });
-      props.virtualHandle?.scrollToIndex(focusedIndex);
+      listContext.createReply(message.id);
+      listContext.scrollToIndex(focusedIndex);
       return true;
     },
     hotkeyToken: TOKENS.channel.replyToMessage,
@@ -410,18 +411,15 @@ export function MessageContainer(props: MessageProps) {
     }
 
     return hasThreadChildren()
-      ? !props.threadViewStore[message.id ?? '']?.threadExpanded
-      : !props.threadViewStore[message.thread_id ?? '']?.threadExpanded;
+      ? !messageState()?.threadExpanded
+      : !threadState()?.threadExpanded;
   });
 
   const setThreadExpansion = (shouldExpand: boolean) => {
     const threadId = hasThreadChildren() ? message.id : message.thread_id;
     if (!threadId) return;
-    props.setThreadViewStore(threadId, (prev) =>
-      prev
-        ? { ...prev, threadExpanded: shouldExpand }
-        : { threadExpanded: shouldExpand }
-    );
+
+    listContext.toggleThread(threadId, shouldExpand);
   };
 
   registerHotkey({
@@ -432,12 +430,7 @@ export function MessageContainer(props: MessageProps) {
     hotkeyToken: TOKENS.channel.expandThread,
     keyDownHandler: () => {
       setThreadExpansion(true);
-      scrollIntoViewAndFocus({
-        virtualHandle: props.virtualHandle,
-        container: props.container,
-        targetIndex: props.index(),
-        targetId: message.id,
-      });
+      listContext.scrollToMessage(message.id, props.index());
       return true;
     },
     displayPriority: 10,
@@ -458,12 +451,7 @@ export function MessageContainer(props: MessageProps) {
         .orderedMessages()
         .findIndex((m) => m.id === parentId);
       if (parentIndex >= 0) {
-        scrollIntoViewAndFocus({
-          virtualHandle: props.virtualHandle,
-          container: props.container,
-          targetIndex: parentIndex,
-          targetId: parentId,
-        });
+        listContext.scrollToMessage(parentId, parentIndex);
       }
       return true;
     },
@@ -477,46 +465,19 @@ export function MessageContainer(props: MessageProps) {
 
   const handleThreadToggle = () => {
     if (!message.thread_id) return;
-    if (!props.threadViewStore[message.thread_id]) {
-      props.setThreadViewStore(message.thread_id, () => ({
-        threadExpanded: true,
-      }));
+    const threadState_ = threadState();
 
-      scrollIntoViewAndFocus({
-        virtualHandle: props.virtualHandle,
-        container: props.container,
-        targetIndex: props.index() + 1,
-        targetId:
-          props.threadSiblings?.at(COLLAPSED_THREAD_INDEX_CUTOFF + 1)?.id ?? '',
-      });
-    } else {
-      props.setThreadViewStore(message.thread_id, (prev) => ({
-        ...prev,
-        threadExpanded: !prev.threadExpanded,
-      }));
-      if (props.threadViewStore[message.thread_id]?.threadExpanded) {
-        scrollIntoViewAndFocus({
-          virtualHandle: props.virtualHandle,
-          container: props.container,
-          targetIndex: props.index() + 1,
-          targetId: message.thread_id,
-        });
-      } else {
-        scrollIntoViewAndFocus({
-          virtualHandle: props.virtualHandle,
-          container: props.container,
-          targetIndex: props
-            .orderedMessages()
-            .findIndex((m) => m.id === message.thread_id),
-          targetId: message.thread_id,
-        });
-      }
+    if (!threadState_) {
+      listContext.toggleThread(message.thread_id, true);
+      return;
     }
+
+    listContext.toggleThread(message.thread_id);
   };
 
   return (
     <div
-      class={`shrink-0 flex justify-center w-full ${isTouchDevice ? 'no-select-children' : ''}
+      class={`shrink-0 flex justify-center w-full ${isTouchDevice() ? 'no-select-children' : ''}
       [--thread-shift:23px] @sm:[--thread-shift:46px] [--user-icon-width:30px] @sm:[--user-icon-width:40px] [--left-of-connector:20px] @sm:[--left-of-connector:28px] [--left-of-user-icon:calc(var(--left-of-connector)-var(--user-icon-width)/2)]`}
       ref={(el) => {
         props.setMessageContainerRef?.(el);
@@ -532,11 +493,7 @@ export function MessageContainer(props: MessageProps) {
             (props.index() === 0 ||
               (props.index() > 0 &&
                 !message.thread_id &&
-                previousNonThreadMessage() &&
-                !isSameDay(
-                  new Date(message.created_at),
-                  new Date(previousNonThreadMessage()!.created_at)
-                )))
+                newDayPreviousNonThreadMessage()))
           }
         >
           <MessageFlag text={formatRelativeDate(message.created_at)} />
@@ -619,12 +576,14 @@ export function MessageContainer(props: MessageProps) {
                 onThreadAppend={onThreadAppend}
                 shouldShowThreadAppendInput={shouldShowThreadAppendInput}
                 isTarget={props.isTarget}
-                setThreadAppendMountTarget={(el) =>
-                  props.setThreadViewStore(message.thread_id ?? '', (prev) => ({
-                    ...prev,
-                    replyInputMountTarget: el,
-                  }))
-                }
+                setThreadAppendMountTarget={(el) => {
+                  if (!message.thread_id) return;
+
+                  listContext.registerThreadAppendMountTarget(
+                    message.thread_id,
+                    el
+                  );
+                }}
                 setMessageBodyRef={setMessageBodyRef}
               >
                 <MessageComponent.TopBar
@@ -637,9 +596,7 @@ export function MessageContainer(props: MessageProps) {
                     <EditMessageInput
                       content={props.message?.content ?? ''}
                       setEditing={setEditing}
-                      save={(input) =>
-                        editMessage_(props.message?.id ?? '', input)
-                      }
+                      save={editMessage}
                     />
                   }
                 >
@@ -687,10 +644,7 @@ export function MessageContainer(props: MessageProps) {
                       timestamp={lastReplyTimestamp()}
                       users={threadReplyUsers()}
                       onClick={handleThreadToggle}
-                      isThreadOpen={
-                        props.threadViewStore[message.thread_id!]
-                          ?.threadExpanded
-                      }
+                      isThreadOpen={threadState()?.threadExpanded}
                     />
                   </div>
                 </div>
@@ -722,12 +676,12 @@ export function MessageContainer(props: MessageProps) {
                       handleClose={() => {
                         setReactionSearchOpen(false);
                       }}
-                      fullWidth={isTouchDevice && isMobileWidth()}
+                      fullWidth={isTouchDevice() && isMobileWidth()}
                       insideMenu={true}
                     />
                   </Match>
                 </Switch>
-                <Show when={isTouchDevice && isMobileWidth()}>
+                <Show when={isTouchDevice() && isMobileWidth()}>
                   <ContextMenu.Item class="mt-4 shrink-1 overflow-y-scroll overflow-x-hidden">
                     <MessageComponent
                       focused={props.isFocused}
@@ -761,7 +715,7 @@ export function MessageContainer(props: MessageProps) {
                   </ContextMenu.Item>
                 </Show>
                 <Show when={!reactionSearchOpen()}>
-                  <div class={MENU_CONTENT_CLASS + ' mt-4'}>
+                  <div class={`${MENU_CONTENT_CLASS} mt-4`}>
                     <For each={actions().filter((a) => a.enabled)}>
                       {(a) => (
                         <>
@@ -794,10 +748,7 @@ export function MessageContainer(props: MessageProps) {
             isLastInThread
             shouldShowThreadAppendInput={createSignal(true)[0]}
             setThreadAppendMountTarget={(el) =>
-              props.setThreadViewStore(message.id ?? '', (prev) => ({
-                ...prev,
-                replyInputMountTarget: el,
-              }))
+              listContext.registerThreadAppendMountTarget(message.id, el)
             }
           >
             <MessageComponent.TopBar name={currentUserName()} />

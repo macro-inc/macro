@@ -103,12 +103,6 @@
       ],
       "stack_path": "infra/stacks/notification-service/**"
     },
-    "notification-email-poller": {
-      "source_paths": [
-        "rust/cloud-storage/notification_email_poller/**"
-      ],
-      "stack_path": "infra/stacks/notification-email-poller/**"
-    },
     "organization-service": {
       "source_paths": [
         "rust/cloud-storage/organization_service/**"

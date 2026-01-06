@@ -2,7 +2,7 @@
 edition = "2024"
 name = "anthropic"
 publish = false
-version = "0.1.0"
+version = "0.2.0"
 
 [features]
 default = ["openai"]
@@ -26,3 +26,4 @@ tracing = { workspace = true }
 tokio-stream = { workspace = true }
 async-openai = { workspace = true, optional = true}
 chrono.workspace = true
+lazy_static = {workspace = true}

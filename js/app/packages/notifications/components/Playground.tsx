@@ -1,7 +1,7 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useChannelMarkdownArea } from '@block-channel/component/MarkdownArea';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { NotificationRenderer } from '@core/component/NotificationRenderer';
-import { TextButton } from '@core/component/TextButton';
 import { formatDate } from '@core/util/date';
 import {
   type Component,
@@ -243,7 +243,7 @@ function PermissionButton(props: { platformNotif: any }) {
         <Show
           when={props.platformNotif.permission() === 'granted'}
           fallback={
-            <TextButton
+            <DeprecatedTextButton
               theme="accent"
               text="Enable Browser Notifications"
               onClick={() => props.platformNotif.requestPermission()}
@@ -294,7 +294,7 @@ function CustomBuilder(props: {
         </div>
 
         <div class="pt-4 border-t border-edge-muted">
-          <TextButton
+          <DeprecatedTextButton
             theme="accent"
             text="🔔 Test Browser Notification"
             onClick={() => props.onTest(props.customNotification)}
@@ -369,7 +369,7 @@ function NotificationDetail(props: {
               {formatDate(props.notification.createdAt)}
             </p>
           </div>
-          <TextButton
+          <DeprecatedTextButton
             theme="accent"
             text="🔔 Test Notification"
             onClick={() => props.onTest(props.notification)}

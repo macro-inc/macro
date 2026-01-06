@@ -6,7 +6,10 @@ use axum::{
     http::request::Parts,
 };
 use comms_service_client::CommsServiceClient;
-use model::{project::BasicProject, user::UserContext};
+use model::{
+    project::BasicProject,
+    user::{UserContext, axum_extractor::MacroUserExtractor},
+};
 use models_permissions::share_permission::access_level::AccessLevel;
 use serde::{Deserialize, de::DeserializeOwned};
 use sqlx::PgPool;
@@ -34,7 +37,11 @@ where
         let db = PgPool::from_ref(state);
         let comms_client = <Arc<CommsServiceClient>>::from_ref(state);
 
-        let user_context: Extension<UserContext> = parts
+        let MacroUserExtractor {
+            macro_user_id,
+            user_context,
+            ..
+        } = parts
             .extract()
             .await
             .map_err(|_| AccessLevelErr::InternalErr)?;
@@ -44,7 +51,7 @@ where
             .await
             .map_err(|_| AccessLevelErr::InternalErr)?;
 
-        if project_context.user_id == user_context.user_id {
+        if project_context.user_id == macro_user_id {
             return Ok(Self {
                 access_level: AccessLevel::Owner,
                 desired: PhantomData,

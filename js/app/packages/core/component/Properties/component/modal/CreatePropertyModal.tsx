@@ -1,4 +1,4 @@
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { useOrganizationId } from '@core/user';
 import { isErr } from '@core/util/maybeResult';
 import { MODAL_VIEWPORT_CLASSES } from '@core/util/modalUtils';
@@ -421,7 +421,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
             <h3 class="text-base font-semibold text-ink">
               Create New Property
             </h3>
-            <IconButton
+            <DeprecatedIconButton
               icon={XIcon}
               theme="clear"
               size="sm"

@@ -31,6 +31,7 @@ fn test_construct_search_result_single_channel() {
         highlight: Highlight {
             name: None,
             content: vec!["Test message content".to_string()],
+            ..Default::default()
         },
     }];
 
@@ -88,6 +89,7 @@ fn test_construct_search_result_multiple_messages_same_channel() {
             highlight: Highlight {
                 name: None,
                 content: vec!["First message".to_string()],
+                ..Default::default()
             },
         },
         opensearch_client::search::model::SearchHit {
@@ -108,6 +110,7 @@ fn test_construct_search_result_multiple_messages_same_channel() {
             highlight: Highlight {
                 name: None,
                 content: vec!["Second message".to_string()],
+                ..Default::default()
             },
         },
     ];
@@ -166,6 +169,7 @@ fn test_construct_search_result_filters_messages_without_content() {
             highlight: Highlight {
                 name: None,
                 content: vec!["Message with content".to_string()],
+                ..Default::default()
             },
         },
         opensearch_client::search::model::SearchHit {
@@ -186,6 +190,7 @@ fn test_construct_search_result_filters_messages_without_content() {
             highlight: Highlight {
                 name: None,
                 content: vec![],
+                ..Default::default()
             },
         },
     ];
@@ -234,6 +239,7 @@ fn create_test_channel_response(
         highlight: Highlight {
             name: None,
             content: content.unwrap_or_default(),
+            ..Default::default()
         },
     }
 }
@@ -399,6 +405,7 @@ fn test_sort_stability() {
             highlight: Highlight {
                 name: None,
                 content: vec!["third".to_string()],
+                ..Default::default()
             },
         },
         opensearch_client::search::model::SearchHit {
@@ -419,6 +426,7 @@ fn test_sort_stability() {
             highlight: Highlight {
                 name: None,
                 content: vec!["first".to_string()],
+                ..Default::default()
             },
         },
         opensearch_client::search::model::SearchHit {
@@ -439,6 +447,7 @@ fn test_sort_stability() {
             highlight: Highlight {
                 name: None,
                 content: vec!["fifth".to_string()],
+                ..Default::default()
             },
         },
         opensearch_client::search::model::SearchHit {
@@ -459,6 +468,7 @@ fn test_sort_stability() {
             highlight: Highlight {
                 name: None,
                 content: vec!["second".to_string()],
+                ..Default::default()
             },
         },
         opensearch_client::search::model::SearchHit {
@@ -479,6 +489,7 @@ fn test_sort_stability() {
             highlight: Highlight {
                 name: None,
                 content: vec!["fourth".to_string()],
+                ..Default::default()
             },
         },
     ];

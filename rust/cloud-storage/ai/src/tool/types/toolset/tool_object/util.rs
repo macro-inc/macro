@@ -195,7 +195,7 @@ pub fn output_schema_generator() -> SchemaGenerator {
 #[macro_export]
 macro_rules! generate_tool_input_schema {
     ($tool:ty) => {{
-        use $crate::tool::types::toolset::tool_object::input_schema_generator;
+        use $crate::tool::types::tool_object::input_schema_generator;
         input_schema_generator().into_root_schema_for::<$tool>()
     }};
 }
@@ -203,7 +203,7 @@ macro_rules! generate_tool_input_schema {
 #[macro_export]
 macro_rules! generate_tool_output_schema {
     ($tool:ty) => {{
-        use $crate::tool::types::toolset::tool_object::output_schema_generator;
+        use $crate::tool::types::tool_object::output_schema_generator;
         output_schema_generator().into_root_schema_for::<$tool>()
     }};
 }

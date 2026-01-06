@@ -15,29 +15,18 @@ export function untilMessage<Send, Receive>(
   ws: Websocket<Send, Receive>,
   predicate: (data: Receive) => boolean
 ): Promise<Receive> {
-  return new Promise((resolve, reject) => {
-    const cleanup = () => {
-      ws.removeEventListener(WebsocketEvent.Message, handler);
-      ws.removeEventListener(WebsocketEvent.Close, closeHandler);
-    };
-
+  return new Promise((resolve) => {
     const handler = (
       _ws: Websocket<Send, Receive>,
       e: WebsocketEventMap<Receive>[WebsocketEvent.Message]
     ) => {
       const data = e.data;
       if (predicate(data)) {
-        cleanup();
+        ws.removeEventListener(WebsocketEvent.Message, handler);
         resolve(data);
       }
     };
 
-    const closeHandler = () => {
-      cleanup();
-      reject(new Error('WebSocket closed before message received'));
-    };
-
     ws.addEventListener(WebsocketEvent.Message, handler);
-    ws.addEventListener(WebsocketEvent.Close, closeHandler);
   });
 }

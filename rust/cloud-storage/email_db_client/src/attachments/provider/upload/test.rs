@@ -16,9 +16,10 @@ async fn thread_attachments_for_backfill_condition_1(pool: Pool<Postgres>) -> Re
     let thread_id = Uuid::parse_str("00000000-0000-0000-0000-000000000101")?;
     let res = thread_document_atts_for_backfill(&pool, thread_id).await?;
 
-    // Only the application/pdf attachment should be included
+    // Only the application/pdf attachment should be included - others have wrong file type or
+    // null filename
     assert_eq!(res.len(), 1);
-    assert_eq!(res[0].filename, "sent_doc.pdf");
+    assert_eq!(res[0].filename, Some("sent_doc.pdf".to_string()));
     assert_eq!(res[0].mime_type, "application/pdf");
 
     Ok(())
@@ -39,7 +40,7 @@ async fn thread_attachments_for_backfill_condition_2(pool: Pool<Postgres>) -> Re
     let res = thread_document_atts_for_backfill(&pool, thread_id).await?;
 
     assert_eq!(res.len(), 1);
-    assert_eq!(res[0].filename, "important_doc.pdf");
+    assert_eq!(res[0].filename, Some("important_doc.pdf".to_string()));
 
     Ok(())
 }
@@ -59,7 +60,7 @@ async fn thread_attachments_for_backfill_condition_3(pool: Pool<Postgres>) -> Re
     let res = thread_document_atts_for_backfill(&pool, thread_id).await?;
 
     assert_eq!(res.len(), 1);
-    assert_eq!(res[0].filename, "same_domain_doc.pdf");
+    assert_eq!(res[0].filename, Some("same_domain_doc.pdf".to_string()));
 
     Ok(())
 }
@@ -98,7 +99,7 @@ async fn thread_attachments_for_backfill_condition_4(pool: Pool<Postgres>) -> Re
     let res = thread_document_atts_for_backfill(&pool, thread_id).await?;
 
     assert_eq!(res.len(), 1);
-    assert_eq!(res[0].filename, "docusign_doc.pdf");
+    assert_eq!(res[0].filename, Some("docusign_doc.pdf".to_string()));
     assert_eq!(res[0].mime_type, "application/pdf");
 
     Ok(())
@@ -126,7 +127,10 @@ async fn job_attachments_for_backfill_includes_previously_contacted_participants
     assert_eq!(res.len(), 3);
 
     // Check that the correct attachments are returned
-    let filenames: Vec<&str> = res.iter().map(|a| a.filename.as_str()).collect();
+    let filenames: Vec<&str> = res
+        .iter()
+        .map(|a| a.filename.as_ref().map(|s| s.as_str()).unwrap())
+        .collect();
     assert!(filenames.contains(&"valid_document.pdf"));
     assert!(filenames.contains(&"mixed_thread_doc.pdf"));
     assert!(filenames.contains(&"also_included_doc.docx"));
@@ -153,7 +157,7 @@ async fn insertable_attachments_condition_1_user_sent_message(pool: Pool<Postgre
 
     // Should return 1 attachment (sent_message_doc.pdf)
     assert_eq!(res.len(), 1);
-    assert_eq!(res[0].filename, "sent_message_doc.pdf");
+    assert_eq!(res[0].filename, Some("sent_message_doc.pdf".to_string()));
     assert_eq!(res[0].mime_type, "application/pdf");
     assert_eq!(res[0].email_provider_id, "target-msg-101");
 
@@ -176,7 +180,7 @@ async fn insertable_attachments_condition_2_important_label(pool: Pool<Postgres>
 
     // Should return 1 attachment (important_doc.pdf)
     assert_eq!(res.len(), 1);
-    assert_eq!(res[0].filename, "important_doc.pdf");
+    assert_eq!(res[0].filename, Some("important_doc.pdf".to_string()));
     assert_eq!(res[0].mime_type, "application/pdf");
     assert_eq!(res[0].email_provider_id, "target-msg-201");
 
@@ -199,7 +203,7 @@ async fn insertable_attachments_condition_3_same_domain(pool: Pool<Postgres>) ->
 
     // Should return 1 attachment (same_domain_doc.pdf)
     assert_eq!(res.len(), 1);
-    assert_eq!(res[0].filename, "same_domain_doc.pdf");
+    assert_eq!(res[0].filename, Some("same_domain_doc.pdf".to_string()));
     assert_eq!(res[0].mime_type, "application/pdf");
     assert_eq!(res[0].email_provider_id, "target-msg-301");
 
@@ -222,7 +226,10 @@ async fn insertable_attachments_condition_4_whitelisted_domain(pool: Pool<Postgr
 
     // Should return 1 attachment (whitelisted_domain_doc.pdf)
     assert_eq!(res.len(), 1);
-    assert_eq!(res[0].filename, "whitelisted_domain_doc.pdf");
+    assert_eq!(
+        res[0].filename,
+        Some("whitelisted_domain_doc.pdf".to_string())
+    );
     assert_eq!(res[0].mime_type, "application/pdf");
     assert_eq!(res[0].email_provider_id, "target-msg-801");
 
@@ -248,7 +255,10 @@ async fn insertable_attachments_condition_5_previously_contacted(
     // Should return 1 attachment (previously_contacted_doc.pdf)
     // This should be found by the second query (condition 4)
     assert_eq!(res.len(), 1);
-    assert_eq!(res[0].filename, "previously_contacted_doc.pdf");
+    assert_eq!(
+        res[0].filename,
+        Some("previously_contacted_doc.pdf".to_string())
+    );
     assert_eq!(res[0].mime_type, "application/pdf");
     assert_eq!(res[0].email_provider_id, "target-msg-401");
 
@@ -311,7 +321,7 @@ async fn insertable_attachments_filters_mime_types(pool: Pool<Postgres>) -> Resu
 
     // Should only return PDF, not image or zip
     assert_eq!(res.len(), 1);
-    assert_eq!(res[0].filename, "sent_message_doc.pdf");
+    assert_eq!(res[0].filename, Some("sent_message_doc.pdf".to_string()));
     assert_eq!(res[0].mime_type, "application/pdf");
 
     // Verify no filtered mime types are present
@@ -370,7 +380,7 @@ async fn insertable_attachments_returns_first_query_when_available(
 
     // Should return result from first query
     assert_eq!(res.len(), 1);
-    assert_eq!(res[0].filename, "sent_message_doc.pdf");
+    assert_eq!(res[0].filename, Some("sent_message_doc.pdf".to_string()));
 
     Ok(())
 }
@@ -392,7 +402,10 @@ async fn thread_media_for_backfill_includes_non_inline_images_and_videos(
     // Should NOT include document.pdf (filtered out)
     assert_eq!(res.len(), 2);
 
-    let filenames: Vec<&str> = res.iter().map(|a| a.filename.as_str()).collect();
+    let filenames: Vec<&str> = res
+        .iter()
+        .map(|a| a.filename.as_ref().map(|s| s.as_str()).unwrap())
+        .collect();
     assert!(filenames.contains(&"photo.jpg"));
     assert!(filenames.contains(&"video.mp4"));
     assert!(!filenames.contains(&"document.pdf"));
@@ -441,7 +454,10 @@ async fn thread_media_for_backfill_handles_multiple_media_types(
     // Should return 3 attachments: PNG, GIF, MOV
     assert_eq!(res.len(), 3);
 
-    let filenames: Vec<&str> = res.iter().map(|a| a.filename.as_str()).collect();
+    let filenames: Vec<&str> = res
+        .iter()
+        .map(|a| a.filename.as_ref().map(|s| s.as_str()).unwrap())
+        .collect();
     assert!(filenames.contains(&"screenshot.png"));
     assert!(filenames.contains(&"animation.gif"));
     assert!(filenames.contains(&"clip.mov"));
@@ -485,7 +501,10 @@ async fn new_email_media_includes_non_inline_attachments(pool: Pool<Postgres>) -
     // Should return 2 attachments: new_photo.jpg and new_video.mp4
     assert_eq!(res.len(), 2);
 
-    let filenames: Vec<&str> = res.iter().map(|a| a.filename.as_str()).collect();
+    let filenames: Vec<&str> = res
+        .iter()
+        .map(|a| a.filename.as_ref().map(|s| s.as_str()).unwrap())
+        .collect();
     assert!(filenames.contains(&"new_photo.jpg"));
     assert!(filenames.contains(&"new_video.mp4"));
 
@@ -522,9 +541,9 @@ async fn new_email_media_filters_inline_images(pool: Pool<Postgres>) -> Result<(
     // Should return 2 attachment: attachment_image.png
     // Should include inline_image.png (has content_id)
     assert_eq!(res.len(), 2);
-    assert_eq!(res[0].filename, "inline_image.png");
+    assert_eq!(res[0].filename, Some("inline_image.png".to_string()));
     assert_eq!(res[0].mime_type, "image/png");
-    assert_eq!(res[1].filename, "attachment_image.png");
+    assert_eq!(res[1].filename, Some("attachment_image.png".to_string()));
     assert_eq!(res[1].mime_type, "image/png");
 
     Ok(())

@@ -1,11 +1,11 @@
 use document_sub_type::DocumentSubType;
-use sqlx::{PgPool, Postgres, Transaction, types::Uuid};
-
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model::document::{
     BomPart, DocumentBasic, DocumentMetadata, FileType, SaveBomPart, VersionIDWithTimeStamps,
     VersionIDWithTimeStampsNoSha, VersionIDWithTimeStampsOptionalSha,
     modification_data::{PdfModificationData, ThreadPlaceable},
 };
+use sqlx::{PgPool, Postgres, Transaction, types::Uuid};
 
 // A comprehensive function that inserts both comment and highlight data
 async fn insert_all_comment_data(
@@ -121,7 +121,7 @@ DELETE FROM "PdfHighlightAnchor" WHERE "documentId" = $1;
             VALUES ($1, $2, $3, $4, $5)
             RETURNING id
             "#,
-            document.owner,
+            document.owner.as_ref(),
             document.document_id,
             create_time,
             create_time,
@@ -144,7 +144,7 @@ DELETE FROM "PdfHighlightAnchor" WHERE "documentId" = $1;
             "#,
             Uuid::parse_str(&thread.head_id).unwrap(),
             document.document_id,
-            document.owner,
+            document.owner.as_ref(),
             thread.page,
             thread.original_page,
             thread.original_index,
@@ -182,7 +182,7 @@ DELETE FROM "PdfHighlightAnchor" WHERE "documentId" = $1;
                 RETURNING id
                 "#,
                 thread_id,
-                document.owner,
+                document.owner.as_ref(),
                 comment.sender,
                 comment.content,
                 created_at,
@@ -222,7 +222,7 @@ DELETE FROM "PdfHighlightAnchor" WHERE "documentId" = $1;
                             VALUES ($1, $2, $3, $4, $5)
                             RETURNING id
                             "#,
-                            document.owner,
+                            document.owner.as_ref(),
                             document.document_id,
                             first_comment_time,
                             last_comment_time,
@@ -254,7 +254,7 @@ DELETE FROM "PdfHighlightAnchor" WHERE "documentId" = $1;
                                 RETURNING id
                                 "#,
                                 thread_id,
-                                document.owner,
+                                document.owner.as_ref(),
                                 comment.sender,
                                 comment.content,
                                 created_at,
@@ -298,7 +298,7 @@ DELETE FROM "PdfHighlightAnchor" WHERE "documentId" = $1;
         "#,
                             highlight_uuid,
                             document.document_id,
-                            document.owner,
+                            document.owner.as_ref(),
                             highlight.page_num as i32,
                             highlight.color.red,
                             highlight.color.green,
@@ -327,7 +327,7 @@ DELETE FROM "PdfHighlightAnchor" WHERE "documentId" = $1;
         RETURNING uuid
         "#,
                             document.document_id,
-                            document.owner,
+                            document.owner.as_ref(),
                             highlight.page_num as i32,
                             highlight.color.red,
                             highlight.color.green,
@@ -450,8 +450,7 @@ pub async fn save_document(
 ) -> anyhow::Result<DocumentMetadata> {
     let mut transaction = db.begin().await?;
 
-    let document = sqlx::query_as!(
-        DocumentBasic,
+    let document = sqlx::query!(
         r#"
         UPDATE "Document" SET "updatedAt" = NOW()
         WHERE id = $1
@@ -463,6 +462,21 @@ pub async fn save_document(
         "#,
         document_id
     )
+    .try_map(|row| {
+        Ok(DocumentBasic {
+            document_id: row.document_id,
+            document_name: row.document_name,
+            owner: MacroUserIdStr::parse_from_str(&row.owner)
+                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
+                .into_owned(),
+            file_type: row.file_type,
+            branched_from_id: row.branched_from_id,
+            branched_from_version_id: row.branched_from_version_id,
+            document_family_id: row.document_family_id,
+            project_id: row.project_id,
+            deleted_at: row.deleted_at,
+        })
+    })
     .fetch_one(&mut *transaction)
     .await?;
 
@@ -617,7 +631,7 @@ mod tests {
         assert!(!document_metadata.document_id.is_empty());
         assert_eq!(document_metadata.document_version_id, 3);
         assert_eq!(document_metadata.file_type, Some("txt".to_string()));
-        assert_eq!(document_metadata.owner, "macro|user@user.com".to_string());
+        assert_eq!(document_metadata.owner.as_ref(), "macro|user@user.com");
 
         Ok(())
     }
@@ -644,7 +658,7 @@ mod tests {
             "test_document_name".to_string()
         );
         assert_eq!(document_metadata.document_version_id, 3);
-        assert_eq!(document_metadata.owner, "macro|user@user.com".to_string());
+        assert_eq!(document_metadata.owner.as_ref(), "macro|user@user.com");
         let bom_parts: Vec<BomPart> =
             serde_json::from_value(document_metadata.document_bom.unwrap()).unwrap();
         assert_eq!(bom_parts[0].sha, "sha-1");

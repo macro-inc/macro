@@ -1,11 +1,13 @@
 import { useChannelsContext } from '@core/component/ChannelsProvider';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { ENABLE_SEARCH_SERVICE } from '@core/constant/featureFlags';
+import { emailToId } from '@core/user';
 import { isErr } from '@core/util/maybeResult';
 import {
   extractSearchSnippet,
   extractSearchTerms,
   mergeAdjacentMacroEmTags,
+  truncateSearchMatch,
 } from '@core/util/searchHighlight';
 import type { ChannelType } from '@service-comms/generated/models';
 import { type PaginatedSearchArgs, searchClient } from '@service-search/client';
@@ -24,6 +26,8 @@ import type { EntityData } from '../types/entity';
 import type { ContentHitData, SearchData, WithSearch } from '../types/search';
 import type { EntityInfiniteQuery } from './entity';
 import { queryKeys } from './key';
+
+const SEARCH_MATCH_LENGTH = 60;
 
 type InnerSearchResult =
   | DocumentSearchResult
@@ -56,11 +60,15 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
         return contents.map((content) => ({
           type: 'channel' as const,
           id: r.message_id!,
-          content: mergeAdjacentMacroEmTags(content),
+          content: truncateSearchMatch(
+            mergeAdjacentMacroEmTags(content),
+            SEARCH_MATCH_LENGTH
+          ),
           senderId: r.sender_id!,
           sentAt: r.created_at!,
           location: {
             type: 'channel' as const,
+            threadId: r.thread_id ?? undefined,
             messageId: r.message_id!,
           },
         }));
@@ -74,7 +82,10 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
           const mergedContent = mergeAdjacentMacroEmTags(content);
           return {
             type: 'pdf' as const,
-            content: mergeAdjacentMacroEmTags(content),
+            content: truncateSearchMatch(
+              mergeAdjacentMacroEmTags(content),
+              SEARCH_MATCH_LENGTH
+            ),
             location: {
               type: 'pdf' as const,
               searchPage: Number(r.node_id),
@@ -95,7 +106,10 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
         const contents = r.highlight.content ?? [];
         return contents.map((content) => ({
           type: 'md' as const,
-          content: mergeAdjacentMacroEmTags(content),
+          content: truncateSearchMatch(
+            mergeAdjacentMacroEmTags(content),
+            SEARCH_MATCH_LENGTH
+          ),
           location: { type: 'md' as const, nodeId: r.node_id! },
         }));
       });
@@ -106,7 +120,13 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
         const contents = r.highlight.content ?? [];
         return contents.map((content) => ({
           type: 'email' as const,
-          content: mergeAdjacentMacroEmTags(content),
+          content: truncateSearchMatch(
+            mergeAdjacentMacroEmTags(content),
+            SEARCH_MATCH_LENGTH
+          ),
+          sender: r.pretty_sender!,
+          senderId: emailToId(r.sender),
+          sentAt: r.sent_at!,
           location: {
             type: 'email' as const,
             messageId: r.message_id!,
@@ -119,7 +139,10 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
       contentHitData = data.results.flatMap((r) => {
         const contents = r.highlight.content ?? [];
         return contents.map((content) => ({
-          content: mergeAdjacentMacroEmTags(content),
+          content: truncateSearchMatch(
+            mergeAdjacentMacroEmTags(content),
+            SEARCH_MATCH_LENGTH
+          ),
           location: undefined,
         }));
       });
@@ -205,9 +228,11 @@ const useMapSearchResponseItem = () => {
           threadHits.at(0)?.pretty_sender;
 
         // TODO: we probably want to get the actual latest message info on the full thread
-        const latestMessageSentAt = Math.max(
-          ...messageHits.map((m) => m.sent_at).filter((m) => m != null)
-        );
+        const messagesSentAt = messageHits
+          .map((m) => m.sent_at)
+          .filter((m) => m != null);
+        const latestMessageSentAt =
+          messagesSentAt.length > 0 ? Math.max(...messagesSentAt) : null;
 
         return {
           type: 'email',
@@ -292,7 +317,7 @@ const useMapSearchResponseItem = () => {
           ownerId: result.owner_id,
           createdAt: result.created_at,
           updatedAt: result.updated_at,
-          parentId: result.metadata?.parent_project_id ?? undefined,
+          projectId: result.metadata?.parent_project_id ?? undefined,
           search,
         };
       }

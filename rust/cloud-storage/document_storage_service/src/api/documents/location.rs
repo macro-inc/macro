@@ -154,7 +154,7 @@ pub async fn get_location_handler_v3(
 
     let response_data = get_presigned_url_by_type(
         &state,
-        &document_context.owner,
+        document_context.owner.as_ref(),
         &document_id,
         file_type,
         params.document_version_id,
@@ -208,7 +208,7 @@ pub async fn get_location_handler(
 
     let response_data = get_presigned_url_by_type(
         &state,
-        &document_context.owner,
+        document_context.owner.as_ref(),
         &document_id,
         file_type,
         params.document_version_id,

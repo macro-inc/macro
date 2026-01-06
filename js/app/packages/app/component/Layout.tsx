@@ -3,6 +3,7 @@ import { useIsAuthenticated } from '@core/auth';
 import { Resize } from '@core/component/Resize';
 import { useABTest } from '@core/constant/ABTest';
 import { usePaywallState } from '@core/constant/PaywallState';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import {
   LAYOUT_CONTEXT_ID,
@@ -111,18 +112,34 @@ export function Layout(props: RouteSectionProps) {
   attachGlobalDOMScope(document.body);
 
   return (
-    <div class="relative pb-[max(env(safe-area-inset-bottom),var(--tauri-inset-bottom))] pt-[max(env(safe-area-inset-top),var(--tauri-inset-top))] flex flex-col justify-between w-dvw h-dvh">
-      <Show when={isAuthenticated()}>
-        <GlobalShortcuts />
-        <Suspense>
-          <KommandMenu />
-        </Suspense>
-        <QuickCreateMenu />
-        <GlobalBulkEditEntityModal />
-      </Show>
-      <Show when={!isAuthenticated() && !AUTH_URLS.includes(location.pathname)}>
-        <Banner />
-      </Show>
+    <div
+      class="relative flex flex-col justify-between w-dvw h-dvh"
+      style={{
+        'padding-top':
+          'max(env(safe-area-inset-top, 0px), var(--tauri-inset-top, 0px))',
+        'padding-bottom':
+          'max(env(safe-area-inset-bottom, 0px), var(--tauri-inset-bottom, 0px))',
+        'padding-left':
+          'max(env(safe-area-inset-left, 0px), var(--tauri-inset-left, 0px))',
+        'padding-right':
+          'max(env(safe-area-inset-right, 0px), var(--tauri-inset-right, 0px))',
+      }}
+    >
+      <Suspense>
+        <Show when={isAuthenticated()}>
+          <GlobalShortcuts />
+          <Suspense>
+            <KommandMenu />
+          </Suspense>
+          <QuickCreateMenu />
+          <GlobalBulkEditEntityModal />
+        </Show>
+        <Show
+          when={!isAuthenticated() && !AUTH_URLS.includes(location.pathname)}
+        >
+          <Banner />
+        </Show>
+      </Suspense>
       {/* <Show when={isAuthenticated() && isTutorialCompleted() === false}>
         <Onboarding />
       </Show> */}
@@ -130,7 +147,7 @@ export function Layout(props: RouteSectionProps) {
       <Show when={paywallOpen()}>
         <Paywall />
       </Show>
-      <div class="p-[var(--gutter-size)] grow-1">
+      <div class="p-[var(--gutter-size)] ios:p-0 grow-1">
         <Resize.Zone
           gutter={8}
           direction="horizontal"
@@ -146,10 +163,16 @@ export function Layout(props: RouteSectionProps) {
           </ItemDndProvider>
         </Resize.Zone>
       </div>
-      <Show when={isAuthenticated() && !AUTH_URLS.includes(location.pathname)}>
-        <Dock />
-        <Launcher open={createMenuOpen()} onOpenChange={setCreateMenuOpen} />
-      </Show>
+      <Suspense>
+        <Show
+          when={isAuthenticated() && !AUTH_URLS.includes(location.pathname)}
+        >
+          <Show when={!isNativeMobilePlatform()}>
+            <Dock />
+          </Show>
+          <Launcher open={createMenuOpen()} onOpenChange={setCreateMenuOpen} />
+        </Show>
+      </Suspense>
     </div>
   );
 }

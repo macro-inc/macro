@@ -1,0 +1,16 @@
+[package]
+name = "navigation_plugin"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rootcause = { workspace = true }
+nom = "8"
+logger = { path = "../logger" }
+serde = { workspace = true, features = ["derive"] }
+serde_qs = "0.15"
+tauri = { workspace = true }
+tauri-plugin-opener = "2"
+thiserror = { workspace = true }
+tracing = { workspace = true }
+url = { workspace = true }

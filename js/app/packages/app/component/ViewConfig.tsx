@@ -30,13 +30,12 @@ export type ViewData = {
   id: ViewId;
   view: ViewLabel;
   viewType?: ViewType;
-  highlightedId: string | undefined;
   selectedEntity: EntityData | undefined;
   scrollOffset: number | undefined;
   initialConfig: string | undefined;
   hasUserInteractedEntity: boolean;
   searchText: string | undefined;
-  selectedEntities: EntityData[];
+  multiSelectEntities: EntityData[];
 } & ViewConfigBase;
 
 /** maps view id to view data */
@@ -65,6 +64,7 @@ export type FilterOptions = {
   documentTypeFilter: DocumentTypeFilter[];
   projectFilter?: string;
   fromFilter?: WithCustomUserInput<'user' | 'contact'>[];
+  focusFilters?: ('signal' | 'noise')[];
 };
 
 export type SystemSortOption =
@@ -178,6 +178,7 @@ const ALL_VIEWCONFIG_DEFAULTS = {
     view: 'Signal',
     filters: {
       notificationFilter: 'notDone',
+      focusFilters: ['signal'],
     },
     sort: {
       sortBy: 'updated_at',
@@ -204,6 +205,7 @@ const ALL_VIEWCONFIG_DEFAULTS = {
     view: 'Noise',
     filters: {
       notificationFilter: 'notDone',
+      focusFilters: ['noise'],
     },
     sort: {
       sortBy: 'updated_at',
@@ -226,6 +228,12 @@ const ALL_VIEWCONFIG_DEFAULTS = {
       },
     },
   },
+  files: {
+    view: 'Files',
+    filters: {
+      typeFilter: ['document'],
+    },
+  },
   people: {
     view: 'People',
     filters: {
@@ -235,10 +243,38 @@ const ALL_VIEWCONFIG_DEFAULTS = {
       showUnreadIndicator: true,
     },
   },
-  files: {
-    view: 'Files',
+  email: {
+    view: 'Email',
     filters: {
-      typeFilter: ['document'],
+      typeFilter: ['email'],
+    },
+    sort: {
+      sortBy: 'updated_at',
+    },
+    display: {
+      showUnreadIndicator: true,
+    },
+    hotkeyOptions: {
+      e: (entity, extra) => {
+        if (extra?.soupContext) {
+          const {
+            emailViewSignal: [emailView],
+          } = extra.soupContext;
+          if (emailView() === 'inbox') {
+            if (entity.type === 'email') {
+              archiveEmail(entity.id, {
+                isDone: entity.done,
+                optimisticallyExclude: true,
+              });
+            }
+            return true;
+          }
+        }
+        if (entity.type === 'email') {
+          archiveEmail(entity.id, { isDone: entity.done });
+        }
+        return true;
+      },
     },
   },
   tasks: {

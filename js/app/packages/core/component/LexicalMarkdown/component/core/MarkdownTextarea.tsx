@@ -1,6 +1,7 @@
 import type { PortalScope } from '@core/component/ScopedPortal';
 import type { EditorType } from '@lexical-core';
 import type { Item } from '@service-storage/generated/schemas/item';
+import { onElementConnect } from '@solid-primitives/lifecycle';
 import {
   COMMAND_PRIORITY_CRITICAL,
   COMMAND_PRIORITY_HIGH,
@@ -13,8 +14,9 @@ import {
   type Accessor,
   createEffect,
   createSignal,
+  type JSX,
+  on,
   onCleanup,
-  onMount,
   Show,
 } from 'solid-js';
 import type { SetStoreFunction } from 'solid-js/store';
@@ -68,6 +70,7 @@ export interface MarkdownTextareaProps {
   initialValue?: string;
   initialHtml?: string;
   placeholder?: string;
+  watermark?: JSX.Element;
   type?: EditorType;
   onEnter?: (e: KeyboardEvent, value: string) => boolean;
   focusOnMount?: boolean;
@@ -110,7 +113,9 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
 
   const [markdownState, setMarkdownState] = createSignal<string>('');
 
-  onMount(() => {
+  let didInitializeContent = false;
+
+  const onConnect = () => {
     if (props.focusOnMount) {
       setTimeout(() => {
         mountRef.focus();
@@ -122,15 +127,30 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
     } else if (props.initialValue) {
       setEditorStateFromMarkdown(editor, props.initialValue);
     }
-  });
+
+    if (props.initialHtml || props.initialValue) {
+      // We do this to make sure anything relying on the markdownState existing initially
+      // has the content
+      props.onChange?.(markdownState());
+    }
+
+    didInitializeContent = true;
+  };
 
   createEffect(() => {
     editor.setEditable(props.editable());
   });
 
-  createEffect(() => {
-    props.onChange?.(markdownState(), editor);
-  });
+  createEffect(
+    on(
+      markdownState,
+      () => {
+        if (!didInitializeContent) return;
+        props.onChange?.(markdownState(), editor);
+      },
+      { defer: true }
+    )
+  );
 
   if (props.initialHtml) {
     setEditorStateFromHtml(editor, props.initialHtml);
@@ -200,7 +220,8 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
     if (onEnter == null) return;
     cleanupEnterListener = editor.registerCommand(
       KEY_ENTER_COMMAND,
-      (e: KeyboardEvent) => {
+      (e) => {
+        if (!e) return false;
         // TODO (seamus) : This is hacky. If we got a props.onEnter,then shift+enter becomes
         // the new "regular enter", so we delete the shiftKey and pass along to lexical.
         if (e.altKey && e.shiftKey) {
@@ -223,11 +244,6 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
       // Run at HIGH here so that the mentions menu can run at CRITICAL
       COMMAND_PRIORITY_HIGH
     );
-  });
-
-  onMount(() => {
-    editor.setRootElement(mountRef);
-    props.domRef?.(mountRef);
   });
 
   onCleanup(() => {
@@ -271,16 +287,33 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
           e.stopPropagation();
         }}
       >
-        <div ref={mountRef} contentEditable={props.editable()} />
+        <div
+          ref={(el) => {
+            onElementConnect(el, () => {
+              editor.setRootElement(el);
+              props.domRef?.(el);
+              mountRef = el;
+              onConnect();
+            });
+          }}
+          contentEditable={props.editable()}
+        />
+
         <DecoratorRenderer editor={editor} />
         <NodeAccessoryRenderer editor={editor} store={accessoryStore} />
         <Show when={showPlaceholder()}>
-          <div class="pointer-events-none text-ink-extra-muted absolute top-0">
+          <div class="pointer-events-none text-ink-placeholder/50 absolute top-0">
             <p class="my-1.5 pointer-events-none">
               {props.placeholder ?? '...'}
             </p>
           </div>
         </Show>
+        <Show when={props.watermark}>
+          <div class="text-ink/50 mt-[1lh]" data-watermark>
+            {props.watermark}
+          </div>
+        </Show>
+
         <MentionsMenu
           editor={editor}
           menu={mentionsMenuOperations}

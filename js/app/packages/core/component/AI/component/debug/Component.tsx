@@ -4,7 +4,7 @@ import type {
   Model,
   Send,
 } from '@core/component/AI/types';
-import { TextButton } from '@core/component/TextButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { createEffect, createSignal } from 'solid-js';
 import { useAttachments } from '../../signal/attachment';
 import { createStream } from '../../util/stream';
@@ -87,12 +87,12 @@ function ChatInputBox() {
     <Item label="Chat input - not connected to backend">
       <div class="w-full h-full">
         <div class="flex gap-2 py-2">
-          <TextButton
+          <DeprecatedTextButton
             onClick={() => setGen(true)}
             theme="accent"
             text="Generate"
           />
-          <TextButton
+          <DeprecatedTextButton
             onClick={() => setGen(false)}
             theme="accent"
             text="Stop"
@@ -276,7 +276,7 @@ function ToolCallResponseRender() {
         {
           type: 'toolCall',
           tool: {
-            name: 'WebSearch',
+            name: 'web_search',
             data: {
               query: 'most important headlines today',
             },
@@ -285,10 +285,16 @@ function ToolCallResponseRender() {
         {
           type: 'toolResponse',
           tool: {
-            name: 'WebSearch',
+            name: 'web_search',
             data: {
-              results: [{ name: 'news.com', url: 'www.news.com' }],
-              content: 'I read the results and there is news!!!',
+              content: [
+                {
+                  type: 'web_search_result',
+                  title: 'news.com',
+                  url: 'www.news.com',
+                },
+              ],
+              tool_use_id: 'I read the results and there is news!!!',
             },
           },
         },

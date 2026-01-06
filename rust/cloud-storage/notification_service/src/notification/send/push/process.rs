@@ -1,109 +1,126 @@
-use std::collections::{HashMap, HashSet};
+use crate::{
+    config::APPLE_BUNDLE_ID,
+    notification::send::push::generate::{PlainTextFormatter, generate_apns_notification},
+};
+use aws_sdk_sns::operation::publish::PublishOutput;
+use futures::{Stream, StreamExt};
+use macro_user_id::user_id::MacroUserIdStr;
+use model_notifications::{DeviceEndpoint, NotificationWithRecipient, UserNotification};
+use sns_client::{NotifCollapseKey, SnsTarget};
+use std::{
+    borrow::Cow,
+    collections::{HashMap, HashSet},
+    hash::{DefaultHasher, Hash, Hasher},
+};
 
-use anyhow::Context;
-use futures::StreamExt;
-use model_notifications::NotificationWithRecipient;
+trait NotifCollapseKeyExt {
+    fn collapse_key(&self) -> NotifCollapseKey<'static>;
+}
 
-use super::generate::generate_push_notification;
+impl NotifCollapseKeyExt for UserNotification {
+    fn collapse_key(&self) -> NotifCollapseKey<'static> {
+        let collapse_key = format!(
+            "{}{}",
+            self.notification_entity.entity_id,
+            self.notification_event.event_type()
+        );
+
+        // hash the collapse key to shorten it
+        let mut hasher = DefaultHasher::new();
+        collapse_key.hash(&mut hasher);
+        let hash = hasher.finish();
+        let collapse_key = format!("{:x}", hash);
+        NotifCollapseKey(Cow::Owned(collapse_key))
+    }
+}
+
+pub type NotificationsForDevices<'a> = HashMap<&'a NotificationWithRecipient, Vec<DeviceEndpoint>>;
+pub type NotificationResult = (PublishOutput, MacroUserIdStr<'static>, DeviceEndpoint);
+
+pub fn stream_push_notifs_to_user<'a>(
+    sns_client: &'a sns_client::SNS,
+    notifs: &'a NotificationsForDevices<'a>,
+) -> impl Stream<Item = Result<NotificationResult, anyhow::Error>> + 'a {
+    futures::stream::iter(
+        notifs
+            .iter()
+            .flat_map(|(notif, devices)| devices.iter().map(move |d| (notif, d))),
+    )
+    .filter_map(
+        async |(notif, endpoint)| -> Option<Result<NotificationResult, anyhow::Error>> {
+            let payload = match endpoint {
+                DeviceEndpoint::Android(_) => {
+                    return Some(Err(anyhow::anyhow!("android not implemented")));
+                }
+                DeviceEndpoint::Ios(_) => {
+                    match generate_apns_notification::<PlainTextFormatter>(notif).transpose()? {
+                        Ok(n) => SnsTarget::Ios(Box::new(n)),
+                        Err(e) => return Some(Err(anyhow::Error::from(e))),
+                    }
+                }
+            };
+            let res = sns_client
+                .push_notification(
+                    endpoint.arn(),
+                    &payload,
+                    sns_client::MessageAttributes {
+                        push_type: sns_client::PushType::Alert,
+                        apns_bundle_id: &APPLE_BUNDLE_ID,
+                        collapse_key: notif.inner.collapse_key(),
+                    },
+                )
+                .await;
+            let out: Result<NotificationResult, anyhow::Error> =
+                res.map(|r| (r, notif.recipient_id.clone(), endpoint.clone()));
+            Some(out)
+        },
+    )
+}
 
 /// Attempts to send push notifications to provided users
 /// Returns a list of users who were sent push notifications.
-#[tracing::instrument(skip(db, sns_client, user_ids))]
+#[tracing::instrument(skip(db, sns_client))]
 pub async fn process_push_notifications(
     db: &sqlx::Pool<sqlx::Postgres>,
     sns_client: &sns_client::SNS,
-    notifications: &[NotificationWithRecipient],
-    user_ids: &HashSet<&String>,
-) -> anyhow::Result<Vec<String>> {
-    let user_ids = user_ids
+    notifications: &HashMap<MacroUserIdStr<'static>, Vec<NotificationWithRecipient>>,
+) -> Result<HashSet<MacroUserIdStr<'static>>, anyhow::Error> {
+    let user_ids: Vec<_> = notifications.keys().cloned().collect();
+
+    let mut user_device_endpoints =
+        notification_db_client::device::get_users_device_endpoints(db, user_ids.as_slice()).await?;
+
+    let to_send: HashMap<_, _> = notifications
         .iter()
-        .map(|user_id| user_id.to_string())
-        .collect::<Vec<String>>();
-
-    let user_device_endpoints: HashMap<String, Vec<String>> =
-        notification_db_client::device::get_users_device_endpoints(db, &user_ids).await?;
-    tracing::trace!(device_endpoints=?user_device_endpoints, "got device endpoints to send push notifications to");
-
-    // create a map where key is recipient_id and value is the push notif to send
-    let notification_map = notifications
-        .iter()
-        .filter_map(|n| {
-            let push_notification = generate_push_notification(n)
-                .context("unable to generate push notification for user")
-                .ok()?; // Return None if error
-
-            push_notification.map(|pn| (n.recipient_id.clone(), pn))
+        .flat_map(|(user_id, notifs)| {
+            notifs
+                .iter()
+                .filter_map(|notif| {
+                    let endpoints = user_device_endpoints.remove(user_id).map(|endpoints| {
+                        endpoints
+                            .into_iter()
+                            .map(|(arn, device)| match device {
+                                model_notifications::DeviceType::Ios => DeviceEndpoint::Ios(arn),
+                                model_notifications::DeviceType::Android => {
+                                    DeviceEndpoint::Android(arn)
+                                }
+                            })
+                            .collect::<Vec<_>>()
+                    })?;
+                    Some((notif, endpoints))
+                })
+                .collect::<Vec<_>>()
         })
-        .collect::<HashMap<String, _>>();
+        .collect();
 
-    if notification_map.is_empty() {
-        // There are no push notifications to send
-        return Ok(user_ids.to_vec());
-    }
-
-    // Goes through each user attempting to send a push notification, returning the user id and
-    // PushNotificationStatus
-    let result: Vec<(String, PushNotificationStatus)> = futures::stream::iter(
-        // Only include items where the user ID exists in notification_map
-        user_device_endpoints
-            .iter()
-            .filter(|(user_id, _)| notification_map.contains_key(*user_id)),
-    )
-    .then(|(user_id, endpoints)| {
-        // safe to unwrap because we filter above
-        let push_notification = notification_map.get(user_id).unwrap();
-        let message_json = push_notification.0.clone();
-        let message_attributes = push_notification.1.clone();
-        async move {
-            tracing::trace!(user_id=%user_id, "sending push notification");
-            if endpoints.is_empty() {
-                return (user_id.clone(), PushNotificationStatus::Empty);
+    let mut users_sent_push = HashSet::new();
+    stream_push_notifs_to_user(sns_client, &to_send)
+        .for_each_concurrent(10, |res| {
+            if let Ok(r) = res.inspect_err(|e| tracing::error!("{e}")) {
+                users_sent_push.insert(r.1);
             }
-            let mut success = false;
-
-            // while most users will have 1 endpoint, we need to handle the case where a user
-            // has multiple endpoints
-            for item in endpoints {
-                if let Err(e) = sns_client
-                    .push_notification(item, &message_json.to_string(), message_attributes.clone())
-                    .await
-                {
-                    tracing::warn!(error=?e, "unable to send push notification");
-                    continue;
-                }
-                // we successfully sent at least one push notification to a user's device
-                success = true;
-            }
-            let status = if success {
-                PushNotificationStatus::Success
-            } else {
-                PushNotificationStatus::Fail
-            };
-            (user_id.clone(), status)
-        }
-    })
-    .collect::<Vec<_>>()
-    .await;
-
-    let users_notified = result
-        .iter()
-        .filter_map(|r| {
-            let (user_id, status) = r;
-            match status {
-                PushNotificationStatus::Success => Some(user_id.clone()),
-                PushNotificationStatus::Empty | PushNotificationStatus::Fail => None,
-            }
+            async {}
         })
-        .collect::<Vec<String>>();
-
-    Ok(users_notified)
-}
-
-pub enum PushNotificationStatus {
-    /// No push notifications were sent
-    Empty,
-    /// Successfully sent a push notification for the user
-    Success,
-    /// Failed to send push notifications for the user
-    Fail,
+        .await;
+    Ok(users_sent_push)
 }

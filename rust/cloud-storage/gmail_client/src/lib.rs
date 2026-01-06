@@ -24,7 +24,7 @@ use models_email::email::service::address::ContactInfo;
 use models_email::email::service::{message, thread};
 pub use models_email::gmail::error::GmailError;
 use models_email::gmail::history::InboxChanges;
-use models_email::gmail::webhook::{
+use models_email::gmail::inbox_sync::{
     GoogleJwtClaims, GooglePublicKeys, JwtVerificationError, KeyMap,
 };
 use models_email::service::contact::{Contact, ContactList};

@@ -1,5 +1,5 @@
 import { BozzyBracketInnerSibling } from '@core/component/BozzyBracket';
-import { GlitchText } from '@core/component/GlitchText';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { Hotkey } from '@core/component/Hotkey';
 import { DecoratorRenderer } from '@core/component/LexicalMarkdown/component/core/DecoratorRenderer';
 import { NodeAccessoryRenderer } from '@core/component/LexicalMarkdown/component/core/NodeAccessoryRenderer';
@@ -35,7 +35,6 @@ import {
 } from '@core/component/LexicalMarkdown/utils';
 import { getDestinationFromOptions } from '@core/component/NewMessage';
 import { RecipientSelector } from '@core/component/RecipientSelector';
-import { TextButton } from '@core/component/TextButton';
 import { toast } from '@core/component/Toast/Toast';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import { IS_MAC } from '@core/constant/isMac';
@@ -61,9 +60,11 @@ import TextStriketrough from '@icon/regular/text-strikethrough.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { $generateHtmlFromNodes } from '@lexical/html';
 import MacroGridLoader from '@macro-icons/macro-grid-noise-loader-4.svg';
+import { useEmailLinksQuery } from '@queries/email/link';
 import type { SimpleMention } from '@service-comms/generated/models/simpleMention';
 import { emailClient } from '@service-email/client';
 import type { MessageToSend } from '@service-email/generated/schemas/messageToSend';
+import { GlitchText } from '@ui/components/GlitchText';
 import { normalizeEnterPlugin } from 'core/component/LexicalMarkdown/plugins/normalize-enter';
 import {
   $getRoot,
@@ -156,6 +157,7 @@ export function QuickCreateMenuInner(props: QuickCreateMenuProps) {
   const [_, setCreateMenuOpen] = props.quickCreateMenuOpenSignal;
   let noteTitleRef: HTMLInputElement | undefined;
   const emailActive = useEmailLinksStatus();
+  const emailLinksQuery = useEmailLinksQuery();
   const [selectedEmailOptions, setSelectedEmailOptions] = createSignal<
     WithCustomUserInput<'user' | 'contact'>[]
   >([]);
@@ -244,10 +246,19 @@ export function QuickCreateMenuInner(props: QuickCreateMenuProps) {
       };
     });
 
-    // Get email links for new emails
-    const fallbackLinks = await emailClient.getLinks();
-    if (isErr(fallbackLinks) || fallbackLinks[1].links.length < 1) {
-      toast.failure('Failed to send email');
+    if (emailLinksQuery.isPending) {
+      toast.alert('Loading email accounts...');
+      return false;
+    }
+
+    if (emailLinksQuery.isError) {
+      toast.failure('Failed to send email: Could not load email accounts');
+      return false;
+    }
+
+    const linksData = emailLinksQuery.data;
+    if (!linksData || linksData.links.length < 1) {
+      toast.failure('Failed to send email: No email account connected');
       return false;
     }
 
@@ -272,7 +283,7 @@ export function QuickCreateMenuInner(props: QuickCreateMenuProps) {
       body_html,
       body_text,
       body_macro,
-      link_id: fallbackLinks[1].links[0].id,
+      link_id: linksData.links[0].id,
     };
 
     const sendRequest = await emailClient.sendMessage({
@@ -706,8 +717,12 @@ export function QuickCreateMenuInner(props: QuickCreateMenuProps) {
           <span>to create & open</span>
         </div>
         <div class="flex w-32 justify-between font-mono">
-          <Dialog.CloseButton as={TextButton} text="Cancel" theme="clear" />
-          <TextButton
+          <Dialog.CloseButton
+            as={DeprecatedTextButton}
+            text="Cancel"
+            theme="clear"
+          />
+          <DeprecatedTextButton
             text={selectedType() === 'note' ? 'CREATE' : 'SEND'}
             theme="accentFill"
             class="w-18"

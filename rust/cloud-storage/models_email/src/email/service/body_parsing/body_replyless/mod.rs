@@ -84,6 +84,16 @@ mod tests {
         test_email_extraction(full_email, expected_reply, "test-4");
     }
 
+    /// the entire email (including style tags before the body) should be used if no splitter
+    /// is found on the email
+    #[test]
+    fn test_extract_message_reply_test_5() {
+        let full_email = include_str!("testdata/test-5/full.html");
+        let expected_reply = include_str!("testdata/test-5/body_replyless.html");
+
+        test_email_extraction(full_email, expected_reply, "test-5");
+    }
+
     fn test_email_extraction(full_email: &str, expected_reply: &str, test_name: &str) {
         // Create a message with HTML content
         let mut message = service::message::Message {

@@ -1,0 +1,12 @@
+[workspace]
+resolver = "2"
+members = ["src-tauri", "navigation_plugin", "logger"]
+
+[workspace.dependencies]
+rootcause = "0.10"
+tracing = "0.1"
+url = "2.5.4"
+anyhow = "1"
+serde = "1"
+tauri  = { version = "2.7.0" }
+thiserror = "2"

@@ -1,4 +1,5 @@
 use chrono::serde::ts_seconds_option;
+use macro_user_id::user_id::MacroUserIdStr;
 use models_bulk_upload::ProjectDocumentStatus;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -49,7 +50,9 @@ pub struct PendingProject {
 #[serde(rename_all = "camelCase")]
 pub struct BasicProject {
     pub id: String,
-    pub user_id: String,
+    #[schema(value_type = String)]
+    #[sqlx(try_from = "String")]
+    pub user_id: MacroUserIdStr<'static>,
     pub parent_id: Option<String>,
     pub name: String,
     pub deleted_at: Option<chrono::DateTime<chrono::Utc>>,

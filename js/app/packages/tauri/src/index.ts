@@ -1,1 +1,1 @@
-export { isTauri, MaybeTauriProvider, useTauri } from './TauriProvider';
+export { MaybeTauriProvider, useTauri } from './TauriProvider';

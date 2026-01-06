@@ -46,6 +46,37 @@ macro_rules! delegate_methods {
     };
 }
 
+/// Creates a highlight field
+pub(crate) fn create_highlight_field<'a>(
+    highlight_type: &'a str,
+    number_of_fragments: u32,
+) -> HighlightField<'a> {
+    HighlightField::new()
+        .highlight_type(highlight_type)
+        .pre_tags(vec![MacroEm::Open.to_string()])
+        .post_tags(vec![MacroEm::Close.to_string()])
+        .number_of_fragments(number_of_fragments)
+}
+
+/// Creates sort vec to sort by the updated_at with a fallback to score sort
+pub(crate) fn updated_at_sort<'a>() -> Vec<SortType<'a>> {
+    vec![
+        SortType::ScriptSort(ScriptSort::new(
+            Script::new(
+                r#"if (doc.containsKey('sent_at_seconds') && doc['sent_at_seconds'].size() > 0) {
+                    return doc['sent_at_seconds'].value.toInstant().toEpochMilli();
+                } else if (doc.containsKey('updated_at_seconds') && doc['updated_at_seconds'].size() > 0) {
+                    return doc['updated_at_seconds'].value.toInstant().toEpochMilli();
+                } else {
+                    return 0L;  // Or Long.MAX_VALUE to push to end
+                }"#,
+            ),
+            ScriptSortType::Number,
+            SortOrder::Desc,
+        )),
+        SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
+    ]
+}
 pub trait SearchQueryConfig {
     /// Key for item id
     const ID_KEY: &'static str = "entity_id";
@@ -61,10 +92,9 @@ pub trait SearchQueryConfig {
     /// Returns the default sort types that are used on the search query.
     /// Override this method if you need custom sort logic
     fn default_sort_types<'a>() -> Vec<SortType<'a>> {
-        vec![
-            SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
-            SortType::Field(FieldSort::new(Self::ID_KEY, SortOrder::Asc)),
-        ]
+        println!("CALLED");
+        // Use the updated_at_sort by default
+        updated_at_sort()
     }
 
     /// Override this method if you need custom highlight logic
@@ -77,6 +107,12 @@ pub trait SearchQueryConfig {
                 .post_tags(vec![MacroEm::Close.to_string()])
                 .number_of_fragments(500),
         )
+    }
+
+    /// Override this method if you want to add custom owner highlight fields
+    /// By default, this will add a user_id highlight field
+    fn append_owner_highlights<'a>(highlight: Highlight<'a>) -> Highlight<'a> {
+        highlight.field("user_id", create_highlight_field("plain", 1))
     }
 }
 
@@ -179,18 +215,60 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
         self
     }
 
+    /// Creates the filter query to filter results to only those a user has
+    /// access to/has requested.
+    /// This could either be a single term/terms query for ids_only or just user_id
+    /// Or a bool query that contains both of these items
+    fn build_filter_query<'a>(&'a self, user_id_key: &str) -> Result<QueryType<'a>> {
+        if self.ids_only {
+            // We only need to search over the entity ids provided
+            if self.ids.is_empty() {
+                return Err(OpensearchClientError::EmptyIdsWithIdsOnly(T::ENTITY_INDEX));
+            }
+
+            // Return just the id query to filter over
+            Ok(QueryType::terms(T::ID_KEY.to_string(), self.ids.to_vec()))
+        } else {
+            let user_id_query = QueryType::term(user_id_key.to_string(), self.user_id.clone());
+
+            // If there are no ids provided we can return only the user id query to filter over
+            if self.ids.is_empty() {
+                return Ok(user_id_query);
+            }
+
+            // otherwise we need to build the filter bool query to contain both entity ids and user_id
+            // Create a filter bool query that will ensure we only search over items that the user has access to
+            let mut filter_bool_query = BoolQueryBuilder::new();
+
+            // We should have either an entity_id match OR a user_id match
+            filter_bool_query.minimum_should_match(1);
+
+            filter_bool_query.should(QueryType::terms(T::ID_KEY.to_string(), self.ids.to_vec()));
+
+            filter_bool_query.should(QueryType::term(
+                user_id_key.to_string(),
+                self.user_id.clone(),
+            ));
+
+            Ok(filter_bool_query.build().into())
+        }
+    }
+
     /// Builds a content and name bool query
     pub fn build_content_and_name_bool_query<'a>(
         &'a self,
     ) -> Result<ContentAndNameBoolQueries<'a>> {
+        // FIXES: https://linear.app/macro-eng/issue/BAC-173/sending-invalid-queries-to-opensearch
+        // If we try and build queries with ids only = true and no ids provided we should
+        // error out as it creates an invalid query since we have minimum_should_match = 1.
+        if self.ids_only && self.ids.is_empty() {
+            return Err(OpensearchClientError::EmptyIdsWithIdsOnly(T::ENTITY_INDEX));
+        }
+
         let content_bool_query = match self.search_on {
             SearchOn::Name => None,
             SearchOn::NameContent | SearchOn::Content => {
                 let mut access_bool_query = BoolQueryBuilder::new();
-
-                // Currently, the minimum should match is always one.
-                // This should of the bool query contains the ids and potentially the user_id
-                access_bool_query.minimum_should_match(1);
 
                 // For name OR content queries, we can build a much more simple bool query
                 let term_must_array: Vec<QueryType<'a>> =
@@ -200,49 +278,76 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
 
                 inner_bool_query.minimum_should_match(1);
 
-                // Create a vec of owner queries for each term
-                // We want to search over the content **and** the owner here
-                let mut owner_queries: Vec<QueryType> = Vec::new();
+                // For email search, we want to search over the participants
+                // For all other indices we want to search over the owner
+                match T::ENTITY_INDEX {
+                    SearchEntityType::Emails => {
+                        let mut participant_queries: Vec<QueryType> = Vec::new();
+                        for term in &self.terms {
+                            let formatted_term = format!("{}*", term);
+                            participant_queries.push(
+                                WildcardQuery::new(
+                                    "sender",
+                                    formatted_term.clone(),
+                                    true,
+                                    Some(5000.0),
+                                )
+                                .into(),
+                            );
+                            participant_queries.push(
+                                WildcardQuery::new(
+                                    "cc",
+                                    formatted_term.clone(),
+                                    true,
+                                    Some(5000.0),
+                                )
+                                .into(),
+                            );
+                            participant_queries.push(
+                                WildcardQuery::new(
+                                    "bcc",
+                                    formatted_term.clone(),
+                                    true,
+                                    Some(5000.0),
+                                )
+                                .into(),
+                            );
+                            participant_queries.push(
+                                WildcardQuery::new(
+                                    "recipients",
+                                    formatted_term.clone(),
+                                    true,
+                                    Some(5000.0),
+                                )
+                                .into(),
+                            );
+                        }
 
-                for term in &self.terms {
-                    let formatted_term = format!("*{}*", term);
-                    owner_queries.push(QueryType::wildcard(T::USER_ID_KEY, formatted_term, true));
-                }
-
-                // Add the owner queries to the bool query
-                for owner_query in owner_queries {
-                    inner_bool_query.should(owner_query);
-                }
-
-                // If the search is on email, we need to add in participants to the query as well
-                if T::ENTITY_INDEX == SearchEntityType::Emails {
-                    let mut participant_queries: Vec<QueryType> = Vec::new();
-                    for term in &self.terms {
-                        let formatted_term = format!("*{}*", term);
-                        participant_queries.push(QueryType::wildcard(
-                            "sender",
-                            formatted_term.clone(),
-                            true,
-                        ));
-                        participant_queries.push(QueryType::wildcard(
-                            "cc",
-                            formatted_term.clone(),
-                            true,
-                        ));
-                        participant_queries.push(QueryType::wildcard(
-                            "bcc",
-                            formatted_term.clone(),
-                            true,
-                        ));
-                        participant_queries.push(QueryType::wildcard(
-                            "recipients",
-                            formatted_term.clone(),
-                            true,
-                        ));
+                        for participant_query in participant_queries {
+                            inner_bool_query.should(participant_query);
+                        }
                     }
+                    _ => {
+                        // Create a vec of owner queries for each term
+                        // We want to search over the content **and** the owner here
+                        let mut owner_queries: Vec<QueryType> = Vec::new();
+                        for term in &self.terms {
+                            let formatted_term = format!("macro|{}*", term);
+                            owner_queries.push(
+                                WildcardQuery::new(
+                                    T::USER_ID_KEY,
+                                    formatted_term,
+                                    true,
+                                    Some(5000.0),
+                                )
+                                .into(),
+                            );
+                        }
 
-                    for participant_query in participant_queries {
-                        inner_bool_query.should(participant_query);
+                        // Add the owner queries to the bool query
+                        for owner_query in owner_queries {
+                            inner_bool_query.should(owner_query);
+                        }
                     }
                 }
 
@@ -253,21 +358,12 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
                 // Add in the inner bool query on content + owner to must of access bool query
                 access_bool_query.must(inner_bool_query.build().into());
 
-                // Add any ids to the should array if provided
-                if !self.ids.is_empty() {
-                    access_bool_query
-                        .should(QueryType::terms(T::ID_KEY.to_string(), self.ids.to_vec()));
-                }
+                // Filter over only items you have access to
+                let filter_bool_query = self.build_filter_query(T::USER_ID_KEY)?;
+                access_bool_query.filter(filter_bool_query);
 
-                // If we are not searching over the ids, we need to add the user_id to the should array
-                if !self.ids_only {
-                    access_bool_query.should(QueryType::term(
-                        T::USER_ID_KEY.to_string(),
-                        self.user_id.clone(),
-                    ));
-                }
-
-                access_bool_query.must(QueryType::term("_index", T::ENTITY_INDEX.as_ref()));
+                // Only search on the provided index
+                access_bool_query.filter(QueryType::term("_index", T::ENTITY_INDEX.as_ref()));
 
                 Some(access_bool_query)
             }
@@ -278,10 +374,6 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
             SearchOn::Name | SearchOn::NameContent => {
                 let mut bool_query = BoolQueryBuilder::new();
 
-                // Currently, the minimum should match is always one.
-                // This should of the bool query contains the ids and potentially the user_id
-                bool_query.minimum_should_match(1);
-
                 // For name OR content queries, we can build a much more simple bool query
                 let term_must_array: Vec<QueryType<'a>> =
                     self.build_must_term_query(SearchOn::Name)?;
@@ -291,26 +383,19 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
                     bool_query.must(must);
                 }
 
-                // Add any ids to the should array if provided
-                if !self.ids.is_empty() {
-                    bool_query.should(QueryType::terms(T::ID_KEY.to_string(), self.ids.to_vec()));
-                }
-
-                // If we are not searching over the ids, we need to add the user_id to the should array
-                if !self.ids_only {
-                    bool_query.should(QueryType::term(
-                        "user_id", // the names index only has user_id
-                        self.user_id.clone(),
-                    ));
-                }
+                // Filter over only items you have access to
+                // For name index queries we want to always use user_id as the user id key
+                let filter_bool_query = self.build_filter_query("user_id")?;
+                bool_query.filter(filter_bool_query);
 
                 match T::ENTITY_INDEX {
                     SearchEntityType::Projects => {
-                        bool_query.must(QueryType::term("_index", SearchIndex::Projects.as_ref()));
+                        bool_query
+                            .filter(QueryType::term("_index", SearchIndex::Projects.as_ref()));
                     }
                     _ => {
-                        bool_query.must(QueryType::term("_index", SearchIndex::Names.as_ref()));
-                        bool_query.must(QueryType::term("entity_type", T::ENTITY_INDEX.as_ref()));
+                        bool_query.filter(QueryType::term("_index", SearchIndex::Names.as_ref()));
+                        bool_query.filter(QueryType::term("entity_type", T::ENTITY_INDEX.as_ref()));
                     }
                 }
 
@@ -381,7 +466,7 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
             search_request.collapse(Collapse::new(T::ID_KEY));
         }
 
-        let highlight = match self.search_on {
+        let mut highlight = match self.search_on {
             SearchOn::Content => T::default_highlight(),
             SearchOn::Name => Highlight::new().require_field_match(true).field(
                 T::TITLE_KEY,
@@ -410,6 +495,8 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
                         .number_of_fragments(1),
                 ),
         };
+
+        highlight = T::append_owner_highlights(highlight);
 
         search_request.highlight(highlight);
         search_request.set_sorts(T::default_sort_types().into());

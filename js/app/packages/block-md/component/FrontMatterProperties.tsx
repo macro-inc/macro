@@ -5,11 +5,19 @@ import {
   dispatchInternalLayoutShift,
   REMOVE_PINNED_PROPERTY_COMMAND,
 } from '@core/component/LexicalMarkdown/plugins';
+import { saveEntityProperty } from '@core/component/Properties/api';
 import { Modals } from '@core/component/Properties/component/modal';
 import { PanelContainer } from '@core/component/Properties/component/panel';
 import { getDefaultPinnedProperties } from '@core/component/Properties/constants';
-import { PropertiesProvider } from '@core/component/Properties/context/PropertiesContext';
+import {
+  PropertiesProvider,
+  type PropertySaveHandler,
+} from '@core/component/Properties/context/PropertiesContext';
 import { useEntityProperties } from '@core/component/Properties/hooks';
+import type {
+  Property,
+  PropertyApiValues,
+} from '@core/component/Properties/types';
 import CaretDown from '@icon/bold/caret-down-bold.svg';
 import CaretRight from '@icon/bold/caret-right-bold.svg';
 import EyeSlash from '@icon/bold/eye-slash-bold.svg';
@@ -143,6 +151,19 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
   const height = () => containerSize.height;
   createEffect(on(height, layoutShift));
 
+  // Network-based save handler for FrontMatter properties
+  const saveHandler: PropertySaveHandler = {
+    saveProperty: async (property: Property, value: PropertyApiValues) => {
+      return await saveEntityProperty(blockId, entityType, property, value);
+    },
+    saveDate: async (property: Property, date: Date) => {
+      return await saveEntityProperty(blockId, entityType, property, {
+        valueType: 'DATE',
+        value: date.toISOString(),
+      });
+    },
+  };
+
   return (
     <Show when={!error()} fallback={props.fallback}>
       <div class="mt-6 mb-6" ref={setContainerRef}>
@@ -157,6 +178,7 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
           onPropertyPinned={handlePropertyPinned}
           onPropertyUnpinned={handlePropertyUnpinned}
           pinnedPropertyIds={pinnedPropertyIds}
+          saveHandler={saveHandler}
         >
           {/* Collapsible header with horizontal line */}
           <div class="flex items-center gap-2 pt-2">

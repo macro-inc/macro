@@ -250,7 +250,7 @@ impl Read {
                 content: content_str,
                 metadata: DocumentMetadata {
                     document_name: metadata.document_name,
-                    owner: metadata.owner,
+                    owner: metadata.owner.to_string(),
                     file_type: metadata.file_type,
                     project_id: metadata.project_id,
                     deleted: metadata.deleted_at.is_some(),
@@ -487,7 +487,7 @@ impl Read {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ai::tool::types::toolset::tool_object::validate_tool_schema;
+    use ai::tool::types::tool_object::validate_tool_schema;
     use ai::{generate_tool_input_schema, generate_tool_output_schema};
 
     // run `cargo test -p ai_tools read::tests::print_input_schema -- --nocapture --include-ignored`

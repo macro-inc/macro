@@ -1,12 +1,6 @@
+import { isTauri } from '@core/util/platform';
 import TauriWebsocket from '@tauri-apps/plugin-websocket';
 import type { MinimalWebSocket, WebSocketFactory } from './minimal-websocket';
-
-/**
- * Check if we're running in a Tauri environment
- */
-export function isTauri(): boolean {
-  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
-}
 
 /**
  * Tauri WebSocket wrapper that implements MinimalWebSocket interface

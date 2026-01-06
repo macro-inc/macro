@@ -226,8 +226,8 @@ export const I_DOCUMENT_MENTION: TextMatchTransformer = {
 
 // External Document Mentions
 
-function cleanHostname(_hostname: string): string {
-  const hostname = _hostname.replace('www.', '').toLowerCase();
+function cleanHostname(rawHostname: string): string {
+  const hostname = rawHostname.replace('www.', '').toLowerCase();
   if (hostname === 'localhost') {
     return 'dev.macro.com';
   }

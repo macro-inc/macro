@@ -69,7 +69,7 @@ async fn main() -> anyhow::Result<()> {
     let gmail_queue_aws_config = if cfg!(feature = "local_queue") {
         aws_config::defaults(aws_config::BehaviorVersion::latest())
             .region("us-east-1")
-            .endpoint_url(&config.gmail_webhook_queue)
+            .endpoint_url(&config.gmail_inbox_sync_queue)
             .load()
             .await
     } else {
@@ -80,8 +80,8 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&gmail_queue_aws_config))
-        .gmail_webhook_queue(&config.gmail_webhook_queue)
-        .gmail_webhook_retry_queue(&config.gmail_webhook_retry_queue)
+        .gmail_inbox_sync_queue(&config.gmail_inbox_sync_queue)
+        .gmail_inbox_sync_retry_queue(&config.gmail_inbox_sync_retry_queue)
         .search_event_queue(&config.search_event_queue)
         .insight_context_queue(&config.insight_context_queue)
         .email_backfill_queue(&config.backfill_queue)
@@ -111,6 +111,7 @@ async fn main() -> anyhow::Result<()> {
     let redis_client = email_service::util::redis::RedisClient::new(
         redis_inner_client,
         config.redis_rate_limit_reqs,
+        config.redis_rate_limit_reqs_backfill,
         config.redis_rate_limit_window_secs,
     );
 

@@ -11,7 +11,7 @@ export function compositeEntity(entity: Entity): CompositeEntity {
 
 export function notificationEntity(notification: UnifiedNotification): Entity {
   return {
-    id: notification.eventItemId,
-    type: notification.eventItemType as EntityType,
+    id: notification.entity_id,
+    type: notification.entity_type as EntityType,
   };
 }

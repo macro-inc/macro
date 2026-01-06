@@ -1,6 +1,8 @@
 import MacroJump from '@app/component/MacroJump';
+import { MobileDock } from '@app/component/mobile/MobileDock';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { ClippedPanel } from '@core/component/ClippedPanel';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isRightPanelOpen, isSettingsPanelOpen } from '@core/signal/layout';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import {
@@ -88,6 +90,7 @@ export function SplitContainer(
           data-split-id={props.id}
           class="bracket-never"
           data-split-container
+          data-modal={panel.handle.isSpotLight()}
           tabindex={-1}
         >
           <ClippedPanel
@@ -107,9 +110,14 @@ export function SplitContainer(
             <div class="flex flex-col min-h-0 size-full">
               <SplitHeader ref={setHeaderRef} />
               <SplitToolbar ref={setToolbarRef} />
-              <div class="size-full overflow-hidden">{props.children}</div>
+              <div class="@container/split size-full overflow-hidden">
+                {props.children}
+              </div>
               <Show when={panel.handle.isSpotLight()}>
                 <MacroJump tabbableParent={ref} />
+              </Show>
+              <Show when={isNativeMobilePlatform()}>
+                <MobileDock />
               </Show>
             </div>
           </ClippedPanel>

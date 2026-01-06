@@ -1,5 +1,6 @@
 use crate::model::Message;
 use anyhow::{Context, Result};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
@@ -11,8 +12,7 @@ pub async fn get_messages_with_context(
     before: i64,
     after: i64,
 ) -> Result<Vec<Message>> {
-    let msg = sqlx::query_as!(
-        Message,
+    let msg = sqlx::query!(
         r#"
         SELECT
         id,
@@ -29,6 +29,21 @@ pub async fn get_messages_with_context(
         "#,
         message_id
     )
+    .try_map(|row| {
+        Ok(Message {
+            id: row.id,
+            channel_id: row.channel_id,
+            thread_id: row.thread_id,
+            sender_id: MacroUserIdStr::parse_from_str(&row.sender_id)
+                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
+                .into_owned(),
+            content: row.content,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            edited_at: row.edited_at,
+            deleted_at: row.deleted_at,
+        })
+    })
     .fetch_one(db)
     .await;
 
@@ -38,8 +53,7 @@ pub async fn get_messages_with_context(
 
     let msg = msg.context("fetch message")?;
 
-    let mut before = sqlx::query_as!(
-        Message,
+    let mut before = sqlx::query!(
         r#"
         SELECT
             id,
@@ -61,6 +75,21 @@ pub async fn get_messages_with_context(
         message_id,
         before
     )
+    .try_map(|row| {
+        Ok(Message {
+            id: row.id,
+            channel_id: row.channel_id,
+            thread_id: row.thread_id,
+            sender_id: MacroUserIdStr::parse_from_str(&row.sender_id)
+                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
+                .into_owned(),
+            content: row.content,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            edited_at: row.edited_at,
+            deleted_at: row.deleted_at,
+        })
+    })
     .fetch_all(db)
     .await
     .context("fetch message before")?
@@ -68,8 +97,7 @@ pub async fn get_messages_with_context(
     .rev()
     .collect::<Vec<_>>();
 
-    let mut after = sqlx::query_as!(
-        Message,
+    let mut after = sqlx::query!(
         r#"
         SELECT
         id,
@@ -91,6 +119,21 @@ pub async fn get_messages_with_context(
         message_id,
         after
     )
+    .try_map(|row| {
+        Ok(Message {
+            id: row.id,
+            channel_id: row.channel_id,
+            thread_id: row.thread_id,
+            sender_id: MacroUserIdStr::parse_from_str(&row.sender_id)
+                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
+                .into_owned(),
+            content: row.content,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            edited_at: row.edited_at,
+            deleted_at: row.deleted_at,
+        })
+    })
     .fetch_all(db)
     .await
     .context("fetch message after")?;

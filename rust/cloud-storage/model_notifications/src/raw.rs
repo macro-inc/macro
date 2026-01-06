@@ -1,10 +1,11 @@
 use crate::{
-    Notification, NotificationEntity, NotificationEvent, NotificationEventType,
-    NotificationTemporalData, UserNotification,
+    Notification, NotificationEvent, NotificationEventType, NotificationTemporalData,
+    UserNotification,
 };
 use anyhow::Context;
 use chrono::{DateTime, serde::ts_seconds_option};
-use model_entity::EntityType;
+use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::{Entity, EntityType};
 use models_pagination::{CreatedAt, CursorVal, Identify, SortOn};
 use serde::{Deserialize, Serialize};
 use sqlx::types::Uuid;
@@ -20,10 +21,9 @@ pub struct RawNotification {
     pub id: Uuid,
     /// The type of notification
     pub notification_event_type: String,
-    /// The item id the notification event was created for
-    pub event_item_id: String,
-    /// The item type (document, chat, project...)
-    pub event_item_type: String,
+    /// The [Entity] the notification event was created for
+    #[serde(flatten)]
+    pub entity: Entity<'static>,
     /// The service that created the notification
     pub service_sender: String,
     /// The time the notification was created
@@ -33,7 +33,8 @@ pub struct RawNotification {
     /// Custom metadata that may be needed for the notification
     pub metadata: Option<serde_json::Value>,
     /// user id of the macro user who generated the notification
-    pub sender_id: Option<String>,
+    #[schema(value_type = Option<String>)]
+    pub sender_id: Option<MacroUserIdStr<'static>>,
 }
 
 /// NOTE: This should only be used for deserialization from the db
@@ -47,10 +48,9 @@ pub struct RawUserNotification {
     pub notification_id: Uuid,
     /// The type of notification
     pub notification_event_type: String,
-    /// The id of the event item
-    pub event_item_id: String,
-    /// The type of the event item
-    pub event_item_type: String,
+    /// The [Entity] which the notification is related to
+    #[serde(flatten)]
+    pub entity: Entity<'static>,
     /// If the notification has been sent
     pub sent: bool,
     /// If the notification is "done"
@@ -70,9 +70,8 @@ pub struct RawUserNotification {
     /// Custom metadata that may be provided from the notification
     pub notification_metadata: Option<serde_json::Value>,
     /// user id of the macro user who generated the notification
-    pub sender_id: Option<String>,
-    /// if notification is important or not
-    pub is_important_v0: bool,
+    #[schema(value_type = Option<String>)]
+    pub sender_id: Option<MacroUserIdStr<'static>>,
     /// The time the notification was updated.
     /// This is the exact same as created_at and only used to make soup
     /// bettter on the frontend.
@@ -86,9 +85,9 @@ impl TryFrom<&RawNotification> for NotificationEventType {
     type Error = anyhow::Error;
     fn try_from(raw: &RawNotification) -> Result<Self, Self::Error> {
         if raw.notification_event_type == "mention" {
-            match raw.event_item_type.as_str() {
-                "channel" => Ok(NotificationEventType::ChannelMention),
-                "document" => Ok(NotificationEventType::DocumentMention),
+            match raw.entity.entity_type {
+                EntityType::Channel => Ok(NotificationEventType::ChannelMention),
+                EntityType::Document => Ok(NotificationEventType::DocumentMention),
                 _ => anyhow::bail!("Unknown event item type"),
             }
         } else {
@@ -105,9 +104,9 @@ impl TryFrom<&RawUserNotification> for NotificationEventType {
     type Error = anyhow::Error;
     fn try_from(raw: &RawUserNotification) -> Result<Self, Self::Error> {
         if raw.notification_event_type == "mention" {
-            match raw.event_item_type.as_str() {
-                "channel" => Ok(NotificationEventType::ChannelMention),
-                "document" => Ok(NotificationEventType::DocumentMention),
+            match &raw.entity.entity_type {
+                EntityType::Channel => Ok(NotificationEventType::ChannelMention),
+                EntityType::Document => Ok(NotificationEventType::DocumentMention),
                 _ => anyhow::bail!("Unknown event item type"),
             }
         } else {
@@ -128,11 +127,7 @@ impl From<UserNotification> for RawUserNotification {
                 .notification_event
                 .event_type()
                 .to_string(),
-            event_item_id: user_notification.notification_entity.event_item_id,
-            event_item_type: user_notification
-                .notification_entity
-                .event_item_type
-                .to_string(),
+            entity: user_notification.notification_entity,
             sent: user_notification.sent,
             done: user_notification.done,
             created_at: user_notification.temporal.created_at,
@@ -140,7 +135,6 @@ impl From<UserNotification> for RawUserNotification {
             deleted_at: user_notification.temporal.deleted_at,
             notification_metadata: user_notification.notification_event.metadata_json(),
             sender_id: user_notification.sender_id,
-            is_important_v0: user_notification.is_important_v0,
             updated_at: user_notification.temporal.updated_at,
         }
     }
@@ -155,21 +149,13 @@ impl TryFrom<RawNotification> for Notification {
             &raw.notification_event_type
         ))?;
 
-        let entity_type = EntityType::from_str(&raw.event_item_type).context(format!(
-            "Failed to parse entity type: {:?}",
-            &raw.event_item_type
-        ))?;
-
         let notification_event =
             NotificationEvent::try_from_type_and_meta(event_type, raw.metadata)
                 .context("Failed to parse notification event")?;
 
         Ok(Notification {
             id: raw.id,
-            notification_entity: NotificationEntity {
-                event_item_id: raw.event_item_id,
-                event_item_type: entity_type,
-            },
+            notification_entity: raw.entity,
             service_sender: raw.service_sender,
             sender_id: raw.sender_id,
             temporal: NotificationTemporalData {
@@ -192,25 +178,16 @@ impl TryFrom<RawUserNotification> for UserNotification {
             &raw.notification_event_type
         ))?;
 
-        let entity_type = EntityType::from_str(&raw.event_item_type).context(format!(
-            "Failed to parse entity type: {:?}",
-            &raw.event_item_type
-        ))?;
-
         let notification_event =
             NotificationEvent::try_from_type_and_meta(event_type, raw.notification_metadata)
                 .context("Failed to parse notification event ")?;
 
         Ok(UserNotification {
             id: raw.notification_id,
-            notification_entity: NotificationEntity {
-                event_item_id: raw.event_item_id,
-                event_item_type: entity_type,
-            },
+            notification_entity: raw.entity,
             sent: raw.sent,
             done: raw.done,
             sender_id: raw.sender_id,
-            is_important_v0: raw.is_important_v0,
             temporal: NotificationTemporalData {
                 created_at: raw.created_at,
                 viewed_at: raw.viewed_at,
@@ -227,8 +204,7 @@ impl From<Notification> for RawNotification {
         RawNotification {
             id: notification.id,
             notification_event_type: notification.notification_event.event_type().to_string(),
-            event_item_id: notification.notification_entity.event_item_id,
-            event_item_type: notification.notification_entity.event_item_type.to_string(),
+            entity: notification.notification_entity,
             service_sender: notification.service_sender,
             created_at: notification.temporal.created_at,
             metadata: notification.notification_event.metadata_json(),

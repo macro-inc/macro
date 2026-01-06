@@ -1,15 +1,21 @@
 import { useBlockId } from '@core/block';
 import LoadingSpinner from '@icon/regular/spinner.svg';
 import { type Accessor, createMemo, Show } from 'solid-js';
+import { saveEntityProperty } from './api';
 import { Modals } from './component/modal/Modals';
 import { AddPropertyButton } from './component/panel/AddPropertyButton';
 import { PanelContainer } from './component/panel/PanelContainer';
 import {
   PropertiesProvider,
+  type PropertySaveHandler,
   usePropertiesContext,
 } from './context/PropertiesContext';
 import { useEntityProperties } from './hooks';
-import type { PropertiesPanelProps, Property } from './types';
+import type {
+  PropertiesPanelProps,
+  Property,
+  PropertyApiValues,
+} from './types';
 
 const CONTAINER_CLASSES =
   'h-full overflow-hidden relative font-mono flex flex-col';
@@ -42,6 +48,23 @@ export function PropertiesView(props: PropertiesPanelProps) {
     handleRefresh();
   };
 
+  const saveHandler: PropertySaveHandler = {
+    saveProperty: async (property: Property, value: PropertyApiValues) => {
+      return await saveEntityProperty(
+        blockId,
+        props.entityType,
+        property,
+        value
+      );
+    },
+    saveDate: async (property: Property, date: Date) => {
+      return await saveEntityProperty(blockId, props.entityType, property, {
+        valueType: 'DATE',
+        value: date.toISOString(),
+      });
+    },
+  };
+
   return (
     <PropertiesProvider
       entityType={props.entityType}
@@ -54,6 +77,7 @@ export function PropertiesView(props: PropertiesPanelProps) {
       onPropertyPinned={props.onPropertyPinned}
       onPropertyUnpinned={props.onPropertyUnpinned}
       pinnedPropertyIds={props.pinnedPropertyIds}
+      saveHandler={saveHandler}
     >
       <PropertiesViewContent
         properties={properties}

@@ -7,7 +7,8 @@ import {
   type GroupingConfig,
   getDocumentHistory,
 } from '@core/collab/time-travel';
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import {
   createLexicalWrapper,
   type LexicalWrapper,
@@ -20,7 +21,6 @@ import {
   tablePlugin,
 } from '@core/component/LexicalMarkdown/plugins';
 import { initializeEditorWithState } from '@core/component/LexicalMarkdown/utils';
-import { TextButton } from '@core/component/TextButton';
 import { toast } from '@core/component/Toast/Toast';
 import { UserIcon } from '@core/component/UserIcon';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -95,7 +95,7 @@ export function HistoryModal(props: { documentId: string }) {
 
   return (
     <>
-      <IconButton
+      <DeprecatedIconButton
         tooltip={{ label: 'History' }}
         icon={ClockIcon}
         theme={drawerControl.isOpen() ? 'accent' : 'clear'}
@@ -243,7 +243,7 @@ export function History(props: HistoryProps) {
                           total={sortedHistory()!.length}
                         />
                         <div class="pr-4">
-                          <TextButton
+                          <DeprecatedTextButton
                             text="Copy Version"
                             theme="accent"
                             disabled={isForking()}

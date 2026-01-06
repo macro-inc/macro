@@ -1,0 +1,9 @@
+bucket := "macro-oidc-prod"
+
+# Download .well-known contents from S3
+download-well-known:
+    aws s3 sync s3://{{bucket}}/.well-known .well-known
+
+# Upload .well-known contents to S3
+upload-well-known:
+    aws s3 sync .well-known s3://{{bucket}}/.well-known

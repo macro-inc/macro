@@ -1,5 +1,6 @@
 import { isErr } from '@core/util/maybeResult';
 import { propertiesServiceClient } from '@service-properties/client';
+import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { createMemo, createSignal } from 'solid-js';
 import type { PropertyDefinitionFlat } from '../types';
 import { ERROR_MESSAGES } from '../utils/errorHandling';
@@ -14,10 +15,14 @@ export interface PropertySelectionState {
 /**
  * Hook for managing property selection in the "Add Properties" modal
  * Handles fetching available properties, filtering, and tracking selections
+ * @param existingPropertyIds - IDs of properties already attached to the entity
+ * @param searchQuery - Optional search query for filtering
+ * @param entityType - Optional entity type to filter properties applicable to this type
  */
 export function usePropertySelection(
   existingPropertyIds: () => string[],
-  searchQuery?: () => string
+  searchQuery?: () => string,
+  entityType?: EntityType
 ) {
   const [state, setState] = createSignal<PropertySelectionState>({
     availableProperties: [],
@@ -75,6 +80,7 @@ export function usePropertySelection(
       const result = await propertiesServiceClient.listProperties({
         scope: 'all',
         include_options: true,
+        for_entity_type: entityType,
       });
 
       if (isErr(result)) {

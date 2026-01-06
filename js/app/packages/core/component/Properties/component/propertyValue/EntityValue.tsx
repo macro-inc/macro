@@ -1,9 +1,8 @@
-import { useBlockId } from '@core/block';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { Component } from 'solid-js';
 import { createSignal, For, Show } from 'solid-js';
-import { saveEntityProperty } from '../../api';
+import { usePropertiesContext } from '../../context/PropertiesContext';
 import type { Property } from '../../types';
 import { getEntityValues } from '../../utils';
 import { ERROR_MESSAGES, handlePropertyError } from '../../utils/errorHandling';
@@ -23,7 +22,7 @@ type EntityValueProps = {
  * Shows entity badges and opens modal on click
  */
 export const EntityValue: Component<EntityValueProps> = (props) => {
-  const blockId = useBlockId();
+  const { saveHandler } = usePropertiesContext();
   const [isSaving, setIsSaving] = createSignal(false);
 
   const handleEditClick = (e: MouseEvent) => {
@@ -45,15 +44,10 @@ export const EntityValue: Component<EntityValueProps> = (props) => {
           entity.entity_type !== entityToRemove.entity_type
       );
 
-      const result = await saveEntityProperty(
-        blockId,
-        props.entityType,
-        props.property,
-        {
-          valueType: 'ENTITY',
-          refs: newValues.length > 0 ? newValues : null,
-        }
-      );
+      const result = await saveHandler.saveProperty(props.property, {
+        valueType: 'ENTITY',
+        refs: newValues.length > 0 ? newValues : null,
+      });
 
       if (
         handlePropertyError(

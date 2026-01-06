@@ -64,7 +64,12 @@ where
 /// This is a value which is guaranteed to be unmodified from its original input
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(try_from = "String", into = "String")]
-pub struct MacroUserIdStr<'a>(pub MacroUserId<ArcCowStr<'a>>);
+pub struct MacroUserIdStr<'a>(pub MacroUserId<Lowercase<'a>>);
+
+/// Deserialize a MacroUserId to a guaranteed borrowed lifetime from the 'de argument
+#[derive(Debug, Clone, Deserialize)]
+#[serde(try_from = "&str")]
+pub struct BorrowedUserIdStr<'a>(#[serde(borrow)] pub MacroUserId<ArcCowStr<'a>>);
 
 impl<'a> doppleganger::Primitive for MacroUserIdStr<'a> {}
 
@@ -75,7 +80,7 @@ impl<'a> std::fmt::Display for MacroUserIdStr<'a> {
 }
 
 impl<'a> Deref for MacroUserIdStr<'a> {
-    type Target = MacroUserId<ArcCowStr<'a>>;
+    type Target = MacroUserId<Lowercase<'a>>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -84,8 +89,11 @@ impl<'a> Deref for MacroUserIdStr<'a> {
 
 impl<'a> MacroUserIdStr<'a> {
     /// parse the inner value from the input string
+    #[tracing::instrument(err)]
     pub fn parse_from_str(s: &'a str) -> Result<Self, ParseErr> {
-        MacroUserId::parse_from_str(s).map(MacroUserIdStr)
+        MacroUserId::parse_from_str(s)
+            .map(|id| id.lowercase())
+            .map(MacroUserIdStr)
     }
 }
 
@@ -102,7 +110,16 @@ impl TryFrom<String> for MacroUserIdStr<'static> {
     fn try_from(value: String) -> Result<Self, Self::Error> {
         MacroUserId::parse_from_str(&value)
             .map(CowLike::into_owned)
+            .map(|i| i.lowercase())
             .map(MacroUserIdStr)
+    }
+}
+
+impl<'a> TryFrom<&'a str> for BorrowedUserIdStr<'a> {
+    type Error = ParseErr;
+
+    fn try_from(value: &'a str) -> Result<Self, Self::Error> {
+        MacroUserId::parse_from_str(value).map(BorrowedUserIdStr)
     }
 }
 

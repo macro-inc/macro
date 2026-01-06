@@ -4,13 +4,18 @@ import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import ChevronDown from '@icon/regular/caret-down.svg?component-solid';
 import ChevronUp from '@icon/regular/caret-up.svg?component-solid';
 import List from '@phosphor-icons/core/regular/list.svg';
-import type { ListDocumentsResult } from '@service-cognition/toolTypes';
+import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import { useSplitLayout } from 'app/component/split-layout/layout';
 import { createMemo, createSignal, Show } from 'solid-js';
 import { VList } from 'virtua/solid';
 import { BaseTool } from './BaseTool';
 import { createToolRenderer } from './ToolRenderer';
+
+type ListDocumentsResult = NamedTool<
+  'ListDocuments',
+  'response'
+>['data']['results'][number];
 
 const ListDocumentsToolResponse = (props: {
   results: ListDocumentsResult[];
@@ -70,7 +75,7 @@ const ListDocumentsToolResponse = (props: {
           <div class="max-h-[480px] overflow-hidden">
             <VList
               data={results()}
-              overscan={5}
+              bufferSize={5 * 32}
               itemSize={32}
               style={{
                 height: `${Math.min(results().length * 32, 480)}px`,

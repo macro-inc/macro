@@ -10,11 +10,13 @@ use utoipa::ToSchema;
 
 use crate::api::context::ApiContext;
 use model::user::UserContext;
+use models_properties::EntityType;
 use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use properties_db_client::{
     error::PropertiesDatabaseError, property_definitions::get as property_definitions_get,
 };
+use system_properties::SystemPropertyKey;
 
 #[derive(Debug, Error)]
 pub enum ListPropertiesErr {
@@ -69,6 +71,10 @@ pub struct ListPropertiesQuery {
     /// Whether to include property options in the response
     #[serde(default)]
     pub include_options: bool,
+    /// Filter properties applicable to a specific entity type.
+    /// When provided, excludes properties that cannot be attached to this entity type
+    /// (e.g., Parent Task and Subtasks are excluded for non-task entities).
+    pub for_entity_type: Option<EntityType>,
 }
 
 /// Response for property definition with optional property options
@@ -85,7 +91,8 @@ pub enum PropertyDefinitionResponse {
     path = "/properties/definitions",
     params(
         ("scope" = PropertyScope, Query, description = "Filter by scope: 'user', 'org', 'system', or 'all'"),
-        ("include_options" = Option<bool>, Query, description = "Whether to include property options in the response")
+        ("include_options" = Option<bool>, Query, description = "Whether to include property options in the response"),
+        ("for_entity_type" = Option<EntityType>, Query, description = "Filter properties applicable to a specific entity type")
     ),
     responses(
         (status = 200, description = "Properties retrieved successfully", body = Vec<PropertyDefinitionResponse>),
@@ -116,9 +123,12 @@ pub async fn list_properties(
         organization_id = ?org_id,
         scope = ?query.scope,
         include_system = include_system,
+        for_entity_type = ?query.for_entity_type,
         user_id = %user_context.user_id,
         "listing properties"
     );
+
+    let filter_entity_type = query.for_entity_type;
 
     if query.scope == PropertyScope::Org && org_id.is_none() {
         return Err(ListPropertiesErr::MissingOrganizationId);
@@ -144,6 +154,11 @@ pub async fn list_properties(
 
         let response: Vec<PropertyDefinitionResponse> = properties_with_options
             .into_iter()
+            .filter(|p| {
+                filter_entity_type
+                    .map(|et| is_property_applicable_to(p.definition.id, et))
+                    .unwrap_or(true)
+            })
             .map(PropertyDefinitionResponse::WithOptions)
             .collect();
 
@@ -175,6 +190,11 @@ pub async fn list_properties(
 
         let response: Vec<PropertyDefinitionResponse> = properties
             .into_iter()
+            .filter(|p| {
+                filter_entity_type
+                    .map(|et| is_property_applicable_to(p.id, et))
+                    .unwrap_or(true)
+            })
             .map(PropertyDefinitionResponse::Simple)
             .collect();
 
@@ -189,4 +209,16 @@ pub async fn list_properties(
     };
 
     Ok(Json(response))
+}
+
+/// Check if a property can be attached to the given entity type.
+pub fn is_property_applicable_to(property_id: uuid::Uuid, entity_type: EntityType) -> bool {
+    // Task-only properties: Parent Task and Subtasks
+    if property_id == SystemPropertyKey::PARENT_TASK_UUID
+        || property_id == SystemPropertyKey::SUBTASKS_UUID
+    {
+        return entity_type == EntityType::Task;
+    }
+
+    true
 }

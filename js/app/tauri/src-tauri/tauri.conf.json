@@ -1,0 +1,76 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "macro",
+  "version": "2.0.0",
+  "identifier": "com.macro.app.prod",
+  "build": {
+    "frontendDist": "../../packages/app/dist",
+    "devUrl": "http://localhost:3000",
+    "beforeDevCommand": { "script": "bun run dev:tauri", "cwd": "../.." },
+    "beforeBuildCommand": { "script": "bun run build:tauri", "cwd": "../.." }
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Macro",
+        "width": 800,
+        "height": 600,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "iOS": {
+      "minimumSystemVersion": "14.0",
+      "bundleVersion": "100"
+    }
+  },
+  "plugins": {
+    "deep-link": {
+      "mobile": [
+        {
+          "scheme": [
+            "macro"
+          ],
+          "appLink": false
+        },
+        {
+          "host": "macro.com",
+          "pathPrefix": [
+            "/app"
+          ]
+        },
+        {
+          "host": "dev.macro.com",
+          "pathPrefix": [
+            "/app"
+          ]
+        },
+        {
+          "host": "staging.macro.com",
+          "pathPrefix": [
+            "/app"
+          ]
+        }
+      ],
+      "desktop": {
+        "schemes": [
+          "macro"
+        ]
+      }
+    }
+  }
+}

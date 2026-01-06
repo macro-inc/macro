@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod test;
+
 use anyhow::anyhow;
 use models_email::service::message::ThreadHistoryInfo;
 use sqlx::PgPool;
@@ -29,8 +32,20 @@ pub async fn upsert_user_history(
     Ok(())
 }
 
-/// get history info for threads. created_at is when the first message was created, updated_at is when
-/// the latest message was created, viewed_at is the last time the thread was opened by the user
+/// Get summary information for multiple email threads.
+///
+/// Returns a HashMap of thread history info including:
+/// - `created_at`: timestamp of the first message in the thread
+/// - `updated_at`: timestamp of the last message in the thread
+/// - `viewed_at`: last time the user opened/viewed the thread (only included if >= updated_at)
+/// - `snippet`, `sender`, `pretty_sender`: from the *latest* message in the thread
+/// - `subject`: from the *earliest* message in the thread (so it doesn't include "Re:"s
+///
+/// The "earliest" and "latest" messages are determined by:
+/// 1. Priority: Non-drafts with a valid `sent_at` take precedence over drafts (or messages without `sent_at`).
+/// 2. Sort: Chronological order of `sent_at` (or `updated_at` fallback).
+///
+/// Note: This will exclude any threads where the latest message is marked as TRASH
 #[tracing::instrument(skip(pool), err)]
 pub async fn get_thread_summary_info(
     pool: &PgPool,
@@ -42,54 +57,93 @@ pub async fn get_thread_summary_info(
     }
 
     let rows = sqlx::query!(
-        r#"
-        SELECT
-            m.thread_id,
-            MIN(m.created_at) as "earliest_created_at!",
-            MAX(m.created_at) as "latest_updated_at!",
-            uh.updated_at as "viewed_at?",
-            m.snippet,
-            m.subject as "subject?",
-            l.macro_id,
-            latest_msg.sender as sender,
-            latest_msg.pretty_sender as "pretty_sender!"
-        FROM email_messages m
-        LEFT JOIN email_user_history uh ON uh.thread_id = m.thread_id AND uh.link_id = $1
-        LEFT JOIN email_links l ON l.id = m.link_id
-        LEFT JOIN LATERAL (
-            SELECT 
-                c.email_address as sender,
-                COALESCE(c.name, c.email_address) as pretty_sender
-            FROM email_messages m2
-            LEFT JOIN email_contacts c ON c.id = m2.from_contact_id
-            WHERE m2.thread_id = m.thread_id 
-            AND m2.link_id = $1
-            ORDER BY m2.internal_date_ts DESC NULLS LAST
-            LIMIT 1
-        ) latest_msg ON true
-        WHERE m.thread_id = ANY($2)
-        AND m.link_id = $1
-        GROUP BY m.thread_id, uh.updated_at, m.snippet, m.subject, l.macro_id, latest_msg.sender, latest_msg.pretty_sender
-        "#,
-        link_id,
-        thread_ids
-    )
-    .fetch_all(pool)
-    .await
-    .map_err(|e| anyhow!("Failed to fetch thread summary info: {}", e))?;
+            r#"
+            SELECT
+                t.id as thread_id,
+                -- Return timestamps from the chosen messages directly
+                COALESCE(earliest_msg.sent_at, earliest_msg.updated_at) as "first_message_ts!",
+                COALESCE(latest_msg.sent_at, latest_msg.updated_at) as "last_message_ts!",
+                -- Last time user viewed this thread
+                uh.updated_at as "viewed_at?",
+                latest_msg.snippet,
+                earliest_msg.subject as "subject?",
+                l.macro_id,
+                latest_msg.sender as sender,
+                latest_msg.pretty_sender as "pretty_sender!",
+                latest_msg.trash_label as trash_label
+            FROM email_threads t
+            LEFT JOIN email_user_history uh ON uh.thread_id = t.id AND uh.link_id = $1
+            LEFT JOIN email_links l ON l.id = t.link_id
+            -- LATERAL join for LATEST message
+            -- JOIN (Inner) acts as a filter to ensure we only return threads that actually have messages
+            JOIN LATERAL (
+                SELECT
+                    m2.snippet,
+                    m2.sent_at,
+                    m2.updated_at,
+                    c.email_address as sender,
+                    COALESCE(c.name, c.email_address) as pretty_sender,
+                    EXISTS(
+                        SELECT 1 
+                        FROM email_message_labels eml 
+                        JOIN email_labels el ON el.id = eml.label_id 
+                        WHERE eml.message_id = m2.id 
+                          AND el.provider_label_id = 'TRASH'
+                    ) as trash_label
+                FROM email_messages m2
+                LEFT JOIN email_contacts c ON c.id = m2.from_contact_id
+                WHERE m2.thread_id = t.id
+                  AND m2.link_id = $1
+                ORDER BY
+                    (CASE WHEN m2.is_draft = false AND m2.sent_at IS NOT NULL THEN 0 ELSE 1 END) ASC,
+                    COALESCE(m2.sent_at, m2.updated_at) DESC NULLS LAST
+                LIMIT 1
+            ) latest_msg ON true
+            -- LATERAL join for EARLIEST message
+            LEFT JOIN LATERAL (
+                SELECT
+                    m3.subject,
+                    m3.sent_at,
+                    m3.updated_at
+                FROM email_messages m3
+                WHERE m3.thread_id = t.id
+                  AND m3.link_id = $1
+                ORDER BY
+                    -- 1. Priority: Non-drafts with valid sent_at come first (0), everything else is fallback (1)
+                    (CASE WHEN m3.is_draft = false AND m3.sent_at IS NOT NULL THEN 0 ELSE 1 END) ASC,
+                    -- 2. Sort by time (Oldest first)
+                    COALESCE(m3.sent_at, m3.updated_at) ASC NULLS LAST
+                LIMIT 1
+            ) earliest_msg ON true
+            WHERE t.id = ANY($2)
+              AND t.link_id = $1
+            "#,
+            link_id,
+            thread_ids
+        )
+        .fetch_all(pool)
+        .await
+        .map_err(|e| anyhow!("Failed to fetch thread summary info: {}", e))?;
 
     let mut result = HashMap::new();
 
     for row in rows {
+        // If the latest message of the thread is in the trash, do not insert ThreadHistoryInfo.
+        // We don't want to include threads that are most likely in trash in the search results.
+        if row.trash_label.unwrap_or_default() {
+            continue;
+        }
         let summary_info = ThreadHistoryInfo {
             item_id: row.thread_id,
             user_id: row.macro_id,
             subject: row.subject,
             snippet: row.snippet,
-            created_at: row.earliest_created_at,
-            updated_at: row.latest_updated_at,
+            created_at: row.first_message_ts,
+            updated_at: row.last_message_ts,
+            // if the last time the user viewed the thread was before the most recent message came in,
+            // the user hasn't viewed the most recent message.
             viewed_at: row.viewed_at.and_then(|viewed| {
-                if viewed >= row.latest_updated_at {
+                if viewed >= row.last_message_ts {
                     Some(viewed)
                 } else {
                     None

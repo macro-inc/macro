@@ -15,7 +15,6 @@ import {
   createChat,
   createCodeFileFromText,
   createMarkdownFile,
-  createTask,
 } from '@core/util/create';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import { isErr, ok } from '@core/util/maybeResult';
@@ -43,7 +42,7 @@ const createBlock = async (spec: {
   const { replaceSplit, insertSplit } = useSplitLayout();
   const { blockName, createFn, loading } = spec;
 
-  setCreateMenuOpen(false);
+  setCreateMenuOpen(false, false);
 
   if (!loading) {
     const id = await createFn();
@@ -70,9 +69,14 @@ const createBlock = async (spec: {
 const createComponent = async (spec: {
   componentId: string;
   shouldInsert?: boolean;
+  asPopover?: boolean;
 }) => {
-  setCreateMenuOpen(false);
-  const { replaceSplit, insertSplit } = useSplitLayout();
+  setCreateMenuOpen(false, false);
+  const { replaceSplit, insertSplit, popoverSplit } = useSplitLayout();
+  if (spec.asPopover) {
+    popoverSplit({ type: 'component', id: spec.componentId });
+    return;
+  }
   if (spec.shouldInsert) {
     insertSplit({ type: 'component', id: spec.componentId });
   } else {
@@ -121,16 +125,9 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
           altHotkeyToken: TOKENS.create.taskNewSplit,
           hotkey: 't' as const,
           keyDownHandler: () => {
-            createBlock({
-              blockName: 'task',
-              loading: true,
-              createFn: () =>
-                createTask({
-                  title: '',
-                  content: '',
-                  projectId: undefined,
-                }),
-              shouldInsert: pressedKeys().has('opt'),
+            createComponent({
+              componentId: 'task-compose',
+              asPopover: true,
             });
             return true;
           },
@@ -310,7 +307,9 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
         buttonRef?.focus();
       }}
     >
-      <div
+      {/** TODO (seamus): we need to pool/cache these canvases. they brick the color picker/or any other gl context
+                because they do not get garbage collected fast enough */}
+      {/*<div
         class="inset-0 absolute bg-panel opacity-2 mask-b-from-0% mask-b-to-100%"
         classList={{
           'text-ink-extra-muted opacity-2': !props.focused,
@@ -328,7 +327,7 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
           stroke={0}
           speed={[props.focused ? 0.3 : 0, 0]}
         />
-      </div>
+      </div>*/}
 
       <div
         class="absolute size-full inset-0 transition-transform origin-top opacity-20 ease duration-200 mix-blend-color"
@@ -376,7 +375,7 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
 };
 
 type LauncherInnerProps = {
-  onClose: () => void;
+  onClose: (shouldReturnFocus?: boolean) => void;
 };
 
 const LauncherInner = (props: LauncherInnerProps) => {
@@ -429,7 +428,7 @@ const LauncherInner = (props: LauncherInnerProps) => {
       description: item.description,
       keyDownHandler: () => {
         item.keyDownHandler();
-        props.onClose();
+        props.onClose(false);
         return true;
       },
     });
@@ -564,7 +563,7 @@ const LauncherInner = (props: LauncherInnerProps) => {
 
 type LauncherProps = {
   open: boolean;
-  onOpenChange: (open: boolean) => void;
+  onOpenChange: (open: boolean, shouldReturnFocus?: boolean) => void;
 };
 
 export const Launcher = (props: LauncherProps) => {
@@ -595,8 +594,19 @@ export const Launcher = (props: LauncherProps) => {
         </Dialog.Overlay>
 
         <Dialog.Content>
-          <div class="fixed inset-0 z-modal w-screen h-screen flex items-center justify-center">
-            <LauncherInner onClose={() => props.onOpenChange(false)} />
+          <div
+            class="fixed inset-0 z-modal w-screen h-screen flex items-center justify-center"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                props.onOpenChange(false);
+              }
+            }}
+          >
+            <LauncherInner
+              onClose={(shouldReturnFocus) =>
+                props.onOpenChange(false, shouldReturnFocus)
+              }
+            />
           </div>
         </Dialog.Content>
       </Dialog.Portal>

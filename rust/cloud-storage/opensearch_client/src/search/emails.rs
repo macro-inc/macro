@@ -2,7 +2,7 @@ use crate::{
     Result, delegate_methods,
     error::{OpensearchClientError, ResponseExt},
     search::{
-        builder::{SearchQueryBuilder, SearchQueryConfig},
+        builder::{SearchQueryBuilder, SearchQueryConfig, create_highlight_field},
         model::{NameIndex, SearchGotoContent, SearchGotoEmail, SearchHit, parse_highlight_hit},
         query::Keys,
         utils::should_wildcard_field_query_builder,
@@ -11,10 +11,7 @@ use crate::{
 
 use crate::SearchOn;
 use models_opensearch::{SearchEntityType, SearchIndex};
-use opensearch_query_builder::{
-    BoolQueryBuilder, FieldSort, QueryType, ScoreWithOrderSort, SearchRequest, SortOrder, SortType,
-    ToOpenSearchJson,
-};
+use opensearch_query_builder::{BoolQueryBuilder, QueryType, SearchRequest, ToOpenSearchJson};
 
 use crate::search::model::DefaultSearchResponse;
 use serde_json::Value;
@@ -26,11 +23,14 @@ impl SearchQueryConfig for EmailSearchConfig {
     const TITLE_KEY: &'static str = "name";
     const ENTITY_INDEX: SearchEntityType = SearchEntityType::Emails;
 
-    fn default_sort_types<'a>() -> Vec<SortType<'a>> {
-        vec![
-            SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
-            SortType::Field(FieldSort::new(Self::ID_KEY, SortOrder::Asc)),
-        ]
+    fn append_owner_highlights<'a>(
+        highlight: opensearch_query_builder::Highlight<'a>,
+    ) -> opensearch_query_builder::Highlight<'a> {
+        let highlight = highlight.field("sender", create_highlight_field("plain", 1));
+        let highlight = highlight.field("recipients", create_highlight_field("plain", 1));
+        let highlight = highlight.field("cc", create_highlight_field("plain", 1));
+
+        highlight.field("bcc", create_highlight_field("plain", 1))
     }
 }
 
@@ -109,33 +109,36 @@ impl EmailQueryBuilder {
                 .content_bool_query
                 .ok_or(OpensearchClientError::BoolQueryNotBuilt)?;
 
+            // We don't want to include trash items in your email search
+            bool_query.must_not(QueryType::term("labels", "TRASH"));
+
             // If link_ids are provided, add them to the query
             if !self.link_ids.is_empty() {
-                bool_query.must(QueryType::terms("link_id", self.link_ids.clone()));
+                bool_query.filter(QueryType::terms("link_id", self.link_ids.clone()));
             }
 
             if !self.sender.is_empty() {
                 // Create new query for senders
                 let senders_query = should_wildcard_field_query_builder("sender", &self.sender);
-                bool_query.must(senders_query);
+                bool_query.filter(senders_query);
             }
 
             if !self.cc.is_empty() {
                 let ccs_query = should_wildcard_field_query_builder("cc", &self.cc);
-                bool_query.must(ccs_query);
+                bool_query.filter(ccs_query);
             }
 
             if !self.bcc.is_empty() {
                 // Create new query for bccs
                 let bccs_query = should_wildcard_field_query_builder("bcc", &self.bcc);
-                bool_query.must(bccs_query);
+                bool_query.filter(bccs_query);
             }
 
             if !self.recipients.is_empty() {
                 // Create new query for recipients
                 let recipients_query =
                     should_wildcard_field_query_builder("recipients", &self.recipients);
-                bool_query.must(recipients_query);
+                bool_query.filter(recipients_query);
             }
 
             content_and_name_bool_queries.content_bool_query = Some(bool_query);
@@ -178,8 +181,6 @@ pub(crate) struct EmailIndex {
     pub link_id: String,
     /// The user id of the email message
     pub user_id: String,
-    /// The updated at time of the email message
-    pub updated_at_seconds: i64,
     /// The subject of the email message
     pub subject: Option<String>,
     /// The sent at time of the email message

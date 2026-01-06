@@ -6,7 +6,7 @@ use utoipa::ToSchema;
 use crate::{MatchType, SearchHighlight, SearchOn, SearchResponseItem};
 
 /// A chat match for a given message id
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct ChatMessageSearchResult {
     /// The chat message id for the chat
     /// This is only present if the search match was on the chat message content
@@ -22,7 +22,7 @@ pub struct ChatMessageSearchResult {
 }
 
 /// A single response item, part of the ChatSearchResponse object
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct ChatSearchResponseItem {
     /// Standardized fields that all item types will share.
     /// These field names are being aligned across all item types
@@ -41,7 +41,7 @@ pub struct ChatSearchResponseItem {
 }
 
 /// Metadata for a chat fetched from the database
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct ChatMetadata {
     pub created_at: i64,
     pub updated_at: i64,
@@ -53,7 +53,7 @@ pub struct ChatMetadata {
 /// ChatSearchResponse object with channel metadata we fetch from macrodb. we don't store these
 /// timestamps in opensearch as they would require us to update each chat message record for the chat
 /// every time the chat updates (specifically for updated_at and viewed_at)
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct ChatSearchResponseItemWithMetadata {
     /// Metadata from the database. None if the chat doesn't exist in the database.
     pub metadata: Option<ChatMetadata>,

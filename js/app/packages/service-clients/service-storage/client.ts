@@ -43,6 +43,8 @@ import type { CreateDocumentHandler200 as CreateDocumentResponse } from './gener
 import type { CreateDocumentRequest } from './generated/schemas/createDocumentRequest';
 import type { CreateInstructionsDocumentResponse } from './generated/schemas/createInstructionsDocumentResponse';
 import type { CreateProjectResponse } from './generated/schemas/createProjectResponse';
+import type { CreateTaskHandler200 as CreateTaskResponse } from './generated/schemas/createTaskHandler200';
+import type { CreateTaskRequest } from './generated/schemas/createTaskRequest';
 import type { CreateUnthreadedAnchorResponse } from './generated/schemas/createUnthreadedAnchorResponse';
 import type { DeleteCommentResponse } from './generated/schemas/deleteCommentResponse';
 import type { DeleteUnthreadedAnchorResponse } from './generated/schemas/deleteUnthreadedAnchorResponse';
@@ -130,7 +132,7 @@ type SuccessResponse = { data: Success };
 
 export type ItemType = CloudStorageItemType | 'channel' | 'email';
 
-const _itemTypeSet = new Set([
+const itemTypeSet = new Set([
   'document',
   'channel',
   'email',
@@ -139,13 +141,15 @@ const _itemTypeSet = new Set([
 ]);
 
 export function isItemType(str: string): str is ItemType {
-  return _itemTypeSet.has(str);
+  return itemTypeSet.has(str);
 }
 
 const mapMetadataDocumentName = (
   metadata: DocumentMetadata
 ): DocumentMetadata => {
-  const name = formatDocumentName(metadata.documentName, metadata.fileType);
+  const name = formatDocumentName(metadata.documentName, metadata.fileType, {
+    fullyQualifiedBlockName: true,
+  });
 
   return {
     ...metadata,
@@ -156,7 +160,9 @@ const mapMetadataDocumentName = (
 const mapItemDocumentName = (item: Item): Item => {
   if (item.type !== 'document') return item;
 
-  const name = formatDocumentName(item.name, item.fileType);
+  const name = formatDocumentName(item.name, item.fileType, {
+    fullyQualifiedBlockName: true,
+  });
 
   return {
     ...item,
@@ -167,7 +173,9 @@ const mapItemDocumentName = (item: Item): Item => {
 const mapPreviewDocumentName = (preview: DocumentPreview): DocumentPreview => {
   if (!('document_name' in preview)) return preview;
 
-  const name = formatDocumentName(preview.document_name, preview.file_type);
+  const name = formatDocumentName(preview.document_name, preview.file_type, {
+    fullyQualifiedBlockName: true,
+  });
   return {
     ...preview,
     document_name: name,
@@ -454,6 +462,31 @@ export const storageServiceClient = {
       contentType: data.contentType,
       fileType: data.fileType ?? undefined,
     });
+  },
+
+  /**
+   * Creates a task with properties in a single call.
+   * NOTE: Content must be initialized separately via sync service (initializeFromSnapshot).
+   */
+  async createTask(request: CreateTaskRequest) {
+    const result = await dssFetch<CreateTaskResponse>(
+      `/documents/create_task`,
+      {
+        method: 'POST',
+        body: JSON.stringify(request),
+      }
+    );
+
+    if (!isOk(result)) {
+      const err = result[0];
+      if (err[0].message.includes('403')) {
+        showPaywall(PaywallKey.FILE_LIMIT);
+      }
+      return result;
+    }
+
+    const [, response] = result;
+    return ok({ documentId: response.documentId });
   },
 
   async createTextDocument({ text, ...docArgs }) {

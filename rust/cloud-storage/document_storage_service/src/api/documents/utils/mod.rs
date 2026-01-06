@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
+use models_opensearch::SearchEntityType;
 use sqlx::{PgPool, Pool, Postgres};
-use tracing::instrument;
+use sqs_client::search::{SearchQueueMessage, name::EntityName};
+use tracing::{Instrument, instrument};
 
 use crate::service::s3::S3;
 
@@ -49,4 +51,37 @@ pub(in crate::api::documents) async fn cleanup_document_version_on_error(
     )
     .await
     .map_err(|e| tracing::error!(error=?e, "unable to delete document version"));
+}
+
+/// Notifies the search service of a document name update by sending a message to the search event queue
+#[instrument(skip(sqs_client), fields(document_id = %document_id))]
+pub(in crate::api::documents) fn notify_search_service_of_document_name_update(
+    sqs_client: Arc<sqs_client::SQS>,
+    document_id: String,
+) {
+    tokio::spawn(
+        async move {
+            tracing::trace!("sending message to search extractor queue");
+            let document_id = match macro_uuid::string_to_uuid(&document_id) {
+                Ok(document_id) => document_id,
+                Err(err) => {
+                    tracing::error!(error=?err, "failed to convert document_id to uuid");
+                    return;
+                }
+            };
+
+            let _ = sqs_client
+                .send_message_to_search_event_queue(SearchQueueMessage::UpdateEntityName(
+                    EntityName {
+                        entity_id: document_id,
+                        entity_type: SearchEntityType::Documents,
+                    },
+                ))
+                .await
+                .inspect_err(|e| {
+                    tracing::error!(error=?e, "SEARCH_QUEUE unable to enqueue message");
+                });
+        }
+        .in_current_span(),
+    );
 }

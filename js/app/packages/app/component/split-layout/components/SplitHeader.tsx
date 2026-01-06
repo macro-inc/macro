@@ -1,14 +1,15 @@
 import EntityNavigationIndicator from '@app/component/EntityNavigationIndicator';
-import { IconButton } from '@core/component/IconButton';
+import { LabelAndHotKey } from '@core/component/Tooltip';
 import { ENABLE_PREVIEW } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
-import { isRightPanelOpen, isSettingsPanelOpen } from '@core/signal/layout';
 import CollapseIcon from '@icon/regular/arrows-in.svg';
 import ExpandIcon from '@icon/regular/arrows-out.svg';
 import CaretLeft from '@icon/regular/caret-left.svg';
 import CaretRight from '@icon/regular/caret-right.svg';
 import SplitIcon from '@icon/regular/square-split-horizontal.svg';
 import CloseIcon from '@icon/regular/x.svg';
+import IconGear from '@macro-icons/macro-gear.svg';
+import { Button } from '@ui/components/Button';
 import {
   createEffect,
   createMemo,
@@ -20,19 +21,27 @@ import {
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { SplitLayoutContext, SplitPanelContext } from '../context';
+import { useSplitLayout } from '../layout';
+import {
+  createActiveSplitMemo,
+  createIsActiveSplitContentMemo,
+} from '../layoutUtils';
+import { canSpotlight } from '../utils/canSpotlight';
 
 function SplitBackButton() {
   const context = useContext(SplitPanelContext);
   if (!context) return null;
   return (
-    <IconButton
-      size="sm"
-      icon={CaretLeft}
-      tooltip={{ label: 'Go Back', hotkeyToken: TOKENS.split.back }}
+    <Button
+      class="p-1 *:h-4"
+      tooltip={
+        <LabelAndHotKey label="Go Back" hotkeyToken={TOKENS.split.go.back} />
+      }
       disabled={!context.handle.canGoBack()}
-      theme="current"
       onClick={context.handle.goBack}
-    />
+    >
+      <CaretLeft />
+    </Button>
   );
 }
 
@@ -40,14 +49,19 @@ function SplitForwardButton() {
   const context = useContext(SplitPanelContext);
   if (!context) return '';
   return (
-    <IconButton
-      size="sm"
-      icon={CaretRight}
-      tooltip={{ label: 'Go Forward', hotkeyToken: TOKENS.split.forward }}
+    <Button
+      class="p-1 *:h-4"
+      tooltip={
+        <LabelAndHotKey
+          label="Go Forward"
+          hotkeyToken={TOKENS.split.go.forward}
+        />
+      }
       disabled={!context.handle.canGoForward()}
-      theme="current"
       onClick={context.handle.goForward}
-    />
+    >
+      <CaretRight />
+    </Button>
   );
 }
 
@@ -55,27 +69,24 @@ function SplitSpotlightButton() {
   const context = useContext(SplitPanelContext);
   const layout = useContext(SplitLayoutContext);
   if (!context || !layout) return '';
-  const show = () => {
-    return (
-      layout.manager.splits().length > 1 ||
-      isSettingsPanelOpen() ||
-      isRightPanelOpen()
-    );
-  };
   return (
-    <Show when={show()}>
-      <IconButton
-        size="sm"
-        icon={context.handle.isSpotLight() ? CollapseIcon : ExpandIcon}
-        theme="current"
-        tooltip={{
-          hotkeyToken: TOKENS.split.spotlight.toggle,
-          label: context.handle.isSpotLight()
-            ? 'Minimize Split'
-            : 'Spotlight Split',
-        }}
+    <Show when={canSpotlight(layout.manager)}>
+      <Button
+        class="p-1 *:h-4"
+        tooltip={
+          <LabelAndHotKey
+            label={
+              context.handle.isSpotLight()
+                ? 'Minimize Split'
+                : 'Spotlight Split'
+            }
+            hotkeyToken={TOKENS.window.spotlight.toggle}
+          />
+        }
         onClick={() => context.handle.toggleSpotlight()}
-      />
+      >
+        {context.handle.isSpotLight() ? <CollapseIcon /> : <ExpandIcon />}
+      </Button>
     </Show>
   );
 }
@@ -84,14 +95,15 @@ function SplitCloseButton() {
   const context = useContext(SplitPanelContext);
   if (!context) return null;
   return (
-    <IconButton
-      size="sm"
-      iconSize={16}
-      icon={CloseIcon}
-      theme="current"
-      tooltip={{ label: 'Close', hotkeyToken: TOKENS.split.close }}
+    <Button
+      class="p-1 *:h-4"
+      tooltip={
+        <LabelAndHotKey label="Close" hotkeyToken={TOKENS.window.close} />
+      }
       onClick={context.handle.close}
-    />
+    >
+      <CloseIcon />
+    </Button>
   );
 }
 
@@ -109,16 +121,23 @@ function SplitPreviewToggle() {
 
   return (
     <Show when={isUnifiedList()}>
-      <IconButton
-        size="sm"
-        icon={SplitIcon}
-        theme={preview() ? 'accent' : 'current'}
-        tooltip={{
-          label: !preview() ? 'Split View (Preview)' : 'Full View (List)',
-          hotkeyToken: TOKENS.unifiedList.togglePreview,
-        }}
-        onClick={() => setPreview((prev) => !prev)}
-      />
+      <div class="max-sm:rotate-90">
+        <Button
+          class="p-1 *:h-4"
+          classList={{
+            'bg-accent/20 text-accent': preview(),
+          }}
+          tooltip={
+            <LabelAndHotKey
+              label={!preview() ? 'Split View (Preview)' : 'Full View (List)'}
+              hotkeyToken={TOKENS.unifiedList.togglePreview}
+            />
+          }
+          onClick={() => setPreview((prev) => !prev)}
+        >
+          <SplitIcon />
+        </Button>
+      </div>
     </Show>
   );
 }
@@ -126,10 +145,46 @@ function SplitPreviewToggle() {
 function SplitControlButtons() {
   return (
     <div class="flex flex-row items-center px-2 h-full shrink-0">
-      <SplitCloseButton />
+      <div class="ios:hidden">
+        <SplitCloseButton />
+      </div>
       <SplitBackButton />
       <SplitForwardButton />
     </div>
+  );
+}
+
+function SplitSettingsButton() {
+  const { replaceSplit } = useSplitLayout();
+  const activeSplit = createActiveSplitMemo();
+  const isSettingsSplitOpen = createIsActiveSplitContentMemo(
+    activeSplit,
+    'component',
+    'settings'
+  );
+
+  return (
+    <Button
+      class="p-1 *:h-4"
+      classList={{
+        'bg-accent/20 text-accent': isSettingsSplitOpen(),
+      }}
+      tooltip={
+        <LabelAndHotKey
+          label={isSettingsSplitOpen() ? 'Close Settings' : 'Open Settings'}
+          hotkeyToken={TOKENS.global.toggleSettings}
+        />
+      }
+      onClick={() => {
+        if (isSettingsSplitOpen()) {
+          activeSplit()?.goBack();
+          return;
+        }
+        replaceSplit({ type: 'component', id: 'settings' });
+      }}
+    >
+      <IconGear />
+    </Button>
   );
 }
 
@@ -157,15 +212,18 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
         <div class="h-full grow-1" />
 
         <div
-          class="min-w-4 h-full shrink-0"
+          class="min-w-4 h-full shrink-0 ios:hidden"
           ref={(ref) => {
             ctx.layoutRefs.headerRight = ref;
           }}
         />
-        <div class="z-2 relative flex items-center bg-panel pr-2 h-full">
+        <div class="z-2 relative flex items-center bg-panel pr-2 h-full ios:hidden">
           <EntityNavigationIndicator />
           <SplitPreviewToggle />
           <SplitSpotlightButton />
+        </div>
+        <div class="z-2 relative items-center bg-panel pr-2 h-full hidden ios:flex">
+          <SplitSettingsButton />
         </div>
       </div>
     </div>

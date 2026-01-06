@@ -37,6 +37,10 @@ import type {
   UserMentionNode,
 } from './nodes/UserMentionNode';
 import type { VideoDecoratorProps, VideoNode } from './nodes/VideoNode';
+import type {
+  WatermarkDecoratorProps,
+  WatermarkNode,
+} from './nodes/WatermarkNode';
 
 // Generic component type to be overridden by solid-js on the front end
 // and nothing on the backend.
@@ -86,6 +90,10 @@ export interface NodeDecoratorMap {
   HtmlRenderNode: {
     klass: typeof HtmlRenderNode;
     props: HtmlRenderDecoratorProps;
+  };
+  WatermarkNode: {
+    klass: typeof WatermarkNode;
+    props: WatermarkDecoratorProps;
   };
 }
 

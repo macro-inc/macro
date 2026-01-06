@@ -94,7 +94,7 @@ mod tests {
         assert!(!document_metadata.document_id.is_empty());
         assert!(document_metadata.document_version_id > 0);
         assert_eq!(document_metadata.document_name, "new-name".to_string());
-        assert_eq!(document_metadata.owner, "macro|user@user.com".to_string());
+        assert_eq!(document_metadata.owner.as_ref(), "macro|user@user.com");
         assert_eq!(
             document_metadata.project_id,
             Some("new-project".to_string())

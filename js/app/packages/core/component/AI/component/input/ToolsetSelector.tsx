@@ -13,11 +13,11 @@ const TOOLSETS = [
   },
 ] as const;
 
-const TOOLSET_TO_DISPLAY = Object.fromEntries(
+const _TOOLSET_TO_DISPLAY = Object.fromEntries(
   TOOLSETS.map((t) => [t.value, t.label])
 ) as Record<ToolSetName, string>;
 
-const TOOLSET_FROM_DISPLAY = Object.fromEntries(
+const _TOOLSET_FROM_DISPLAY = Object.fromEntries(
   TOOLSETS.map((t) => [t.label, { value: t.value, tooltip: t.tooltip }])
 ) as Record<string, { value: ToolSetName; tooltip: string }>;
 
@@ -43,7 +43,7 @@ export function ToolsetSelector(props: {
   toolset: Signal<ToolSet>;
   sources: Signal<Source>;
 }) {
-  const [toolset, setToolset] = props.toolset;
+  const [toolset, _setToolset] = props.toolset;
   const [source, setSource] = props.sources;
 
   return (

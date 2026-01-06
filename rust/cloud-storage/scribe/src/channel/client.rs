@@ -102,7 +102,7 @@ impl ChannelClient {
                     name: "message".to_string(),
                     metadata: vec![
                         ("message_id".to_string(), msg.id.to_string()),
-                        ("sender_id".to_string(), msg.sender_id.clone()),
+                        ("sender_id".to_string(), msg.sender_id.to_string()),
                         ("created_at".to_string(), msg.created_at.to_rfc3339()),
                     ],
                     content: msg.content.clone(),

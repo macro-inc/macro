@@ -43,6 +43,9 @@ const AUDIENCE = aws.secretsmanager
 const ISSUER = config.require(`fusionauth_issuer`);
 const NOTIFICATIONS_ENABLED = config.require(`notifications_enabled`);
 const REDIS_RATE_LIMIT_REQS = config.require(`redis_rate_limit_reqs`);
+const REDIS_RATE_LIMIT_REQS_BACKFILL = config.require(
+  `redis_rate_limit_reqs_backfill`
+);
 const REDIS_RATE_LIMIT_WINDOW_SECS = config.require(
   `redis_rate_limit_window_secs`
 );
@@ -51,13 +54,15 @@ const BACKFILL_QUEUE_WORKERS = config.require(`backfill_queue_workers`);
 const BACKFILL_QUEUE_MAX_MESSAGES = config.require(
   `backfill_queue_max_messages`
 );
-const WEBHOOK_QUEUE_WORKERS = config.require(`webhook_queue_workers`);
-const WEBHOOK_QUEUE_MAX_MESSAGES = config.require(`webhook_queue_max_messages`);
-const WEBHOOK_RETRY_QUEUE_WORKERS = config.require(
-  `webhook_retry_queue_workers`
+const INBOX_SYNC_QUEUE_WORKERS = config.require(`inbox_sync_queue_workers`);
+const INBOX_SYNC_QUEUE_MAX_MESSAGES = config.require(
+  `inbox_sync_queue_max_messages`
 );
-const WEBHOOK_RETRY_QUEUE_MAX_MESSAGES = config.require(
-  `webhook_retry_queue_max_messages`
+const INBOX_SYNC_RETRY_QUEUE_WORKERS = config.require(
+  `inbox_sync_retry_queue_workers`
+);
+const INBOX_SYNC_RETRY_QUEUE_MAX_MESSAGES = config.require(
+  `inbox_sync_retry_queue_max_messages`
 );
 const SFS_UPLOADER_WORKERS = config.require(`sfs_uploader_workers`);
 const gmailGcpQueue = config.require(`gmail_gcp_queue`);
@@ -129,30 +134,30 @@ const macroDbUrlArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: MACRO_DB_URL_SECRET_NAME })
   .apply((secret) => secret.arn);
 
-const webhook_queue = new Queue('email-service-gmail-webhook', {
+const inbox_sync_queue = new Queue('email-service-gmail-webhook', {
   tags,
   maxReceiveCount: 5,
   visibilityTimeoutSeconds: 60,
 });
 
-export const webhookQueueArn = pulumi.interpolate`${webhook_queue.queue.arn}`;
-export const webhookQueueName = pulumi.interpolate`${webhook_queue.queue.name}`;
+export const inboxSyncQueueArn = pulumi.interpolate`${inbox_sync_queue.queue.arn}`;
+export const inboxSyncQueueName = pulumi.interpolate`${inbox_sync_queue.queue.name}`;
 
-const webhook_retry_queue = new Queue('email-service-gmail-webhook-retry', {
+const inbox_sync_retry_queue = new Queue('email-service-gmail-webhook-retry', {
   tags,
   maxReceiveCount: 100,
   visibilityTimeoutSeconds: 60,
 });
 
-export const webhookRetryQueueArn = pulumi.interpolate`${webhook_retry_queue.queue.arn}`;
-export const webhookRetryQueueName = pulumi.interpolate`${webhook_retry_queue.queue.name}`;
+export const inboxSyncRetryQueueArn = pulumi.interpolate`${inbox_sync_retry_queue.queue.arn}`;
+export const inboxSyncRetryQueueName = pulumi.interpolate`${inbox_sync_retry_queue.queue.name}`;
 
-const refresh_queue = new Queue('email-service-refresh', {
+const link_manager_queue = new Queue('email-service-refresh', {
   tags,
 });
 
-export const refreshQueueArn = pulumi.interpolate`${refresh_queue.queue.arn}`;
-export const refreshQueueName = pulumi.interpolate`${refresh_queue.queue.name}`;
+export const linkManagerQueueArn = pulumi.interpolate`${link_manager_queue.queue.arn}`;
+export const linkManagerQueueName = pulumi.interpolate`${link_manager_queue.queue.name}`;
 
 const scheduled_queue = new Queue('email-service-scheduled', {
   tags,
@@ -234,9 +239,9 @@ const secretKeyArns = [
 
 const queueArns = [
   notificationQueueArn,
-  webhookQueueArn,
-  webhookRetryQueueArn,
-  refreshQueueArn,
+  inboxSyncQueueArn,
+  inboxSyncRetryQueueArn,
+  linkManagerQueueArn,
   scheduledQueueArn,
   searchEventQueueArn,
   insightContextQueueArn,
@@ -347,20 +352,20 @@ const containerEnvVars = [
     value: pulumi.interpolate`redis://${emailServiceRedis.endpoint}`,
   },
   {
-    name: 'EMAIL_REFRESH_QUEUE',
-    value: refreshQueueName,
+    name: 'LINK_MANAGER_QUEUE',
+    value: linkManagerQueueName,
   },
   {
     name: 'EMAIL_SCHEDULED_QUEUE',
     value: scheduledQueueName,
   },
   {
-    name: 'GMAIL_WEBHOOK_QUEUE',
-    value: webhookQueueName,
+    name: 'GMAIL_INBOX_SYNC_QUEUE',
+    value: inboxSyncQueueName,
   },
   {
-    name: 'GMAIL_WEBHOOK_RETRY_QUEUE',
-    value: webhookRetryQueueName,
+    name: 'GMAIL_INBOX_SYNC_RETRY_QUEUE',
+    value: inboxSyncRetryQueueName,
   },
   {
     name: 'BACKFILL_QUEUE',
@@ -431,6 +436,10 @@ const containerEnvVars = [
     value: pulumi.interpolate`${REDIS_RATE_LIMIT_REQS}`,
   },
   {
+    name: 'REDIS_RATE_LIMIT_REQS_BACKFILL',
+    value: pulumi.interpolate`${REDIS_RATE_LIMIT_REQS_BACKFILL}`,
+  },
+  {
     name: 'REDIS_RATE_LIMIT_WINDOW_SECS',
     value: pulumi.interpolate`${REDIS_RATE_LIMIT_WINDOW_SECS}`,
   },
@@ -443,20 +452,20 @@ const containerEnvVars = [
     value: pulumi.interpolate`${BACKFILL_QUEUE_MAX_MESSAGES}`,
   },
   {
-    name: 'WEBHOOK_QUEUE_WORKERS',
-    value: pulumi.interpolate`${WEBHOOK_QUEUE_WORKERS}`,
+    name: 'INBOX_SYNC_QUEUE_WORKERS',
+    value: pulumi.interpolate`${INBOX_SYNC_QUEUE_WORKERS}`,
   },
   {
-    name: 'WEBHOOK_QUEUE_MAX_MESSAGES',
-    value: pulumi.interpolate`${WEBHOOK_QUEUE_MAX_MESSAGES}`,
+    name: 'INBOX_SYNC_QUEUE_MAX_MESSAGES',
+    value: pulumi.interpolate`${INBOX_SYNC_QUEUE_MAX_MESSAGES}`,
   },
   {
-    name: 'WEBHOOK_RETRY_QUEUE_WORKERS',
-    value: pulumi.interpolate`${WEBHOOK_RETRY_QUEUE_WORKERS}`,
+    name: 'INBOX_SYNC_RETRY_QUEUE_WORKERS',
+    value: pulumi.interpolate`${INBOX_SYNC_RETRY_QUEUE_WORKERS}`,
   },
   {
-    name: 'WEBHOOK_RETRY_QUEUE_MAX_MESSAGES',
-    value: pulumi.interpolate`${WEBHOOK_RETRY_QUEUE_MAX_MESSAGES}`,
+    name: 'INBOX_SYNC_RETRY_QUEUE_MAX_MESSAGES',
+    value: pulumi.interpolate`${INBOX_SYNC_RETRY_QUEUE_MAX_MESSAGES}`,
   },
   {
     name: 'SFS_UPLOADER_WORKERS',
@@ -522,11 +531,11 @@ new EmailPubSubWorkers('email-pubsub-workers', {
 });
 
 const emailRefreshHandler = new EmailRefreshHandler('email-refresh-handler', {
-  queueArns: [refreshQueueArn],
+  queueArns: [linkManagerQueueArn],
   vpc: coparse_api_vpc,
   envVars: {
     DATABASE_URL: pulumi.interpolate`${MACRO_DB_URL}`,
-    EMAIL_REFRESH_QUEUE: pulumi.interpolate`${refreshQueueName}`,
+    LINK_MANAGER_QUEUE: pulumi.interpolate`${linkManagerQueueName}`,
     ENVIRONMENT: stack,
     RUST_LOG: 'email_refresh_handler=info',
   },

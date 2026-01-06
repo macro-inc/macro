@@ -110,6 +110,11 @@ export function parseEmailContent(
 
   const hasTable = Boolean(doc.querySelector('table'));
 
+  // Extract style tags from head to preserve email styling
+  const styleTags = Array.from(doc.head?.querySelectorAll('style') ?? [])
+    .map((style) => style.outerHTML)
+    .join('\n');
+
   let mainContent = doc.body?.innerHTML ?? doc.documentElement?.innerHTML;
   let signature: string | null = null;
 
@@ -128,8 +133,13 @@ export function parseEmailContent(
     trimTrailingBrs(mainContentDiv);
   }
 
+  // Prepend style tags to the main content
+  const finalContent = styleTags
+    ? `${styleTags}\n${mainContentDiv.innerHTML}`
+    : mainContentDiv.innerHTML;
+
   return {
-    mainContent: mainContentDiv.innerHTML,
+    mainContent: finalContent,
     signature: signature,
     hasTable,
   };

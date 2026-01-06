@@ -2,7 +2,7 @@ use std::io::Write;
 use std::process::exit;
 
 use anthropic::client::Client;
-use anthropic::types::stream_response::{ContentDeltaEvent, StreamEvent};
+use anthropic::types::response::{ContentDeltaEvent, StreamEvent};
 use async_openai::types::{
     ChatCompletionRequestAssistantMessage, ChatCompletionRequestAssistantMessageContent,
     ChatCompletionRequestMessage, ChatCompletionRequestSystemMessageArgs,

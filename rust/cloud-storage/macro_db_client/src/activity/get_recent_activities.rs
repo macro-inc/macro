@@ -1,4 +1,5 @@
 use document_sub_type::DocumentSubType;
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model::{activity::Activity, chat::Chat, document::BasicDocument};
 use sqlx::{Pool, Postgres, Row};
 
@@ -135,7 +136,7 @@ pub async fn get_recent_activities(
                     let document_version_id: String = r.get("document_version_id");
                     Some(Activity::Document(BasicDocument {
                         document_id: id,
-                        owner: user_id,
+                        owner: MacroUserIdStr::parse_from_str(&user_id).ok()?.into_owned(),
                         document_version_id: document_version_id.parse::<i64>().unwrap(),
                         document_name: name,
                         created_at,

@@ -74,10 +74,12 @@ const fetchPaginatedDocumentsPost = async ({
   apiToken,
   params,
   requestBody,
+  signal,
 }: {
   apiToken?: string;
   requestBody?: PostSoupRequest;
   params?: PostItemsSoupParams;
+  signal?: AbortSignal;
 }) => {
   if (!apiToken) throw new Error('No API token provided');
   const Authorization = `Bearer ${apiToken}`;
@@ -93,6 +95,7 @@ const fetchPaginatedDocumentsPost = async ({
     headers: { Authorization, 'Content-Type': 'application/json' },
     method: 'POST',
     body: requestBody ? JSON.stringify(requestBody) : undefined,
+    signal,
   });
   if (!response.ok)
     throw new Error('Failed to fetch documents', { cause: response });
@@ -102,21 +105,20 @@ const fetchPaginatedDocumentsPost = async ({
 };
 
 export function createDssInfiniteQuery(
-  _params?: Accessor<PostItemsSoupParams>,
+  initialParams?: Accessor<PostItemsSoupParams>,
+  getRequestBody?: Accessor<PostSoupRequest>,
   options?: {
     disabled?: Accessor<boolean>;
-    requestBody?: Accessor<PostSoupRequest>;
   }
 ) {
   const params = () => {
-    const argParams = _params?.();
+    const argParams = initialParams?.();
     let limit = 100;
     let sort_method;
     let emailView;
-    const requestBody = options?.requestBody;
 
-    if (requestBody) {
-      const body = requestBody();
+    if (getRequestBody) {
+      const body = getRequestBody();
       if (body?.limit) {
         limit = body.limit;
       }
@@ -140,7 +142,7 @@ export function createDssInfiniteQuery(
   const instructionsIdQuery = useInstructionsMdIdQuery();
 
   return useInfiniteQuery(() => {
-    const requestBody = options?.requestBody?.();
+    const requestBody = getRequestBody?.();
     // Include all filters in query key so query refetches when any filter changes
     const documentFilters = requestBody?.document_filters;
     const projectFilters = requestBody?.project_filters;
@@ -166,12 +168,13 @@ export function createDssInfiniteQuery(
 
     return {
       queryKey,
-      queryHash: hashKey(queryKey),
-      queryFn: ({ pageParam }) => {
+      queryKeyHashFn: hashKey,
+      queryFn: ({ pageParam, signal }) => {
         return fetchPaginatedDocumentsPost({
           apiToken: authQuery.data,
-          requestBody: requestBody,
+          requestBody,
           params: { cursor: pageParam.cursor },
+          signal,
         });
       },
       initialPageParam: params(),
@@ -228,7 +231,7 @@ const selectData: (
               ownerId: item.data.ownerId,
               frecencyScore: item.frecency_score,
               viewedAt: item.data.viewedAt ?? undefined,
-              parentId: item.data.parentId ?? undefined,
+              projectId: item.data.parentId ?? undefined,
               type: item.tag,
               name: item.data.name || 'New Project',
             };

@@ -22,6 +22,7 @@ fn create_test_response(
         highlight: Highlight {
             name: None,
             content: content.unwrap_or_default(),
+            ..Default::default()
         },
     }
 }

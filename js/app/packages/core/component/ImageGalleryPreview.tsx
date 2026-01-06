@@ -13,7 +13,6 @@ import XIcon from '@icon/regular/x.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import Panzoom, { type PanzoomObject } from '@panzoom/panzoom';
-import { commsServiceClient } from '@service-comms/client';
 import {
   type Component,
   createEffect,
@@ -23,21 +22,24 @@ import {
   Show,
 } from 'solid-js';
 import { platformFetch } from '../util/platformFetch';
-import { IconButton } from './IconButton';
+import { DeprecatedIconButton } from './DeprecatedIconButton';
 import { DropdownMenuContent, MenuItem, MenuSeparator } from './Menu';
 import { toast } from './Toast/Toast';
 
+type ImageData = {
+  id: string;
+  width?: string | number | undefined;
+  height?: string | number | undefined;
+};
+
 export type ImageGalleryPreviewProps = {
-  ids: string[];
+  images: ImageData[];
   initialIndex?: number;
   variant: 'small' | 'dynamic';
   square?: boolean;
   wrapperClass?: string;
-  channelId?: string;
-  messageId?: string;
   attachmentIds: string[];
-  isCurrentUser: boolean;
-  content?: string;
+  onDelete?: (attachmentId: string) => void;
   isContext?: boolean;
 };
 
@@ -67,8 +69,11 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
   const [touchEndX, setTouchEndX] = createSignal(0);
   const [isSwiping, setIsSwiping] = createSignal(false);
 
-  const currentImageUrl = (): string => {
-    const id = props.ids[currentIndex()];
+  const currentImageUrl = () => {
+    const id = props.images[currentIndex()]?.id;
+
+    if (!id) return;
+
     return `${SERVER_HOSTS['static-file']}/file/${id}`;
   };
 
@@ -76,7 +81,7 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
     return `${SERVER_HOSTS['static-file']}/file/${id}`;
   };
 
-  const hasNext = () => currentIndex() < props.ids.length - 1;
+  const hasNext = () => currentIndex() < props.images.length - 1;
   const hasPrevious = () => currentIndex() > 0;
 
   const navigateNext = () => {
@@ -92,13 +97,13 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
   };
 
   const handleTouchStart = (e: TouchEvent) => {
-    if (!isMobileWidth() || !isTouchDevice) return;
+    if (!isMobileWidth() || !isTouchDevice()) return;
     setTouchStartX(e.touches[0].clientX);
     setIsSwiping(false);
   };
 
   const handleTouchMove = (e: TouchEvent) => {
-    if (!isMobileWidth() || !isTouchDevice) return;
+    if (!isMobileWidth() || !isTouchDevice()) return;
     setTouchEndX(e.touches[0].clientX);
 
     const diffX = Math.abs(touchStartX() - e.touches[0].clientX);
@@ -108,7 +113,7 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
   };
 
   const handleTouchEnd = () => {
-    if (!isMobileWidth() || !isTouchDevice || !isSwiping()) return;
+    if (!isMobileWidth() || !isTouchDevice() || !isSwiping()) return;
 
     const swipeThreshold = 50;
     const diff = touchStartX() - touchEndX();
@@ -127,13 +132,15 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
   };
 
   const downloadImage = async () => {
+    const imageUrl = currentImageUrl();
+    if (!imageUrl) return;
     try {
-      const response = await platformFetch(currentImageUrl());
+      const response = await platformFetch(imageUrl);
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `image-${props.ids[currentIndex()]}.png`;
+      a.download = `image-${props.images[currentIndex()]?.id}.png`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -165,7 +172,7 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
   };
 
   const handleMouseMove = () => {
-    if (isMobileWidth() || isTouchDevice) return;
+    if (isMobileWidth() || isTouchDevice()) return;
 
     setIsToolbarVisible(true);
 
@@ -179,11 +186,11 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
   };
 
   const copyToClipboard = async () => {
-    if (isTouchDevice) {
+    const imageUrl = currentImageUrl();
+    if (!imageUrl) return;
+    if (isTouchDevice()) {
       try {
-        const blob = await platformFetch(currentImageUrl()).then((res) =>
-          res.blob()
-        );
+        const blob = await platformFetch(imageUrl).then((res) => res.blob());
         const file = new File([blob], 'image.png', { type: blob.type });
 
         if (navigator.share) {
@@ -202,14 +209,14 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
             ]);
             toast.success('Copied to clipboard');
           } else {
-            await navigator.clipboard.writeText(currentImageUrl());
+            await navigator.clipboard.writeText(imageUrl);
             toast.success('Copied image URL to clipboard');
           }
         }
       } catch (err) {
         console.error('Share/clipboard operation failed:', err);
         try {
-          await navigator.clipboard.writeText(currentImageUrl());
+          await navigator.clipboard.writeText(imageUrl);
           toast.success('Copied image URL to clipboard');
         } catch {
           toast.failure('Failed to copy image');
@@ -217,7 +224,7 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
       }
     } else {
       try {
-        const response = await platformFetch(currentImageUrl());
+        const response = await platformFetch(imageUrl);
         const blob = await response.blob();
 
         const isSupported = ClipboardItem.supports(blob.type);
@@ -230,13 +237,13 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
           ]);
           toast.success('Copied to clipboard');
         } else {
-          await navigator.clipboard.writeText(currentImageUrl());
+          await navigator.clipboard.writeText(imageUrl);
           toast.success('Copied image URL to clipboard');
         }
       } catch (err) {
         console.error('Clipboard operation failed:', err);
         try {
-          await navigator.clipboard.writeText(currentImageUrl());
+          await navigator.clipboard.writeText(imageUrl);
           toast.success('Copied image URL to clipboard');
         } catch {
           toast.failure('Failed to copy image');
@@ -246,7 +253,7 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
   };
 
   const copyToClipboardById = async (id: string) => {
-    if (isTouchDevice) {
+    if (isTouchDevice()) {
       try {
         const blob = await platformFetch(getImageUrl(id)).then((res) =>
           res.blob()
@@ -351,7 +358,7 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
 
     window.addEventListener('keydown', handleKeyDown);
 
-    if (!isMobileWidth() && !isTouchDevice) {
+    if (!isMobileWidth() && !isTouchDevice()) {
       setTimeout(() => {
         window.addEventListener('mousemove', handleMouseMove);
       }, 500);
@@ -381,7 +388,7 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
       }
     };
 
-    if (isMobileWidth() && isTouchDevice) {
+    if (isMobileWidth() && isTouchDevice()) {
       image.addEventListener('touchstart', handleTouchStartWrapper, {
         passive: true,
       });
@@ -404,7 +411,7 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
         clearTimeout(hideToolbarTimeout);
       }
 
-      if (isMobileWidth() && isTouchDevice) {
+      if (isMobileWidth() && isTouchDevice()) {
         image.removeEventListener('touchstart', handleTouchStartWrapper);
         image.removeEventListener('touchmove', handleTouchMoveWrapper);
         image.removeEventListener('touchend', handleTouchEndWrapper);
@@ -419,15 +426,8 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
     panzoomInstance()?.reset({ animate: false });
   });
 
-  const handleDeleteMedia = async (attachmentId: string) => {
-    console.log('deleting media 2', attachmentId);
-    if (!props.channelId || !props.messageId) return;
-    await commsServiceClient.patchMessage({
-      channel_id: props.channelId,
-      message_id: props.messageId,
-      attachment_ids_to_delete: [attachmentId],
-      content: props.content,
-    });
+  const handleDelete = (attachmentId: string) => {
+    props.onDelete?.(attachmentId);
   };
 
   return (
@@ -443,8 +443,8 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
       }}
     >
       <div class={props.wrapperClass ?? 'flex flex-row flex-wrap gap-2'}>
-        <For each={props.ids}>
-          {(id, index) => (
+        <For each={props.images}>
+          {(image, index) => (
             <div
               class={props.variant === 'dynamic' ? 'max-w-[200px] w-fit' : ''}
             >
@@ -455,11 +455,14 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
                       onClick={() => setClickedIndex(index())}
                       disabled={props.isContext}
                     >
-                      <IconButton icon={ExpandIcon} theme="clear" />
+                      <DeprecatedIconButton icon={ExpandIcon} theme="clear" />
                     </Dialog.Trigger>
                     <DropdownMenu>
                       <DropdownMenu.Trigger disabled={props.isContext}>
-                        <IconButton icon={ThreeDotsIcon} theme="clear" />
+                        <DeprecatedIconButton
+                          icon={ThreeDotsIcon}
+                          theme="clear"
+                        />
                       </DropdownMenu.Trigger>
                       <DropdownMenu.Portal>
                         <div class="fixed inset-0 z-modal-overlay bg-transparent" />
@@ -467,20 +470,20 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
                           <MenuItem
                             text="Copy image"
                             icon={ClipboardIcon}
-                            onClick={() => copyToClipboardById(id)}
+                            onClick={() => copyToClipboardById(image.id)}
                           />
                           <MenuItem
                             text="Download image"
                             icon={DownloadIcon}
-                            onClick={() => downloadImageById(id)}
+                            onClick={() => downloadImageById(image.id)}
                           />
-                          <Show when={props.isCurrentUser}>
+                          <Show when={props.onDelete}>
                             <MenuSeparator />
                             <MenuItem
                               text="Delete image"
                               icon={TrashIcon}
                               onClick={() =>
-                                handleDeleteMedia(props.attachmentIds[index()])
+                                handleDelete(props.attachmentIds[index()])
                               }
                             />
                           </Show>
@@ -496,7 +499,7 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
                 >
                   <img
                     class={`${THEMES[props.variant]} select-none`}
-                    src={getImageUrl(id)}
+                    src={getImageUrl(image.id)}
                     alt="preview"
                     style={{
                       '-webkit-touch-callout': 'none',
@@ -506,7 +509,7 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
                       '-ms-user-select': 'none',
                       'user-select': 'none',
                     }}
-                    draggable={!isTouchDevice}
+                    draggable={!isTouchDevice()}
                   />
                 </Dialog.Trigger>
               </div>
@@ -515,38 +518,35 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
         </For>
       </div>
       <Dialog.Portal>
-        <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay backdrop-blur-md" />
+        <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay pattern-edge-muted pattern-diagonal-4" />
         <div class="fixed inset-0 z-modal w-screen h-screen flex items-center justify-center p-2 pb-6 sm:p-12">
-          <Dialog.Content
-            class="relative flex items-center justify-center w-full h-full sm:w-auto sm:h-auto"
-            onOpenAutoFocus={(e) => e.preventDefault()}
-          >
+          <Dialog.Content class="relative flex items-center justify-center w-full h-full sm:w-auto sm:h-auto bg-panel">
             {/* Top toolbar */}
             <div
               class="absolute top-4 right-4 bg-dialog backdrop-blur-sm rounded-lg border border-edge p-1 flex flex-row items-center gap-1 shadow-md transition-opacity duration-300"
               classList={{
                 'opacity-100':
-                  isMobileWidth() || isTouchDevice || isToolbarVisible(),
+                  isMobileWidth() || isTouchDevice() || isToolbarVisible(),
                 'opacity-0 pointer-events-none':
-                  !isMobileWidth() && !isTouchDevice && !isToolbarVisible(),
+                  !isMobileWidth() && !isTouchDevice() && !isToolbarVisible(),
               }}
               style={{ 'z-index': stackingContext.zModal + 1 }}
             >
-              <IconButton
+              <DeprecatedIconButton
                 icon={ClipboardIcon}
                 theme="clear"
                 onClick={copyToClipboard}
                 onTouchEnd={copyToClipboard}
                 tooltip={{ label: 'Copy image' }}
               />
-              <IconButton
+              <DeprecatedIconButton
                 icon={DownloadIcon}
                 theme="clear"
                 onClick={downloadImage}
                 tooltip={{ label: 'Download image' }}
               />
               <Dialog.CloseButton>
-                <IconButton
+                <DeprecatedIconButton
                   icon={XIcon}
                   theme="clear"
                   tooltip={{ label: 'Close' }}
@@ -555,15 +555,18 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
             </div>
 
             {/* Navigation arrows */}
-            <Show when={!isMobileWidth() || !isTouchDevice}>
-              <Show when={props.ids.length > 1 && hasPrevious()}>
+            <Show when={!isMobileWidth() || !isTouchDevice()}>
+              <Show when={props.images.length > 1}>
                 <button
                   class="absolute left-4 top-1/2 -translate-y-1/2 bg-dialog backdrop-blur-sm rounded-lg border border-edge p-2 shadow-md hover:bg-button transition-opacity duration-300"
                   classList={{
+                    hidden: !hasPrevious(),
                     'opacity-100':
-                      isMobileWidth() || isTouchDevice || isToolbarVisible(),
+                      isMobileWidth() || isTouchDevice() || isToolbarVisible(),
                     'opacity-0 pointer-events-none':
-                      !isMobileWidth() && !isTouchDevice && !isToolbarVisible(),
+                      !isMobileWidth() &&
+                      !isTouchDevice() &&
+                      !isToolbarVisible(),
                   }}
                   style={{ 'z-index': stackingContext.zModal + 1 }}
                   onClick={navigatePrevious}
@@ -573,14 +576,17 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
                 </button>
               </Show>
 
-              <Show when={props.ids.length > 1 && hasNext()}>
+              <Show when={props.images.length > 1}>
                 <button
                   class="absolute right-4 top-1/2 -translate-y-1/2 bg-dialog backdrop-blur-sm rounded-lg border border-edge p-2 shadow-md hover:bg-button transition-opacity duration-300"
                   classList={{
+                    hidden: !hasNext(),
                     'opacity-100':
-                      isMobileWidth() || isTouchDevice || isToolbarVisible(),
+                      isMobileWidth() || isTouchDevice() || isToolbarVisible(),
                     'opacity-0 pointer-events-none':
-                      !isMobileWidth() && !isTouchDevice && !isToolbarVisible(),
+                      !isMobileWidth() &&
+                      !isTouchDevice() &&
+                      !isToolbarVisible(),
                   }}
                   style={{ 'z-index': stackingContext.zModal + 1 }}
                   onClick={navigateNext}
@@ -592,19 +598,19 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
             </Show>
 
             {/* Navigation indicator */}
-            <Show when={props.ids.length > 1}>
+            <Show when={props.images.length > 1}>
               <div
                 class="absolute top-4 left-4 bg-dialog backdrop-blur-sm rounded-lg border border-edge px-3 py-1.5 shadow-md transition-opacity duration-300"
                 classList={{
                   'opacity-100':
-                    isMobileWidth() || isTouchDevice || isToolbarVisible(),
+                    isMobileWidth() || isTouchDevice() || isToolbarVisible(),
                   'opacity-0 pointer-events-none':
-                    !isMobileWidth() && !isTouchDevice && !isToolbarVisible(),
+                    !isMobileWidth() && !isTouchDevice() && !isToolbarVisible(),
                 }}
                 style={{ 'z-index': stackingContext.zModal + 1 }}
               >
                 <span class="text-sm text-ink font-medium">
-                  {currentIndex() + 1}/{props.ids.length}
+                  {currentIndex() + 1}/{props.images.length}
                 </span>
               </div>
             </Show>

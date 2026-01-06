@@ -150,7 +150,7 @@ export function AttachMenu(props: AttachMenuProps) {
               >
                 <VList
                   data={rankedHistory()}
-                  overscan={10}
+                  bufferSize={10 * 40}
                   itemSize={40}
                   style={{ height: '100%', contain: 'content' }}
                 >
@@ -193,11 +193,11 @@ export function AttachMenu(props: AttachMenuProps) {
             >
               <OldMenuItem
                 text={
-                  isTouchDevice
+                  isTouchDevice()
                     ? 'Upload from your device'
                     : 'Upload from your computer'
                 }
-                icon={isTouchDevice ? DeviceMobileIcon : LaptopIcon}
+                icon={isTouchDevice() ? DeviceMobileIcon : LaptopIcon}
               />
             </div>
           </OldMenu>

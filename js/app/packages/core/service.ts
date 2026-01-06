@@ -306,7 +306,6 @@ export const fetchErrorsSvc = new Svc('Common fetch errors')
   .err('SERVER_ERROR', { description: 'Internal server error' })
   .err('INVALID_JSON', { description: 'Invalid JSON in response' })
   .err('UNKNOWN_ERROR', { description: 'An unknown error occurred' })
-  .err('GRAPHQL_ERROR', { description: 'GraphQL error occurred' })
   .err('GONE', { description: 'Resource deleted' });
 
 export type FetchError = keyof typeof fetchErrorsSvc.state.errors;

@@ -1,9 +1,10 @@
+import { useMaybeBlockId } from '@core/block';
 import { useChannelsContext } from '@core/component/ChannelsProvider';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import type { ChannelWithParticipants, IUser } from '@core/user';
-import { useContacts } from '@core/user';
+import { idToEmail, useContacts, useDisplayName } from '@core/user';
 import { createFreshSearch } from '@core/util/freshSort';
 import CheckIcon from '@icon/bold/check-bold.svg';
 import CompanyIcon from '@icon/duotone/building-duotone.svg';
@@ -19,6 +20,7 @@ import {
   createUnifiedSearchInfiniteQuery,
   type EmailEntity,
 } from '@macro-entity';
+import { useUserId } from '@service-gql/client';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { Item } from '@service-storage/generated/schemas/item';
 import { useHistory } from '@service-storage/history';
@@ -31,6 +33,7 @@ import {
   on,
   Show,
 } from 'solid-js';
+import { usePropertiesContext } from '../../../context/PropertiesContext';
 import { PROPERTY_STYLES } from '../../../styles/styles';
 import type { Property } from '../../../types';
 import { useSearchInputFocus } from '../../../utils';
@@ -137,6 +140,9 @@ function getEntityType(entity: CombinedEntity): string {
     case 'channel':
       return 'CHANNEL';
     case 'item':
+      if (entity.data.type === 'document' && entity.data.subType === 'task') {
+        return 'TASK';
+      }
       return entity.data.type.toUpperCase();
     case 'company':
       return 'COMPANY';
@@ -202,10 +208,40 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
   let searchInputRef!: HTMLInputElement;
 
+  // Get current entity context for self-filtering
+  const blockId = useMaybeBlockId();
+  const { entityType: currentEntityType } = usePropertiesContext();
+
   const history = useHistory();
   const contacts = useContacts();
   const channelsContext = useChannelsContext();
   const channels = () => channelsContext.channels();
+
+  // Get current user info for injection into contacts
+  const currentUserId = useUserId();
+  const [currentUserDisplayName] = useDisplayName(currentUserId());
+
+  // Contacts with current user injected at the beginning
+  const contactsWithCurrentUser = createMemo((): IUser[] => {
+    const userId = currentUserId();
+    if (!userId) return contacts();
+
+    const existingContacts = contacts();
+
+    // Check if current user is already in contacts
+    const isCurrentUserInContacts = existingContacts.some(
+      (contact) => contact.id === userId
+    );
+    if (isCurrentUserInContacts) return existingContacts;
+
+    // Inject current user at the beginning
+    const currentUser: IUser = {
+      id: userId,
+      email: idToEmail(userId),
+      name: currentUserDisplayName(),
+    };
+    return [currentUser, ...existingContacts];
+  });
 
   // Fetch emails for browsing (only when THREAD type)
   const emailsQuery = createEmailsInfiniteQuery(() => ({ view: 'all' }), {
@@ -257,14 +293,14 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
     if (!specificEntityType) {
       return [
-        ...contacts().map(entityMapper('user')),
+        ...contactsWithCurrentUser().map(entityMapper('user')),
         ...history().map(entityMapper('item')),
         ...channels().map(entityMapper('channel')),
       ];
     }
 
     if (specificEntityType === 'USER') {
-      return contacts().map(entityMapper('user'));
+      return contactsWithCurrentUser().map(entityMapper('user'));
     }
 
     if (specificEntityType === 'CHANNEL') {
@@ -289,7 +325,11 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     const itemTypes: EntityType[] = ['DOCUMENT', 'PROJECT', 'CHAT'];
     if (itemTypes.includes(specificEntityType)) {
       return history()
-        .filter((item) => item.type.toUpperCase() === specificEntityType)
+        .filter(
+          (item) =>
+            item.type.toUpperCase() === specificEntityType &&
+            !(item.type === 'document' && item.subType === 'task')
+        )
         .map(entityMapper('item'));
     }
 
@@ -308,17 +348,28 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     const MAX_VISIBLE_ENTITIES_NO_SEARCH = 50;
     const MAX_SEARCH_RESULTS = 20;
 
+    // Filter out the current entity when selecting same entity type (e.g., parent task on a task)
+    const excludeFilter = blockId
+      ? (e: CombinedEntity) =>
+          !(getEntityType(e) === currentEntityType && e.id === blockId)
+      : () => true;
+
     // Get visible entities based on search
     const localResults = term
       ? entitySearch(allEntities, term)
           .slice(0, MAX_SEARCH_RESULTS)
           .map((result) => result.item)
-      : allEntities.slice(0, MAX_VISIBLE_ENTITIES_NO_SEARCH);
+          .filter(excludeFilter)
+      : allEntities
+          .filter(excludeFilter)
+          .slice(0, MAX_VISIBLE_ENTITIES_NO_SEARCH);
 
     // For THREAD: merge local + server results (local first, server appended, deduped)
     if (props.property.specificEntityType === 'THREAD' && term) {
       const localIds = new Set(localResults.map((e) => e.id));
-      const serverResults = serverEmails().filter((e) => !localIds.has(e.id));
+      const serverResults = serverEmails()
+        .filter((e) => !localIds.has(e.id))
+        .filter(excludeFilter);
       return [...localResults, ...serverResults].slice(0, MAX_SEARCH_RESULTS);
     }
 
