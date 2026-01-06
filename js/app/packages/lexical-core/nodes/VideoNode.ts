@@ -150,6 +150,10 @@ export class VideoNode extends MediaNode<{ controls: boolean }> {
         const scale = domNode.getAttribute('data-scale');
         const srcType = domNode.getAttribute('data-src-type');
         const id = domNode.getAttribute('data-video-id');
+        const constrainedWidth = domNode.getAttribute('data-constrained-width');
+        const constrainedHeight = domNode.getAttribute(
+          'data-constrained-height'
+        );
 
         if (src && id && srcType) {
           return {
@@ -162,6 +166,12 @@ export class VideoNode extends MediaNode<{ controls: boolean }> {
                 width: width ? parseInt(width, 10) : 0,
                 height: height ? parseInt(height, 10) : 0,
                 scale: scale ? parseFloat(scale) : 1,
+                constrainedWidth: constrainedWidth
+                  ? parseInt(constrainedWidth, 10)
+                  : undefined,
+                constrainedHeight: constrainedHeight
+                  ? parseInt(constrainedHeight, 10)
+                  : undefined,
               });
               return { node };
             },
@@ -181,6 +191,8 @@ export class VideoNode extends MediaNode<{ controls: boolean }> {
         const scale = video.getAttribute('data-scale');
         const srcType = video.getAttribute('data-src-type');
         const id = video.getAttribute('data-video-id');
+        const constrainedWidth = video.getAttribute('data-constrained-width');
+        const constrainedHeight = video.getAttribute('data-constrained-height');
 
         if (src && id && srcType) {
           return {
@@ -193,6 +205,12 @@ export class VideoNode extends MediaNode<{ controls: boolean }> {
                 width: width ? parseInt(width, 10) : 0,
                 height: height ? parseInt(height, 10) : 0,
                 scale: scale ? parseFloat(scale) : 1,
+                constrainedWidth: constrainedWidth
+                  ? parseInt(constrainedWidth, 10)
+                  : undefined,
+                constrainedHeight: constrainedHeight
+                  ? parseInt(constrainedHeight, 10)
+                  : undefined,
               });
               return { node };
             },

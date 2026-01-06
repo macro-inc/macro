@@ -1,4 +1,3 @@
-import { calculateEffectiveDimensions } from '@lexical-core/utils/media';
 import type {
   LexicalNode,
   NodeKey,
@@ -7,6 +6,7 @@ import type {
 } from 'lexical';
 import type { DecoratorComponent } from '../decoratorRegistry';
 import { $applyIdFromSerialized } from '../plugins/nodeIdPlugin';
+import { calculateEffectiveDimensions } from '../utils/media';
 import { DecoratorBlockNode } from './DecoratorBlockNode';
 
 export type MediaType = 'image' | 'video';
@@ -185,6 +185,18 @@ export abstract class MediaNode<
     element.setAttribute('data-src-type', this.__srcType);
     element.setAttribute(`data-${this.getMediaType()}-id`, this.__id);
     element.setAttribute('data-scale', this.__scale.toString());
+    if (this.__constrainedWidth !== undefined) {
+      element.setAttribute(
+        'data-constrained-width',
+        this.__constrainedWidth.toString()
+      );
+    }
+    if (this.__constrainedHeight !== undefined) {
+      element.setAttribute(
+        'data-constrained-height',
+        this.__constrainedHeight.toString()
+      );
+    }
     wrapper.appendChild(element);
     return { element: wrapper };
   }

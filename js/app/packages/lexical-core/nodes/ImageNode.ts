@@ -146,6 +146,10 @@ export class ImageNode extends MediaNode<{ alt: string }> {
         const scale = domNode.getAttribute('data-scale');
         const srcType = domNode.getAttribute('data-src-type');
         const id = domNode.getAttribute('data-image-id');
+        const constrainedWidth = domNode.getAttribute('data-constrained-width');
+        const constrainedHeight = domNode.getAttribute(
+          'data-constrained-height'
+        );
 
         if (src && id && srcType) {
           return {
@@ -158,6 +162,12 @@ export class ImageNode extends MediaNode<{ alt: string }> {
                 width: width ? parseInt(width, 10) : 0,
                 height: height ? parseInt(height, 10) : 0,
                 scale: scale ? parseFloat(scale) : 1,
+                constrainedWidth: constrainedWidth
+                  ? parseInt(constrainedWidth, 10)
+                  : undefined,
+                constrainedHeight: constrainedHeight
+                  ? parseInt(constrainedHeight, 10)
+                  : undefined,
               });
               return { node };
             },
@@ -177,6 +187,8 @@ export class ImageNode extends MediaNode<{ alt: string }> {
         const scale = img.getAttribute('data-scale');
         const srcType = img.getAttribute('data-src-type');
         const id = img.getAttribute('data-image-id');
+        const constrainedWidth = img.getAttribute('data-constrained-width');
+        const constrainedHeight = img.getAttribute('data-constrained-height');
 
         if (src && id && srcType) {
           return {
@@ -189,6 +201,12 @@ export class ImageNode extends MediaNode<{ alt: string }> {
                 width: width ? parseInt(width, 10) : 0,
                 height: height ? parseInt(height, 10) : 0,
                 scale: scale ? parseFloat(scale) : 1,
+                constrainedWidth: constrainedWidth
+                  ? parseInt(constrainedWidth, 10)
+                  : undefined,
+                constrainedHeight: constrainedHeight
+                  ? parseInt(constrainedHeight, 10)
+                  : undefined,
               });
               return { node };
             },
