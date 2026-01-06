@@ -7,8 +7,8 @@ import {
   useBlockId,
   useBlockName,
 } from '@core/block';
-import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
+import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { UserIcon } from '@core/component/UserIcon';
 import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
 import clickOutside from '@core/directive/clickOutside';
@@ -59,9 +59,9 @@ import {
 import { match } from 'ts-pattern';
 import { beveledCorners } from '../../../block-theme/signals/themeSignals';
 import { ClippedPanel } from '../ClippedPanel';
+import { DeprecatedIconButton } from '../DeprecatedIconButton';
 import { DialogWrapper } from '../DialogWrapper';
 import { ForwardToChannel } from '../ForwardToChannel';
-import { DeprecatedIconButton } from '../DeprecatedIconButton';
 import { MENU_ITEM_CLASS } from '../Menu';
 import { Permissions } from '../SharePermissions';
 import { toast } from '../Toast/Toast';
