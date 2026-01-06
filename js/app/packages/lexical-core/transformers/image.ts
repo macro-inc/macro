@@ -2,8 +2,8 @@ import type { ElementTransformer } from '@lexical/markdown';
 import type { ElementNode, LexicalNode } from 'lexical';
 import { $createImageNode, $isImageNode, ImageNode } from '../nodes/ImageNode';
 
-// Internal image transformer with metadata (for constrained dimensions)
-export const I_IMAGE: ElementTransformer = {
+// Internal transformer for images with constrained dimensions
+export const I_IMAGE_CONSTRAINED: ElementTransformer = {
   dependencies: [ImageNode],
   type: 'element',
   regExp: /<m-image>(.*?)<\/m-image>/,
@@ -12,11 +12,10 @@ export const I_IMAGE: ElementTransformer = {
     if (node.getSrcType() === 'local') return null;
     if (!node.getUrl()) return null;
 
-    // Only use internal format if there are constrained dimensions
     const constrainedWidth = node.getConstrainedWidth();
     const constrainedHeight = node.getConstrainedHeight();
     if (constrainedWidth === undefined && constrainedHeight === undefined) {
-      return null; // Fall through to standard IMAGE transformer
+      return null;
     }
 
     const data = JSON.stringify({
