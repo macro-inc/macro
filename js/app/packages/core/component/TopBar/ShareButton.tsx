@@ -469,7 +469,7 @@ export function ShareModal(props: ShareModalProps) {
                       size="sm"
                     />
                   </Dialog.CloseButton>
-                  <Dialog.Title class="text-sm">{`Share: ${props.name}`}</Dialog.Title>
+                  <Dialog.Title>{`Share: ${props.name}`}</Dialog.Title>
                 </div>
 
                 <div class="flex flex-row items-center gap-2"></div>
@@ -487,13 +487,13 @@ export function ShareModal(props: ShareModalProps) {
                 name={props.name}
               />
 
-              <Show when={recipients()?.length > 0}>
-                <div class="border-t-1 border-edge-muted w-full h-fit max-h-[120px] relative">
+              <Show when={(recipients()?.length ?? 0) > 0}>
+                <div class="border-t-1 border-edge-muted w-full h-fit max-h-[160px] relative">
                   <div class="absolute top-0 left-0 border-b border-edge-muted/50 bg-panel w-full h-[40px] flex items-center px-3">Share Recipients</div>
-                  <div class="grid bg-edge-muted/50 text-ink text-sm select-none overflow-y-auto scrollbar-hidden">
+                  <div class="grid gap-3 text-ink text-sm select-none overflow-y-auto scrollbar-hidden pt-[52px] pb-3 px-3 max-h-[159px] h-min">
                     <Show when={props.owner}>
                       <div class="contents rounded-md">
-                        <div class="flex items-center gap-2 overflow-hidden">
+                        <div class="flex items-centeroverflow-hidden">
                           <UserIcon
                             isDeleted={false}
                             id={props.owner!}
@@ -509,9 +509,9 @@ export function ShareModal(props: ShareModalProps) {
                       </div>
                     </Show>
 
-                    <For each={recipients()!}>
+                    <For each={recipients() || []}>
                       {(recipient) => (
-                        <div class="flex justify-between p-2 bg-panel">
+                        <div class="flex justify-between bg-panel">
                           <div
                             class="flex items-center gap-2 overflow-hidden cursor-pointer"
                             onClick={() =>
