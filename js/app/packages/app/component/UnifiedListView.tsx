@@ -5,6 +5,7 @@ import {
 import { noiseFilter, signalFilter } from '@app/component/soupFilters';
 import type { BlockChannelProps } from '@block-channel/component/Block';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
+import { codeFileExtensions } from '@block-code/util/languageSupport';
 import { URL_PARAMS as EMAIL_PARAMS } from '@block-email/constants';
 import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/signal/location';
@@ -156,6 +157,8 @@ import {
 
 const SEARCH_SERVICE_DEBOUNCE_MS = 200;
 const LOCAL_FUZZY_SEARCH_DEBOUNCE_MS = 20;
+
+const GARBAGE_UUID = '00000000-0000-0000-0000-000000000000';
 
 const sortOptions = [
   {
@@ -714,7 +717,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   );
 
   // accounts for task entity type filtering as "note" type files
-  const joinedFileTypeFilter = createMemo<string[]>(
+  const joinedSoupFileTypeFilter = createMemo<string[]>(
     () => {
       let fileTypes = [];
       if (entityTypeFilter().includes('task')) {
@@ -743,10 +746,40 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     }
   );
 
+  const joinedSearchFileTypeFilter = createMemo<string[]>(
+    () => {
+      let fileTypes = [];
+      if (entityTypeFilter().includes('task')) {
+        fileTypes.push('md');
+      }
+
+      if (entityTypeFilter().includes('document')) {
+        if (fileTypeFilter().length > 0) {
+          const documentFileTypes = fileTypeFilter().flatMap((fileType) => {
+            if (fileType === 'code') return codeFileExtensions;
+            // NOTE: unknown not supported in search so we effectively ignore it
+            if (fileType === 'unknown') return [GARBAGE_UUID];
+            return [fileType];
+          });
+          fileTypes.push(...documentFileTypes);
+        } else {
+          // if we have task + document and no file type filter, we want to include all file types
+          fileTypes = [];
+        }
+      }
+
+      return Array.from(new Set(fileTypes));
+    },
+    [],
+    {
+      equals: arrayEquals,
+    }
+  );
+
   const unifiedSearchFilters = createMemo<UnifiedSearchRequestFilters>(() => {
     let documentFilters: DocumentFilters | null = null;
     documentFilters = {
-      file_types: joinedFileTypeFilter(),
+      file_types: joinedSearchFileTypeFilter(),
     };
 
     let emailFilters: EmailFilters | null = null;
@@ -821,7 +854,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       sort_method: sortType(),
     })
   );
-  const GARBAGE_UUID = '00000000-0000-0000-0000-000000000000';
+
   const dssQueryRequestBody = createMemo(
     (): PostSoupRequest => ({
       channel_filters: {
@@ -835,7 +868,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
             ? []
             : [GARBAGE_UUID],
         project_ids: view().viewType === 'project' ? [view().id] : [],
-        file_types: joinedFileTypeFilter(),
+        file_types: joinedSoupFileTypeFilter(),
       },
       chat_filters: {
         chat_ids:
