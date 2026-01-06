@@ -263,7 +263,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
             focusOnMount
           />
         </div>
-        <div class="flex flex-col w-full h-[120px] overflow-y-auto border-t-1 border-edge-muted/50">
+        <div class="flex flex-col w-full min-h-[120px] overflow-y-auto border-t-1 border-edge-muted/50 scrollbar-hidden">
           <div
             class="flex-1 px-[12px] py-[6px] w-full text-sm"
             onClick={() => focusMarkdownArea()}
@@ -285,23 +285,23 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
             />
           </div>
 
-          <div class="flex w-full items-center pl-3">
-            <div class="w-min">
-              <Show when={canSendAsGroup()}>
-                <ToggleSwitch
-                  switchRootClass={canSendAsGroup() ? '' : 'cursor-not-allowed'}
-                  checked={sendAsGroupMessage() && canSendAsGroup()}
-                  onChange={setSendAsGroupMessage}
-                  label={'Send As Group Message'}
-                  disabled={!canSendAsGroup()}
-                  falseLabel="FALSE"
-                  trueLabel="TRUE"
-                  size="SM"
-                />
-              </Show>
-            </div>
+          <div class="flex w-full items-center p-3 gap-3 flex-wrap">
+            <Show when={canSendAsGroup()}>
+              <ToggleSwitch
+                switchRootClass={canSendAsGroup() ? '' : 'cursor-not-allowed'}
+                checked={sendAsGroupMessage() && canSendAsGroup()}
+                onChange={setSendAsGroupMessage}
+                label={'Send As Group Message'}
+                disabled={!canSendAsGroup()}
+                falseLabel="FALSE"
+                trueLabel="TRUE"
+                size="SM"
+              />
+            </Show>
 
-            <div class="w-full p-3 gap-2 flex justify-end">
+            <div class="flex flex-auto min-w-0 gap-3">
+              <div class="flex-auto min-w-0"/>
+
               <TextButton
                 onClick={() => {
                   const options = selectedOptions();
