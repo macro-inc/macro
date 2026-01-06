@@ -218,7 +218,11 @@ const CustomCursorTest = () => {
           <div>div wrapper with inline style cursor pointer and hr child</div>
           <hr style="border:none;transition:border-color var(--transition);border-top:10px dashed var(--b4);box-sizing:border-box;width:100%;" />
         </div>
-        <div class="border border-slate-500 p-2" contenteditable>
+        {/* SCUFFED: how do we want to handle this color? */}
+        <div
+          class="border border-[color:oklch(0.554_0.046_257.417)] p-2"
+          contenteditable
+        >
           contenteditable
           <ul class="p-2">
             <li class="list-disc mb-6">some text</li>

@@ -439,12 +439,6 @@
   box-shadow: inset 400px 400px --value(--color-*);
 }
 
-/* The above utility does not allow to use tailind "color/number" transparency, e.g. `bg-red-500/50`, this one does, but requires you to use the full color variable name, e.g. `floating-transparent-[var(--color-edge)]/30`. */
-@utility floating-transparent-* {
-  background-color: var(--color-dialog);
-  box-shadow: inset 400px 400px --value([*]);
-}
-
 @utility hover-transition-text {
   transition: color var(--transition);
 
