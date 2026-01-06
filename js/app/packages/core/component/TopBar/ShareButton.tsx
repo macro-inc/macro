@@ -7,8 +7,8 @@ import {
   useBlockId,
   useBlockName,
 } from '@core/block';
-import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { TextButton } from '@core/component/TextButton';
+import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { UserIcon } from '@core/component/UserIcon';
 import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
 import clickOutside from '@core/directive/clickOutside';
@@ -33,6 +33,7 @@ import User from '@icon/regular/user.svg';
 import IconUsers from '@icon/regular/users.svg';
 import CloseIcon from '@icon/regular/x.svg';
 import { Dialog } from '@kobalte/core/dialog';
+import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import PaperPlaneRight from '@phosphor-icons/core/fill/paper-plane-right-fill.svg?component-solid';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { commsServiceClient } from '@service-comms/client';
@@ -798,6 +799,12 @@ export function ShareOptions(props: {
     return props.permissions || 'none';
   });
 
+  const currentValueText = createMemo(() => {
+    const value = currentValue();
+    if (value === 'none') return accessLevelText(null);
+    return accessLevelText(value as AccessLevel);
+  });
+
   const handleChange = (value: string) => {
     if (value === 'none') {
       props.setPermissions(null);
@@ -807,12 +814,33 @@ export function ShareOptions(props: {
   };
 
   return (
-    <SegmentedControl
-      disabled={props.disabled}
-      onChange={handleChange}
-      value={currentValue()}
-      list={options()}
-      size="SM"
-    />
+    <DropdownMenu>
+      <DropdownMenu.Trigger disabled={props.disabled}>
+        <TextButton
+          theme="base"
+          text={currentValueText()}
+          showChevron
+          disabled={props.disabled}
+          height='22px'
+        />
+      </DropdownMenu.Trigger>
+      <DropdownMenuContent>
+        <DropdownMenu.RadioGroup
+          value={currentValue()}
+          onChange={handleChange}
+        >
+          <For each={options()}>
+            {(option) => (
+              <MenuItem
+                text={option.label}
+                selectorType="radio"
+                value={option.value}
+                groupValue={currentValue()}
+              />
+            )}
+          </For>
+        </DropdownMenu.RadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

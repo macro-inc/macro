@@ -3,12 +3,10 @@ import { withAnalytics } from '@coparse/analytics';
 import { TrackingEvents } from '@coparse/analytics/src/types/TrackingEvents';
 import { useIsAuthenticated } from '@core/auth';
 import { useBlockAliasedName, useBlockId, useBlockName } from '@core/block';
-import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
 import { RecipientSelector } from '@core/component/RecipientSelector';
+import { ShareOptions } from '@core/component/TopBar/ShareButton';
 import { TextButton } from '@core/component/TextButton';
-import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
-import { blockEditPermissionEnabledSignal } from '@core/signal/load';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { WithCustomUserInput } from '@core/user';
 import { useSendMessageToPeople } from '@core/util/channels';
@@ -26,83 +24,6 @@ import {
 import { getDestinationFromOptions } from './NewMessage';
 import { Permissions } from './SharePermissions';
 import { toast } from './Toast/Toast';
-
-const accessLevelText = (accessLevel?: AccessLevel | null) => {
-  const blockName = useBlockName();
-  switch (accessLevel) {
-    case 'comment':
-      if (blockName === 'md' && !ENABLE_MARKDOWN_COMMENTS) {
-        return 'View';
-      }
-      return 'Comment';
-    case 'view':
-      return 'View';
-    case 'edit':
-      return 'Edit';
-    case 'owner':
-      return 'Owner';
-    default:
-      return 'No Access';
-  }
-};
-
-export function ShareOptions(props: {
-  setPermissions: (accessLevel: AccessLevel | null) => void;
-  permissions?: AccessLevel | null;
-  hideNoAccess?: boolean;
-  label?: string | '';
-  disabled?: boolean;
-}) {
-  const editPermissionEnabled = blockEditPermissionEnabledSignal();
-  const blockName = useBlockName();
-
-  const options = createMemo(() => {
-    const optionsList: { value: string; label: string }[] = [];
-
-    // Add no access option if not hidden
-    if (!props.hideNoAccess) {
-      optionsList.push({ value: 'none', label: accessLevelText(null) });
-    }
-
-    // Add comment option if applicable
-    if (blockName !== 'md' || ENABLE_MARKDOWN_COMMENTS) {
-      optionsList.push({ value: 'comment', label: accessLevelText('comment') });
-    }
-
-    // Always add view option
-    optionsList.push({ value: 'view', label: accessLevelText('view') });
-
-    // Add edit option if enabled
-    if (editPermissionEnabled) {
-      optionsList.push({ value: 'edit', label: accessLevelText('edit') });
-    }
-
-    return optionsList;
-  });
-
-  const currentValue = createMemo(() => {
-    if (props.permissions === null) return 'none';
-    return props.permissions || 'none';
-  });
-
-  const handleChange = (value: string) => {
-    if (value === 'none') {
-      props.setPermissions(null);
-    } else {
-      props.setPermissions(value as AccessLevel);
-    }
-  };
-
-  return (
-    <SegmentedControl
-      disabled={props.disabled}
-      onChange={handleChange}
-      value={currentValue()}
-      list={options()}
-      size="SM"
-    />
-  );
-}
 
 interface ForwardToChannelProps {
   submitPermissionInfo?: {
