@@ -27,6 +27,83 @@ import { getDestinationFromOptions } from './NewMessage';
 import { Permissions } from './SharePermissions';
 import { toast } from './Toast/Toast';
 
+const accessLevelText = (accessLevel?: AccessLevel | null) => {
+  const blockName = useBlockName();
+  switch (accessLevel) {
+    case 'comment':
+      if (blockName === 'md' && !ENABLE_MARKDOWN_COMMENTS) {
+        return 'View';
+      }
+      return 'Comment';
+    case 'view':
+      return 'View';
+    case 'edit':
+      return 'Edit';
+    case 'owner':
+      return 'Owner';
+    default:
+      return 'No Access';
+  }
+};
+
+export function ShareOptions(props: {
+  setPermissions: (accessLevel: AccessLevel | null) => void;
+  permissions?: AccessLevel | null;
+  hideNoAccess?: boolean;
+  label?: string | '';
+  disabled?: boolean;
+}) {
+  const editPermissionEnabled = blockEditPermissionEnabledSignal();
+  const blockName = useBlockName();
+
+  const options = createMemo(() => {
+    const optionsList: { value: string; label: string }[] = [];
+
+    // Add no access option if not hidden
+    if (!props.hideNoAccess) {
+      optionsList.push({ value: 'none', label: accessLevelText(null) });
+    }
+
+    // Add comment option if applicable
+    if (blockName !== 'md' || ENABLE_MARKDOWN_COMMENTS) {
+      optionsList.push({ value: 'comment', label: accessLevelText('comment') });
+    }
+
+    // Always add view option
+    optionsList.push({ value: 'view', label: accessLevelText('view') });
+
+    // Add edit option if enabled
+    if (editPermissionEnabled) {
+      optionsList.push({ value: 'edit', label: accessLevelText('edit') });
+    }
+
+    return optionsList;
+  });
+
+  const currentValue = createMemo(() => {
+    if (props.permissions === null) return 'none';
+    return props.permissions || 'none';
+  });
+
+  const handleChange = (value: string) => {
+    if (value === 'none') {
+      props.setPermissions(null);
+    } else {
+      props.setPermissions(value as AccessLevel);
+    }
+  };
+
+  return (
+    <SegmentedControl
+      disabled={props.disabled}
+      onChange={handleChange}
+      value={currentValue()}
+      list={options()}
+      size="SM"
+    />
+  );
+}
+
 interface ForwardToChannelProps {
   submitPermissionInfo?: {
     setChannelPermissions: (
@@ -286,8 +363,8 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
             />
           </div>
 
-          <div class="flex w-full items-center">
-            <div class="px-3 w-min">
+          <div class="flex w-full items-center pl-3 pr-2">
+            <div class="w-min">
               <Show when={canSendAsGroup()}>
                 <ToggleSwitch
                   switchRootClass={canSendAsGroup() ? '' : 'cursor-not-allowed'}
@@ -335,82 +412,5 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
         </div>
       </div>
     </Show>
-  );
-}
-
-const accessLevelText = (accessLevel?: AccessLevel | null) => {
-  const blockName = useBlockName();
-  switch (accessLevel) {
-    case 'comment':
-      if (blockName === 'md' && !ENABLE_MARKDOWN_COMMENTS) {
-        return 'View';
-      }
-      return 'Comment';
-    case 'view':
-      return 'View';
-    case 'edit':
-      return 'Edit';
-    case 'owner':
-      return 'Owner';
-    default:
-      return 'No Access';
-  }
-};
-
-export function ShareOptions(props: {
-  setPermissions: (accessLevel: AccessLevel | null) => void;
-  permissions?: AccessLevel | null;
-  hideNoAccess?: boolean;
-  label?: string | '';
-  disabled?: boolean;
-}) {
-  const editPermissionEnabled = blockEditPermissionEnabledSignal();
-  const blockName = useBlockName();
-
-  const options = createMemo(() => {
-    const optionsList: { value: string; label: string }[] = [];
-
-    // Add no access option if not hidden
-    if (!props.hideNoAccess) {
-      optionsList.push({ value: 'none', label: accessLevelText(null) });
-    }
-
-    // Add comment option if applicable
-    if (blockName !== 'md' || ENABLE_MARKDOWN_COMMENTS) {
-      optionsList.push({ value: 'comment', label: accessLevelText('comment') });
-    }
-
-    // Always add view option
-    optionsList.push({ value: 'view', label: accessLevelText('view') });
-
-    // Add edit option if enabled
-    if (editPermissionEnabled) {
-      optionsList.push({ value: 'edit', label: accessLevelText('edit') });
-    }
-
-    return optionsList;
-  });
-
-  const currentValue = createMemo(() => {
-    if (props.permissions === null) return 'none';
-    return props.permissions || 'none';
-  });
-
-  const handleChange = (value: string) => {
-    if (value === 'none') {
-      props.setPermissions(null);
-    } else {
-      props.setPermissions(value as AccessLevel);
-    }
-  };
-
-  return (
-    <SegmentedControl
-      disabled={props.disabled}
-      onChange={handleChange}
-      value={currentValue()}
-      list={options()}
-      size="SM"
-    />
   );
 }
