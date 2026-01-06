@@ -155,8 +155,8 @@ pub(in crate::api::search) async fn search_projects(
     }
 
     let user_id = MacroUserId::parse_from_str(user_id)
-        .map(|l| l.lowercase())
-        .map_err(|_| SearchError::InvalidUserId(user_id.to_string()))?;
+        .map_err(|_| SearchError::InvalidUserId(user_id.to_string()))?
+        .lowercase();
 
     let page = query_params.page.unwrap_or(0);
 
