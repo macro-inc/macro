@@ -21,7 +21,7 @@ type TextButton = {
   iconColor?: string;
   width?: string;
   height?: string;
-  left?: boolean
+  left?: boolean;
   textSize?: string;
   onClick?: JSX.EventHandler<HTMLButtonElement, MouseEvent>;
   onMouseDown?: JSX.EventHandler<HTMLButtonElement, MouseEvent>;

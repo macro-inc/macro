@@ -7,8 +7,8 @@ import {
   useBlockId,
   useBlockName,
 } from '@core/block';
-import { TextButton } from '@core/component/TextButton';
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
+import { TextButton } from '@core/component/TextButton';
 import { UserIcon } from '@core/component/UserIcon';
 import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
 import clickOutside from '@core/directive/clickOutside';
@@ -146,7 +146,6 @@ export function ShareModal(props: ShareModalProps) {
   const [permissionsResource, { refetch }] = permissionsBlockResource;
   const userId = useUserId();
 
-
   const copyPublicLink = createCallback(() => {
     const url = buildSimpleEntityUrl(
       {
@@ -161,8 +160,6 @@ export function ShareModal(props: ShareModalProps) {
       'Sending this link in a Macro message will automatically update permissions to include recipients.'
     );
   });
-
-
 
   const [channelNamesResource] = createResource(
     () => {
@@ -475,9 +472,7 @@ export function ShareModal(props: ShareModalProps) {
                   <Dialog.Title class="text-sm">{`Share: ${props.name}`}</Dialog.Title>
                 </div>
 
-                <div class="flex flex-row items-center gap-2">
-
-                </div>
+                <div class="flex flex-row items-center gap-2"></div>
               </div>
 
               <ForwardToChannel
@@ -488,7 +483,6 @@ export function ShareModal(props: ShareModalProps) {
                   channelSharePermissions: recipients(),
                 }}
                 onSubmit={() => props.setIsSharePermOpen(false)}
-
                 refetch={refetch}
                 name={props.name}
               />
@@ -809,22 +803,19 @@ export function ShareOptions(props: {
         <TextButton
           text={currentValueText()}
           disabled={props.disabled}
-          width='w-[67px]'
-          height='22px'
+          width="w-[67px]"
+          height="22px"
           theme="base"
           showChevron
           left
         />
       </DropdownMenu.Trigger>
       <DropdownMenuContent>
-        <DropdownMenu.RadioGroup
-          value={currentValue()}
-          onChange={handleChange}
-        >
+        <DropdownMenu.RadioGroup value={currentValue()} onChange={handleChange}>
           <For each={options()}>
             {(option) => (
               <MenuItem
-              groupValue={currentValue()}
+                groupValue={currentValue()}
                 value={option.value}
                 selectorType="radio"
                 text={option.label}
