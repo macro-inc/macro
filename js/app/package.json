@@ -10,12 +10,12 @@
 	"scripts": {
 		"dev": "cd packages/app && bun run --bun dev",
 		"build": "cd packages/app && MODE=development NODE_ENV=production bun run --bun build",
-		"test": "bunx vitest run",
+		"test": "bunx --bun vitest run",
 		"check": "tsc --noEmit --skipLibCheck --project packages/app/tsconfig.json",
 		"preview": "cd packages/app && bun run --bun preview:dev",
 		"lint": "bunx --bun biome lint --skip=nursery/noImportCycles",
-		"format": "bunx biome format --write",
-		"fix": "bunx biome lint --write",
+		"format": "bunx --bun biome format --write",
+		"fix": "bunx --bun biome lint --write",
 		"clean": "bun scripts/clean-env.js"
 	},
 	"dependencies": {

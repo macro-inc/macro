@@ -10,6 +10,12 @@ local-dss:
 local-search:
     cd packages/app && VITE_LOCAL_SERVERS='search-service' bun run --bun dev
 
+build-dev:
+    cd packages/app && MODE=development NODE_ENV=production bun run --bun build
+
+build-staging:
+    cd packages/app && MODE=staging NODE_ENV=production bun run --bun build
+
 build-prod:
     cd packages/app && MODE=production NODE_ENV=production bun run --bun build
 
@@ -17,10 +23,10 @@ build-tauri:
     cd packages/app && MODE=production NODE_ENV=production bun run --bun build:tauri
 
 test-watch:
-    bunx vitest
+    bunx --bun vitest
 
 preview-prod:
-    cd packages/app && MODE=production NODE_ENV=production bun preview:prod
+    cd packages/app && MODE=production NODE_ENV=production bun run preview:prod
 
 lint-staged:
     bunx --bun biome lint --staged
