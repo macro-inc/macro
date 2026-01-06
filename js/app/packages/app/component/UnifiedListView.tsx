@@ -1221,6 +1221,113 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
   let lastClickedEntityId = -1;
 
+  const toggleSingleMultiSelection = (params: {
+    entity: EntityData;
+    next: boolean;
+  }) => {
+    unifiedListContext.setViewDataStore(
+      selectedView(),
+      'multiSelectEntities',
+      (prev) => {
+        if (!params.next) {
+          return prev.filter((e) => e.id !== params.entity.id);
+        }
+        return prev.concat(params.entity);
+      }
+    );
+  };
+
+  const getSelectionAnchorIndex = (params: {
+    entityList: EntityData[];
+    selectedEntitySet: Set<EntityData>;
+    lastClickedIndex: number;
+  }) => {
+    // Try to grab the last clicked item and fall back on the highest currently
+    // selected index.
+    let anchorIndex = params.lastClickedIndex;
+    if (anchorIndex === -1) {
+      for (let i = 0; i < params.entityList.length; i++) {
+        if (params.selectedEntitySet.has(params.entityList[i])) {
+          anchorIndex = i;
+        }
+      }
+    }
+    return anchorIndex;
+  };
+
+  const getNewEntitiesForShiftSelection = (params: {
+    entityList: EntityData[];
+    selectedEntitySet: Set<EntityData>;
+    anchorIndex: number;
+    targetIndex: number;
+  }) => {
+    const newEntitiesForSelection: EntityData[] = [];
+    const sign = Math.sign(params.targetIndex - params.anchorIndex);
+    if (params.anchorIndex === params.targetIndex)
+      return newEntitiesForSelection;
+
+    for (
+      let i = params.anchorIndex;
+      sign > 0 ? i <= params.targetIndex : i >= params.targetIndex;
+      i += sign
+    ) {
+      const entity = params.entityList[i];
+      if (!params.selectedEntitySet.has(entity)) {
+        newEntitiesForSelection.push(entity);
+      }
+    }
+
+    return newEntitiesForSelection;
+  };
+
+  const handleMultiSelectChecked = (params: {
+    entity: EntityData;
+    entityIndex: number;
+    next: boolean;
+    shiftKey: boolean;
+  }) => {
+    if (!params.shiftKey) {
+      toggleSingleMultiSelection({ entity: params.entity, next: params.next });
+      lastClickedEntityId = params.entityIndex;
+      return;
+    }
+
+    const entityList = unifiedListContext.entitiesSignal[0]();
+    if (!entityList) return;
+
+    const selectedEntitySet = new Set(
+      unifiedListContext.viewsDataStore[unifiedListContext.selectedView()]
+        .multiSelectEntities
+    );
+
+    const anchorIndex = getSelectionAnchorIndex({
+      entityList,
+      selectedEntitySet,
+      lastClickedIndex: lastClickedEntityId,
+    });
+
+    if (anchorIndex === -1) {
+      toggleSingleMultiSelection({ entity: params.entity, next: params.next });
+      lastClickedEntityId = params.entityIndex;
+      return;
+    }
+
+    const newEntitiesForSelection = getNewEntitiesForShiftSelection({
+      entityList,
+      selectedEntitySet,
+      anchorIndex,
+      targetIndex: params.entityIndex,
+    });
+
+    unifiedListContext.setViewDataStore(
+      selectedView(),
+      'multiSelectEntities',
+      (prev) => prev.concat(newEntitiesForSelection)
+    );
+
+    lastClickedEntityId = params.entityIndex;
+  };
+
   // reset last clicked on view change.
   createEffect(
     on(view, () => {
@@ -1642,74 +1749,14 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                           innerProps.entity.id
                       }
                       checked={multiSelectSelector(innerProps.entity.id)}
-                      onChecked={(next, shiftKey) => {
-                        const toggleSingle = () =>
-                          unifiedListContext.setViewDataStore(
-                            selectedView(),
-                            'multiSelectEntities',
-                            (p) => {
-                              if (!next) {
-                                return p.filter(
-                                  (e) => e.id !== innerProps.entity.id
-                                );
-                              }
-                              return p.concat(innerProps.entity);
-                            }
-                          );
-                        if (shiftKey) {
-                          const entityList =
-                            unifiedListContext.entitiesSignal[0]();
-                          if (!entityList) return;
-                          const selectedEntitySet = new Set(
-                            unifiedListContext.viewsDataStore[
-                              unifiedListContext.selectedView()
-                            ].multiSelectEntities
-                          );
-                          const newEnititiesForSeleciton: EntityData[] = [];
-                          // Try to grab the last clicked item and fall back on
-                          // the highest currently selected index.
-                          let anchorIndex = lastClickedEntityId;
-                          if (anchorIndex === -1) {
-                            for (let i = 0; i < entityList.length; i++) {
-                              if (selectedEntitySet.has(entityList[i])) {
-                                anchorIndex = i;
-                              }
-                            }
-                          }
-                          if (anchorIndex === -1) {
-                            toggleSingle();
-                            lastClickedEntityId = innerProps.index;
-                            return;
-                          }
-                          const targetIndex = innerProps.index;
-                          const sign = Math.sign(targetIndex - anchorIndex);
-                          if (anchorIndex === targetIndex) {
-                            // no_op
-                          } else {
-                            for (
-                              let i = anchorIndex;
-                              sign > 0 ? i <= targetIndex : i >= targetIndex;
-                              i += sign
-                            ) {
-                              const entity = entityList[i];
-                              if (!selectedEntitySet.has(entity)) {
-                                newEnititiesForSeleciton.push(entity);
-                              }
-                            }
-                          }
-                          unifiedListContext.setViewDataStore(
-                            selectedView(),
-                            'multiSelectEntities',
-                            (p) => {
-                              return p.concat(newEnititiesForSeleciton);
-                            }
-                          );
-                          lastClickedEntityId = innerProps.index;
-                        } else {
-                          toggleSingle();
-                          lastClickedEntityId = innerProps.index;
-                        }
-                      }}
+                      onChecked={(next, shiftKey) =>
+                        handleMultiSelectChecked({
+                          entity: innerProps.entity,
+                          entityIndex: innerProps.index,
+                          next,
+                          shiftKey: shiftKey ?? false,
+                        })
+                      }
                     />
                   </EntityRow>
                 );
