@@ -1,7 +1,5 @@
 import { IS_MAC } from '@core/constant/isMac';
-import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { isEditableInput } from '@core/util/isEditableInput';
 import { logger } from '@observability';
 import { onCleanup, onMount, untrack } from 'solid-js';
@@ -424,7 +422,7 @@ export function attachGlobalDOMScope(el: Element) {
  * @returns A function to subscribe to keypress events with full context information.
  */
 export function useHotKeyRoot() {
-  if (isNativeMobilePlatform() || (isMobileWidth() && isTouchDevice())) {
+  if (isTouchDevice()) {
     return;
   }
 

@@ -1,5 +1,6 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useChannelsContext } from '@core/component/ChannelsProvider';
+import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { ENABLE_PROPERTIES_METADATA } from '@core/constant/featureFlags';
 import { HotkeyTags } from '@core/hotkey/constants';
@@ -7,6 +8,7 @@ import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { runCommand } from '@core/hotkey/utils';
+import { isModality } from '@core/mobile/inputModality';
 import { DEFAULT_VIEWS, type DefaultView, type ViewId } from '@core/types/view';
 import { getActualTarget } from '@core/util/getActualTarget';
 import { isInteractiveElement } from '@core/util/isInteractiveElement';
@@ -82,6 +84,8 @@ import {
 
 type NavigateListFn = (input: NavigationInput) => Promise<NavigationResult>;
 
+type CollapseEntityFn = (entityId: string) => Promise<void>;
+
 export type UnifiedListContext = {
   viewsDataStore: Store<ViewDataMap>;
   setViewDataStore: SetStoreFunction<Partial<ViewDataMap>>;
@@ -97,6 +101,10 @@ export type UnifiedListContext = {
   navigateThroughList: NavigateListFn;
   // this is a private method that should be registered once by createNavigationEntityListShortcut
   _setNavigateThroughList: (fn: NavigateListFn) => void;
+  /**
+   * Optional hook to animate an entity row collapsing before the entity disappears from the list. This gets set by the EntityRowProvider.
+   */
+  collapseEntitySignal: Signal<CollapseEntityFn | undefined>;
 };
 
 export function createStubSoupContext(): UnifiedListContext {
@@ -118,6 +126,7 @@ export function createStubSoupContext(): UnifiedListContext {
       entity: undefined,
     }),
     _setNavigateThroughList: () => {},
+    collapseEntitySignal: createSignal<CollapseEntityFn | undefined>(undefined),
   };
 }
 
@@ -134,6 +143,9 @@ export function createSoupContext(): UnifiedListContext {
   const entityListRefSignal = createSignal<HTMLDivElement>();
   const entitiesSignal = createSignal<EntityData[]>();
   const emailViewSignal = createSignal<PreviewViewStandardLabel>('inbox');
+  const collapseEntitySignal = createSignal<CollapseEntityFn | undefined>(
+    undefined
+  );
   const tutorialCompleted = useTutorialCompleted();
   const [showHelpDrawer, setShowHelpDrawer] = createSignal<Set<DefaultView>>(
     !tutorialCompleted() ? new Set(DEFAULT_VIEWS) : new Set()
@@ -149,6 +161,7 @@ export function createSoupContext(): UnifiedListContext {
     entityListRefSignal,
     entitiesSignal,
     emailViewSignal,
+    collapseEntitySignal,
     showHelpDrawer,
     setShowHelpDrawer,
     actionRegistry: createEntityActionRegistry(),
@@ -402,6 +415,24 @@ export function createNavigationEntityListShortcut({
       );
 
       if (handler || hasSupportedEntity) {
+        // Check if current view filters out completed items. More robustly we would have the list of entitites itself trigger entity removal animation when the list changes, but this is complicated by our usage of queries and virtualized lists.
+        const currentViewConfig =
+          unifiedListContext.viewsDataStore[selectedView()];
+        const [collapseEntity] = unifiedListContext.collapseEntitySignal;
+        const shouldCollapse =
+          currentViewConfig?.filters?.notificationFilter === 'notDone' &&
+          collapseEntity() !== undefined;
+
+        // If the view hides completed items, collapse the entities first
+        if (shouldCollapse) {
+          const collapse = collapseEntity();
+          if (collapse) {
+            await Promise.all(
+              multiSelectEntities.map((entity) => collapse(entity.id))
+            );
+          }
+        }
+
         if (multiSelectEntities.length > 1) {
           const selectedEntityData = getSelectedEntity();
           const selectedEntityIncludedInMultiSelectedEntities =
@@ -411,7 +442,11 @@ export function createNavigationEntityListShortcut({
 
           // update selected entity to current selected entity's neighbor, before/after neighbor is based on last navigation direction.
           // if selected entity is not from multi selected list, don't update selected entity
-          if (selectedEntityIncludedInMultiSelectedEntities) {
+          // we don't want to update the selected entity when user is using touch modality because it will cause the list to scroll in unexpected ways when swiping to mark done
+          if (
+            selectedEntityIncludedInMultiSelectedEntities &&
+            !isModality('touch')
+          ) {
             const index = selectedEntityData?.index ?? 0;
 
             const newSelectedEntity = entities()?.at(index);
@@ -422,7 +457,7 @@ export function createNavigationEntityListShortcut({
               mode: 'step',
             });
           }
-        } else {
+        } else if (!isModality('touch')) {
           if (isEntityLastItem()) {
             navigateThroughList({ axis: 'start', mode: 'step' });
           } else {
@@ -451,6 +486,8 @@ export function createNavigationEntityListShortcut({
         }
 
         setViewDataStore(selectedView(), 'multiSelectEntities', []);
+
+        toast.success('Marked as done');
       }
 
       return { success: true };

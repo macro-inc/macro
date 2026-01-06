@@ -326,17 +326,17 @@ export function createUploadToast(message: string) {
       <Toast
         toastId={props.toastId}
         persistent={true}
-        class={`flex flex-col items-center justify-between gap-2 border rounded-md p-3 shadow-lg bg-amber-50 border-amber-300 text-amber-700 pointer-events-auto
+        class={`flex flex-col items-center justify-between gap-2 border rounded-md p-3 shadow-lg bg-menu border-edge-muted pointer-events-auto
                 ui-opened:animate-slide-in ui-closed:animate-hide transition-transform ui-swipe-move:translate-x-[var(--kb-toast-swipe-move-x)]
                 ui-swipe-cancel:translate-x-0 ui-swipe-cancel:ease-out ui-swipe-cancel:duration-200 ui-swipe-end:animate-swipe-out`}
       >
         <div class="flex items-center w-full">
-          <Spinner class="fill-amber-700 mr-3 h-7 animate-spin shrink-0" />
+          <Spinner class="mr-3 h-7 animate-spin shrink-0" />
           <div>
             <Toast.Title>{message}</Toast.Title>
           </div>
           <Toast.CloseButton class="ml-auto">
-            <XIcon class={`h-5 ml-4 fill-amber-700`} />
+            <XIcon class={`h-5 ml-4`} />
           </Toast.CloseButton>
         </div>
       </Toast>

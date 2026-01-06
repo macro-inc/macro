@@ -338,7 +338,7 @@ export const VIEWCONFIG_SORT_ORDER: readonly SortOptions['sortOrder'][] = [
   'descending',
 ] as const;
 export const VIEWCONFIG_FILTER_DOCUMENT_TYPE_FILTER: readonly FilterOptions['documentTypeFilter'][number][] =
-  ['md', 'code', 'image', 'canvas', 'pdf', 'unknown'] as const;
+  ['md', 'pdf', 'canvas', 'code', 'image', 'unknown'] as const;
 export const VIEWCONFIG_FILTER_ENTITY_TYPE: readonly FilterOptions['typeFilter'][number][] =
   ['channel', 'chat', 'document', 'email', 'project', 'task'] as const;
 

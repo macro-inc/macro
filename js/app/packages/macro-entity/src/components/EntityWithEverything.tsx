@@ -865,7 +865,7 @@ export function EntityWithEverything(
       use:draggable
       use:droppable
       data-checked={props.checked}
-      class="everything-entity relative group/entity hover:bg-hover/30"
+      class="everything-entity w-full relative group/entity hover:bg-hover/30"
       style={{
         'min-height': `${ENTITY_HEIGHT}px`,
       }}
@@ -1075,7 +1075,11 @@ export function EntityWithEverything(
         {/* Content Hits from Search */}
         <Show when={contentHitData().length > 0}>
           <div class="relative row-2 col-2 col-end-4 pb-2 @max-md/split:row-auto @max-md/split:col-auto @max-md/split:w-full @max-md/split:mt-1">
-            <CollapsibleList items={contentHitData()} threadBorder>
+            <CollapsibleList
+              items={contentHitData()}
+              threadBorder
+              visibleCount={1}
+            >
               {(data, index, count) => (
                 <ContentHitRow
                   allData={contentHitData()}

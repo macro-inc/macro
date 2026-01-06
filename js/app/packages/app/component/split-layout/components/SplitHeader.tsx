@@ -2,6 +2,8 @@ import EntityNavigationIndicator from '@app/component/EntityNavigationIndicator'
 import { LabelAndHotKey } from '@core/component/Tooltip';
 import { ENABLE_PREVIEW } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { isMobileWidth } from '@core/mobile/mobileWidth';
 import CollapseIcon from '@icon/regular/arrows-in.svg';
 import ExpandIcon from '@icon/regular/arrows-out.svg';
 import CaretLeft from '@icon/regular/caret-left.svg';
@@ -145,7 +147,7 @@ function SplitPreviewToggle() {
 function SplitControlButtons() {
   return (
     <div class="flex flex-row items-center px-2 h-full shrink-0">
-      <div class="ios:hidden">
+      <div class="touch:mobile-width:hidden">
         <SplitCloseButton />
       </div>
       <SplitBackButton />
@@ -211,20 +213,24 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
         {/* space filler */}
         <div class="h-full grow-1" />
 
-        <div
-          class="min-w-4 h-full shrink-0 ios:hidden"
-          ref={(ref) => {
-            ctx.layoutRefs.headerRight = ref;
-          }}
-        />
-        <div class="z-2 relative flex items-center bg-panel pr-2 h-full ios:hidden">
-          <EntityNavigationIndicator />
-          <SplitPreviewToggle />
-          <SplitSpotlightButton />
-        </div>
-        <div class="z-2 relative items-center bg-panel pr-2 h-full hidden ios:flex">
-          <SplitSettingsButton />
-        </div>
+        <Show when={!isTouchDevice() || !isMobileWidth()}>
+          <div
+            class="min-w-4 h-full shrink-0"
+            ref={(ref) => {
+              ctx.layoutRefs.headerRight = ref;
+            }}
+          />
+          <div class="z-2 relative flex items-center bg-panel pr-2 h-full">
+            <EntityNavigationIndicator />
+            <SplitPreviewToggle />
+            <SplitSpotlightButton />
+          </div>
+        </Show>
+        <Show when={isTouchDevice()}>
+          <div class="z-2 relative flex items-center bg-panel pr-2 h-full">
+            <SplitSettingsButton />
+          </div>
+        </Show>
       </div>
     </div>
   );

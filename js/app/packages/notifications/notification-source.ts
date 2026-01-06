@@ -116,6 +116,18 @@ export function createNotificationSource(
     }
 
     batch(() => {
+      const currentKeys: Set<CompositeEntity> = new Set(
+        Object.keys(store) as CompositeEntity[]
+      );
+      const newKeys: Set<CompositeEntity> = new Set(
+        Object.keys(newNotificationMap) as CompositeEntity[]
+      );
+      for (const key of currentKeys) {
+        if (!newKeys.has(key)) {
+          setStore(key, reconcile([], { key: NOTIFICATION_KEY }));
+        }
+      }
+
       for (const [composite, notifications] of Object.entries(
         newNotificationMap
       )) {

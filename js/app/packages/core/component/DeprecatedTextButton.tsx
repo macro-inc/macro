@@ -21,6 +21,7 @@ type TextButton = {
   iconColor?: string;
   width?: string;
   height?: string;
+  left?: boolean;
   textSize?: string;
   onClick?: JSX.EventHandler<HTMLButtonElement, MouseEvent>;
   onMouseDown?: JSX.EventHandler<HTMLButtonElement, MouseEvent>;
@@ -161,7 +162,7 @@ export function DeprecatedTextButton(props: TextButtonProps) {
           )}
           <div class="flex flex-1 justify-between items-center gap-2 min-w-0">
             <div
-              class={`${props.width ? props.width + ' truncate ' : ''}${props.textSize ?? 'text-xs'} font-mono uppercase flex-1 text-center font-medium leading-5 whitespace-nowrap truncate`}
+              class={`${props.width ? props.width + ' truncate ' : ''}${props.textSize ?? 'text-xs'} font-mono uppercase flex-1 ${props.left ? 'text-left' : 'text-center'} font-medium leading-5 whitespace-nowrap truncate`}
             >
               {props.text ?? props.children}
             </div>

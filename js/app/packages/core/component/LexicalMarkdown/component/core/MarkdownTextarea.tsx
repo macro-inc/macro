@@ -31,8 +31,10 @@ import {
   createAccessoryStore,
   customSelectionDataPlugin,
   emojisPlugin,
+  filePastePlugin,
   type ItemMention,
   keyboardFocusPlugin,
+  mediaPlugin,
   mentionsPlugin,
   type SelectionData,
   selectionDataPlugin,
@@ -46,9 +48,10 @@ import {
   setEditorStateFromHtml,
   setEditorStateFromMarkdown,
 } from '../../utils';
+import type { UserMentionRecord } from '../../utils/mentionsUtils';
 import { EmojiMenu } from '../menu/EmojiMenu';
 import { FloatingLinkMenu } from '../menu/FloatingLinkMenu';
-import { MentionsMenu, type UserMentionRecord } from '../menu/MentionsMenu';
+import { MentionsMenu } from '../menu/MentionsMenu';
 import { DecoratorRenderer } from './DecoratorRenderer';
 import { NodeAccessoryRenderer } from './NodeAccessoryRenderer';
 
@@ -90,6 +93,10 @@ export interface MarkdownTextareaProps {
   formatState?: SelectionData;
   setFormatState?: SetStoreFunction<SelectionData>;
   domRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
+  onPasteFilesAndDirs?: (
+    files: FileSystemFileEntry[],
+    directories: FileSystemDirectoryEntry[]
+  ) => void;
 }
 
 export function MarkdownTextarea(props: MarkdownTextareaProps) {
@@ -173,6 +180,7 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
     .state<string>(setMarkdownState, 'markdown')
     .history(400)
     .use(restoreFocusPlugin())
+    .use(mediaPlugin())
     .use(
       props.formatState && props.setFormatState
         ? customSelectionDataPlugin(
@@ -190,6 +198,14 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
       })
     )
     .use(emojisPlugin({ menu: emojisMenuOperations }));
+
+  if (props.onPasteFilesAndDirs) {
+    plugins.use(
+      filePastePlugin({
+        onPasteFilesAndDirs: props.onPasteFilesAndDirs,
+      })
+    );
+  }
 
   const [accessoryStore, setAccessoryStore] = createAccessoryStore();
   plugins.use(
