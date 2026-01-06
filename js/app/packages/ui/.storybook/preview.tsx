@@ -12,7 +12,7 @@ import type { Renderer } from 'storybook/internal/types';
 import {
   generateAllThemesCSS,
   generateThemeClassMapping,
-} from '../../block-theme/utils/generateThemeCSS';
+} from './generateThemeCSS';
 
 // Theme class mapping - auto-generated from DEFAULT_THEMES
 const THEME_CLASSES = generateThemeClassMapping();
