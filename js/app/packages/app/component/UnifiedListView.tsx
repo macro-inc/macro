@@ -99,6 +99,7 @@ import {
   createRoot,
   createSelector,
   createSignal,
+  For,
   mergeProps,
   on,
   onCleanup,
@@ -160,6 +161,15 @@ const SEARCH_SERVICE_DEBOUNCE_MS = 200;
 const LOCAL_FUZZY_SEARCH_DEBOUNCE_MS = 20;
 
 const GARBAGE_UUID = '00000000-0000-0000-0000-000000000000';
+
+const FILE_TYPE_DISPLAY_LABELS: Record<DocumentTypeFilter, string> = {
+  md: 'NOTE',
+  pdf: 'PDF',
+  canvas: 'CANVAS',
+  code: 'CODE',
+  image: 'IMAGE',
+  unknown: 'OTHER',
+};
 
 const sortOptions = [
   {
@@ -1417,48 +1427,17 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                   <section class="gap-1 p-2">
                     <span class="font-medium text-xs">Filetype</span>
                     <div class="flex flex-row flex-wrap items-center gap-1">
-                      <ToggleButton
-                        size="SM"
-                        pressed={fileTypeFilter().includes('md')}
-                        onChange={() => toggleFileTypeFilter('md')}
-                      >
-                        NOTE
-                      </ToggleButton>
-                      <ToggleButton
-                        size="SM"
-                        pressed={fileTypeFilter().includes('pdf')}
-                        onChange={() => toggleFileTypeFilter('pdf')}
-                      >
-                        PDF
-                      </ToggleButton>
-                      <ToggleButton
-                        size="SM"
-                        pressed={fileTypeFilter().includes('canvas')}
-                        onChange={() => toggleFileTypeFilter('canvas')}
-                      >
-                        CANVAS
-                      </ToggleButton>
-                      <ToggleButton
-                        size="SM"
-                        pressed={fileTypeFilter().includes('code')}
-                        onChange={() => toggleFileTypeFilter('code')}
-                      >
-                        CODE
-                      </ToggleButton>
-                      <ToggleButton
-                        size="SM"
-                        pressed={fileTypeFilter().includes('image')}
-                        onChange={() => toggleFileTypeFilter('image')}
-                      >
-                        IMAGE
-                      </ToggleButton>
-                      <ToggleButton
-                        size="SM"
-                        pressed={fileTypeFilter().includes('unknown')}
-                        onChange={() => toggleFileTypeFilter('unknown')}
-                      >
-                        Other
-                      </ToggleButton>
+                      <For each={[...VIEWCONFIG_FILTER_DOCUMENT_TYPE_FILTER]}>
+                        {(fileType) => (
+                          <ToggleButton
+                            size="SM"
+                            pressed={fileTypeFilter().includes(fileType)}
+                            onChange={() => toggleFileTypeFilter(fileType)}
+                          >
+                            {FILE_TYPE_DISPLAY_LABELS[fileType]}
+                          </ToggleButton>
+                        )}
+                      </For>
                     </div>
                   </section>
                   <Show when={ENABLE_SOUP_FROM_FILTER && showFromFilter()}>
