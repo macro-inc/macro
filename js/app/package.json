@@ -10,7 +10,7 @@
 	"scripts": {
 		"dev": "cd packages/app && bun run --bun dev",
 		"build": "cd packages/app && MODE=development NODE_ENV=production bun run --bun build",
-		"test": "bunx --bun vitest run",
+		"test": "bunx vitest run",
 		"check": "tsc --noEmit --skipLibCheck --project packages/app/tsconfig.json",
 		"preview": "cd packages/app && bun run --bun preview:dev",
 		"lint": "bunx --bun biome lint --skip=nursery/noImportCycles",
