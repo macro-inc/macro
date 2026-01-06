@@ -485,20 +485,6 @@ export function ShareModal(props: ShareModalProps) {
                 </div>
 
                 <div class="flex flex-row items-center gap-2">
-                  {/*<Show when={props.userPermissions === Permissions.OWNER}>
-                    <ShareOptions
-                      setPermissions={(accessLevel) => {
-                        setSubmitAccessLevel(accessLevel);
-                        forwardToChannelRef()?.setSubmitAccessLevel(
-                          accessLevel
-                        );
-                      }}
-                      permissions={submitAccessLevel()}
-                      label="Permission"
-                      hideNoAccess
-                    />
-                  </Show>*/}
-
                   <TextButton
                     onClick={() => {
                       const selectedOptions =
