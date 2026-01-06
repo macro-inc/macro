@@ -7,7 +7,9 @@ import {
   createSignal,
   type JSX,
   onCleanup,
+  onMount,
   type ParentProps,
+  type Setter,
   useContext,
 } from 'solid-js';
 
@@ -82,9 +84,9 @@ export function EntityRowProvider(
     canSwipeLeft?: (entityId: string) => boolean;
     onSwipeRight?: (entityId: string) => void;
     onSwipeLeft?: (entityId: string) => void;
-    onCollapseReady?: (
-      collapseEntity: (entityId: string) => Promise<void>
-    ) => void;
+    setCollapseEntity?: Setter<
+      ((entityId: string) => Promise<void>) | undefined
+    >;
   }>
 ) {
   const [stateById, setStateById] = createSignal<
@@ -168,9 +170,10 @@ export function EntityRowProvider(
     });
   };
 
-  // Notify parent when collapse function is ready
-  createEffect(() => {
-    props.onCollapseReady?.(collapseEntity);
+  // Register/unregister the row-collapse hook with our parent (e.g. UnifiedListView).
+  onMount(() => {
+    props.setCollapseEntity?.(() => collapseEntity);
+    onCleanup(() => props.setCollapseEntity?.(() => undefined));
   });
 
   const handleSwipe = (entityId: string) => {

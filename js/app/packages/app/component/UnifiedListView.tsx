@@ -1532,9 +1532,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
               unifiedListContext.actionRegistry.execute('mark_as_done', entity);
             }}
-            onCollapseReady={(collapseEntity) => {
-              unifiedListContext.collapseEntity = collapseEntity;
-            }}
+            setCollapseEntity={unifiedListContext.collapseEntitySignal[1]}
           >
             <UnifiedListComponent
               entityListRef={setLocalEntityListRef}

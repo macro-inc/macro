@@ -84,6 +84,8 @@ import {
 
 type NavigateListFn = (input: NavigationInput) => Promise<NavigationResult>;
 
+type CollapseEntityFn = (entityId: string) => Promise<void>;
+
 export type UnifiedListContext = {
   viewsDataStore: Store<ViewDataMap>;
   setViewDataStore: SetStoreFunction<Partial<ViewDataMap>>;
@@ -99,7 +101,10 @@ export type UnifiedListContext = {
   navigateThroughList: NavigateListFn;
   // this is a private method that should be registered once by createNavigationEntityListShortcut
   _setNavigateThroughList: (fn: NavigateListFn) => void;
-  collapseEntity?: (entityId: string) => Promise<void>;
+  /**
+   * Optional hook to animate an entity row collapsing before the entity disappears from the list. This gets set by the EntityRowProvider.
+   */
+  collapseEntitySignal: Signal<CollapseEntityFn | undefined>;
 };
 
 export function createStubSoupContext(): UnifiedListContext {
@@ -121,7 +126,7 @@ export function createStubSoupContext(): UnifiedListContext {
       entity: undefined,
     }),
     _setNavigateThroughList: () => {},
-    collapseEntity: undefined,
+    collapseEntitySignal: createSignal<CollapseEntityFn | undefined>(undefined),
   };
 }
 
@@ -138,6 +143,9 @@ export function createSoupContext(): UnifiedListContext {
   const entityListRefSignal = createSignal<HTMLDivElement>();
   const entitiesSignal = createSignal<EntityData[]>();
   const emailViewSignal = createSignal<PreviewViewStandardLabel>('inbox');
+  const collapseEntitySignal = createSignal<CollapseEntityFn | undefined>(
+    undefined
+  );
   const tutorialCompleted = useTutorialCompleted();
   const [showHelpDrawer, setShowHelpDrawer] = createSignal<Set<DefaultView>>(
     !tutorialCompleted() ? new Set(DEFAULT_VIEWS) : new Set()
@@ -153,6 +161,7 @@ export function createSoupContext(): UnifiedListContext {
     entityListRefSignal,
     entitiesSignal,
     emailViewSignal,
+    collapseEntitySignal,
     showHelpDrawer,
     setShowHelpDrawer,
     actionRegistry: createEntityActionRegistry(),
@@ -168,7 +177,6 @@ export function createSoupContext(): UnifiedListContext {
       }
       navigateThroughListFn = fn;
     },
-    collapseEntity: undefined,
   };
 }
 
@@ -410,17 +418,19 @@ export function createNavigationEntityListShortcut({
         // Check if current view filters out completed items. More robustly we would have the list of entitites itself trigger entity removal animation when the list changes, but this is complicated by our usage of queries and virtualized lists.
         const currentViewConfig =
           unifiedListContext.viewsDataStore[selectedView()];
+        const [collapseEntity] = unifiedListContext.collapseEntitySignal;
         const shouldCollapse =
           currentViewConfig?.filters?.notificationFilter === 'notDone' &&
-          unifiedListContext.collapseEntity !== undefined;
+          collapseEntity() !== undefined;
 
         // If the view hides completed items, collapse the entities first
-        if (shouldCollapse && unifiedListContext.collapseEntity) {
-          await Promise.all(
-            multiSelectEntities.map((entity) =>
-              unifiedListContext.collapseEntity!(entity.id)
-            )
-          );
+        if (shouldCollapse) {
+          const collapse = collapseEntity();
+          if (collapse) {
+            await Promise.all(
+              multiSelectEntities.map((entity) => collapse(entity.id))
+            );
+          }
         }
 
         if (multiSelectEntities.length > 1) {
