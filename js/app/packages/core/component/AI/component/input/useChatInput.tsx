@@ -15,13 +15,13 @@ import type {
   UploadQueue,
 } from '@core/component/AI/types';
 import { useUploadAttachment } from '@core/component/AI/util/uploadToChat';
-import { BrightJoins } from '@core/component/BrightJoins';
 import { CircleSpinner } from '@core/component/CircleSpinner';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import PlusIcon from '@icon/regular/plus.svg';
 import XIcon from '@icon/regular/x.svg';
 import { createCallback } from '@solid-primitives/rootless';
+import { BrightJoins } from '@ui/components/BrightJoins';
 import type { LexicalEditor } from 'lexical';
 import type { Accessor, Component, Setter } from 'solid-js';
 import { createEffect, createSignal, Match, on, Show, Switch } from 'solid-js';

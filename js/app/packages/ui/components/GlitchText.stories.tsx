@@ -2,7 +2,6 @@ import { GlitchText, type GlitchTextProps } from '@ui/components/GlitchText';
 import type { Meta, StoryObj } from 'storybook-solidjs-vite';
 
 const meta = {
-  title: 'GlitchText',
   component: GlitchText,
   argTypes: {
     from: {

@@ -2,8 +2,6 @@ import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { withAnalytics } from '@coparse/analytics';
 import { updateUserAuth, useIsAuthenticated } from '@core/auth';
 import { useHasPaidAccess } from '@core/auth/license';
-import { BrightJoins } from '@core/component/BrightJoins';
-import BrightJoinsProgressMeter from '@core/component/BrightJoinsProgressMeter';
 import { ActionSequence } from '@core/component/FormControls/ActionSequence';
 import MacroLogo from '@core/component/MacroLogo';
 import { useEmailLinks, useEmailLinksStatus } from '@core/email-link';
@@ -11,6 +9,10 @@ import { licenseChannel } from '@core/util/licenseUpdateBroadcastChannel';
 import { updateUserInfo } from '@service-gql/client';
 import { stripeServiceClient } from '@service-stripe/client';
 import { useNavigate, useSearchParams } from '@solidjs/router';
+import {
+  BrightJoins,
+  BrightJoinsProgressMeter,
+} from '@ui/components/BrightJoins';
 import { createEffect, createSignal, onCleanup, Show } from 'solid-js';
 
 export default function Onboarding() {

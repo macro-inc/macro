@@ -1,10 +1,9 @@
-import type { PlayContext } from '@ui/types/storybook';
 import { Button } from '@ui/components/Button';
+import type { PlayContext } from '@ui/types/storybook';
 import { expect, fn } from 'storybook/test';
 import type { Meta, StoryObj } from 'storybook-solidjs-vite';
 
 const meta = {
-  title: 'Buttons',
   component: Button,
   argTypes: {
     variant: {

@@ -16,4 +16,3 @@ import type { Meta, StoryObj } from 'storybook-solidjs-vite';
 export type PlayContext<TStory extends StoryObj<Meta<any>>> = Parameters<
   NonNullable<TStory['play']>
 >[0];
-
