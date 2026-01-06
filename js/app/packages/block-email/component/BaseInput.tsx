@@ -856,6 +856,7 @@ export function BaseInput(props: {
             onChange={handleChange}
             onDocumentMention={(item) => {
               makeAttachmentPublic(item.id);
+              scheduleDraftSave();
             }}
             onUserMention={handleUserMention}
             portalScope="local"
@@ -877,6 +878,7 @@ export function BaseInput(props: {
                     uploadedItemIds.forEach((itemId) => {
                       makeAttachmentPublic(itemId);
                     });
+                    scheduleDraftSave();
                   },
                   { width: 542, height: 542 }
                 )
