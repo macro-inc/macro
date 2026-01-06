@@ -246,18 +246,14 @@ pub(crate) async fn search_emails(
     client: &opensearch::OpenSearch,
     args: EmailSearchArgs,
 ) -> Result<Vec<SearchHit>> {
-    let indices = match args.search_on {
-        SearchOn::Content => vec![SearchIndex::Emails.as_ref()],
-        SearchOn::NameContent => vec![SearchIndex::Emails.as_ref(), SearchIndex::Names.as_ref()],
-        SearchOn::Name => vec![SearchIndex::Names.as_ref()],
-    };
-
     let query_body = args.build()?;
 
     tracing::trace!("query: {}", query_body);
 
     let response = client
-        .search(opensearch::SearchParts::Index(&indices))
+        .search(opensearch::SearchParts::Index(&[
+            SearchIndex::Emails.as_ref()
+        ]))
         .body(query_body)
         .send()
         .await
