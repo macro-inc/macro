@@ -11,8 +11,8 @@ export { useDisplayName } from './displayName';
 export {
   emailToMacroId,
   isMacroId,
-  macroIdToEmail,
   type MacroId,
+  macroIdToEmail,
   tryMacroId,
 } from './macroId';
 export {

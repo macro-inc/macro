@@ -268,7 +268,9 @@ function NotificationRow(props: {
   onClick?: NotificationClickHandler;
   entity: EntityData;
 }) {
-  const [userName] = useDisplayName(tryMacroId(props.notification.senderId ?? ''));
+  const [userName] = useDisplayName(
+    tryMacroId(props.notification.senderId ?? '')
+  );
 
   const ActionContent = () => {
     if (

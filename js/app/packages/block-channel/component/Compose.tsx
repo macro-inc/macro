@@ -10,7 +10,11 @@ import { RecipientSelector } from '@core/component/RecipientSelector';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { InputAttachment } from '@core/store/cacheChannelInput';
-import { tryMacroId, useDisplayName, type WithCustomUserInput } from '@core/user';
+import {
+  tryMacroId,
+  useDisplayName,
+  type WithCustomUserInput,
+} from '@core/user';
 import { handleFileFolderDrop } from '@core/util/upload';
 import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';

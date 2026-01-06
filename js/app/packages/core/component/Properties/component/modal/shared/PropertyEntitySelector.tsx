@@ -219,7 +219,9 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
   // Get current user info for injection into contacts
   const currentUserId = useUserId();
-  const [currentUserDisplayName] = useDisplayName(tryMacroId(currentUserId() ?? ''));
+  const [currentUserDisplayName] = useDisplayName(
+    tryMacroId(currentUserId() ?? '')
+  );
 
   // Contacts with current user injected at the beginning
   const contactsWithCurrentUser = createMemo((): IUser[] => {

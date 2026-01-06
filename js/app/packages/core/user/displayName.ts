@@ -24,6 +24,7 @@ function queueItemsForFetch(items: string[]) {
 }
 
 function defaultNameTransform(item: UserNameItem): string {
+  // TODO: UserNameItem needs to be ported to use MacroId
   const email = macroIdToEmail(item.id as MacroId);
 
   if (item.loading) return email;
