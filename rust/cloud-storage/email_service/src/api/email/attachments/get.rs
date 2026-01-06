@@ -192,9 +192,9 @@ pub async fn upload_single_attachment(
         .db_id
         .ok_or_else(|| anyhow::anyhow!("Attachment must have a db_id to generate an object key"))?;
 
-    // Create an object key that combines link_id and attachment_id
+    // Create an object key that combines link_id and attachment_id. temp/ prefix for lifecycle policy
     let object_key = format!(
-        "{}/{}-{}",
+        "temp/{}/{}-{}",
         link_id,
         attachment_id,
         attachment.filename.clone().unwrap_or_default()
