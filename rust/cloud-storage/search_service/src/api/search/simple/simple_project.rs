@@ -146,7 +146,7 @@ pub(in crate::api::search) async fn search_projects(
     req: ProjectSearchRequest,
 ) -> Result<Vec<opensearch_client::search::model::SearchHit>, SearchError> {
     // content search is not applicable for projects
-    if req.search_on == SearchOn::Content {
+    if let SearchOn::Content = req.search_on {
         return Ok(Vec::new());
     }
 

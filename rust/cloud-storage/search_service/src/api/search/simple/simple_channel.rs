@@ -115,7 +115,7 @@ pub(in crate::api::search) async fn search_channels(
     req: ChannelSearchRequest,
 ) -> Result<Vec<opensearch_client::search::model::SearchHit>, SearchError> {
     // We don't support searching on channels by name
-    if req.search_on == SearchOn::Name {
+    if let SearchOn::Name = req.search_on {
         return Ok(Vec::new());
     }
     if user_id.is_empty() {
