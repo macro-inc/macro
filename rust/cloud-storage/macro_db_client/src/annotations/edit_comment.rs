@@ -81,6 +81,7 @@ mod tests {
             text: Some("Updated comment text".to_string()),
             metadata: None,
             mentions: None,
+            thread_id: 42,
         };
 
         let result = edit_document_comment(&pool, comment_id, owner, &req).await;
@@ -103,6 +104,7 @@ mod tests {
             mentions: None,
             text: Some("Updated comment text".to_string()),
             metadata: None,
+            thread_id: 42,
         };
 
         let result = edit_document_comment(&pool, comment_id, owner, &req).await;
@@ -120,6 +122,7 @@ mod tests {
             mentions: None,
             text: Some("Updated comment text".to_string()),
             metadata: None,
+            thread_id: 42,
         };
 
         let result = edit_document_comment(&pool, comment_id, document_owner, &req).await;
@@ -138,6 +141,7 @@ mod tests {
             mentions: None,
             text: Some("Updated comment text".to_string()),
             metadata: None,
+            thread_id: 42,
         };
 
         let result = edit_document_comment(&pool, comment_id, owner, &req).await;
@@ -156,6 +160,7 @@ mod tests {
             mentions: None,
             text: Some("Updated comment text".to_string()),
             metadata: None,
+            thread_id: 42,
         };
 
         let result = edit_document_comment(&pool, comment_id, non_owner, &req).await;
