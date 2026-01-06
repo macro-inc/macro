@@ -29,4 +29,3 @@ export function calculateEffectiveDimensions(
     height: Math.round(height * effectiveScale),
   };
 }
-

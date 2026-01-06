@@ -847,11 +847,8 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
             handleFileFolderDrop(
               fileEntries,
               folderEntries,
-              createFilesReadyHandler(
-                editor,
-                blockId,
-                'md',
-                () => getDragDropPosition(editor, e, true)
+              createFilesReadyHandler(editor, blockId, 'md', () =>
+                getDragDropPosition(editor, e, true)
               )
             );
           },

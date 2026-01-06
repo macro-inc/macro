@@ -142,7 +142,6 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
 
     const bodyMacro = content();
 
-
     props.onSubmit({
       body: {
         text: prepared.bodyText,
