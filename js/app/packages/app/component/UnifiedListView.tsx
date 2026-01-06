@@ -716,64 +716,40 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     { equals: arrayEquals }
   );
 
-  const joinedSoupFileTypeFilter = createMemo<string[]>(
-    () => {
-      let fileTypes = [];
-      if (entityTypeFilter().includes('task')) {
-        fileTypes.push('md');
-      }
-
-      if (entityTypeFilter().includes('document')) {
-        if (fileTypeFilter().length > 0) {
-          const documentFileTypes = fileTypeFilter().flatMap((fileType) => {
-            if (fileType === 'code') return ['assoc:code'];
-            if (fileType === 'unknown') return ['assoc:other'];
-            return [fileType];
-          });
-          fileTypes.push(...documentFileTypes);
-        } else {
-          // if we have task + document and no file type filter, we want to include all file types
-          fileTypes = [];
+  const createFileTypeFilterMemo = (type: 'soup' | 'search') =>
+    createMemo<string[]>(
+      () => {
+        let fileTypes = [];
+        if (entityTypeFilter().includes('task')) {
+          fileTypes.push('md');
         }
-      }
 
-      return Array.from(new Set(fileTypes));
-    },
-    [],
-    {
-      equals: arrayEquals,
-    }
-  );
-
-  const joinedSearchFileTypeFilter = createMemo<string[]>(
-    () => {
-      let fileTypes = [];
-      if (entityTypeFilter().includes('task')) {
-        fileTypes.push('md');
-      }
-
-      if (entityTypeFilter().includes('document')) {
-        if (fileTypeFilter().length > 0) {
-          const documentFileTypes = fileTypeFilter().flatMap((fileType) => {
-            if (fileType === 'code') return codeFileExtensions;
-            // NOTE: unknown not supported in search so we effectively ignore it
-            if (fileType === 'unknown') return [GARBAGE_UUID];
-            return [fileType];
-          });
-          fileTypes.push(...documentFileTypes);
-        } else {
-          // if we have task + document and no file type filter, we want to include all file types
-          fileTypes = [];
+        if (entityTypeFilter().includes('document')) {
+          if (fileTypeFilter().length > 0) {
+            const documentFileTypes = fileTypeFilter().flatMap((fileType) => {
+              if (fileType === 'code')
+                return type === 'soup' ? ['assoc:code'] : codeFileExtensions;
+              if (fileType === 'unknown')
+                return type === 'soup' ? ['assoc:other'] : [GARBAGE_UUID];
+              return [fileType];
+            });
+            fileTypes.push(...documentFileTypes);
+          } else {
+            // if we have task + document and no file type filter, we want to include all file types
+            fileTypes = [];
+          }
         }
-      }
 
-      return Array.from(new Set(fileTypes));
-    },
-    [],
-    {
-      equals: arrayEquals,
-    }
-  );
+        return Array.from(new Set(fileTypes));
+      },
+      [],
+      {
+        equals: arrayEquals,
+      }
+    );
+
+  const joinedSoupFileTypeFilter = createFileTypeFilterMemo('soup');
+  const joinedSearchFileTypeFilter = createFileTypeFilterMemo('search');
 
   const unifiedSearchFilters = createMemo<UnifiedSearchRequestFilters>(() => {
     let documentFilters: DocumentFilters | null = null;
