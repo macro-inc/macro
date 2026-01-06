@@ -1,4 +1,7 @@
-import { CreateCommentRequest, EditCommentRequest } from '@service-storage/generated/schemas';
+import {
+  CreateCommentRequest,
+  EditCommentRequest,
+} from '@service-storage/generated/schemas';
 import type { Comment } from '@service-storage/generated/schemas/comment';
 import type { CreateCommentResponse } from '@service-storage/generated/schemas/createCommentResponse';
 
@@ -44,7 +47,10 @@ export type CommentOperations = {
     info: CreateCommentRequest
   ) => Promise<CreateCommentResponse | null>;
   deleteComment: (info: DeleteCommentInfo) => Promise<boolean> | undefined;
-  updateComment: (commentId: number, info: EditCommentRequest) => Promise<boolean>;
+  updateComment: (
+    commentId: number,
+    info: EditCommentRequest
+  ) => Promise<boolean>;
 };
 
 export function isRoot(comment: Root | Reply): comment is Root {

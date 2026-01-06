@@ -9,11 +9,11 @@ import {
   untrack,
   useContext,
 } from 'solid-js';
+import { getCommentMentions } from '.';
 import type { Root } from './commentType';
 import { EditInput } from './Inputs';
 import { MessageTopRow } from './MessageTopRow';
 import { CommentsContext, sendMentions, ThreadContext } from './Thread';
-import { getCommentMentions } from '.';
 
 const ThreadLine = () => {
   return (

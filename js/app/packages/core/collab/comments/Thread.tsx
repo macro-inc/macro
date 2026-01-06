@@ -19,11 +19,11 @@ import {
   type Signal,
   useContext,
 } from 'solid-js';
+import { getCommentMentions } from '.';
 import { Comment, CommentReply } from './Comment';
 import type { CommentOperations, Layout, Reply, Root } from './commentType';
 import { EditInput, NewReplyInput } from './Inputs';
 import { MeasureContainer } from './MeasureContainer';
-import { getCommentMentions } from '.';
 
 type SoftSetEdit = {
   action: 'soft';
@@ -224,12 +224,11 @@ export function Thread(props: {
                   onSend={(content: string) => {
                     if (content.trim() === '') return;
                     // NOTE: we need the server to return the thread id first
-                    commentOperations
-                      .createComment({
-                        threadId: props.comment.threadId,
-                        text: content,
-                        mentions: getCommentMentions(mentionsSignal),
-                      });
+                    commentOperations.createComment({
+                      threadId: props.comment.threadId,
+                      text: content,
+                      mentions: getCommentMentions(mentionsSignal),
+                    });
                   }}
                   isNewThread
                 />
@@ -282,11 +281,14 @@ export function Thread(props: {
                           }
                           updateReply={(content) => {
                             Promise.all([
-                              commentOperations.updateComment(props.comment.threadId, {
-                                text: content,
-                                threadId: props.comment.threadId,
-                                mentions: getCommentMentions(mentionsSignal),
-                              }),
+                              commentOperations.updateComment(
+                                props.comment.threadId,
+                                {
+                                  text: content,
+                                  threadId: props.comment.threadId,
+                                  mentions: getCommentMentions(mentionsSignal),
+                                }
+                              ),
                             ]);
                           }}
                         />
@@ -302,12 +304,11 @@ export function Thread(props: {
                   createReply={(content) => {
                     if (content.trim() === '') return;
                     dispatch({ action: 'hard', editing: false });
-                    commentOperations
-                      .createComment({
-                        threadId: props.comment.threadId,
-                        text: content,
-                        mentions: getCommentMentions(mentionsSignal),
-                      });
+                    commentOperations.createComment({
+                      threadId: props.comment.threadId,
+                      text: content,
+                      mentions: getCommentMentions(mentionsSignal),
+                    });
                   }}
                   isEditing={isEditingNewReply()}
                   setEditing={(editing) =>

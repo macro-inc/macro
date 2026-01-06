@@ -472,7 +472,7 @@ export function useDeleteUnthreadedHighlightResource() {
 export function useCreateThreadReplyResource() {
   const createComment = useCreateComment();
 
-  return async (body: CreateCommentRequest & {threadId: number}) => {
+  return async (body: CreateCommentRequest & { threadId: number }) => {
     if (body.threadId < 0) {
       console.error('Provide a valid thread id');
       return null;
