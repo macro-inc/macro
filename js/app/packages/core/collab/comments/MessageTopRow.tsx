@@ -1,4 +1,4 @@
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { UserIcon } from '@core/component/UserIcon';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { idToDisplayName } from '@core/user';
@@ -134,7 +134,7 @@ export function MessageTopRow(props: {
         <Show when={canComment()}>
           <Show when={props.isOwned}>
             {props.toggleResolve && (
-              <IconButton
+              <DeprecatedIconButton
                 tooltip={{ label: 'Resolve Comment' }}
                 icon={Check}
                 theme={props.isResolved ? 'accent' : 'clear'}
@@ -142,7 +142,7 @@ export function MessageTopRow(props: {
               />
             )}
             {props.enableEditing && (
-              <IconButton
+              <DeprecatedIconButton
                 tooltip={{ label: 'Edit Comment' }}
                 theme="clear"
                 icon={NotePencil}
@@ -151,7 +151,7 @@ export function MessageTopRow(props: {
             )}
           </Show>
           <Show when={!props.isEditing && (props.isOwned || isDocumentOwner())}>
-            <IconButton
+            <DeprecatedIconButton
               tooltip={{ label: 'Delete Comment' }}
               theme="clear"
               icon={Trash}

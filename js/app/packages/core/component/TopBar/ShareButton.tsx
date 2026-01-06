@@ -8,7 +8,7 @@ import {
   useBlockName,
 } from '@core/block';
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
-import { TextButton } from '@core/component/TextButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { UserIcon } from '@core/component/UserIcon';
 import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
 import clickOutside from '@core/directive/clickOutside';
@@ -61,7 +61,7 @@ import { beveledCorners } from '../../../block-theme/signals/themeSignals';
 import { ClippedPanel } from '../ClippedPanel';
 import { DialogWrapper } from '../DialogWrapper';
 import { ForwardToChannel } from '../ForwardToChannel';
-import { IconButton } from '../IconButton';
+import { DeprecatedIconButton } from '../DeprecatedIconButton';
 import { MENU_ITEM_CLASS } from '../Menu';
 import { Permissions } from '../SharePermissions';
 import { toast } from '../Toast/Toast';
@@ -461,7 +461,7 @@ export function ShareModal(props: ShareModalProps) {
               <div class="flex flex-row items-center justify-between px-2 h-[40px] gap-2 border-b-1 border-b-edge-muted">
                 <div class="flex flex-row items-center gap-2">
                   <Dialog.CloseButton>
-                    <IconButton
+                    <DeprecatedIconButton
                       tooltip={{ label: 'Close' }}
                       icon={CloseIcon}
                       iconSize={16}
@@ -569,7 +569,7 @@ export function ShareModal(props: ShareModalProps) {
                     Public Link
                   </div>
                   <div class="flex items-center p-3 justify-between">
-                    <TextButton
+                    <DeprecatedTextButton
                       onClick={() => copyPublicLink()}
                       text="Copy Link"
                       height="h-[22px]"
@@ -728,7 +728,7 @@ export function ShareButton(props: ShareButtonProps) {
 
         <div class="w-[1px] bg-edge-muted" />
 
-        <IconButton
+        <DeprecatedIconButton
           tooltip={{ label: 'Copy Share Link' }}
           onClick={ShareLinkAction().action}
           icon={ShareLinkAction().icon}
@@ -806,7 +806,7 @@ export function ShareOptions(props: {
   return (
     <DropdownMenu>
       <DropdownMenu.Trigger disabled={props.disabled}>
-        <TextButton
+        <DeprecatedTextButton
           text={currentValueText()}
           disabled={props.disabled}
           width="w-[67px]"

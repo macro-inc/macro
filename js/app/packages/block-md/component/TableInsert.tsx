@@ -1,4 +1,4 @@
-import { TextButton } from '@core/component/TextButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { INSERT_TABLE_COMMAND } from '@lexical/table';
 import { createCallback } from '@solid-primitives/rootless';
 import { createSignal, Index, type ParentProps } from 'solid-js';
@@ -158,7 +158,7 @@ export function TableInsert(
             on:blur={(e) => e.stopPropagation()}
           />
         </div>
-        <TextButton
+        <DeprecatedTextButton
           text="Insert Table"
           theme="base"
           disabled={!rows() || !cols()}

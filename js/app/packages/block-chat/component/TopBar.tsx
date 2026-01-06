@@ -13,7 +13,7 @@ import {
 } from '@app/component/split-layout/components/SplitToolbar';
 import { DEFAULT_CHAT_NAME } from '@block-chat/definition';
 import { useBlockId } from '@core/block';
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { ReferencesModal } from '@core/component/ReferencesModal';
 import { ShareButton } from '@core/component/TopBar/ShareButton';
 import { useGetPermissions } from '@core/signal/permissions';
@@ -76,7 +76,7 @@ export function TopBar() {
       </SplitToolbarLeft>
       <SplitToolbarRight>
         <div class="flex items-center p-1 h-full">
-          <IconButton
+          <DeprecatedIconButton
             icon={Notepad}
             size="sm"
             theme="clear"

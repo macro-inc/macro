@@ -4,9 +4,9 @@ import { debounce } from '@solid-primitives/scheduled';
 import {
   type Accessor,
   createEffect,
+  createMemo,
   createSignal,
   onCleanup,
-  onMount,
   Show,
 } from 'solid-js';
 import {
@@ -22,6 +22,14 @@ import {
   tablePlugin,
 } from '../../plugins';
 import {
+  aiChatTheme,
+  channelTheme,
+  channelThemeSender,
+  embeddedCodeBlock,
+  theme,
+  unifiedListMarkdownTheme,
+} from '../../theme';
+import {
   editorIsEmpty,
   initializeEditorWithState,
   setEditorStateFromMarkdown,
@@ -35,6 +43,8 @@ const KEYS = {
   outputType: 'internal-markdown-output-type',
   targetType: 'internal-markdown-target-type',
   inputType: 'internal-markdown-input-type',
+  themeType: 'internal-markdown-theme-type',
+  singleLine: 'internal-markdown-single-line',
 };
 
 const getSavedStringFromLocalStorage = () => {
@@ -77,36 +87,77 @@ const getSavedInputType = (): 'markdown' | 'lexical-json' => {
   return 'markdown';
 };
 
+type ThemeType =
+  | 'default'
+  | 'aiChat'
+  | 'channel'
+  | 'channelSender'
+  | 'embeddedCode'
+  | 'unifiedList';
+
+const getSavedThemeType = (): ThemeType => {
+  try {
+    const saved = localStorage.getItem(KEYS.themeType);
+    if (
+      saved === 'default' ||
+      saved === 'aiChat' ||
+      saved === 'channel' ||
+      saved === 'channelSender' ||
+      saved === 'embeddedCode' ||
+      saved === 'unifiedList'
+    ) {
+      return saved as ThemeType;
+    }
+  } catch (_) {}
+  return 'default';
+};
+
+const getSavedSingleLine = (): boolean => {
+  try {
+    const saved = localStorage.getItem(KEYS.singleLine);
+    return saved === 'true';
+  } catch (_) {}
+  return false;
+};
+
+const getThemeByType = (themeType: ThemeType) => {
+  switch (themeType) {
+    case 'aiChat':
+      return aiChatTheme;
+    case 'channel':
+      return channelTheme;
+    case 'channelSender':
+      return channelThemeSender;
+    case 'embeddedCode':
+      return embeddedCodeBlock;
+    case 'unifiedList':
+      return unifiedListMarkdownTheme;
+    default:
+      return theme;
+  }
+};
+
 export function TestEditor(props: {
   value: Accessor<string>;
   target: Accessor<'internal' | 'external' | 'both'>;
   inputType: Accessor<'markdown' | 'lexical-json'>;
+  themeType: Accessor<ThemeType>;
 }) {
   let mountRef!: HTMLDivElement;
-  const lexicalWrapper = createLexicalWrapper({
-    type: 'markdown',
-    namespace: 'markdown-textarea',
-    isInteractable: () => true,
-  });
-  const { editor, plugins, cleanup: cleanupLexical } = lexicalWrapper;
-  const setEditorContent = (
-    content: string,
-    target: 'internal' | 'external' | 'both',
-    inputType: 'markdown' | 'lexical-json'
-  ) => {
-    if (inputType === 'lexical-json') {
-      try {
-        const parsed = JSON.parse(content);
-        initializeEditorWithState(editor, parsed);
-      } catch (error) {
-        console.error('Invalid JSON:', error);
-      }
-    } else {
-      setEditorStateFromMarkdown(editor, content, target);
-    }
-  };
 
-  setEditorContent(props.value(), props.target(), props.inputType());
+  const lexicalWrapper = createMemo(() =>
+    createLexicalWrapper({
+      type: 'markdown',
+      namespace: 'markdown-textarea',
+      isInteractable: () => true,
+      theme: getThemeByType(props.themeType()),
+    })
+  );
+
+  const editor = () => lexicalWrapper().editor;
+  const plugins = () => lexicalWrapper().plugins;
+  const cleanup = () => lexicalWrapper().cleanup;
+
   const debouncedUpdateContent = debounce(
     (
       content: string,
@@ -118,53 +169,81 @@ export function TestEditor(props: {
     50
   );
 
+  const setEditorContent = (
+    content: string,
+    target: 'internal' | 'external' | 'both',
+    inputType: 'markdown' | 'lexical-json'
+  ) => {
+    if (inputType === 'lexical-json') {
+      try {
+        const parsed = JSON.parse(content);
+        initializeEditorWithState(editor(), parsed);
+      } catch (error) {
+        console.error('Invalid JSON:', error);
+      }
+    } else {
+      setEditorStateFromMarkdown(editor(), content, target);
+    }
+  };
+
   createEffect(() => {
     const value = props.value();
     const target = props.target();
     const inputType = props.inputType();
-    debouncedUpdateContent(value, target, inputType);
+    if (value || inputType === 'lexical-json') {
+      debouncedUpdateContent(value, target, inputType);
+    }
   });
 
   const [showPlaceholder, setShowPlaceholder] = createSignal(true);
-
-  plugins
-    .richText()
-    .list()
-    .markdownShortcuts()
-    .delete()
-    .history(400)
-    .use(tabIndentationPlugin())
-    .use(mentionsPlugin({}))
-    .use(mediaPlugin())
-    .use(tablePlugin({}));
-
   const [accessoryStore, setAccessoryStore] = createAccessoryStore();
-  plugins.use(
-    codePlugin({
-      accessories: accessoryStore,
-      setAccessories: setAccessoryStore,
-    })
-  );
 
-  onMount(() => {
-    editor.setRootElement(mountRef);
-    editor.setEditable(false);
+  // Setup plugins whenever the wrapper changes
+  createEffect(() => {
+    const currentPlugins = plugins();
+    const currentAccessoryStore = accessoryStore;
+
+    currentPlugins
+      .richText()
+      .list()
+      .markdownShortcuts()
+      .delete()
+      .history(400)
+      .use(tabIndentationPlugin())
+      .use(mentionsPlugin({}))
+      .use(mediaPlugin())
+      .use(tablePlugin({}))
+      .use(
+        codePlugin({
+          accessories: currentAccessoryStore,
+          setAccessories: setAccessoryStore,
+        })
+      );
+  });
+
+  // Setup editor whenever it changes
+  createEffect(() => {
+    const currentEditor = editor();
+    if (mountRef) {
+      currentEditor.setRootElement(mountRef);
+      currentEditor.setEditable(false);
+    }
   });
 
   onCleanup(() => {
-    cleanupLexical();
+    cleanup();
   });
 
   createEffect(() => {
     props.value();
-    setShowPlaceholder(editorIsEmpty(editor));
+    setShowPlaceholder(editorIsEmpty(editor()));
   });
 
   return (
-    <LexicalWrapperContext.Provider value={lexicalWrapper}>
+    <LexicalWrapperContext.Provider value={lexicalWrapper()}>
       <div ref={mountRef} contentEditable={false}></div>
-      <DecoratorRenderer editor={editor} />
-      <NodeAccessoryRenderer editor={editor} store={accessoryStore} />
+      <DecoratorRenderer editor={editor()} />
+      <NodeAccessoryRenderer editor={editor()} store={accessoryStore} />
       <Show when={showPlaceholder()}>
         <div class="pointer-events-none text-ink-extra-muted absolute top-0">
           <p class="my-1.5">...</p>
@@ -187,18 +266,28 @@ export default function MarkdownParseTestPage() {
   const [inputType, setInputType] = createSignal<'markdown' | 'lexical-json'>(
     getSavedInputType()
   );
+  const [themeType, setThemeType] = createSignal<ThemeType>(
+    getSavedThemeType()
+  );
+  const [singleLine, setSingleLine] = createSignal<boolean>(
+    getSavedSingleLine()
+  );
 
   const debouncedLocalSave = debounce(() => {
     const content = rawContent();
     const output = outputType();
     const target = targetType();
     const input = inputType();
+    const theme = themeType();
+    const single = singleLine();
 
     try {
       localStorage.setItem(KEYS.content, content);
       localStorage.setItem(KEYS.outputType, output);
       localStorage.setItem(KEYS.targetType, target);
       localStorage.setItem(KEYS.inputType, input);
+      localStorage.setItem(KEYS.themeType, theme);
+      localStorage.setItem(KEYS.singleLine, single.toString());
     } catch (_) {}
   });
 
@@ -207,6 +296,8 @@ export default function MarkdownParseTestPage() {
     outputType();
     targetType();
     inputType();
+    themeType();
+    singleLine();
     debouncedLocalSave();
   });
 
@@ -296,13 +387,44 @@ export default function MarkdownParseTestPage() {
               </div>
             </div>
 
+            <div class="flex items-center gap-2 mb-4">
+              <span class="text-sm text-ink-extra-muted">Theme</span>
+              <select
+                class="px-3 py-1 text-sm bg-edge/50 border-1 border-edge rounded"
+                value={themeType()}
+                onChange={(e) => setThemeType(e.target.value as ThemeType)}
+              >
+                <option value="default">Default</option>
+                <option value="aiChat">AI Chat</option>
+                <option value="channel">Channel</option>
+                <option value="channelSender">Channel Sender</option>
+                <option value="embeddedCode">Embedded Code</option>
+                <option value="unifiedList">Unified List</option>
+              </select>
+            </div>
+
+            <Show when={outputType() === 'static'}>
+              <div class="flex items-center gap-2 mb-4">
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={singleLine()}
+                    onChange={(e) => setSingleLine(e.target.checked)}
+                    class="rounded border-edge"
+                  />
+                  <span class="text-sm text-ink-extra-muted">Single Line</span>
+                </label>
+              </div>
+            </Show>
+
             <div class="flex-1 overflow-auto bg-input border border-edge rounded p-4">
               <Show when={outputType() === 'static'}>
-                <StaticMarkdownContext>
+                <StaticMarkdownContext theme={getThemeByType(themeType())}>
                   <Show when={inputType() === 'markdown'}>
                     <StaticMarkdown
                       markdown={rawContent()}
                       target={targetType()}
+                      singleLine={singleLine()}
                     />
                   </Show>
                   <Show when={inputType() === 'lexical-json'}>
@@ -320,6 +442,7 @@ export default function MarkdownParseTestPage() {
                     value={rawContent}
                     target={targetType}
                     inputType={inputType}
+                    themeType={themeType}
                   />
                 </div>
               </Show>

@@ -4,7 +4,7 @@ import { TrackingEvents } from '@coparse/analytics/src/types/TrackingEvents';
 import { useIsAuthenticated } from '@core/auth';
 import { useBlockAliasedName, useBlockId, useBlockName } from '@core/block';
 import { RecipientSelector } from '@core/component/RecipientSelector';
-import { TextButton } from '@core/component/TextButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { ShareOptions } from '@core/component/TopBar/ShareButton';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { WithCustomUserInput } from '@core/user';
@@ -128,9 +128,15 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
     return true;
   });
 
-  const asAttachment = {
-    entity_type: blockNameToItemType(useBlockAliasedName()) ?? 'unknown',
-    entity_id: useBlockId(),
+  const blockName = useBlockAliasedName();
+  const blockId = useBlockId();
+  const asAttachment = () => {
+    const itemType =
+      blockName === 'email' ? 'thread' : blockNameToItemType(blockName);
+    return {
+      entity_type: itemType ?? 'unknown',
+      entity_id: blockId,
+    };
   };
 
   function handleSubmit() {
@@ -143,7 +149,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
       const destination_ = destination();
       if (destination_ && destination_.type === 'users') {
         sendToUsers({
-          attachments: [asAttachment],
+          attachments: [asAttachment()],
           users: destination_.users,
           content: markdownState(),
           mentions: [],
@@ -172,7 +178,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
           Promise.all([
             submitChannelPermissions(option.id),
             sendToChannel({
-              attachments: [asAttachment],
+              attachments: [asAttachment()],
               content: markdownState(),
               channelId: option.id,
               mentions: [],
@@ -195,7 +201,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
         } else {
           // handles option.kind of user, custom, and contact (gmail)
           sendToUsers({
-            attachments: [asAttachment],
+            attachments: [asAttachment()],
             content: markdownState(),
             users: [option.id],
             mentions: [],
@@ -330,7 +336,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
             <div class="flex flex-auto min-w-0 gap-3">
               <div class="flex-auto min-w-0" />
 
-              <TextButton
+              <DeprecatedTextButton
                 onClick={() => {
                   const options = selectedOptions();
                   if (options && options.length > 0) {

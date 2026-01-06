@@ -37,12 +37,17 @@ impl AsyncTool<ToolServiceContext, RequestContext> for MarkdownRewrite {
     ) -> ToolResult<Self::Output> {
         tracing::info!(markdown_file_id=?self.markdown_file_id, "Rewrite params");
 
-        rewrite_markdown(self.clone(), &sc.scribe, &request_context.user_id)
-            .await
-            .map_err(|err| ToolCallError {
-                description: "An internal error occured rewriting generating rewrite".into(),
-                internal_error: err,
-            })
+        rewrite_markdown(
+            self.clone(),
+            &sc.scribe,
+            &request_context.user_id,
+            request_context.jwt_token.clone(),
+        )
+        .await
+        .map_err(|err| ToolCallError {
+            description: "An internal error occured rewriting generating rewrite".into(),
+            internal_error: err,
+        })
     }
 }
 
@@ -50,10 +55,11 @@ pub async fn rewrite_markdown(
     request: MarkdownRewrite,
     scribe: &ToolScribe,
     _user_id: &str,
+    jwt: String,
 ) -> Result<AIDiffResponse, Error> {
     let document = scribe
         .document
-        .fetch(request.markdown_file_id.clone())
+        .fetch_with_auth(request.markdown_file_id.clone(), jwt)
         .document_content()
         .await?;
     if document.file_type() != FileType::Md {

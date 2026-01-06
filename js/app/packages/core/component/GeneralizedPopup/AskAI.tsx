@@ -25,13 +25,13 @@ import {
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { CircleSpinner } from '../CircleSpinner';
+import { DeprecatedTextButton } from '../DeprecatedTextButton';
 import {
   DropdownMenuContent,
   MenuItem,
   MenuSeparator,
   SubTrigger,
 } from '../Menu';
-import { TextButton } from '../TextButton';
 
 const SUPPORTED_LANGUAGES = [
   'English',
@@ -399,7 +399,7 @@ export function AskAi(props: {
         onOpenChange={setOpen}
         getAnchorRect={() => triggerRef()?.getBoundingClientRect()}
       >
-        <TextButton
+        <DeprecatedTextButton
           theme="clear"
           icon={actionIcon()}
           onClick={executeDefaultAction}

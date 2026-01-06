@@ -4,7 +4,7 @@ import {
 } from '@block-canvas/model/CanvasModel';
 import { useCachedStyle } from '@block-canvas/signal/cachedStyle';
 import { useToolManager } from '@block-canvas/signal/toolManager';
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import {
@@ -54,7 +54,7 @@ const ConnectorTypeSubMenu = (props: {
       onOpenChange={setConnectorTypeMenuTrigger}
     >
       <DropdownMenu.Trigger>
-        <IconButton
+        <DeprecatedIconButton
           icon={SmallCaretDown}
           theme="clear"
           style={{ width: '12px', margin: '0 -2px 0 -4px' }}
@@ -167,7 +167,7 @@ export function ToolBar() {
         <div
           class={`flex flex-row items-center space-x-2 ${canEdit() && 'border-r border-edge'}`}
         >
-          <IconButton
+          <DeprecatedIconButton
             tooltip={{
               label: 'Hand tool',
               hotkeyToken: TOKENS.canvas.handTool,
@@ -181,7 +181,7 @@ export function ToolBar() {
           />
 
           <Show when={!isNativeMobilePlatform()}>
-            <IconButton
+            <DeprecatedIconButton
               tooltip={[
                 { label: 'Zoom', hotkeyToken: TOKENS.canvas.zoomInTool },
                 {
@@ -203,7 +203,7 @@ export function ToolBar() {
           </Show>
 
           <Show when={canEdit()}>
-            <IconButton
+            <DeprecatedIconButton
               tooltip={{ label: 'Move', hotkeyToken: TOKENS.canvas.selectTool }}
               showShortcut={true}
               theme={
@@ -222,7 +222,7 @@ export function ToolBar() {
         </div>
         <Show when={canEdit()}>
           <div class="flex flex-row px-2 items-center space-x-2">
-            <IconButton
+            <DeprecatedIconButton
               tooltip={{
                 label: 'Rectangle',
                 hotkeyToken: TOKENS.canvas.shapeTool,
@@ -235,7 +235,7 @@ export function ToolBar() {
               }}
             />
 
-            <IconButton
+            <DeprecatedIconButton
               tooltip={{
                 label: 'Pencil',
                 hotkeyToken: TOKENS.canvas.pencilTool,
@@ -248,7 +248,7 @@ export function ToolBar() {
               }}
             />
 
-            <IconButton
+            <DeprecatedIconButton
               tooltip={{
                 label: 'Connector',
                 hotkeyToken: TOKENS.canvas.lineTool,
@@ -263,7 +263,7 @@ export function ToolBar() {
             <ConnectorTypeSubMenu onSelect={onSelectConnectionStyle} />
 
             <Show when={ENABLE_CANVAS_TEXT}>
-              <IconButton
+              <DeprecatedIconButton
                 tooltip={{ label: 'Text', hotkeyToken: TOKENS.canvas.textTool }}
                 showShortcut={true}
                 theme={

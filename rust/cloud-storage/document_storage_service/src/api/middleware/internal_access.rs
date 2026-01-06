@@ -1,6 +1,6 @@
 use crate::api::{
-    MACRO_DOCUMENT_STORAGE_SERVICE_AUTH_HEADER_KEY, MACRO_INTERNAL_USER_ID_HEADER_KEY,
-    context::DocumentStorageServiceAuthKey,
+    MACRO_DOCUMENT_STORAGE_SERVICE_AUTH_HEADER_KEY, MACRO_INTERNAL_USER_ID,
+    MACRO_INTERNAL_USER_ID_HEADER_KEY, context::DocumentStorageServiceAuthKey,
 };
 use axum::{
     extract::{Request, State},
@@ -84,7 +84,7 @@ pub(in crate::api) async fn handler(
         .get(MACRO_INTERNAL_USER_ID_HEADER_KEY)
         .and_then(|header| header.to_str().ok())
         .map(|header| header.to_string())
-        .unwrap_or("INTERNAL".to_string());
+        .unwrap_or(MACRO_INTERNAL_USER_ID.to_string());
 
     // Attach user_id to the UserContext
     req.extensions_mut().insert(UserContext {

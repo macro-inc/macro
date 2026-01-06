@@ -86,7 +86,7 @@ rand = { workspace = true }
 remote_env_var = { path = "../remote_env_var" }
 reqwest = { workspace = true }
 roles_and_permissions = { path = "../roles_and_permissions" }
-rsa = "0.9.8"
+rsa = "0.9.10"
 secretsmanager_client = { path = "../secretsmanager_client" }
 serde = { workspace = true }
 serde_json = { workspace = true }

@@ -10,7 +10,7 @@ use anyhow::{Context, Result};
 use std::sync::Arc;
 
 // fetch documents then build request
-#[tracing::instrument(skip(ctx, chat, incoming_message), err)]
+#[tracing::instrument(skip(ctx, chat, incoming_message, static_system_prompt, jwt), err)]
 pub async fn build_chat_completion_request(
     ctx: Arc<ApiContext>,
     chat: &ChatResponse,

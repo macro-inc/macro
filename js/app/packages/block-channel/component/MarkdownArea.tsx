@@ -55,6 +55,7 @@ import {
   type LexicalEditor,
   type TextFormatType,
 } from 'lexical';
+
 import {
   type Accessor,
   createEffect,
@@ -283,7 +284,8 @@ function MarkdownArea(props: MarkdownAreaProps & ConsumableMarkdownAreaProps) {
     autoRegister(
       editor.registerCommand(
         KEY_ENTER_COMMAND,
-        (e: KeyboardEvent) => {
+        (e) => {
+          if (!e) return false;
           // TODO (seamus) : This is hacky. If we got a props.onEnter,then shift+enter becomes
           // the new "regular enter", so we delete the shiftKey and pass along to lexical.
           if (e.shiftKey) {

@@ -112,7 +112,7 @@ const extensionToLanguage: Record<string, string> = {
 };
 
 // Build supported extensions from FileTypeMap where app === 'code'
-const codeFileExtensions = Object.values(FileTypeMap)
+export const codeFileExtensions = Object.values(FileTypeMap)
   .filter((fileType) => fileType.app === 'code')
   .map((fileType) => fileType.extension);
 

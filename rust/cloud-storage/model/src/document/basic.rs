@@ -1,8 +1,7 @@
 use std::str::FromStr;
 
-use crate::document::FileTypeExt;
-
 use super::file_type::FileType;
+use crate::document::FileTypeExt;
 use chrono::serde::ts_seconds_option;
 use macro_user_id::user_id::MacroUserIdStr;
 use utoipa::ToSchema;
@@ -119,7 +118,7 @@ pub struct DocumentBasic {
     pub document_family_id: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub project_id: Option<String>,
-    #[serde(with = "ts_seconds_option", skip_serializing_if = "Option::is_none")]
+    #[serde(with = "ts_seconds_option")]
     #[schema(value_type = i64, nullable=true)]
     pub deleted_at: Option<chrono::DateTime<chrono::Utc>>,
 }

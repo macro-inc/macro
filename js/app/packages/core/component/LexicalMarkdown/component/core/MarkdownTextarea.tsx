@@ -15,6 +15,7 @@ import {
   createEffect,
   createSignal,
   type JSX,
+  on,
   onCleanup,
   Show,
 } from 'solid-js';
@@ -112,6 +113,8 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
 
   const [markdownState, setMarkdownState] = createSignal<string>('');
 
+  let didInitializeContent = false;
+
   const onConnect = () => {
     if (props.focusOnMount) {
       setTimeout(() => {
@@ -124,15 +127,30 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
     } else if (props.initialValue) {
       setEditorStateFromMarkdown(editor, props.initialValue);
     }
+
+    if (props.initialHtml || props.initialValue) {
+      // We do this to make sure anything relying on the markdownState existing initially
+      // has the content
+      props.onChange?.(markdownState());
+    }
+
+    didInitializeContent = true;
   };
 
   createEffect(() => {
     editor.setEditable(props.editable());
   });
 
-  createEffect(() => {
-    props.onChange?.(markdownState(), editor);
-  });
+  createEffect(
+    on(
+      markdownState,
+      () => {
+        if (!didInitializeContent) return;
+        props.onChange?.(markdownState(), editor);
+      },
+      { defer: true }
+    )
+  );
 
   if (props.initialHtml) {
     setEditorStateFromHtml(editor, props.initialHtml);
@@ -202,7 +220,8 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
     if (onEnter == null) return;
     cleanupEnterListener = editor.registerCommand(
       KEY_ENTER_COMMAND,
-      (e: KeyboardEvent) => {
+      (e) => {
+        if (!e) return false;
         // TODO (seamus) : This is hacky. If we got a props.onEnter,then shift+enter becomes
         // the new "regular enter", so we delete the shiftKey and pass along to lexical.
         if (e.altKey && e.shiftKey) {
@@ -272,6 +291,8 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
           ref={(el) => {
             onElementConnect(el, () => {
               editor.setRootElement(el);
+              props.domRef?.(el);
+              mountRef = el;
               onConnect();
             });
           }}

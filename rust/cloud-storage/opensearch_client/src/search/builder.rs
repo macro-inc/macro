@@ -8,7 +8,6 @@ use crate::search::query::Keys;
 use crate::search::query::QueryKey;
 use crate::search::query::generate_terms_must_query;
 use models_opensearch::SearchEntityType;
-use models_opensearch::SearchIndex;
 use opensearch_query_builder::*;
 
 /// A macro for generating delegation methods that forward calls to an inner field
@@ -92,7 +91,6 @@ pub trait SearchQueryConfig {
     /// Returns the default sort types that are used on the search query.
     /// Override this method if you need custom sort logic
     fn default_sort_types<'a>() -> Vec<SortType<'a>> {
-        println!("CALLED");
         // Use the updated_at_sort by default
         updated_at_sort()
     }
@@ -146,11 +144,6 @@ pub struct SearchQueryBuilder<T: SearchQueryConfig> {
     pub disable_recency: bool,
 
     _phantom: std::marker::PhantomData<T>,
-}
-
-pub struct ContentAndNameBoolQueries<'a> {
-    pub content_bool_query: Option<BoolQueryBuilder<'a>>,
-    pub name_bool_query: Option<BoolQueryBuilder<'a>>,
 }
 
 impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
@@ -254,10 +247,12 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
         }
     }
 
-    /// Builds a content and name bool query
-    pub fn build_content_and_name_bool_query<'a>(
-        &'a self,
-    ) -> Result<ContentAndNameBoolQueries<'a>> {
+    /// Builds a content bool query
+    pub fn build_content_bool_query<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
+        // We only support searching over content in opensearch now
+        if self.search_on == SearchOn::Name {
+            return Err(OpensearchClientError::InvalidSearchOn);
+        }
         // FIXES: https://linear.app/macro-eng/issue/BAC-173/sending-invalid-queries-to-opensearch
         // If we try and build queries with ids only = true and no ids provided we should
         // error out as it creates an invalid query since we have minimum_should_match = 1.
@@ -265,187 +260,82 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
             return Err(OpensearchClientError::EmptyIdsWithIdsOnly(T::ENTITY_INDEX));
         }
 
-        let content_bool_query = match self.search_on {
-            SearchOn::Name => None,
-            SearchOn::NameContent | SearchOn::Content => {
-                let mut access_bool_query = BoolQueryBuilder::new();
+        let mut access_bool_query = BoolQueryBuilder::new();
 
-                // For name OR content queries, we can build a much more simple bool query
-                let term_must_array: Vec<QueryType<'a>> =
-                    self.build_must_term_query(SearchOn::Content)?;
+        // For name OR content queries, we can build a much more simple bool query
+        let term_must_array: Vec<QueryType<'a>> = self.build_must_term_query(SearchOn::Content)?;
 
-                let mut inner_bool_query = BoolQueryBuilder::new();
+        let mut inner_bool_query = BoolQueryBuilder::new();
 
-                inner_bool_query.minimum_should_match(1);
+        inner_bool_query.minimum_should_match(1);
 
-                // For email search, we want to search over the participants
-                // For all other indices we want to search over the owner
-                match T::ENTITY_INDEX {
-                    SearchEntityType::Emails => {
-                        let mut participant_queries: Vec<QueryType> = Vec::new();
-                        for term in &self.terms {
-                            let formatted_term = format!("{}*", term);
-                            participant_queries.push(
-                                WildcardQuery::new(
-                                    "sender",
-                                    formatted_term.clone(),
-                                    true,
-                                    Some(5000.0),
-                                )
-                                .into(),
-                            );
-                            participant_queries.push(
-                                WildcardQuery::new(
-                                    "cc",
-                                    formatted_term.clone(),
-                                    true,
-                                    Some(5000.0),
-                                )
-                                .into(),
-                            );
-                            participant_queries.push(
-                                WildcardQuery::new(
-                                    "bcc",
-                                    formatted_term.clone(),
-                                    true,
-                                    Some(5000.0),
-                                )
-                                .into(),
-                            );
-                            participant_queries.push(
-                                WildcardQuery::new(
-                                    "recipients",
-                                    formatted_term.clone(),
-                                    true,
-                                    Some(5000.0),
-                                )
-                                .into(),
-                            );
-                        }
-
-                        for participant_query in participant_queries {
-                            inner_bool_query.should(participant_query);
-                        }
-                    }
-                    _ => {
-                        // Create a vec of owner queries for each term
-                        // We want to search over the content **and** the owner here
-                        let mut owner_queries: Vec<QueryType> = Vec::new();
-                        for term in &self.terms {
-                            let formatted_term = format!("macro|{}*", term);
-                            owner_queries.push(
-                                WildcardQuery::new(
-                                    T::USER_ID_KEY,
-                                    formatted_term,
-                                    true,
-                                    Some(5000.0),
-                                )
-                                .into(),
-                            );
-                        }
-
-                        // Add the owner queries to the bool query
-                        for owner_query in owner_queries {
-                            inner_bool_query.should(owner_query);
-                        }
-                    }
+        // For email search, we want to search over the participants
+        // For all other indices we want to search over the owner
+        match T::ENTITY_INDEX {
+            SearchEntityType::Emails => {
+                let mut participant_queries: Vec<QueryType> = Vec::new();
+                for term in &self.terms {
+                    let formatted_term = format!("{}*", term);
+                    participant_queries.push(
+                        WildcardQuery::new("sender", formatted_term.clone(), true, Some(5000.0))
+                            .into(),
+                    );
+                    participant_queries.push(
+                        WildcardQuery::new("cc", formatted_term.clone(), true, Some(5000.0)).into(),
+                    );
+                    participant_queries.push(
+                        WildcardQuery::new("bcc", formatted_term.clone(), true, Some(5000.0))
+                            .into(),
+                    );
+                    participant_queries.push(
+                        WildcardQuery::new(
+                            "recipients",
+                            formatted_term.clone(),
+                            true,
+                            Some(5000.0),
+                        )
+                        .into(),
+                    );
                 }
 
-                for must in term_must_array {
-                    inner_bool_query.should(must);
+                for participant_query in participant_queries {
+                    inner_bool_query.should(participant_query);
                 }
-
-                // Add in the inner bool query on content + owner to must of access bool query
-                access_bool_query.must(inner_bool_query.build().into());
-
-                // Filter over only items you have access to
-                let filter_bool_query = self.build_filter_query(T::USER_ID_KEY)?;
-                access_bool_query.filter(filter_bool_query);
-
-                // Only search on the provided index
-                access_bool_query.filter(QueryType::term("_index", T::ENTITY_INDEX.as_ref()));
-
-                Some(access_bool_query)
             }
-        };
-
-        let name_bool_query = match self.search_on {
-            SearchOn::Content => None,
-            SearchOn::Name | SearchOn::NameContent => {
-                let mut bool_query = BoolQueryBuilder::new();
-
-                // For name OR content queries, we can build a much more simple bool query
-                let term_must_array: Vec<QueryType<'a>> =
-                    self.build_must_term_query(SearchOn::Name)?;
-
-                // For each item in term must array, add to bool must query
-                for must in term_must_array {
-                    bool_query.must(must);
+            _ => {
+                // Create a vec of owner queries for each term
+                // We want to search over the content **and** the owner here
+                let mut owner_queries: Vec<QueryType> = Vec::new();
+                for term in &self.terms {
+                    let formatted_term = format!("macro|{}*", term);
+                    owner_queries.push(
+                        WildcardQuery::new(T::USER_ID_KEY, formatted_term, true, Some(5000.0))
+                            .into(),
+                    );
                 }
 
-                // Filter over only items you have access to
-                // For name index queries we want to always use user_id as the user id key
-                let filter_bool_query = self.build_filter_query("user_id")?;
-                bool_query.filter(filter_bool_query);
-
-                match T::ENTITY_INDEX {
-                    SearchEntityType::Projects => {
-                        bool_query
-                            .filter(QueryType::term("_index", SearchIndex::Projects.as_ref()));
-                    }
-                    _ => {
-                        bool_query.filter(QueryType::term("_index", SearchIndex::Names.as_ref()));
-                        bool_query.filter(QueryType::term("entity_type", T::ENTITY_INDEX.as_ref()));
-                    }
+                // Add the owner queries to the bool query
+                for owner_query in owner_queries {
+                    inner_bool_query.should(owner_query);
                 }
-
-                Some(bool_query)
-            }
-        };
-
-        Ok(ContentAndNameBoolQueries {
-            content_bool_query,
-            name_bool_query,
-        })
-    }
-
-    /// Builds the core bool query using the content_and_name_bool_queries
-    /// generated from self.build_content_and_name_bool_query().
-    /// They must be geneated separately as they could be modified after initially
-    /// being built.
-    pub fn build_bool_query<'a>(
-        &self,
-        content_and_name_bool_queries: ContentAndNameBoolQueries<'a>,
-    ) -> Result<BoolQueryBuilder<'a>> {
-        // If we have name content search, we need to combine the content and name bool queries
-        // under a single root bool query
-        match self.search_on {
-            SearchOn::Name => Ok(content_and_name_bool_queries
-                .name_bool_query
-                .ok_or(OpensearchClientError::BoolQueryNotBuilt)?),
-            SearchOn::Content => Ok(content_and_name_bool_queries
-                .content_bool_query
-                .ok_or(OpensearchClientError::BoolQueryNotBuilt)?),
-            SearchOn::NameContent => {
-                let mut bool_query = BoolQueryBuilder::new();
-
-                // Currently, the minimum should match is always one.
-                // This should of the bool query contains the ids and potentially the user_id
-                bool_query.minimum_should_match(1);
-
-                let content_bool_query = content_and_name_bool_queries
-                    .content_bool_query
-                    .ok_or(OpensearchClientError::BoolQueryNotBuilt)?;
-                let name_bool_query = content_and_name_bool_queries
-                    .name_bool_query
-                    .ok_or(OpensearchClientError::BoolQueryNotBuilt)?;
-
-                bool_query.should(content_bool_query.build().into());
-                bool_query.should(name_bool_query.build().into());
-
-                Ok(bool_query)
             }
         }
+
+        for must in term_must_array {
+            inner_bool_query.should(must);
+        }
+
+        // Add in the inner bool query on content + owner to must of access bool query
+        access_bool_query.must(inner_bool_query.build().into());
+
+        // Filter over only items you have access to
+        let filter_bool_query = self.build_filter_query(T::USER_ID_KEY)?;
+        access_bool_query.filter(filter_bool_query);
+
+        // Only search on the provided index
+        access_bool_query.filter(QueryType::term("_index", T::ENTITY_INDEX.as_ref()));
+
+        Ok(access_bool_query)
     }
 
     /// Builds the search request with the provided main bool query

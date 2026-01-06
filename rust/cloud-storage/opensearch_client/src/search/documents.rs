@@ -56,8 +56,7 @@ impl DocumentQueryBuilder {
     }
 
     pub fn build_bool_query<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
-        self.inner
-            .build_bool_query(self.inner.build_content_and_name_bool_query()?)
+        self.inner.build_content_bool_query()
     }
 
     fn build_search_request<'a>(&'a self) -> Result<SearchRequest<'a>> {
@@ -131,18 +130,14 @@ pub(crate) async fn search_documents(
     client: &opensearch::OpenSearch,
     args: DocumentSearchArgs,
 ) -> Result<Vec<SearchHit>> {
-    let indices = match args.search_on {
-        SearchOn::Content => vec![SearchIndex::Documents.as_ref()],
-        SearchOn::NameContent => vec![SearchIndex::Documents.as_ref(), SearchIndex::Names.as_ref()],
-        SearchOn::Name => vec![SearchIndex::Names.as_ref()],
-    };
-
     let query_body = args.build()?;
 
     tracing::trace!("query: {}", query_body);
 
     let response = client
-        .search(opensearch::SearchParts::Index(&indices))
+        .search(opensearch::SearchParts::Index(&[
+            SearchIndex::Documents.as_ref()
+        ]))
         .body(query_body)
         .send()
         .await

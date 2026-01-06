@@ -6,8 +6,8 @@ import type { SendMessageArgs } from '@block-channel/signal/channel';
 import { handleFileUpload } from '@block-channel/utils/inputAttachments';
 import { isInBlock } from '@core/block';
 import { BrightJoins } from '@core/component/BrightJoins';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
-import { IconButton } from '@core/component/IconButton';
 import { setEditorStateFromMarkdown } from '@core/component/LexicalMarkdown/utils';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -529,7 +529,7 @@ export function BaseInput(props: BaseInputProps) {
           />
         </Show>
         <div class="flex flex-row items-center gap-2">
-          <IconButton
+          <DeprecatedIconButton
             icon={showAttachMenu() ? XIcon : PlusIcon}
             theme="base"
             ref={setAttachMenuAnchorRef}

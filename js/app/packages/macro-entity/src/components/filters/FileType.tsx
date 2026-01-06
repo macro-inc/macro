@@ -1,3 +1,4 @@
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import FileIcon from '@phosphor-icons/core/assets/regular/file-magnifying-glass.svg';
 import FunnelClearIcon from '@phosphor-icons/core/assets/regular/funnel-simple-x.svg';
@@ -6,7 +7,6 @@ import {
   MenuItem,
   MenuSeparator,
 } from 'core/component/Menu';
-import { TextButton } from 'core/component/TextButton';
 import { createMemo, createSelector, createSignal, For } from 'solid-js';
 import { useFilterContext } from '../../contexts/filter';
 import { containsAllSameValues } from '../../utils/arrayCompare';
@@ -48,7 +48,7 @@ export function FileTypeFilter() {
         class="flex items-center justify-end gap-2 px-1 align-middle"
         as="div"
       >
-        <TextButton
+        <DeprecatedTextButton
           theme="clear"
           icon={FileIcon}
           class={`${hasFilters() ? 'text-accent-ink!' : ''} ${isOpen() ? 'bg-active!' : ''}`}
