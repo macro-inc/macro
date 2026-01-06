@@ -3,7 +3,7 @@ import { withAnalytics } from '@coparse/analytics';
 import { TrackingEvents } from '@coparse/analytics/src/types/TrackingEvents';
 import { useIsAuthenticated } from '@core/auth';
 import { useBlockAliasedName, useBlockId, useBlockName } from '@core/block';
-import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
+import CheckIcon from '@icon/bold/check-bold.svg?component-solid';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { TextButton } from '@core/component/TextButton';
 import { ShareOptions } from '@core/component/TopBar/ShareButton';
@@ -287,16 +287,36 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
 
           <div class="flex w-full items-center p-3 gap-3 flex-wrap">
             <Show when={canSendAsGroup()}>
-              <ToggleSwitch
-                switchRootClass={canSendAsGroup() ? '' : 'cursor-not-allowed'}
-                checked={sendAsGroupMessage() && canSendAsGroup()}
-                onChange={setSendAsGroupMessage}
-                label={'Send As Group Message'}
-                disabled={!canSendAsGroup()}
-                falseLabel="FALSE"
-                trueLabel="TRUE"
-                size="SM"
-              />
+              <label
+                class={`flex items-start gap-2 ${!canSendAsGroup() ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+              >
+                <div class="relative mt-0.5">
+                  <input
+                    onChange={(e) => setSendAsGroupMessage(e.currentTarget.checked)}
+                    checked={sendAsGroupMessage() && canSendAsGroup()}
+                    disabled={!canSendAsGroup()}
+                    class="peer sr-only"
+                    type="checkbox"
+                  />
+                  <div class={`w-4 h-4 border ${
+                    !canSendAsGroup()
+                      ? 'border-edge/30 peer-checked:bg-menu/20'
+                      : 'border-edge hover:border-accent/30 peer-checked:bg-accent/10 peer-checked:border-accent/30'
+                  }`}>
+                    <Show when={sendAsGroupMessage() && canSendAsGroup()}>
+                      <CheckIcon class="w-full h-full text-accent p-0.5" />
+                    </Show>
+                  </div>
+                </div>
+                <div class={`flex flex-col text-sm ${!canSendAsGroup() ? 'text-ink-disabled/50' : ''}`}>
+                  <span class="font-medium">Send As Group Message</span>
+                  <span class={`text-xs mt-0.5 ${!canSendAsGroup() ? 'text-ink-disabled/50' : 'text-ink-muted'}`}>
+                    {sendAsGroupMessage() && canSendAsGroup()
+                      ? 'Creates a new group message with all recipients'
+                      : 'Send a message to each recipient'}
+                  </span>
+                </div>
+              </label>
             </Show>
 
             <div class="flex flex-auto min-w-0 gap-3">
