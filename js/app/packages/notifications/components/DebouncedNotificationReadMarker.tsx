@@ -6,6 +6,7 @@ import {
   markNotificationsForEntityAsRead,
 } from '../notification-helpers';
 import type { NotificationSource } from '../notification-source';
+import { queryClient } from '@queries/client';
 
 const DEFAULT_DEBOUNCE_TIME = 2_000;
 
@@ -110,7 +111,15 @@ export function EmailDebouncedReadMarker(props: {
   debounceTime?: number;
   threadId: string;
 }) {
-  const markSeenMutation = useMarkThreadAsSeenMutation();
+  const markSeenMutation = useMarkThreadAsSeenMutation({
+    onSuccess() {
+      queryClient.invalidateQueries({
+        predicate(query) {
+          return query.queryKey.includes('dss');
+        },
+      });
+    },
+  });
 
   return (
     <DebouncedMarker
