@@ -33,6 +33,8 @@ import {
   type DocumentMentionInfo,
 } from '@lexical-core';
 import { logger } from '@observability';
+import { queryClient } from '@queries/client';
+import { emailKeys } from '@queries/email/keys';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { useSendMessageMutation } from '@queries/email/thread';
 import type {
@@ -91,8 +93,6 @@ import { getReplyTypeFromDraft } from '../util/replyType';
 import { AttachMenu } from './AttachMenu';
 import { type EmailRecipient, useEmailContext } from './EmailContext';
 import { getOrInitEmailFormContext } from './EmailFormContext';
-import { queryClient } from '@queries/client';
-import { emailKeys } from '@queries/email/keys';
 
 false && fileDrop;
 
