@@ -5,16 +5,22 @@ import { useIsAuthenticated } from '@core/auth';
 import { useBlockAliasedName, useBlockId, useBlockName } from '@core/block';
 import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
 import { RecipientSelector } from '@core/component/RecipientSelector';
-import { TextButton } from '@core/component/TextButton';
 import { ShareOptions } from '@core/component/TopBar/ShareButton';
+import { TextButton } from '@core/component/TextButton';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { WithCustomUserInput } from '@core/user';
 import { useSendMessageToPeople } from '@core/util/channels';
-import PaperPlaneRight from '@phosphor-icons/core/fill/paper-plane-right-fill.svg?component-solid';
 import { blockNameToItemType } from '@service-storage/client';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { SharePermissionV2ChannelSharePermissions } from '@service-storage/generated/schemas/sharePermissionV2ChannelSharePermissions';
-import { createEffect, createMemo, createSignal, Show } from 'solid-js';
+import PaperPlaneRight from '@phosphor-icons/core/fill/paper-plane-right-fill.svg?component-solid';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  onMount,
+  Show,
+} from 'solid-js';
 import { getDestinationFromOptions } from './NewMessage';
 import { Permissions } from './SharePermissions';
 import { toast } from './Toast/Toast';
@@ -31,7 +37,15 @@ interface ForwardToChannelProps {
   onSubmit?: () => void;
   refetch?: () => void;
   projectId?: string;
-  name?: string;
+  name: string;
+  ref?: (ref: {
+    getSelectedOptions: () => WithCustomUserInput<
+      'user' | 'contact' | 'channel'
+    >[];
+    setSubmitAccessLevel: (level: AccessLevel | null) => void;
+    getSubmitAccessLevel: () => AccessLevel | null;
+    handleSubmit: () => void;
+  }) => void;
 }
 
 export function ForwardToChannel(props: ForwardToChannelProps) {
@@ -221,6 +235,17 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
     props.onSubmit?.();
   }
 
+  onMount(() => {
+    if (props.ref) {
+      props.ref({
+        getSubmitAccessLevel: submitAccessLevel,
+        getSelectedOptions: selectedOptions,
+        setSubmitAccessLevel,
+        handleSubmit,
+      });
+    }
+  });
+
   return (
     <Show when={isAuthenticated()}>
       <div class="flex flex-col w-full">
@@ -235,6 +260,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
             noBrackets
             hideBorder
             noPadding
+            focusOnMount
           />
         </div>
         <div class="flex flex-col w-full h-[120px] overflow-y-auto border-t-1 border-edge-muted/50">
@@ -250,9 +276,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
                 return true;
               }}
               initialValue={markdownState()}
-              onTab={() => {
-                return true;
-              }}
+              onTab={() => {return true}}
               useBlockBoundary={false}
               portalScope="local"
               dontFocusOnMount
@@ -266,8 +290,8 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
                   switchRootClass={canSendAsGroup() ? '' : 'cursor-not-allowed'}
                   checked={sendAsGroupMessage() && canSendAsGroup()}
                   onChange={setSendAsGroupMessage}
+                  label={'Send As Group Message'}
                   disabled={!canSendAsGroup()}
-                  label={'Send In Channel'}
                   falseLabel="FALSE"
                   trueLabel="TRUE"
                   size="SM"
@@ -275,13 +299,11 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
               </Show>
             </div>
 
-            <div class="w-full p-2 gap-2 flex justify-end">
+            <div class="w-full p-3 gap-2 flex justify-end">
               <TextButton
                 onClick={() => {
                   const options = selectedOptions();
-                  if (options && options.length > 0) {
-                    handleSubmit();
-                  }
+                  if(options && options.length > 0){handleSubmit()}
                 }}
                 theme={selectedOptions().length > 0 ? 'accent' : 'disabled'}
                 icon={PaperPlaneRight}
@@ -289,16 +311,9 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
                 text="Share"
               />
 
-              <Show
-                when={
-                  props.submitPermissionInfo?.userPermissions ===
-                  Permissions.OWNER
-                }
-              >
+              <Show when={props.submitPermissionInfo?.userPermissions === Permissions.OWNER}>
                 <ShareOptions
-                  setPermissions={(accessLevel) => {
-                    setSubmitAccessLevel(accessLevel);
-                  }}
+                  setPermissions={(accessLevel) => {setSubmitAccessLevel(accessLevel)}}
                   permissions={submitAccessLevel()}
                   label="Permission"
                   hideNoAccess

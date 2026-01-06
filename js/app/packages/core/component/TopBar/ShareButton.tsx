@@ -487,9 +487,10 @@ export function ShareModal(props: ShareModalProps) {
                 name={props.name}
               />
 
-              <Show when={recipients() || props.owner}>
-                <div class="border-t-1 border-edge-muted w-full h-fit max-h-[120px] overflow-y-auto">
-                  <div class="grid gap-[1px] bg-edge-muted/50 text-ink text-sm select-none">
+              <Show when={recipients()?.length > 0}>
+                <div class="border-t-1 border-edge-muted w-full h-fit max-h-[120px] relative">
+                  <div class="absolute top-0 left-0 border-b border-edge-muted/50 bg-panel w-full h-[40px] flex items-center px-3">Share Recipients</div>
+                  <div class="grid bg-edge-muted/50 text-ink text-sm select-none overflow-y-auto scrollbar-hidden">
                     <Show when={props.owner}>
                       <div class="contents rounded-md">
                         <div class="flex items-center gap-2 overflow-hidden">
@@ -508,75 +509,76 @@ export function ShareModal(props: ShareModalProps) {
                       </div>
                     </Show>
 
-                    <Show when={recipients()}>
-                      <For each={recipients()!}>
-                        {(recipient) => (
-                          <div class="flex justify-between p-2 bg-panel">
-                            <div
-                              class="flex items-center gap-2 overflow-hidden cursor-pointer"
-                              onClick={() =>
-                                navigateToChannel(recipient.channel_id)
-                              }
-                            >
-                              <Switch>
-                                <Match
-                                  when={channelNameMap().get(
-                                    recipient.channel_id
-                                  )}
-                                >
-                                  <User class="flex-shrink-0 w-4 h-4" />
-                                </Match>
-                                <Match when={true}>
-                                  <IconUsers class="flex-shrink-0 w-4 h-4" />
-                                </Match>
-                              </Switch>
-                              <div class="font-medium truncate">
-                                {channelNameMap().get(recipient.channel_id)
-                                  ?.name || recipient.channel_id}
-                              </div>
-                            </div>
-                            <div class="flex items-center">
-                              <div class="font-medium text-ink-muted text-xs">
-                                <ShareOptions
-                                  permissions={recipient.access_level}
-                                  setPermissions={(accessLevel) => {
-                                    if (accessLevel === null) {
-                                      removeChannelAccess(recipient.channel_id);
-                                    } else if (
-                                      accessLevel !== recipient.access_level
-                                    ) {
-                                      setChannelPermissions(
-                                        recipient.channel_id,
-                                        accessLevel
-                                      );
-                                    }
-                                  }}
-                                />
-                              </div>
+                    <For each={recipients()!}>
+                      {(recipient) => (
+                        <div class="flex justify-between p-2 bg-panel">
+                          <div
+                            class="flex items-center gap-2 overflow-hidden cursor-pointer"
+                            onClick={() =>
+                              navigateToChannel(recipient.channel_id)
+                            }
+                          >
+                            <Switch>
+                              <Match
+                                when={channelNameMap().get(
+                                  recipient.channel_id
+                                )}
+                              >
+                                <User class="flex-shrink-0 w-4 h-4" />
+                              </Match>
+                              <Match when={true}>
+                                <IconUsers class="flex-shrink-0 w-4 h-4" />
+                              </Match>
+                            </Switch>
+                            <div class="font-medium truncate">
+                              {channelNameMap().get(recipient.channel_id)
+                                ?.name || recipient.channel_id}
                             </div>
                           </div>
-                        )}
-                      </For>
-                    </Show>
+                          <div class="flex items-center">
+                            <div class="font-medium text-ink-muted text-xs">
+                              <ShareOptions
+                                permissions={recipient.access_level}
+                                setPermissions={(accessLevel) => {
+                                  if (accessLevel === null) {
+                                    removeChannelAccess(recipient.channel_id);
+                                  } else if (
+                                    accessLevel !== recipient.access_level
+                                  ) {
+                                    setChannelPermissions(
+                                      recipient.channel_id,
+                                      accessLevel
+                                    );
+                                  }
+                                }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </For>
                   </div>
                 </div>
               </Show>
 
               <Show when={props.userPermissions === Permissions.OWNER}>
-                <div class="flex border-t-1 items-center px-2 border-edge-muted h-[40px] justify-between">
-                  <TextButton
-                    onClick={() => copyPublicLink()}
-                    text="Public Link"
-                    height="h-[22px]"
-                    icon={IconLink}
-                    theme="accent"
-                    outline
-                  />
-                  <ShareOptions
-                    permissions={publicAccessLevel() ?? null}
-                    hideNoAccess={props.itemType === 'chat'}
-                    setPermissions={setPublicPermissions}
-                  />
+                <div class="border-t-1 border-edge-muted flex flex-col">
+                  <div class="border-b border-edge-muted/50 bg-panel w-full h-[40px] flex items-center px-3">Public Link</div>
+                  <div class="flex items-center p-3 justify-between">
+                    <TextButton
+                      onClick={() => copyPublicLink()}
+                      text="Copy Link"
+                      height="h-[22px]"
+                      icon={IconLink}
+                      theme="accent"
+                      outline
+                    />
+                    <ShareOptions
+                      permissions={publicAccessLevel() ?? null}
+                      hideNoAccess={props.itemType === 'chat'}
+                      setPermissions={setPublicPermissions}
+                    />
+                  </div>
                 </div>
               </Show>
             </ClippedPanel>
