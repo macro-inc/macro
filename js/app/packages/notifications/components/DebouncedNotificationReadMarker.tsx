@@ -1,4 +1,5 @@
 import type { Entity } from '@core/types';
+import { queryClient } from '@queries/client';
 import { useMarkThreadAsSeenMutation } from '@queries/email/thread';
 import { onCleanup, onMount } from 'solid-js';
 import {
@@ -6,7 +7,6 @@ import {
   markNotificationsForEntityAsRead,
 } from '../notification-helpers';
 import type { NotificationSource } from '../notification-source';
-import { queryClient } from '@queries/client';
 
 const DEFAULT_DEBOUNCE_TIME = 2_000;
 
