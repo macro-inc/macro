@@ -1,4 +1,4 @@
-import {
+import type {
   CreateCommentRequest,
   EditCommentRequest,
 } from '@service-storage/generated/schemas';
