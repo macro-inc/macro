@@ -749,7 +749,7 @@ function MessageListImpl(props: MessageListProps) {
               }}
               style={{
                 'max-height': `${listHeight()}px`,
-                height: 'fit-content',
+                height: '100%',
                 contain: 'none',
                 'overflow-x': 'hidden',
                 'overflow-y': 'scroll',
