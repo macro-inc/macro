@@ -332,6 +332,19 @@ export function ShareModal(props: ShareModalProps) {
           },
           id: props.id,
         });
+      } else if (props.itemType === 'email') {
+        result = await storageServiceClient.editThread({
+          sharePermission: {
+            channelSharePermissions: [
+              {
+                operation: 'replace',
+                accessLevel,
+                channelId,
+              },
+            ],
+          },
+          threadId: props.id,
+        });
       }
 
       if (result && isOk(result)) {
