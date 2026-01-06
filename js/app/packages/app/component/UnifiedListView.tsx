@@ -716,7 +716,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     { equals: arrayEquals }
   );
 
-  // accounts for task entity type filtering as "note" type files
   const joinedSoupFileTypeFilter = createMemo<string[]>(
     () => {
       let fileTypes = [];
