@@ -1,4 +1,3 @@
-mod base_64_image;
 mod client;
 mod error;
 mod message;
