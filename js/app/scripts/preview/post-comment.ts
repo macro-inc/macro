@@ -55,7 +55,7 @@ function parseArgs(): Args {
 async function main() {
   const args = parseArgs();
   const [owner, repo] = args.repo.split('/');
-  const previewUrl = `https://${args.previewId}-preview.macro.com`;
+  const previewUrl = `https://${args.previewId}.preview.macro.com`;
   const shortSha = args.sha.slice(0, 7);
 
   // Check for existing preview comment
@@ -81,7 +81,7 @@ async function main() {
   }>;
 
   const existingComment = comments.find(
-    (c) => c.body?.includes('-preview.macro.com') && c.user?.type === 'Bot'
+    (c) => c.body?.includes('.preview.macro.com') && c.user?.type === 'Bot'
   );
 
   const body = `### Preview Deployment

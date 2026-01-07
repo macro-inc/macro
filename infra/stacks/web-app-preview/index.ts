@@ -2,11 +2,54 @@ import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import {
   BASE_DOMAIN,
-  MACRO_SUBDOMAIN_CERT,
   stack,
 } from '../../packages/shared/src';
 
 const BASE_NAME = 'preview-deploy';
+
+// Certificate must be in us-east-1 for CloudFront
+const usEast1Provider = new aws.Provider('us-east-1-provider', {
+  region: 'us-east-1',
+});
+
+// Create certificate for *.preview.macro.com
+const previewCert = new aws.acm.Certificate(
+  `${BASE_NAME}-cert`,
+  {
+    domainName: `*.preview.${BASE_DOMAIN}`,
+    validationMethod: 'DNS',
+    tags: {
+      environment: stack,
+      project: 'web-app-preview',
+    },
+  },
+  { provider: usEast1Provider }
+);
+
+// Get the hosted zone for DNS validation
+const zone = aws.route53.getZoneOutput({ name: BASE_DOMAIN });
+
+// Create DNS validation record
+const certValidation = new aws.route53.Record(
+  `${BASE_NAME}-cert-validation`,
+  {
+    name: previewCert.domainValidationOptions[0].resourceRecordName,
+    type: previewCert.domainValidationOptions[0].resourceRecordType,
+    zoneId: zone.zoneId,
+    records: [previewCert.domainValidationOptions[0].resourceRecordValue],
+    ttl: 60,
+  }
+);
+
+// Wait for certificate validation
+const certValidated = new aws.acm.CertificateValidation(
+  `${BASE_NAME}-cert-validated`,
+  {
+    certificateArn: previewCert.arn,
+    validationRecordFqdns: [certValidation.fqdn],
+  },
+  { provider: usEast1Provider }
+);
 
 const tags = {
   environment: stack,
@@ -80,7 +123,7 @@ const originRequestLambda = new aws.lambda.Function(
   },
   {
     // Lambda@Edge must be in us-east-1
-    provider: new aws.Provider('us-east-1-provider', { region: 'us-east-1' }),
+    provider: usEast1Provider,
   }
 );
 
@@ -89,6 +132,8 @@ const originRequestLambda = new aws.lambda.Function(
 const bucketRegionalDomainName = pulumi.interpolate`${previewBucket.bucket}.s3.us-east-1.amazonaws.com`;
 
 // Cache policy for previews (short TTL since content changes frequently)
+// Note: Don't forward Host header to S3 - it breaks OAC signing.
+// Lambda@Edge can read Host from the viewer request headers directly.
 const cachePolicy = new aws.cloudfront.CachePolicy(`${BASE_NAME}-cache-policy`, {
   name: `${BASE_NAME}-cache-policy-${stack}`,
   defaultTtl: 60, // 1 minute default
@@ -99,10 +144,7 @@ const cachePolicy = new aws.cloudfront.CachePolicy(`${BASE_NAME}-cache-policy`, 
       cookieBehavior: 'none',
     },
     headersConfig: {
-      headerBehavior: 'whitelist',
-      headers: {
-        items: ['Host'], // Need Host header for subdomain routing
-      },
+      headerBehavior: 'none',
     },
     queryStringsConfig: {
       queryStringBehavior: 'none',
@@ -138,7 +180,8 @@ const responseHeadersPolicy = new aws.cloudfront.ResponseHeadersPolicy(
 );
 
 // Wildcard alias for preview subdomains
-const previewAlias = `*-preview.${BASE_DOMAIN}`;
+// Format: *.preview.macro.com (e.g., feature-abc123.preview.macro.com)
+const previewAlias = `*.preview.${BASE_DOMAIN}`;
 
 // CloudFront distribution for preview deployments
 const distribution = new aws.cloudfront.Distribution(
@@ -148,7 +191,7 @@ const distribution = new aws.cloudfront.Distribution(
     aliases: [previewAlias],
     viewerCertificate: {
       cloudfrontDefaultCertificate: false,
-      acmCertificateArn: MACRO_SUBDOMAIN_CERT,
+      acmCertificateArn: certValidated.certificateArn,
       sslSupportMethod: 'sni-only',
       minimumProtocolVersion: 'TLSv1.2_2021',
     },
@@ -162,7 +205,7 @@ const distribution = new aws.cloudfront.Distribution(
       responseHeadersPolicyId: responseHeadersPolicy.id,
       lambdaFunctionAssociations: [
         {
-          eventType: 'origin-request',
+          eventType: 'viewer-request',
           lambdaArn: pulumi.interpolate`${originRequestLambda.arn}:${originRequestLambda.version}`,
           includeBody: false,
         },
@@ -216,10 +259,8 @@ new aws.s3.BucketPolicy(`${BASE_NAME}-bucket-policy`, {
 });
 
 // Route53 wildcard record for preview subdomains
-const zone = aws.route53.getZoneOutput({ name: BASE_DOMAIN });
-
 new aws.route53.Record(`${BASE_NAME}-dns-record`, {
-  name: `*-preview`,
+  name: `*.preview`,
   zoneId: zone.zoneId,
   type: 'A',
   aliases: [
@@ -236,4 +277,4 @@ export const previewBucketName = previewBucket.bucket;
 export const previewBucketArn = previewBucket.arn;
 export const previewDistributionId = distribution.id;
 export const previewDistributionDomain = distribution.domainName;
-export const previewBaseUrl = `https://{subdomain}-preview.${BASE_DOMAIN}`;
+export const previewBaseUrl = `https://{subdomain}.preview.${BASE_DOMAIN}`;

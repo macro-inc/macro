@@ -76,6 +76,7 @@ import { setOpenWhichKey, WhichKey } from './WhichKey';
 const { track, identify, TrackingEvents } = withAnalytics();
 
 const rootPreload: RoutePreloadFunc = async (args) => {
+  console.log('THIS IS A PREVIEW');
   useObserveRouting();
 
   // even though we are using the transformUrl prop, we may still need to replace the url in the history

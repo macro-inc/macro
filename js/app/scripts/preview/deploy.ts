@@ -74,11 +74,12 @@ function deploy(previewId: string): void {
     process.exit(1);
   }
 
-  console.log(`\n🚀 Deploying to s3://${PREVIEW_BUCKET}/${previewId}/\n`);
+  // Note: Build output expects /app/ base path (same as dev.macro.com)
+  console.log(`\n🚀 Deploying to s3://${PREVIEW_BUCKET}/${previewId}/app/\n`);
 
   // Sync all files except index.html with immutable cache
   execSync(
-    `aws s3 sync ${DIST_PATH}/ s3://${PREVIEW_BUCKET}/${previewId}/ ` +
+    `aws s3 sync ${DIST_PATH}/ s3://${PREVIEW_BUCKET}/${previewId}/app/ ` +
       `--delete ` +
       `--cache-control "public, max-age=31536000, immutable" ` +
       `--exclude "index.html"`,
@@ -87,12 +88,12 @@ function deploy(previewId: string): void {
 
   // Upload index.html with no-cache
   execSync(
-    `aws s3 cp ${DIST_PATH}/index.html s3://${PREVIEW_BUCKET}/${previewId}/index.html ` +
+    `aws s3 cp ${DIST_PATH}/index.html s3://${PREVIEW_BUCKET}/${previewId}/app/index.html ` +
       `--cache-control "no-cache, no-store, must-revalidate"`,
     { stdio: 'inherit' }
   );
 
-  const previewUrl = `https://${previewId}-preview.macro.com`;
+  const previewUrl = `https://${previewId}.preview.macro.com`;
   console.log(`\n✅ Preview deployed: ${previewUrl}\n`);
 }
 
@@ -101,6 +102,7 @@ function cleanup(previewId: string): void {
 
   console.log(`\n🧹 Cleaning up s3://${PREVIEW_BUCKET}/${previewId}/\n`);
 
+  // Delete entire preview folder (includes /app/ subfolder)
   execSync(`aws s3 rm s3://${PREVIEW_BUCKET}/${previewId}/ --recursive`, {
     stdio: 'inherit',
   });
