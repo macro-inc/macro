@@ -90,7 +90,7 @@ function PopoverSplitModal(props: {
     handle: stubHandle,
     splitHotkeyScope: `popover-${props.popover.id}`,
     isPanelActive: () => true,
-    unifiedListContext: createStubSoupContext(),
+    soupContext: createStubSoupContext(),
     panelRef,
     panelSize: { width: null, height: null },
     contentOffsetTop,

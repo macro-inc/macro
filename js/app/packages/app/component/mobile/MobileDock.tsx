@@ -33,7 +33,7 @@ function MobileDockButton(props: MobileDockButtonProps) {
 
 export function MobileDock() {
   const splitContext = useSplitPanelOrThrow();
-  const { selectedView, setSelectedView } = splitContext.unifiedListContext;
+  const { selectedView, setSelectedView } = splitContext.soupContext;
 
   const focusSearchInput = (viewId: string) => {
     setTimeout(() => {

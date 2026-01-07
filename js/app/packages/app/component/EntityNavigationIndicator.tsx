@@ -8,7 +8,7 @@ import { Show } from 'solid-js';
 
 const EntityNavigationIndicator = () => {
   const {
-    unifiedListContext: {
+    soupContext: {
       entitiesSignal: [entities],
       selectedView,
       viewsDataStore,
@@ -23,6 +23,7 @@ const EntityNavigationIndicator = () => {
   return (
     <Show
       when={
+        handle.referredFrom() === 'unified-list' &&
         entities()?.length &&
         selectedEntity() &&
         handle.content().type !== 'component' &&

@@ -5,7 +5,7 @@ import {
   type Setter,
   type Signal,
 } from 'solid-js';
-import type { UnifiedListContext } from '../SoupContext';
+import type { SoupContext } from '../SoupContext';
 import type { SplitHandle, SplitManager } from './layoutManager';
 
 export const SplitLayoutContext = createContext<{
@@ -20,7 +20,7 @@ export type HalfSplitState = {
 export type SplitPanelContextType = {
   handle: SplitHandle;
   splitHotkeyScope: string;
-  unifiedListContext: UnifiedListContext;
+  soupContext: SoupContext;
   isPanelActive: Accessor<boolean>;
   panelRef: Accessor<HTMLElement | null>;
   panelSize: NullableSize;

@@ -124,7 +124,7 @@ export default function GlobalShortcuts() {
     description: 'Create new split',
     condition: canFit,
     keyDownHandler: () => {
-      insertSplit({ type: 'component', id: 'unified-list' });
+      insertSplit({ type: 'component', id: 'unified-list' }, 'hotkey');
       return true;
     },
     runWithInputFocused: true,
@@ -136,7 +136,7 @@ export default function GlobalShortcuts() {
     description: 'Create new split',
     condition: canFit,
     keyDownHandler: () => {
-      insertSplit({ type: 'component', id: 'unified-list' });
+      insertSplit({ type: 'component', id: 'unified-list' }, 'hotkey');
       return true;
     },
   });

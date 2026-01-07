@@ -1,31 +1,34 @@
-import { ENABLE_DOCK_NOTITIFCATIONS, ENABLE_JACK_IN } from '@core/constant/featureFlags';
-import { GlobalNotificationBell } from '@core/component/GlobalNotificationBell';
-import { createMemo, createSignal, onCleanup, onMount, Show } from 'solid-js';
-import { isRightPanelOpen, useToggleRightPanel } from '@core/signal/layout';
-import { useSettingsState } from '@core/constant/SettingsState';
-import { useGlobalNotificationSource } from '../GlobalAppState';
-import IconPower from '@phosphor-icons/core/regular/power.svg';
-import MacroCreateIcon from '@macro-icons/macro-create-b.svg';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { ClippedPanel } from '@core/component/ClippedPanel';
-import { isMobileWidth } from '@core/mobile/mobileWidth';
-import { PresentModeGlitch } from './PresentModeGlitch';
-import { IconButton } from '@core/component/IconButton';
-import IconQuestion from '@icon/regular/question.svg';
+import { playSound } from '@app/util/sound';
 import { withAnalytics } from '@coparse/analytics';
-import SplitIcon from '@macro-icons/new-split.svg';
-import IconAI from '@macro-icons/pixel/ai.svg';
+import { useHasPaidAccess } from '@core/auth';
+import { ClippedPanel } from '@core/component/ClippedPanel';
+import { GlobalNotificationBell } from '@core/component/GlobalNotificationBell';
+import { Hotkey } from '@core/component/Hotkey';
+import { IconButton } from '@core/component/IconButton';
+import {
+  ENABLE_DOCK_NOTITIFCATIONS,
+  ENABLE_JACK_IN,
+} from '@core/constant/featureFlags';
+import { useSettingsState } from '@core/constant/SettingsState';
+import { TOKENS } from '@core/hotkey/tokens';
+import { getActiveCommandByToken, runCommand } from '@core/hotkey/utils';
+import { isMobileWidth } from '@core/mobile/mobileWidth';
+import { isRightPanelOpen, useToggleRightPanel } from '@core/signal/layout';
+import { isTauri } from '@core/util/platform';
+import IconQuestion from '@icon/regular/question.svg';
+import MacroCreateIcon from '@macro-icons/macro-create-b.svg';
 import IconGear from '@macro-icons/macro-gear.svg';
 import IconLogo from '@macro-icons/macro-logo.svg';
-import { BasicTierLimit } from './BasicTierLimit';
+import SplitIcon from '@macro-icons/new-split.svg';
+import IconAI from '@macro-icons/pixel/ai.svg';
+import IconPower from '@phosphor-icons/core/regular/power.svg';
+import { createMemo, createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { setKonsoleOpen } from '../command/state';
-import { getActiveCommandByToken, runCommand } from '@core/hotkey/utils';
-import { Hotkey } from '@core/component/Hotkey';
+import { useGlobalNotificationSource } from '../GlobalAppState';
 import { setCreateMenuOpen } from '../Launcher';
-import { useHasPaidAccess } from '@core/auth';
-import { isTauri } from '@core/util/platform';
-import { TOKENS } from '@core/hotkey/tokens';
-import { playSound } from '@app/util/sound';
+import { BasicTierLimit } from './BasicTierLimit';
+import { PresentModeGlitch } from './PresentModeGlitch';
 import { QuickAccess } from './QuickAccess';
 
 export function Dock() {
@@ -42,9 +45,13 @@ export function Dock() {
 
   const isSoupActive = createMemo(() => {
     const splitId = globalSplitManager()?.activeSplitId();
-    if (!splitId) { return false };
+    if (!splitId) {
+      return false;
+    }
     const split = globalSplitManager()?.getSplit(splitId);
-    if (!split) { return false };
+    if (!split) {
+      return false;
+    }
     return split.content().id === 'unified-list';
   });
 
@@ -52,64 +59,96 @@ export function Dock() {
     try {
       playSound('Stab_Destruct');
       const element = document.documentElement;
-      if (element.requestFullscreen) { await element.requestFullscreen() }
-      else if ((element as any).webkitRequestFullscreen) { await (element as any).webkitRequestFullscreen() }// Safari
-      else if ((element as any).mozRequestFullScreen) { await (element as any).mozRequestFullScreen() }// Firefox
-      else if ((element as any).msRequestFullscreen) { await (element as any).msRequestFullscreen() }// IE/Edge
+      if (element.requestFullscreen) {
+        await element.requestFullscreen();
+      } else if ((element as any).webkitRequestFullscreen) {
+        await (element as any).webkitRequestFullscreen();
+      } // Safari
+      else if ((element as any).mozRequestFullScreen) {
+        await (element as any).mozRequestFullScreen();
+      } // Firefox
+      else if ((element as any).msRequestFullscreen) {
+        await (element as any).msRequestFullscreen();
+      } // IE/Edge
       focusActiveSplit();
-    }
-    catch (error) {
+    } catch (error) {
       console.error('Error entering present mode:', error);
     }
-  };
+  }
 
   async function exitPresentMode() {
     try {
-      if (document.exitFullscreen) { await document.exitFullscreen() }
-      else if ((document as any).webkitExitFullscreen) { await (document as any).webkitExitFullscreen() }// Safari
-      else if ((document as any).mozCancelFullScreen) { await (document as any).mozCancelFullScreen() }// Firefox
-      else if ((document as any).msExitFullscreen) { await (document as any).msExitFullscreen() }// IE/Edge
+      if (document.exitFullscreen) {
+        await document.exitFullscreen();
+      } else if ((document as any).webkitExitFullscreen) {
+        await (document as any).webkitExitFullscreen();
+      } // Safari
+      else if ((document as any).mozCancelFullScreen) {
+        await (document as any).mozCancelFullScreen();
+      } // Firefox
+      else if ((document as any).msExitFullscreen) {
+        await (document as any).msExitFullscreen();
+      } // IE/Edge
       focusActiveSplit();
-    }
-    catch (error) {
+    } catch (error) {
       console.error('Error exiting present mode:', error);
     }
-  };
+  }
 
   async function focusActiveSplit() {
     const id = activeSplitId();
     if (!id) return null;
-    const splitEl = document.querySelector(`[data-split-id="${id}"]`) as HTMLElement;
+    const splitEl = document.querySelector(
+      `[data-split-id="${id}"]`
+    ) as HTMLElement;
     splitEl?.focus();
-  };
+  }
 
   function togglePresentMode() {
     if (isPresentMode()) {
       exitPresentMode();
       setShowGlitchEffect(false);
-    }
-    else {
+    } else {
       setShowGlitchEffect(true); // Show glitch effect before entering fullscreen
-      setTimeout(() => { enterPresentMode() }, 200); // Enter fullscreen after a brief delay to let glitch start
+      setTimeout(() => {
+        enterPresentMode();
+      }, 200); // Enter fullscreen after a brief delay to let glitch start
     }
-  };
+  }
 
   // Check if we're in fullscreen
   function checkFullscreen() {
-    const isFullscreen = document.fullscreenElement || (document as any).webkitFullscreenElement || (document as any).mozFullScreenElement || (document as any).msFullscreenElement;
+    const isFullscreen =
+      document.fullscreenElement ||
+      (document as any).webkitFullscreenElement ||
+      (document as any).mozFullScreenElement ||
+      (document as any).msFullscreenElement;
     setIsPresentMode(!!isFullscreen);
-  };
+  }
 
   // Listen for fullscreen changes
   onMount(() => {
-    const events = ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'];
+    const events = [
+      'fullscreenchange',
+      'webkitfullscreenchange',
+      'mozfullscreenchange',
+      'MSFullscreenChange',
+    ];
 
-    events.forEach((event) => { document.addEventListener(event, checkFullscreen) });
-    const handleKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape' && isPresentMode()) { exitPresentMode() } };
+    events.forEach((event) => {
+      document.addEventListener(event, checkFullscreen);
+    });
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isPresentMode()) {
+        exitPresentMode();
+      }
+    };
     document.addEventListener('keydown', handleKeyDown);
 
     onCleanup(() => {
-      events.forEach((event) => { document.removeEventListener(event, checkFullscreen) });
+      events.forEach((event) => {
+        document.removeEventListener(event, checkFullscreen);
+      });
       document.removeEventListener('keydown', handleKeyDown);
     });
   });
@@ -131,25 +170,26 @@ export function Dock() {
 
       <div
         style={{
-          'padding': '0 var(--gutter-size) var(--gutter-size) var(--gutter-size)',
-          'height': 'calc(40px + var(--gutter-size))',
+          padding: '0 var(--gutter-size) var(--gutter-size) var(--gutter-size)',
+          height: 'calc(40px + var(--gutter-size))',
           'box-sizing': 'border-box',
-          'width': '100vw'
+          width: '100vw',
         }}
       >
         <ClippedPanel bl br>
-          <div style={{
-            'grid-template-columns': 'min-content 1fr min-content',
-            'box-sizing': 'border-box',
-            'scrollbar-width': 'none',
-            'align-content': 'center',
-            'overflow-y': 'hidden',
-            'padding': '0 7px',
-            'display': 'grid',
-            'height': '100%',
-            'gap': '7px',
-          }}>
-
+          <div
+            style={{
+              'grid-template-columns': 'min-content 1fr min-content',
+              'box-sizing': 'border-box',
+              'scrollbar-width': 'none',
+              'align-content': 'center',
+              'overflow-y': 'hidden',
+              padding: '0 7px',
+              display: 'grid',
+              height: '100%',
+              gap: '7px',
+            }}
+          >
             <div
               style={{
                 'border-right': '1px solid var(--color-edge-muted)',
@@ -157,8 +197,8 @@ export function Dock() {
                 'grid-auto-flow': 'column',
                 'align-items': 'center',
                 'padding-right': '7px',
-                'display': 'grid',
-                'gap': '7px'
+                display: 'grid',
+                gap: '7px',
               }}
             >
               <div
@@ -166,19 +206,21 @@ export function Dock() {
                   'grid-template-columns': 'min-content min-content',
                   'box-sizing': 'border-box',
                   'align-items': 'center',
-                  'padding': '0 4px',
-                  'display': 'grid',
-                  'height': '24px',
-                  'gap': '7px'
+                  padding: '0 4px',
+                  display: 'grid',
+                  height: '24px',
+                  gap: '7px',
                 }}
-                onClick={() => { setKonsoleOpen(true) }}
+                onClick={() => {
+                  setKonsoleOpen(true);
+                }}
                 class="dock-button-hover"
                 data-hotkey-token={TOKENS.global.commandMenu}
               >
                 <IconLogo
                   style={{
-                    'display': 'block',
-                    'height': '9px'
+                    display: 'block',
+                    height: '9px',
                   }}
                 />
                 {/*<div style={{
@@ -194,30 +236,34 @@ export function Dock() {
                 </div>
               </div>
 
-              <div style={{
-                'background-color': 'var(--color-edge-muted)',
-                'height': '38px',
-                'width': '1px',
-              }} />
+              <div
+                style={{
+                  'background-color': 'var(--color-edge-muted)',
+                  height: '38px',
+                  width: '1px',
+                }}
+              />
 
               <div
                 style={{
                   'grid-template-columns': 'min-content min-content',
                   'box-sizing': 'border-box',
                   'align-items': 'center',
-                  'padding': '0 4px',
-                  'display': 'grid',
-                  'height': '24px',
-                  'gap': '10px'
+                  padding: '0 4px',
+                  display: 'grid',
+                  height: '24px',
+                  gap: '10px',
                 }}
-                onClick={() => { setCreateMenuOpen(true) }}
+                onClick={() => {
+                  setCreateMenuOpen(true);
+                }}
                 class="dock-button-hover"
                 data-hotkey-token={TOKENS.global.createCommand}
               >
                 <MacroCreateIcon
                   style={{
-                    'display': 'block',
-                    'height': '9px'
+                    display: 'block',
+                    height: '9px',
                   }}
                 />
                 {/*<div style={{
@@ -235,17 +281,19 @@ export function Dock() {
             </div>
 
             <Show when={!isMobileWidth()}>
-              <div style={{
-                'border-top': '1px solid var(--edge-muted)',
-                'color': 'var(--ink-extra-muted)',
-                'justify-content': 'center',
-                'font-family': 'monospace',
-                'align-items': 'center',
-                'font-size': '0.75rem',
-                'line-height': '1rem',
-                'display': 'flex',
-                'gap': '4px',
-              }}>
+              <div
+                style={{
+                  'border-top': '1px solid var(--edge-muted)',
+                  color: 'var(--ink-extra-muted)',
+                  'justify-content': 'center',
+                  'font-family': 'monospace',
+                  'align-items': 'center',
+                  'font-size': '0.75rem',
+                  'line-height': '1rem',
+                  display: 'flex',
+                  gap: '4px',
+                }}
+              >
                 <Show when={!hasPaid()}>
                   <BasicTierLimit />
                 </Show>
@@ -254,11 +302,13 @@ export function Dock() {
                   <Hints />
                 </Show>*/}
 
-                <div class="w-full"/>
+                <div class="w-full" />
 
                 <Show when={ENABLE_DOCK_NOTITIFCATIONS}>
                   <QuickAccess />
-                  <GlobalNotificationBell notificationSource={notificationSource} />
+                  <GlobalNotificationBell
+                    notificationSource={notificationSource}
+                  />
                 </Show>
               </div>
             </Show>
@@ -267,22 +317,28 @@ export function Dock() {
               <div></div>
             </Show>
 
-            <div style={{
-              'border-left': '1px solid var(--color-edge-muted)',
-              'grid-auto-columns': 'min-content',
-              'grid-auto-flow': 'column',
-              'align-items': 'center',
-              'padding-left': '7px',
-              'display': 'grid',
-              'height': '38px',
-              'gap': '4px'
-            }}>
+            <div
+              style={{
+                'border-left': '1px solid var(--color-edge-muted)',
+                'grid-auto-columns': 'min-content',
+                'grid-auto-flow': 'column',
+                'align-items': 'center',
+                'padding-left': '7px',
+                display: 'grid',
+                height: '38px',
+                gap: '4px',
+              }}
+            >
               <Show when={isSoupActive()}>
                 <IconButton
                   onClick={() => {
                     globalSplitManager()?.returnFocus();
-                    const showHelp = getActiveCommandByToken(TOKENS.split.showHelpDrawer);
-                    if (!showHelp) { return };
+                    const showHelp = getActiveCommandByToken(
+                      TOKENS.split.showHelpDrawer
+                    );
+                    if (!showHelp) {
+                      return;
+                    }
                     runCommand(showHelp);
                   }}
                   tooltip={{
@@ -297,8 +353,11 @@ export function Dock() {
 
               <IconButton
                 onClick={() => {
-                  if (isRightPanelCollapsed()) { track(TrackingEvents.RIGHTBAR.OPEN) }
-                  else { track(TrackingEvents.RIGHTBAR.CLOSE) }
+                  if (isRightPanelCollapsed()) {
+                    track(TrackingEvents.RIGHTBAR.OPEN);
+                  } else {
+                    track(TrackingEvents.RIGHTBAR.CLOSE);
+                  }
                   toggleRightPanel();
                 }}
                 theme={isRightPanelCollapsed() ? 'clear' : 'accent'}
@@ -314,30 +373,37 @@ export function Dock() {
                 <IconButton
                   tooltip={{
                     hotkeyToken: TOKENS.global.createNewSplit,
-                    label: 'Create New Split'
+                    label: 'Create New Split',
                   }}
                   onClick={() => {
                     const manager = globalSplitManager();
                     if (manager) {
-                      const canFit = manager.resizeContext()?.canFit({ minSize: 400 }) ?? true;
+                      const canFit =
+                        manager.resizeContext()?.canFit({ minSize: 400 }) ??
+                        true;
                       if (canFit) {
                         manager.createNewSplit({
-                          id: 'unified-list',
-                          type: 'component',
+                          content: {
+                            id: 'unified-list',
+                            type: 'component',
+                          },
+                          referredFrom: 'dock',
                         });
+                      }
                     }
-                  }
-                }}
-                icon={SplitIcon}
-                theme="clear"
-                size="sm"
-              />
+                  }}
+                  icon={SplitIcon}
+                  theme="clear"
+                  size="sm"
+                />
               </div>
 
               <Show when={ENABLE_JACK_IN && !isTauri()}>
                 <IconButton
                   tooltip={{
-                    label: isPresentMode() ? 'Exit Present Mode' : 'Enter Present Mode'
+                    label: isPresentMode()
+                      ? 'Exit Present Mode'
+                      : 'Enter Present Mode',
                   }}
                   theme={isPresentMode() ? 'accent' : 'clear'}
                   onClick={togglePresentMode}
@@ -352,7 +418,9 @@ export function Dock() {
                   hotkeyToken: TOKENS.global.toggleSettings,
                 }}
                 theme={settingsOpen() ? 'accent' : 'clear'}
-                onClick={() => { toggleSettings() }}
+                onClick={() => {
+                  toggleSettings();
+                }}
                 icon={IconGear}
                 size="sm"
               />
@@ -362,7 +430,6 @@ export function Dock() {
       </div>
 
       <Show when={ENABLE_JACK_IN}>
-
         <PresentModeGlitch
           show={showGlitchEffect()}
           onComplete={() => setShowGlitchEffect(false)}

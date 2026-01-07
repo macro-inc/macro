@@ -269,7 +269,7 @@ export interface HelpDrawerInnerProps {
 export function HelpDrawerInner(props: HelpDrawerInnerProps) {
   const splitPanelContext = useSplitPanelOrThrow();
   const {
-    unifiedListContext: { setShowHelpDrawer },
+    soupContext: { setShowHelpDrawer },
   } = splitPanelContext;
   const tuturialComplete = useTutorialCompleted();
   const hideAllHelpDrawers = () => {

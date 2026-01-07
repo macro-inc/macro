@@ -242,7 +242,10 @@ export function EmailCompose() {
     onSuccess: (data) => {
       toast.success('Email sent');
       if (data.message.thread_db_id) {
-        replaceSplit({ type: 'email', id: data.message.thread_db_id }, true);
+        replaceSplit({
+          content: { type: 'email', id: data.message.thread_db_id },
+          mergeHistory: true,
+        });
       }
     },
     onError: () => {

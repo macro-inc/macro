@@ -44,8 +44,11 @@ export function SplitCreateButton() {
       tooltip={{ label: 'Create new split' }}
       onClick={() => {
         context.manager.createNewSplit({
-          type: 'component',
-          id: 'unified-list',
+          content: {
+            type: 'component',
+            id: 'unified-list',
+          },
+          referredFrom: 'dock',
         });
       }}
     />
