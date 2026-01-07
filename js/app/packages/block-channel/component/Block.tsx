@@ -37,6 +37,7 @@ export default function BlockChannel(props: BlockChannelProps) {
     () => channelId,
     () => ({
       placeholderData: (p) => p,
+      staleTime: 0,
     })
   );
   const userId = useUserId();
