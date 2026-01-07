@@ -2,37 +2,63 @@ import {
   BrightJoins,
   BrightJoinsProgressMeter,
 } from '@ui/components/BrightJoins';
+import { createEffect } from 'solid-js';
 import type { Meta, StoryObj } from 'storybook-solidjs-vite';
 
-const meta = {
-  component: BrightJoins,
+type DotsArray = [boolean, boolean, boolean, boolean];
+
+interface StoryArgs {
+  dots: string[];
+  class?: string;
+  progress?: number;
+  progressMeterClass?: string;
+}
+
+function dotsToBooleanArray(dots?: string[]): DotsArray {
+  if (!dots) return [false, false, false, false];
+  return [
+    dots.includes('TL'),
+    dots.includes('TR'),
+    dots.includes('BR'),
+    dots.includes('BL'),
+  ];
+}
+
+const meta: Meta<StoryArgs> = {
+  component: BrightJoins as unknown as Meta<StoryArgs>['component'],
   argTypes: {
     dots: {
-      control: { type: 'object' },
-      defaultValue: [true, true, true, true],
-      description: 'Array of booleans representing the corners of the joins',
+      control: { type: 'check' },
+      options: ['TL', 'TR', 'BR', 'BL'],
+      description: 'Which corner dots to show',
     },
   },
-  render: (args) => (
-    <div class="relative border border-edge-muted p-8 w-80 h-32">
-      <BrightJoins {...args} />
-    </div>
-  ),
-} satisfies Meta<typeof BrightJoins>;
-
-export default meta;
-type Story = StoryObj<typeof meta>;
-
-export const Default: Story = {
   args: {
-    dots: [true, true, true, true],
+    dots: ['TL', 'TR', 'BR', 'BL'],
+  },
+  render: (_, context) => {
+    const dots = () => dotsToBooleanArray(context.args.dots);
+    createEffect(() => {
+      console.log(context.args.dots, dots());
+    });
+    return (
+      <div class="relative border border-edge-muted p-8 w-80 h-32">
+        <BrightJoins dots={dots()} class={context.args.class} />
+      </div>
+    );
   },
 };
 
+export default meta;
+type Story = StoryObj<StoryArgs>;
+
+export const Default: Story = {};
+
 export const WithProgress: Story = {
   args: {
-    dots: [true, true, true, true],
+    dots: ['TR', 'TL', 'BR', 'BL'],
     progress: 50,
+    progressMeterClass: '',
   },
   argTypes: {
     progress: {
@@ -40,21 +66,24 @@ export const WithProgress: Story = {
     },
     progressMeterClass: {
       control: { type: 'text' },
-      defaultValue: undefined,
     },
   },
-  render: (args: Story['args']) => (
-    <div class="relative border border-edge-muted p-8 w-80 h-32">
-      <BrightJoins {...args} />
-      <BrightJoinsProgressMeter
-        progress={args.progress!}
-        class={args.progressMeterClass}
-      />
-    </div>
-  ),
+  render: (_, context) => {
+    const dots = () => dotsToBooleanArray(context.args.dots);
+    return (
+      <div class="relative border border-edge-muted p-8 w-80 h-32">
+        <BrightJoins dots={dots()} class={context.args.class} />
+        <BrightJoinsProgressMeter
+          progress={context.args.progress ?? 0}
+          class={context.args.progressMeterClass}
+        />
+      </div>
+    );
+  },
 };
+
 export const OnlyOneCorner: Story = {
   args: {
-    dots: [true, false, false, false],
+    dots: ['TL'],
   },
 };
