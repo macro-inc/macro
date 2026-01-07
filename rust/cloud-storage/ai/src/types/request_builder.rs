@@ -2,7 +2,6 @@ use crate::{
     traits::TextAttachment,
     types::{ChatCompletionRequest, ChatMessage, ImageData, Model, Role, SystemPrompt},
 };
-use std::sync::Arc;
 
 #[derive(Default)]
 pub struct Attachments(pub Vec<Attachment>);
