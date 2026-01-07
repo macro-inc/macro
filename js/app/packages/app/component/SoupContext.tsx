@@ -415,24 +415,7 @@ export function createNavigationEntityListShortcut({
       );
 
       if (handler || hasSupportedEntity) {
-        // Check if current view filters out completed items. More robustly we would have the list of entitites itself trigger entity removal animation when the list changes, but this is complicated by our usage of queries and virtualized lists.
-        const currentViewConfig =
-          unifiedListContext.viewsDataStore[selectedView()];
-        const [collapseEntity] = unifiedListContext.collapseEntitySignal;
-        const shouldCollapse =
-          currentViewConfig?.filters?.notificationFilter === 'notDone' &&
-          collapseEntity() !== undefined;
-
-        // If the view hides completed items, collapse the entities first
-        if (shouldCollapse) {
-          const collapse = collapseEntity();
-          if (collapse) {
-            await Promise.all(
-              multiSelectEntities.map((entity) => collapse(entity.id))
-            );
-          }
-        }
-
+        // focus the correct entity first, so that the animation is not blcoking
         if (multiSelectEntities.length > 1) {
           const selectedEntityData = getSelectedEntity();
           const selectedEntityIncludedInMultiSelectedEntities =
@@ -462,6 +445,26 @@ export function createNavigationEntityListShortcut({
             navigateThroughList({ axis: 'start', mode: 'step' });
           } else {
             navigateThroughList({ axis: 'end', mode: 'step' });
+          }
+        }
+
+        // Check if current view filters out completed items in order to know whether to run collapse animation. More robustly we would have the list of entitites itself trigger entity removal animation when the list changes, but this is complicated by our usage of queries and virtualized lists.
+        // NOTE: collapse animation is currently only enabled for touch modality, i.e. phone.
+        const currentViewConfig =
+          unifiedListContext.viewsDataStore[selectedView()];
+        const [collapseEntity] = unifiedListContext.collapseEntitySignal;
+        const shouldCollapse =
+          currentViewConfig?.filters?.notificationFilter === 'notDone' &&
+          collapseEntity() !== undefined &&
+          isModality('touch');
+
+        if (shouldCollapse) {
+          // If the view hides completed items, collapse the entities first
+          const collapse = collapseEntity();
+          if (collapse) {
+            await Promise.all(
+              multiSelectEntities.map((entity) => collapse(entity.id))
+            );
           }
         }
 
