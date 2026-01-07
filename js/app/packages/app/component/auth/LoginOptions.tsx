@@ -9,7 +9,11 @@ import { useLocation } from '@solidjs/router';
 import { type JSX, type Setter, Show } from 'solid-js';
 import { Stage } from './Shared';
 
-function LoginOption(props: { icon: JSX.Element; label: string; onClick: () => void }) {
+function LoginOption(props: {
+  icon: JSX.Element;
+  label: string;
+  onClick: () => void;
+}) {
   return (
     <div
       onClick={props.onClick}
