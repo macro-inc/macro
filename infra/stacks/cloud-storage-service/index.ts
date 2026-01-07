@@ -250,7 +250,7 @@ const cloudStorageService = new CloudStorageService(
       },
       {
         name: 'RUST_LOG',
-        value: `document_storage_service=${
+        value: `warn,document_storage_service=${
           stack === 'prod' ? 'debug' : 'trace'
         },tower_http=info,macro_share_permissions=${
           stack === 'prod' ? 'error' : 'trace'

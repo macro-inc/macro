@@ -689,7 +689,7 @@ export function createSplitLayout(
           s.content.id === initialContent.id
       );
 
-      return getSplit(existingSplit.id)!;
+      return getSplit(existingSplit!.id)!;
     }
 
     const split = buildSplit(initialContent, isDefault);
