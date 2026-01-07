@@ -2,7 +2,6 @@ import {
   BrightJoins,
   BrightJoinsProgressMeter,
 } from '@ui/components/BrightJoins';
-import { createEffect } from 'solid-js';
 import type { Meta, StoryObj } from 'storybook-solidjs-vite';
 
 type DotsArray = [boolean, boolean, boolean, boolean];
@@ -38,9 +37,6 @@ const meta: Meta<StoryArgs> = {
   },
   render: (_, context) => {
     const dots = () => dotsToBooleanArray(context.args.dots);
-    createEffect(() => {
-      console.log(context.args.dots, dots());
-    });
     return (
       <div class="relative border border-edge-muted p-8 w-80 h-32">
         <BrightJoins dots={dots()} class={context.args.class} />
