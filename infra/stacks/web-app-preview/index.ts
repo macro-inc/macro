@@ -109,8 +109,8 @@ new aws.iam.RolePolicyAttachment(`${BASE_NAME}-lambda-role-attach`, {
   policyArn: 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
 });
 
-// Lambda@Edge: Origin Request - routes subdomain to S3 prefix
-const originRequestLambda = new aws.lambda.Function(
+// Lambda@Edge: Viewer Request - rewrites URI based on subdomain
+const viewerRequestLambda = new aws.lambda.Function(
   `${BASE_NAME}-origin-request`,
   {
     code: new pulumi.asset.FileArchive('./previewOriginRequestLambda'),
@@ -128,12 +128,8 @@ const originRequestLambda = new aws.lambda.Function(
 );
 
 
-// S3 bucket regional domain name
 const bucketRegionalDomainName = pulumi.interpolate`${previewBucket.bucket}.s3.us-east-1.amazonaws.com`;
 
-// Cache policy for previews (short TTL since content changes frequently)
-// Note: Don't forward Host header to S3 - it breaks OAC signing.
-// Lambda@Edge can read Host from the viewer request headers directly.
 const cachePolicy = new aws.cloudfront.CachePolicy(`${BASE_NAME}-cache-policy`, {
   name: `${BASE_NAME}-cache-policy-${stack}`,
   defaultTtl: 60, // 1 minute default
@@ -152,7 +148,6 @@ const cachePolicy = new aws.cloudfront.CachePolicy(`${BASE_NAME}-cache-policy`, 
   },
 });
 
-// Response headers policy
 const responseHeadersPolicy = new aws.cloudfront.ResponseHeadersPolicy(
   `${BASE_NAME}-response-headers-policy`,
   {
@@ -179,11 +174,8 @@ const responseHeadersPolicy = new aws.cloudfront.ResponseHeadersPolicy(
   }
 );
 
-// Wildcard alias for preview subdomains
-// Format: *.preview.macro.com (e.g., feature-abc123.preview.macro.com)
 const previewAlias = `*.preview.${BASE_DOMAIN}`;
 
-// CloudFront distribution for preview deployments
 const distribution = new aws.cloudfront.Distribution(
   `${BASE_NAME}-distribution`,
   {
@@ -206,7 +198,7 @@ const distribution = new aws.cloudfront.Distribution(
       lambdaFunctionAssociations: [
         {
           eventType: 'viewer-request',
-          lambdaArn: pulumi.interpolate`${originRequestLambda.arn}:${originRequestLambda.version}`,
+          lambdaArn: pulumi.interpolate`${viewerRequestLambda.arn}:${viewerRequestLambda.version}`,
           includeBody: false,
         },
       ],
@@ -230,7 +222,6 @@ const distribution = new aws.cloudfront.Distribution(
   }
 );
 
-// S3 bucket policy to allow CloudFront access via OAC
 new aws.s3.BucketPolicy(`${BASE_NAME}-bucket-policy`, {
   bucket: previewBucket.id,
   policy: pulumi
@@ -258,7 +249,6 @@ new aws.s3.BucketPolicy(`${BASE_NAME}-bucket-policy`, {
     ),
 });
 
-// Route53 wildcard record for preview subdomains
 new aws.route53.Record(`${BASE_NAME}-dns-record`, {
   name: `*.preview`,
   zoneId: zone.zoneId,
@@ -272,7 +262,6 @@ new aws.route53.Record(`${BASE_NAME}-dns-record`, {
   ],
 });
 
-// Exports
 export const previewBucketName = previewBucket.bucket;
 export const previewBucketArn = previewBucket.arn;
 export const previewDistributionId = distribution.id;

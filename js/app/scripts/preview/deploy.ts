@@ -74,7 +74,6 @@ function deploy(previewId: string): void {
     process.exit(1);
   }
 
-  // Note: Build output expects /app/ base path (same as dev.macro.com)
   console.log(`\n🚀 Deploying to s3://${PREVIEW_BUCKET}/${previewId}/app/\n`);
 
   // Sync all files except index.html with immutable cache
@@ -102,7 +101,6 @@ function cleanup(previewId: string): void {
 
   console.log(`\n🧹 Cleaning up s3://${PREVIEW_BUCKET}/${previewId}/\n`);
 
-  // Delete entire preview folder (includes /app/ subfolder)
   execSync(`aws s3 rm s3://${PREVIEW_BUCKET}/${previewId}/ --recursive`, {
     stdio: 'inherit',
   });

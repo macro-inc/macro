@@ -18,6 +18,7 @@ interface Args {
   pr?: number;
   repo?: string;
   token?: string;
+  branch?: string;
 }
 
 function parseArgs(): Args {
@@ -37,18 +38,28 @@ function parseArgs(): Args {
       result.token = args[i + 1];
       i++;
     }
+    if (args[i] === '--branch' && args[i + 1]) {
+      result.branch = args[i + 1];
+      i++;
+    }
   }
 
   return result;
 }
 
-function generatePreviewId(): string {
-  let branch: string;
+function generatePreviewId(branchOverride?: string): string {
+  let branch = branchOverride;
 
-  try {
-    branch = execSync('git branch --show-current', { encoding: 'utf-8' }).trim();
-  } catch {
-    branch = 'local';
+  if (!branch) {
+    try {
+      branch = execSync('git branch --show-current', { encoding: 'utf-8' }).trim();
+    } catch {
+      branch = '';
+    }
+  }
+
+  if (!branch) {
+    branch = 'preview';
   }
 
   const sanitized = branch
@@ -108,8 +119,7 @@ async function main() {
     }
   }
 
-  // Generate new ID
-  console.log(generatePreviewId());
+  console.log(generatePreviewId(args.branch));
 }
 
 main();

@@ -37,7 +37,8 @@ jobs:
           PREVIEW_ID=$(bun scripts/preview/get-or-create-id.ts \
             --pr ${{ github.event.pull_request.number }} \
             --repo ${{ github.repository }} \
-            --token ${{ secrets.GITHUB_TOKEN }})
+            --token ${{ secrets.GITHUB_TOKEN }} \
+            --branch "${{ github.head_ref }}")
           echo "id=$PREVIEW_ID" >> $GITHUB_OUTPUT
           echo "Preview ID: $PREVIEW_ID"
 
