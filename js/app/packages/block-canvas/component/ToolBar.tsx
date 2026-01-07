@@ -14,7 +14,7 @@ import {
 } from '@core/constant/featureFlags';
 import { IS_MAC } from '@core/constant/isMac';
 import { TOKENS } from '@core/hotkey/tokens';
-import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import { useCanEdit } from '@core/signal/permissions';
 import CaretDown from '@icon/bold/caret-down-bold.svg';
@@ -180,7 +180,7 @@ export function ToolBar() {
             }}
           />
 
-          <Show when={!isNativeMobilePlatform()}>
+          <Show when={!isTouchDevice()}>
             <DeprecatedIconButton
               tooltip={[
                 { label: 'Zoom', hotkeyToken: TOKENS.canvas.zoomInTool },

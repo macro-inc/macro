@@ -1,4 +1,5 @@
-import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { cornerClip } from '@core/util/clipPath';
 import { type JSXElement, type Ref, Show } from 'solid-js';
 import { beveledCorners } from '../../block-theme/signals/themeSignals';
@@ -16,7 +17,7 @@ interface PanelProps {
 export function ClippedPanel(props: PanelProps) {
   return (
     <Show
-      when={!isNativeMobilePlatform()}
+      when={!isTouchDevice() || !isMobileWidth()}
       fallback={<div class="size-full">{props.children}</div>}
     >
       <div

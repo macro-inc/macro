@@ -1,20 +1,35 @@
 import type { ChannelParticipant } from '@service-comms/generated/models';
 import { useDisplayName } from './displayName';
+import {
+  emailToMacroId,
+  type MacroId,
+  macroIdToEmail,
+  tryMacroId,
+} from './macroId';
 import type { IUser } from './types';
 
+export { emailToMacroId, macroIdToEmail, tryMacroId, type MacroId };
+
 // TODO: consolidate idToEmail, see idToEmail in email.ts
-/** Converts a user id to an email address */
+/**
+ * Converts a user id to an email address.
+ * @deprecated Use `macroIdToEmail` with a validated `MacroId` instead.
+ */
 export function idToEmail(id: string): string {
   return id.replace('macro|', '');
 }
 
-/** Converts an email address to a user id */
+/**
+ * Converts an email address to a user id.
+ * @deprecated Use `emailToMacroId` instead for type-safe MacroId creation.
+ */
 export function emailToId(email: string): string {
   return `macro|${email}`;
 }
 
 export function idToDisplayName(id: string): string {
-  const [displayName] = useDisplayName(id);
+  const macroId = tryMacroId(id);
+  const [displayName] = useDisplayName(macroId);
   return displayName();
 }
 

@@ -14,7 +14,7 @@ import { getIconConfig } from 'core/component/EntityIcon';
 import { StaticMarkdown } from 'core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from 'core/component/LexicalMarkdown/theme';
 import { UserIcon } from 'core/component/UserIcon';
-import { emailToId, useDisplayName } from 'core/user';
+import { emailToMacroId, tryMacroId, useDisplayName } from 'core/user';
 import type { ParentProps, Ref } from 'solid-js';
 import {
   createDeferred,
@@ -96,7 +96,7 @@ function GenericContentHit(props: { data: ContentHitData }) {
 }
 
 function ChannelMessageContentHit(props: { data: ChannelContentHitData }) {
-  const [userName] = useDisplayName(props.data.senderId);
+  const [userName] = useDisplayName(tryMacroId(props.data.senderId));
 
   return (
     <div class="flex gap-2 items-center min-w-0">
@@ -268,7 +268,9 @@ function NotificationRow(props: {
   onClick?: NotificationClickHandler;
   entity: EntityData;
 }) {
-  const [userName] = useDisplayName(props.notification.senderId);
+  const [userName] = useDisplayName(
+    tryMacroId(props.notification.senderId ?? '')
+  );
 
   const ActionContent = () => {
     if (
@@ -537,7 +539,7 @@ export function EntityWithEverything(
           if (!participant.email) return;
           if (me && participant.email === me) return;
           const macroDisplayName = useDisplayName(
-            emailToId(participant.email)
+            emailToMacroId(participant.email)
           )[0]?.();
           const participantFullName = participant.name ?? '';
           if (macroDisplayName && !isLikelyEmail(macroDisplayName)) {
@@ -687,7 +689,7 @@ export function EntityWithEverything(
     const userNameFromSender = createMemo(() => {
       const senderId = channelEntity()?.latestMessage?.senderId;
       if (!senderId) return;
-      const [userName] = useDisplayName(senderId);
+      const [userName] = useDisplayName(tryMacroId(senderId));
       return userName();
     });
 
@@ -844,7 +846,7 @@ export function EntityWithEverything(
       return false;
     }
     return {
-      ownerDisplayName: useDisplayName(props.entity.ownerId)[0],
+      ownerDisplayName: useDisplayName(tryMacroId(props.entity.ownerId))[0],
       ownerId: props.entity.ownerId,
     };
   };
@@ -863,7 +865,7 @@ export function EntityWithEverything(
       use:draggable
       use:droppable
       data-checked={props.checked}
-      class="everything-entity relative group/entity hover:bg-hover/30"
+      class="everything-entity w-full relative group/entity hover:bg-hover/30"
       style={{
         'min-height': `${ENTITY_HEIGHT}px`,
       }}
@@ -921,7 +923,11 @@ export function EntityWithEverything(
         <button
           type="button"
           class="col-1 size-full relative group/button flex items-center justify-center bracket-never @max-md/split:hidden"
+          onMouseDown={(e) => {
+            e.stopPropagation();
+          }}
           onClick={(e) => {
+            e.stopPropagation();
             props.onChecked?.(!props.checked, e.shiftKey);
           }}
           data-blocks-navigation
@@ -938,8 +944,14 @@ export function EntityWithEverything(
               <CheckIcon class="w-full h-full text-panel" />
             </Show>
           </div>
-          <Show when={props.showLeftColumnIndicator && !props.checked}>
-            <div class="absolute inset-0 flex items-center justify-center -z-1 @max-md/split:hidden">
+          <Show
+            when={
+              props.showLeftColumnIndicator &&
+              !props.checked &&
+              !props.highlighted
+            }
+          >
+            <div class="absolute inset-0 flex items-center justify-center group-hover/button:opacity-0 @max-md/split:hidden">
               <UnreadIndicator active={props.unreadIndicatorActive} />
             </div>
           </Show>
@@ -1073,7 +1085,11 @@ export function EntityWithEverything(
         {/* Content Hits from Search */}
         <Show when={contentHitData().length > 0}>
           <div class="relative row-2 col-2 col-end-4 pb-2 @max-md/split:row-auto @max-md/split:col-auto @max-md/split:w-full @max-md/split:mt-1">
-            <CollapsibleList items={contentHitData()} threadBorder>
+            <CollapsibleList
+              items={contentHitData()}
+              threadBorder
+              visibleCount={1}
+            >
               {(data, index, count) => (
                 <ContentHitRow
                   allData={contentHitData()}

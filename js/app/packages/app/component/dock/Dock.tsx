@@ -311,7 +311,7 @@ export function Dock() {
                 <IconAI />
               </Button>
 
-              <div class="ios:hidden">
+              <div class="mobile-width:hidden">
                 <Button
                   tooltip={<LabelAndHotKey label='Create New Split' hotkeyToken={TOKENS.global.createNewSplit} />}
                   onClick={() => {

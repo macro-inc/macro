@@ -1,6 +1,6 @@
 import { InlineItemPreview } from '@core/component/ItemPreview';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { useDisplayName } from '@core/user/displayName';
+import { tryMacroId, useDisplayName } from '@core/user';
 import { formatDate } from '@core/util/date';
 import {
   extractNotificationData,
@@ -32,7 +32,7 @@ export function NotificationRenderer(props: NotificationRendererProps) {
     <Show when={data()}>
       {(d) => {
         const actorId = d().actor?.id ?? '';
-        const [actorName] = useDisplayName(actorId);
+        const [actorName] = useDisplayName(tryMacroId(actorId));
 
         const displayName = () => actorName() || 'Someone';
 
@@ -44,7 +44,7 @@ export function NotificationRenderer(props: NotificationRendererProps) {
               <Show when={d().target?.type === 'channel' && d().target?.id}>
                 <div class="self-center max-h-[1lh]">
                   <InlineItemPreview
-                    itemId={d().target!.id!}
+                    itemId={d().target.id!}
                     itemType="channel"
                   />
                 </div>
@@ -64,10 +64,7 @@ export function NotificationRenderer(props: NotificationRendererProps) {
             <div class="text-sm text-ink inline-flex items-center gap-1">
               <span class="font-medium">{displayName()}</span> {d().action}{' '}
               <Show when={d().target?.type === 'channel' && d().target?.id}>
-                <InlineItemPreview
-                  itemId={d().target!.id!}
-                  itemType="channel"
-                />
+                <InlineItemPreview itemId={d().target.id!} itemType="channel" />
               </Show>
               <Show when={d().target?.name && d().target?.type !== 'channel'}>
                 <span class="font-medium">{d().target!.name}</span>

@@ -6,8 +6,26 @@ import IconApple from '@macro-icons/macro-apple.svg';
 import IconGoogle from '@macro-icons/macro-google.svg';
 import IconMail from '@macro-icons/macro-mail.svg';
 import { useLocation } from '@solidjs/router';
-import { type Setter, Show } from 'solid-js';
+import { type JSX, type Setter, Show } from 'solid-js';
 import { Stage } from './Shared';
+
+function LoginOption(props: {
+  icon: JSX.Element;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <div
+      onClick={props.onClick}
+      class="grid items-center justify-center p-5 border border-dashed border-ink border-t-0 [transition:color_var(--transition)] hover:text-accent hover:transition-none cursor-pointer"
+    >
+      <div class="grid grid-cols-[min-content_180px] gap-2.5 items-center justify-center">
+        {props.icon}
+        <div class="whitespace-nowrap">{props.label}</div>
+      </div>
+    </div>
+  );
+}
 
 export function LoginOptions(props: { setStage: Setter<Stage> }) {
   const location = useLocation<RedirectLocation>();
@@ -32,44 +50,32 @@ export function LoginOptions(props: { setStage: Setter<Stage> }) {
   return (
     <div class="grid select-none">
       <Show when={getNativeMobilePlatform() === 'ios'}>
-        <div class="grid items-center justify-center p-5 border border-dashed border-ink border-t-0 [transition:color_var(--transition)] hover:text-accent hover:transition-none cursor-pointer">
-          <a class="grid grid-cols-[min-content_180px] gap-2.5 items-center justify-center" />
-          <IconApple />
-          <div class="whitespace-nowrap">Continue with Apple</div>
-        </div>
+        <LoginOption
+          icon={<IconApple />}
+          label="Continue with Apple"
+          onClick={() => startSsoLogin('Apple')}
+        />
       </Show>
 
-      <div class="grid items-center justify-center p-5 border border-dashed border-ink border-t-0 [transition:color_var(--transition)] hover:text-accent hover:transition-none cursor-pointer">
-        <a
-          onClick={() => startSsoLogin('google')}
-          class="grid grid-cols-[min-content_180px] gap-2.5 items-center justify-center"
-        >
-          <IconGoogle />
-          <div class="whitespace-nowrap">Continue with Google</div>
-        </a>
-      </div>
+      <LoginOption
+        icon={<IconGoogle />}
+        label="Continue with Google"
+        onClick={() => startSsoLogin('google')}
+      />
 
       <Show when={!isNativeMobilePlatform()}>
-        <div class="grid items-center justify-center p-5 border border-dashed border-ink border-t-0 [transition:color_var(--transition)] hover:text-accent hover:transition-none cursor-pointer">
-          <a
-            onClick={() => startSsoLogin('Apple')}
-            class="grid grid-cols-[min-content_180px] gap-2.5 items-center justify-center"
-          >
-            <IconApple />
-            <div class="whitespace-nowrap">Continue with Apple</div>
-          </a>
-        </div>
+        <LoginOption
+          icon={<IconApple />}
+          label="Continue with Apple"
+          onClick={() => startSsoLogin('Apple')}
+        />
       </Show>
 
-      <div class="grid items-center justify-center p-5 border border-dashed border-ink border-t-0 transition-colors duration-300 hover:text-accent hover:transition-none cursor-pointer">
-        <a
-          onClick={() => props.setStage(Stage.Email)}
-          class="grid grid-cols-[min-content_180px] gap-2.5 items-center justify-center"
-        >
-          <IconMail />
-          <div class="whitespace-nowrap">Continue with Email</div>
-        </a>
-      </div>
+      <LoginOption
+        icon={<IconMail />}
+        label="Continue with Email"
+        onClick={() => props.setStage(Stage.Email)}
+      />
 
       <div class="p-5 border border-dashed border-[var(--color-ink)] border-t-0 text-center text-xs">
         By signing up, you agree to our
