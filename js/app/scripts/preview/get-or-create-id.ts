@@ -98,7 +98,7 @@ async function getExistingPreviewId(pr: number, repo: string, token: string): Pr
   );
 
   if (previewComment?.body) {
-    const match = previewComment.body.match(/https:\/\/(.+)\.preview\.macro\.com/);
+    const match = previewComment.body.match(/https:\/\/([a-z0-9-]+)\.preview\.macro\.com/);
     if (match?.[1]) {
       return match[1];
     }
