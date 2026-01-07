@@ -3049,6 +3049,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "email_contact_search"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "macro_db_migrator",
+ "macro_user_id",
+ "serde",
+ "sqlx",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "email_db_client"
 version = "0.1.0"
 dependencies = [
