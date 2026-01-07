@@ -1,5 +1,6 @@
 import { defineBlock, type ExtractLoadType, LoadErrors } from '@core/block';
 import { isErr, ok } from '@core/util/maybeResult';
+import { optimisticUpdateViewedAt } from '@queries/history/history';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { AllModels } from '@service-cognition/generated/schemas';
 import type { ChatAttachmentWithName } from '@service-cognition/generated/schemas/chatAttachmentWithName';
@@ -31,6 +32,9 @@ export const definition = defineBlock({
           origin: source,
         });
       }
+
+      // Optimistically update viewedAt immediately for instant UI feedback
+      optimisticUpdateViewedAt(source.id);
 
       storageServiceClient
         .trackOpenedChat({

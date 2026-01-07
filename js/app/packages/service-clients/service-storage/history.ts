@@ -57,10 +57,15 @@ export const useHistoryTree = createSingletonRoot(() => {
   });
 });
 
+export type HistoryItemWithViewedAt = Item & {
+  name: string;
+  viewedAt?: number;
+};
+
 export const useHistory = createSingletonRoot(() => {
   const history = useFilteredHistory();
 
-  return createMemo(() => {
+  return createMemo((): HistoryItemWithViewedAt[] => {
     const result = history();
 
     if (isOk(result))

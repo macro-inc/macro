@@ -5,9 +5,13 @@ import {
   ok,
   throwOnErr,
 } from '@core/util/maybeResult';
+import { queryKeys } from '@macro-entity';
 import { commsServiceClient } from '@service-comms/client';
 import type { getChannelResponseError } from '@service-comms/generated/client';
-import type { GetChannelResponse } from '@service-comms/generated/models';
+import type {
+  ChannelWithLatest,
+  GetChannelResponse,
+} from '@service-comms/generated/models';
 import {
   type QueryClient,
   type UseBaseQueryOptions,
@@ -109,4 +113,22 @@ export function invalidateChannelWithID(channelID: string) {
   queryClient.invalidateQueries({
     queryKey: channelKeys.withID(channelID).queryKey,
   });
+}
+
+/**
+ * Optimistically update the viewedAt timestamp for a channel in the channels list query.
+ * This provides instant UI feedback when a channel is opened.
+ */
+export function optimisticUpdateChannelViewedAt(channelId: string) {
+  const now = new Date().toISOString();
+
+  queryClient.setQueryData<ChannelWithLatest[]>(
+    queryKeys.all.channel,
+    (old) => {
+      if (!old) return old;
+      return old.map((channel) =>
+        channel.id === channelId ? { ...channel, viewed_at: now } : channel
+      );
+    }
+  );
 }
