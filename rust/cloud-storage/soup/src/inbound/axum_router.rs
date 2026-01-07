@@ -212,7 +212,7 @@ impl SoupApiItem {
 pub enum SoupHandlerErr {
     #[error("An internal server error has occurred")]
     Internal(#[from] SoupErr),
-    #[error("An internal server error has occurred")]
+    #[error("An internal email server error has occurred")]
     EmailLinkErr(#[from] EmailLinkErr),
     #[error("Invalid filter arguments provided")]
     ExpandErr(#[from] ExpandErr),

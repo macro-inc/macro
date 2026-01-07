@@ -47,12 +47,10 @@ impl UserRepo for UserRepoImpl {
     ) -> Result<Vec<UserName>, rootcause::Report> {
         let body = PostGetNamesRequestBody { user_ids };
 
-        let res = self
-            .client
-            .post(format!("{}/internal/get_names", self.url))
-            .json(&body)
-            .send()
-            .await?;
+        let mut url = self.url.as_ref().clone();
+        url.set_path("/internal/get_names");
+
+        let res = self.client.post(url).json(&body).send().await?;
 
         match res.status() {
             reqwest::StatusCode::OK => {
