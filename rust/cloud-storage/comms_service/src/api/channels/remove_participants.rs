@@ -7,7 +7,6 @@ use axum_extra::extract::Cached;
 use comms_db_client::participants::remove_participant::{
     RemoveParticipantOptions, remove_participant,
 };
-use model::comms::ChannelType;
 use model::document_storage_service_internal::UpdateUserChannelPermissionsRequest;
 use models_permissions::share_permission::channel_share_permission::UpdateOperation;
 use serde::{Deserialize, Serialize};
@@ -42,7 +41,7 @@ pub async fn handler(
     Cached(ChannelId(channel_id)): Cached<ChannelId>,
     req: Json<RemoveParticipantsRequest>,
 ) -> Result<StatusCode, (StatusCode, String)> {
-    if let ChannelType::DirectMessage = channel_type {
+    if let models_comms::channel::ChannelType::DirectMessage = channel_type {
         tracing::error!("cannot add or remove participants from direct message channel");
         return Err((
             StatusCode::BAD_REQUEST,

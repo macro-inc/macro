@@ -4209,6 +4209,29 @@
           }
         }
       },
+      "Channel": {
+        "type": "object",
+        "required": [
+          "id",
+          "channel_type",
+          "created_at",
+          "updated_at",
+          "owner_id"
+        ],
+        "properties": {
+          "channel_type": { "$ref": "#/components/schemas/ChannelType" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "id": { "type": "string", "format": "uuid" },
+          "name": { "type": ["string", "null"] },
+          "org_id": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "minimum": 0
+          },
+          "owner_id": { "type": "string" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
       "ChannelFilters": {
         "type": "object",
         "description": "The channel message filters used to filter down what channel messages you search over.",
@@ -4240,6 +4263,42 @@
           }
         }
       },
+      "ChannelMessage": {
+        "type": "object",
+        "required": [
+          "message_id",
+          "sender_id",
+          "content",
+          "created_at",
+          "updated_at",
+          "mentions"
+        ],
+        "properties": {
+          "content": { "type": "string" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "deleted_at": { "type": ["string", "null"], "format": "date-time" },
+          "mentions": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`"
+          },
+          "message_id": { "type": "string", "format": "uuid" },
+          "sender_id": { "type": "string" },
+          "thread_id": { "type": ["string", "null"], "format": "uuid" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ChannelParticipant": {
+        "type": "object",
+        "required": ["channel_id", "user_id", "role", "joined_at"],
+        "properties": {
+          "channel_id": { "type": "string", "format": "uuid" },
+          "joined_at": { "type": "string", "format": "date-time" },
+          "left_at": { "type": ["string", "null"], "format": "date-time" },
+          "role": { "$ref": "#/components/schemas/ParticipantRole" },
+          "user_id": { "type": "string" }
+        }
+      },
       "ChannelSharePermission": {
         "type": "object",
         "description": "The channel share permission",
@@ -4250,6 +4309,21 @@
             "description": "The access level for the channel"
           },
           "channel_id": { "type": "string", "description": "The channel id" }
+        }
+      },
+      "ChannelType": {
+        "type": "string",
+        "enum": ["public", "organization", "private", "direct_message"]
+      },
+      "ChannelWithParticipants": {
+        "type": "object",
+        "required": ["channel", "participants"],
+        "properties": {
+          "channel": { "$ref": "#/components/schemas/Channel" },
+          "participants": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ChannelParticipant" }
+          }
         }
       },
       "Chat": {
@@ -6204,6 +6278,23 @@
           "userAccessLevel": { "$ref": "#/components/schemas/AccessLevel" }
         }
       },
+      "LatestMessage": {
+        "type": "object",
+        "properties": {
+          "latest_message": {
+            "oneOf": [
+              { "type": "null" },
+              { "$ref": "#/components/schemas/ChannelMessage" }
+            ]
+          },
+          "latest_non_thread_message": {
+            "oneOf": [
+              { "type": "null" },
+              { "$ref": "#/components/schemas/ChannelMessage" }
+            ]
+          }
+        }
+      },
       "LocationResponseData": {
         "oneOf": [
           {
@@ -6254,6 +6345,10 @@
             ]
           }
         }
+      },
+      "ParticipantRole": {
+        "type": "string",
+        "enum": ["owner", "admin", "member"]
       },
       "PatchProjectRequestV2": {
         "type": "object",
@@ -7047,6 +7142,22 @@
           "sizeBytes": { "type": ["integer", "null"], "format": "int64" }
         }
       },
+      "SoupChannel": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ChannelWithParticipants" },
+          { "$ref": "#/components/schemas/LatestMessage" },
+          {
+            "type": "object",
+            "properties": {
+              "interacted_at": {
+                "type": ["string", "null"],
+                "format": "date-time"
+              },
+              "viewed_at": { "type": ["string", "null"], "format": "date-time" }
+            }
+          }
+        ]
+      },
       "SoupChat": {
         "type": "object",
         "required": [
@@ -7321,12 +7432,16 @@
               },
               "tag": { "type": "string", "enum": ["emailThread"] }
             }
+          },
+          {
+            "type": "object",
+            "required": ["data", "tag"],
+            "properties": {
+              "data": { "$ref": "#/components/schemas/SoupChannel" },
+              "tag": { "type": "string", "enum": ["channel"] }
+            }
           }
         ]
-      },
-      "SoupItemType": {
-        "type": "string",
-        "enum": ["document", "chat", "project", "email_thread"]
       },
       "SoupLabel": {
         "type": "object",

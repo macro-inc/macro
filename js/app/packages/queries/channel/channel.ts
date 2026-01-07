@@ -39,6 +39,7 @@ function channelQueryOptions(channelId: string): ChannelQueryOptions {
 
       return result;
     },
+    staleTime: 0,
   };
 }
 

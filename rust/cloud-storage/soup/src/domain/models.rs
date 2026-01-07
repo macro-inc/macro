@@ -194,4 +194,6 @@ pub enum SoupErr {
     SoupDbErr(#[from] anyhow::Error),
     #[error(transparent)]
     EmailErr(#[from] email::domain::models::EmailErr),
+    #[error("A comms error has occured, see logs for more details")]
+    CommsErr,
 }

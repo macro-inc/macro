@@ -701,6 +701,7 @@ interface NotificationProps {
   onClose?: () => void;
 }
 
+// SCUFFED THEME: how do we want to handle these colors?
 export const BrowserNotificationPreview: Component<NotificationProps> = (
   props
 ) => {
@@ -709,16 +710,18 @@ export const BrowserNotificationPreview: Component<NotificationProps> = (
       <div class="flex items-start gap-3 p-4">
         {/* Icon with optional badge */}
         <div class="relative flex-shrink-0">
-          <div class="w-10 h-10 rounded-lg overflow-hidden bg-gray-800 flex items-center justify-center">
+          <div class="w-10 h-10 rounded-lg overflow-hidden bg-[oklch(0.278_0.033_256.848)] flex items-center justify-center">
             <Show
               when={props.icon}
-              fallback={<div class="w-6 h-6 bg-gray-600 rounded" />}
+              fallback={
+                <div class="w-6 h-6 bg-[oklch(0.446_0.03_256.802)] rounded" />
+              }
             >
               <img src={props.icon} alt="" class="w-full h-full object-cover" />
             </Show>
           </div>
           <Show when={props.badge}>
-            <div class="absolute -top-1 -left-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center">
+            <div class="absolute -top-1 -left-1 w-5 h-5 bg-[oklch(0.637_0.237_25.331)] rounded-full flex items-center justify-center">
               <img src={props.badge} alt="" class="w-3 h-3" />
             </div>
           </Show>
@@ -729,13 +732,15 @@ export const BrowserNotificationPreview: Component<NotificationProps> = (
           <div class="text-white font-medium text-sm mb-1 truncate">
             {props.title}
           </div>
-          <div class="text-gray-400 text-sm line-clamp-2">{props.body}</div>
+          <div class="text-[oklch(0.707_0.022_261.325)] text-sm line-clamp-2">
+            {props.body}
+          </div>
         </div>
 
         {/* Close button */}
         <button
           onClick={props.onClose}
-          class="flex-shrink-0 text-gray-500 hover:text-gray-300 transition-colors"
+          class="flex-shrink-0 text-[oklch(0.551_0.027_264.364)] hover:text-[oklch(0.872_0.01_258.338)] transition-colors"
         >
           <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
             <path

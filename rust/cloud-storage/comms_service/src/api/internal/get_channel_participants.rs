@@ -3,6 +3,7 @@ use axum::{
     extract::{Path, State},
     response::{IntoResponse, Json, Response},
 };
+use doppleganger::Mirror;
 use reqwest::StatusCode;
 use uuid::Uuid;
 
@@ -30,5 +31,11 @@ pub async fn handler(
                     .into_response()
             })?;
 
-    Ok((StatusCode::OK, Json(participants)).into_response())
+    Ok((
+        StatusCode::OK,
+        Json(<Vec<model::comms::ChannelParticipant>>::mirror(
+            participants,
+        )),
+    )
+        .into_response())
 }

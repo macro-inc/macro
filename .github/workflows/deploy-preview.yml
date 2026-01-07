@@ -1,0 +1,89 @@
+# Frontend Preview Deployments
+#
+# Deploys a preview build to <branch>-<nanoid>-preview.macro.com
+# Built identical to dev.macro.com (MODE=development, points to dev services)
+#
+# NOTE: This workflow should NOT be added to required status checks.
+# PRs should be mergeable regardless of preview deploy status.
+
+name: Deploy Preview
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+    paths:
+      - 'js/app/**'
+
+concurrency:
+  group: preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  PREVIEW_BUCKET: macro-preview-assets-dev
+
+jobs:
+  deploy:
+    runs-on: linux-latest-beefy
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup
+        uses: ./.github/actions/setup-reqs-web
+        with:
+          npm-rc-token: ${{ secrets.NPMRC_GH_TOKEN }}
+
+      # Build identical to dev.macro.com deployment
+      - name: Build
+        working-directory: js/app
+        run: bun run build:dev
+        env:
+          VITE_DD_WEB_APP_ID: ${{ secrets.DD_WEB_APP_ID }}
+          VITE_DD_WEB_APP_TOKEN: ${{ secrets.DD_WEB_APP_TOKEN }}
+          VITE_DD_HASH: ${{ github.sha }}
+          VITE_SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Get or create preview ID
+        id: preview-id
+        working-directory: js/app
+        run: |
+          PREVIEW_ID=$(bun scripts/preview/get-or-create-id.ts \
+            --pr ${{ github.event.pull_request.number }} \
+            --repo ${{ github.repository }} \
+            --token ${{ secrets.GITHUB_TOKEN }} \
+            --branch "${{ github.head_ref }}")
+          echo "id=$PREVIEW_ID" >> $GITHUB_OUTPUT
+          echo "Preview ID: $PREVIEW_ID"
+
+      - name: Validate bucket name
+        run: |
+          if [[ "${{ env.PREVIEW_BUCKET }}" != "macro-preview-assets-dev" ]]; then
+            echo "ERROR: PREVIEW_BUCKET must be 'macro-preview-assets-dev'"
+            exit 1
+          fi
+
+      - name: Deploy to S3
+        working-directory: js/app
+        run: |
+          bun scripts/preview/deploy.ts \
+            --preview-id ${{ steps.preview-id.outputs.id }} \
+            --skip-build
+
+      - name: Comment on PR
+        working-directory: js/app
+        run: |
+          bun scripts/preview/post-comment.ts \
+            --pr ${{ github.event.pull_request.number }} \
+            --repo ${{ github.repository }} \
+            --token ${{ secrets.GITHUB_TOKEN }} \
+            --preview-id ${{ steps.preview-id.outputs.id }} \
+            --sha ${{ github.sha }}

@@ -923,7 +923,11 @@ export function EntityWithEverything(
         <button
           type="button"
           class="col-1 size-full relative group/button flex items-center justify-center bracket-never @max-md/split:hidden"
+          onMouseDown={(e) => {
+            e.stopPropagation();
+          }}
           onClick={(e) => {
+            e.stopPropagation();
             props.onChecked?.(!props.checked, e.shiftKey);
           }}
           data-blocks-navigation
@@ -940,8 +944,14 @@ export function EntityWithEverything(
               <CheckIcon class="w-full h-full text-panel" />
             </Show>
           </div>
-          <Show when={props.showLeftColumnIndicator && !props.checked}>
-            <div class="absolute inset-0 flex items-center justify-center -z-1 @max-md/split:hidden">
+          <Show
+            when={
+              props.showLeftColumnIndicator &&
+              !props.checked &&
+              !props.highlighted
+            }
+          >
+            <div class="absolute inset-0 flex items-center justify-center group-hover/button:opacity-0 @max-md/split:hidden">
               <UnreadIndicator active={props.unreadIndicatorActive} />
             </div>
           </Show>

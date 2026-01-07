@@ -20,7 +20,7 @@ export type NotificationsProps = {
 export function Notifications(props: NotificationsProps) {
   const notifications = createMemo(() => {
     const entityNotifications =
-      props.notificationSource.store[
+      props.notificationSource.notificationsByEntity()[
         `${props.entity.type}@${props.entity.id}`
       ] ?? [];
     return entityNotifications.sort((a, b) => {

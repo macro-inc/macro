@@ -61,14 +61,15 @@ const TOAST_STYLES: Record<ToastType, ToastStyle> = {
     },
   },
   [ToastType.LOADING]: {
-    background: 'floating-accent-bg',
-    border: 'border-blue-200',
-    text: 'text-blue-700',
+    // SCUFFED: how do we want to handle these color?
+    background: 'bg-[oklch(0.623_0.214_259.815)/0.15]',
+    border: 'border-[color:oklch(0.882_0.059_254.128)]',
+    text: 'text-[oklch(0.488_0.243_264.376)]',
     icon: Spinner,
     button: {
-      background: 'bg-blue-100',
-      hover: 'hover:bg-blue-200',
-      text: 'text-blue-700',
+      background: 'bg-[oklch(0.932_0.032_255.585)]',
+      hover: 'hover:bg-[oklch(0.882_0.059_254.128)]',
+      text: 'text-[oklch(0.488_0.243_264.376)]',
     },
   },
 };
@@ -312,7 +313,7 @@ function embed(
           <Dynamic component={component} />
         </div>
         <Toast.CloseButton class="ml-auto absolute top-2 right-2 z-1">
-          <XIcon class="h-5 ml-4 text-gray-500" />
+          <XIcon class="h-5 ml-4 text-[oklch(0.551_0.027_264.364)]" />
         </Toast.CloseButton>
       </Toast>
     ),

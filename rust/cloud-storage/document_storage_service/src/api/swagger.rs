@@ -109,7 +109,6 @@ use models_soup::email_thread::{
     SoupMacroAttachment, SoupMessageListVisibility,
 };
 use models_soup::item::SoupItem;
-use models_soup::item::SoupItemType;
 use models_soup::project::SoupProject;
 use soup::inbound::axum_router::{PostSoupRequest, SoupApiItem, SoupApiSort, SoupPage};
 use utoipa::OpenApi;
@@ -290,7 +289,6 @@ use utoipa::OpenApi;
             SoupDocument,
             SoupChat,
             SoupProject,
-            SoupItemType,
             SoupApiSort,
             SoupPage,
             SoupEnrichedEmailThreadPreview,

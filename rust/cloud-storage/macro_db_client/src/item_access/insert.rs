@@ -54,7 +54,7 @@ pub async fn insert_user_item_access(
 #[tracing::instrument(skip(executor))]
 pub async fn upsert_user_item_access_bulk<'e, E>(
     executor: E,
-    user_ids: &[String],
+    user_ids: &[MacroUserIdStr<'_>],
     item_id: &str,
     item_type: &str,
     access_level: AccessLevel,
@@ -66,6 +66,8 @@ where
     if user_ids.is_empty() {
         return Ok(());
     }
+
+    let macro_ids: Vec<String> = user_ids.iter().map(|s| s.to_string()).collect();
 
     // Generate UUIDs for each user
     let ids: Vec<Uuid> = user_ids
@@ -106,7 +108,7 @@ where
         access_level as _,
         granted_from_channel_id,
         &ids,
-        user_ids as &[String],
+        macro_ids.as_slice(),
     )
     .execute(executor)
     .await?;
@@ -254,7 +256,7 @@ mod tests {
 
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("user_item_access.sql")))]
     async fn test_insert_user_item_access(pool: Pool<Postgres>) -> anyhow::Result<()> {
-        let user_id = MacroUserIdStr::parse_from_str("macro|test@user.com").unwrap();
+        let user_id = MacroUserIdStr::parse_from_str("macro|test@test.com").unwrap();
         let item_id = "new-test-item";
         let item_type = "document";
         let access_level = AccessLevel::Edit;
@@ -308,9 +310,9 @@ mod tests {
         let access_level = AccessLevel::View;
         let granted_from_channel_id = Some(Uuid::now_v7());
         let user_ids = vec![
-            "user0".to_string(),
-            "user1".to_string(),
-            "user2".to_string(),
+            MacroUserIdStr::parse_from_str("macro|user0@test.com").unwrap(),
+            MacroUserIdStr::parse_from_str("macro|user1@test.com").unwrap(),
+            MacroUserIdStr::parse_from_str("macro|user2@test.com").unwrap(),
         ];
 
         let mut transaction = pool.begin().await?;
@@ -326,6 +328,8 @@ mod tests {
         )
         .await?;
 
+        let ids: Vec<_> = user_ids.iter().map(|x| x.to_string()).collect();
+
         // Verify all records exist
         let result = sqlx::query!(
             r#"
@@ -334,7 +338,7 @@ mod tests {
         WHERE "user_id" = ANY($1) AND "item_id" = $2 AND "item_type" = $3 
         AND "access_level"::text = $4 AND "granted_from_channel_id" = $5
         "#,
-            &user_ids,
+            &ids,
             item_id,
             item_type,
             access_level.to_string(),
@@ -363,13 +367,13 @@ mod tests {
             FROM "UserItemAccess"
             WHERE "user_id" = $1 AND "item_id" = $2
             "#,
-                user_id,
+                user_id.as_ref(),
                 item_id,
             )
             .fetch_one(&mut *transaction)
             .await?;
 
-            assert_eq!(result.user_id, *user_id);
+            assert_eq!(result.user_id, user_id.as_ref());
             assert_eq!(result.item_id, item_id);
             assert_eq!(result.item_type, item_type);
             assert_eq!(result.access_level, Some(access_level.to_string()));
@@ -428,9 +432,9 @@ mod tests {
         let access_level = AccessLevel::Owner;
         let granted_from_channel_id = Some(Uuid::now_v7());
         let user_ids = vec![
-            "user3".to_string(),
-            "user4".to_string(),
-            "user5".to_string(),
+            MacroUserIdStr::parse_from_str("macro|user3@test.com").unwrap(),
+            MacroUserIdStr::parse_from_str("macro|user4@test.com").unwrap(),
+            MacroUserIdStr::parse_from_str("macro|user5@test.com").unwrap(),
         ];
 
         // Insert using the pool directly
@@ -444,6 +448,8 @@ mod tests {
         )
         .await?;
 
+        let ids: Vec<_> = user_ids.iter().map(|x| x.to_string()).collect();
+
         // Verify all records exist
         let result = sqlx::query!(
             r#"
@@ -452,7 +458,7 @@ mod tests {
         WHERE "user_id" = ANY($1) AND "item_id" = $2 AND "item_type" = $3 
         AND "access_level"::text = $4 AND "granted_from_channel_id" = $5
         "#,
-            &user_ids,
+            &ids,
             item_id,
             item_type,
             access_level.to_string(),
@@ -476,7 +482,10 @@ mod tests {
         let item_id = "upsert-test-item";
         let item_type = "document";
         let granted_from_channel_id = Some(Uuid::now_v7());
-        let user_ids = vec!["user1".to_string(), "user2".to_string()];
+        let user_ids = vec![
+            MacroUserIdStr::parse_from_str("macro|user1@test.com").unwrap(),
+            MacroUserIdStr::parse_from_str("macro|user2@test.com").unwrap(),
+        ];
 
         let mut transaction = pool.begin().await?;
 
@@ -492,6 +501,8 @@ mod tests {
         )
         .await?;
 
+        let ids: Vec<_> = user_ids.iter().map(|x| x.to_string()).collect();
+
         // Verify initial insert
         let initial_result = sqlx::query!(
             r#"
@@ -501,7 +512,7 @@ mod tests {
         AND "granted_from_channel_id" = $4
         ORDER BY "user_id"
         "#,
-            &user_ids,
+            &ids,
             item_id,
             item_type,
             granted_from_channel_id,
@@ -535,6 +546,8 @@ mod tests {
         )
         .await?;
 
+        let ids: Vec<_> = user_ids.iter().map(|x| x.to_string()).collect();
+
         // Verify the upsert updated the access levels but kept the same records
         let updated_result = sqlx::query!(
             r#"
@@ -547,7 +560,7 @@ mod tests {
         AND "granted_from_channel_id" = $4
         ORDER BY "user_id"
         "#,
-            &user_ids,
+            &ids,
             item_id,
             item_type,
             granted_from_channel_id,
@@ -580,9 +593,9 @@ mod tests {
 
         // Test with both updates and new inserts
         let mixed_user_ids = vec![
-            "user1".to_string(), // existing
-            "user3".to_string(), // new
-            "user4".to_string(), // new
+            MacroUserIdStr::parse_from_str("macro|user1@test.com").unwrap(), // existing
+            MacroUserIdStr::parse_from_str("macro|user3@test.com").unwrap(), // new
+            MacroUserIdStr::parse_from_str("macro|user4@test.com").unwrap(), // new
         ];
 
         let final_access_level = AccessLevel::Owner;
@@ -598,6 +611,8 @@ mod tests {
         )
         .await?;
 
+        let ids: Vec<_> = mixed_user_ids.iter().map(|x| x.to_string()).collect();
+
         // Verify the result
         let final_result = sqlx::query!(
             r#"
@@ -610,7 +625,7 @@ mod tests {
         AND "granted_from_channel_id" = $4
         ORDER BY "user_id"
         "#,
-            &mixed_user_ids,
+            &ids,
             item_id,
             item_type,
             granted_from_channel_id,
@@ -644,12 +659,12 @@ mod tests {
             r#"
         SELECT COUNT(*) as count
         FROM "UserItemAccess"
-        WHERE ("user_id" = ANY($1) OR "user_id" = ANY($2)) 
-        AND "item_id" = $3 AND "item_type" = $4 
+        WHERE ("user_id" = ANY($1) OR "user_id" = ANY($2))
+        AND "item_id" = $3 AND "item_type" = $4
         AND "granted_from_channel_id" = $5
         "#,
-            &user_ids,
-            &["user3".to_string(), "user4".to_string()],
+            &ids,
+            &["macro|user2@test.com".to_string()], // user2 from original insert, not in mixed_user_ids
             item_id,
             item_type,
             granted_from_channel_id,

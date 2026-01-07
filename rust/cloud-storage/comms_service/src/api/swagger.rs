@@ -1,12 +1,10 @@
 use crate::api::{
-    activity::get_activity::GetActivityResponse,
     activity::post_activity::PostActivityRequest,
     channels::{
         add_participants::AddParticipantsRequest,
         create_channel::{CreateChannelRequest, CreateChannelResponse},
         delete_message::DeleteMessageParams,
         get_channel::GetChannelResponse,
-        get_channels::GetChannelsResponse,
         get_or_create_dm::{GetOrCreateDmRequest, GetOrCreateDmResponse},
         get_or_create_private::{GetOrCreatePrivateRequest, GetOrCreatePrivateResponse},
         patch_message::{PatchMessageParams, PatchMessageRequest},
@@ -23,13 +21,14 @@ use crate::api::{
 };
 
 use crate::api::extractors::ParticipantAccess;
+use comms::inbound::{ApiActivity, ApiChannelWithLatest};
 use comms_db_client::channels::patch_channel::PatchChannelOptions;
 use comms_db_client::model::{
     Activity, ActivityType, CountedReaction, EntityMention, Message, NewAttachment, Reaction,
     SimpleMention,
 };
 use model::comms::{
-    Channel, ChannelParticipant, ChannelType, ChannelWithLatest, ChannelWithParticipants,
+    Channel, ChannelParticipant, ChannelType, ChannelWithParticipants,
     GetMessageWithContextResponse, GetOrCreateAction, LatestMessage, ParticipantRole,
 };
 
@@ -38,10 +37,9 @@ use model::version::CommunicationServiceApiVersion;
 use utoipa::OpenApi;
 
 use super::channels::{
-    add_participants, create_channel, delete_channel, delete_message, get_channel, get_channels,
-    get_mentions, get_message_with_context, get_or_create_dm, get_or_create_private, join_channel,
-    leave_channel, patch_channel, patch_message, post_message, post_reaction, post_typing,
-    remove_participants,
+    add_participants, create_channel, delete_channel, delete_message, get_channel, get_mentions,
+    get_message_with_context, get_or_create_dm, get_or_create_private, join_channel, leave_channel,
+    patch_channel, patch_message, post_message, post_reaction, post_typing, remove_participants,
 };
 
 use super::attachments::references;
@@ -52,7 +50,7 @@ use comms_db_client::attachments::get_attachment_references::{
 
 use super::channels::get_mentions::GetMentionsResponse;
 
-use super::activity::{get_activity, post_activity};
+use super::activity::post_activity;
 use super::mentions::{
     create_mention::__path_create_mention_handler, delete_mention::__path_delete_mention_handler,
 };
@@ -66,13 +64,13 @@ use super::preview::get_batch_preview;
         paths(
             create_channel::create_channel_handler,
             get_channel::get_channel_handler,
-            get_channels::get_channels_handler,
+            comms::inbound::get_channels_handler,
             post_message::post_message_handler,
             post_typing::post_typing_handler,
             post_reaction::post_reaction_handler,
             patch_message::patch_message_handler,
             delete_message::delete_message_handler,
-            get_activity::get_activity_handler,
+            comms::inbound::get_activity_handler,
             post_activity::post_activity_handler,
             join_channel::join_channel_handler,
             leave_channel::leave_channel_handler,
@@ -95,7 +93,7 @@ use super::preview::get_batch_preview;
                 CreateChannelRequest,
                 CreateChannelResponse,
                 GetChannelResponse,
-                GetChannelsResponse,
+                ApiChannelWithLatest,
                 PostMessageRequest,
                 PostMessageResponse,
                 PostTypingRequest,
@@ -107,7 +105,6 @@ use super::preview::get_batch_preview;
                 PatchMessageRequest,
                 DeleteMessageParams,
                 PostActivityRequest,
-                GetActivityResponse,
                 AddParticipantsRequest,
                 RemoveParticipantsRequest,
 
@@ -119,6 +116,7 @@ use super::preview::get_batch_preview;
                 Reaction,
                 CountedReaction,
                 Activity,
+                ApiActivity,
                 ActivityType,
                 NewAttachment,
                 ParticipantAccess,
@@ -148,7 +146,6 @@ use super::preview::get_batch_preview;
                 DeleteEntityMentionResponse,
 
                 GetMentionsResponse,
-                ChannelWithLatest,
                 ChannelWithParticipants,
                 LatestMessage,
                 GetMessageWithContextResponse,

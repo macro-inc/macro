@@ -9,7 +9,10 @@ import {
 } from '@app/component/split-layout/components/SplitToolbar';
 import { hasPermissions, Permissions } from '@core/component/SharePermissions';
 import { ShareButton } from '@core/component/TopBar/ShareButton';
-import { ENABLE_PROPERTIES_METADATA } from '@core/constant/featureFlags';
+import {
+  ENABLE_EMAIL_SHARING,
+  ENABLE_PROPERTIES_METADATA,
+} from '@core/constant/featureFlags';
 import { Show } from 'solid-js';
 import { useEmailContext } from './EmailContext';
 import { EmailPropertiesModal } from './EmailPropertiesModal';
@@ -39,12 +42,14 @@ export function TopBar(props: { id: string; title: string }) {
               )}
             />
           </Show>
-          <ShareButton
-            id={props.id}
-            name={props.title}
-            itemType="email"
-            userPermissions={email.permissions().type}
-          />
+          <Show when={ENABLE_EMAIL_SHARING}>
+            <ShareButton
+              id={props.id}
+              name={props.title}
+              itemType="email"
+              userPermissions={email.permissions().type}
+            />
+          </Show>
         </div>
       </SplitToolbarRight>
     </>

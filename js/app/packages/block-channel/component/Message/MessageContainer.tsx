@@ -574,7 +574,7 @@ export function MessageContainer(props: MessageProps) {
                 isNewMessage={isNewMessage()}
                 isParentNewMessage={isParentNewMessage()}
                 onThreadAppend={onThreadAppend}
-                shouldShowThreadAppendInput={shouldShowThreadAppendInput}
+                shouldShowThreadAppendInput={shouldShowThreadAppendInput()}
                 isTarget={props.isTarget}
                 setThreadAppendMountTarget={(el) => {
                   if (!message.thread_id) return;
@@ -746,7 +746,7 @@ export function MessageContainer(props: MessageProps) {
             threadDepth={threadDepth() + 1}
             isFirstInThread
             isLastInThread
-            shouldShowThreadAppendInput={createSignal(true)[0]}
+            shouldShowThreadAppendInput
             setThreadAppendMountTarget={(el) =>
               listContext.registerThreadAppendMountTarget(message.id, el)
             }
