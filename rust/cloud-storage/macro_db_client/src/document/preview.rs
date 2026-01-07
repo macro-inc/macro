@@ -43,10 +43,10 @@ pub async fn batch_get_document_preview_v2(
         PreviewQueryResult,
         r#"
             SELECT
-                d.id as "document_id!",
-                d.name as "document_name!",
+                d.id as document_id,
+                d.name as document_name,
                 d."fileType" as file_type,
-                d.owner as "owner!",
+                d.owner as owner,
                 d."updatedAt"::timestamptz as "updated_at",
                 dt.sub_type as "sub_type?: DocumentSubType",
                 CASE 
