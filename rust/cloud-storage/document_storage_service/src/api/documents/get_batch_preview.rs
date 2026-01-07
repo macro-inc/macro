@@ -50,17 +50,7 @@ pub async fn get_batch_preview_handler(
     let result: Vec<DocumentPreview> = document_preview_results
         .iter()
         .map(|d| match d {
-            DocumentPreviewV2::Found(preview_data) => {
-                DocumentPreview::Access(DocumentPreviewData {
-                    document_id: preview_data.document_id.clone(),
-                    document_name: preview_data.document_name.clone(),
-                    file_type: preview_data.file_type.clone(),
-                    owner: preview_data.owner.clone(),
-                    updated_at: preview_data.updated_at,
-                    sub_type: preview_data.sub_type,
-                    is_completed: preview_data.is_completed,
-                })
-            }
+            DocumentPreviewV2::Found(preview_data) => DocumentPreview::Access(preview_data.clone()),
             DocumentPreviewV2::DoesNotExist(preview_data) => {
                 DocumentPreview::DoesNotExist(WithDocumentId {
                     document_id: preview_data.document_id.clone(),

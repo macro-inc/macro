@@ -320,9 +320,37 @@ pub enum DocumentPreview {
     DoesNotExist(WithDocumentId),
 }
 
-#[derive(
-    sqlx::FromRow, serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone, ToSchema,
-)]
+/// The sub type of a document preview with associated properties.
+/// Task-related properties are encoded within the variant to ensure valid states.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone, ToSchema)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum DocumentPreviewDataSubType {
+    /// A task document with completion status
+    Task {
+        /// Whether the task is completed.
+        /// True if the Status property is set to "Completed".
+        is_completed: bool,
+    },
+}
+
+impl DocumentPreviewDataSubType {
+    /// Converts from DB representation (separate sub_type and is_completed columns)
+    /// to the domain enum.
+    pub fn from_db(sub_type: Option<DocumentSubType>, is_completed: Option<bool>) -> Option<Self> {
+        match (sub_type, is_completed) {
+            (Some(DocumentSubType::Task), Some(is_completed)) => Some(Self::Task { is_completed }),
+            (Some(DocumentSubType::Task), None) => {
+                // Default to false if sub_type is Task but is_completed is None
+                Some(Self::Task {
+                    is_completed: false,
+                })
+            }
+            _ => None,
+        }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone, ToSchema)]
 pub struct DocumentPreviewData {
     /// The document id
     pub document_id: String,
@@ -338,12 +366,9 @@ pub struct DocumentPreviewData {
     #[schema(value_type = i64, nullable=false)]
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
     /// The sub type of the document if present.
+    /// Task-related properties are encoded within the variant.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub sub_type: Option<DocumentSubType>,
-    /// Whether the task is completed (only present when sub_type is 'task').
-    /// True if the Status property is set to "Completed".
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub is_completed: Option<bool>,
+    pub sub_type: Option<DocumentPreviewDataSubType>,
 }
 
 #[derive(
