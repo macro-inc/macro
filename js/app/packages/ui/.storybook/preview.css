@@ -1,11 +1,5 @@
 @reference "../../app/index.css";
 
-/* =============================================================================
-   STORYBOOK PREVIEW STYLES
-   Theme CSS is dynamically generated from @block-theme/constants.ts
-   and injected at runtime in preview.tsx
-   ============================================================================= */
-
 @layer base {
   body {
     @apply overflow-y-auto overflow-x-hidden optical-auto;
@@ -14,12 +8,17 @@
   * {
     @apply select-auto;
   }
+
+  /* Story canvas body */
+  body[class*="theme-"] {
+    @apply bg-page text-ink;
+  }
+
+  pre * {
+    @apply font-mono!;
+  } 
 }
 
-/* =============================================================================
-   MDX DOCS STYLING
-   Theme the docs pages. Uses :not(.docs-story *) to avoid overriding story content.
-   ============================================================================= */
 
 .sbdocs-wrapper {
   @apply bg-page!;
@@ -109,10 +108,7 @@
     @apply bg-panel border-edge;
   }
 }
-
-/* =============================================================================
-   ARGS TABLE (autodocs controls)
-   ============================================================================= */
+  
 
 .docblock-argstable {
   @apply bg-panel outline outline-edge-muted!;
@@ -140,7 +136,6 @@
 }
 
 .docblock-argstable-body {
-
   /* Value chips under descriptions  */
   td:nth-child(2) span[class] {
     @apply bg-surface-0 font-mono;
@@ -173,14 +168,10 @@
     @apply border-edge bg-panel hover:bg-hover;
 
     button {
-      @apply text-accent outline outline-current shadow-none bg-transparent hover:bg-accent/10 rounded-none!;
+      @apply text-accent outline outline-current shadow-none bg-transparent hover:bg-accent/10 rounded-none! focus:shadow-none!;
     }
   }
 }
-
-/* =============================================================================
-   STORY CONTAINERS
-   ============================================================================= */
 
 .docs-story,
 .sbdocs-preview {
@@ -189,14 +180,121 @@
   [role="toolbar"] {
     @apply bg-surface-0!;
 
-    button {
-      @apply text-ink! hover:text-accent! hover:bg-accent/10!;
+    & > :has(button) {
+      @apply bg-transparent!;
+    }
+
+    .docblock-code-toggle {
+      @apply text-ink! border-none! hover:text-accent! hover:bg-accent/10! focus:shadow-none!;
     }
   }
 }
 
 .docblock-source {
-  @apply bg-panel border-edge;
+  @apply bg-panel! border-none! m-0!;
+
+  & > :has(button) {
+    @apply bg-transparent!;
+  }
+
+  button {
+    @apply rounded-none text-accent bg-accent/10 hover:text-accent hover:bg-accent/50 focus:shadow-none;
+  }
+
+  .prismjs {
+    @apply border-none!;
+
+    .token {
+      @apply text-accent;
+    }
+
+    .token.punctuation {
+      @apply text-ink-muted;
+    }
+
+    .token.comment,
+    .token.block-comment,
+    .token.prolog,
+    .token.doctype,
+    .token.cdata {
+      @apply text-ink-extra-muted/40;
+    }
+
+    .token.attr-name,
+    .token.namespace,
+    .token.number,
+    .token.unit,
+    .token.hexcode,
+    .token.deleted {
+      @apply text-accent-1!;
+    }
+
+    .token.property,
+    .token.selector {
+      @apply text-accent-1!;
+    }
+
+    .token.function-name {
+      @apply text-accent-2!;
+    }
+
+    .token.boolean,
+    .token.selector .token.id,
+    .token.function {
+      @apply text-accent;
+    }
+
+    .token.tag,
+    .token.tag.punctuation,
+    .token.class-name,
+    .token.maybe-class-name {
+      @apply text-accent-3;
+    }
+
+    .token.constant,
+    .token.symbol {
+      @apply text-accent;
+    }
+
+    .token.important,
+    .token.atrule,
+    .token.keyword,
+    .token.selector .token.class,
+    .token.builtin {
+      @apply text-accent-2;
+    }
+
+    .token.string,
+    .token.char,
+    .token.attr-value,
+    .token.regex,
+    .token.variable {
+      @apply text-accent;
+    }
+
+    .token.operator,
+    .token.entity,
+    .token.url {
+      @apply text-accent-4;
+    }
+
+    .token.important,
+    .token.bold {
+      @apply font-bold;
+    }
+
+    .token.italic {
+      font-style: italic;
+    }
+
+    .token.entity {
+      @apply cursor-help;
+    }
+
+    .token.inserted {
+      @apply text-success!;
+    }
+  }
 }
 
 .docblock-code-toggle {
@@ -221,11 +319,3 @@
   @apply bg-page;
 }
 
-/* Story canvas body */
-body[class*="theme-"] {
-  @apply bg-page text-ink;
-}
-
-pre * {
-  @apply font-mono!;
-} 
