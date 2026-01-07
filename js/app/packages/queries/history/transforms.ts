@@ -1,6 +1,8 @@
 import { itemToSafeName } from '@core/constant/allBlocks';
 import type { Item } from '@service-storage/generated/schemas/item';
 
+type ItemWithViewedAt = Item & { viewedAt?: number };
+
 export type HistoryItem = Item & {
   name: string;
   viewedAt?: number;
@@ -14,7 +16,7 @@ export function transformHistoryItem(item: Item): HistoryItem {
   return {
     ...item,
     name: itemToSafeName(item),
-    viewedAt: (item as Item & { viewedAt?: number }).viewedAt,
+    viewedAt: (item as ItemWithViewedAt).viewedAt,
   };
 }
 

@@ -4,8 +4,8 @@ vi.mock('@core/constant/allBlocks', () => ({
   itemToSafeName: (item: { name?: string }) => item.name ?? 'Untitled',
 }));
 
-import { transformHistoryResponse, updateItemViewedAt } from '../transforms';
 import type { Item } from '@service-storage/generated/schemas/item';
+import { transformHistoryResponse, updateItemViewedAt } from '../transforms';
 
 function createItem(overrides: Partial<Item> = {}): Item {
   return {

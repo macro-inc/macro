@@ -8,6 +8,8 @@ import type { ChannelType } from '@service-comms/generated/models/channelType';
 import { createMemo } from 'solid-js';
 import type { CommandItemCard } from './KonsoleItem';
 
+type ChannelWithViewedAt = Channel & { viewed_at?: number };
+
 const FILTER_PERSISTENT_CHATS = false;
 
 function channelsIntoCategories(channels: Channel[]) {
@@ -96,8 +98,7 @@ export function useCommandItems() {
             : undefined,
       },
       updatedAt: channel.updated_at,
-      // viewedAt comes from channel API data
-      viewedAt: (channel as Channel & { viewed_at?: number }).viewed_at,
+      viewedAt: (channel as ChannelWithViewedAt).viewed_at,
     }));
 
     return mapFromListsByKey<CommandItemCard>(

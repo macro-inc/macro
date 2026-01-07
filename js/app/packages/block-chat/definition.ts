@@ -33,7 +33,6 @@ export const definition = defineBlock({
         });
       }
 
-      // Optimistically update viewedAt immediately for instant UI feedback
       optimisticUpdateViewedAt(source.id);
 
       storageServiceClient

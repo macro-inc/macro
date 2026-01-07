@@ -1,4 +1,7 @@
-import { optimisticUpdateViewedAt, refetchHistory } from '@queries/history/history';
+import {
+  optimisticUpdateViewedAt,
+  refetchHistory,
+} from '@queries/history/history';
 import { storageServiceClient } from '@service-storage/client';
 
 /**
@@ -8,7 +11,6 @@ import { storageServiceClient } from '@service-storage/client';
  * @param refetch - Whether to refetch the history
  */
 export function trackOpenAndRefetchHistory(documentId: string, refetch = true) {
-  // Optimistically update viewedAt immediately for instant UI feedback
   optimisticUpdateViewedAt(documentId);
 
   storageServiceClient

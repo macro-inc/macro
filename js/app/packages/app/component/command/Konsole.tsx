@@ -126,18 +126,14 @@ export function KommandMenuInner(props: {
   });
   const channelsContext = useChannelsContext();
 
-  // Configure fresh search with viewedAt-based sorting and channel boost when query exists
   const freshSearchConfig = createMemo(() => {
     const query = debouncedLocalQuery();
     const hasQuery = query && query.trim().length > 0;
     return {
       useViewedAt: true,
-      // Boost channels/DMs when there's a search query
       channelBoost: hasQuery ? 1.5 : 1.0,
-      // When no query, prioritize time (viewedAt); when query exists, prioritize fuzzy match
       fuzzyWeight: hasQuery ? 0.7 : 0.1,
       timeWeight: hasQuery ? 0.3 : 0.9,
-      // Disable fuzzy threshold penalty when no query (all items have 0 fuzzy score)
       minFuzzyThreshold: hasQuery ? 0.1 : 0,
     };
   });

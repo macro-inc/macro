@@ -163,11 +163,9 @@ export function freshSort<T extends TimestampedItem>(
     // Apply fuzzy threshold penalty
     const fuzzyPenalty = fuzzyScore < finalConfig.minFuzzyThreshold ? 0.1 : 1;
 
-    // Apply channel boost when configured
-    const channelMultiplier =
-      finalConfig.channelBoost > 1.0 && isChannelItem(result.original)
-        ? finalConfig.channelBoost
-        : 1.0;
+    const channelMultiplier = isChannelItem(result.original)
+      ? finalConfig.channelBoost
+      : 1.0;
 
     const combinedScore =
       (normalizedFuzzyWeight * fuzzyScore +
