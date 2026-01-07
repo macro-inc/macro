@@ -1,3 +1,4 @@
+pub use super::base_64_image::*;
 use super::{
     message::{Base64Image, ChatMessage, SystemPrompt},
     model::Model,
