@@ -48,3 +48,28 @@ impl From<crate::service::attachment::AttachmentSfs> for AttachmentSfs {
         }
     }
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct AttachmentDraft {
+    pub id: Uuid,
+    pub draft_id: Uuid,
+    pub file_name: String,
+    pub content_type: String,
+    pub sha: String,
+    pub size: i32,
+    pub s3_key: String,
+}
+
+impl From<crate::service::attachment::AttachmentDraft> for AttachmentDraft {
+    fn from(service: crate::service::attachment::AttachmentDraft) -> Self {
+        Self {
+            id: service.id,
+            draft_id: service.draft_id,
+            file_name: service.file_name,
+            content_type: service.content_type,
+            sha: service.sha,
+            size: service.size,
+            s3_key: service.s3_key,
+        }
+    }
+}

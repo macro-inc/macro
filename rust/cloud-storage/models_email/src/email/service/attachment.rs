@@ -86,3 +86,28 @@ pub enum AttachmentUploadDestination {
     Dss,
     Sfs,
 }
+
+#[derive(Debug, Clone)]
+pub struct AttachmentDraft {
+    pub id: Uuid,
+    pub draft_id: Uuid,
+    pub file_name: String,
+    pub content_type: String,
+    pub sha: String,
+    pub size: i32,
+    pub s3_key: String,
+}
+
+impl From<crate::db::attachment::AttachmentDraft> for AttachmentDraft {
+    fn from(db: crate::db::attachment::AttachmentDraft) -> Self {
+        Self {
+            id: db.id,
+            draft_id: db.draft_id,
+            file_name: db.file_name,
+            content_type: db.content_type,
+            sha: db.sha,
+            size: db.size,
+            s3_key: db.s3_key,
+        }
+    }
+}

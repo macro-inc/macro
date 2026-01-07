@@ -3072,6 +3072,7 @@ dependencies = [
  "mime_guess",
  "model",
  "model-entity",
+ "model_file_type",
  "model_notifications",
  "models_email",
  "models_opensearch",
@@ -7433,6 +7434,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "aws-sdk-s3",
+ "base64 0.22.1",
+ "hex",
  "tracing",
 ]
 
