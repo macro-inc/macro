@@ -1,0 +1,43 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH user_links AS (\n            SELECT id FROM email_links WHERE macro_id = $1\n        ),\n        -- Sender matches (From) - search both from_name and contact name\n        sender_matches AS (\n            SELECT DISTINCT ON (t.id, c.id)\n                t.id as thread_id,\n                COALESCE(m.from_name, c.name) as contact_name,\n                c.email_address as contact_email,\n                'FROM' as contact_type,\n                t.latest_non_spam_message_ts\n            FROM email_threads t\n            JOIN email_messages m ON m.thread_id = t.id\n            JOIN email_contacts c ON c.id = m.from_contact_id\n            WHERE t.link_id IN (SELECT id FROM user_links)\n              AND (m.from_name ILIKE $2 OR c.name ILIKE $2)\n            ORDER BY t.id, c.id\n        ),\n        -- Recipient matches (To/Cc/Bcc) - search both recipient name and contact name\n        recipient_matches AS (\n            SELECT DISTINCT ON (t.id, c.id, mr.recipient_type)\n                t.id as thread_id,\n                COALESCE(mr.name, c.name) as contact_name,\n                c.email_address as contact_email,\n                mr.recipient_type::text as contact_type,\n                t.latest_non_spam_message_ts\n            FROM email_threads t\n            JOIN email_messages m ON m.thread_id = t.id\n            JOIN email_message_recipients mr ON mr.message_id = m.id\n            JOIN email_contacts c ON c.id = mr.contact_id\n            WHERE t.link_id IN (SELECT id FROM user_links)\n              AND (mr.name ILIKE $2 OR c.name ILIKE $2)\n            ORDER BY t.id, c.id, mr.recipient_type\n        )\n        SELECT\n            thread_id as \"thread_id!\",\n            contact_name as \"contact_name!\",\n            contact_email as \"contact_email!\",\n            contact_type as \"contact_type!\"\n        FROM (\n            SELECT * FROM sender_matches\n            UNION ALL\n            SELECT * FROM recipient_matches\n        ) combined\n        ORDER BY latest_non_spam_message_ts DESC NULLS LAST\n        LIMIT $3 OFFSET $4\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "thread_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "contact_name!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "contact_email!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "contact_type!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "449dba6f4eb50ec22f68fc584aad60863ff1a0bccdee92c76e4268c0ab6ee1f5"
+}
