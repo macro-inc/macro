@@ -5,7 +5,6 @@ use crate::domain::{
     },
     ports::{SoupOutput, SoupRepo, SoupService},
 };
-use comms::domain::ports::ChannelsService;
 use doppleganger::Mirror;
 use either::Either;
 use email::domain::{models::GetEmailsRequest, ports::EmailService};
@@ -19,9 +18,7 @@ use model_entity::as_owned::ShallowClone;
 use models_pagination::{
     Cursor, CursorVal, Frecency, FrecencyValue, PaginateOn, Query, SimpleSortMethod,
 };
-use models_soup::{
-    comms::SoupChannel, email_thread::SoupEnrichedEmailThreadPreview, item::SoupItem,
-};
+use models_soup::{email_thread::SoupEnrichedEmailThreadPreview, item::SoupItem};
 use std::cmp::Ordering;
 use uuid::Uuid;
 
@@ -29,31 +26,27 @@ use uuid::Uuid;
 mod tests;
 
 /// struct which handles the actual implementation of soup with abstracted interfaces for mocking
-pub struct SoupImpl<T, U, V, C> {
+pub struct SoupImpl<T, U, V> {
     /// the interface for interacting with the db
     soup_storage: T,
     /// the interface for interacting with frecency
     frecency: U,
     /// the interface for interacting with email
     email_service: V,
-    /// the interface for interacting with comms
-    comms_service: C,
 }
 
-impl<T, U, V, C> SoupImpl<T, U, V, C>
+impl<T, U, V> SoupImpl<T, U, V>
 where
     T: SoupRepo,
     anyhow::Error: From<T::Err>,
     U: FrecencyQueryService,
     V: EmailService,
-    C: ChannelsService,
 {
-    pub fn new(soup_storage: T, frecency: U, email_service: V, comms_service: C) -> Self {
+    pub fn new(soup_storage: T, frecency: U, email_service: V) -> Self {
         SoupImpl {
             soup_storage,
             frecency,
             email_service,
-            comms_service,
         }
     }
 
@@ -269,35 +262,14 @@ where
             });
         Ok(Either::Right(emails))
     }
-
-    async fn handle_comms_request(
-        &self,
-        req: MacroUserIdStr<'_>,
-    ) -> Result<impl Iterator<Item = FrecencySoupItem>, SoupErr> {
-        self.comms_service
-            .get_channels(req)
-            .await
-            .map_err(|_| SoupErr::CommsErr)
-            .map(|r| {
-                r.into_iter().map(|mut c| {
-                    let frecency_score = c.frecency_score.take();
-                    let soup_channel = SoupChannel::mirror(c);
-                    FrecencySoupItem {
-                        item: SoupItem::Channel(soup_channel),
-                        frecency_score,
-                    }
-                })
-            })
-    }
 }
 
-impl<T, U, V, C> SoupService for SoupImpl<T, U, V, C>
+impl<T, U, V> SoupService for SoupImpl<T, U, V>
 where
     T: SoupRepo,
     anyhow::Error: From<T::Err>,
     U: FrecencyQueryService,
     V: EmailService,
-    C: ChannelsService,
 {
     async fn get_user_soup(&self, req: SoupRequest) -> Result<SoupOutput, SoupErr> {
         let limit = req.limit.clamp(20, 500);
@@ -314,21 +286,17 @@ where
                     SimpleSortRequest {
                         limit,
                         cursor: SimpleSortQuery::from_entity_cursor(cursor),
-                        user_id: req.user.copied(),
+                        user_id: req.user,
                     },
                 );
 
                 let email_soup_fut = self.handle_email_request(email_request);
 
-                let comms_soup_fut = self.handle_comms_request(req.user.copied());
-
-                let (main_soup, email_soup, comms_soup) =
-                    tokio::try_join!(main_soup_fut, email_soup_fut, comms_soup_fut)?;
+                let (main_soup, email_soup) = tokio::try_join!(main_soup_fut, email_soup_fut)?;
 
                 Ok(Either::Left(
                     main_soup
                         .chain(email_soup)
-                        .chain(comms_soup)
                         .paginate_on(limit.into(), sort_method)
                         .filter_on(paginate_filter)
                         .sort_desc()

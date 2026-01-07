@@ -1,4 +1,5 @@
 pub mod error;
+pub mod get_names;
 pub mod google_access_token;
 pub mod unlink;
 pub mod users;

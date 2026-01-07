@@ -57,14 +57,6 @@ const syncServiceAuthKeyArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: SYNC_SERVICE_AUTH_KEY })
   .apply((secret) => secret.arn);
 
-const AUTHENTICATION_SERVICE_SECRET_KEY = config.require(
-  `authentication_service_secret_key`
-);
-const authenticationServiceSecretKeyArn: pulumi.Output<string> =
-  aws.secretsmanager
-    .getSecretVersionOutput({ secretId: AUTHENTICATION_SERVICE_SECRET_KEY })
-    .apply((secret) => secret.arn);
-
 const fusionauthClientIdSecretKey = config.require(`fusionauth_client_id`);
 
 const FUSIONAUTH_CLIENT_ID = aws.secretsmanager
@@ -231,7 +223,6 @@ const cloudStorageService = new CloudStorageService(
       cloudfrontPrivateKeySecretArn,
       internalApiKeyArn,
       syncServiceAuthKeyArn,
-      authenticationServiceSecretKeyArn,
       MACRO_API_TOKENS.macroApiTokenPublicKeyArn,
     ],
     notificationQueueArn,
@@ -356,14 +347,6 @@ const cloudStorageService = new CloudStorageService(
       {
         name: 'SYNC_SERVICE_URL',
         value: `https://sync-service-${stack === 'dev' ? 'dev3' : 'prod2'}.macroverse.workers.dev`,
-      },
-      {
-        name: 'AUTHENTICATION_SERVICE_SECRET_KEY',
-        value: pulumi.interpolate`${AUTHENTICATION_SERVICE_SECRET_KEY}`,
-      },
-      {
-        name: 'AUTHENTICATION_SERVICE_URL',
-        value: `https://auth-service${stack === 'prod' ? '' : `-${stack}`}.macro.com`,
       },
       {
         name: 'MACRO_API_TOKEN_ISSUER',

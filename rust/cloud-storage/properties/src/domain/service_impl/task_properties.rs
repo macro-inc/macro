@@ -1,10 +1,7 @@
 //! Task-specific property handlers.
 
-use std::collections::HashSet;
-
 use futures::future::join_all;
 use macro_user_id::cowlike::CowLike;
-use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::EntityType;
 use models_properties::api::requests::SetPropertyValue;
 use models_properties::service::property_value::PropertyValue;
@@ -108,11 +105,7 @@ where
             return Ok(());
         };
 
-        let assignee_ids = references
-            .iter()
-            .map(|r| MacroUserIdStr::parse_from_str(&r.entity_id))
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| PropertiesErr::Validation(e.to_string()))?;
+        let assignee_ids: Vec<String> = references.iter().map(|r| r.entity_id.clone()).collect();
         if assignee_ids.is_empty() {
             return Ok(());
         }
@@ -131,7 +124,7 @@ where
     pub async fn handle_task_assignee_notifications(
         &self,
         task_id: Uuid,
-        assignee_ids: &[MacroUserIdStr<'_>],
+        assignee_ids: &[String],
         assigned_by_user_id: &str,
     ) -> Result<(), PropertiesErr> {
         if assignee_ids.is_empty() {
@@ -157,19 +150,17 @@ where
             .map_err(anyhow::Error::from)
             .map_err(PropertiesErr::Repo)?;
 
-        let current_assignee_ids: HashSet<String> = match current_value {
+        let current_assignee_ids: Vec<String> = match current_value {
             Some(PropertyValue::EntityRef(refs)) => {
                 refs.iter().map(|r| r.entity_id.clone()).collect()
             }
-            _ => Default::default(),
+            _ => vec![],
         };
 
-        let recipient_ids: Vec<MacroUserIdStr<'_>> = assignee_ids
+        let recipient_ids: Vec<String> = assignee_ids
             .iter()
-            .filter(|id| {
-                !current_assignee_ids.contains(id.as_ref()) && id.as_ref() != assigned_by_user_id
-            })
-            .map(|id| id.copied())
+            .filter(|id| !current_assignee_ids.contains(id) && id.as_str() != assigned_by_user_id)
+            .cloned()
             .collect();
 
         if recipient_ids.is_empty() {
@@ -207,7 +198,7 @@ where
                     notification_entity: notification_entity.clone(),
                     notification_event: notification_event.clone(),
                     sender_id: Some(assigned_by.clone()),
-                    recipient_ids: Some(vec![recipient_id.to_string()]),
+                    recipient_ids: Some(vec![recipient_id.clone()]),
                 };
 
                 let recipient_id_for_log = recipient_id.clone();
@@ -241,7 +232,7 @@ where
     pub async fn handle_task_assignee_permissions(
         &self,
         task_id: Uuid,
-        assignee_ids: &[MacroUserIdStr<'_>],
+        assignee_ids: &[String],
     ) -> Result<(), PropertiesErr> {
         if assignee_ids.is_empty() {
             return Ok(());

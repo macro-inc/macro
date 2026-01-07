@@ -8,6 +8,7 @@ use axum_extra::extract::Cached;
 use comms_db_client::participants::remove_participant::{
     RemoveParticipantOptions, remove_participant,
 };
+use model::comms::ChannelType;
 
 #[utoipa::path(
     post,
@@ -34,15 +35,14 @@ pub async fn leave_channel_handler(
     Cached(ChannelMember(channel_member)): Cached<ChannelMember>,
 ) -> Result<StatusCode, (StatusCode, String)> {
     match (channel_type, participants.len()) {
-        (models_comms::channel::ChannelType::Organization, _) => {
+        (ChannelType::Organization, _) => {
             tracing::warn!("user tried to leave organization channel");
             return Err((
                 StatusCode::BAD_REQUEST,
                 "cannot leave organization channel".to_string(),
             ));
         }
-        (models_comms::channel::ChannelType::Private, 2)
-        | (models_comms::channel::ChannelType::DirectMessage, _) => {
+        (ChannelType::Private, 2) | (ChannelType::DirectMessage, _) => {
             tracing::warn!("user tried to leave private channel with only 2 participants");
             return Err((
                 StatusCode::BAD_REQUEST,

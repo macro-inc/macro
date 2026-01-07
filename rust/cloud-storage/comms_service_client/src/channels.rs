@@ -1,7 +1,7 @@
 use super::CommsServiceClient;
 use crate::error::{ClientError, ResponseExt};
-use model::comms::ChannelType;
 use model::comms::{GetChannelsHistoryRequest, GetChannelsHistoryResponse};
+use models_comms::ChannelType;
 use serde::{Deserialize, Serialize};
 use urlencoding;
 use uuid::Uuid;

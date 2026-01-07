@@ -8,6 +8,7 @@ use model_notifications::{
     ChannelInviteMetadata, ChannelMentionMetadata, ChannelMessageSendMetadata,
     ChannelReplyMetadata, DocumentMentionMetadata, TaskAssignedMetadata,
 };
+use models_comms::ChannelType;
 use sns_client::{APNSPushNotification, Aps};
 use std::str::FromStr;
 use thiserror::Error;
@@ -209,9 +210,7 @@ impl BuildNotification for ChannelMessageSendMetadata {
             aps: Aps {
                 alert: Some(sns_client::Alert::Dictionary(sns_client::AlertDictionary {
                     title: Some(match self.common.channel_type {
-                        model_notifications::ChannelType::DirectMessage => {
-                            self.common.channel_name.to_string()
-                        }
+                        ChannelType::DirectMessage => self.common.channel_name.to_string(),
                         _ => format!(
                             "{} <{}>",
                             self.sender.email_part().local_part(),

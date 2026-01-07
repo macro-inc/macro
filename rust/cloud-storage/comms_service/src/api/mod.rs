@@ -1,9 +1,5 @@
-use crate::api::{activity::post_activity, context::AppState};
-use axum::{
-    Router,
-    middleware::from_fn_with_state,
-    routing::{IntoMakeService, post},
-};
+use crate::api::context::AppState;
+use axum::{Router, middleware::from_fn_with_state, routing::IntoMakeService};
 use tower_http::trace::TraceLayer;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
@@ -26,8 +22,7 @@ pub fn service(app_state: AppState) -> Service {
     let cors = macro_cors::cors_layer();
 
     let app = Router::new()
-        .merge(comms::inbound::comms_router(app_state.comms_state.clone()))
-        .route("/activity", post(post_activity::post_activity_handler))
+        .nest("/activity", activity::router())
         .nest("/channels", channels::router())
         .nest("/preview", preview::router())
         .nest("/attachments", attachments::router())

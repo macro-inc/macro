@@ -46,10 +46,10 @@ async fn process_single_chat(
 
         // Add an access record for each participant
         for participant in participants {
-            if participant.user_id.as_ref() != user_id {
+            if participant.user_id != user_id {
                 generated_items.push(UserItemAccess {
                     id: macro_uuid::generate_uuid_v7(),
-                    user_id: participant.user_id.to_string(),
+                    user_id: participant.user_id,
                     item_id: chat_id.clone(),
                     item_type: "chat".to_string(),
                     access_level: csp.access_level,

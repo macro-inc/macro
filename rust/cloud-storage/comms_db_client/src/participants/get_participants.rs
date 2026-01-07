@@ -1,51 +1,29 @@
 use anyhow::{Context, Result};
-use doppleganger::Doppleganger;
-use doppleganger::Mirror;
-use macro_user_id::cowlike::CowLike;
-use macro_user_id::user_id::MacroUserIdStr;
-use model::comms::ChannelId;
+use model::comms::ChannelParticipant;
+use model::comms::ParticipantRole;
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
-
-#[derive(sqlx::Type, Doppleganger, Debug)]
-#[dg(forward = models_comms::channel::ParticipantRole)]
-#[sqlx(rename_all = "lowercase")]
-pub enum DbParticipantRole {
-    Admin,
-    Member,
-    Owner,
-}
 
 #[tracing::instrument(skip(db))]
 pub async fn get_participants(
     db: &Pool<Postgres>,
     channel_id: &Uuid,
-) -> Result<Vec<models_comms::channel::ChannelParticipant>, sqlx::Error> {
-    let participants = sqlx::query!(
+) -> Result<Vec<ChannelParticipant>, sqlx::Error> {
+    let participants = sqlx::query_as!(
+        ChannelParticipant,
         r#"
         SELECT
             user_id,
             channel_id,
             joined_at,
             left_at,
-            role as "role: DbParticipantRole"
+            role as "role: ParticipantRole"
         FROM comms_channel_participants
         WHERE channel_id = $1
         ORDER BY joined_at DESC
         "#,
         channel_id
     )
-    .try_map(|row| {
-        Ok(models_comms::channel::ChannelParticipant {
-            channel_id: ChannelId(row.channel_id),
-            user_id: macro_user_id::user_id::MacroUserIdStr::parse_from_str(&row.user_id)
-                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
-                .into_owned(),
-            role: DbParticipantRole::mirror(row.role),
-            joined_at: row.joined_at,
-            left_at: row.left_at,
-        })
-    })
     .fetch_all(db)
     .await?;
 
@@ -78,8 +56,8 @@ pub async fn get_channel_participants_for_notification(
 pub async fn get_channel_participants_for_thread_id(
     db: &Pool<Postgres>,
     thread_id: &Uuid,
-) -> Result<Vec<MacroUserIdStr<'static>>> {
-    let participants: Vec<_> = sqlx::query!(
+) -> Result<Vec<String>> {
+    let participants: Vec<String> = sqlx::query!(
         r#"
         SELECT DISTINCT(m.sender_id) as id
         FROM comms_channel_participants cp
@@ -89,11 +67,7 @@ pub async fn get_channel_participants_for_thread_id(
         "#,
         thread_id
     )
-    .try_map(|participant| {
-        Ok(MacroUserIdStr::parse_from_str(&participant.id)
-            .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
-            .into_owned())
-    })
+    .map(|participant| participant.id)
     .fetch_all(db)
     .await?;
 
@@ -118,18 +92,10 @@ mod tests {
 
         assert_eq!(participants.len(), 4);
 
-        assert!(
-            participants.contains(&MacroUserIdStr::parse_from_str("macro|user1@test.com").unwrap())
-        );
-        assert!(
-            participants.contains(&MacroUserIdStr::parse_from_str("macro|user2@test.com").unwrap())
-        );
-        assert!(
-            participants.contains(&MacroUserIdStr::parse_from_str("macro|user3@test.com").unwrap())
-        );
-        assert!(
-            participants.contains(&MacroUserIdStr::parse_from_str("macro|user4@test.com").unwrap())
-        );
+        assert!(participants.contains(&"user1".to_string()));
+        assert!(participants.contains(&"user2".to_string()));
+        assert!(participants.contains(&"user3".to_string()));
+        assert!(participants.contains(&"user4".to_string()));
 
         Ok(())
     }

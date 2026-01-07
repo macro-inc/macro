@@ -77,7 +77,7 @@ mod tests {
             &"11111111-1111-1111-1111-111111111111"
                 .parse::<Uuid>()
                 .unwrap(),
-            "macro|user1@test.com",
+            "user1",
             PatchChannelOptions {
                 channel_name: Some("new channel name".to_string()),
             },
@@ -111,7 +111,7 @@ mod tests {
             &"11111111-1111-1111-1111-111111111111"
                 .parse::<Uuid>()
                 .unwrap(),
-            "macro|user2@test.com",
+            "user2",
             PatchChannelOptions {
                 channel_name: Some("new channel name".to_string()),
             },

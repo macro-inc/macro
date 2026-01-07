@@ -1,14 +1,27 @@
+use crate::chat::SoupChat;
 use crate::document::SoupDocument;
 use crate::email_thread::SoupEnrichedEmailThreadPreview;
 use crate::project::SoupProject;
-use crate::{chat::SoupChat, comms::SoupChannel};
 use chrono::{DateTime, Utc};
 use model_entity::{Entity, EntityType};
 use models_pagination::{Identify, SimpleSortMethod, SortOn};
 use serde::{Deserialize, Serialize};
+use strum::EnumString;
 use uuid::Uuid;
 
+#[derive(Debug, Clone, Eq, PartialEq, EnumString, Deserialize, Serialize)]
+#[strum(serialize_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub enum SoupItemType {
+    Document,
+    Chat,
+    Project,
+    EmailThread,
+}
+
 #[derive(Serialize, Deserialize, Debug)]
+#[cfg_attr(feature = "mock", derive(PartialEq, Eq))]
 #[serde(rename_all = "camelCase", tag = "tag", content = "data")]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub enum SoupItem {
@@ -16,7 +29,6 @@ pub enum SoupItem {
     Chat(SoupChat),
     Project(SoupProject),
     EmailThread(SoupEnrichedEmailThreadPreview),
-    Channel(SoupChannel),
 }
 
 impl SoupItem {
@@ -35,9 +47,6 @@ impl SoupItem {
             SoupItem::EmailThread(email_thread) => {
                 EntityType::EmailThread.with_entity_string(email_thread.thread.id.to_string())
             }
-            SoupItem::Channel(channel) => {
-                EntityType::Channel.with_entity_string(channel.channel.channel.id.0.to_string())
-            }
         }
     }
 
@@ -47,7 +56,6 @@ impl SoupItem {
             SoupItem::Chat(soup_chat) => soup_chat.updated_at,
             SoupItem::Project(soup_project) => soup_project.updated_at,
             SoupItem::EmailThread(soup_thread) => soup_thread.thread.updated_at,
-            SoupItem::Channel(soup_channel) => soup_channel.channel.channel.updated_at,
         }
     }
 }
@@ -99,18 +107,6 @@ impl SoupItem {
             (SoupItem::EmailThread(thread), SimpleSortMethod::ViewedUpdated) => {
                 thread.thread.viewed_at.unwrap_or(thread.thread.updated_at)
             }
-            (SoupItem::Channel(soup_channel), SimpleSortMethod::ViewedAt) => {
-                soup_channel.viewed_at.unwrap_or_default()
-            }
-            (SoupItem::Channel(soup_channel), SimpleSortMethod::UpdatedAt) => {
-                soup_channel.channel.channel.updated_at
-            }
-            (SoupItem::Channel(soup_channel), SimpleSortMethod::CreatedAt) => {
-                soup_channel.channel.channel.created_at
-            }
-            (SoupItem::Channel(soup_channel), SimpleSortMethod::ViewedUpdated) => soup_channel
-                .viewed_at
-                .unwrap_or(soup_channel.channel.channel.updated_at),
         }
     }
 }
@@ -124,7 +120,6 @@ impl Identify for SoupItem {
             SoupItem::Chat(soup_chat) => soup_chat.id,
             SoupItem::Project(soup_project) => soup_project.id,
             SoupItem::EmailThread(thread) => thread.thread.id,
-            SoupItem::Channel(soup_channel) => soup_channel.channel.channel.id.0,
         }
     }
 }

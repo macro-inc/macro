@@ -1,4 +1,4 @@
-import type { ApiChannelWithLatest } from '@service-comms/generated/models';
+import type { GetChannelsResponse } from '@service-comms/generated/models/getChannelsResponse';
 import { useQuery } from '@tanstack/solid-query';
 import { SERVER_HOSTS } from 'core/constant/servers';
 import { platformFetch } from 'core/util/platformFetch';
@@ -20,7 +20,7 @@ const fetchChannels = async ({ apiToken }: { apiToken?: string }) => {
   if (!response.ok)
     throw new Error('Failed to fetch channels', { cause: response });
 
-  const channels: ApiChannelWithLatest[] = await response.json();
+  const { channels }: GetChannelsResponse = await response.json();
   return channels;
 };
 
@@ -39,7 +39,7 @@ export function createChannelsQuery(options?: {
           name: channel.name ?? 'Unknown Channel',
           channelType: channel.channel_type,
           ownerId: channel.owner_id,
-          frecencyScore: channel.frecency_score ?? 0,
+          frecencyScore: channel.frecency_score,
           createdAt: Date.parse(channel.created_at),
           updatedAt: Date.parse(channel.updated_at),
           participantIds: channel.participants.map((p) => p.user_id),

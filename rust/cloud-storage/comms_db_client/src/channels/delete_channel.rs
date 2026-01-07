@@ -51,7 +51,7 @@ mod tests {
             "11111111-1111-1111-1111-111111111111"
                 .parse::<Uuid>()
                 .unwrap(),
-            "macro|user1@test.com",
+            "user1",
         )
         .await;
 

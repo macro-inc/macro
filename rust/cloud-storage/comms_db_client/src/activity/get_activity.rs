@@ -6,6 +6,36 @@ use sqlx::{Pool, Postgres};
 use std::collections::HashMap;
 use uuid::Uuid;
 
+#[tracing::instrument(skip(db), err)]
+pub async fn get_activities(db: &Pool<Postgres>, user_id: &str) -> Result<Vec<Activity>> {
+    sqlx::query_as!(
+        Activity,
+        r#"
+        SELECT 
+            a.id as "id!: Uuid",
+            a.user_id as "user_id!: String",
+            a.channel_id as "channel_id!: Uuid",
+            a.viewed_at as "viewed_at?: DateTime<Utc>",
+            a.interacted_at as "interacted_at?: DateTime<Utc>",
+            a.created_at as "created_at!: DateTime<Utc>",
+            a.updated_at as "updated_at!: DateTime<Utc>"
+        FROM comms_activity a
+        WHERE a.user_id = $1
+        ORDER BY 
+            GREATEST(
+                COALESCE(a.viewed_at, '1970-01-01'::timestamp),
+                COALESCE(a.interacted_at, '1970-01-01'::timestamp)
+            ) DESC,
+            a.created_at DESC
+        LIMIT 100
+        "#,
+        user_id
+    )
+    .fetch_all(db)
+    .await
+    .context("failed to get activities")
+}
+
 #[tracing::instrument(skip(db))]
 pub async fn get_activity_for_channel(
     db: &Pool<Postgres>,

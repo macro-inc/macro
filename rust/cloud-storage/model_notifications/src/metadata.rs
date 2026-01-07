@@ -1,29 +1,9 @@
 use crate::NotificationEventType;
-use doppleganger::Doppleganger;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
+use models_comms::ChannelType;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use utoipa::ToSchema;
-
-#[derive(Debug, Clone, Copy, ToSchema, Doppleganger, Serialize, Deserialize)]
-#[dg(backward = models_comms::channel::ChannelType)]
-pub enum ChannelType {
-    Public,
-    Organization,
-    Private,
-    DirectMessage,
-}
-
-impl ChannelType {
-    pub fn to_model_comms(self) -> models_comms::channel::ChannelType {
-        match self {
-            ChannelType::Public => models_comms::channel::ChannelType::Public,
-            ChannelType::Organization => models_comms::channel::ChannelType::Organization,
-            ChannelType::Private => models_comms::channel::ChannelType::Private,
-            ChannelType::DirectMessage => models_comms::channel::ChannelType::DirectMessage,
-        }
-    }
-}
 
 /// Common metadata for notifications on channels
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]

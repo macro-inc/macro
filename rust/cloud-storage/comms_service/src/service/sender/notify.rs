@@ -1,7 +1,6 @@
 use anyhow::Result;
 use comms_db_client::model::{Attachment, CountedReaction, Message, TypingAction};
 use comms_db_client::participants::get_participants::get_participants;
-use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -12,7 +11,7 @@ use crate::api::context::AppState;
 pub async fn notify_message(
     ctx: &AppState,
     message: Message,
-    participants: &[MacroUserIdStr<'_>],
+    participants: &[String],
 ) -> Result<()> {
     if participants.is_empty() {
         return Ok(());
@@ -23,7 +22,7 @@ pub async fn notify_message(
             serde_json::to_value(message)?,
             participants
                 .iter()
-                .map(|p| EntityType::User.with_entity_str(p.as_ref()))
+                .map(|p| EntityType::User.with_entity_str(p.as_str()))
                 .collect(),
         )
         .await?;
@@ -48,7 +47,7 @@ pub async fn notify_typing(ctx: &AppState, update: TypingUpdate) -> Result<()> {
             serde_json::to_value(update)?,
             participants
                 .iter()
-                .map(|p| EntityType::User.with_entity_str(p.user_id.as_ref()))
+                .map(|p| EntityType::User.with_entity_str(&p.user_id))
                 .collect(),
         )
         .await?;
@@ -72,7 +71,7 @@ pub async fn notify_reactions(ctx: &AppState, update: ReactionUpdate) -> Result<
             serde_json::to_value(update)?,
             participants
                 .iter()
-                .map(|p| EntityType::User.with_entity_str(p.user_id.as_ref()))
+                .map(|p| EntityType::User.with_entity_str(&p.user_id))
                 .collect(),
         )
         .await?;
@@ -96,7 +95,7 @@ pub async fn notify_attachments(ctx: &AppState, update: AttachmentUpdate) -> Res
             serde_json::to_value(update)?,
             participants
                 .iter()
-                .map(|p| EntityType::User.with_entity_str(p.user_id.as_ref()))
+                .map(|p| EntityType::User.with_entity_str(&p.user_id))
                 .collect(),
         )
         .await?;

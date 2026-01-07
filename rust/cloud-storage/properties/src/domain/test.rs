@@ -6,7 +6,6 @@ use crate::domain::{
     service::PropertiesService,
 };
 use anyhow::anyhow;
-use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::{EntityType, service::property_value::PropertyValue};
 use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
@@ -382,20 +381,15 @@ async fn test_handle_task_assignee_permissions_grants_permissions() {
     let mut perm_service = MockPermissionService::new();
 
     let task_id = Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc);
-    let assignee_ids = vec![
-        MacroUserIdStr::parse_from_str("macro|user1@test.com").unwrap(),
-        MacroUserIdStr::parse_from_str("macro|user2@test.com").unwrap(),
-    ];
+    let assignee_ids = vec!["user1".to_string(), "user2".to_string()];
 
     perm_service
         .expect_grant_permissions_to_task()
         .withf(move |user_ids, task_id_param| {
             user_ids.len() == 2
-                && user_ids
-                    .contains(&MacroUserIdStr::parse_from_str("macro|user1@test.com").unwrap())
-                && user_ids
-                    .contains(&MacroUserIdStr::parse_from_str("macro|user2@test.com").unwrap())
-                && task_id_param == task_id.to_string()
+                && user_ids.contains(&"user1".to_string())
+                && user_ids.contains(&"user2".to_string())
+                && task_id_param == &task_id.to_string()
         })
         .returning(|_, _| Box::pin(async { Ok(()) }));
 
@@ -429,7 +423,7 @@ async fn test_handle_task_assignee_permissions_empty_assignees() {
 async fn test_handle_task_assignee_permissions_no_service() {
     let repo = MockPropertiesRepo::new();
     let task_id = Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc);
-    let assignee_ids = vec![MacroUserIdStr::parse_from_str("macro|user1@test.com").unwrap()];
+    let assignee_ids = vec!["user1".to_string()];
 
     let service = PropertiesServiceImpl::new(
         repo,
@@ -454,7 +448,7 @@ async fn test_handle_task_assignee_permissions_error_propagates() {
     let mut perm_service = MockPermissionService::new();
 
     let task_id = Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc);
-    let assignee_ids = vec![MacroUserIdStr::parse_from_str("macro|user1@test.com").unwrap()];
+    let assignee_ids = vec!["user1".to_string()];
 
     perm_service
         .expect_grant_permissions_to_task()
@@ -478,7 +472,7 @@ async fn test_handle_task_assignee_permissions_error_propagates() {
 struct NotificationTestCase {
     task_id: Uuid,
     assigned_by: String,
-    assignees: Vec<MacroUserIdStr<'static>>,
+    assignees: Vec<String>,
     existing_assignees: Vec<String>,
     task_name: Option<String>,
     expected_notification_count: usize,
@@ -499,7 +493,7 @@ async fn check_notifications(test_case: NotificationTestCase) {
     // Mock: get current assignees
     repo.expect_get_entity_property_value()
         .withf(move |entity_id, entity_type, prop_id| {
-            entity_id == task_id.to_string()
+            entity_id == &task_id.to_string()
                 && *entity_type == EntityType::Task
                 && *prop_id == SystemPropertyKey::ASSIGNEES_UUID
         })
@@ -527,7 +521,7 @@ async fn check_notifications(test_case: NotificationTestCase) {
         let task_id_clone = task_id;
         let task_name_result = task_name.clone();
         repo.expect_get_document_name()
-            .withf(move |id| id == task_id_clone.to_string())
+            .withf(move |id| id == &task_id_clone.to_string())
             .returning(move |_| {
                 let name = task_name_result.clone();
                 Box::pin(async move { Ok(name) })
@@ -584,9 +578,9 @@ async fn test_handle_task_assignee_notifications_sends_to_new_assignees_only() {
         task_id: Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc),
         assigned_by: "macro|assigner@macro.com".to_string(),
         assignees: vec![
-            MacroUserIdStr::parse_from_str("macro|user1@macro.com").unwrap(),
-            MacroUserIdStr::parse_from_str("macro|user2@macro.com").unwrap(),
-            MacroUserIdStr::parse_from_str("macro|user3@macro.com").unwrap(), // existing, should not get notification
+            "macro|user1@macro.com".to_string(),
+            "macro|user2@macro.com".to_string(),
+            "macro|user3@macro.com".to_string(), // existing, should not get notification
         ],
         existing_assignees: vec!["macro|user3@macro.com".to_string()],
         task_name: Some("Test Task".to_string()),
@@ -603,8 +597,8 @@ async fn test_handle_task_assignee_notifications_filters_out_assigner() {
         task_id: Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc),
         assigned_by: "macro|assigner@macro.com".to_string(),
         assignees: vec![
-            MacroUserIdStr::parse_from_str("macro|user1@macro.com").unwrap(),
-            MacroUserIdStr::parse_from_str("macro|assigner@macro.com").unwrap(),
+            "macro|user1@macro.com".to_string(),
+            "macro|assigner@macro.com".to_string(),
         ],
         existing_assignees: vec![],
         task_name: Some("Test Task".to_string()),
@@ -620,7 +614,7 @@ async fn test_handle_task_assignee_notifications_no_new_assignees() {
     check_notifications(NotificationTestCase {
         task_id: Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc),
         assigned_by: "macro|assigner@macro.com".to_string(),
-        assignees: vec![MacroUserIdStr::parse_from_str("macro|user1@macro.com").unwrap()],
+        assignees: vec!["macro|user1@macro.com".to_string()],
         existing_assignees: vec!["macro|user1@macro.com".to_string()],
         task_name: None,                // Should not call get_entity_name
         expected_notification_count: 0, // no new assignees
@@ -635,7 +629,7 @@ async fn test_handle_task_assignee_notifications_no_service() {
     check_notifications(NotificationTestCase {
         task_id: Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc),
         assigned_by: "assigner".to_string(),
-        assignees: vec![MacroUserIdStr::parse_from_str("macro|user1@macro.com").unwrap()],
+        assignees: vec!["user1".to_string()],
         existing_assignees: vec![],
         task_name: None, // Should not call get_entity_name when no service
         expected_notification_count: 0,
@@ -665,7 +659,7 @@ async fn test_handle_task_assignee_notifications_task_name_none() {
     check_notifications(NotificationTestCase {
         task_id: Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc),
         assigned_by: "macro|assigner@macro.com".to_string(),
-        assignees: vec![MacroUserIdStr::parse_from_str("macro|user1@macro.com").unwrap()],
+        assignees: vec!["macro|user1@macro.com".to_string()],
         existing_assignees: vec![],
         task_name: None, // task doesn't exist yet
         expected_notification_count: 1,
@@ -688,9 +682,9 @@ async fn test_handle_task_assignees_property_calls_both_handlers() {
     let task_id = Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc);
     let entity_id = task_id.to_string();
     let assigned_by = "macro|assigner@macro.com".to_string();
-    let assignees = [
-        MacroUserIdStr::parse_from_str("macro|user1@macro.com").unwrap(),
-        MacroUserIdStr::parse_from_str("macro|user2@macro.com").unwrap(),
+    let assignees = vec![
+        "macro|user1@macro.com".to_string(),
+        "macro|user2@macro.com".to_string(),
     ];
 
     let value = Some(
@@ -699,7 +693,7 @@ async fn test_handle_task_assignees_property_calls_both_handlers() {
                 .iter()
                 .map(|id| models_properties::shared::EntityReference {
                     entity_type: EntityType::User,
-                    entity_id: id.to_string(),
+                    entity_id: id.clone(),
                     specific_message_id: None,
                 })
                 .collect(),
@@ -719,7 +713,7 @@ async fn test_handle_task_assignees_property_calls_both_handlers() {
     perm_service
         .expect_grant_permissions_to_task()
         .times(1)
-        .withf(move |user_ids, tid| user_ids.len() == 2 && tid == entity_id_clone)
+        .withf(move |user_ids, tid| user_ids.len() == 2 && tid == &entity_id_clone)
         .returning(|_, _| Box::pin(async { Ok(()) }));
 
     // Mock: notifications should be sent

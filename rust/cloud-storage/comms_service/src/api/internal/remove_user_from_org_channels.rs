@@ -28,7 +28,7 @@ pub async fn handler(
         remove_participant(
             &ctx.db,
             RemoveParticipantOptions {
-                channel_id: &channel.id.0,
+                channel_id: &channel.id,
                 user_id: &req.user_id,
             },
         )

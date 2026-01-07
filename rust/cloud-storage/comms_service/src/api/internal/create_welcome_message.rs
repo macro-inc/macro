@@ -12,7 +12,6 @@ use comms_db_client::{
     messages::create_message,
     model::ActivityType,
 };
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use tracing::Instrument;
 
 use crate::{api::context::AppState, service::sender::notify};
@@ -31,13 +30,17 @@ pub async fn handler(
 ) -> Result<Response, Response> {
     tracing::trace!("checking channels for user");
 
+    if req.welcome_user_id.is_empty() || req.to_user_id.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "empty user ids").into_response());
+    }
+
     tokio::spawn(
         {
             let ctx = app_state.clone();
             let welcome_user_id = req.welcome_user_id.clone();
             let to_user_id = req.to_user_id.clone();
             async move {
-                if let Err(e) = create_welcome_message(&ctx, welcome_user_id, to_user_id).await {
+                if let Err(e) = create_welcome_message(&ctx, &welcome_user_id, &to_user_id).await {
                     tracing::error!(error=?e, "unable to create welcome message");
                 }
             }
@@ -51,18 +54,17 @@ pub async fn handler(
 #[tracing::instrument(skip(ctx))]
 async fn create_welcome_message(
     ctx: &AppState,
-    welcome_user_id: MacroUserIdStr<'_>,
-    to_user_id: MacroUserIdStr<'_>,
+    welcome_user_id: &str,
+    to_user_id: &str,
 ) -> anyhow::Result<()> {
     let content = WELCOME_MESSAGE.to_string();
     let sleep_time = SLEEP_TIME_SECONDS;
-    let participants: Vec<_> = vec![welcome_user_id.copied(), to_user_id.copied()];
+    let participants: Vec<String> = vec![welcome_user_id.to_string(), to_user_id.to_string()];
 
     tracing::trace!("sleeping welcome message");
     tokio::time::sleep(std::time::Duration::from_secs(sleep_time)).await;
 
-    let maybe_dm =
-        get_dm::maybe_get_dm(&ctx.db, welcome_user_id.as_ref(), to_user_id.as_ref()).await?;
+    let maybe_dm = get_dm::maybe_get_dm(&ctx.db, welcome_user_id, to_user_id).await?;
 
     let (channel_id, action) = match maybe_dm {
         Some(private_id) => (private_id, GetOrCreateAction::Get),
@@ -74,7 +76,7 @@ async fn create_welcome_message(
                     owner_id: welcome_user_id.to_string(),
                     org_id: None,
                     channel_type: ChannelType::DirectMessage,
-                    participants: participants.iter().map(|x| x.to_string()).collect(),
+                    participants: participants.clone(),
                 },
             )
             .await?;
@@ -115,7 +117,7 @@ async fn create_welcome_message(
 
     upsert_activity(
         &ctx.db,
-        welcome_user_id.as_ref(),
+        welcome_user_id,
         &channel_id,
         &ActivityType::Interact,
     )

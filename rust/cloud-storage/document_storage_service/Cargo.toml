@@ -40,7 +40,6 @@ bzip2 = { workspace = true, default-features = false, features = [
 chrono = { workspace = true }
 clap = { workspace = true }
 cloudfront_sign = { workspace = true }
-comms = { path = "../comms", features = ["outbound"] }
 comms_service_client = { path = "../comms_service_client" }
 connection_gateway = { path = "../connection_gateway" }
 document_sub_type = { path = "../document_sub_type" }

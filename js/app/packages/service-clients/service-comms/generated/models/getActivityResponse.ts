@@ -4,5 +4,8 @@
  * comms_service
  * OpenAPI spec version: 0.1.0
  */
+import type { Activity } from './activity';
 
-export type ApiChannelWithLatestAllOfViewedAt = string | null;
+export interface GetActivityResponse {
+  items: Activity[];
+}

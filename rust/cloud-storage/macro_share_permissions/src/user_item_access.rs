@@ -35,7 +35,7 @@ pub async fn update_user_item_access<'t>(
                 })?
                 .into_iter()
                 // don't make another entry for the owner of the item
-                .filter(|p| p.user_id.as_ref() != user_id && p.left_at.is_none())
+                .filter(|p| p.user_id != user_id && p.left_at.is_none())
                 .map(|p| p.user_id)
                 .collect::<Vec<_>>();
 

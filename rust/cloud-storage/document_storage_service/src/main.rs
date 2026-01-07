@@ -4,10 +4,6 @@ use crate::{
     service::s3::S3,
 };
 use anyhow::Context;
-use comms::{
-    domain::service::ChannelServiceImpl,
-    outbound::{http::user_repo::UserRepoImpl, postgres::comms_repo::PgCommsRepo},
-};
 use comms_service_client::CommsServiceClient;
 use config::{Config, Environment};
 use connection_gateway_client::client::ConnectionGatewayClient;
@@ -189,19 +185,6 @@ async fn main() -> anyhow::Result<()> {
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
 
-    let auth_service_secret_key = match config.environment {
-        Environment::Local => config
-            .vars
-            .authentication_service_secret_key
-            .as_ref()
-            .to_string(),
-        _ => secretsmanager_client
-            .get_secret_value(&config.vars.authentication_service_secret_key)
-            .await
-            .context("unable to get auth service secret")?
-            .to_string(),
-    };
-
     let frecency_service = FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone()));
     let email_service =
         EmailServiceImpl::new(EmailPgRepo::new(db.clone()), frecency_service.clone());
@@ -226,19 +209,6 @@ async fn main() -> anyhow::Result<()> {
                 PgSoupRepo::new(db.clone()),
                 frecency_service,
                 email_service.clone(),
-                ChannelServiceImpl::new(
-                    PgCommsRepo { pool: db.clone() },
-                    UserRepoImpl::new(
-                        auth_service_secret_key,
-                        config
-                            .vars
-                            .authentication_service_url
-                            .as_ref()
-                            .parse()
-                            .context("AUTHENTICATION_SERVICE_URL must be a valid url")?,
-                    ),
-                    FrecencyPgStorage::new(db.clone()),
-                ),
             ),
             email_service,
         ),

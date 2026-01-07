@@ -17,10 +17,7 @@ export interface Channel {
   id: string;
   /** string name of the channel */
   name?: ChannelName;
-  /**
-   * id of the organization this channel belongs too
-   * @minimum 0
-   */
+  /** id of the organization this channel belongs too */
   org_id?: ChannelOrgId;
   /** id of the user who created the channel */
   owner_id: string;
