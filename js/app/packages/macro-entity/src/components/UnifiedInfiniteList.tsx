@@ -75,7 +75,7 @@ const mergeSearchEntities = <T extends EntityData>(
   let nameHighlight;
   if (serviceEntity.search.nameHighlight && localEntity.search.nameHighlight) {
     nameHighlight =
-      serviceEntity.search.nameHighlight.length >
+      serviceEntity.search.nameHighlight.length >=
       localEntity.search.nameHighlight.length
         ? serviceEntity.search.nameHighlight
         : localEntity.search.nameHighlight;
