@@ -73,11 +73,8 @@ import { SuspenseContextComp } from './SuspenseContext';
 import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
 import Visor from './Visor';
 import { setOpenWhichKey, WhichKey } from './WhichKey';
-import { warn } from '@tauri-apps/plugin-log';
 
 const { track, identify, TrackingEvents } = withAnalytics();
-
-warn("TESTING");
 
 const rootPreload: RoutePreloadFunc = async (args) => {
   useObserveRouting();
