@@ -33,6 +33,11 @@ setup_prepare:
 reset_db:
     just sqlx::reset_db {{ DATABASE_URL }}
 
+check_db_prod:
+    #!/usr/bin/env bash
+    echo -e "\033[33mChecking pending migrations on PRODUCTION database...\033[0m"
+    DATABASE_URL=$(../scripts/rds_database_url.sh macro-db-prod macrodb-password-prod macrodb) sqlx migrate info
+
 migrate_db_dev:
     DATABASE_URL=$(../scripts/rds_database_url.sh macro-db-dev macrodb-password-dev macrodb) sqlx migrate run
 
