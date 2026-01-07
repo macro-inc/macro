@@ -176,6 +176,8 @@ const deduplicateEntities = <T extends EntityData>(entities: T[]): T[] => {
  * Sorts entities for search mode
  */
 const sortEntitiesForSearch = <T extends EntityData>(a: T, b: T): number => {
+  if (!isSearchEntity(a) || !isSearchEntity(b)) return 0;
+
   const channelsWithNameMatchesFirst = (a: WithSearch<T>, b: WithSearch<T>) => {
     if (a.type === 'channel' && b.type !== 'channel' && a.search.nameHighlight)
       return -1;
@@ -184,17 +186,15 @@ const sortEntitiesForSearch = <T extends EntityData>(a: T, b: T): number => {
     return 0;
   };
 
-  const localFirst = (a: WithSearch<T>, b: WithSearch<T>) => {
-    if (a.search.source === 'local' && b.search.source !== 'local') return -1;
-    if (a.search.source !== 'local' && b.search.source === 'local') return 1;
+  const updatedAtFirst = (a: WithSearch<T>, b: WithSearch<T>) => {
+    if (a.updatedAt && b.updatedAt) return b.updatedAt - a.updatedAt;
+    if (a.updatedAt) return 1;
+    if (b.updatedAt) return -1;
     return 0;
   };
 
-  if (isSearchEntity(a) && isSearchEntity(b)) {
-    return channelsWithNameMatchesFirst(a, b) || localFirst(a, b);
-  }
-
-  return 0;
+  // TODO: we may want to sort exact name matches first for other items too
+  return channelsWithNameMatchesFirst(a, b) || updatedAtFirst(a, b);
 };
 
 const getGroupKey = (operations?: EntityQueryOperations): PropertyKey => {
