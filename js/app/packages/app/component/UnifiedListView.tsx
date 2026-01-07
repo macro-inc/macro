@@ -134,7 +134,6 @@ import {
   SplitToolbarLeft,
   SplitToolbarRight,
 } from './split-layout/components/SplitToolbar';
-import { useSplitLayout } from './split-layout/layout';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 import {
   type DisplayOptions,
@@ -958,8 +957,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     }
     return false;
   };
-
-  const { replaceOrInsertSplit, insertSplit } = useSplitLayout();
 
   const blockOrchestrator = useGlobalBlockOrchestrator();
   const gotoChannelNotification = async (notification: UnifiedNotification) => {

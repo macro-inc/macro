@@ -32,16 +32,16 @@ type SplitKey = `${BlockName | BlockAlias | 'component'}:${string}`;
 
 export type SplitContent =
   | {
-    type: BlockName | BlockAlias;
-    id: string;
-    params?: BlockComponentProps[BlockName];
-    aliasContext?: BlockAliasContext;
-  }
+      type: BlockName | BlockAlias;
+      id: string;
+      params?: BlockComponentProps[BlockName];
+      aliasContext?: BlockAliasContext;
+    }
   | {
-    type: 'component';
-    id: string;
-    params?: Record<string, string>;
-  };
+      type: 'component';
+      id: string;
+      params?: Record<string, string>;
+    };
 
 export type SplitContentType = SplitContent['type'];
 
@@ -161,11 +161,11 @@ export type SplitEventWithType =
   | ({ type: SplitEvent.Insert } & SplitEventPayload[SplitEvent.Insert])
   | ({ type: SplitEvent.Remove } & SplitEventPayload[SplitEvent.Remove])
   | ({
-    type: SplitEvent.ContentChange;
-  } & SplitEventPayload[SplitEvent.ContentChange])
+      type: SplitEvent.ContentChange;
+    } & SplitEventPayload[SplitEvent.ContentChange])
   | ({
-    type: SplitEvent.ReturnFocus;
-  } & SplitEventPayload[SplitEvent.ReturnFocus]);
+      type: SplitEvent.ReturnFocus;
+    } & SplitEventPayload[SplitEvent.ReturnFocus]);
 
 /**
  * If a split layout helper passes and aliased block type, make sure to wrap
@@ -425,13 +425,11 @@ export function createSplitLayout(
     ]);
   }
 
-  function buildSplit(
-    options: {
-      initialContent: SplitContent,
-      isDefault?: boolean,
-      referredFrom?: ReferredFrom
-    }
-  ): SplitState {
+  function buildSplit(options: {
+    initialContent: SplitContent;
+    isDefault?: boolean;
+    referredFrom?: ReferredFrom;
+  }): SplitState {
     const { initialContent, isDefault, referredFrom } = options;
     const id = newSplitId();
     const history = createHistory<SplitContent>();
@@ -843,9 +841,22 @@ export function createSplitLayout(
 
     for (const split of newSplits) {
       if (split.type === 'component') {
-        newState.push(buildSplit({ initialContent: split, isDefault: false, referredFrom: null }));
+        newState.push(
+          buildSplit({
+            initialContent: split,
+            isDefault: false,
+            referredFrom: null,
+          })
+        );
       } else {
-        newState.push(lookup(split.type, split.id) ?? buildSplit({ initialContent: split, isDefault: false, referredFrom: null }));
+        newState.push(
+          lookup(split.type, split.id) ??
+            buildSplit({
+              initialContent: split,
+              isDefault: false,
+              referredFrom: null,
+            })
+        );
       }
     }
 

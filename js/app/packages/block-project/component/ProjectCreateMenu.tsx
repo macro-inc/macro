@@ -75,7 +75,10 @@ function MenuContent(props: { projectId: string }) {
         : replaceSplit({ content: block, referredFrom: 'entity-actions-menu' });
     } else {
       const split = shouldInsert
-        ? insertSplit({ type: 'component', id: 'loading' }, 'entity-actions-menu')
+        ? insertSplit(
+            { type: 'component', id: 'loading' },
+            'entity-actions-menu'
+          )
         : replaceSplit({
             content: { type: 'component', id: 'loading' },
             referredFrom: 'entity-actions-menu',

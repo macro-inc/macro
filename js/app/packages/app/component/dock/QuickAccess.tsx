@@ -106,7 +106,10 @@ function QuickAccessItem(props: QuickAccessItemProps) {
           metadata.threadId || undefined
         );
       } else {
-        replaceOrInsertSplit({ type: 'channel', id: channelId }, 'quick-access');
+        replaceOrInsertSplit(
+          { type: 'channel', id: channelId },
+          'quick-access'
+        );
       }
     } else {
       // Default to channel for other notifications
