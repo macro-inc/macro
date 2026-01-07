@@ -7602,7 +7602,6 @@ dependencies = [
  "doppleganger",
  "email_service_client",
  "futures",
- "image",
  "lexical_client",
  "macro_client_errors",
  "model",
@@ -7620,7 +7619,6 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
- "webp",
 ]
 
 [[package]]
