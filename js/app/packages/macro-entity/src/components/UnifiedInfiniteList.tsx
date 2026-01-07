@@ -482,7 +482,6 @@ export function createUnifiedInfiniteList<T extends EntityData>({
 
     onCleanup(() => debouncedFetchMore.clear());
 
-    // const cacheKey = createMemo(() => (id ? `list-cache-${id}` : null));
     const cacheKey = `list-cache-${id}`;
 
     // compose method to cache scroll position when called
