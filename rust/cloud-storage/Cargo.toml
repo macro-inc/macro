@@ -130,7 +130,7 @@ async-trait = "0.1.86"
 aws-config = { version = "1.5.17", features = ["behavior-version-latest"] }
 aws-sdk-dynamodb = "1.66.0"
 aws-sdk-lambda = "1.69.0"
-aws-sdk-s3 = "1.77.0"
+aws-sdk-s3 = "1.119.0"
 aws-sdk-secretsmanager = "1.64.0"
 aws-sdk-sesv2 = "1.68.0"
 aws-sdk-sns = "1.61.0"
