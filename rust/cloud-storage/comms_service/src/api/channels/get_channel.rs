@@ -1,5 +1,5 @@
 use crate::api::{
-    context::AppState,
+    context::{AppState, ChannelImpl},
     extractors::{ChannelId, ChannelMember, ChannelName, ChannelParticipants, ParticipantAccess},
 };
 use anyhow::Result;
@@ -17,6 +17,7 @@ use comms_db_client::{
     model::{Activity, Attachment, CountedReaction, Message},
     reactions::{get_reactions::get_messages_reactions, group_reactions_by_message},
 };
+use doppleganger::Mirror;
 use futures::try_join;
 use model::comms::{Channel, ChannelParticipant};
 use serde::{Deserialize, Serialize};
@@ -71,7 +72,7 @@ pub async fn get_channel_handler(
     ChannelId(channel_id): ChannelId,
     ChannelParticipants(participants): ChannelParticipants,
     ChannelMember(channel_member): ChannelMember,
-    ChannelName(channel_name): ChannelName,
+    ChannelName(channel_name, ..): ChannelName<ChannelImpl>,
     Cached(access): Cached<ParticipantAccess>,
     Query(query): Query<GetChannelQuery>,
 ) -> Result<(StatusCode, Json<GetChannelResponse>), (StatusCode, String)> {
@@ -103,7 +104,7 @@ pub async fn get_channel_handler(
         StatusCode::OK,
         Json(GetChannelResponse {
             channel,
-            participants,
+            participants: <Vec<model::comms::ChannelParticipant>>::mirror(participants),
             messages,
             reactions,
             activity,

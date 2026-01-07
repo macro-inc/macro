@@ -1,5 +1,5 @@
 import { useMaybeBlockAliasedName } from '@core/block';
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import DeleteIcon from '@icon/bold/x-bold.svg';
 import PinIcon from '@icon/regular/push-pin.svg';
 import UnpinIcon from '@icon/regular/push-pin-slash.svg';
@@ -112,7 +112,7 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
                 isHovered() ? 'opacity-100' : 'opacity-0'
               }`}
             >
-              <IconButton
+              <DeprecatedIconButton
                 icon={isPinned() ? UnpinIcon : PinIcon}
                 theme="clear"
                 size="xs"
@@ -130,7 +130,7 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
                 isHovered() ? 'opacity-100' : 'opacity-0'
               }`}
             >
-              <IconButton
+              <DeprecatedIconButton
                 icon={DeleteIcon}
                 theme="clear"
                 size="xs"
@@ -155,7 +155,7 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
                 <Dialog.Title class="text-lg font-semibold text-ink">
                   Delete Property
                 </Dialog.Title>
-                <IconButton
+                <DeprecatedIconButton
                   icon={XIcon}
                   theme="clear"
                   size="sm"

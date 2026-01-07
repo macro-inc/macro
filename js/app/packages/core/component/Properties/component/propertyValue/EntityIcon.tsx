@@ -1,4 +1,4 @@
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { BlockLink } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import DeleteIcon from '@icon/bold/x-bold.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
@@ -64,7 +64,7 @@ export const EntityIcon: Component<EntityValueDisplayProps> = (props) => {
           }
         >
           <div class="absolute right-1 inset-y-0 flex items-center">
-            <IconButton
+            <DeprecatedIconButton
               icon={DeleteIcon}
               theme="clear"
               size="xs"

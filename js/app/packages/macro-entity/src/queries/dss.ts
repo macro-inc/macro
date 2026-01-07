@@ -27,6 +27,7 @@ import { SERVER_HOSTS } from 'core/constant/servers';
 import { platformFetch } from 'core/util/platformFetch';
 import type { Accessor } from 'solid-js';
 import type {
+  ChannelEntity,
   ChatEntity,
   DocumentEntity,
   EmailEntity,
@@ -198,10 +199,13 @@ const selectData: (
   options: {
     instructionsIdQuery: UseQueryResult<string | null | undefined, Error>;
   }
-) => (DocumentEntity | ChatEntity | ProjectEntity | EmailEntity)[] = (
-  data,
-  options
-) => {
+) => (
+  | DocumentEntity
+  | ChatEntity
+  | ProjectEntity
+  | EmailEntity
+  | ChannelEntity
+)[] = (data, options) => {
   return data.pages.flatMap(({ items }) =>
     items
       .filter(
@@ -211,7 +215,14 @@ const selectData: (
           item.data.id !== options.instructionsIdQuery.data
       )
       .map(
-        (item): DocumentEntity | ChatEntity | ProjectEntity | EmailEntity => {
+        (
+          item
+        ):
+          | DocumentEntity
+          | ChatEntity
+          | ProjectEntity
+          | EmailEntity
+          | ChannelEntity => {
           if (item.tag === 'chat') {
             return {
               ...item.data,
@@ -257,6 +268,18 @@ const selectData: (
             };
           }
 
+          if (item.tag === 'channel') {
+            const out: ChannelEntity = {
+              ...item.data.channel,
+              channelType: item.data.channel.channel_type,
+              type: 'channel',
+              id: item.data.channel.id,
+              name: item.data.channel.name || 'New Channel',
+              ownerId: item.data.channel.owner_id,
+            };
+            return out;
+          }
+
           return {
             ...item.data,
             type: item.tag,
@@ -271,62 +294,6 @@ const selectData: (
       )
   );
 };
-
-export function createDocumentsInfiniteQuery(
-  args?: GetItemsSoupParams | Accessor<GetItemsSoupParams>
-) {
-  const params = () => {
-    const argParams = typeof args === 'function' ? args() : args;
-    const limit =
-      argParams?.limit && argParams.limit > 0 && argParams.limit <= 500
-        ? argParams.limit
-        : 500;
-    return {
-      ...argParams,
-      limit,
-    };
-  };
-
-  const authQuery = createApiTokenQuery();
-  const instructionsIdQuery = useInstructionsMdIdQuery();
-
-  return useInfiniteQuery(() => ({
-    queryKey: queryKeys.document({
-      infinite: true,
-      ...params(),
-    }),
-    queryHash: dssQueryKeyHashFn(
-      queryKeys.document({
-        infinite: true,
-        ...params(),
-      }) as DssQueryKey
-    ),
-    queryFn: ({ pageParam }) =>
-      fetchPaginatedDocumentsGet({ apiToken: authQuery.data, ...pageParam }),
-    initialPageParam: params(),
-    getNextPageParam: ({ next_cursor: cursor }) =>
-      cursor ? { ...params(), cursor } : undefined,
-    select: (data) =>
-      data.pages.flatMap(({ items }) =>
-        items
-          .filter((item) => item.tag === 'document')
-          .filter((item) => item.data.id !== instructionsIdQuery.data)
-          .map(
-            (item): DocumentEntity => ({
-              ...item.data,
-              type: item.tag,
-              frecencyScore: item.frecency_score,
-              viewedAt: item.data.viewedAt ?? undefined,
-              fileType: item.data.fileType ?? undefined,
-              projectId: item.data.projectId ?? undefined,
-              subType: item.data.subType ?? undefined,
-              name: resolveDocumentEntityName(item.data),
-            })
-          )
-      ),
-    enabled: authQuery.isSuccess,
-  }));
-}
 
 export function createChatsInfiniteQuery(
   args?: GetItemsSoupParams | Accessor<GetItemsSoupParams>

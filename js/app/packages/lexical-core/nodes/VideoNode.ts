@@ -35,10 +35,22 @@ export class VideoNode extends MediaNode<{ controls: boolean }> {
     controls: boolean,
     width: number,
     height: number,
+    constrainedWidth?: number,
+    constrainedHeight?: number,
     scale?: number,
     key?: NodeKey
   ) {
-    super(srcType, id, url, width, height, scale, key);
+    super(
+      srcType,
+      id,
+      url,
+      width,
+      height,
+      constrainedWidth,
+      constrainedHeight,
+      scale,
+      key
+    );
     this.__controls = controls;
   }
 
@@ -87,6 +99,8 @@ export class VideoNode extends MediaNode<{ controls: boolean }> {
       node.__controls,
       node.__width,
       node.__height,
+      node.__constrainedWidth,
+      node.__constrainedHeight,
       node.__scale,
       node.__key
     );
@@ -119,10 +133,9 @@ export class VideoNode extends MediaNode<{ controls: boolean }> {
   exportDOM() {
     const result = super.exportDOM();
     if (result && result.element) {
-      (result.element as HTMLVideoElement).setAttribute(
-        'controls',
-        this.__controls.toString()
-      );
+      result.element
+        .querySelector('video')
+        ?.setAttribute('controls', this.__controls.toString());
     }
     return result;
   }
@@ -137,6 +150,10 @@ export class VideoNode extends MediaNode<{ controls: boolean }> {
         const scale = domNode.getAttribute('data-scale');
         const srcType = domNode.getAttribute('data-src-type');
         const id = domNode.getAttribute('data-video-id');
+        const constrainedWidth = domNode.getAttribute('data-constrained-width');
+        const constrainedHeight = domNode.getAttribute(
+          'data-constrained-height'
+        );
 
         if (src && id && srcType) {
           return {
@@ -149,10 +166,55 @@ export class VideoNode extends MediaNode<{ controls: boolean }> {
                 width: width ? parseInt(width, 10) : 0,
                 height: height ? parseInt(height, 10) : 0,
                 scale: scale ? parseFloat(scale) : 1,
+                constrainedWidth: constrainedWidth
+                  ? parseInt(constrainedWidth, 10)
+                  : undefined,
+                constrainedHeight: constrainedHeight
+                  ? parseInt(constrainedHeight, 10)
+                  : undefined,
               });
               return { node };
             },
             priority: 1,
+          };
+        }
+        return null;
+      },
+      div: (domNode: HTMLDivElement) => {
+        const video = domNode.querySelector('video');
+        if (!video) return null;
+
+        const src = video.getAttribute('src');
+        const controls = video.hasAttribute('controls');
+        const width = video.getAttribute('width');
+        const height = video.getAttribute('height');
+        const scale = video.getAttribute('data-scale');
+        const srcType = video.getAttribute('data-src-type');
+        const id = video.getAttribute('data-video-id');
+        const constrainedWidth = video.getAttribute('data-constrained-width');
+        const constrainedHeight = video.getAttribute('data-constrained-height');
+
+        if (src && id && srcType) {
+          return {
+            conversion: () => {
+              const node = $createVideoNode({
+                srcType: srcType,
+                id,
+                url: src,
+                controls: controls,
+                width: width ? parseInt(width, 10) : 0,
+                height: height ? parseInt(height, 10) : 0,
+                scale: scale ? parseFloat(scale) : 1,
+                constrainedWidth: constrainedWidth
+                  ? parseInt(constrainedWidth, 10)
+                  : undefined,
+                constrainedHeight: constrainedHeight
+                  ? parseInt(constrainedHeight, 10)
+                  : undefined,
+              });
+              return { node };
+            },
+            priority: 2, // Higher priority for our wrapped format
           };
         }
         return null;
@@ -198,6 +260,8 @@ export class VideoNode extends MediaNode<{ controls: boolean }> {
       controls: this.__controls,
       scale: this.__scale || 1,
       key: this.__key,
+      constrainedWidth: this.__constrainedWidth,
+      constrainedHeight: this.__constrainedHeight,
     };
   }
 }
@@ -209,6 +273,8 @@ export function $createVideoNode(params: {
   controls?: boolean;
   width?: number;
   height?: number;
+  constrainedWidth?: number;
+  constrainedHeight?: number;
   scale?: number;
 }) {
   return $applyNodeReplacement(
@@ -219,6 +285,8 @@ export function $createVideoNode(params: {
       params.controls ?? true,
       params.width ?? 0,
       params.height ?? 0,
+      params.constrainedWidth,
+      params.constrainedHeight,
       params.scale ?? 1
     )
   );

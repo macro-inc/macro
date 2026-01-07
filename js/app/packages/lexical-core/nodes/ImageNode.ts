@@ -35,10 +35,22 @@ export class ImageNode extends MediaNode<{ alt: string }> {
     alt: string,
     width: number,
     height: number,
+    constrainedWidth?: number,
+    constrainedHeight?: number,
     scale?: number,
     key?: NodeKey
   ) {
-    super(srcType, id, url, width, height, scale, key);
+    super(
+      srcType,
+      id,
+      url,
+      width,
+      height,
+      constrainedWidth,
+      constrainedHeight,
+      scale,
+      key
+    );
     this.__alt = alt;
   }
 
@@ -85,6 +97,8 @@ export class ImageNode extends MediaNode<{ alt: string }> {
       node.__alt,
       node.__width,
       node.__height,
+      node.__constrainedWidth,
+      node.__constrainedHeight,
       node.__scale,
       node.__key
     );
@@ -117,7 +131,7 @@ export class ImageNode extends MediaNode<{ alt: string }> {
   exportDOM() {
     const result = super.exportDOM();
     if (result && result.element) {
-      (result.element as HTMLImageElement).setAttribute('alt', this.__alt);
+      result.element.querySelector('img')?.setAttribute('alt', this.__alt);
     }
     return result;
   }
@@ -132,6 +146,10 @@ export class ImageNode extends MediaNode<{ alt: string }> {
         const scale = domNode.getAttribute('data-scale');
         const srcType = domNode.getAttribute('data-src-type');
         const id = domNode.getAttribute('data-image-id');
+        const constrainedWidth = domNode.getAttribute('data-constrained-width');
+        const constrainedHeight = domNode.getAttribute(
+          'data-constrained-height'
+        );
 
         if (src && id && srcType) {
           return {
@@ -144,10 +162,55 @@ export class ImageNode extends MediaNode<{ alt: string }> {
                 width: width ? parseInt(width, 10) : 0,
                 height: height ? parseInt(height, 10) : 0,
                 scale: scale ? parseFloat(scale) : 1,
+                constrainedWidth: constrainedWidth
+                  ? parseInt(constrainedWidth, 10)
+                  : undefined,
+                constrainedHeight: constrainedHeight
+                  ? parseInt(constrainedHeight, 10)
+                  : undefined,
               });
               return { node };
             },
             priority: 1,
+          };
+        }
+        return null;
+      },
+      div: (domNode: HTMLDivElement) => {
+        const img = domNode.querySelector('img');
+        if (!img) return null;
+
+        const src = img.getAttribute('src');
+        const alt = img.getAttribute('alt');
+        const width = img.getAttribute('width');
+        const height = img.getAttribute('height');
+        const scale = img.getAttribute('data-scale');
+        const srcType = img.getAttribute('data-src-type');
+        const id = img.getAttribute('data-image-id');
+        const constrainedWidth = img.getAttribute('data-constrained-width');
+        const constrainedHeight = img.getAttribute('data-constrained-height');
+
+        if (src && id && srcType) {
+          return {
+            conversion: () => {
+              const node = $createImageNode({
+                srcType: srcType,
+                id,
+                url: src,
+                alt: alt || '',
+                width: width ? parseInt(width, 10) : 0,
+                height: height ? parseInt(height, 10) : 0,
+                scale: scale ? parseFloat(scale) : 1,
+                constrainedWidth: constrainedWidth
+                  ? parseInt(constrainedWidth, 10)
+                  : undefined,
+                constrainedHeight: constrainedHeight
+                  ? parseInt(constrainedHeight, 10)
+                  : undefined,
+              });
+              return { node };
+            },
+            priority: 2, // Higher priority for our wrapped format
           };
         }
         return null;
@@ -189,6 +252,8 @@ export class ImageNode extends MediaNode<{ alt: string }> {
       alt: this.__alt,
       key: this.__key,
       scale: this.__scale,
+      constrainedWidth: this.__constrainedWidth,
+      constrainedHeight: this.__constrainedHeight,
     };
   }
 }
@@ -200,6 +265,8 @@ export function $createImageNode(params: {
   alt?: string;
   width?: number;
   height?: number;
+  constrainedWidth?: number;
+  constrainedHeight?: number;
   scale?: number;
 }) {
   return $applyNodeReplacement(
@@ -210,6 +277,8 @@ export function $createImageNode(params: {
       params.alt ?? '',
       params.width ?? 0,
       params.height ?? 0,
+      params.constrainedWidth,
+      params.constrainedHeight,
       params.scale ?? 1
     )
   );

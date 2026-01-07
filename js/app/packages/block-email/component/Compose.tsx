@@ -7,8 +7,8 @@ import { useSplitLayout } from '@app/component/split-layout/layout';
 import { useHasPaidAccess } from '@core/auth';
 import { CircleSpinner } from '@core/component/CircleSpinner';
 import { ClippedPanel } from '@core/component/ClippedPanel';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { RecipientSelector } from '@core/component/RecipientSelector';
-import { TextButton } from '@core/component/TextButton';
 import { toast } from '@core/component/Toast/Toast';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { useEmailLinks } from '@core/email-link';
@@ -17,6 +17,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import {
   type ContactInfo,
+  tryMacroId,
   useDisplayName,
   type WithCustomUserInput,
 } from '@core/user';
@@ -211,7 +212,7 @@ export function EmailCompose() {
     } else if (recipients.length === 1) {
       const recipientName =
         recipients[0].kind === 'user'
-          ? useDisplayName(recipients[0].data.id)[0]()
+          ? useDisplayName(tryMacroId(recipients[0].data.id))[0]()
           : recipients[0].data.email;
       return recipientName ? `Email to ${recipientName}` : 'Draft email';
     } else {
@@ -219,7 +220,7 @@ export function EmailCompose() {
         .slice(0, 2)
         .map((r) => {
           if (r.kind === 'user') {
-            return useDisplayName(r.data.id)[0]();
+            return useDisplayName(tryMacroId(r.data.id))[0]();
           }
           return r.data.email || 'Unknown';
         })
@@ -337,7 +338,7 @@ export function EmailCompose() {
                   You have not connected an email account.
                 </span>
                 <span class="grow" />
-                <TextButton
+                <DeprecatedTextButton
                   theme="base"
                   text="Connect Email"
                   onClick={connectEmail}
@@ -351,7 +352,7 @@ export function EmailCompose() {
                 <Caution class="size-4" />
                 <span class="text-sm">You must upgrade to send email.</span>
                 <span class="grow" />
-                <TextButton
+                <DeprecatedTextButton
                   theme="base"
                   text="Upgrade"
                   onClick={() => {

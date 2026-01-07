@@ -19,7 +19,10 @@ import { ShareButton } from '@core/component/TopBar/ShareButton';
 import { ENABLE_PROPERTIES_METADATA } from '@core/constant/featureFlags';
 import { blockMetadataSignal, blockTextSignal } from '@core/signal/load';
 import { useGetPermissions } from '@core/signal/permissions';
-import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
+import {
+  useBlockDocumentDownloadName,
+  useBlockDocumentName,
+} from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
 import Download from '@icon/regular/download-simple.svg';
 import { createCallback } from '@solid-primitives/rootless';
@@ -31,14 +34,14 @@ export const TopBar: Component = () => {
   const blockId = useBlockId();
   const text = blockTextSignal.get;
   const name = useBlockDocumentName();
+  const downloadName = useBlockDocumentDownloadName();
   const userPermissions = useGetPermissions();
 
   const downloadDocument = createCallback(() => {
-    const filename = name();
     const content = text();
     if (!text || !name) return;
     const file = new Blob([content ?? ''], { type: 'text/plain' });
-    downloadFile(file, filename);
+    downloadFile(file, downloadName());
     track(TrackingEvents.BLOCKCODE.FILEMENU.DOWNLOAD);
   });
 

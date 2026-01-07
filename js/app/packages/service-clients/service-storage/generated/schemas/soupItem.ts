@@ -8,5 +8,6 @@ import type { SoupItemOneOf } from './soupItemOneOf';
 import type { SoupItemOneOfThree } from './soupItemOneOfThree';
 import type { SoupItemOneOfFive } from './soupItemOneOfFive';
 import type { SoupItemOneOfSeven } from './soupItemOneOfSeven';
+import type { SoupItemOneOfNine } from './soupItemOneOfNine';
 
-export type SoupItem = SoupItemOneOf | SoupItemOneOfThree | SoupItemOneOfFive | SoupItemOneOfSeven;
+export type SoupItem = SoupItemOneOf | SoupItemOneOfThree | SoupItemOneOfFive | SoupItemOneOfSeven | SoupItemOneOfNine;

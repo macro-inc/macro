@@ -16,7 +16,6 @@ export { useQueryClient } from './queries/client';
 export {
   createChatsInfiniteQuery,
   createDeleteDssItemMutation,
-  createDocumentsInfiniteQuery,
   createDssInfiniteQuery,
 } from './queries/dss';
 export { createEmailsInfiniteQuery } from './queries/email';

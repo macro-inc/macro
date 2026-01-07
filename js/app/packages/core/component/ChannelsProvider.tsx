@@ -3,7 +3,7 @@ import { queryKeys } from '@macro-entity';
 import { commsServiceClient } from '@service-comms/client';
 import type {
   ActivityType,
-  ChannelWithLatest,
+  ApiChannelWithLatest as ChannelWithLatest,
 } from '@service-comms/generated/models';
 import type { Activity as ChannelActivity } from '@service-comms/generated/models/activity';
 import { type UseQueryResult, useQuery } from '@tanstack/solid-query';
@@ -29,7 +29,7 @@ export function createChannelActivityQuery() {
         throw new Error('Failed to fetch activity', { cause: result[0] });
       }
 
-      return result[1]?.items ?? [];
+      return result[1] ?? [];
     },
   }));
 }
@@ -44,7 +44,7 @@ export function createChannelsQuery() {
         throw new Error('Failed to fetch channels', { cause: result[0] });
       }
 
-      return result[1]?.channels ?? [];
+      return result[1] ?? [];
     },
   }));
 }

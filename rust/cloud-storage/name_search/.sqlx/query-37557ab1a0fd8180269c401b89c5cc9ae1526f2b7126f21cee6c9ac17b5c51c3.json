@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                p.id as entity_id,\n                p.name\n            FROM \"Project\" p\n            WHERE (p.\"userId\" = $1 OR p.id = ANY($2))\n                AND p.\"deletedAt\" IS NULL\n                AND p.name ILIKE $3\n            ORDER BY p.\"updatedAt\" DESC\n            LIMIT $4\n            OFFSET $5\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entity_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray",
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "37557ab1a0fd8180269c401b89c5cc9ae1526f2b7126f21cee6c9ac17b5c51c3"
+}

@@ -18,12 +18,16 @@ use uuid::Uuid;
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum DocumentLiteral {
     /// this node value filters by [FileType]
+    #[serde(rename = "ft")]
     FileType(FileType),
     /// this node value filters by document [Uuid]
+    #[serde(rename = "id")]
     Id(Uuid),
     /// this node value filters by project [Uuid]
+    #[serde(rename = "pid")]
     ProjectId(Uuid),
     /// this node value filters by document owner
+    #[serde(rename = "o")]
     Owner(MacroUserIdStr<'static>),
 }
 

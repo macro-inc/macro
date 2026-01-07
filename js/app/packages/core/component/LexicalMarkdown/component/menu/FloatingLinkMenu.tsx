@@ -1,7 +1,7 @@
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { UnfurlLink } from '@core/component/Link';
 import { ScopedPortal } from '@core/component/ScopedPortal';
-import { TextButton } from '@core/component/TextButton';
 import { toast } from '@core/component/Toast/Toast';
 import { Tooltip } from '@core/component/Tooltip';
 import clickOutside from '@core/directive/clickOutside';
@@ -438,7 +438,7 @@ export function FloatingLinkMenu(props: { closePopup?: () => void }) {
             <div class="relative flex items-center justify-end shrink">
               <div class="flex ease-in-out" classList={{ hidden: expanded() }}>
                 <Tooltip tooltip="Open in new tab">
-                  <IconButton
+                  <DeprecatedIconButton
                     onClick={openInNewTab}
                     class="p-1 hover:bg-hover hover-transition-bg"
                     theme="accent"
@@ -447,7 +447,7 @@ export function FloatingLinkMenu(props: { closePopup?: () => void }) {
                   />
                 </Tooltip>
                 <Tooltip tooltip="Edit link">
-                  <IconButton
+                  <DeprecatedIconButton
                     onClick={handleEditClick}
                     class="p-1 hover:bg-hover hover-transition-bg"
                     theme="clear"
@@ -456,7 +456,7 @@ export function FloatingLinkMenu(props: { closePopup?: () => void }) {
                   />
                 </Tooltip>
                 <Tooltip tooltip="Copy link">
-                  <IconButton
+                  <DeprecatedIconButton
                     onClick={copyLink}
                     class="p-1 hover:bg-hover hover-transition-bg"
                     theme="clear"
@@ -465,7 +465,7 @@ export function FloatingLinkMenu(props: { closePopup?: () => void }) {
                   />
                 </Tooltip>
                 <Tooltip tooltip="Remove link">
-                  <IconButton
+                  <DeprecatedIconButton
                     onClick={handleUnlink}
                     class="p-1 hover:bg-hover hover-transition-bg"
                     theme="clear"
@@ -522,7 +522,7 @@ export function FloatingLinkMenu(props: { closePopup?: () => void }) {
             }}
           >
             <Tooltip tooltip="Apply link changes">
-              <TextButton
+              <DeprecatedTextButton
                 onClick={handleSubmit}
                 class="focus:ring-failure focus:ring-2 focus:ring-offset-2"
                 theme="base"

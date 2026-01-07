@@ -74,7 +74,6 @@ pub struct UploadAttachmentContext<'a> {
 }
 
 /// Upload an email attachment to DSS as a document or SFS as media.
-#[tracing::instrument(skip(ctx), err)]
 pub async fn upload_attachment(
     ctx: UploadAttachmentContext<'_>,
     args: &AttachmentUploadArgs,

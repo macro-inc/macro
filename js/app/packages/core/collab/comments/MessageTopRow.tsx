@@ -1,4 +1,4 @@
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { UserIcon } from '@core/component/UserIcon';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { idToDisplayName } from '@core/user';
@@ -12,7 +12,7 @@ import { CommentsContext } from './Thread';
 // SCUFFED: how should we define these tag colors?
 const NewTag = () => {
   return (
-    <div class="py-0.5 px-1.5 rounded ml-1 bg-amber-100 text-amber-700 text-xs">
+    <div class="py-0.5 px-1.5 rounded ml-1 bg-[oklch(0.962_0.059_95.617)] text-[oklch(0.555_0.163_48.998)] text-xs">
       New
     </div>
   );
@@ -134,7 +134,7 @@ export function MessageTopRow(props: {
         <Show when={canComment()}>
           <Show when={props.isOwned}>
             {props.toggleResolve && (
-              <IconButton
+              <DeprecatedIconButton
                 tooltip={{ label: 'Resolve Comment' }}
                 icon={Check}
                 theme={props.isResolved ? 'accent' : 'clear'}
@@ -142,7 +142,7 @@ export function MessageTopRow(props: {
               />
             )}
             {props.enableEditing && (
-              <IconButton
+              <DeprecatedIconButton
                 tooltip={{ label: 'Edit Comment' }}
                 theme="clear"
                 icon={NotePencil}
@@ -151,7 +151,7 @@ export function MessageTopRow(props: {
             )}
           </Show>
           <Show when={!props.isEditing && (props.isOwned || isDocumentOwner())}>
-            <IconButton
+            <DeprecatedIconButton
               tooltip={{ label: 'Delete Comment' }}
               theme="clear"
               icon={Trash}

@@ -4,6 +4,7 @@ import { useBlockId } from '@core/block';
 import type { Completion } from '@core/client/completion';
 import { structuredOutputCompletion } from '@core/client/structuredOutput';
 import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMessageMarkdown';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { AskAi } from '@core/component/GeneralizedPopup/AskAI';
 import { GeneralizedPopup } from '@core/component/GeneralizedPopup/Popup';
 import { LocationHighlight } from '@core/component/LexicalMarkdown/component/core/Highlights';
@@ -26,7 +27,6 @@ import {
   REMOVE_HIGHLIGHT_SELECTED_NODES,
 } from '@core/component/LexicalMarkdown/plugins/popup/popupPlugin';
 import { ScopedPortal } from '@core/component/ScopedPortal';
-import { TextButton } from '@core/component/TextButton';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { blockElementSignal } from '@core/signal/blockElement';
@@ -409,7 +409,7 @@ export function MarkdownPopup(props: {
           >
             <FormatTools withinPopup />
           </Show>
-          <TextButton
+          <DeprecatedTextButton
             width={'w-12'}
             theme="clear"
             icon={

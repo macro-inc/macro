@@ -1,9 +1,12 @@
 import { useBlockId } from '@core/block';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { getPermissions, Permissions } from '@core/component/SharePermissions';
-import { TextButton } from '@core/component/TextButton';
 import { ShareModal } from '@core/component/TopBar/ShareButton';
-import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
+import {
+  useBlockDocumentDownloadName,
+  useBlockDocumentName,
+} from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
 import DownloadSimple from '@icon/regular/download-simple.svg';
 import ShareFat from '@icon/regular/share-fat.svg';
@@ -31,6 +34,7 @@ export default function BlockUnknown() {
 const Unknown = () => {
   const documentId = useBlockId();
   const fileName = useBlockDocumentName();
+  const downloadName = useBlockDocumentDownloadName();
   const [isSharePermOpen, setIsSharePermOpen] = createSignal(false);
   const getBlob = useGetFileBlob();
 
@@ -44,7 +48,7 @@ const Unknown = () => {
   const downloadDocument = createCallback(async () => {
     try {
       const blob = await getBlob();
-      downloadFile(blob, fileName());
+      downloadFile(blob, downloadName());
     } catch (e) {
       console.error('error downloading file', e);
       toast.failure('Error downloading file');
@@ -60,14 +64,14 @@ const Unknown = () => {
         </div>
 
         <div class="flex flex-row gap-2 items-center">
-          <TextButton
+          <DeprecatedTextButton
             text="Share"
             theme="accent"
             icon={ShareFat}
             onClick={() => setIsSharePermOpen(true)}
           />
 
-          <TextButton
+          <DeprecatedTextButton
             text="Download"
             theme="accent"
             icon={DownloadSimple}

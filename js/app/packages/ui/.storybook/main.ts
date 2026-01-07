@@ -5,14 +5,7 @@ import wasm from 'vite-plugin-wasm';
 import tsconfigpaths from 'vite-tsconfig-paths';
 
 const config: StorybookConfig = {
-  stories: [
-    // @ui package stories
-    '../**/*.mdx',
-    '../**/*.stories.@(js|jsx|mjs|ts|tsx)',
-    // Other packages stories
-    '../../core/**/*.mdx',
-    '../../core/**/*.stories.@(js|jsx|mjs|ts|tsx)',
-  ],
+  stories: ['../**/*.mdx', '../**/*.stories.@(js|jsx|mjs|ts|tsx)'],
   addons: ['@storybook/addon-docs'],
   framework: {
     name: 'storybook-solidjs-vite',

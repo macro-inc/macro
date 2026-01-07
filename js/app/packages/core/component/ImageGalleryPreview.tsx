@@ -22,7 +22,7 @@ import {
   Show,
 } from 'solid-js';
 import { platformFetch } from '../util/platformFetch';
-import { IconButton } from './IconButton';
+import { DeprecatedIconButton } from './DeprecatedIconButton';
 import { DropdownMenuContent, MenuItem, MenuSeparator } from './Menu';
 import { toast } from './Toast/Toast';
 
@@ -455,11 +455,14 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
                       onClick={() => setClickedIndex(index())}
                       disabled={props.isContext}
                     >
-                      <IconButton icon={ExpandIcon} theme="clear" />
+                      <DeprecatedIconButton icon={ExpandIcon} theme="clear" />
                     </Dialog.Trigger>
                     <DropdownMenu>
                       <DropdownMenu.Trigger disabled={props.isContext}>
-                        <IconButton icon={ThreeDotsIcon} theme="clear" />
+                        <DeprecatedIconButton
+                          icon={ThreeDotsIcon}
+                          theme="clear"
+                        />
                       </DropdownMenu.Trigger>
                       <DropdownMenu.Portal>
                         <div class="fixed inset-0 z-modal-overlay bg-transparent" />
@@ -529,21 +532,21 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
               }}
               style={{ 'z-index': stackingContext.zModal + 1 }}
             >
-              <IconButton
+              <DeprecatedIconButton
                 icon={ClipboardIcon}
                 theme="clear"
                 onClick={copyToClipboard}
                 onTouchEnd={copyToClipboard}
                 tooltip={{ label: 'Copy image' }}
               />
-              <IconButton
+              <DeprecatedIconButton
                 icon={DownloadIcon}
                 theme="clear"
                 onClick={downloadImage}
                 tooltip={{ label: 'Download image' }}
               />
               <Dialog.CloseButton>
-                <IconButton
+                <DeprecatedIconButton
                   icon={XIcon}
                   theme="clear"
                   tooltip={{ label: 'Close' }}

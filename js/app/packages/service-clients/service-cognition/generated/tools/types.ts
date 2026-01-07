@@ -541,339 +541,443 @@ export interface UnifiedSearchResponseOutput {
     results: (
       | {
           /**
-           * The document id
+           * The id of the document
            */
           document_id: string;
           /**
-           * The document name
+           * The name of the document
            */
           document_name: string;
           /**
-           * The file type
+           * The search results for the document
+           * This may be empty if the search result match was on the document name only
            */
-          file_type: string;
+          document_search_results: {
+            /**
+             * The highlights for the document
+             */
+            highlight: {
+              /**
+               * The highlight match on the bcc (email only)
+               */
+              bcc?: string[];
+              /**
+               * The highlight match on the cc (email only)
+               */
+              cc?: string[];
+              /**
+               * The highlight match on the content field
+               */
+              content?: string[];
+              /**
+               * The highlight match on the name field
+               */
+              name?: string | null;
+              /**
+               * The highlight match on the recipients (email only)
+               */
+              recipients?: string[];
+              /**
+               * The highlight match on the sender (email only)
+               */
+              sender?: string | null;
+              /**
+               * The highlight match on the user (owner) of the entity
+               */
+              user_id?: string | null;
+            };
+            /**
+             * The node id for the document.
+             * This is only useful for markdown at the moment
+             * This will only be provided if the match was on content
+             */
+            node_id?: string | null;
+            /**
+             * The raw content of the document.
+             * This is only included for markdown files and will be the raw json node of the match
+             */
+            raw_content?: string | null;
+            /**
+             * The score of the result
+             */
+            score?: number | null;
+          }[];
           /**
-           * The highlights on the document
+           * The file type of the document
            */
-          highlight: {
-            /**
-             * The highlight match on the bcc (email only)
-             */
-            bcc?: string[];
-            /**
-             * The highlight match on the cc (email only)
-             */
-            cc?: string[];
-            /**
-             * The highlight match on the content field
-             */
-            content?: string[];
-            /**
-             * The highlight match on the name field
-             */
-            name?: string | null;
-            /**
-             * The highlight match on the recipients (email only)
-             */
-            recipients?: string[];
-            /**
-             * The highlight match on the sender (email only)
-             */
-            sender?: string | null;
-            /**
-             * The highlight match on the user (owner) of the entity
-             */
-            user_id?: string | null;
-          };
+          file_type?: string | null;
           /**
-           * The node id
+           * Standardized fields that all item types will share.
+           * These field names are being aligned across all item types
+           * for consistency in our data model.
            */
-          node_id: string;
+          id: string;
           /**
-           * The owner id
+           * Metadata from the database. None if the document doesn't exist in the database.
            */
+          metadata?: {
+            created_at: number;
+            deleted_at?: number | null;
+            project_id?: string | null;
+            updated_at: number;
+            viewed_at?: number | null;
+          } | null;
+          name: string;
           owner_id: string;
           /**
-           * The raw content of the document
+           * The sub type of the document if present.
            */
-          raw_content?: string | null;
+          sub_type?: 'task' | null;
           type: 'document';
-          /**
-           * The time the document was last updated
-           */
-          updated_at: string;
         }
       | {
           /**
-           * The chat id
+           * The id of the chat
            */
           chat_id: string;
           /**
-           * The chat message id
+           * The search results for the chat
+           * This may be empty if the search result match was on the chat title only
            */
-          chat_message_id: string;
+          chat_search_results: {
+            /**
+             * The chat message id for the chat
+             * This is only present if the search match was on the chat message content
+             */
+            chat_message_id?: string | null;
+            /**
+             * The highlights for the chat message
+             */
+            highlight: {
+              /**
+               * The highlight match on the bcc (email only)
+               */
+              bcc?: string[];
+              /**
+               * The highlight match on the cc (email only)
+               */
+              cc?: string[];
+              /**
+               * The highlight match on the content field
+               */
+              content?: string[];
+              /**
+               * The highlight match on the name field
+               */
+              name?: string | null;
+              /**
+               * The highlight match on the recipients (email only)
+               */
+              recipients?: string[];
+              /**
+               * The highlight match on the sender (email only)
+               */
+              sender?: string | null;
+              /**
+               * The highlight match on the user (owner) of the entity
+               */
+              user_id?: string | null;
+            };
+            /**
+             * The role of the chat message
+             * This is only present if the search match was on the chat message content
+             */
+            role?: string | null;
+            /**
+             * The score of the result
+             */
+            score?: number | null;
+          }[];
           /**
-           * The highlights on the chat
+           * Standardized fields that all item types will share.
+           * These field names are being aligned across all item types
+           * for consistency in our data model.
            */
-          highlight: {
-            /**
-             * The highlight match on the bcc (email only)
-             */
-            bcc?: string[];
-            /**
-             * The highlight match on the cc (email only)
-             */
-            cc?: string[];
-            /**
-             * The highlight match on the content field
-             */
-            content?: string[];
-            /**
-             * The highlight match on the name field
-             */
-            name?: string | null;
-            /**
-             * The highlight match on the recipients (email only)
-             */
-            recipients?: string[];
-            /**
-             * The highlight match on the sender (email only)
-             */
-            sender?: string | null;
-            /**
-             * The highlight match on the user (owner) of the entity
-             */
-            user_id?: string | null;
-          };
+          id: string;
           /**
-           * The role
+           * Metadata from the database. None if the chat doesn't exist in the database.
            */
-          role: string;
-          /**
-           * The title
-           */
-          title: string;
+          metadata?: {
+            created_at: number;
+            deleted_at?: number | null;
+            project_id?: string | null;
+            updated_at: number;
+            viewed_at?: number | null;
+          } | null;
+          name: string;
+          owner_id: string;
           type: 'chat';
           /**
-           * The time the chat was last updated
-           */
-          updated_at: string;
-          /**
-           * The user id
+           * The id of the creator of the chat
            */
           user_id: string;
         }
       | {
+          created_at: number;
           /**
-           * The bcc
+           * The search results for the document
+           * This may be empty if the search result match was on the email subject only
            */
-          bcc: string[];
-          /**
-           * The cc
-           */
-          cc: string[];
-          /**
-           * The highlights on the email
-           */
-          highlight: {
+          email_message_search_results: {
             /**
-             * The highlight match on the bcc (email only)
+             * This is only present if the search result is on the message content
              */
-            bcc?: string[];
+            bcc: string[];
             /**
-             * The highlight match on the cc (email only)
+             * This is only present if the search result is on the message content
              */
-            cc?: string[];
+            cc: string[];
             /**
-             * The highlight match on the content field
+             * The highlights for the email message
              */
-            content?: string[];
+            highlight: {
+              /**
+               * The highlight match on the bcc (email only)
+               */
+              bcc?: string[];
+              /**
+               * The highlight match on the cc (email only)
+               */
+              cc?: string[];
+              /**
+               * The highlight match on the content field
+               */
+              content?: string[];
+              /**
+               * The highlight match on the name field
+               */
+              name?: string | null;
+              /**
+               * The highlight match on the recipients (email only)
+               */
+              recipients?: string[];
+              /**
+               * The highlight match on the sender (email only)
+               */
+              sender?: string | null;
+              /**
+               * The highlight match on the user (owner) of the entity
+               */
+              user_id?: string | null;
+            };
             /**
-             * The highlight match on the name field
+             * This is only present if the search result is on the message content
              */
-            name?: string | null;
+            labels: string[];
             /**
-             * The highlight match on the recipients (email only)
+             * The email message id.
+             * This is only present if the search result is on the message content
              */
-            recipients?: string[];
+            message_id?: string | null;
             /**
-             * The highlight match on the sender (email only)
+             * The pretty sender.
+             * If the match is on the subject, the pretty sender is the latest sender on the thread.
+             * This could be the sender's email if there is no contact name for the sender.
              */
-            sender?: string | null;
+            pretty_sender: string;
             /**
-             * The highlight match on the user (owner) of the entity
+             * This is only present if the search result is on the message content
              */
-            user_id?: string | null;
-          };
+            recipients: string[];
+            /**
+             * The score of the result
+             */
+            score?: number | null;
+            /**
+             * The sender.
+             * If the match is on the subject, the sender is the latest sender on the thread.
+             */
+            sender: string;
+            /**
+             * When the email message was sent
+             * This is only present if the search result is on the message content
+             */
+            sent_at?: number | null;
+          }[];
           /**
-           * The labels
+           * Standardized fields that all item types will share.
+           * These field names are being aligned across all item types
+           * for consistency in our data model.
            */
-          labels: string[];
+          id: string;
           /**
-           * The link id
+           * Subject of the email thread
            */
-          link_id: string;
+          name?: string | null;
+          owner_id: string;
+          snippet?: string | null;
           /**
-           * The message id
-           */
-          message_id: string;
-          /**
-           * The recipients
-           */
-          recipients: string[];
-          /**
-           * The sender
-           */
-          sender: string;
-          /**
-           * The time the email was sent
-           */
-          sent_at?: string | null;
-          /**
-           * The subject
+           * The subject of the email
+           * This is only present if the search result is on the message content
            */
           subject?: string | null;
           /**
-           * The thread id
+           * The id of the email thread
            */
           thread_id: string;
           type: 'email';
+          updated_at: number;
           /**
-           * The time the email was last updated
-           */
-          updated_at: string;
-          /**
-           * The user id
+           * The id of the owner of the email thread
            */
           user_id: string;
+          viewed_at?: number | null;
         }
       | {
           /**
-           * The channel id
+           * The id of the channel
            */
           channel_id: string;
           /**
-           * The channel type
+           * The search results for the channel
+           * This may be empty if the search result match was not on content
+           */
+          channel_message_search_results: {
+            /**
+             * When the channel message was created
+             * This is only prsent if the search result is on the message content
+             */
+            created_at?: number | null;
+            /**
+             * The highlights for the channel message
+             */
+            highlight: {
+              /**
+               * The highlight match on the bcc (email only)
+               */
+              bcc?: string[];
+              /**
+               * The highlight match on the cc (email only)
+               */
+              cc?: string[];
+              /**
+               * The highlight match on the content field
+               */
+              content?: string[];
+              /**
+               * The highlight match on the name field
+               */
+              name?: string | null;
+              /**
+               * The highlight match on the recipients (email only)
+               */
+              recipients?: string[];
+              /**
+               * The highlight match on the sender (email only)
+               */
+              sender?: string | null;
+              /**
+               * The highlight match on the user (owner) of the entity
+               */
+              user_id?: string | null;
+            };
+            /**
+             * The channel message id
+             * This is only prsent if the search result is on the message content
+             */
+            message_id?: string | null;
+            /**
+             * The score of the result
+             */
+            score?: number | null;
+            /**
+             * The sender id
+             * This is only prsent if the search result is on the message content
+             */
+            sender_id?: string | null;
+            /**
+             * The channel message thread id
+             */
+            thread_id?: string | null;
+            /**
+             * When the channel message was last updated
+             * This is only prsent if the search result is on the message content
+             */
+            updated_at?: number | null;
+          }[];
+          /**
+           * The type of channel
            */
           channel_type: string;
           /**
-           * The time the channel message was created
+           * Standardized fields that all item types will share.
+           * These field names are being aligned across all item types
+           * for consistency in our data model.
            */
-          created_at: string;
+          id: string;
           /**
-           * The highlights on the channel message
+           * Metadata from the database. None if the channel doesn't exist in the database.
            */
-          highlight: {
-            /**
-             * The highlight match on the bcc (email only)
-             */
-            bcc?: string[];
-            /**
-             * The highlight match on the cc (email only)
-             */
-            cc?: string[];
-            /**
-             * The highlight match on the content field
-             */
-            content?: string[];
-            /**
-             * The highlight match on the name field
-             */
-            name?: string | null;
-            /**
-             * The highlight match on the recipients (email only)
-             */
-            recipients?: string[];
-            /**
-             * The highlight match on the sender (email only)
-             */
-            sender?: string | null;
-            /**
-             * The highlight match on the user (owner) of the entity
-             */
-            user_id?: string | null;
-          };
+          metadata?: {
+            created_at: number;
+            interacted_at?: number | null;
+            updated_at: number;
+            viewed_at?: number | null;
+          } | null;
           /**
-           * The mentions
+           * we don't store this for channels atm but keeping it here for consistency
            */
-          mentions: string[];
-          /**
-           * The message id
-           */
-          message_id: string;
-          /**
-           * The org id
-           */
-          org_id?: number | null;
-          /**
-           * The sender id
-           */
-          sender_id: string;
-          /**
-           * The thread id
-           */
-          thread_id?: string | null;
+          owner_id?: string | null;
           type: 'channel';
-          /**
-           * The time the channel message was last updated
-           */
-          updated_at: string;
         }
       | {
+          created_at: number;
           /**
-           * The time the project was created
+           * Standardized fields that all item types will share.
+           * These field names are being aligned across all item types
+           * for consistency in our data model.
            */
-          created_at: string;
+          id: string;
           /**
-           * The highlights on the project
+           * Metadata from the database. None if the project doesn't exist in the database.
            */
-          highlight: {
+          metadata?: {
+            created_at: number;
+            deleted_at?: number | null;
+            parent_project_id?: string | null;
+            updated_at: number;
+            viewed_at?: number | null;
+          } | null;
+          name: string;
+          owner_id: string;
+          project_search_results: {
+            highlight: {
+              /**
+               * The highlight match on the bcc (email only)
+               */
+              bcc?: string[];
+              /**
+               * The highlight match on the cc (email only)
+               */
+              cc?: string[];
+              /**
+               * The highlight match on the content field
+               */
+              content?: string[];
+              /**
+               * The highlight match on the name field
+               */
+              name?: string | null;
+              /**
+               * The highlight match on the recipients (email only)
+               */
+              recipients?: string[];
+              /**
+               * The highlight match on the sender (email only)
+               */
+              sender?: string | null;
+              /**
+               * The highlight match on the user (owner) of the entity
+               */
+              user_id?: string | null;
+            };
             /**
-             * The highlight match on the bcc (email only)
+             * The score of the result
              */
-            bcc?: string[];
-            /**
-             * The highlight match on the cc (email only)
-             */
-            cc?: string[];
-            /**
-             * The highlight match on the content field
-             */
-            content?: string[];
-            /**
-             * The highlight match on the name field
-             */
-            name?: string | null;
-            /**
-             * The highlight match on the recipients (email only)
-             */
-            recipients?: string[];
-            /**
-             * The highlight match on the sender (email only)
-             */
-            sender?: string | null;
-            /**
-             * The highlight match on the user (owner) of the entity
-             */
-            user_id?: string | null;
-          };
-          /**
-           * The project id
-           */
-          project_id: string;
-          /**
-           * The project name
-           */
-          project_name: string;
+            score?: number | null;
+          }[];
           type: 'project';
-          /**
-           * The time the project was last updated
-           */
-          updated_at: string;
-          /**
-           * The id of the user who created the project
-           */
-          user_id: string;
+          updated_at: number;
         }
     )[];
     /**

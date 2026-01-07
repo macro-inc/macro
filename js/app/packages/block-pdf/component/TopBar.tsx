@@ -83,21 +83,23 @@ export function TopBar() {
     const data = (await documentProxy.getData()) as Uint8Array<ArrayBuffer>;
     const blob = new Blob([data], { type: 'application/pdf' });
 
+    const fileNameWithExtension = `${fileName()}.pdf`;
+
     try {
       // No need to export if there are no modifications
       // comments are outside of the modification data so handled separately
       if (!hasModificationData() && hasComments() === false)
-        return downloadFile(blob, `${fileName()}.pdf`);
+        return downloadFile(blob, fileNameWithExtension);
 
       // Attempt to export and download
       const exportFile = await exportPdf({
         documentId,
         fileName: fileName(),
       });
-      downloadFile(exportFile, `${fileName()}.pdf`);
+      downloadFile(exportFile, fileNameWithExtension);
     } catch (_) {
       try {
-        downloadFile(blob, `${fileName()}.pdf`);
+        downloadFile(blob, fileNameWithExtension);
       } catch (_) {
         toast.failure('Unable to download file');
       }
@@ -111,6 +113,8 @@ export function TopBar() {
     if (!data) {
       return toast.failure('Unable to download file');
     }
+
+    const fileNameWithExtension = `${fileName()}.docx`;
 
     try {
       // Fetch the file from the presigned URL
@@ -127,8 +131,7 @@ export function TopBar() {
         type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       });
 
-      // Use your existing downloadFile utility
-      downloadFile(blob, `${fileName()}.docx`);
+      downloadFile(blob, fileNameWithExtension);
 
       toast.success('File downloaded successfully');
     } catch (error) {

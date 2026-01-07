@@ -51,6 +51,9 @@ pub enum OpensearchClientError {
 
     #[error("empty ids with ids only for {0}")]
     EmptyIdsWithIdsOnly(SearchEntityType),
+
+    #[error("unsupported search_on")]
+    InvalidSearchOn,
 }
 
 impl From<anyhow::Error> for OpensearchClientError {

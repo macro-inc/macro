@@ -11,37 +11,13 @@ export function Appearance() {
   // const [cursorEnabled, setCursorEnabled] = createSignal(customCursorEnabled());
 
   return (
-    <>
-      <style>{`
-        .appearance-container{
-          grid-template-areas: "tools" "basic" "list" "advanced";
-          grid-template-rows: min-content min-content 1fr 1fr;
-          grid-template-columns: 1fr;
-        }
-        @container(min-width: 650px){
-          .appearance-container{
-            grid-template-areas: "tools tools" "basic basic" "list advanced";
-            grid-template-rows: min-content min-content 1fr;
-            grid-template-columns: 1fr 1fr;
-          }
-        }
-      `}</style>
       <div
-        style="
-          background-color: var(--color-edge-muted);
-          container-type: inline-size;
-          position: absolute;
-          overflow: hidden;
-          display: grid;
-          inset: 0;
-          gap: 1px;
-        "
-        class="appearance-container"
+        class="absolute inset-0 overflow-hidden bg-edge-muted @container gap-px grid grid-cols-1 grid-rows-[min-content_min-content_1fr_1fr] @[650px]:grid-cols-2 @[650px]:grid-rows-[min-content_min-content_1fr] touch:mobile-width:flex"
       >
-        <div class="ios:hidden" style="grid-area: tools;"><ThemeTools /></div>
-        <div class="ios:hidden" style="grid-area: basic;"><ThemeEditorBasic /></div>
-        <div style="grid-area: list; overflow: hidden;"><ThemeList/></div>
-        <div class="ios:hidden" style="grid-area: advanced; overflow: hidden;"><ThemeEditorAdvanced /></div>
+        <div class="touch:mobile-width:hidden @[650px]:col-span-2"><ThemeTools /></div>
+        <div class="touch:mobile-width:hidden @[650px]:col-span-2"><ThemeEditorBasic /></div>
+        <div class="touch:mobile-width:flex-1 overflow-hidden"><ThemeList/></div>
+        <div class="touch:mobile-width:hidden overflow-hidden"><ThemeEditorAdvanced /></div>
 
         {/*<Show when={ENABLE_CUSTOM_CURSOR}>
           <div
@@ -64,6 +40,5 @@ export function Appearance() {
           </div>
         </Show>*/}
       </div>
-    </>
   );
 }

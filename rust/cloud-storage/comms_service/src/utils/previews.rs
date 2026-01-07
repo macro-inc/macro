@@ -1,14 +1,15 @@
+use comms::domain::models::channel_name::resolve_channel_name;
 use comms_db_client::model::{ChannelPreview, ChannelPreviewData, WithChannelId};
 use comms_db_client::preview::Previews;
-use model::user::UserContext;
+use macro_user_id::cowlike::CowLike;
+use macro_user_id::user_id::MacroUserIdStr;
+use models_comms::channel::ChannelId;
 use std::collections::HashMap;
 
-use crate::utils::channel_name::resolve_channel_name;
-
 pub fn resolve_previews(
-    context: &UserContext,
+    context: MacroUserIdStr<'_>,
     raw_previews: Previews,
-    name_lookup: Option<&HashMap<String, String>>,
+    name_lookup: &HashMap<MacroUserIdStr<'static>, String>,
 ) -> Vec<ChannelPreview> {
     let mut previews = vec![];
 
@@ -26,12 +27,45 @@ pub fn resolve_previews(
         .exists
         .iter()
         .map(|preview| {
+            let participants: Vec<_> = preview
+                .participants
+                .iter()
+                .map(|p| models_comms::channel::ChannelParticipant {
+                    channel_id: p.channel_id,
+                    user_id: p.user_id.clone(),
+                    role: match p.role {
+                        model::comms::ParticipantRole::Owner => {
+                            models_comms::channel::ParticipantRole::Owner
+                        }
+                        model::comms::ParticipantRole::Admin => {
+                            models_comms::channel::ParticipantRole::Admin
+                        }
+                        model::comms::ParticipantRole::Member => {
+                            models_comms::channel::ParticipantRole::Member
+                        }
+                    },
+                    joined_at: p.joined_at,
+                    left_at: p.left_at,
+                })
+                .collect();
+
             let resolved_name = resolve_channel_name(
-                &preview.channel_type,
+                &match preview.channel_type {
+                    model::comms::ChannelType::Public => models_comms::channel::ChannelType::Public,
+                    model::comms::ChannelType::Organization => {
+                        models_comms::channel::ChannelType::Organization
+                    }
+                    model::comms::ChannelType::Private => {
+                        models_comms::channel::ChannelType::Private
+                    }
+                    model::comms::ChannelType::DirectMessage => {
+                        models_comms::channel::ChannelType::DirectMessage
+                    }
+                },
                 preview.channel_name.as_deref(),
-                &preview.participants,
-                &preview.channel_id,
-                &context.user_id,
+                &participants,
+                &ChannelId(preview.channel_id),
+                context.copied(),
                 name_lookup,
             );
             ChannelPreview::Access(ChannelPreviewData {

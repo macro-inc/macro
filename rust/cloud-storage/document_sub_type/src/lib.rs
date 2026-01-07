@@ -1,4 +1,5 @@
 //! This crate contains the document sub type enum and various logic for it
+use schemars::JsonSchema;
 
 /// The document sub type enum represents all values of document sub types.
 /// These values should match the `document_sub_type_value` table in macrodb.
@@ -14,6 +15,7 @@
     sqlx::Type,
     strum::EnumString,
     strum::Display,
+    JsonSchema,
 )]
 #[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "snake_case")]

@@ -1,13 +1,13 @@
 use chrono::{DateTime, Utc};
+use doppleganger::Doppleganger;
 use macro_user_id::user_id::MacroUserIdStr;
+pub use models_comms::channel::{ChannelId, OrganizationId};
 use serde::{Deserialize, Serialize};
 use sqlx::Type;
 use std::collections::HashMap;
+use strum::Display;
 use utoipa::ToSchema;
 use uuid::Uuid;
-
-// Re-export ChannelType for use by other modules in this crate
-pub use models_comms::ChannelType;
 
 /// Ugly place to store the models that are used by service client.
 /// it's ugly to promot someone else moving it as I am lazy -- Hutch.
@@ -47,9 +47,12 @@ pub struct UserActivityForChannel {
     pub updated_at: chrono::NaiveDateTime,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, ToSchema, Default)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, ToSchema, Default, Doppleganger,
+)]
 #[sqlx(type_name = "comms_participant_role", rename_all = "lowercase")]
 #[serde(rename_all = "snake_case")]
+#[dg(backward = models_comms::channel::ParticipantRole)]
 pub enum ParticipantRole {
     Owner,
     Admin,
@@ -57,12 +60,15 @@ pub enum ParticipantRole {
     Member,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, Doppleganger)]
+#[dg(backward = models_comms::channel::ChannelParticipant)]
 pub struct ChannelParticipant {
     /// id of the channel
-    pub channel_id: Uuid,
+    #[schema(value_type = Uuid)]
+    pub channel_id: ChannelId,
     /// id of the user
-    pub user_id: String,
+    #[schema(value_type = String)]
+    pub user_id: MacroUserIdStr<'static>,
     /// type of the participant
     pub role: ParticipantRole,
     /// timestamp of when the user joined the channel
@@ -71,46 +77,65 @@ pub struct ChannelParticipant {
     pub left_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq, Eq)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Display,
+    ToSchema,
+    Doppleganger,
+    Serialize,
+    Deserialize,
+    sqlx::Type,
+)]
+#[strum(serialize_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
+#[sqlx(type_name = "comms_channel_type", rename_all = "snake_case")]
+#[dg(backward = models_comms::channel::ChannelType)]
+pub enum ChannelType {
+    Public,
+    Organization,
+    Private,
+    DirectMessage,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq, Eq, Doppleganger)]
+#[dg(backward = models_comms::channel::Channel)]
 pub struct Channel {
     /// uuid of the channel
-    pub id: Uuid,
+    #[schema(value_type = Uuid)]
+    pub id: ChannelId,
     /// string name of the channel
     pub name: Option<String>,
     /// type of the channel
     pub channel_type: ChannelType,
     /// id of the organization this channel belongs too
-    pub org_id: Option<i64>,
+    #[schema(value_type = Option<u32>)]
+    pub org_id: Option<OrganizationId>,
     /// timestamp of when the channel was created
     pub created_at: chrono::DateTime<chrono::Utc>,
     /// timestamp of when the channel was last updated
     pub updated_at: chrono::DateTime<chrono::Utc>,
     /// id of the user who created the channel
-    pub owner_id: String,
+    #[schema(value_type = String)]
+    pub owner_id: MacroUserIdStr<'static>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, Doppleganger)]
+#[dg(backward = models_comms::channel::ChannelWithParticipants)]
 pub struct ChannelWithParticipants {
     #[serde(flatten)]
     pub channel: Channel,
     pub participants: Vec<ChannelParticipant>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, Default)]
+#[derive(Debug, Clone, Default, ToSchema, Serialize, Deserialize, Doppleganger)]
+#[dg(backward = models_comms::channel::LatestMessage)]
 pub struct LatestMessage {
     pub latest_message: Option<ChannelMessage>,
     pub latest_non_thread_message: Option<ChannelMessage>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-pub struct ChannelWithLatest {
-    #[serde(flatten)]
-    pub channel: ChannelWithParticipants,
-    #[serde(flatten)]
-    pub latest_message: LatestMessage,
-    pub viewed_at: Option<chrono::DateTime<chrono::Utc>>,
-    pub interacted_at: Option<chrono::DateTime<chrono::Utc>>,
-    pub frecency_score: f64,
 }
 
 /// information about a channel used in search responses
@@ -141,12 +166,13 @@ pub struct GetChannelsHistoryResponse {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CreateWelcomeMessageRequest {
     /// The id of the user to create the welcome message to
-    pub welcome_user_id: String,
+    pub welcome_user_id: MacroUserIdStr<'static>,
     /// The id of the user to send the welcome message to
-    pub to_user_id: String,
+    pub to_user_id: MacroUserIdStr<'static>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, Doppleganger)]
+#[dg(backward = models_comms::channel::ChannelMessage)]
 pub struct ChannelMessage {
     pub message_id: Uuid,
     pub thread_id: Option<Uuid>,

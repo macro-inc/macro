@@ -212,7 +212,7 @@ impl SoupApiItem {
 pub enum SoupHandlerErr {
     #[error("An internal server error has occurred")]
     Internal(#[from] SoupErr),
-    #[error("An internal server error has occurred")]
+    #[error("An internal email server error has occurred")]
     EmailLinkErr(#[from] EmailLinkErr),
     #[error("Invalid filter arguments provided")]
     ExpandErr(#[from] ExpandErr),
@@ -305,6 +305,7 @@ type SoupCursor = EitherWrapper<
             (status = 500, body=ErrorResponse),
     )
 )]
+#[tracing::instrument(err, skip_all)]
 pub async fn post_soup_handler<T, U>(
     State(service): State<SoupRouterState<T, U>>,
     Cached(MacroUserExtractor { macro_user_id, .. }): Cached<MacroUserExtractor>,
@@ -316,7 +317,6 @@ where
     T: SoupService,
     U: EmailService,
 {
-    dbg!(&post_soup_request);
     let link = match email_link {
         Ok(l) => Some(l.0.0),
         Err(EmailLinkErr::NotFound) => None,

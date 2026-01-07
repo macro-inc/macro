@@ -1,6 +1,6 @@
 import { markdownBlockErrorSignal } from '@block-md/signal/error';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { BasicHotkey } from '@core/component/Hotkey';
-import { IconButton } from '@core/component/IconButton';
 import {
   INSERT_HORIZONTAL_RULE_COMMAND,
   NODE_TRANSFORM,
@@ -190,7 +190,7 @@ const InlineFormatButton = (props: {
 }) => {
   const icon = InlineIcons[props.format];
   return (
-    <IconButton
+    <DeprecatedIconButton
       tooltip={{ label: props.format, shortcut: InlineShortcuts[props.format] }}
       icon={icon}
       theme={props.selection()?.[props.format] ? 'accent' : 'clear'}
@@ -239,7 +239,7 @@ export const ElementFormatButton = (props: {
   const name = NodeMenuOptions[props.format]?.label || 'Body';
   const icon = NodeMenuOptions[props.format]?.icon;
   return (
-    <IconButton
+    <DeprecatedIconButton
       tooltip={{ label: name }}
       icon={icon}
       theme={
@@ -437,7 +437,7 @@ export function FormatTools(props: { withinPopup?: boolean }) {
     return (
       <DropdownMenu open={menuOpen()} onOpenChange={setMenuOpen}>
         <DropdownMenu.Trigger>
-          <IconButton
+          <DeprecatedIconButton
             icon={TextAA}
             theme="clear"
             tooltip={{ label: 'Text Styles' }}
@@ -500,7 +500,7 @@ export function FormatTools(props: { withinPopup?: boolean }) {
     return (
       <DropdownMenu open={menuOpen()} onOpenChange={setMenuOpen}>
         <DropdownMenu.Trigger>
-          <IconButton
+          <DeprecatedIconButton
             icon={TextAA}
             theme="clear"
             tooltip={{ label: 'Text Styles' }}
@@ -550,7 +550,7 @@ export function FormatTools(props: { withinPopup?: boolean }) {
   }) => (
     <DropdownMenu>
       <DropdownMenu.Trigger>
-        <IconButton
+        <DeprecatedIconButton
           icon={props.icon ?? ThreeDots}
           theme="clear"
           tooltip={{ label: props.label ?? 'More Formats' }}
@@ -595,7 +595,7 @@ export function FormatTools(props: { withinPopup?: boolean }) {
   }) => (
     <DropdownMenu>
       <DropdownMenu.Trigger>
-        <IconButton
+        <DeprecatedIconButton
           icon={props.icon ?? ThreeDots}
           theme="clear"
           tooltip={{ label: props.label ?? 'More Formats' }}
@@ -680,7 +680,7 @@ export function FormatTools(props: { withinPopup?: boolean }) {
             ]}
             buttonIsDisabled={buttonIsDisabled}
           />
-          <IconButton
+          <DeprecatedIconButton
             icon={selection()?.hasLinks ? BrokenLinkIcon : LinkIcon}
             theme="clear"
             onClick={handleLink}
@@ -691,7 +691,7 @@ export function FormatTools(props: { withinPopup?: boolean }) {
           />
         </Show>
         <Show when={ENABLE_MARKDOWN_COMMENTS && canComment()}>
-          <IconButton
+          <DeprecatedIconButton
             tooltip={{
               label: 'Comment',
             }}
@@ -821,7 +821,7 @@ export function FormatTools(props: { withinPopup?: boolean }) {
 
           {/* ------------ Visible at all breakpoints ----------- */}
           <div class="flex gap-1 h-full">
-            <IconButton
+            <DeprecatedIconButton
               icon={selection()?.hasLinks ? BrokenLinkIcon : LinkIcon}
               theme="clear"
               onClick={handleLink}
@@ -832,7 +832,7 @@ export function FormatTools(props: { withinPopup?: boolean }) {
             />
             <MediaSelector buttonIsDisabled={buttonIsDisabled} />
             <Show when={ENABLE_MARKDOWN_COMMENTS}>
-              <IconButton
+              <DeprecatedIconButton
                 tooltip={{
                   label: 'Comment',
                 }}
@@ -852,7 +852,7 @@ export function FormatTools(props: { withinPopup?: boolean }) {
               onOpenChange={setMoreOptionsOpen}
             >
               <DropdownMenu.Trigger>
-                <IconButton
+                <DeprecatedIconButton
                   icon={PlusSquare}
                   theme="clear"
                   tooltip={{ label: 'More' }}
@@ -924,7 +924,7 @@ export function FormatTools(props: { withinPopup?: boolean }) {
           <div class="w-4"></div>
         </Show>
         <Show when={ENABLE_MARKDOWN_COMMENTS && canComment() && !canEdit()}>
-          <IconButton
+          <DeprecatedIconButton
             tooltip={{
               label: 'Comment',
             }}

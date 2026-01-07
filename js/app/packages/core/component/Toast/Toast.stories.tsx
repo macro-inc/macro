@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from 'storybook-solidjs-vite';
-import { TextButton } from '../TextButton';
+import { DeprecatedTextButton } from '../DeprecatedTextButton';
 import { toast } from './Toast';
 import { ToastRegion } from './ToastRegion';
 
@@ -24,7 +24,7 @@ export const Default: Story = {
       <>
         <ToastRegion />
         <div class="flex flex-col gap-2">
-          <TextButton
+          <DeprecatedTextButton
             text="Show Success Toast"
             theme="base"
             onClick={() =>
@@ -34,7 +34,7 @@ export const Default: Story = {
               )
             }
           />
-          <TextButton
+          <DeprecatedTextButton
             text="Show Failure Toast"
             theme="base"
             onClick={() =>
@@ -44,7 +44,7 @@ export const Default: Story = {
               )
             }
           />
-          <TextButton
+          <DeprecatedTextButton
             text="Show Alert Toast"
             theme="base"
             onClick={() =>
@@ -54,7 +54,7 @@ export const Default: Story = {
               )
             }
           />
-          <TextButton
+          <DeprecatedTextButton
             text="Show Success with Action"
             theme="base"
             onClick={() =>

@@ -3,6 +3,10 @@ import type { ChatData } from '@block-chat/definition';
 import { LocationType, useCreateShareUrl } from '@block-pdf/signal/location';
 import { withAnalytics } from '@coparse/analytics';
 import { useIsAuthenticated } from '@core/auth';
+import {
+  DeprecatedEditingTextButton,
+  DeprecatedTextButton,
+} from '@core/component/DeprecatedTextButton';
 import { EditableProvider } from '@core/component/Editable';
 import {
   DropdownMenuContent,
@@ -10,7 +14,6 @@ import {
   MenuItemRenameTrigger,
   MenuSeparator,
 } from '@core/component/Menu';
-import { EditingTextButton, TextButton } from '@core/component/TextButton';
 import { BarContext } from '@core/component/TopBar/Bar';
 import { setCachedInputStore } from '@core/store/cacheChatInput';
 import { isErr } from '@core/util/maybeResult';
@@ -126,7 +129,7 @@ export function ChatNameMenu(props: Props) {
   return (
     <EditableProvider
       editingComponent={
-        <EditingTextButton
+        <DeprecatedEditingTextButton
           handleSubmitEdit={(new_name) => {
             renameChat({ chat_id: props.data.chat.id, new_name });
           }}
@@ -143,9 +146,9 @@ export function ChatNameMenu(props: Props) {
         sameWidth
       >
         <DropdownMenu.Trigger>
-          <TextButton theme="clear" showChevron tabIndex={-1}>
+          <DeprecatedTextButton theme="clear" showChevron tabIndex={-1}>
             {truncatedName()}
-          </TextButton>
+          </DeprecatedTextButton>
         </DropdownMenu.Trigger>
 
         <DropdownMenu.Portal>

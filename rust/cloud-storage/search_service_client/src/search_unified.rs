@@ -1,5 +1,4 @@
 use crate::{SearchServiceClient, constants::INTERNAL_MACRO_USER_ID_HEADER};
-use models_search::TimestampField;
 
 impl SearchServiceClient {
     pub async fn search_unified(
@@ -38,13 +37,13 @@ impl SearchServiceClient {
         }
     }
 
-    pub async fn search_simple_unified<T: TimestampField>(
+    pub async fn search_simple_unified(
         &self,
         user_id: &str,
         body: models_search::unified::UnifiedSearchRequest,
         page: i64,
         page_size: i64,
-    ) -> anyhow::Result<models_search::unified::SimpleUnifiedSearchBaseResponse<T>> {
+    ) -> anyhow::Result<models_search::SimpleSearchResponse> {
         let res = self
             .client
             .post(format!(
@@ -58,9 +57,7 @@ impl SearchServiceClient {
 
         match res.status() {
             reqwest::StatusCode::OK => {
-                let result = res
-                    .json::<models_search::unified::SimpleUnifiedSearchBaseResponse<T>>()
-                    .await?;
+                let result = res.json::<models_search::SimpleSearchResponse>().await?;
                 Ok(result)
             }
             status_code => {

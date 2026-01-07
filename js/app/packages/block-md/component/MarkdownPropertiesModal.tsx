@@ -1,7 +1,7 @@
 import { SplitDrawer } from '@app/component/split-layout/components/SplitDrawer';
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import { useBlockAliasedName } from '@core/block';
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import {
   $getPinnedProperties,
   ADD_PINNED_PROPERTY_COMMAND,
@@ -26,7 +26,7 @@ export function MarkdownPropertiesModal(props: {
 
   return (
     <>
-      <IconButton
+      <DeprecatedIconButton
         icon={TagIcon}
         theme={drawerControl.isOpen() ? 'accent' : 'clear'}
         size={props.buttonSize ?? 'base'}

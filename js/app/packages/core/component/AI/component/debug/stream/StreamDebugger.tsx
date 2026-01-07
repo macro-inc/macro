@@ -1,4 +1,4 @@
-import { TextButton } from '@core/component/TextButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import type { ChatMessageWithAttachments } from '@service-cognition/generated/schemas';
 import type { MessageStream } from '@service-cognition/websocket';
 import { createSignal } from 'solid-js';
@@ -27,7 +27,7 @@ export function StreamDebuggerWithControls(props: {
   return (
     <div class="size-full flex flex-col gap-y-2">
       <div class="flex gap-x-1">
-        <TextButton
+        <DeprecatedTextButton
           text="Stream"
           onClick={() => {
             const stream = props.stream();
@@ -36,7 +36,7 @@ export function StreamDebuggerWithControls(props: {
           }}
           theme="accent"
         />
-        <TextButton
+        <DeprecatedTextButton
           text="Reset"
           theme="accent"
           onClick={() => {

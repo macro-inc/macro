@@ -80,7 +80,7 @@ export function MinimizedThread(props: {
         transition={true}
       >
         <div
-          class="flex flex-row p-[2px] w-full gap-1 transition-transform items-center bg-panel text-ink-muted border-edge/50 border-1 relative overflow-clip"
+          class="flex flex-row justify-between p-[2px] gap-1 transition-transform items-center bg-panel text-ink-muted border-edge/50 border-1 relative overflow-clip"
           classList={{
             '-translate-x-4': props.isActive,
           }}
@@ -99,8 +99,8 @@ export function MinimizedThread(props: {
             />
           </div>
           <div class="flex items-center px-1 h-6 pointer-events-auto">
-            <span class="text-xs font-bold text-center font-mono whitespace-pre">
-              [ {commentCount()} ]
+            <span class="text-xs font-bold text-center font-mono">
+              [{commentCount()}]
             </span>
           </div>
           <BozzyBracketInnerSibling

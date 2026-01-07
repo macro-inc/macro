@@ -713,6 +713,16 @@ export const StorageService = new Svc('Document++ Storage Service API')
     result: schemas.exportDocumentResponse.shape,
     throws: withFetchErrors(),
   })
+  .fn('editThread', {
+    description: schemas.editThreadV2Params.description!,
+    args: {
+      threadId: schemas.editThreadV2Params.shape.thread_id,
+      ...schemas.editThreadV2Body.shape,
+    },
+    result: schemas.editThreadV2Response.shape.data.shape,
+    modifies: true,
+    throws: withFetchErrors(),
+  })
   .use('annotations', AnnotationsSvc)
   .use('projects', ProjectsSvc)
   .use('permissionsTokens', PermissionsTokensSvc)
