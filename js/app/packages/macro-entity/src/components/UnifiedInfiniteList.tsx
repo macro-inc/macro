@@ -186,10 +186,11 @@ const sortEntitiesForSearch = <T extends EntityData>(a: T, b: T): number => {
     return 0;
   };
 
+  // NOTE: backend returns items in descending order of updatedAt so we match that here
   const updatedAtFirst = (a: WithSearch<T>, b: WithSearch<T>) => {
     if (a.updatedAt && b.updatedAt) return b.updatedAt - a.updatedAt;
-    if (a.updatedAt) return 1;
-    if (b.updatedAt) return -1;
+    if (a.updatedAt) return -1;
+    if (b.updatedAt) return 1;
     return 0;
   };
 
