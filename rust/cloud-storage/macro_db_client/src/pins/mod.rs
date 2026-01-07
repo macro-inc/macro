@@ -1,6 +1,7 @@
 use anyhow::Context;
 use document_sub_type::DocumentSubType;
 use sqlx::{Pool, Postgres};
+use system_properties::domain::model::constants::{SystemPropertyKey, options::StatusOption};
 
 use model::{
     activity::map_item::{map_chat_item, map_document_item},
@@ -55,6 +56,9 @@ pub async fn get_pins(db: Pool<Postgres>, user_id: &str) -> anyhow::Result<Vec<P
         return Ok(vec![]);
     }
 
+    let status_property_id = SystemPropertyKey::STATUS_UUID;
+    let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
+
     let result: Vec<PinnedItem> = sqlx::query!(
         r#"
     WITH PinnedItems AS (
@@ -84,7 +88,7 @@ pub async fn get_pins(db: Pool<Postgres>, user_id: &str) -> anyhow::Result<Vec<P
             pi.pin_index as "pin_index",
             CASE 
                 WHEN dt.sub_type = 'task' 
-                    AND ep_status.values->'value' ? '00000001-0000-0000-0002-000000000004'
+                    AND ep_status.values->'value' ? $2
                 THEN true 
                 WHEN dt.sub_type = 'task'
                 THEN false
@@ -96,7 +100,7 @@ pub async fn get_pins(db: Pool<Postgres>, user_id: &str) -> anyhow::Result<Vec<P
             ON dt.sub_type = 'task'
             AND ep_status.entity_id = d.id 
             AND ep_status.entity_type = 'TASK'
-            AND ep_status.property_definition_id = '00000001-0000-0000-0000-000000000002'
+            AND ep_status.property_definition_id = $3
         INNER JOIN PinnedItems pi ON pi.pin_item_id = d.id AND pi.pin_item_type = 'document'
         LEFT JOIN LATERAL (
             SELECT
@@ -170,7 +174,9 @@ pub async fn get_pins(db: Pool<Postgres>, user_id: &str) -> anyhow::Result<Vec<P
     SELECT * FROM Combined
     ORDER BY pin_index ASC
     "#,
-        user_id
+        user_id,
+        completed_option_id,
+        status_property_id,
     )
     .try_map(|r| {
         let pin_index: i32 =

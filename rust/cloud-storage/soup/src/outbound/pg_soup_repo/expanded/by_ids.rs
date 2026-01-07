@@ -5,6 +5,7 @@ use model_entity::{Entity, EntityType};
 use models_soup::item::SoupItem;
 use sqlx::PgPool;
 use std::str::FromStr;
+use system_properties::domain::model::constants::{SystemPropertyKey, options::StatusOption};
 use uuid::Uuid;
 
 /// Returns objects that a user has EXPLICIT and IMPLICIT access to by their IDs, excluding project items.
@@ -32,6 +33,9 @@ pub async fn expanded_soup_by_ids<'a>(
     if document_ids.is_empty() && chat_ids.is_empty() {
         return Ok(Vec::new());
     }
+
+    let status_property_id = SystemPropertyKey::STATUS_UUID;
+    let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
 
     let items: Vec<SoupItem> = sqlx::query!(
         r#"
@@ -96,7 +100,7 @@ pub async fn expanded_soup_by_ids<'a>(
                 uh."updatedAt"::timestamptz as "viewed_at",
                 CASE 
                     WHEN dt.sub_type = 'task' 
-                        AND ep_status.values->'value' ? '00000001-0000-0000-0002-000000000004'
+                        AND ep_status.values->'value' ? $4
                     THEN true 
                     WHEN dt.sub_type = 'task'
                     THEN false
@@ -108,7 +112,7 @@ pub async fn expanded_soup_by_ids<'a>(
                 ON dt.sub_type = 'task'
                 AND ep_status.entity_id = d.id 
                 AND ep_status.entity_type = 'TASK'
-                AND ep_status.property_definition_id = '00000001-0000-0000-0000-000000000002'
+                AND ep_status.property_definition_id = $5
             INNER JOIN UserAccessibleItems uai 
                 ON uai.item_id = d.id 
                 AND uai.item_type = 'document'
@@ -170,6 +174,8 @@ pub async fn expanded_soup_by_ids<'a>(
         user_id.as_ref(),        // $1
         document_ids.as_slice(), // $2
         chat_ids.as_slice(),     // $3
+        completed_option_id,     // $4
+        status_property_id,      // $5
     )
     .try_map(map_soup_type!())
     .fetch_all(db)

@@ -49,6 +49,8 @@ tokio = { workspace = true, features = ["macros"], optional = true }
 tracing = { workspace = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
+document_sub_type = { path = "../document_sub_type" }
+system_properties = { path = "../system_properties" }
 
 [dev-dependencies]
 cool_asserts = "2"

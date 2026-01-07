@@ -3,6 +3,7 @@ use model::item::{
     Item,
     map_item::{map_chat_item, map_document_item, map_project_item},
 };
+use system_properties::domain::model::constants::{SystemPropertyKey, options::StatusOption};
 
 /// Gets the users recently deleted items.
 /// Supports pagination.
@@ -11,6 +12,9 @@ pub async fn get_recently_deleted(
     db: &sqlx::Pool<sqlx::Postgres>,
     user_id: &str,
 ) -> anyhow::Result<Vec<Item>> {
+    let status_property_id = SystemPropertyKey::STATUS_UUID;
+    let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
+
     // NOTE: we may need to support pagination here at some point.
     let result: Vec<Item> = sqlx::query!(
         r#"
@@ -29,7 +33,7 @@ pub async fn get_recently_deleted(
             dt.sub_type as "sub_type?: DocumentSubType",
             CASE 
                 WHEN dt.sub_type = 'task' 
-                    AND ep_status.values->'value' ? '00000001-0000-0000-0002-000000000004'
+                    AND ep_status.values->'value' ? $2
                 THEN true 
                 WHEN dt.sub_type = 'task'
                 THEN false
@@ -41,7 +45,7 @@ pub async fn get_recently_deleted(
             ON dt.sub_type = 'task'
             AND ep_status.entity_id = d.id 
             AND ep_status.entity_type = 'TASK'
-            AND ep_status.property_definition_id = '00000001-0000-0000-0000-000000000002'
+            AND ep_status.property_definition_id = $3
         LEFT JOIN LATERAL (
             SELECT
                 b.id
@@ -102,6 +106,8 @@ pub async fn get_recently_deleted(
     ORDER BY deleted_at DESC
     "#,
         user_id,
+        completed_option_id,
+        status_property_id,
     )
     .try_map(|r| match r.item_type.as_ref() {
         "document" => {

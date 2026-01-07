@@ -9,10 +9,14 @@ use model::item::{
     Item,
     map_item::{map_chat_item, map_document_item, map_project_item},
 };
+use system_properties::domain::model::constants::{SystemPropertyKey, options::StatusOption};
 
 /// Gets a users recently opened history.
 #[tracing::instrument(skip(db))]
 pub async fn get_user_history(db: &Pool<Postgres>, user_id: &str) -> anyhow::Result<Vec<Item>> {
+    let status_property_id = SystemPropertyKey::STATUS_UUID;
+    let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
+
     let result: Vec<Item> = sqlx::query!(
         r#"
     WITH UserHistories AS (
@@ -41,7 +45,7 @@ pub async fn get_user_history(db: &Pool<Postgres>, user_id: &str) -> anyhow::Res
             dt.sub_type as "sub_type?: DocumentSubType",
             CASE 
                 WHEN dt.sub_type = 'task' 
-                    AND ep_status.values->'value' ? '00000001-0000-0000-0002-000000000004'
+                    AND ep_status.values->'value' ? $2
                 THEN true 
                 WHEN dt.sub_type = 'task'
                 THEN false
@@ -53,7 +57,7 @@ pub async fn get_user_history(db: &Pool<Postgres>, user_id: &str) -> anyhow::Res
             ON dt.sub_type = 'task'
             AND ep_status.entity_id = d.id 
             AND ep_status.entity_type = 'TASK'
-            AND ep_status.property_definition_id = '00000001-0000-0000-0000-000000000002'
+            AND ep_status.property_definition_id = $3
         INNER JOIN UserHistories uh ON uh.item_id = d.id AND uh.item_type = 'document'
         LEFT JOIN LATERAL (
             SELECT
@@ -128,6 +132,8 @@ pub async fn get_user_history(db: &Pool<Postgres>, user_id: &str) -> anyhow::Res
     ORDER BY updated_at DESC
     "#,
         user_id,
+        completed_option_id,
+        status_property_id,
     )
     .try_map(|r| match r.item_type.as_ref() {
         "document" => {

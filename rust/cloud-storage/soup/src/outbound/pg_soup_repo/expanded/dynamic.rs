@@ -14,6 +14,7 @@ use models_pagination::{Query, SimpleSortMethod};
 use models_soup::{chat::SoupChat, document::SoupDocument, item::SoupItem, project::SoupProject};
 use recursion::CollapsibleExt;
 use sqlx::{PgPool, Postgres, QueryBuilder, Row, postgres::PgRow, prelude::FromRow};
+use system_properties::domain::model::constants::{SystemPropertyKey, options::StatusOption};
 use uuid::Uuid;
 
 use crate::outbound::pg_soup_repo::type_err;
@@ -88,7 +89,7 @@ static DOCUMENT_CLAUSE: &str = r#"
         END::timestamptz as "sort_ts",
         CASE 
             WHEN dt.sub_type = 'task' 
-                AND ep_status.values->'value' ? '00000001-0000-0000-0002-000000000004'
+                AND ep_status.values->'value' ? $6
             THEN true 
             WHEN dt.sub_type = 'task'
             THEN false
@@ -100,7 +101,7 @@ static DOCUMENT_CLAUSE: &str = r#"
         ON dt.sub_type = 'task'
         AND ep_status.entity_id = d.id 
         AND ep_status.entity_type = 'TASK'
-        AND ep_status.property_definition_id = '00000001-0000-0000-0000-000000000002'
+        AND ep_status.property_definition_id = $7
     INNER JOIN UserAccessibleItems uai ON uai.item_id = d.id AND uai.item_type = 'document'
     -- This MUST be a LEFT JOIN to support all three sort methods
     LEFT JOIN "UserHistory" uh ON uh."itemId" = d.id AND uh."itemType" = 'document' AND uh."userId" = $1
@@ -504,6 +505,8 @@ pub(crate) async fn expanded_dynamic_cursor_soup(
     let sort_method_str = cursor.sort_method().to_string();
     let (cursor_id, cursor_timestamp) = cursor.vals();
     let cursor_id_str = cursor_id.as_ref().map(|u| u.to_string());
+    let status_property_id = SystemPropertyKey::STATUS_UUID;
+    let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
 
     build_query(cursor.filter(), exclude_frecency)
         .build()
@@ -512,6 +515,8 @@ pub(crate) async fn expanded_dynamic_cursor_soup(
         .bind(query_limit)
         .bind(cursor_timestamp)
         .bind(cursor_id_str)
+        .bind(completed_option_id)
+        .bind(status_property_id)
         .try_map(|row| SoupRow::from_row(&row)?.into_soup_item())
         .fetch_all(db)
         .await

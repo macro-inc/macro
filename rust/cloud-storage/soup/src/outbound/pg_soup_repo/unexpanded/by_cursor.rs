@@ -5,6 +5,7 @@ use models_pagination::{Query, SimpleSortMethod};
 use models_soup::item::SoupItem;
 use sqlx::PgPool;
 use std::str::FromStr;
+use system_properties::domain::model::constants::{SystemPropertyKey, options::StatusOption};
 use uuid::Uuid;
 
 /// Returns objects that a user has EXPLICIT access to, including project items.
@@ -25,6 +26,9 @@ pub async fn unexpanded_generic_cursor_soup(
     let sort_method_str = cursor.sort_method().to_string();
     let (cursor_id, cursor_timestamp) = cursor.vals();
     let cursor_id = cursor_id.map(|u| u.to_string());
+
+    let status_property_id = SystemPropertyKey::STATUS_UUID;
+    let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
 
     let items: Vec<SoupItem> = sqlx::query!(
         r#"
@@ -69,7 +73,7 @@ pub async fn unexpanded_generic_cursor_soup(
                 END::timestamptz as "sort_ts!",
                 CASE 
                     WHEN dt.sub_type = 'task' 
-                        AND ep_status.values->'value' ? '00000001-0000-0000-0002-000000000004'
+                        AND ep_status.values->'value' ? $6
                     THEN true 
                     WHEN dt.sub_type = 'task'
                     THEN false
@@ -81,7 +85,7 @@ pub async fn unexpanded_generic_cursor_soup(
                 ON dt.sub_type = 'task'
                 AND ep_status.entity_id = d.id 
                 AND ep_status.entity_type = 'TASK'
-                AND ep_status.property_definition_id = '00000001-0000-0000-0000-000000000002'
+                AND ep_status.property_definition_id = $7
             INNER JOIN UserAccessibleItems uai 
                 ON uai.item_id = d.id 
                 AND uai.item_type = 'document'
@@ -184,11 +188,13 @@ pub async fn unexpanded_generic_cursor_soup(
         ORDER BY "sort_ts!" DESC, "updated_at!" DESC
         LIMIT $3
         "#,
-        user_id.as_ref(), // $1
-        sort_method_str,  // $2
-        query_limit,      // $3
-        cursor_timestamp, // $4
-        cursor_id,        // $5
+        user_id.as_ref(),    // $1
+        sort_method_str,     // $2
+        query_limit,         // $3
+        cursor_timestamp,    // $4
+        cursor_id,           // $5
+        completed_option_id, // $6
+        status_property_id,  // $7
     )
     .try_map(map_soup_type!())
     .fetch_all(db)
@@ -214,6 +220,9 @@ pub async fn no_frecency_unexpanded_generic_cursor_soup(
     let query_limit = limit as i64;
     let sort_method_str = cursor.sort_method().to_string();
     let (cursor_id, cursor_timestamp) = cursor.vals();
+
+    let status_property_id = SystemPropertyKey::STATUS_UUID;
+    let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
 
     let items: Vec<SoupItem> = sqlx::query!(
         r#"
@@ -258,7 +267,7 @@ pub async fn no_frecency_unexpanded_generic_cursor_soup(
                 END::timestamptz as "sort_ts!",
                 CASE 
                     WHEN dt.sub_type = 'task' 
-                        AND ep_status.values->'value' ? '00000001-0000-0000-0002-000000000004'
+                        AND ep_status.values->'value' ? $6
                     THEN true 
                     WHEN dt.sub_type = 'task'
                     THEN false
@@ -270,7 +279,7 @@ pub async fn no_frecency_unexpanded_generic_cursor_soup(
                 ON dt.sub_type = 'task'
                 AND ep_status.entity_id = d.id 
                 AND ep_status.entity_type = 'TASK'
-                AND ep_status.property_definition_id = '00000001-0000-0000-0000-000000000002'
+                AND ep_status.property_definition_id = $7
             INNER JOIN UserAccessibleItems uai 
                 ON uai.item_id = d.id 
                 AND uai.item_type = 'document'
@@ -286,7 +295,7 @@ pub async fn no_frecency_unexpanded_generic_cursor_soup(
                 LIMIT 1
             ) db ON true
             LEFT JOIN LATERAL (
-                SELECT i.id, i.sha 
+                Select i.id, i.sha 
                 FROM "DocumentInstance" i 
                 WHERE i."documentId" = d.id 
                 ORDER BY i."updatedAt" DESC 
@@ -380,11 +389,13 @@ pub async fn no_frecency_unexpanded_generic_cursor_soup(
       ORDER BY Combined."sort_ts!" DESC, Combined."updated_at!" DESC
       LIMIT $3
           "#,
-        user_id.as_ref(), // $1
-        sort_method_str,  // $2
-        query_limit,      // $3
-        cursor_timestamp, // $4
-        cursor_id,        // $5
+        user_id.as_ref(),    // $1
+        sort_method_str,     // $2
+        query_limit,         // $3
+        cursor_timestamp,    // $4
+        cursor_id,           // $5
+        completed_option_id, // $6
+        status_property_id,  // $7
     )
     .try_map(map_soup_type!())
     .fetch_all(db)

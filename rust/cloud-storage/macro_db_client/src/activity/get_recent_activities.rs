@@ -2,6 +2,7 @@ use document_sub_type::DocumentSubType;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model::{activity::Activity, chat::Chat, document::BasicDocument};
 use sqlx::{Pool, Postgres, Row};
+use system_properties::domain::model::constants::{SystemPropertyKey, options::StatusOption};
 
 #[tracing::instrument(skip(db))]
 pub async fn get_recent_activities(
@@ -41,6 +42,9 @@ pub async fn get_recent_activities(
         return Ok((vec![], 0));
     }
 
+    let status_property_id = SystemPropertyKey::STATUS_UUID;
+    let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
+
     let query = r#"
         SELECT
             'document' as type,
@@ -60,7 +64,7 @@ pub async fn get_recent_activities(
             dt.sub_type as "sub_type",
             CASE 
                 WHEN dt.sub_type = 'task' 
-                    AND ep_status.values->'value' ? '00000001-0000-0000-0002-000000000004'
+                    AND ep_status.values->'value' ? $4
                 THEN true 
                 WHEN dt.sub_type = 'task'
                 THEN false
@@ -73,7 +77,7 @@ pub async fn get_recent_activities(
             ON dt.sub_type = 'task'
             AND ep_status.entity_id = d.id 
             AND ep_status.entity_type = 'TASK'
-            AND ep_status.property_definition_id = '00000001-0000-0000-0000-000000000002'
+            AND ep_status.property_definition_id = $5
         LEFT JOIN LATERAL (
             SELECT
                 b.id
@@ -130,6 +134,8 @@ pub async fn get_recent_activities(
         .bind(user_id)
         .bind(limit)
         .bind(offset)
+        .bind(&completed_option_id)
+        .bind(status_property_id)
         .fetch_all(&mut *transaction)
         .await?;
 

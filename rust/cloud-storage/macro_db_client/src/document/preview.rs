@@ -4,6 +4,7 @@ use document_sub_type::DocumentSubType;
 use model::document::{
     DocumentPreviewData, DocumentPreviewDataSubType, DocumentPreviewV2, WithDocumentId,
 };
+use system_properties::domain::model::constants::{SystemPropertyKey, options::StatusOption};
 
 /// Intermediate struct for SQL row mapping with compile-time validation.
 #[derive(sqlx::FromRow)]
@@ -35,6 +36,9 @@ pub async fn batch_get_document_preview_v2(
     db: &sqlx::Pool<sqlx::Postgres>,
     document_ids: &[String],
 ) -> anyhow::Result<Vec<DocumentPreviewV2>> {
+    let status_property_id = SystemPropertyKey::STATUS_UUID;
+    let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
+
     let rows: Vec<PreviewQueryResult> = sqlx::query_as!(
         PreviewQueryResult,
         r#"
@@ -47,7 +51,7 @@ pub async fn batch_get_document_preview_v2(
                 dt.sub_type as "sub_type?: DocumentSubType",
                 CASE 
                     WHEN dt.sub_type = 'task' 
-                        AND ep_status.values->'value' ? '00000001-0000-0000-0002-000000000004'
+                        AND ep_status.values->'value' ? $2
                     THEN true 
                     WHEN dt.sub_type = 'task'
                     THEN false
@@ -59,11 +63,13 @@ pub async fn batch_get_document_preview_v2(
                 ON dt.sub_type = 'task'
                 AND ep_status.entity_id = d.id 
                 AND ep_status.entity_type = 'TASK'
-                AND ep_status.property_definition_id = '00000001-0000-0000-0000-000000000002'
+                AND ep_status.property_definition_id = $3
             WHERE
                 d."id" = ANY($1)
         "#,
         document_ids,
+        completed_option_id,
+        status_property_id,
     )
     .fetch_all(db)
     .await?;
