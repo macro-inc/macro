@@ -26,9 +26,6 @@ type ChannelQueryOptions = UseBaseQueryOptions<
   getChannelResponseError
 >;
 
-/**
- * Shared query options for getting a channel with an ID
- */
 function channelQueryOptions(channelId: string): ChannelQueryOptions {
   return {
     queryKey: channelKeys.withID(channelId).queryKey,
@@ -45,12 +42,6 @@ function channelQueryOptions(channelId: string): ChannelQueryOptions {
   };
 }
 
-/**
- * Imperatively fetch a channel (for use outside of components).
- * Returns cached data if fresh, otherwise fetches from server.
- * Ensures the query data will be available for the next time the query is
- * accessed if it's before the stale time period.
- */
 export async function fetchAndCacheChannel(
   channelId: string
 ): Promise<MaybeResult<string, { channel: GetChannelResponse }>> {
@@ -66,9 +57,6 @@ export async function fetchAndCacheChannel(
   return ok({ channel: result[1] });
 }
 
-/**
- * Query hook for fetching a channel
- */
 export function useChannelQuery(
   channelId: Accessor<string>,
   options?: Accessor<Omit<ChannelQueryOptions, 'queryKey' | 'queryFn'>>,
@@ -115,10 +103,6 @@ export function invalidateChannelWithID(channelID: string) {
   });
 }
 
-/**
- * Optimistically update the viewedAt timestamp for a channel in the channels list query.
- * This provides instant UI feedback when a channel is opened.
- */
 export function optimisticUpdateChannelViewedAt(channelId: string) {
   const now = new Date().toISOString();
 

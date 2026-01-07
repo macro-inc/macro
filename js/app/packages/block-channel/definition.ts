@@ -30,7 +30,6 @@ export const definition = defineBlock({
 
       const [, channelData] = channel;
 
-      // Optimistically update viewedAt immediately for instant UI feedback
       optimisticUpdateViewedAt(source.id);
       optimisticUpdateChannelViewedAt(source.id);
 

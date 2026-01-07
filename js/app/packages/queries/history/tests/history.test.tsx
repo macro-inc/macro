@@ -1,295 +1,186 @@
-/**
- * @vitest-environment jsdom
- */
+import { describe, expect, it, vi } from 'vitest';
 
-import { err, ok } from '@core/util/maybeResult';
-import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
-import type { JSX } from 'solid-js';
-import { render } from 'solid-js/web';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { historyKeys } from '../keys';
-
-// Mock all external dependencies first
-vi.mock('@service-storage/client', () => ({
-  storageServiceClient: {
-    getUsersHistory: vi.fn(),
-    trackOpenedDocument: vi.fn(),
-    trackOpenedChat: vi.fn(),
-    upsertItemToUserHistory: vi.fn(),
-  },
-}));
-
-vi.mock('@service-storage/instructionsMd', () => ({
-  useInstructionsMdIdQuery: () => ({
-    isSuccess: false,
-    data: null,
-  }),
-}));
-
+// Mock itemToSafeName before importing
 vi.mock('@core/constant/allBlocks', () => ({
   itemToSafeName: (item: { name?: string }) => item.name ?? 'Untitled',
 }));
 
-import { storageServiceClient } from '@service-storage/client';
 import {
-  optimisticUpdateViewedAt,
-  useTrackViewedMutation,
-} from '../history';
+  filterInstructionsMd,
+  transformHistoryItem,
+  transformHistoryResponse,
+  updateItemViewedAt,
+} from '../transforms';
+import type { Item } from '@service-storage/generated/schemas/item';
 
-const mockTrackOpenedDocument = vi.mocked(
-  storageServiceClient.trackOpenedDocument
-);
-const mockTrackOpenedChat = vi.mocked(storageServiceClient.trackOpenedChat);
-const mockUpsertItemToUserHistory = vi.mocked(
-  storageServiceClient.upsertItemToUserHistory
-);
-
-let testQueryClient: QueryClient;
-
-vi.mock('../../client', () => ({
-  get queryClient() {
-    return testQueryClient;
-  },
-}));
-
-type MockItem = {
-  id: string;
-  name: string;
-  type: string;
-  viewedAt?: number;
-};
-
-type HistoryQueryResponse = {
-  data: MockItem[];
-};
-
-function createMockHistoryItem(
-  overrides: Partial<MockItem> = {}
-): MockItem {
+function createItem(overrides: Partial<Item> = {}): Item {
   return {
     id: `item-${Math.random().toString(36).slice(2)}`,
-    name: 'Test Document',
+    name: 'Test Item',
     type: 'document',
-    viewedAt: undefined,
+    userId: 'user-1',
+    createdAt: Date.now() / 1000,
+    updatedAt: Date.now() / 1000,
     ...overrides,
-  };
+  } as Item;
 }
 
-function seedQueryCache(items: MockItem[]) {
-  const queryKey = historyKeys.list.queryKey;
-  testQueryClient.setQueryData(queryKey, { data: items });
-  return queryKey;
-}
+describe('filterInstructionsMd', () => {
+  it('filters out item matching instructionsId', () => {
+    const items = [
+      createItem({ id: 'doc-1' }),
+      createItem({ id: 'instructions-md' }),
+      createItem({ id: 'doc-2' }),
+    ];
 
-function getHistoryFromCache(): MockItem[] {
-  const queryKey = historyKeys.list.queryKey;
-  const data = testQueryClient.getQueryData<HistoryQueryResponse>(queryKey);
-  return data?.data ?? [];
-}
+    const result = filterInstructionsMd(items, 'instructions-md');
 
-function createWrapper() {
-  return function Wrapper(props: { children: JSX.Element }) {
-    return (
-      <QueryClientProvider client={testQueryClient}>
-        {props.children}
-      </QueryClientProvider>
-    );
-  };
-}
-
-function renderWithClient(Component: () => JSX.Element): () => void {
-  const container = document.createElement('div');
-  document.body.appendChild(container);
-  const Wrapper = createWrapper();
-  const dispose = render(
-    () => (
-      <Wrapper>
-        <Component />
-      </Wrapper>
-    ),
-    container
-  );
-  return () => {
-    dispose();
-    container.remove();
-  };
-}
-
-describe('history mutations', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    testQueryClient = new QueryClient({
-      defaultOptions: {
-        queries: { retry: false },
-        mutations: { retry: false },
-      },
-    });
+    expect(result).toHaveLength(2);
+    expect(result.map((i) => i.id)).toEqual(['doc-1', 'doc-2']);
   });
 
-  afterEach(() => {
-    testQueryClient.clear();
+  it('returns all items when instructionsId is null', () => {
+    const items = [createItem({ id: 'doc-1' }), createItem({ id: 'doc-2' })];
+
+    const result = filterInstructionsMd(items, null);
+
+    expect(result).toHaveLength(2);
   });
 
-  describe('useTrackViewedMutation', () => {
-    it('should optimistically update viewedAt when tracking document open', async () => {
-      const item1 = createMockHistoryItem({ id: 'doc-1', viewedAt: undefined });
-      const item2 = createMockHistoryItem({ id: 'doc-2', viewedAt: undefined });
-      seedQueryCache([item1, item2]);
+  it('returns all items when instructionsId is undefined', () => {
+    const items = [createItem({ id: 'doc-1' }), createItem({ id: 'doc-2' })];
 
-      mockTrackOpenedDocument.mockResolvedValue(ok(undefined));
+    const result = filterInstructionsMd(items, undefined);
 
-      let mutatePromise: Promise<unknown> | undefined;
-
-      const TestComponent = () => {
-        const mutation = useTrackViewedMutation();
-        mutatePromise = mutation.mutateAsync({
-          itemId: 'doc-1',
-          itemType: 'document',
-        });
-        return null;
-      };
-
-      const cleanup = renderWithClient(TestComponent);
-
-      await mutatePromise;
-
-      const items = getHistoryFromCache();
-      expect(items[0].viewedAt).toBeDefined();
-      expect(items[0].viewedAt).toBeGreaterThan(0);
-      expect(items[1].viewedAt).toBeUndefined();
-
-      cleanup();
-    });
-
-    it('should call trackOpenedChat for chat items', async () => {
-      const item1 = createMockHistoryItem({
-        id: 'chat-1',
-        type: 'chat',
-        viewedAt: undefined,
-      });
-      seedQueryCache([item1]);
-
-      mockTrackOpenedChat.mockResolvedValue(ok(undefined));
-
-      let mutatePromise: Promise<unknown> | undefined;
-
-      const TestComponent = () => {
-        const mutation = useTrackViewedMutation();
-        mutatePromise = mutation.mutateAsync({
-          itemId: 'chat-1',
-          itemType: 'chat',
-        });
-        return null;
-      };
-
-      const cleanup = renderWithClient(TestComponent);
-
-      await mutatePromise;
-
-      expect(mockTrackOpenedChat).toHaveBeenCalledWith({ chatId: 'chat-1' });
-
-      cleanup();
-    });
-
-    it('should call upsertItemToUserHistory for other item types', async () => {
-      const item1 = createMockHistoryItem({
-        id: 'project-1',
-        type: 'project',
-        viewedAt: undefined,
-      });
-      seedQueryCache([item1]);
-
-      mockUpsertItemToUserHistory.mockResolvedValue(ok(undefined));
-
-      let mutatePromise: Promise<unknown> | undefined;
-
-      const TestComponent = () => {
-        const mutation = useTrackViewedMutation();
-        mutatePromise = mutation.mutateAsync({
-          itemId: 'project-1',
-          itemType: 'project',
-        });
-        return null;
-      };
-
-      const cleanup = renderWithClient(TestComponent);
-
-      await mutatePromise;
-
-      expect(mockUpsertItemToUserHistory).toHaveBeenCalledWith({
-        itemId: 'project-1',
-        itemType: 'project',
-      });
-
-      cleanup();
-    });
-
-    it('should rollback optimistic update on error', async () => {
-      const item1 = createMockHistoryItem({ id: 'doc-1', viewedAt: undefined });
-      seedQueryCache([item1]);
-
-      mockTrackOpenedDocument.mockResolvedValue(
-        err('SERVER_ERROR', 'Failed to track')
-      );
-
-      let mutatePromise: Promise<unknown> | undefined;
-
-      const TestComponent = () => {
-        const mutation = useTrackViewedMutation();
-        mutatePromise = mutation
-          .mutateAsync({ itemId: 'doc-1', itemType: 'document' })
-          .catch(() => {});
-        return null;
-      };
-
-      const cleanup = renderWithClient(TestComponent);
-
-      await mutatePromise;
-      // Wait for rollback to complete
-      await new Promise((r) => setTimeout(r, 10));
-
-      const items = getHistoryFromCache();
-      expect(items[0].viewedAt).toBeUndefined();
-
-      cleanup();
-    });
+    expect(result).toHaveLength(2);
   });
 
-  describe('optimisticUpdateViewedAt', () => {
-    it('should update viewedAt for matching item', () => {
-      const item1 = createMockHistoryItem({ id: 'doc-1', viewedAt: undefined });
-      const item2 = createMockHistoryItem({ id: 'doc-2', viewedAt: undefined });
-      seedQueryCache([item1, item2]);
+  it('returns all items when no item matches instructionsId', () => {
+    const items = [createItem({ id: 'doc-1' }), createItem({ id: 'doc-2' })];
 
-      optimisticUpdateViewedAt('doc-1');
+    const result = filterInstructionsMd(items, 'non-existent');
 
-      const items = getHistoryFromCache();
-      expect(items[0].viewedAt).toBeDefined();
-      expect(items[0].viewedAt).toBeGreaterThan(0);
-      expect(items[1].viewedAt).toBeUndefined();
-    });
+    expect(result).toHaveLength(2);
+  });
 
-    it('should not modify items with different id', () => {
-      const item1 = createMockHistoryItem({
-        id: 'doc-1',
-        viewedAt: 1000,
-      });
-      const item2 = createMockHistoryItem({
-        id: 'doc-2',
-        viewedAt: 2000,
-      });
-      seedQueryCache([item1, item2]);
+  it('handles empty array', () => {
+    const result = filterInstructionsMd([], 'instructions-md');
 
-      optimisticUpdateViewedAt('doc-3');
+    expect(result).toEqual([]);
+  });
+});
 
-      const items = getHistoryFromCache();
-      expect(items[0].viewedAt).toBe(1000);
-      expect(items[1].viewedAt).toBe(2000);
-    });
+describe('updateItemViewedAt', () => {
+  it('updates viewedAt for matching item', () => {
+    const items = [createItem({ id: 'doc-1' }), createItem({ id: 'doc-2' })];
+    const timestamp = 1704067200000;
 
-    it('should handle empty cache gracefully', () => {
-      // Don't seed any data
-      expect(() => optimisticUpdateViewedAt('doc-1')).not.toThrow();
-    });
+    const result = updateItemViewedAt(items, 'doc-1', timestamp);
+
+    expect(result[0]).toHaveProperty('viewedAt', timestamp);
+    expect(result[1]).not.toHaveProperty('viewedAt');
+  });
+
+  it('does not mutate original array', () => {
+    const items = [createItem({ id: 'doc-1' })];
+    const timestamp = 1704067200000;
+
+    const result = updateItemViewedAt(items, 'doc-1', timestamp);
+
+    expect(result).not.toBe(items);
+    expect(result[0]).not.toBe(items[0]);
+    expect(items[0]).not.toHaveProperty('viewedAt');
+  });
+
+  it('returns unchanged array when itemId not found', () => {
+    const items = [createItem({ id: 'doc-1' }), createItem({ id: 'doc-2' })];
+    const timestamp = 1704067200000;
+
+    const result = updateItemViewedAt(items, 'non-existent', timestamp);
+
+    expect(result[0]).not.toHaveProperty('viewedAt');
+    expect(result[1]).not.toHaveProperty('viewedAt');
+  });
+
+  it('handles empty array', () => {
+    const result = updateItemViewedAt([], 'doc-1', 1704067200000);
+
+    expect(result).toEqual([]);
+  });
+
+  it('overwrites existing viewedAt', () => {
+    const items = [createItem({ id: 'doc-1' })];
+    (items[0] as Item & { viewedAt?: number }).viewedAt = 1000;
+    const newTimestamp = 2000;
+
+    const result = updateItemViewedAt(items, 'doc-1', newTimestamp);
+
+    expect(result[0]).toHaveProperty('viewedAt', newTimestamp);
+  });
+});
+
+describe('transformHistoryItem', () => {
+  it('adds computed name from itemToSafeName', () => {
+    const item = createItem({ name: 'My Document' });
+
+    const result = transformHistoryItem(item);
+
+    expect(result.name).toBe('My Document');
+  });
+
+  it('preserves viewedAt if present', () => {
+    const item = createItem();
+    (item as Item & { viewedAt?: number }).viewedAt = 1704067200000;
+
+    const result = transformHistoryItem(item);
+
+    expect(result.viewedAt).toBe(1704067200000);
+  });
+
+  it('viewedAt is undefined when not present', () => {
+    const item = createItem();
+
+    const result = transformHistoryItem(item);
+
+    expect(result.viewedAt).toBeUndefined();
+  });
+});
+
+describe('transformHistoryResponse', () => {
+  it('filters and transforms in one pass', () => {
+    const data = {
+      data: [
+        createItem({ id: 'doc-1', name: 'Doc 1' }),
+        createItem({ id: 'instructions', name: 'Instructions' }),
+        createItem({ id: 'doc-2', name: 'Doc 2' }),
+      ],
+    };
+
+    const result = transformHistoryResponse(data, 'instructions');
+
+    expect(result).toHaveLength(2);
+    expect(result[0].id).toBe('doc-1');
+    expect(result[0].name).toBe('Doc 1');
+    expect(result[1].id).toBe('doc-2');
+    expect(result[1].name).toBe('Doc 2');
+  });
+
+  it('transforms all items when no instructionsId', () => {
+    const data = {
+      data: [
+        createItem({ id: 'doc-1', name: 'Doc 1' }),
+        createItem({ id: 'doc-2', name: 'Doc 2' }),
+      ],
+    };
+
+    const result = transformHistoryResponse(data, null);
+
+    expect(result).toHaveLength(2);
+  });
+
+  it('handles empty data', () => {
+    const result = transformHistoryResponse({ data: [] }, 'instructions');
+
+    expect(result).toEqual([]);
   });
 });

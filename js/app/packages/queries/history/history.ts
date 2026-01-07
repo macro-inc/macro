@@ -1,8 +1,6 @@
-import { itemToSafeName } from '@core/constant/allBlocks';
 import { throwOnErr } from '@core/util/maybeResult';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import type { CloudStorageItemType } from '@service-storage/generated/schemas/cloudStorageItemType';
-import type { Item } from '@service-storage/generated/schemas/item';
 import { storageServiceClient } from '@service-storage/client';
 import { useInstructionsMdIdQuery } from '@service-storage/instructionsMd';
 import {
@@ -12,20 +10,24 @@ import {
 } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { historyKeys } from './keys';
+import {
+  type HistoryItem,
+  type HistoryQueryResponse,
+  transformHistoryResponse,
+  updateItemViewedAt,
+} from './transforms';
 
 export { historyKeys } from './keys';
+export type { HistoryItem, HistoryQueryResponse } from './transforms';
+export {
+  filterInstructionsMd,
+  transformHistoryItem,
+  transformHistoryResponse,
+  updateItemViewedAt,
+} from './transforms';
 
-const HISTORY_STALE_TIME = 5 * 60 * 1000; // 5 minutes
-const HISTORY_GC_TIME = 10 * 60 * 1000; // 10 minutes
-
-export type HistoryItem = Item & {
-  name: string;
-  viewedAt?: number;
-};
-
-type HistoryQueryResponse = {
-  data: Item[];
-};
+const HISTORY_STALE_TIME = 5 * 60 * 1000;
+const HISTORY_GC_TIME = 10 * 60 * 1000;
 
 function historyQueryOptions() {
   return {
@@ -51,17 +53,10 @@ export function useHistoryQuery(options?: {
   return useQuery(() => ({
     ...historyQueryOptions(),
     select: (data: HistoryQueryResponse): HistoryItem[] => {
-      return data.data
-        .filter(
-          (item) =>
-            !instructionsIdQuery.isSuccess ||
-            item.id !== instructionsIdQuery.data
-        )
-        .map((item) => ({
-          ...item,
-          name: itemToSafeName(item),
-          viewedAt: (item as Item & { viewedAt?: number }).viewedAt ?? undefined,
-        }));
+      const instructionsId = instructionsIdQuery.isSuccess
+        ? instructionsIdQuery.data
+        : null;
+      return transformHistoryResponse(data, instructionsId);
     },
   }));
 }
@@ -70,10 +65,31 @@ export async function fetchAndCacheHistory(): Promise<HistoryQueryResponse> {
   return queryClient.fetchQuery(historyQueryOptions());
 }
 
-export async function refetchHistory() {
+export function refetchHistory() {
   return queryClient.invalidateQueries({
     queryKey: historyKeys.list.queryKey,
   });
+}
+
+export function invalidateHistory() {
+  return queryClient.invalidateQueries({
+    queryKey: historyKeys.list.queryKey,
+  });
+}
+
+export function optimisticUpdateViewedAt(itemId: string) {
+  const now = Date.now();
+
+  queryClient.setQueryData<HistoryQueryResponse>(
+    historyKeys.list.queryKey,
+    (old) => {
+      if (!old) return old;
+      return {
+        ...old,
+        data: updateItemViewedAt(old.data, itemId, now),
+      };
+    }
+  );
 }
 
 type TrackViewedParams = {
@@ -85,35 +101,42 @@ type TrackViewedContext = {
   previousData: HistoryQueryResponse | undefined;
 };
 
+async function trackViewedOnServer(params: TrackViewedParams): Promise<void> {
+  if (params.itemType === 'document') {
+    await throwOnErr(
+      async () =>
+        await storageServiceClient.trackOpenedDocument({
+          documentId: params.itemId,
+        })
+    );
+  } else if (params.itemType === 'chat') {
+    await throwOnErr(
+      async () =>
+        await storageServiceClient.trackOpenedChat({
+          chatId: params.itemId,
+        })
+    );
+  } else {
+    await throwOnErr(
+      async () =>
+        await storageServiceClient.upsertItemToUserHistory({
+          itemId: params.itemId,
+          itemType: params.itemType,
+        })
+    );
+  }
+}
+
 export function useTrackViewedMutation(
-  callbacks?: MutationCallbacks<void, Error, TrackViewedParams, TrackViewedContext>
+  callbacks?: MutationCallbacks<
+    void,
+    Error,
+    TrackViewedParams,
+    TrackViewedContext
+  >
 ) {
   return useMutation(() => ({
-    mutationFn: async (params: TrackViewedParams) => {
-      if (params.itemType === 'document') {
-        await throwOnErr(
-          async () =>
-            await storageServiceClient.trackOpenedDocument({
-              documentId: params.itemId,
-            })
-        );
-      } else if (params.itemType === 'chat') {
-        await throwOnErr(
-          async () =>
-            await storageServiceClient.trackOpenedChat({
-              chatId: params.itemId,
-            })
-        );
-      } else {
-        await throwOnErr(
-          async () =>
-            await storageServiceClient.upsertItemToUserHistory({
-              itemId: params.itemId,
-              itemType: params.itemType,
-            })
-        );
-      }
-    },
+    mutationFn: trackViewedOnServer,
     ...withCallbacks<void, Error, TrackViewedParams, TrackViewedContext>(
       {
         onMutate: async (params) => {
@@ -125,22 +148,7 @@ export function useTrackViewedMutation(
             historyKeys.list.queryKey
           );
 
-          const now = Date.now();
-
-          queryClient.setQueryData<HistoryQueryResponse>(
-            historyKeys.list.queryKey,
-            (old) => {
-              if (!old) return old;
-              return {
-                ...old,
-                data: old.data.map((item) =>
-                  item.id === params.itemId
-                    ? { ...item, viewedAt: now }
-                    : item
-                ),
-              };
-            }
-          );
+          optimisticUpdateViewedAt(params.itemId);
 
           return { previousData };
         },
@@ -161,27 +169,4 @@ export function useTrackViewedMutation(
       callbacks
     ),
   }));
-}
-
-export function optimisticUpdateViewedAt(itemId: string) {
-  const now = Date.now();
-
-  queryClient.setQueryData<HistoryQueryResponse>(
-    historyKeys.list.queryKey,
-    (old) => {
-      if (!old) return old;
-      return {
-        ...old,
-        data: old.data.map((item) =>
-          item.id === itemId ? { ...item, viewedAt: now } : item
-        ),
-      };
-    }
-  );
-}
-
-export function invalidateHistory() {
-  return queryClient.invalidateQueries({
-    queryKey: historyKeys.list.queryKey,
-  });
 }
