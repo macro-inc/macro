@@ -1,4 +1,5 @@
 use crate::compress_image::make_compressed_base64_webp;
+use ai::types::ImageData;
 use anyhow::Error;
 use model::document::{ContentType, ContentTypeExt};
 
@@ -12,6 +13,18 @@ pub struct StaticFileContent {
     pub file_id: String,
     pub content_type: ContentType,
     pub metadata: FileMetadata,
+}
+
+impl TryFrom<StaticFileContent> for ImageData {
+    type Error = anyhow::Error;
+    fn try_from(value: StaticFileContent) -> Result<Self, Self::Error> {
+        if value.content_type.is_image() {
+            if let Data::Binary(bytes) = value.data {
+                return ImageData::try_from_bytes(bytes.into());
+            }
+        }
+        return Err(anyhow::anyhow!("No conversion to image"));
+    }
 }
 
 impl StaticFileContent {

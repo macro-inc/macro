@@ -1,4 +1,4 @@
-use crate::compress_image::make_compressed_base64_webp;
+use ai::types::ImageData;
 use anyhow::Error;
 use bytes::Bytes;
 use lexical_client::types::CognitionResponseData;
@@ -18,6 +18,18 @@ pub enum Data {
     Text(String),
     Binary(Bytes),
     Markdown(CognitionResponseData),
+}
+
+impl TryFrom<DocumentContent> for ImageData {
+    type Error = anyhow::Error;
+    fn try_from(value: DocumentContent) -> Result<Self, Self::Error> {
+        if value.file_type.is_image() {
+            if let Data::Binary(bytes) = value.data {
+                return ImageData::try_from_bytes(bytes.into());
+            }
+        }
+        return Err(anyhow::anyhow!("No conversion to image"));
+    }
 }
 
 impl std::fmt::Debug for Data {
@@ -43,17 +55,6 @@ impl DocumentContent {
             Ok(self.data.to_string())
         } else {
             Err(anyhow::anyhow!("Document is not text"))
-        }
-    }
-
-    #[tracing::instrument(err)]
-    pub fn base64_compressed_webp(self) -> Result<String, Error> {
-        if self.file_type.is_image()
-            && let Some(bytes) = self.data.binary_data()
-        {
-            make_compressed_base64_webp(&bytes)
-        } else {
-            Err(anyhow::anyhow!("Data is not in image format"))
         }
     }
 }

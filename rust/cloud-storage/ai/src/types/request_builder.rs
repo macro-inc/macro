@@ -1,5 +1,5 @@
 use crate::types::{
-    ChatCompletionRequest, ChatMessage, Model, PromptAttachment, Role, SystemPrompt,
+    ChatCompletionRequest, ChatMessage, ImageData, Model, PromptAttachment, Role, SystemPrompt,
 };
 
 #[derive(Default)]
@@ -22,7 +22,7 @@ pub enum Attachment {
     /// These are inserted into the system prompt
     Text(PromptAttachment),
     /// a base64 or static url to a supported image type
-    ImageUrl(String),
+    Image(ImageData),
 }
 
 pub type NotSet = ();
@@ -84,7 +84,7 @@ impl RequestBuilder<Model, Vec<ChatMessage>, String> {
             .0
             .into_iter()
             .map(|attachment| match attachment {
-                Attachment::ImageUrl(url) => (Some(url), None),
+                Attachment::Image(data) => (Some(data), None),
                 Attachment::Text(text_attachment) => (None, Some(text_attachment)),
             })
             .collect::<(Vec<_>, Vec<_>)>();
@@ -176,8 +176,8 @@ impl<ChatModel, Messages, Prompt> RequestBuilder<ChatModel, Messages, Prompt> {
         self
     }
 
-    pub fn add_image_attachment(mut self, image_url: String) -> Self {
-        let wrapped = Attachment::ImageUrl(image_url);
+    pub fn add_image_attachment(mut self, data: ImageData) -> Self {
+        let wrapped = Attachment::Image(data);
         if let Some(ref mut attachments) = self.attachments {
             attachments.0.push(wrapped)
         } else {
@@ -248,11 +248,11 @@ mod test {
 
         let request = RequestBuilder::new()
             .system_prompt("Test system prompt".to_string())
-            .messages(messages.clone())
+            .messages(messages)
             .model(Model::Claude35Sonnet)
             .max_tokens(1000)
             .add_text_attachment(text_attachment.clone())
-            .add_image_attachment("https://example.com/image.jpg".to_string())
+            .add_image_attachment(ImageData::Url("https://example.com/image.jpg".to_string()))
             .build();
 
         // Verify system prompt has text attachment
@@ -277,7 +277,7 @@ mod test {
         assert_eq!(last_user_message.image_urls.as_ref().unwrap().len(), 1);
         assert_eq!(
             last_user_message.image_urls.as_ref().unwrap()[0],
-            "https://example.com/image.jpg"
+            ImageData::Url("https://example.com/image.jpg".into())
         );
     }
 
@@ -296,7 +296,7 @@ mod test {
 
         let request = RequestBuilder::new()
             .system_prompt("Basic system prompt".to_string())
-            .messages(messages.clone())
+            .messages(messages)
             .model(Model::Claude35Sonnet)
             .build();
 

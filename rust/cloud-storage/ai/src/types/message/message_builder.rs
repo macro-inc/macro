@@ -1,9 +1,9 @@
-use crate::types::{ChatMessage, ChatMessageContent, Role};
+use crate::types::{ChatMessage, ChatMessageContent, ImageData, Role};
 
 pub struct MessageBuilder<R, C> {
     content: C,
     role: R,
-    image_urls: Option<Vec<String>>,
+    image_urls: Option<Vec<ImageData>>,
 }
 
 impl MessageBuilder<Role, ChatMessageContent> {
@@ -91,7 +91,7 @@ impl<R> MessageBuilder<R, NoContent> {
 }
 
 impl<R, C> MessageBuilder<R, C> {
-    pub fn image_urls(mut self, image_urls: Vec<String>) -> Self {
+    pub fn image_urls(mut self, image_urls: Vec<ImageData>) -> Self {
         if image_urls.is_empty() {
             self.image_urls = None;
             self

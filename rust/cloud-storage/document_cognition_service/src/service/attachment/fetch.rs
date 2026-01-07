@@ -1,6 +1,6 @@
 use crate::api::context::DcsScribe;
 use crate::core::constants::CHANNEL_TRANSCRIPT_MAX_MESSAGES;
-use ai::types::{Attachment, PromptAttachment};
+use ai::types::{Attachment, ImageData, PromptAttachment};
 use ai_tools::read::EmailMessage;
 use model::{
     chat::{AttachmentType, ChatAttachmentWithName},
@@ -40,15 +40,14 @@ pub async fn fetchium(
                 }))
             }
             AttachmentType::Image => {
-                let base64_image = scribe
+                let image = scribe
                     .static_file
                     .fetch(attachment.attachment_id.clone())
                     .file_content()
                     .await?
-                    .content
-                    .base64_compressed_webp()?;
+                    .content;
 
-                Ok(Attachment::ImageUrl(base64_image))
+                Ok(Attachment::Image(ImageData::try_from(image)?))
             }
             AttachmentType::Channel => {
                 let transcript = scribe
@@ -75,9 +74,7 @@ pub async fn fetchium(
                     .document_content()
                     .await?;
                 if document.file_type().is_image() {
-                    Ok(Attachment::ImageUrl(
-                        document.content.base64_compressed_webp()?,
-                    ))
+                    Ok(Attachment::Image(ImageData::try_from(document.content)?))
                 } else {
                     Ok(Attachment::Text(PromptAttachment {
                         id: attachment.attachment_id,
