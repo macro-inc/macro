@@ -3,6 +3,10 @@ create_db $DATABASE_URL:
     cargo sqlx database create
 
 [no-cd]
+check_db $DATABASE_URL:
+    sqlx migrate info
+
+[no-cd]
 migrate_db $DATABASE_URL:
     cargo sqlx migrate run
 
