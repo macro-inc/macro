@@ -84,6 +84,7 @@ function PopoverSplitModal(props: {
       props.popover.mount.kind === 'component'
         ? (props.popover.mount as any).updateMeta
         : undefined,
+    referredFrom: () => null,
   };
 
   const stubPanelContext: SplitPanelContextType = {
