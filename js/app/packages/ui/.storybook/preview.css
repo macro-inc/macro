@@ -8,7 +8,7 @@
 
 @layer base {
   body {
-    @apply overflow-auto optical-auto;
+    @apply overflow-y-auto overflow-x-hidden optical-auto;
   }
 
   * {
