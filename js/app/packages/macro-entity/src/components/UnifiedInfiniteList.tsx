@@ -42,6 +42,11 @@ import type {
 import type { WithSearch } from '../types/search';
 import { Entity } from './Entity';
 
+const DEBOUNCE_FETCH_MORE_MS = 50;
+
+// note that this must be greater than DEBOUNCE_FETCH_MORE_MS
+const DEBOUNCE_LOADING_STATE_MS = 100;
+
 const cacheMap = new Map<
   string,
   {
@@ -179,11 +184,6 @@ const sortEntitiesForSearch = <T extends EntityData>(a: T, b: T): number => {
 
   return 0;
 };
-
-const DEBOUNCE_FETCH_MORE_MS = 50;
-
-// note that this must be greater than DEBOUNCE_FETCH_MORE_MS
-const DEBOUNCE_LOADING_STATE_MS = 100;
 
 const getGroupKey = (operations?: EntityQueryOperations): PropertyKey => {
   if (!operations) return 0;
