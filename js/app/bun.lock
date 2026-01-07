@@ -1,5 +1,6 @@
 {
   "lockfileVersion": 1,
+  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "@coparse/monorepo",
@@ -155,6 +156,7 @@
       "version": "2.5.0",
       "dependencies": {
         "@macro/tauri": "workspace:*",
+        "@tauri-apps/plugin-log": "^2.7.1",
         "@types/three": "^0.178.0",
         "core": "workspace:*",
         "mermaid": "^11.6.0",
@@ -1146,6 +1148,8 @@
     "@tauri-apps/plugin-haptics": ["@tauri-apps/plugin-haptics@2.3.2", "", { "dependencies": { "@tauri-apps/api": "^2.8.0" } }, "sha512-TqvBR5JoPodDQWPXsNymmyqp37dOpunZOdVVbx5xOAxki7rVwiCMvoEPdtJQNIrU+dQDfkQYZ2oDBVOu4hf+ig=="],
 
     "@tauri-apps/plugin-http": ["@tauri-apps/plugin-http@2.5.2", "", { "dependencies": { "@tauri-apps/api": "^2.8.0" } }, "sha512-x1mQKHSLDk4mS2S938OTeyk8L7QyLpCrKZCZcjkljGsvTvRMojCvI9SeJ1kaxc7t8xSilkC7WdId8xER9TIGLg=="],
+
+    "@tauri-apps/plugin-log": ["@tauri-apps/plugin-log@2.7.1", "", { "dependencies": { "@tauri-apps/api": "^2.8.0" } }, "sha512-jdb+o0wxQc8PjnLktgGpOs9Dh1YupaOGDXzO+Y8peA1UZ1ep3eXv4E1oiJ7nIQVN0XUFDDhnn3aBszl8ijhR+A=="],
 
     "@tauri-apps/plugin-notification": ["@tauri-apps/plugin-notification@2.3.1", "", { "dependencies": { "@tauri-apps/api": "^2.8.0" } }, "sha512-7gqgfANSREKhh35fY1L4j3TUjUdePmU735FYDqRGeIf8nMXWpcx6j4FhN9/4nYz+m0mv79DCTPLqIPTySggGgg=="],
 
