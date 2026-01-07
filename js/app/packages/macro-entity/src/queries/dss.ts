@@ -11,6 +11,7 @@ import type { ItemType } from '@service-storage/client';
 import type {
   PostItemsSoupParams,
   PostSoupRequest,
+  SoupApiItem,
   SoupApiSort,
   SoupDocument,
 } from '@service-storage/generated/schemas';
@@ -405,19 +406,31 @@ export function createBulkDeleteDssItemsMutation() {
       const deletedIDs = entities.map((e) => e.id);
 
       queryClient.cancelQueries({
-        queryKey: queryKeys.dss({ infinite: true }),
+        queryKey: queryKeys.all.dss,
       });
       queryClient.cancelQueries({
         queryKey: queryKeys.all.search,
       });
 
+      function getSoupItemId(item: SoupApiItem): string {
+        switch (item.tag) {
+          case 'channel':
+            return item.data.channel.id;
+          default:
+            return item.data.id;
+        }
+      }
+
       function removeEntitiesFromQueryData(
-        prev: { pages: { items: EntityData[] }[] } | undefined
-      ): { pages: { items: EntityData[] }[] } | undefined {
+        prev: InfiniteData<SoupPage, unknown> | undefined
+      ): InfiniteData<SoupPage, unknown> | undefined {
         if (!prev) return prev;
         const pages = prev.pages.map((page) => ({
           ...page,
-          items: page.items.filter((item) => !deletedIDs.includes(item.id)),
+          items: page.items.filter((item) => {
+            const itemId = getSoupItemId(item);
+            return !deletedIDs.includes(itemId);
+          }),
         }));
         return {
           ...prev,
@@ -462,10 +475,10 @@ export function createBulkDeleteDssItemsMutation() {
       }
 
       queryClient.setQueriesData(
-        { queryKey: queryKeys.dss({ infinite: true }) },
+        { queryKey: queryKeys.all.dss },
         (prev) =>
           removeEntitiesFromQueryData(
-            prev as { pages: { items: EntityData[] }[] } | undefined
+            prev as InfiniteData<SoupPage, unknown> | undefined
           )
       );
 
@@ -477,12 +490,11 @@ export function createBulkDeleteDssItemsMutation() {
         )
       );
     },
-    onSettled: (data, error, entities) => {
-      if (error)
-        console.error(`Failed to delete dss items`, entities, data, error);
-
+    onError: (error, entities, _context) => {
+      console.error(`Failed to delete dss items`, entities, error);
+      // Rollback on error - restore the deleted items
       queryClient.invalidateQueries({
-        queryKey: queryKeys.dss({ infinite: true }),
+        queryKey: queryKeys.all.dss,
       });
       queryClient.invalidateQueries({
         queryKey: queryKeys.all.search,
