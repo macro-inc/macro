@@ -474,12 +474,10 @@ export function createBulkDeleteDssItemsMutation() {
         };
       }
 
-      queryClient.setQueriesData(
-        { queryKey: queryKeys.all.dss },
-        (prev) =>
-          removeEntitiesFromQueryData(
-            prev as InfiniteData<SoupPage, unknown> | undefined
-          )
+      queryClient.setQueriesData({ queryKey: queryKeys.all.dss }, (prev) =>
+        removeEntitiesFromQueryData(
+          prev as InfiniteData<SoupPage, unknown> | undefined
+        )
       );
 
       queryClient.setQueriesData({ queryKey: queryKeys.all.search }, (prev) =>
