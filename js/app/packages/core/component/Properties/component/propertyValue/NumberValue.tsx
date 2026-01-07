@@ -52,10 +52,10 @@ export const NumberValue: Component<NumberValueProps> = (props) => {
       fallback={
         <button
           onClick={handleClick}
-          class="text-left px-2 py-0.5 border border-edge-muted bg-transparent block max-w-full break-words"
+          class="text-left px-2 py-0.5 border border-edge-muted bg-transparent block max-w-full break-words cursor-default"
           classList={{
-            'hover:bg-hover text-ink': supportsInline(),
-            'text-ink-muted cursor-default': !supportsInline(),
+            'text-ink': supportsInline(),
+            'text-ink-muted': !supportsInline(),
           }}
         >
           <Show when={hasValue()} fallback={<EmptyValue />}>

@@ -84,7 +84,16 @@ export const SelectValue: Component<SelectValueProps> = (props) => {
               onMouseEnter={() => setHoveredValue(value)}
               onMouseLeave={() => setHoveredValue(null)}
             >
-              <div class={PROPERTY_STYLES.value.multiButton} title={formatted}>
+              <div
+                class={PROPERTY_STYLES.value.multiButton}
+                title={formatted}
+                onClick={
+                  !props.property.isMultiSelect ? handleClick : undefined
+                }
+                style={{
+                  cursor: 'default',
+                }}
+              >
                 <PropertyValueIcon optionId={value} />
                 <span class="block truncate">{formatted}</span>
               </div>

@@ -70,14 +70,11 @@ export const DateValue: Component<DateValueProps> = (props) => {
         onClick={handleClick}
         class="text-left px-2 py-0.5 border border-edge-muted bg-transparent inline-block max-w-full break-words shrink-0"
         classList={{
-          'text-ink-muted cursor-default': isReadOnly(),
-          'hover:bg-hover text-ink': !isReadOnly(),
+          'text-ink-muted cursor-default': true,
         }}
       >
         <Show when={displayValue} fallback={<EmptyValue />}>
-          <span class="block truncate max-w-full font-mono">
-            {displayValue}
-          </span>
+          <span class="block truncate max-w-full">{displayValue}</span>
         </Show>
       </button>
       <Show when={!isReadOnly() && isHovered() && displayValue && !isSaving()}>

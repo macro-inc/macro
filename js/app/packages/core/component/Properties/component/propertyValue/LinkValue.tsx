@@ -256,10 +256,7 @@ const LinkDisplay: Component<LinkDisplayProps> = (props) => {
     >
       <button
         onClick={handleLinkClick}
-        class="text-left px-2 py-0.5 border border-edge-muted bg-transparent text-ink inline-flex items-center gap-2 w-full"
-        classList={{
-          'hover:bg-hover': props.canEdit,
-        }}
+        class="text-left px-2 py-0.5 border border-edge-muted bg-transparent text-ink inline-flex items-center gap-2 w-full cursor-default"
         title={props.url}
         disabled={props.isRemoving}
       >

@@ -39,9 +39,8 @@ export const BooleanValue: Component<BooleanValueProps> = (props) => {
       disabled={isSaving() || isReadOnly()}
       class="flex items-center justify-end p-1"
       classList={{
-        'cursor-default': isReadOnly(),
-        'hover:bg-hover': !isReadOnly(),
-        'opacity-50 cursor-not-allowed': isSaving(),
+        'cursor-default': isReadOnly() || isSaving(),
+        'hover:bg-hover': !isReadOnly() && !isSaving(),
       }}
     >
       <div

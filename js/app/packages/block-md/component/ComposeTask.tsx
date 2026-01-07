@@ -12,15 +12,11 @@ import {
   propertyValueToApi,
 } from '@core/component/Properties/api/converters';
 import { Modals } from '@core/component/Properties/component/modal';
-import {
-  PropertyGrid,
-  PropertyRow,
-} from '@core/component/Properties/component/panel';
+import { PropertyGrid } from '@core/component/Properties/component/panel';
 import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 import {
   PropertiesProvider,
   type PropertySaveHandler,
-  usePropertiesContext,
 } from '@core/component/Properties/context/PropertiesContext';
 import type {
   Property,
@@ -33,11 +29,16 @@ import { createTask } from '@core/util/create';
 import { filterMap } from '@core/util/list';
 import { isErr } from '@core/util/maybeResult';
 import XIcon from '@icon/regular/x.svg';
+import {
+  queryKeys,
+  useQueryClient as useEntityQueryClient,
+} from '@macro-entity';
 import { propertiesServiceClient } from '@service-properties/client';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
+import { refetchHistory } from '@service-storage/history';
 import { useQuery } from '@tanstack/solid-query';
 import type { LexicalEditor } from 'lexical';
-import { createSignal, For, Show, Suspense } from 'solid-js';
+import { createSignal, Show, Suspense } from 'solid-js';
 import { createStore, reconcile, type Store, unwrap } from 'solid-js/store';
 import { tabbable } from 'tabbable';
 
@@ -91,6 +92,13 @@ async function createTaskWithProperties(
     }
   );
 
+  // Invalidate queries to refresh DSS and history
+  const entityQueryClient = useEntityQueryClient();
+  entityQueryClient.invalidateQueries({
+    queryKey: queryKeys.all.dss,
+  });
+  refetchHistory();
+
   return documentId;
 }
 
@@ -119,7 +127,7 @@ function extractPropertyValue(
     if (Array.isArray(value)) {
       return filterMap(value as string[], (id) => {
         const opt = opts.find((opt) => opt.id === id);
-        return opt ? opt.value.value : undefined;
+        return opt ? opt.id : undefined;
       });
     }
   } else {
@@ -135,7 +143,7 @@ function extractPropertyValue(
 function TaskToastPreview(props: { title: string; body: string; id: string }) {
   return (
     <BlockLink blockOrFileName="task" id={props.id}>
-      <div class="text-ink size-full">
+      <div class="text-ink size-full w-44">
         <div class="flex row items-center gap-2 mb-4">
           <EntityIcon targetType="task" />
           <span class="text-base font-medium">
@@ -233,6 +241,7 @@ export function ComposeTask(props: ComposeTaskProps) {
         createdAt: '',
         valueType: definition.data_type,
         value: extractPropertyValue(definition, propertyValues, options()),
+        options: options().get(definition.id),
       } as Property;
     });
   };
@@ -367,8 +376,13 @@ export function ComposeTask(props: ComposeTaskProps) {
             onPropertyDeleted={() => {}}
             saveHandler={saveHandler}
           >
-            <PropertyGrid properties={properties()} columns={2}></PropertyGrid>
-            <Modals />
+            <div class="text-sm">
+              <PropertyGrid
+                properties={properties()}
+                columns={2}
+              ></PropertyGrid>
+              <Modals />
+            </div>
           </PropertiesProvider>
         </Suspense>
       </div>

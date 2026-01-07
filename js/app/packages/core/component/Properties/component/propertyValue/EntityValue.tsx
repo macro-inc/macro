@@ -31,6 +31,12 @@ export const EntityValue: Component<EntityValueProps> = (props) => {
     }
   };
 
+  const handleEditEntity = (anchor?: HTMLElement) => {
+    if (props.canEdit && !props.property.isMetadata) {
+      props.onEdit?.(props.property, anchor);
+    }
+  };
+
   const handleRemoveEntity = async (entityToRemove: EntityReference) => {
     if (isReadOnly() || isSaving()) return;
 
@@ -76,6 +82,9 @@ export const EntityValue: Component<EntityValueProps> = (props) => {
             specificMessageId={entityRef.specific_message_id}
             canEdit={!isReadOnly()}
             onRemove={() => handleRemoveEntity(entityRef)}
+            onEdit={
+              !props.property.isMultiSelect ? handleEditEntity : undefined
+            }
             isSaving={isSaving()}
           />
         )}

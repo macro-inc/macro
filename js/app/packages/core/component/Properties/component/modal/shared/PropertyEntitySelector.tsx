@@ -458,6 +458,9 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
     if (!props.property.isMultiSelect && props.onClose) {
       props.onClose();
+    } else if (props.property.isMultiSelect && searchInputRef) {
+      // Keep input focused when multiselect is enabled
+      setTimeout(() => searchInputRef.focus(), 0);
     }
   };
 

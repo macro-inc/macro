@@ -5,7 +5,7 @@ import {
 } from '@core/component/Properties/utils';
 import { Tooltip } from '@core/component/Tooltip';
 import { useUnfurl } from '@core/signal/unfurl';
-import { cornerClip } from '@core/util/clipPath';
+
 import LinkIcon from '@icon/regular/link.svg';
 import { proxyResource } from '@service-unfurl/client';
 import { createSignal, For, Show } from 'solid-js';
@@ -76,30 +76,22 @@ const SingleLinkPill = (props: SingleLinkPillProps) => {
         shift: { padding: 8 },
       }}
     >
-      <div
-        class="p-px bg-edge box-border h-fit flex items-center"
-        style={{ 'clip-path': cornerClip('0.2rem', 0, 0, 0) }}
-      >
-        <div
-          class="inline-flex items-center gap-1.5 p-1.5 @3xl/soup:px-2 @3xl/soup:py-1 text-xs leading-none text-ink-muted bg-panel box-border"
-          style={{ 'clip-path': cornerClip('calc(0.2rem - 0.5px)', 0, 0, 0) }}
+      <div class="inline-flex items-center gap-1.5 p-1.5 @3xl/soup:px-2 @3xl/soup:py-1 text-xs leading-none text-ink-muted border border-edge-muted rounded box-border h-fit">
+        <Show
+          when={faviconUrl() && !imageError()}
+          fallback={<LinkIcon class="size-4 text-ink-muted shrink-0" />}
         >
-          <Show
-            when={faviconUrl() && !imageError()}
-            fallback={<LinkIcon class="size-4 text-ink-muted shrink-0" />}
-          >
-            <img
-              src={faviconUrl()!}
-              class="size-4 object-cover rounded shrink-0"
-              crossorigin="anonymous"
-              alt=""
-              onError={() => setImageError(true)}
-            />
-          </Show>
-          <span class="truncate max-w-[100px] hidden @3xl/soup:inline">
-            {title()}
-          </span>
-        </div>
+          <img
+            src={faviconUrl()!}
+            class="size-4 object-cover rounded shrink-0"
+            crossorigin="anonymous"
+            alt=""
+            onError={() => setImageError(true)}
+          />
+        </Show>
+        <span class="truncate max-w-[100px] hidden @3xl/soup:inline">
+          {title()}
+        </span>
       </div>
     </Tooltip>
   );
@@ -118,33 +110,27 @@ const SingleLinkTooltipContent = (props: SingleLinkTooltipContentProps) => {
   return (
     <PropertyPillTooltip property={props.property}>
       <div class="flex items-center gap-1.5 flex-wrap">
-        <div
-          class="p-px bg-edge box-border h-fit w-fit flex items-center"
-          style={{ 'clip-path': cornerClip('0.2rem', 0, 0, 0) }}
+        <a
+          href={props.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="inline-flex items-center gap-1.5 px-2 py-1 text-xs leading-none text-ink-muted border border-edge-muted rounded box-border h-fit w-fit"
+          title={props.url}
         >
-          <a
-            href={props.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            class="inline-flex items-center gap-1.5 px-2 py-1 text-xs leading-none text-ink-muted bg-panel box-border"
-            style={{ 'clip-path': cornerClip('calc(0.2rem - 0.5px)', 0, 0, 0) }}
-            title={props.url}
+          <Show
+            when={props.faviconUrl && !imageError()}
+            fallback={<LinkIcon class="size-4 text-ink-muted" />}
           >
-            <Show
-              when={props.faviconUrl && !imageError()}
-              fallback={<LinkIcon class="size-4 text-ink-muted" />}
-            >
-              <img
-                src={props.faviconUrl!}
-                class="size-4 object-cover rounded"
-                crossorigin="anonymous"
-                alt=""
-                onError={() => setImageError(true)}
-              />
-            </Show>
-            <span class="truncate max-w-[150px]">{props.title}</span>
-          </a>
-        </div>
+            <img
+              src={props.faviconUrl!}
+              class="size-4 object-cover rounded"
+              crossorigin="anonymous"
+              alt=""
+              onError={() => setImageError(true)}
+            />
+          </Show>
+          <span class="truncate max-w-[150px]">{props.title}</span>
+        </a>
       </div>
     </PropertyPillTooltip>
   );
@@ -167,24 +153,16 @@ const MultiLinkPill = (props: MultiLinkPillProps) => {
         shift: { padding: 8 },
       }}
     >
-      <div
-        class="p-px bg-edge box-border h-fit flex items-center"
-        style={{ 'clip-path': cornerClip('0.2rem', 0, 0, 0) }}
-      >
-        <div
-          class="inline-flex items-center gap-1.5 p-1.5 @3xl/soup:px-2 @3xl/soup:py-1 text-xs leading-none text-ink-muted bg-panel box-border"
-          style={{ 'clip-path': cornerClip('calc(0.2rem - 0.5px)', 0, 0, 0) }}
-        >
-          <PropertyDataTypeIcon
-            property={{
-              data_type: 'LINK',
-            }}
-            class="size-3.5 shrink-0"
-          />
-          <span class="truncate max-w-[120px] hidden @3xl/soup:inline">
-            {props.property.displayName} ({props.urls.length})
-          </span>
-        </div>
+      <div class="inline-flex items-center gap-1.5 p-1.5 @3xl/soup:px-2 @3xl/soup:py-1 text-xs leading-none text-ink-muted border border-edge-muted rounded box-border h-fit">
+        <PropertyDataTypeIcon
+          property={{
+            data_type: 'LINK',
+          }}
+          class="size-3.5 shrink-0"
+        />
+        <span class="truncate max-w-[120px] hidden @3xl/soup:inline">
+          {props.property.displayName} ({props.urls.length})
+        </span>
       </div>
     </Tooltip>
   );
@@ -230,32 +208,26 @@ const LinkValuePill = (props: LinkValuePillProps) => {
   };
 
   return (
-    <div
-      class="p-px bg-edge box-border h-fit w-fit flex items-center"
-      style={{ 'clip-path': cornerClip('0.2rem', 0, 0, 0) }}
+    <a
+      href={props.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      class="inline-flex items-center gap-1.5 px-2 py-1 text-xs leading-none text-ink-muted border border-edge-muted rounded box-border h-fit w-fit"
+      title={props.url}
     >
-      <a
-        href={props.url}
-        target="_blank"
-        rel="noopener noreferrer"
-        class="inline-flex items-center gap-1.5 px-2 py-1 text-xs leading-none text-ink-muted bg-panel box-border"
-        style={{ 'clip-path': cornerClip('calc(0.2rem - 0.5px)', 0, 0, 0) }}
-        title={props.url}
+      <Show
+        when={faviconUrl() && !imageError()}
+        fallback={<LinkIcon class="size-4 text-ink-muted" />}
       >
-        <Show
-          when={faviconUrl() && !imageError()}
-          fallback={<LinkIcon class="size-4 text-ink-muted" />}
-        >
-          <img
-            src={faviconUrl()!}
-            class="size-4 object-cover rounded"
-            crossorigin="anonymous"
-            alt=""
-            onError={() => setImageError(true)}
-          />
-        </Show>
-        <span class="truncate max-w-[150px]">{title()}</span>
-      </a>
-    </div>
+        <img
+          src={faviconUrl()!}
+          class="size-4 object-cover rounded"
+          crossorigin="anonymous"
+          alt=""
+          onError={() => setImageError(true)}
+        />
+      </Show>
+      <span class="truncate max-w-[150px]">{title()}</span>
+    </a>
   );
 };

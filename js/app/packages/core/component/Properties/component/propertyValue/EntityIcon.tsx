@@ -3,7 +3,10 @@ import type { EntityType } from '@service-properties/generated/schemas/entityTyp
 import { type Component, createSignal, type ParentProps, Show } from 'solid-js';
 import { usePropertyEntityDisplay } from '../../hooks';
 import type { Property } from '../../types';
-import { PropertyValueDeleteButton } from './ValueComponents';
+import {
+  PropertyValueDeleteButton,
+  PropertyValueEditButton,
+} from './ValueComponents';
 
 type EntityValueDisplayProps = ParentProps<{
   property: Property;
@@ -12,11 +15,13 @@ type EntityValueDisplayProps = ParentProps<{
   specificMessageId?: string | null;
   canEdit?: boolean;
   onRemove?: () => void;
+  onEdit?: (anchor?: HTMLElement) => void;
   isSaving?: boolean;
 }>;
 
 export const EntityIcon: Component<EntityValueDisplayProps> = (props) => {
   const [isHovered, setIsHovered] = createSignal(false);
+  let containerRef: HTMLDivElement | undefined;
 
   const { name, icon, blockOrFileType, linkParams } = usePropertyEntityDisplay(
     () => props.entityId,
@@ -49,6 +54,7 @@ export const EntityIcon: Component<EntityValueDisplayProps> = (props) => {
 
   return (
     <div
+      ref={containerRef}
       class="relative inline-flex max-w-[140px] shrink-0"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
@@ -57,15 +63,25 @@ export const EntityIcon: Component<EntityValueDisplayProps> = (props) => {
         <span class="truncate flex-1">{innerContent}</span>
         <Show
           when={
-            props.canEdit && isHovered() && !props.isSaving && props.onRemove
+            props.canEdit &&
+            isHovered() &&
+            !props.isSaving &&
+            (props.onRemove || props.onEdit)
           }
         >
-          <div class="absolute right-1 inset-y-0 flex items-center">
-            <PropertyValueDeleteButton
-              onClick={props.onRemove!}
-              variant="modern"
-              disabled={props.isSaving}
-            />
+          <div class="absolute right-1 inset-y-0 flex items-center gap-1">
+            <Show when={props.onEdit}>
+              <PropertyValueEditButton
+                onClick={() => props.onEdit!(containerRef)}
+                disabled={props.isSaving}
+              />
+            </Show>
+            <Show when={props.onRemove}>
+              <PropertyValueDeleteButton
+                onClick={props.onRemove!}
+                disabled={props.isSaving}
+              />
+            </Show>
           </div>
         </Show>
       </div>

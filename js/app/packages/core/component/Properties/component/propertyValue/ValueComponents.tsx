@@ -35,7 +35,7 @@ export const AddPropertyValueButton: Component<{
     <button
       onClick={props.onClick as (e: MouseEvent) => void}
       disabled={props.disabled}
-      class={STYLES.addButton}
+      class={twMerge(STYLES.addButton, 'cursor-default')}
     >
       +
     </button>
@@ -60,12 +60,12 @@ export const PropertyValueButton: Component<{
       disabled={props.disabled}
       title={props.title}
       class={twMerge(
-        'text-left px-2 py-0.5 border border-edge-muted bg-transparent',
+        'text-left px-2 py-0.5 border border-edge-muted bg-transparent cursor-default',
         props.class
       )}
       classList={{
-        'text-ink-muted cursor-default': props.isReadOnly,
-        'hover:bg-hover text-ink': !props.isReadOnly,
+        'text-ink-muted': props.isReadOnly,
+        'text-ink': !props.isReadOnly,
       }}
     >
       {props.children}
@@ -86,7 +86,7 @@ export const PropertyValueEditButton: Component<{
       onClick={props.onClick}
       disabled={props.disabled}
       class={twMerge(
-        'bg-panel size-4 p-0.5 border border-edge-muted text-ink-muted',
+        'bg-panel size-4 p-0.5 border border-edge-muted text-ink-muted cursor-default',
         'hover:bg-hover hover:text-ink',
         'active:bg-panel active:border-edge active:text-ink'
       )}
@@ -109,7 +109,7 @@ export const PropertyValueDeleteButton: Component<{
       onClick={props.onClick}
       disabled={props.disabled}
       class={twMerge(
-        'bg-panel floating-failure-bg size-4 p-0.5 border border-edge-muted text-failure-ink',
+        'bg-panel floating-failure-bg size-4 p-0.5 border border-edge-muted text-failure-ink cursor-default',
         'hover:bg-panel hover:floating-failure-bg',
         'active:bg-failure-ink active:border-failure-ink active:text-panel'
       )}

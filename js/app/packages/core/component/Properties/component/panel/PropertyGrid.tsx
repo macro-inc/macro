@@ -81,7 +81,7 @@ export const PropertyGrid: Component<PropertiesListProps> = (props) => {
       }
     >
       <div
-        class="grid gap-x-4 gap-y-1 pt-2 min-w-fit"
+        class="grid gap-x-4 gap-y-2 pt-2 min-w-fit"
         style={{
           'grid-template-columns': `repeat(${props.columns ?? 1}, minmax(4rem, 12rem) minmax(8rem, 1fr))`,
         }}
