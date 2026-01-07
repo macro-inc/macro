@@ -42,7 +42,7 @@ jobs:
           npm-rc-token: ${{ secrets.NPMRC_GH_TOKEN }}
       - name: Generate API Types
         working-directory: js/app
-        run: just gen-api
+        run: bun run gen-api -- --check
       - name: Check Types
         working-directory: js/app
         run: |
