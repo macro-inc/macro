@@ -1,10 +1,9 @@
-pub use super::base_64_image::*;
 use super::{
-    message::{ChatMessage, SystemPrompt},
+    message::{Base64Image, ChatMessage, SystemPrompt},
     model::Model,
 };
 
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Debug, Clone)]
 pub struct ChatCompletionRequest {
     /// can either be openai or google
     pub(crate) model: Model,

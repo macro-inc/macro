@@ -45,7 +45,6 @@ dependencies = [
 name = "ai"
 version = "0.1.0"
 dependencies = [
- "ai_format",
  "anthropic",
  "anyhow",
  "async-openai",
@@ -77,6 +76,7 @@ dependencies = [
 name = "ai_format"
 version = "0.1.0"
 dependencies = [
+ "ai",
  "chrono",
 ]
 
@@ -85,6 +85,7 @@ name = "ai_tools"
 version = "0.1.0"
 dependencies = [
  "ai",
+ "ai_format",
  "anthropic",
  "anyhow",
  "async-trait",
@@ -2576,6 +2577,7 @@ version = "0.1.0"
 dependencies = [
  "aho-corasick",
  "ai",
+ "ai_format",
  "ai_tools",
  "anyhow",
  "async-openai",

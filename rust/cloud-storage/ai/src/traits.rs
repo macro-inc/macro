@@ -5,4 +5,4 @@ pub trait Metadata: for<'de> Deserialize<'de> {
     fn description() -> Option<String>;
 }
 
-pub trait TextAttachment: std::fmt::Display {}
+pub trait TextAttachment: std::fmt::Display + std::fmt::Debug + Send + Sync {}

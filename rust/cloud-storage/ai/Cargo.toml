@@ -8,7 +8,6 @@ version = "0.1.0"
 tokio = { workspace = true }
 
 [dependencies]
-ai_format = { path = "../ai_format" }
 anyhow = { workspace = true }
 async-openai = { workspace = true }
 async-stream = { workspace = true }

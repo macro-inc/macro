@@ -128,7 +128,7 @@ where
         // tell the primary model how all the tools will work
         request
             .system_prompt
-            .content
+            .instructions
             .push_str(&build_tool_prompt(&self.toolset));
 
         self.request = request.try_into()?;
@@ -174,9 +174,9 @@ where
                         .build(),
                 ],
                 system_prompt: SystemPrompt {
-                    attachments: vec![],
-                    content: "Use the tool provided in context following the user instructions"
-                        .into(),
+                    attachments: Default::default(),
+                    instructions:
+                        "Use the tool provided in context following the user instructions".into(),
                 },
             },
             selected_tool,

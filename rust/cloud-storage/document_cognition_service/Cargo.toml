@@ -98,6 +98,9 @@ unfurl_service = { path = "../unfurl_service" }
 utoipa = { workspace = true, features = ["axum_extras", "chrono"] }
 utoipa-swagger-ui = { workspace = true, features = ["axum"] }
 uuid = { workspace = true }
+macro_user_id = { path = "../macro_user_id" }
+models_opensearch = { path = "../models_opensearch" }
+ai_format = { path = "../ai_format" }
 
 [dev-dependencies]
 macro_auth = { path = "../macro_auth", features = ["testing"] }

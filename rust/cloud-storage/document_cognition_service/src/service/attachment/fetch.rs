@@ -1,6 +1,7 @@
 use crate::api::context::DcsScribe;
 use crate::core::constants::CHANNEL_TRANSCRIPT_MAX_MESSAGES;
-use ai::types::{Attachment, ImageData, PromptAttachment};
+use ai::types::{Attachment, ImageData};
+use ai_format::document::Document;
 use ai_tools::read::EmailMessage;
 use model::{
     chat::{AttachmentType, ChatAttachmentWithName},
@@ -32,12 +33,15 @@ pub async fn fetchium(
                     .content()
                     .await?
                     .to_string();
-                Ok(Attachment::Text(PromptAttachment {
-                    id: attachment.attachment_id.clone(),
-                    file_type: "Project".into(),
-                    name: attachment.name().unwrap_or_default().into(),
-                    content: project_items,
-                }))
+                Ok(Attachment::Text(
+                    Document {
+                        id: attachment.attachment_id.clone(),
+                        file_type: "Project".into(),
+                        name: attachment.name().unwrap_or_default().into(),
+                        content: project_items,
+                    }
+                    .into(),
+                ))
             }
             AttachmentType::Image => {
                 let image = scribe
@@ -60,12 +64,15 @@ pub async fn fetchium(
                     )
                     .await?;
 
-                Ok(Attachment::Text(PromptAttachment {
-                    content: transcript,
-                    file_type: "channel".into(),
-                    id: attachment.attachment_id.clone(),
-                    name: "unknown channel name".into(),
-                }))
+                Ok(Attachment::Text(
+                    Document {
+                        content: transcript,
+                        file_type: "channel".into(),
+                        id: attachment.attachment_id.clone(),
+                        name: "unknown channel name".into(),
+                    }
+                    .into(),
+                ))
             }
             AttachmentType::Document => {
                 let document = scribe
@@ -76,12 +83,15 @@ pub async fn fetchium(
                 if document.file_type().is_image() {
                     Ok(Attachment::Image(ImageData::try_from(document.content)?))
                 } else {
-                    Ok(Attachment::Text(PromptAttachment {
-                        id: attachment.attachment_id,
-                        name: document.metadata().document_name.clone(),
-                        file_type: document.file_type().to_string(),
-                        content: document.content.text_content()?,
-                    }))
+                    Ok(Attachment::Text(
+                        Document {
+                            id: attachment.attachment_id,
+                            name: document.metadata().document_name.clone(),
+                            file_type: document.file_type().to_string(),
+                            content: document.content.text_content()?,
+                        }
+                        .into(),
+                    ))
                 }
             }
             AttachmentType::Email => {
@@ -114,12 +124,15 @@ pub async fn fetchium(
 
                 let content = serde_json::to_string_pretty(&formatted_content)?;
 
-                Ok(Attachment::Text(PromptAttachment {
-                    id: attachment.attachment_id,
-                    name: subject.clone(),
-                    file_type: "email".to_string(),
-                    content,
-                }))
+                Ok(Attachment::Text(
+                    Document {
+                        id: attachment.attachment_id,
+                        name: subject.clone(),
+                        file_type: "email".to_string(),
+                        content,
+                    }
+                    .into(),
+                ))
             }
         }
     }
