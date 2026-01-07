@@ -272,8 +272,8 @@ export function createUnifiedInfiniteList<T extends EntityData>({
 
     const infiniteEntities = entityInfiniteQueries.map((query) => {
       const operations = getOperations(query.operations);
-      const data =
-        query.query.isSuccess && query.query.isEnabled ? query.query.data : [];
+      // NOTE: we don't use the isSuccess check because fetch next page can fail
+      const data = query.query.isEnabled ? (query.query.data ?? []) : [];
       return {
         data,
         operations,
