@@ -3,11 +3,14 @@ import { withAnalytics } from '@coparse/analytics';
 import { TrackingEvents } from '@coparse/analytics/src/types/TrackingEvents';
 import { useIsAuthenticated } from '@core/auth';
 import { useBlockAliasedName, useBlockId, useBlockName } from '@core/block';
-import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { RecipientSelector } from '@core/component/RecipientSelector';
+import { ShareOptions } from '@core/component/TopBar/ShareButton';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { WithCustomUserInput } from '@core/user';
 import { useSendMessageToPeople } from '@core/util/channels';
+import CheckIcon from '@icon/bold/check-bold.svg?component-solid';
+import PaperPlaneRight from '@phosphor-icons/core/fill/paper-plane-right-fill.svg?component-solid';
 import { blockNameToItemType } from '@service-storage/client';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { SharePermissionV2ChannelSharePermissions } from '@service-storage/generated/schemas/sharePermissionV2ChannelSharePermissions';
@@ -19,7 +22,7 @@ import {
   Show,
 } from 'solid-js';
 import { getDestinationFromOptions } from './NewMessage';
-import type { Permissions } from './SharePermissions';
+import { Permissions } from './SharePermissions';
 import { toast } from './Toast/Toast';
 
 interface ForwardToChannelProps {
@@ -263,9 +266,10 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
             noBrackets
             hideBorder
             noPadding
+            focusOnMount
           />
         </div>
-        <div class="flex flex-col w-full h-[150px] overflow-y-auto border-t-1 border-edge-muted/50">
+        <div class="flex flex-col w-full min-h-[120px] overflow-y-auto border-t-1 border-edge-muted/50 scrollbar-hidden">
           <div
             class="flex-1 px-[12px] py-[6px] w-full text-sm"
             onClick={() => focusMarkdownArea()}
@@ -287,20 +291,81 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
             />
           </div>
 
-          <Show when={canSendAsGroup()}>
-            <div class="p-2 w-min">
-              <ToggleSwitch
-                switchRootClass={canSendAsGroup() ? '' : 'cursor-not-allowed'}
-                checked={sendAsGroupMessage() && canSendAsGroup()}
-                onChange={setSendAsGroupMessage}
-                disabled={!canSendAsGroup()}
-                label={'Send In Channel'}
-                falseLabel="FALSE"
-                trueLabel="TRUE"
-                size="SM"
+          <div class="flex w-full items-center p-3 gap-3 flex-wrap">
+            <Show when={canSendAsGroup()}>
+              <label
+                class={`flex items-start gap-2 ${!canSendAsGroup() ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+              >
+                <div class="relative mt-0.5">
+                  <input
+                    onChange={(e) =>
+                      setSendAsGroupMessage(e.currentTarget.checked)
+                    }
+                    checked={sendAsGroupMessage() && canSendAsGroup()}
+                    disabled={!canSendAsGroup()}
+                    class="peer sr-only"
+                    type="checkbox"
+                  />
+                  <div
+                    class={`w-4 h-4 border ${
+                      !canSendAsGroup()
+                        ? 'border-edge/30 peer-checked:bg-menu/20'
+                        : 'border-edge hover:border-accent/30 peer-checked:bg-accent/10 peer-checked:border-accent/30'
+                    }`}
+                  >
+                    <Show when={sendAsGroupMessage() && canSendAsGroup()}>
+                      <CheckIcon class="w-full h-full text-accent p-0.5" />
+                    </Show>
+                  </div>
+                </div>
+                <div
+                  class={`flex flex-col text-sm ${!canSendAsGroup() ? 'text-ink-disabled/50' : ''}`}
+                >
+                  <span class="font-medium">Send As Group Message</span>
+                  <span
+                    class={`text-xs mt-0.5 ${!canSendAsGroup() ? 'text-ink-disabled/50' : 'text-ink-muted'}`}
+                  >
+                    {sendAsGroupMessage() && canSendAsGroup()
+                      ? 'Creates a new group message with all recipients'
+                      : 'Send a message to each recipient'}
+                  </span>
+                </div>
+              </label>
+            </Show>
+
+            <div class="flex flex-auto min-w-0 gap-3">
+              <div class="flex-auto min-w-0" />
+
+              <DeprecatedTextButton
+                onClick={() => {
+                  const options = selectedOptions();
+                  if (options && options.length > 0) {
+                    handleSubmit();
+                  }
+                }}
+                theme={selectedOptions().length > 0 ? 'accent' : 'disabled'}
+                icon={PaperPlaneRight}
+                height="h-[22px]"
+                text="Share"
               />
+
+              <Show
+                when={
+                  props.submitPermissionInfo?.userPermissions ===
+                  Permissions.OWNER
+                }
+              >
+                <ShareOptions
+                  setPermissions={(accessLevel) => {
+                    setSubmitAccessLevel(accessLevel);
+                  }}
+                  permissions={submitAccessLevel()}
+                  label="Permission"
+                  hideNoAccess
+                />
+              </Show>
             </div>
-          </Show>
+          </div>
         </div>
       </div>
     </Show>

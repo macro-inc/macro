@@ -66,13 +66,25 @@ const mergeSearchEntities = <T extends EntityData>(
   const hasLocal =
     first.search.source === 'local' || second.search.source === 'local';
 
+  // NOTE: we that the longer name highlight is more relevant since it will contain a macro highlight tag
+  let nameHighlight;
+  if (serviceEntity.search.nameHighlight && localEntity.search.nameHighlight) {
+    nameHighlight =
+      serviceEntity.search.nameHighlight.length >=
+      localEntity.search.nameHighlight.length
+        ? serviceEntity.search.nameHighlight
+        : localEntity.search.nameHighlight;
+  } else {
+    nameHighlight =
+      serviceEntity.search.nameHighlight || localEntity.search.nameHighlight;
+  }
+
   return {
     ...serviceEntity,
     search: {
       ...serviceEntity.search,
       source: hasLocal ? 'local' : 'service',
-      nameHighlight:
-        serviceEntity.search.nameHighlight || localEntity.search.nameHighlight,
+      nameHighlight,
       contentHitData: serviceEntity.search.contentHitData?.length
         ? serviceEntity.search.contentHitData
         : localEntity.search.contentHitData,

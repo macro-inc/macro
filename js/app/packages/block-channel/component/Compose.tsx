@@ -10,7 +10,11 @@ import { RecipientSelector } from '@core/component/RecipientSelector';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { InputAttachment } from '@core/store/cacheChannelInput';
-import { useDisplayName, type WithCustomUserInput } from '@core/user';
+import {
+  tryMacroId,
+  useDisplayName,
+  type WithCustomUserInput,
+} from '@core/user';
 import { handleFileFolderDrop } from '@core/util/upload';
 import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
@@ -64,7 +68,7 @@ export function ChannelCompose() {
   const dmUserName = createMemo<() => string | undefined>(() => {
     const id = dmUserId();
     if (!id) return () => undefined;
-    return useDisplayName(id)[0];
+    return useDisplayName(tryMacroId(id))[0];
   });
 
   const [triedToSubmit, _setTriedToSubmit] = createSignal(false);
@@ -81,7 +85,7 @@ export function ChannelCompose() {
         .slice(0, 2)
         .map((r) => {
           if (r.kind === 'user') {
-            return useDisplayName(r.data.id)[0]();
+            return useDisplayName(tryMacroId(r.data.id))[0]();
           }
           return r.data.email || 'Unknown';
         })

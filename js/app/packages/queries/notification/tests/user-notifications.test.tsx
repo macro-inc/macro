@@ -11,6 +11,7 @@ import { render } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { notificationKeys } from '../keys';
 import {
+  optimisticInsertNotification,
   useMarkNotificationsAsDoneMutation,
   useMarkNotificationsAsSeenMutation,
 } from '../user-notifications';
@@ -317,5 +318,50 @@ describe('notification mutations', () => {
 
       cleanup();
     });
+  });
+});
+
+describe('optimisticInsertNotification', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    testQueryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+  });
+
+  afterEach(() => {
+    testQueryClient.clear();
+  });
+
+  it('should insert notification at the beginning of the first page', () => {
+    const n1 = createMockNotification({ id: 'n1' });
+    const n2 = createMockNotification({ id: 'n2' });
+    seedQueryCache([createMockNotificationPage([n1, n2])]);
+
+    const newNotification = createMockNotification({ id: 'new-notification' });
+    optimisticInsertNotification(newNotification);
+
+    const notifications = getNotificationsFromCache();
+    expect(notifications).toHaveLength(3);
+    expect(notifications[0].id).toBe('new-notification');
+    expect(notifications[1].id).toBe('n1');
+    expect(notifications[2].id).toBe('n2');
+  });
+
+  it('should not insert duplicate notifications', () => {
+    const n1 = createMockNotification({ id: 'n1' });
+    const n2 = createMockNotification({ id: 'n2' });
+    seedQueryCache([createMockNotificationPage([n1, n2])]);
+
+    const duplicateNotification = createMockNotification({ id: 'n1' });
+    optimisticInsertNotification(duplicateNotification);
+
+    const notifications = getNotificationsFromCache();
+    expect(notifications).toHaveLength(2);
+    expect(notifications[0].id).toBe('n1');
+    expect(notifications[1].id).toBe('n2');
   });
 });

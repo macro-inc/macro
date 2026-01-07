@@ -12,7 +12,7 @@ import { CommentsContext } from './Thread';
 // SCUFFED: how should we define these tag colors?
 const NewTag = () => {
   return (
-    <div class="py-0.5 px-1.5 rounded ml-1 bg-amber-100 text-amber-700 text-xs">
+    <div class="py-0.5 px-1.5 rounded ml-1 bg-[oklch(0.962_0.059_95.617)] text-[oklch(0.555_0.163_48.998)] text-xs">
       New
     </div>
   );
