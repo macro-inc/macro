@@ -84,13 +84,7 @@ async function main() {
     (c) => c.body?.includes('.preview.macro.com') && c.user?.type === 'Bot'
   );
 
-  const body = `### Preview Deployment
-
-| Status | URL |
-|--------|-----|
-| ✅ Deployed (${shortSha}) | ${previewUrl} |
-
-*Updated: ${new Date().toISOString()}*`;
+  const body = `**Preview:** [${previewUrl}](${previewUrl}) (${shortSha})`;
 
   if (existingComment) {
     // Update existing comment

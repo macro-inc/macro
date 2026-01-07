@@ -58,7 +58,7 @@ function validateBucket(bucket: string): void {
 }
 
 function build(): void {
-  console.log('\n📦 Building app (same as dev.macro.com)...\n');
+  console.log('\nBuilding app (same as dev.macro.com)...\n');
   execSync('bun run build:dev', {
     cwd: resolve(import.meta.dir, '../..'),
     stdio: 'inherit',
@@ -74,7 +74,7 @@ function deploy(previewId: string): void {
     process.exit(1);
   }
 
-  console.log(`\n🚀 Deploying to s3://${PREVIEW_BUCKET}/${previewId}/app/\n`);
+  console.log(`\nDeploying to s3://${PREVIEW_BUCKET}/${previewId}/app/\n`);
 
   // Sync all files except index.html with immutable cache
   execSync(
@@ -93,19 +93,19 @@ function deploy(previewId: string): void {
   );
 
   const previewUrl = `https://${previewId}.preview.macro.com`;
-  console.log(`\n✅ Preview deployed: ${previewUrl}\n`);
+  console.log(`\nPreview deployed: ${previewUrl}\n`);
 }
 
 function cleanup(previewId: string): void {
   validateBucket(PREVIEW_BUCKET);
 
-  console.log(`\n🧹 Cleaning up s3://${PREVIEW_BUCKET}/${previewId}/\n`);
+  console.log(`\nCleaning up s3://${PREVIEW_BUCKET}/${previewId}/\n`);
 
   execSync(`aws s3 rm s3://${PREVIEW_BUCKET}/${previewId}/ --recursive`, {
     stdio: 'inherit',
   });
 
-  console.log('\n✅ Cleanup complete\n');
+  console.log('\nCleanup complete\n');
 }
 
 // Main
