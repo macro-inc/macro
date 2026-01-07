@@ -23,12 +23,13 @@ pub enum Data {
 impl TryFrom<DocumentContent> for ImageData {
     type Error = anyhow::Error;
     fn try_from(value: DocumentContent) -> Result<Self, Self::Error> {
-        if value.file_type.is_image() {
-            if let Data::Binary(bytes) = value.data {
-                return ImageData::try_from_bytes(bytes.into());
-            }
+        if value.file_type.is_image()
+            && let Data::Binary(bytes) = value.data
+        {
+            ImageData::try_from_bytes(bytes.into())
+        } else {
+            Err(anyhow::anyhow!("No conversion to image"))
         }
-        return Err(anyhow::anyhow!("No conversion to image"));
     }
 }
 

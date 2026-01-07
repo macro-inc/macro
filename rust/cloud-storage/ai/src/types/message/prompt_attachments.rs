@@ -14,7 +14,7 @@ where
 
 impl From<&[&dyn TextAttachment]> for PromptAttachments {
     fn from(value: &[&dyn TextAttachment]) -> Self {
-        Self(value.into_iter().map(|a| a.to_string()).collect())
+        Self(value.iter().map(|a| a.to_string()).collect())
     }
 }
 

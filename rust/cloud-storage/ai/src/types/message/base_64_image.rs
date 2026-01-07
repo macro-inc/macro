@@ -71,9 +71,9 @@ impl std::fmt::Display for ImageFormat {
             "{}",
             match self {
                 Self::WebP => "webp",
-                Self::Jpg => "webp",
-                Self::Jpeg => "webp",
-                Self::Png => "webp",
+                Self::Jpg => "Jpg",
+                Self::Jpeg => "Jpeg",
+                Self::Png => "Png",
             }
         )
     }
@@ -119,13 +119,13 @@ impl Base64Image {
     }
 }
 
-impl Into<image::ImageFormat> for ImageFormat {
-    fn into(self) -> image::ImageFormat {
-        match self {
-            Self::Jpeg => image::ImageFormat::Jpeg,
-            Self::Jpg => image::ImageFormat::Jpeg,
-            Self::Png => image::ImageFormat::Png,
-            Self::WebP => image::ImageFormat::WebP,
+impl From<ImageFormat> for image::ImageFormat {
+    fn from(value: ImageFormat) -> Self {
+        match value {
+            ImageFormat::Jpeg => Self::Jpeg,
+            ImageFormat::Jpg => Self::Jpeg,
+            ImageFormat::WebP => Self::WebP,
+            ImageFormat::Png => Self::Png,
         }
     }
 }
