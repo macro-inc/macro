@@ -48,6 +48,7 @@ use utoipa::OpenApi;
         email::drafts::create::handler,
         email::drafts::delete::handler,
         email::drafts::add_attachment::handler,
+        email::drafts::remove_attachment::handler,
         email::messages::get::handler,
         email::messages::get::batch_handler,
         email::messages::labels::handler,

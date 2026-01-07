@@ -1,5 +1,5 @@
 use crate::api::context::ApiContext;
-use crate::api::email::validation::ValidationError;
+use crate::api::email::drafts::generate_attachment_s3_key;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
@@ -18,7 +18,7 @@ use uuid::Uuid;
 #[derive(Debug, Error, AsRefStr)]
 pub enum AddDraftAttachmentError {
     #[error("Validation error: {0}")]
-    Validation(#[from] ValidationError),
+    Validation(String),
 
     #[error("Draft not found")]
     DraftNotFound,
@@ -30,7 +30,7 @@ pub enum AddDraftAttachmentError {
 impl IntoResponse for AddDraftAttachmentError {
     fn into_response(self) -> Response {
         let status_code = match &self {
-            AddDraftAttachmentError::Validation(e) => e.status_code(),
+            AddDraftAttachmentError::Validation(_) => StatusCode::BAD_REQUEST,
             AddDraftAttachmentError::DraftNotFound => StatusCode::NOT_FOUND,
             AddDraftAttachmentError::InternalError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
@@ -89,10 +89,7 @@ pub async fn handler(
     Path(PathParams { id: draft_id }): Path<PathParams>,
     Json(req): Json<AddDraftAttachmentRequest>,
 ) -> Result<Json<AddDraftAttachmentResponse>, AddDraftAttachmentError> {
-    // ensure draft exists
-    if !email_db_client::messages::get::draft_exists_with_id(&ctx.db, link.id, draft_id).await? {
-        return Err(AddDraftAttachmentError::DraftNotFound);
-    }
+    validate_request(&ctx, link.id, draft_id, &req).await?;
 
     let (file_name, file_type) = match FileType::split_suffix_match(req.file_name.as_str()) {
         Some((file_name, extension)) => {
@@ -105,7 +102,7 @@ pub async fn handler(
     let content_type: ContentType = file_type.into();
 
     let attachment_id = macro_uuid::generate_uuid_v7();
-    let s3_key = format!("draft/{}/{}", draft_id, attachment_id);
+    let s3_key = generate_attachment_s3_key(draft_id, attachment_id);
     let mime_type = content_type.mime_type().to_string();
 
     let attachment = service::attachment::AttachmentDraft {
@@ -132,4 +129,63 @@ pub async fn handler(
         upload_url,
         content_type: mime_type.to_string(),
     }))
+}
+
+async fn validate_request(
+    ctx: &ApiContext,
+    link_id: Uuid,
+    draft_id: Uuid,
+    req: &AddDraftAttachmentRequest,
+) -> Result<(), AddDraftAttachmentError> {
+    if req.file_name.trim().is_empty() {
+        return Err(AddDraftAttachmentError::Validation(
+            "File name cannot be empty".to_string(),
+        ));
+    }
+    if req.file_name.len() > 255 {
+        return Err(AddDraftAttachmentError::Validation(
+            "File name must be less than 256 characters".to_string(),
+        ));
+    }
+    if req.sha.len() != 64 || !req.sha.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err(AddDraftAttachmentError::Validation(
+            "SHA256 must be 64 hex characters".to_string(),
+        ));
+    }
+    if req.size <= 0 {
+        return Err(AddDraftAttachmentError::Validation(
+            "File size must be greater than 0".to_string(),
+        ));
+    }
+
+    // 25MB total encoded limit enforced by Gmail. Base64 adds ~33% overhead.
+    // 25 / 1.33 = ~18.8MB. We use 18,000,000 bytes as the safe raw limit.
+    const MAX_RAW_TOTAL_SIZE_BYTES: i32 = 18_000_000;
+
+    if req.size > MAX_RAW_TOTAL_SIZE_BYTES {
+        return Err(AddDraftAttachmentError::Validation(format!(
+            "File size ({} bytes) exceeds the safe limit for email delivery (18MB).",
+            req.size
+        )));
+    }
+
+    // ensure draft exists. doing this late as possible in validation to avoid unnecessary db queries
+    if !email_db_client::messages::get::draft_exists_with_id(&ctx.db, link_id, draft_id).await? {
+        return Err(AddDraftAttachmentError::DraftNotFound);
+    }
+
+    let current_total_size =
+        email_db_client::attachments::draft::get_total_attachments_size_by_draft_id(
+            &ctx.db, draft_id,
+        )
+        .await?;
+
+    if (current_total_size + req.size) > MAX_RAW_TOTAL_SIZE_BYTES {
+        return Err(AddDraftAttachmentError::Validation(format!(
+            "Combined attachments size exceeds the safe limit for email delivery (18MB). Current total: {} bytes.",
+            current_total_size
+        )));
+    }
+
+    Ok(())
 }
