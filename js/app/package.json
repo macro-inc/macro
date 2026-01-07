@@ -26,7 +26,7 @@
     "lint:ci": "bunx --bun biome ci --changed",
     "format": "bunx --bun biome check --linter-enabled=false --write --staged",
     "check-tailwind": "bun scripts/check-tailwind.ts",
-    "test": "vitest run --project websocket --project core --project queries",
+    "test": "vitest run",
     "test:watch": "vitest --project websocket --project core --project queries",
     "java:build": "bun scripts/createBackend.js",
     "csharp:build": "bun scripts/publish-docx-server.js",
