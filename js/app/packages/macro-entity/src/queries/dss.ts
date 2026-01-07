@@ -4,7 +4,6 @@ import {
   moveToFolder,
   renameItem,
 } from '@core/component/FileList/itemOperations';
-import { toast } from '@core/component/Toast/Toast';
 import { itemToSafeName } from '@core/constant/allBlocks';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import type { ItemType } from '@service-storage/client';
@@ -171,25 +170,13 @@ export function createDssInfiniteQuery(
     return {
       queryKey,
       queryKeyHashFn: hashKey,
-      queryFn: async ({ pageParam, signal }) => {
-        try {
-          return await fetchPaginatedDocumentsPost({
-            apiToken: authQuery.data,
-            requestBody,
-            params: { cursor: pageParam.cursor },
-            signal,
-          });
-        } catch (error) {
-          console.error(`Failed to fetch`, error);
-
-          if (pageParam.cursor) {
-            toast.failure('Failed to fetch more data');
-          } else {
-            toast.failure('Failed to fetch data');
-          }
-
-          return { items: [], next_cursor: null };
-        }
+      queryFn: ({ pageParam, signal }) => {
+        return fetchPaginatedDocumentsPost({
+          apiToken: authQuery.data,
+          requestBody,
+          params: { cursor: pageParam.cursor },
+          signal,
+        });
       },
       initialPageParam: params(),
       getNextPageParam: ({ next_cursor: cursor }) =>
