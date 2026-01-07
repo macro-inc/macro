@@ -8,8 +8,10 @@ import { registerHotkey } from 'core/hotkey/hotkeys';
 import { createMemo } from 'solid-js';
 import {
   beveledCorners,
+  blackBezels,
   monochromeIcons,
   setBeveledCorners,
+  setBlackBezels,
   setDarkModeTheme,
   setLightModeTheme,
   setMonochromeIcons,
@@ -261,6 +263,16 @@ export default function GlobalShortcuts() {
     description: 'Toggle beveled corners',
     keyDownHandler: () => {
       setBeveledCorners(!beveledCorners());
+      return true;
+    },
+    runWithInputFocused: true,
+  });
+
+  registerHotkey({
+    scopeId: 'global',
+    description: 'Toggle black bezels',
+    keyDownHandler: () => {
+      setBlackBezels(!blackBezels());
       return true;
     },
     runWithInputFocused: true,

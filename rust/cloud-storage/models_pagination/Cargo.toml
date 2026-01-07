@@ -5,7 +5,7 @@ publish = false
 version = "0.1.0"
 
 [features]
-axum = ["dep:axum", "dep:model-error-response"]
+axum = ["dep:axum", "dep:model-error-response", "serde_json/unbounded_depth"]
 docs = [
 ] # adds the doc attrs, the reason this is a feature is because of JsonSchema
 

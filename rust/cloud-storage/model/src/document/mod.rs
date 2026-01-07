@@ -1,3 +1,5 @@
+#[cfg(test)]
+mod test;
 use chrono::serde::ts_seconds_option;
 pub mod list;
 pub mod response;

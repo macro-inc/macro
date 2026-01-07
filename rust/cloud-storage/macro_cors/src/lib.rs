@@ -44,6 +44,11 @@ fn is_allowed_origin(origin: &str) -> bool {
         return true;
     }
 
+    // Allow all preview endpoints `https://*preview.macro.com`
+    if origin.ends_with("preview.macro.com") && origin.starts_with("https://") {
+        return true;
+    }
+
     // Check for localhost:3xxx pattern
     if origin.starts_with("http://localhost:3")
         && origin.len() == 21

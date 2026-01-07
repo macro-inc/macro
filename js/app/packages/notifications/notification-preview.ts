@@ -98,7 +98,7 @@ const extractors: {
       target: {
         type: 'channel',
         id: n.entity_id,
-        show: n.notificationMetadata.channelType !== 'direct_message',
+        show: n.notificationMetadata.channelType !== 'directMessage',
       },
       content: m.messageContent,
       meta: {
@@ -141,7 +141,7 @@ const extractors: {
       target: {
         type: 'channel',
         id: n.entity_id,
-        show: n.notificationMetadata.channelType !== 'direct_message',
+        show: n.notificationMetadata.channelType !== 'directMessage',
       },
       content: m.messageContent,
       meta: {
@@ -159,7 +159,7 @@ const extractors: {
       target: {
         type: 'channel',
         id: n.entity_id,
-        show: n.notificationMetadata.channelType !== 'direct_message',
+        show: n.notificationMetadata.channelType !== 'directMessage',
       },
       content: m.messageContent,
       meta: {

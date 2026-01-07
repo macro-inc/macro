@@ -35,15 +35,7 @@ async fn test_viewed_at_orders_nulls_last(pool: Pool<Postgres>) -> anyhow::Resul
     assert_eq!(items.len(), 13, "Should get 13 total items");
 
     // Make sure we got only the items with a history entry.
-    let returned_ids: HashSet<Uuid> = items
-        .iter()
-        .map(|item| match item {
-            SoupItem::Chat(c) => c.id,
-            SoupItem::Document(d) => d.id,
-            SoupItem::Project(p) => p.id,
-            SoupItem::EmailThread(t) => t.thread.id,
-        })
-        .collect();
+    let returned_ids: HashSet<Uuid> = items.iter().map(|item| item.id()).collect();
 
     let expected_ids: HashSet<Uuid> = [
         "22222222-0000-0000-0000-000000000000", // chat-standalone
@@ -224,7 +216,7 @@ async fn test_expanded_generic_sorting_methods(pool: Pool<Postgres>) -> anyhow::
         );
 
         let item_ids = get_item_ids(&items);
-        let expected_ids: Vec<Uuid> = vec![
+        let expected_ids: Vec<Uuid> = [
             "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", // doc-A
             "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", // doc-B
             "aaaaaaaa-cccc-cccc-cccc-cccccccccccc", // chat-A
@@ -254,7 +246,7 @@ async fn test_expanded_generic_sorting_methods(pool: Pool<Postgres>) -> anyhow::
         assert_eq!(items.len(), 6, "UpdatedAt should return all 6 items");
 
         let item_ids = get_item_ids(&items);
-        let expected_ids: Vec<Uuid> = vec![
+        let expected_ids: Vec<Uuid> = [
             "aaaaaaaa-cccc-cccc-cccc-cccccccccccc", // chat-A
             "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", // doc-A
             "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", // doc-B
@@ -284,7 +276,7 @@ async fn test_expanded_generic_sorting_methods(pool: Pool<Postgres>) -> anyhow::
         assert_eq!(items.len(), 6, "CreatedAt should return all 6 items");
 
         let item_ids = get_item_ids(&items);
-        let expected_ids: Vec<Uuid> = vec![
+        let expected_ids: Vec<Uuid> = [
             "bbbbbbbb-cccc-cccc-cccc-cccccccccccc", // chat-B
             "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", // doc-B
             "aaaaaaaa-cccc-cccc-cccc-cccccccccccc", // chat-A
@@ -337,7 +329,10 @@ async fn test_expanded_soup_by_ids(pool: Pool<Postgres>) {
         .iter()
         .find_map(|x| match x {
             SoupItem::Document(soup_document) => Some(soup_document),
-            SoupItem::Chat(_) | SoupItem::Project(_) | _ => None,
+            SoupItem::Chat(_)
+            | SoupItem::Project(_)
+            | SoupItem::EmailThread(_)
+            | SoupItem::Channel(_) => None,
         })
         .expect("The document should exist");
     let expected_doc_id = Uuid::parse_str("11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa").unwrap(); // doc-in-A
@@ -351,7 +346,7 @@ async fn test_expanded_soup_by_ids(pool: Pool<Postgres>) {
         .iter()
         .find_map(|x| match x {
             SoupItem::Chat(soup_chat) => Some(soup_chat),
-            SoupItem::Document(_) | SoupItem::Project(_) | _ => None,
+            _ => None,
         })
         .expect("The chat should exist");
     let expected_chat_id = Uuid::parse_str("22222222-bbbb-bbbb-bbbb-bbbbbbbbbbbb").unwrap(); // chat-in-B

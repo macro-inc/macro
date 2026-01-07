@@ -1,5 +1,5 @@
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { EntityIcon } from '@core/component/EntityIcon';
-import { IconButton } from '@core/component/IconButton';
 import { OldMenu } from '@core/component/OldMenu';
 import { blockAcceptedFileExtensionSet } from '@core/constant/allBlocks';
 import { onKeyDownClick, onKeyUpClick } from '@core/util/click';
@@ -90,7 +90,7 @@ export function FileSelector() {
   return (
     <DropdownMenu open={fileSelectorOpen()} onOpenChange={setFileSelectorOpen}>
       <DropdownMenu.Trigger class="dropdown-menu__trigger">
-        <IconButton
+        <DeprecatedIconButton
           tooltip={{ label: 'File' }}
           theme="clear"
           icon={FileText}

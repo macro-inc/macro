@@ -1,5 +1,4 @@
 use crate::api::context::ApiContext;
-use crate::util;
 use axum::extract::State;
 use axum::http::HeaderMap;
 use axum::{
@@ -7,6 +6,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
+use email_service::util;
 use model::response::ErrorResponse;
 use models_email::gmail::inbox_sync::{
     GmailInboxSyncPayload, GmailMessagePayload, InboxSyncOperation, InboxSyncPubsubMessage,

@@ -1,5 +1,5 @@
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { EntityIcon } from '@core/component/EntityIcon';
-import { IconButton } from '@core/component/IconButton';
 import { INSERT_MEDIA_COMMAND } from '@core/component/LexicalMarkdown/plugins';
 import { DropdownMenuContent } from '@core/component/Menu';
 import {
@@ -122,7 +122,7 @@ export function MediaSelector(props: MediaSelectorProps) {
     // TODO bring up to menu best practices, ie. fully focusable menu items, etc.
     <DropdownMenu open={menuOpen()} onOpenChange={setMenuOpen}>
       <DropdownMenu.Trigger class="dropdown-menu__trigger">
-        <IconButton
+        <DeprecatedIconButton
           tooltip={{ label: 'Insert Media File' }}
           theme="clear"
           icon={ImageIcon}

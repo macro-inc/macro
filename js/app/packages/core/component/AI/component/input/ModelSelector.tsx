@@ -6,8 +6,8 @@ import {
   Model,
 } from '@core/component/AI/constant';
 import type { TModel } from '@core/component/AI/types';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
-import { TextButton } from '@core/component/TextButton';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import type { Accessor } from 'solid-js';
 import { For } from 'solid-js';
@@ -39,7 +39,7 @@ export function ModelSelector(props: ModelSelectorProps) {
       }}
     >
       <DropdownMenu.Trigger>
-        <TextButton
+        <DeprecatedTextButton
           theme="clear"
           text={MODEL_PRETTYNAME[model()]}
           icon={MODEL_PROVIDER_ICON[model()]}

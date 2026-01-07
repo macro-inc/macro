@@ -4,7 +4,7 @@ import type {
   Model,
   Send,
 } from '@core/component/AI/types';
-import { TextButton } from '@core/component/TextButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { createEffect, createSignal } from 'solid-js';
 import { useAttachments } from '../../signal/attachment';
 import { createStream } from '../../util/stream';
@@ -87,12 +87,12 @@ function ChatInputBox() {
     <Item label="Chat input - not connected to backend">
       <div class="w-full h-full">
         <div class="flex gap-2 py-2">
-          <TextButton
+          <DeprecatedTextButton
             onClick={() => setGen(true)}
             theme="accent"
             text="Generate"
           />
-          <TextButton
+          <DeprecatedTextButton
             onClick={() => setGen(false)}
             theme="accent"
             text="Stop"

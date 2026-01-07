@@ -1,5 +1,5 @@
 import { BrightJoins } from '@core/component/BrightJoins';
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { TOKENS } from '@core/hotkey/tokens';
 import CloseIcon from '@icon/regular/x.svg';
@@ -130,7 +130,7 @@ export function SplitDrawer(
               </h3>
             </Show>
             <div class="grow" />
-            <IconButton
+            <DeprecatedIconButton
               icon={CloseIcon}
               theme="clear"
               size="sm"

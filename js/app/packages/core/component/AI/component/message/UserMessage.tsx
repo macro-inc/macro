@@ -1,6 +1,6 @@
 import type { Model, Send } from '@core/component/AI/types';
 import { isDssImage, isImageAttachment } from '@core/component/AI/util';
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { ImagePreview } from '@core/component/ImagePreview';
 import { ItemPreview } from '@core/component/ItemPreview';
 import PencilIcon from '@icon/regular/note-pencil.svg';
@@ -118,7 +118,7 @@ export function UserMessage(props: {
           <Switch>
             <Match when={!isEditing()}>
               <Show when={props.edit}>
-                <IconButton
+                <DeprecatedIconButton
                   icon={PencilIcon}
                   theme="clear"
                   onClick={() => setIsEditing(true)}

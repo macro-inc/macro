@@ -1,3 +1,4 @@
+use crate::api::context::ChannelImpl;
 use crate::api::{context::AppState, extractors::ChannelName};
 use crate::notification as comms_notification;
 use crate::{
@@ -21,6 +22,8 @@ use comms_db_client::{
     messages::{add_attachments, create_message, create_message_mentions},
     model::{ActivityType, NewAttachment, SimpleMention},
 };
+use doppleganger::Mirror;
+use macro_user_id::cowlike::CowLike;
 use model::comms::ChannelParticipant;
 use model::document_storage_service_internal::UpdateChannelSharePermissionRequest;
 use model_notifications::CommonChannelMetadata;
@@ -62,7 +65,7 @@ pub async fn post_message_handler(
     State(ctx): State<AppState>,
     ChannelMember(channel_member): ChannelMember,
     Cached(ChannelParticipants(channel_participants)): Cached<ChannelParticipants>,
-    Cached(ChannelName(channel_name)): Cached<ChannelName>,
+    Cached(ChannelName(channel_name, ..)): Cached<ChannelName<ChannelImpl>>,
     Cached(ChannelId(channel_id)): Cached<ChannelId>,
     Cached(ChannelTypeExtractor(channel_type)): Cached<ChannelTypeExtractor>,
     extract::Json(req): extract::Json<PostMessageRequest>,
@@ -205,10 +208,9 @@ pub async fn post_message_handler(
 
     // TODO: -- end
 
-    let participants: Vec<String> = channel_participants
-        .clone()
+    let participants: Vec<_> = channel_participants
         .iter()
-        .map(|p| p.user_id.clone())
+        .map(|p| p.user_id.copied())
         .collect();
 
     let start_time = Instant::now();
@@ -280,10 +282,10 @@ pub async fn post_message_handler(
         &ctx,
         channel_id,
         CommonChannelMetadata {
-            channel_type,
+            channel_type: model_notifications::ChannelType::mirror(channel_type),
             channel_name: channel_name.clone(),
         },
-        channel_participants.clone(),
+        <Vec<model::comms::ChannelParticipant>>::mirror(channel_participants),
         message.clone(),
         req.mentions.clone(),
     );

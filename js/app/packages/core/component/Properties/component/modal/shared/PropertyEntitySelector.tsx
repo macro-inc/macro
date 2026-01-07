@@ -4,7 +4,7 @@ import { EntityIcon } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import type { ChannelWithParticipants, IUser } from '@core/user';
-import { idToEmail, useContacts, useDisplayName } from '@core/user';
+import { idToEmail, tryMacroId, useContacts, useDisplayName } from '@core/user';
 import { createFreshSearch } from '@core/util/freshSort';
 import CheckIcon from '@icon/bold/check-bold.svg';
 import CompanyIcon from '@icon/duotone/building-duotone.svg';
@@ -219,7 +219,9 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
   // Get current user info for injection into contacts
   const currentUserId = useUserId();
-  const [currentUserDisplayName] = useDisplayName(currentUserId());
+  const [currentUserDisplayName] = useDisplayName(
+    tryMacroId(currentUserId() ?? '')
+  );
 
   // Contacts with current user injected at the beginning
   const contactsWithCurrentUser = createMemo((): IUser[] => {

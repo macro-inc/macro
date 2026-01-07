@@ -1,9 +1,9 @@
 use crate::api::context::ApiContext;
-use crate::util::gmail::auth::fetch_gmail_access_token_from_link;
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
+use email_service::util::gmail::auth::fetch_gmail_access_token_from_link;
 use futures::future::join_all;
 use model::response::ErrorResponse;
 use model::user::UserContext;

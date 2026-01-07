@@ -241,7 +241,7 @@ fn test_build_search_request() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_build_content_and_name_query_empty_ids() -> anyhow::Result<()> {
+fn test_build_contentquery_empty_ids() -> anyhow::Result<()> {
     // Empty ids ok with ids only false
     let term = vec!["test".to_string()];
     let ids: Vec<String> = vec![];
@@ -258,10 +258,9 @@ fn test_build_content_and_name_query_empty_ids() -> anyhow::Result<()> {
         .ids(ids.clone())
         .ids_only(false);
 
-    let result = builder.build_content_and_name_bool_query()?;
+    let result = builder.build_content_bool_query();
 
-    assert!(result.name_bool_query.is_none());
-    assert!(result.content_bool_query.is_some());
+    assert!(result.is_ok());
 
     // Empty ids fails with ids only true
     let builder = SearchQueryBuilder::<TestSearchConfig>::new(term.clone())
@@ -273,7 +272,7 @@ fn test_build_content_and_name_query_empty_ids() -> anyhow::Result<()> {
         .ids(ids.clone())
         .ids_only(true);
 
-    let error = builder.build_content_and_name_bool_query().err().unwrap();
+    let error = builder.build_content_bool_query().err().unwrap();
 
     assert_eq!(
         OpensearchClientError::EmptyIdsWithIdsOnly(SearchEntityType::Documents),
@@ -299,7 +298,7 @@ fn test_build_bool_query() -> anyhow::Result<()> {
         .search_on(SearchOn::Content)
         .ids(ids.clone());
 
-    let query = builder.build_bool_query(builder.build_content_and_name_bool_query()?)?;
+    let query = builder.build_content_bool_query()?;
 
     let expected = serde_json::json!({
         "bool": {
@@ -352,7 +351,7 @@ fn test_build_bool_query() -> anyhow::Result<()> {
         .search_on(SearchOn::Content)
         .ids(ids.clone());
 
-    let query = builder.build_bool_query(builder.build_content_and_name_bool_query()?)?;
+    let query = builder.build_content_bool_query()?;
 
     let expected = serde_json::json!({
         "bool": {
@@ -399,86 +398,49 @@ fn test_build_bool_query() -> anyhow::Result<()> {
         .search_on(SearchOn::NameContent)
         .ids(ids.clone());
 
-    let query = builder.build_bool_query(builder.build_content_and_name_bool_query()?)?;
+    let query = builder.build_content_bool_query()?;
 
     let expected = serde_json::json!({
-    "bool": {
-      "minimum_should_match": 1,
-      "should": [
-        {
-          "bool": {
-            "must": [
-              {
-                "bool": {
-                  "minimum_should_match": 1,
-                  "should": [
-                    {
-                      "wildcard": {
-                        "test_user_id": {
-                          "case_insensitive": true,
-                          "value": "macro|test*",
-                          "boost": 5000.0
-                        }
-                      }
-                    },
-                    {
-                      "match_phrase_prefix": {
-                        "content": {
-                          "query": "test"
-                        }
+      "bool": {
+          "must": [
+            {
+              "bool": {
+                "minimum_should_match": 1,
+                "should": [
+                  {
+                    "wildcard": {
+                      "test_user_id": {
+                        "case_insensitive": true,
+                        "value": "macro|test*",
+                        "boost": 5000.0
                       }
                     }
-                  ]
-                }
-              },
-            ],
-            "filter": [
-              {
-                "terms": {
-                  "entity_id": ["id1", "id2"]
-                }
-              },
-              {
-                  "term": {
-                      "_index": "documents",
+                  },
+                  {
+                    "match_phrase_prefix": {
+                      "content": {
+                        "query": "test"
+                      }
+                    }
                   }
+                ]
               }
-            ]
-          }
-        },
-        {
-          "bool": {
-            "must": [
-              {
-                "match_phrase_prefix": {
-                  "test_title": {
-                    "query": "test"
-                  }
-                }
-              },
-           ],
-           "filter": [
-              {
-                "terms": {
-                  "entity_id": ["id1", "id2"]
-                }
-              },
-              {
-                  "term": {
-                      "_index": "names",
-                  }
-              },
-              {
-                  "term": {
-                      "entity_type": "documents"
-                  }
+            },
+          ],
+          "filter": [
+            {
+              "terms": {
+                "entity_id": ["id1", "id2"]
               }
-            ]
-         }
+            },
+            {
+                "term": {
+                    "_index": "documents",
+                }
+            }
+          ]
         }
-      ]
-    }
-      });
+    });
 
     assert_eq!(query.build().to_json(), expected);
 

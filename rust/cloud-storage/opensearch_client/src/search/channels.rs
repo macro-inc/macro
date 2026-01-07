@@ -98,38 +98,26 @@ impl ChannelMessageQueryBuilder {
 
     /// Builds the main bool query for the index
     pub fn build_bool_query<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
-        let mut content_and_name_bool_queries = self.inner.build_content_and_name_bool_query()?;
+        let mut content_bool_query = self.inner.build_content_bool_query()?;
 
         // CUSTOM ATTRIBUTES SECTION
-        if self.inner.search_on == SearchOn::Content
-            || self.inner.search_on == SearchOn::NameContent
-        {
-            let mut bool_query = content_and_name_bool_queries
-                .content_bool_query
-                .ok_or(OpensearchClientError::BoolQueryNotBuilt)?;
+        // Add thread_ids to must clause if provided
+        if !self.thread_ids.is_empty() {
+            content_bool_query.filter(QueryType::terms("thread_id", self.thread_ids.clone()));
+        }
 
-            // Add thread_ids to must clause if provided
-            if !self.thread_ids.is_empty() {
-                bool_query.filter(QueryType::terms("thread_id", self.thread_ids.clone()));
-            }
+        // Add mentions to must clause if provided
+        if !self.mentions.is_empty() {
+            content_bool_query.filter(QueryType::terms("mentions", self.mentions.clone()));
+        }
 
-            // Add mentions to must clause if provided
-            if !self.mentions.is_empty() {
-                bool_query.filter(QueryType::terms("mentions", self.mentions.clone()));
-            }
-
-            // Add sender_ids to must clause if provided
-            if !self.sender_ids.is_empty() {
-                bool_query.filter(QueryType::terms("sender_id", self.sender_ids.clone()));
-            }
-
-            content_and_name_bool_queries.content_bool_query = Some(bool_query);
+        // Add sender_ids to must clause if provided
+        if !self.sender_ids.is_empty() {
+            content_bool_query.filter(QueryType::terms("sender_id", self.sender_ids.clone()));
         }
         // END CUSTOM ATTRIBUTES SECTION
 
-        let bool_query = self.inner.build_bool_query(content_and_name_bool_queries)?;
-
-        Ok(bool_query)
+        Ok(content_bool_query)
     }
 
     fn build_search_request<'a>(&'a self) -> Result<SearchRequest<'a>> {
@@ -192,16 +180,12 @@ pub(crate) async fn search_channel_messages(
     client: &opensearch::OpenSearch,
     args: ChannelMessageSearchArgs,
 ) -> Result<Vec<SearchHit>> {
-    let indices = match args.search_on {
-        SearchOn::Content => vec![SearchIndex::Channels.as_ref()],
-        SearchOn::NameContent => vec![SearchIndex::Channels.as_ref(), SearchIndex::Names.as_ref()],
-        SearchOn::Name => vec![SearchIndex::Names.as_ref()],
-    };
-
     let query_body = args.build()?;
 
     let response = client
-        .search(opensearch::SearchParts::Index(&indices))
+        .search(opensearch::SearchParts::Index(&[
+            SearchIndex::Channels.as_ref()
+        ]))
         .body(query_body)
         .send()
         .await

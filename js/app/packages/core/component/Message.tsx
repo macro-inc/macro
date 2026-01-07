@@ -15,12 +15,12 @@ import {
   useContext,
 } from 'solid-js';
 import { BozzyBracket } from './BozzyBracket';
+import { DeprecatedIconButton } from './DeprecatedIconButton';
 import {
   CustomEntityIcon,
   EntityIcon,
   type EntityWithValidIcon,
 } from './EntityIcon';
-import { IconButton } from './IconButton';
 import { UserIcon } from './UserIcon';
 
 false && observedSize;
@@ -44,7 +44,7 @@ export type MessageRootProps = {
   isDeleted?: boolean;
   isNewMessage?: boolean;
   isParentNewMessage?: boolean;
-  shouldShowThreadAppendInput?: Accessor<boolean>;
+  shouldShowThreadAppendInput?: boolean;
   setThreadAppendMountTarget?: (el: HTMLElement) => void;
   onThreadAppend?: () => void;
   hideConnectors?: boolean;
@@ -348,10 +348,7 @@ const Root: Component<MessageRootProps> = (props) => {
             }}
           >
             <Show
-              when={
-                props.shouldShowThreadAppendInput &&
-                props.shouldShowThreadAppendInput()
-              }
+              when={props.shouldShowThreadAppendInput}
               fallback={
                 <div
                   class="w-min -translate-x-1/2 icon-plus allow-css-brackets"
@@ -363,7 +360,7 @@ const Root: Component<MessageRootProps> = (props) => {
                   }}
                   onMouseEnter={() => setHover(false)}
                 >
-                  <IconButton
+                  <DeprecatedIconButton
                     icon={IconPlus}
                     theme="base"
                     iconSize={16}

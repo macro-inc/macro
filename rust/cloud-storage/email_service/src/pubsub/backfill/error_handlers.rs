@@ -53,23 +53,27 @@ pub async fn handle_non_retryable_error(
 }
 
 /// Handles retryable errors by updating status to InProgress and adding the error message
-#[tracing::instrument(skip(_e), err)]
+#[tracing::instrument(
+    skip(data, _e),
+    fields(link_id = %data.link_id, error = tracing::field::Empty)
+)]
 pub async fn handle_retryable_error(
     data: &BackfillPubsubMessage,
     _e: &DetailedError,
 ) -> anyhow::Result<()> {
     let error_chain = format!("{:#}", _e.source);
+    tracing::Span::current().record("error", &error_chain);
+
     match &data.backfill_operation {
         BackfillOperation::Init => {
-            tracing::debug!(error = %error_chain, "Retryable error in Init")
+            tracing::debug!("Retryable error in Init")
         }
         BackfillOperation::ListThreads(_) => {
-            tracing::debug!(error = %error_chain, "Retryable error listing threads")
+            tracing::debug!("Retryable error listing threads")
         }
         BackfillOperation::BackfillThread(p) => {
             tracing::debug!(
                 thread_id = %p.thread_provider_id,
-                error = %error_chain,
                 "Retryable error backfilling thread"
             );
         }
@@ -77,21 +81,18 @@ pub async fn handle_retryable_error(
             tracing::debug!(
                 thread_id = %p.thread_provider_id,
                 message_id = %p.message_provider_id,
-                error = %error_chain,
                 "Retryable error backfilling message"
             );
         }
         BackfillOperation::UpdateThreadMetadata(p) => {
             tracing::debug!(
                 thread_id = %p.thread_provider_id,
-                error = %error_chain,
                 "Retryable error updating thread metadata"
             );
         }
         BackfillOperation::BackfillAttachment(p) => {
             tracing::debug!(
                 attachment_db_id = %p.metadata.attachment_metadata.attachment_db_id,
-                error = %error_chain,
                 "Retryable error backfilling attachment"
             )
         }

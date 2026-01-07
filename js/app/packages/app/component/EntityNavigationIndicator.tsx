@@ -1,5 +1,5 @@
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { TOKENS } from '@core/hotkey/tokens';
 import { getActiveCommandByToken, runCommand } from '@core/hotkey/utils';
 import CaretDown from '@icon/regular/caret-down.svg';
@@ -37,7 +37,7 @@ const EntityNavigationIndicator = () => {
         </div>
         <div>{selectedViewData().view}</div>
         <div class="flex text-ink">
-          <IconButton
+          <DeprecatedIconButton
             size="sm"
             icon={CaretDown}
             tooltip={{
@@ -52,7 +52,7 @@ const EntityNavigationIndicator = () => {
               runCommand(command);
             }}
           />
-          <IconButton
+          <DeprecatedIconButton
             size="sm"
             icon={CaretUp}
             tooltip={{

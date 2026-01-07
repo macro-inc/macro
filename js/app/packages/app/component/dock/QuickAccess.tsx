@@ -12,7 +12,7 @@ import {
   notificationIsRead,
   type UnifiedNotification,
 } from '@notifications';
-import type { ChannelWithLatest } from '@service-comms/generated/models';
+import type { ApiChannelWithLatest as ChannelWithLatest } from '@service-comms/generated/models';
 import { useUserId } from '@service-gql/client';
 import { NotificationEventType } from '@service-notification/generated/schemas';
 import { createMemo, createSignal, For, Show } from 'solid-js';

@@ -1,10 +1,10 @@
 import { createSignal } from 'solid-js';
 import type { Meta, StoryObj } from 'storybook-solidjs-vite';
+import { DeprecatedTextButton } from './DeprecatedTextButton';
 import {
   type FilteredTailwindColors,
   TailwindColorPicker,
 } from './TailwindColorPicker';
-import { TextButton } from './TextButton';
 
 const meta = {
   title: 'TailwindColorPicker',
@@ -29,7 +29,7 @@ export const Default: Story = {
 
     return (
       <div>
-        <TextButton
+        <DeprecatedTextButton
           text={`Selected: ${selectedColor()}`}
           theme="base"
           onClick={() => setShow(!show())}

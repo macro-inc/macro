@@ -334,7 +334,7 @@ function EmailContent(props: EmailViewProps) {
   return (
     <EmailFormContextProvider>
       <div class="w-full h-full bg-panel select-none overscroll-none overflow-hidden flex flex-col">
-        <TopBar title={props.title()} />
+        <TopBar id={props.threadId()} title={props.title()} />
         <div
           class="w-full flex-1 flex flex-col items-center overflow-hidden"
           ref={context.registerMessagesContainer}
@@ -343,6 +343,7 @@ function EmailContent(props: EmailViewProps) {
         </div>
         <Show
           when={
+            context.permissions().isOwner &&
             context.drafts.initialDraftsSettled() &&
             context.messages.list().at(-1)
           }

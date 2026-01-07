@@ -12,6 +12,7 @@ axum = { workspace = true }
 base64 = { workspace = true }
 chrono = { workspace = true }
 document_sub_type = { path = "../document_sub_type" }
+doppleganger = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
 model-error-response = { path = "../model-error-response" }
 model_file_type = { path = "../model_file_type", features = ["utoipa"] }
