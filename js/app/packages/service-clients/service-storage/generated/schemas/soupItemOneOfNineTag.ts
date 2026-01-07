@@ -5,13 +5,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type SoupItemType = typeof SoupItemType[keyof typeof SoupItemType];
+export type SoupItemOneOfNineTag = typeof SoupItemOneOfNineTag[keyof typeof SoupItemOneOfNineTag];
 
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
-export const SoupItemType = {
-  document: 'document',
-  chat: 'chat',
-  project: 'project',
-  email_thread: 'email_thread',
+export const SoupItemOneOfNineTag = {
+  channel: 'channel',
 } as const;

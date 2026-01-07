@@ -4,6 +4,7 @@ use crate::core::model::FALLBACK_MODEL;
 use crate::model::chats::ChatResponse;
 use ai::model_selection::ModelSelection;
 use anyhow::Context;
+use doppleganger::Mirror;
 use macro_db_client::dcs::get_chat::{
     get_chat_db, get_messages, get_web_citations, raw_attachments,
 };
@@ -62,7 +63,7 @@ pub async fn get_chat(
                 .await
                 .map(|channel_metadata| AttachmentMetadata::Channel {
                     channel_name: channel_metadata.name,
-                    channel_type: channel_metadata.channel_type,
+                    channel_type: model::comms::ChannelType::mirror(channel_metadata.channel_type),
                 })
                 .ok(),
             AttachmentType::Email => {

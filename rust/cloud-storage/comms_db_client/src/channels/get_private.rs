@@ -53,18 +53,23 @@ mod tests {
     )]
     async fn test_get_existing_private_channel(pool: Pool<Postgres>) -> anyhow::Result<()> {
         const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS; // Dummy reference for IDE
-        let result =
-            maybe_get_private_channel(&pool, &vec!["user1".to_string(), "user2".to_string()])
-                .await?;
+        let result = maybe_get_private_channel(
+            &pool,
+            &vec![
+                "macro|user1@test.com".to_string(),
+                "macro|user2@test.com".to_string(),
+            ],
+        )
+        .await?;
 
         assert_eq!(result, None);
 
         let result = maybe_get_private_channel(
             &pool,
             &vec![
-                "user1".to_string(),
-                "user3".to_string(),
-                "user2".to_string(),
+                "macro|user1@test.com".to_string(),
+                "macro|user3@test.com".to_string(),
+                "macro|user2@test.com".to_string(),
             ],
         )
         .await?;
@@ -77,10 +82,10 @@ mod tests {
         let result = maybe_get_private_channel(
             &pool,
             &vec![
-                "user1".to_string(),
-                "user3".to_string(),
-                "user4".to_string(),
-                "user2".to_string(),
+                "macro|user1@test.com".to_string(),
+                "macro|user3@test.com".to_string(),
+                "macro|user4@test.com".to_string(),
+                "macro|user2@test.com".to_string(),
             ],
         )
         .await?;

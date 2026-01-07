@@ -27,7 +27,7 @@ pub async fn handler(
         add_participant(
             &ctx.db,
             AddParticipantOptions {
-                channel_id: &channel.id,
+                channel_id: &channel.id.0,
                 user_id: &req.user_id,
                 participant_role: Some(ParticipantRole::Member),
             },

@@ -1,5 +1,6 @@
 //! Permission service implementation for properties.
 
+use macro_user_id::user_id::MacroUserIdStr;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_properties::EntityType;
 use sqlx::{Pool, Postgres};
@@ -86,7 +87,7 @@ impl PermissionService for PermissionServiceImpl {
     #[tracing::instrument(skip(self), fields(task_id = %task_id, user_count = user_ids.len()), err)]
     async fn grant_permissions_to_task(
         &self,
-        user_ids: &[String],
+        user_ids: &[MacroUserIdStr<'_>],
         task_id: &str,
     ) -> Result<(), Self::Err> {
         if user_ids.is_empty() {

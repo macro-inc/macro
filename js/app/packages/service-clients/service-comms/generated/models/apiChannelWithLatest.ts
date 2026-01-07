@@ -6,6 +6,6 @@
  */
 import type { ChannelWithParticipants } from './channelWithParticipants';
 import type { LatestMessage } from './latestMessage';
-import type { ChannelWithLatestAllOf } from './channelWithLatestAllOf';
+import type { ApiChannelWithLatestAllOf } from './apiChannelWithLatestAllOf';
 
-export type ChannelWithLatest = ChannelWithParticipants & LatestMessage & ChannelWithLatestAllOf;
+export type ApiChannelWithLatest = ChannelWithParticipants & LatestMessage & ApiChannelWithLatestAllOf;

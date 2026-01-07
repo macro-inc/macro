@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            user_id,\n            channel_id,\n            joined_at,\n            left_at,\n            role as \"role: ParticipantRole\"\n        FROM comms_channel_participants\n        WHERE channel_id = $1\n        ORDER BY joined_at DESC\n        ",
+  "query": "\n        SELECT\n            user_id,\n            channel_id,\n            joined_at,\n            left_at,\n            role as \"role: DbParticipantRole\"\n        FROM comms_channel_participants\n        WHERE channel_id = $1\n        ORDER BY joined_at DESC\n        ",
   "describe": {
     "columns": [
       {
@@ -25,7 +25,7 @@
       },
       {
         "ordinal": 4,
-        "name": "role: ParticipantRole",
+        "name": "role: DbParticipantRole",
         "type_info": {
           "Custom": {
             "name": "comms_participant_role",
@@ -53,5 +53,5 @@
       false
     ]
   },
-  "hash": "8b6544a586ac95ece01dc4837e5d7be5b36735131fc567e0ae371b6b2b6dcb66"
+  "hash": "a7f90096050e550d15ef11bbc56a3cd79e1a80bc3f46cd063d0ff94d9b76f252"
 }

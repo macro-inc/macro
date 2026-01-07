@@ -48,6 +48,8 @@ env_var! {
         pub UploadStagingBucket,
         pub SyncServiceUrl,
         pub SyncServiceAuthKey,
+        pub AuthenticationServiceUrl,
+        pub AuthenticationServiceSecretKey,
     }
 }
 

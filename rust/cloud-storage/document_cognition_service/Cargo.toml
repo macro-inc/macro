@@ -36,6 +36,7 @@ cookie = { workspace = true }
 dashmap = { workspace = true }
 document_cognition_service_client = { path = "../document_cognition_service_client" }
 document_storage_service_client = { path = "../document_storage_service_client" }
+doppleganger = { workspace = true }
 email_service_client = { path = "../email_service_client" }
 futures = { workspace = true }
 http-body-util = { workspace = true }
@@ -56,10 +57,12 @@ macro_middleware = { path = "../macro_middleware", default-features = false, fea
 macro_notify = { path = "../macro_notify" }
 macro_project_utils = { path = "../macro_project_utils" }
 macro_share_permissions = { path = "../macro_share_permissions" }
+macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 metering_service_client = { path = "../metering_service_client" }
 model = { path = "../model" }
 models_dcs = { path = "../models_dcs" }
+models_opensearch = { path = "../models_opensearch" }
 models_permissions = { path = "../models_permissions" }
 regex = { workspace = true }
 reqwest.workspace = true
@@ -95,8 +98,6 @@ unfurl_service = { path = "../unfurl_service" }
 utoipa = { workspace = true, features = ["axum_extras", "chrono"] }
 utoipa-swagger-ui = { workspace = true, features = ["axum"] }
 uuid = { workspace = true }
-macro_user_id = { path = "../macro_user_id" }
-models_opensearch = { path = "../models_opensearch" }
 
 [dev-dependencies]
 macro_auth = { path = "../macro_auth", features = ["testing"] }
