@@ -48,7 +48,7 @@ function WhichKeyContent(props: WhichKeyContentProps) {
                           token={command.hotkeyToken}
                           shortcut={prettyPrintHotkeyString(
                             // Asserting this, because useActiveCommands only returns commands with hotkeys.
-                            command.hotkeys.at(0)!
+                            command.hotkeys!.at(0)!
                           )}
                         />
                       </div>
@@ -70,7 +70,7 @@ function WhichKeyContent(props: WhichKeyContentProps) {
                       token={command.hotkeyToken}
                       shortcut={prettyPrintHotkeyString(
                         // Asserting this, because useActiveCommands only returns commands with hotkeys.
-                        command.hotkeys.at(0)!
+                        command.hotkeys!.at(0)!
                       )}
                     />
                   </div>

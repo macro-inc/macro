@@ -97,7 +97,7 @@ type MessageListContentContextValues = {
   scrollToMessage: (messageID: string, index: number, focus?: boolean) => void;
   createReply: (id: string, focus?: boolean) => void;
   toggleThread: (threadID: string, value?: boolean) => void;
-  clearThreadFocus: (threadID: string, expanded?: boolean) => void;
+  closeThreadReply: (threadID: string, expanded?: boolean) => void;
   toggleReplyInputFocus: (threadID: string, value?: boolean) => void;
   getThreadsWithActiveReplies: () => string[];
   registerThreadAppendMountTarget: (threadID: string, el: HTMLElement) => void;
@@ -200,7 +200,7 @@ export function MessageList(props: MessageListProps) {
         };
       });
     },
-    clearThreadFocus: function (threadID: string, expanded?: boolean): void {
+    closeThreadReply: function (threadID: string, expanded?: boolean): void {
       setThreadViewStore(threadID, (prev) => {
         return {
           ...prev,

@@ -1,0 +1,51 @@
+# Cleanup Preview Deployment
+#
+# Removes preview files from S3 when PR is closed
+
+name: Cleanup Preview
+
+on:
+  pull_request:
+    types: [closed]
+
+env:
+  PREVIEW_BUCKET: macro-preview-assets-dev
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Get preview ID from comments
+        id: preview-id
+        working-directory: js/app
+        run: |
+          PREVIEW_ID=$(bun scripts/preview/get-or-create-id.ts \
+            --pr ${{ github.event.pull_request.number }} \
+            --repo ${{ github.repository }} \
+            --token ${{ secrets.GITHUB_TOKEN }} \
+            --branch "${{ github.head_ref }}")
+          echo "id=$PREVIEW_ID" >> $GITHUB_OUTPUT
+          echo "Preview ID: $PREVIEW_ID"
+
+      - name: Cleanup preview
+        if: steps.preview-id.outputs.id != ''
+        working-directory: js/app
+        run: |
+          bun scripts/preview/deploy.ts \
+            --preview-id ${{ steps.preview-id.outputs.id }} \
+            --cleanup

@@ -21,6 +21,8 @@
     "build:prod": "cd packages/app && MODE=production NODE_ENV=production bun run --bun build",
     "preview": "cd packages/app && bun run --bun preview:dev",
     "preview:prod": "cd packages/app && MODE=production NODE_ENV=production bun preview:prod",
+    "preview:deploy": "bun scripts/preview/deploy.ts",
+    "preview:cleanup": "bun scripts/preview/deploy.ts --cleanup",
     "lint": "bunx --bun biome lint --skip=nursery/noImportCycles",
     "lint:staged": "bunx --bun biome lint --staged",
     "lint:ci": "bunx --bun biome ci --changed",
