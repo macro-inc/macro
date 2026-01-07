@@ -1,32 +1,25 @@
-use std::sync::Arc;
-
 use crate::traits::TextAttachment;
 
 #[derive(Debug, Clone, Default)]
-pub struct PromptAttachments(Vec<Arc<dyn TextAttachment>>);
+pub struct PromptAttachments(Vec<String>);
 
 impl<T> From<Vec<T>> for PromptAttachments
 where
     T: TextAttachment + 'static,
 {
     fn from(value: Vec<T>) -> Self {
-        Self(
-            value
-                .into_iter()
-                .map(|a| Arc::new(a) as Arc<dyn TextAttachment>)
-                .collect(),
-        )
+        Self(value.into_iter().map(|a| a.to_string()).collect())
     }
 }
 
-impl From<Vec<Arc<dyn TextAttachment>>> for PromptAttachments {
-    fn from(value: Vec<Arc<dyn TextAttachment>>) -> Self {
-        Self(value)
+impl From<&[&dyn TextAttachment]> for PromptAttachments {
+    fn from(value: &[&dyn TextAttachment]) -> Self {
+        Self(value.into_iter().map(|a| a.to_string()).collect())
     }
 }
 
 impl std::ops::Deref for PromptAttachments {
-    type Target = Vec<Arc<dyn TextAttachment>>;
+    type Target = Vec<String>;
     fn deref(&self) -> &Self::Target {
         &self.0
     }

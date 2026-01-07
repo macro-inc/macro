@@ -40,7 +40,7 @@ pub async fn fetchium(
                         name: attachment.name().unwrap_or_default().into(),
                         content: project_items,
                     }
-                    .into(),
+                    .boxed(),
                 ))
             }
             AttachmentType::Image => {
@@ -71,7 +71,7 @@ pub async fn fetchium(
                         id: attachment.attachment_id.clone(),
                         name: "unknown channel name".into(),
                     }
-                    .into(),
+                    .boxed(),
                 ))
             }
             AttachmentType::Document => {
@@ -90,7 +90,7 @@ pub async fn fetchium(
                             file_type: document.file_type().to_string(),
                             content: document.content.text_content()?,
                         }
-                        .into(),
+                        .boxed(),
                     ))
                 }
             }
@@ -131,7 +131,7 @@ pub async fn fetchium(
                         file_type: "email".to_string(),
                         content,
                     }
-                    .into(),
+                    .boxed(),
                 ))
             }
         }

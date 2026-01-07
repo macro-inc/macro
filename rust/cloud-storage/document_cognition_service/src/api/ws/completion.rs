@@ -72,7 +72,7 @@ async fn build_completion_request(
     ctx: Arc<ApiContext>,
     payload: &SendCompletionPayload,
 ) -> Result<ChatCompletionRequest> {
-    let mut prompt_attachments: Vec<Arc<_>> = vec![];
+    let mut prompt_attachments = vec![];
 
     if let (Some(attachment_id), Some(selected_text)) = (
         payload.attachment_id.as_ref(),
@@ -103,7 +103,7 @@ async fn build_completion_request(
                                     name: document.name,
                                     content: context,
                                 }
-                                .type_erase(),
+                                .boxed(),
                             );
                         } else {
                             tracing::warn!(
@@ -130,7 +130,7 @@ async fn build_completion_request(
                                     name: document.name,
                                     content,
                                 }
-                                .type_erase(),
+                                .boxed(),
                             );
                         }
                     }

@@ -2,7 +2,6 @@ use crate::{
     traits::TextAttachment,
     types::{ChatCompletionRequest, ChatMessage, ImageData, Model, Role, SystemPrompt},
 };
-use std::sync::Arc;
 
 #[derive(Default)]
 pub struct Attachments(pub Vec<Attachment>);
@@ -13,8 +12,8 @@ impl From<Vec<Attachment>> for Attachments {
     }
 }
 
-impl From<Vec<Arc<dyn TextAttachment>>> for Attachments {
-    fn from(values: Vec<Arc<dyn TextAttachment>>) -> Self {
+impl From<Vec<Box<dyn TextAttachment>>> for Attachments {
+    fn from(values: Vec<Box<dyn TextAttachment>>) -> Self {
         Attachments(values.into_iter().map(Attachment::Text).collect())
     }
 }
@@ -22,7 +21,7 @@ impl From<Vec<Arc<dyn TextAttachment>>> for Attachments {
 pub enum Attachment {
     /// A document, channel, project, or other thing that can be represented by text
     /// These are inserted into the system prompt
-    Text(Arc<dyn TextAttachment>),
+    Text(Box<dyn TextAttachment>),
     /// a base64 or static url to a supported image type
     Image(ImageData),
 }
@@ -168,7 +167,7 @@ impl<ChatModel, Messages, Prompt> RequestBuilder<ChatModel, Messages, Prompt> {
         }
     }
 
-    pub fn add_text_attachment(mut self, attachment: Arc<dyn TextAttachment>) -> Self {
+    pub fn add_text_attachment(mut self, attachment: Box<dyn TextAttachment>) -> Self {
         let wrapped = Attachment::Text(attachment);
         if let Some(ref mut attachments) = self.attachments {
             attachments.0.push(wrapped)

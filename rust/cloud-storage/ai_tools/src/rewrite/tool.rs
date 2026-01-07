@@ -88,7 +88,7 @@ pub async fn generate_patches(
                 id: request.markdown_file_id,
                 name: file_name,
             }
-            .into(),
+            .boxed(),
         )
         .messages(vec![
             MessageBuilder::new()

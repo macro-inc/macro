@@ -1,5 +1,4 @@
 use ai::traits::TextAttachment;
-use std::sync::Arc;
 
 pub struct Document {
     pub content: String,
@@ -37,14 +36,9 @@ impl std::fmt::Display for Document {
 }
 
 impl TextAttachment for Document {}
-impl Into<Arc<dyn TextAttachment>> for Document {
-    fn into(self) -> Arc<dyn TextAttachment> {
-        Arc::new(self)
-    }
-}
 
 impl Document {
-    pub fn type_erase(self) -> Arc<dyn TextAttachment> {
-        self.into()
+    pub fn boxed(self) -> Box<dyn TextAttachment> {
+        Box::new(self)
     }
 }
