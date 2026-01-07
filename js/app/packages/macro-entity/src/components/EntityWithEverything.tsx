@@ -946,7 +946,9 @@ export function EntityWithEverything(
           </div>
           <Show
             when={
-              props.showLeftColumnIndicator && !props.checked && !props.highlighted
+              props.showLeftColumnIndicator &&
+              !props.checked &&
+              !props.highlighted
             }
           >
             <div class="absolute inset-0 flex items-center justify-center group-hover/button:opacity-0 @max-md/split:hidden">
