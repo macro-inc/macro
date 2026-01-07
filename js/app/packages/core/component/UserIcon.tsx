@@ -1,7 +1,7 @@
 import { toast } from '@core/component/Toast/Toast';
-import { idToEmail, useDisplayName } from '@core/user';
+import { macroIdToEmail, tryMacroId, useDisplayName } from '@core/user';
 import { isOk } from '@core/util/maybeResult';
-import Tooltip from '@corvu/tooltip';
+import { Tooltip } from '@kobalte/core/tooltip';
 import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
 import { commsServiceClient } from '@service-comms/client';
 import { debounce } from '@solid-primitives/scheduled';
@@ -26,13 +26,18 @@ export type SizeClass = {
 };
 
 export function UserIcon(props: UserIconProps) {
-  console.log('USER ICON', props.id);
-  const [displayName] = useDisplayName(props.id!);
+  const displayName = createMemo(() => {
+    if (!props.id) return () => props.email;
+    const [displayName] = useDisplayName(tryMacroId(props.id));
+    return displayName;
+  });
+
   const email = createMemo(() => {
-    if (!props.id) {
-      return props.email;
+    const macroId = props.id && tryMacroId(props.id);
+    if (macroId) {
+      return macroIdToEmail(macroId);
     }
-    return idToEmail(props.id);
+    if (props.email) return props.email;
   });
 
   const sizeClasses = createMemo(() => {
@@ -137,14 +142,14 @@ export function UserIcon(props: UserIconProps) {
 
   return (
     <Show when={displayName().length > 0 || email()} fallback={icon()}>
-      <Tooltip>
+      <Tooltip placement="bottom" gutter={8} overflowPadding={16}>
         <Tooltip.Trigger as="div" class={sizeClasses().container}>
           {icon()}
         </Tooltip.Trigger>
         <Tooltip.Portal>
           <Tooltip.Content class="z-tool-tip">
             <UserTooltip
-              displayName={displayName()}
+              displayName={displayName()() || ''}
               email={email()}
               id={props.id}
               isDeleted={props.isDeleted}
