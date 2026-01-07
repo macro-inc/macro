@@ -1,7 +1,7 @@
 import type { UserMentionRecord } from '@core/component/LexicalMarkdown/component/menu/MentionsMenu';
 import type { Signal } from 'solid-js';
 
-export const getCommentMentions = (
+export const getAndClearCommentMentions = (
   mentionsSignal: Signal<UserMentionRecord[]>
 ) => {
   const [mentions, setMentions] = mentionsSignal;

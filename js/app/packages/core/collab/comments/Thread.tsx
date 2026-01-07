@@ -19,7 +19,7 @@ import {
   type Signal,
   useContext,
 } from 'solid-js';
-import { getCommentMentions } from '.';
+import { getAndClearCommentMentions } from '.';
 import { Comment, CommentReply } from './Comment';
 import type { CommentOperations, Layout, Reply, Root } from './commentType';
 import { EditInput, NewReplyInput } from './Inputs';
@@ -88,25 +88,6 @@ export const CommentsContext = createContext<CommentsContextType>({
   ownedComment: () => false,
   inComment: false,
 });
-
-export const sendMentions = (
-  data: DocumentMentionLocation,
-  mentionsSignal: Signal<UserMentionRecord[]>
-) => {
-  const [mentions, setMentions] = mentionsSignal;
-  const mentions_ = mentions();
-  setMentions([]);
-  if (mentions_.length === 0) return;
-  const aggregatedMention: UserMentionRecord = {
-    documentId: mentions_[0].documentId,
-    mentions: mentions_.flatMap((m) => m.mentions),
-    metadata: {
-      mention_id: mentions_[0].metadata.mention_id,
-      location: data,
-    },
-  };
-  return storageServiceClient.upsertUserMentions(aggregatedMention);
-};
 
 export function Thread(props: {
   comment: Root;
@@ -227,7 +208,7 @@ export function Thread(props: {
                     commentOperations.createComment({
                       threadId: props.comment.threadId,
                       text: content,
-                      mentions: getCommentMentions(mentionsSignal),
+                      mentions: getAndClearCommentMentions(mentionsSignal),
                     });
                   }}
                   isNewThread
@@ -286,7 +267,7 @@ export function Thread(props: {
                                 {
                                   text: content,
                                   threadId: props.comment.threadId,
-                                  mentions: getCommentMentions(mentionsSignal),
+                                  mentions: getAndClearCommentMentions(mentionsSignal),
                                 }
                               ),
                             ]);
@@ -307,7 +288,7 @@ export function Thread(props: {
                     commentOperations.createComment({
                       threadId: props.comment.threadId,
                       text: content,
-                      mentions: getCommentMentions(mentionsSignal),
+                      mentions: getAndClearCommentMentions(mentionsSignal),
                     });
                   }}
                   isEditing={isEditingNewReply()}
