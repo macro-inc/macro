@@ -6,6 +6,7 @@ import {
 } from '@core/component/FileList/itemOperations';
 import { itemToSafeName } from '@core/constant/allBlocks';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
+import type { UnifiedSearchResponseItem } from '@service-search/generated/models';
 import type { ItemType } from '@service-storage/client';
 import type {
   PostItemsSoupParams,
@@ -402,9 +403,14 @@ export function createBulkDeleteDssItemsMutation() {
     },
     onMutate: async (entities: EntityData[]) => {
       const deletedIDs = entities.map((e) => e.id);
+
       queryClient.cancelQueries({
         queryKey: queryKeys.dss({ infinite: true }),
       });
+      queryClient.cancelQueries({
+        queryKey: queryKeys.all.search,
+      });
+
       function removeEntitiesFromQueryData(
         prev: { pages: { items: EntityData[] }[] } | undefined
       ): { pages: { items: EntityData[] }[] } | undefined {
@@ -418,12 +424,57 @@ export function createBulkDeleteDssItemsMutation() {
           pages,
         };
       }
+
+      function getSearchResultId(result: UnifiedSearchResponseItem): string {
+        switch (result.type) {
+          case 'document':
+            return result.document_id;
+          case 'chat':
+            return result.chat_id;
+          case 'channel':
+            return result.channel_id;
+          case 'email':
+            return result.thread_id;
+          case 'project':
+            return result.id;
+        }
+      }
+
+      function removeEntitiesFromSearchData(
+        prev:
+          | InfiniteData<{ results: UnifiedSearchResponseItem[] }, unknown>
+          | undefined
+      ):
+        | InfiniteData<{ results: UnifiedSearchResponseItem[] }, unknown>
+        | undefined {
+        if (!prev) return prev;
+        const pages = prev.pages.map((page) => ({
+          ...page,
+          results: page.results.filter((result) => {
+            const id = getSearchResultId(result);
+            return !deletedIDs.includes(id);
+          }),
+        }));
+        return {
+          ...prev,
+          pages,
+        };
+      }
+
       queryClient.setQueriesData(
         { queryKey: queryKeys.dss({ infinite: true }) },
         (prev) =>
           removeEntitiesFromQueryData(
             prev as { pages: { items: EntityData[] }[] } | undefined
           )
+      );
+
+      queryClient.setQueriesData({ queryKey: queryKeys.all.search }, (prev) =>
+        removeEntitiesFromSearchData(
+          prev as
+            | InfiniteData<{ results: UnifiedSearchResponseItem[] }, unknown>
+            | undefined
+        )
       );
     },
     onSettled: (data, error, entities) => {
@@ -432,6 +483,9 @@ export function createBulkDeleteDssItemsMutation() {
 
       queryClient.invalidateQueries({
         queryKey: queryKeys.dss({ infinite: true }),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.all.search,
       });
     },
   }));
