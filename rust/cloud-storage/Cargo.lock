@@ -7599,6 +7599,7 @@ dependencies = [
  "comms_service_client",
  "document_storage_service_client",
  "document_sub_type",
+ "email_contact_search",
  "email_service_client",
  "futures",
  "http-body-util",

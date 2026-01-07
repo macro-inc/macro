@@ -1,4 +1,13 @@
-use crate::api::search::simple::SearchError;
+use std::future::ready;
+
+use crate::api::search::{SearchPaginationParams, simple::SearchError};
+use axum::{
+    Extension,
+    extract::{self, State},
+    response::Json,
+};
+use email_contact_search::search_email_contacts;
+use futures::future::Either;
 use macro_user_id::user_id::MacroUserId;
 use opensearch_client::search::model::{Highlight, SearchHit};
 use sqlx::{Pool, Postgres, types::Uuid};
