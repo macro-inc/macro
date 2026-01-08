@@ -9,7 +9,7 @@ use anyhow::Result;
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, extract::Json};
-use model::document::{DocumentPreview, DocumentPreviewData, DocumentPreviewV2, WithDocumentId};
+use model::document::{DocumentPreview, DocumentPreviewV2, WithDocumentId};
 use model::response::{GenericErrorResponse, GenericResponse};
 use model::user::UserContext;
 use reqwest::StatusCode;
