@@ -1,3 +1,4 @@
+import { platformWebSocketFactory } from '@websocket/platform/factory';
 import { match, P } from 'ts-pattern';
 import type { Backoff } from './backoff/backoff';
 import type { WebsocketBuffer } from './websocket-buffer';
@@ -28,7 +29,6 @@ import {
   resolveUrl,
   type UrlResolver,
 } from './websocket-url-resolver';
-import { platformWebSocketFactory } from '@websocket/platform/factory';
 
 /**
  * A websocket wrapper that can be configured to reconnect automatically and buffer messages when the websocket is not connected.
