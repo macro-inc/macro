@@ -38,6 +38,9 @@ pub enum SendMessageError {
     #[error("Failed to send message via Gmail")]
     GmailSendError(#[from] anyhow::Error),
 
+    #[error("Failed to fetch attachments for message")]
+    AttachmentError,
+
     #[error("A database transaction error occurred")]
     TransactionError(#[from] sqlx::Error),
 }
@@ -46,13 +49,13 @@ impl IntoResponse for SendMessageError {
     fn into_response(self) -> Response {
         let status_code = match &self {
             SendMessageError::Validation(e) => e.status_code(),
-            SendMessageError::SenderContactNotFound => StatusCode::INTERNAL_SERVER_ERROR,
             SendMessageError::Base64DecodeError(_) | SendMessageError::Utf8Error(_) => {
                 StatusCode::BAD_REQUEST
             }
-            SendMessageError::GmailSendError(_) | SendMessageError::TransactionError(_) => {
-                StatusCode::INTERNAL_SERVER_ERROR
-            }
+            SendMessageError::GmailSendError(_)
+            | SendMessageError::TransactionError(_)
+            | SendMessageError::SenderContactNotFound
+            | SendMessageError::AttachmentError => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
         if status_code.is_server_error() {
@@ -279,8 +282,7 @@ async fn fetch_and_attach_draft_attachments(
                 &ctx.db, link.id, db_id,
             )
             .await
-            .map_err(anyhow::Error::from)
-            .map_err(SendMessageError::GmailSendError)?;
+            .map_err(|_| SendMessageError::AttachmentError)?;
 
         if !db_attachments.is_empty() {
             for db_attachment in &db_attachments {
@@ -289,7 +291,10 @@ async fn fetch_and_attach_draft_attachments(
                     .s3_client
                     .get(ctx.config.attachment_bucket.as_str(), &db_attachment.s3_key)
                     .await
-                    .map_err(SendMessageError::GmailSendError)?;
+                    .map_err(|e| {
+                        tracing::error!(error = ?e, draft_id = db_id.to_string(), s3_key = %db_attachment.s3_key, "Failed to fetch attachment from S3");
+                        SendMessageError::AttachmentError
+                    })?;
 
                 attachments_to_send.push(AttachmentToSend {
                     file_name: db_attachment.file_name.clone(),
@@ -321,8 +326,9 @@ async fn cleanup_draft_attachments(
             tracing::error!(
                 error = ?e,
                 s3_key = %attachment.s3_key,
-                "Failed to delete draft attachment from S3 during cleanup"
+                    "Failed to delete draft attachment from S3 during cleanup; skipping database deletion"
             );
+            continue;
         }
 
         // Delete from DB
