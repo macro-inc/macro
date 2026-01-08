@@ -31,6 +31,7 @@ import { itemToSafeName } from '@core/constant/allBlocks';
 import { createTask } from '@core/util/create';
 import { filterMap } from '@core/util/list';
 import { isErr } from '@core/util/maybeResult';
+import TrashIcon from '@icon/regular/trash.svg';
 import XIcon from '@icon/regular/x.svg';
 import {
   queryKeys,
@@ -40,11 +41,18 @@ import { useUserId } from '@service-gql/client';
 import { propertiesServiceClient } from '@service-properties/client';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import { refetchHistory } from '@service-storage/history';
+import { debounce } from '@solid-primitives/scheduled';
 import { useQuery } from '@tanstack/solid-query';
 import type { LexicalEditor } from 'lexical';
-import { createSignal, Show, Suspense } from 'solid-js';
+import { createEffect, createSignal, Show, Suspense } from 'solid-js';
 import { createStore, reconcile, type Store, unwrap } from 'solid-js/store';
 import { tabbable } from 'tabbable';
+import {
+  clearTaskComposerDraft,
+  loadTaskComposerDraft,
+  saveTaskComposerDraft,
+  updateDraftTimestamp,
+} from '../util/taskComposerStorage';
 
 // Show these props in the composer.
 const COMPOSER_PROPERTIES = [
@@ -177,25 +185,75 @@ export interface ComposeTaskProps {
 
 export function ComposeTask(props: ComposeTaskProps) {
   const splitPanel = useSplitPanelOrThrow();
-  const [title, setTitle] = createSignal(props.initialTitle ?? '');
-  const [content, setContent] = createSignal(props.initialContent ?? '');
+  const currentUserId = useUserId();
+
+  const getDefaultPropertyValues = (): Record<string, PropertyApiValues> => {
+    const id = currentUserId();
+    return {
+      [SYSTEM_PROPERTY_IDS.ASSIGNEES]: {
+        valueType: 'ENTITY' as const,
+        refs: id ? [{ entity_id: id, entity_type: 'USER' as const }] : [],
+      },
+      [SYSTEM_PROPERTY_IDS.STATUS]: {
+        valueType: 'SELECT_STRING' as const,
+        values: [PROPERTY_OPTION_IDS.STATUS.NOT_STARTED],
+      },
+    };
+  };
+
+  // draft init logic
+  const initializeFromDraft = () => {
+    if (!props.initialTitle && !props.initialContent) {
+      const draft = loadTaskComposerDraft();
+      if (draft) {
+        return {
+          title: draft.title,
+          content: draft.content,
+          propertyValues: draft.propertyValues,
+          isDraftLoaded: true,
+        };
+      }
+    }
+    return {
+      title: props.initialTitle ?? '',
+      content: props.initialContent ?? '',
+      propertyValues: getDefaultPropertyValues(),
+      isDraftLoaded: false,
+    };
+  };
+
+  const initialState = initializeFromDraft();
+  const [title, setTitle] = createSignal(initialState.title);
+  const [content, setContent] = createSignal(initialState.content);
   const [bodyEditor, setBodyEditor] = createSignal<LexicalEditor>();
   const [containerRef, setContainerRef] = createSignal<HTMLDivElement>();
-  const currentUserId = useUserId();
+  const [isDraftLoaded, setIsDraftLoaded] = createSignal(
+    initialState.isDraftLoaded
+  );
 
   const [propertyValues, setPropertyValues] = createStore<
     Record<string, PropertyApiValues>
-  >({
-    [SYSTEM_PROPERTY_IDS.ASSIGNEES]: {
-      valueType: 'ENTITY',
-      refs: currentUserId()
-        ? [{ entity_id: currentUserId()!, entity_type: 'USER' }]
-        : [],
-    },
-    [SYSTEM_PROPERTY_IDS.STATUS]: {
-      valueType: 'SELECT_STRING',
-      values: [PROPERTY_OPTION_IDS.STATUS.NOT_STARTED],
-    },
+  >(initialState.propertyValues);
+
+  // draft saving logic
+  let hasInitializedFromDraft = isDraftLoaded();
+  const debouncedSave = debounce(saveTaskComposerDraft, 300);
+
+  createEffect(() => {
+    const currentTitle = title();
+    const currentContent = content();
+    const currentProperties = { ...unwrap(propertyValues) };
+
+    if (hasInitializedFromDraft) {
+      hasInitializedFromDraft = false;
+      return;
+    }
+
+    debouncedSave({
+      title: currentTitle,
+      content: currentContent,
+      propertyValues: currentProperties,
+    });
   });
 
   const systemPropertiesQuery = useQuery(() => ({
@@ -283,8 +341,12 @@ export function ComposeTask(props: ComposeTaskProps) {
 
     createTaskWithProperties(taskTitle, taskContent, properties, definitions());
 
+    // Clear draft and reset form
+    clearTaskComposerDraft();
     setTitle('');
-    setPropertyValues(reconcile({}));
+    setContent('');
+    setPropertyValues(reconcile(getDefaultPropertyValues()));
+    setIsDraftLoaded(false);
 
     const ed = bodyEditor();
     ed && initializeEditorEmpty(ed);
@@ -295,6 +357,28 @@ export function ComposeTask(props: ComposeTaskProps) {
 
     props.onCreateTask?.(taskTitle, taskContent);
     props.onClose?.();
+  };
+
+  const handleClose = () => {
+    // Update timestamp when closing to extend draft life
+    const currentTitle = title();
+    const currentContent = content();
+
+    if (currentTitle || currentContent) {
+      updateDraftTimestamp();
+    }
+
+    props.onClose?.();
+  };
+
+  const handleClearDraft = () => {
+    clearTaskComposerDraft();
+    setTitle('');
+    setContent('');
+    setPropertyValues(reconcile(getDefaultPropertyValues()));
+    setIsDraftLoaded(false);
+    const ed = bodyEditor();
+    ed && initializeEditorEmpty(ed);
   };
 
   const editorFocusChange = (e: KeyboardEvent, dir: 1 | -1) => {
@@ -322,17 +406,27 @@ export function ComposeTask(props: ComposeTaskProps) {
         <Show when={splitPanel?.handle.isPopover()}>
           <DeprecatedIconButton
             icon={XIcon}
-            onClick={splitPanel?.handle.close}
+            onClick={handleClose}
             size="sm"
             tabIndex={-1}
             theme="current"
           />
         </Show>
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 flex-1">
           <span class="text-sm font-medium text-ink-disabled/50">
             Create Task
           </span>
         </div>
+        <Show when={title() || content()}>
+          <DeprecatedIconButton
+            icon={TrashIcon}
+            onClick={handleClearDraft}
+            size="sm"
+            tabIndex={-1}
+            theme="current"
+            title="Clear draft"
+          />
+        </Show>
       </div>
       <div class="w-full border-b border-edge-muted/50" />
       <div class="p-2">
@@ -369,7 +463,7 @@ export function ComposeTask(props: ComposeTaskProps) {
           <MarkdownTextarea
             editable={() => true}
             onChange={(value) => setContent(value)}
-            initialValue={props.initialContent}
+            initialValue={content()}
             placeholder={props.placeholder ?? 'Add description...'}
             captureEditor={setBodyEditor}
             onEscape={() => {
