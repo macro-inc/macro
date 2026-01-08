@@ -1,6 +1,10 @@
 use document_sub_type::DocumentSubType;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
-use model::{activity::Activity, chat::Chat, document::BasicDocument};
+use model::{
+    activity::Activity,
+    chat::Chat,
+    document::{BasicDocument, BasicDocumentSubType},
+};
 use sqlx::{Pool, Postgres, Row};
 use system_properties::{StatusOption, SystemPropertyKey};
 
@@ -169,8 +173,7 @@ pub async fn get_recent_activities(
                         branched_from_id: r.get("branched_from_id"),
                         branched_from_version_id: r.get("branched_from_version_id"),
                         project_id,
-                        sub_type,
-                        is_completed,
+                        sub_type: BasicDocumentSubType::from_db(sub_type, is_completed),
                     }))
                 }
                 "chat" => Some(Activity::Chat(Chat {

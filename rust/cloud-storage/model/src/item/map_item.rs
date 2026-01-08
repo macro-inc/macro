@@ -1,7 +1,11 @@
 use document_sub_type::DocumentSubType;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 
-use crate::{chat::Chat, document::BasicDocument, project::Project};
+use crate::{
+    chat::Chat,
+    document::{BasicDocument, BasicDocumentSubType},
+    project::Project,
+};
 
 #[expect(
     clippy::too_many_arguments,
@@ -38,8 +42,7 @@ pub fn map_document_item(
         branched_from_id,
         branched_from_version_id,
         project_id,
-        sub_type,
-        is_completed,
+        sub_type: BasicDocumentSubType::from_db(sub_type, is_completed),
     })
 }
 

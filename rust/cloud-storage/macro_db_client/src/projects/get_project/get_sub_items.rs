@@ -1,6 +1,10 @@
 use document_sub_type::DocumentSubType;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
-use model::{chat::Chat, document::BasicDocument, project::Project};
+use model::{
+    chat::Chat,
+    document::{BasicDocument, BasicDocumentSubType},
+    project::Project,
+};
 use system_properties::{StatusOption, SystemPropertyKey};
 
 /// Gets all deleted sub-projects of a given project.
@@ -156,8 +160,7 @@ pub async fn get_sub_documents(
             created_at: row.created_at,
             updated_at: row.updated_at,
             deleted_at: None, // Don't care about the deleted_at
-            sub_type: row.sub_type,
-            is_completed: row.is_completed,
+            sub_type: BasicDocumentSubType::from_db(row.sub_type, row.is_completed),
         })
     })
     .fetch_all(transaction.as_mut())

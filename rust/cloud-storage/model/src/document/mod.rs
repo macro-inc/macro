@@ -37,6 +37,36 @@ pub struct DocumentPermissionsToken {
     pub iss: String,
 }
 
+/// Sub type of a document with associated properties encoded in each variant.
+/// This ensures type-safety: task properties only exist when the document is a task.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone, ToSchema)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum BasicDocumentSubType {
+    /// A task document with its associated properties
+    Task {
+        /// Whether the task is completed.
+        /// True if the Status property is set to "Completed".
+        is_completed: bool,
+    },
+}
+
+impl BasicDocumentSubType {
+    /// Converts from DB representation (separate sub_type and is_completed columns)
+    /// to the domain enum.
+    pub fn from_db(sub_type: Option<DocumentSubType>, is_completed: Option<bool>) -> Option<Self> {
+        match (sub_type, is_completed) {
+            (Some(DocumentSubType::Task), Some(is_completed)) => Some(Self::Task { is_completed }),
+            (Some(DocumentSubType::Task), None) => {
+                // Default to false if sub_type is Task but is_completed is None
+                Some(Self::Task {
+                    is_completed: false,
+                })
+            }
+            _ => None,
+        }
+    }
+}
+
 #[derive(
     sqlx::FromRow, serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone, ToSchema,
 )]
@@ -92,13 +122,9 @@ pub struct BasicDocument {
     pub deleted_at: Option<chrono::DateTime<chrono::Utc>>,
 
     /// The sub type of the document if present.
+    /// Task-related properties are encoded within the variant.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub sub_type: Option<DocumentSubType>,
-
-    /// Whether the task is completed (only present when sub_type is 'task').
-    /// True if the Status property is set to "Completed".
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub is_completed: Option<bool>,
+    pub sub_type: Option<BasicDocumentSubType>,
 }
 
 #[derive(sqlx::FromRow, serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
