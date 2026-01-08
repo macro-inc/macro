@@ -191,8 +191,8 @@ tower-http = { version = "0.6.1", features = [
   "cors",
   "trace",
 ] }
-tracing = "0.1.41"
-tracing-subscriber = { version = "0.3.20", features = ["env-filter", "json"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.22", features = ["env-filter", "json"] }
 tracing-tree = "0.4.0"
 unsynn = "0.3"
 urlencoding = "2.1.3"
