@@ -2,6 +2,9 @@ use models_email::{db, service};
 use sqlx::types::Uuid;
 use sqlx::{Executor, PgPool, Postgres};
 
+#[cfg(test)]
+mod test;
+
 /// Inserts a new draft attachment metadata record.
 #[tracing::instrument(skip(executor, attachment), err)]
 pub async fn insert_draft_attachment<'e, E>(
