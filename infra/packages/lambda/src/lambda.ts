@@ -4,7 +4,7 @@ import {
   CLOUDWATCH_KINESIS_STREAM_ROLE_ARN,
   DATADOG_KINESIS_FIREHOSE_STREAM_ARN,
   stack,
-} from '@shared';
+} from '../../shared';
 import { generateContentHash } from './hash';
 import { SourceCodeHash } from './source_code_hash';
 

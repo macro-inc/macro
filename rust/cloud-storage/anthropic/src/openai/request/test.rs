@@ -215,7 +215,7 @@ fn expected_failed_tool_calls() -> CreateMessageRequestBody {
         temperature: None,
         thinking: None,
         tool_choice: None,
-        tools: Some(vec![Tool {
+        tools: Some(vec![ClientTool {
             name: "ListDocuments".into(),
             description: Some("List documents the user has access to with optional filtering and pagination. Only applies to documents, not emails, AI conversations, chat/slack threads, projects aka folders. This tool returns document metadata including access levels and supports filtering by file type, minimum access level, and pagination. Use this tool to discover and browse documents before using the Read tool to access their content. Prefer using the search tool to search on a specific matching string within the content or the name of the entity.".into()),
             input_schema: serde_json::json!({
@@ -262,7 +262,7 @@ fn expected_failed_tool_calls() -> CreateMessageRequestBody {
                 "title": "ListDocuments",
                 "type": "object"
             })
-        }]),
+        }.into()]),
         top_k: None,
         top_p: None,
     }

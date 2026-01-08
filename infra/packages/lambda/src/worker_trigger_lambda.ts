@@ -1,7 +1,7 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { stack } from '@shared';
-import { get_coparse_api_vpc } from '@vpc';
+import { stack } from '../../shared';
+import { get_coparse_api_vpc } from '../../vpc';
 
 // Path to worker trigger lambda as if we are in the stack package
 const HANDLER_BASE = '../../../rust/cloud-storage';

@@ -1572,6 +1572,49 @@
         }
       }
     },
+    "/user/get_names_with_email": {
+      "post": {
+        "tags": ["user::post_get_names_with_email"],
+        "summary": "Gets names for passed user profile ids, falling back to the requesting user's email contact names",
+        "operationId": "get_user_names_with_email",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GetNamesWithEmailRequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/UserNames" }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/user/group": {
       "patch": {
         "tags": ["user::patch_user_group"],
@@ -2059,6 +2102,7 @@
   },
   "components": {
     "schemas": {
+      "ABGroup": { "type": "string", "enum": ["A", "B"] },
       "AppleLoginRequest": {
         "type": "object",
         "required": ["id_token", "code"],
@@ -2160,8 +2204,13 @@
         "properties": {
           "email": { "type": "string", "description": "The user's email" },
           "group": {
-            "type": ["string", "null"],
-            "description": "The user's group"
+            "oneOf": [
+              { "type": "null" },
+              {
+                "$ref": "#/components/schemas/ABGroup",
+                "description": "The user's group"
+              }
+            ]
           },
           "hasChromeExt": {
             "type": "boolean",
@@ -2189,6 +2238,13 @@
             "description": "Whether the user has completed the tutorial"
           },
           "userId": { "type": "string", "description": "The user id" }
+        }
+      },
+      "GetNamesWithEmailRequestBody": {
+        "type": "object",
+        "required": ["user_ids"],
+        "properties": {
+          "user_ids": { "type": "array", "items": { "type": "string" } }
         }
       },
       "GetProfilePicturesRequestBody": {

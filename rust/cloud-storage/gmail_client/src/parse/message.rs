@@ -65,6 +65,7 @@ pub fn map_message_resource_to_service(
                 mime_type: meta.mime_type,
                 size_bytes: meta.size_bytes,
                 content_id: meta.content_id,
+                sfs_id: None,
             }
         })
         .collect();

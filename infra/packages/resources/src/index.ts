@@ -1,5 +1,6 @@
-export { createBucket } from './resources/bucket';
+export { createBucket, createBucketV2 } from './resources/bucket';
 export { create_cluster } from './resources/cluster';
+export { ALLOWED_ORIGINS } from './resources/cors';
 export {
   DATADOG_API_KEY,
   DatadogServiceEntity,

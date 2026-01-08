@@ -4,12 +4,11 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
+import type { ChannelType } from './channelType';
 import type { AttachmentMetadataOneOfSevenType } from './attachmentMetadataOneOfSevenType';
 
-/**
- * an email thread
- */
 export type AttachmentMetadataOneOfSeven = {
-  email_subject: string;
+  channel_name: string;
+  channel_type: ChannelType;
   type: AttachmentMetadataOneOfSevenType;
 };

@@ -9,7 +9,7 @@ use axum::{
 };
 use model::{response::ErrorResponse, user::UserContext};
 use models_search::{
-    SimpleSearchResponse,
+    SearchOn, SimpleSearchResponse,
     channel::{ChannelSearchRequest, SimpleChannelSearchResponse},
 };
 use opensearch_client::search::channels::ChannelMessageSearchArgs;
@@ -114,6 +114,10 @@ pub(in crate::api::search) async fn search_channels(
     query_params: &SearchPaginationParams,
     req: ChannelSearchRequest,
 ) -> Result<Vec<opensearch_client::search::model::SearchHit>, SearchError> {
+    // We don't support searching on channels by name
+    if let SearchOn::Name = req.search_on {
+        return Ok(Vec::new());
+    }
     if user_id.is_empty() {
         return Err(SearchError::NoUserId);
     }

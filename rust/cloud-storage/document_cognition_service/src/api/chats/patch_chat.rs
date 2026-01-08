@@ -139,21 +139,6 @@ async fn patch_chat_v2(
                 tracing::error!(error=?err, "failed to convert chat_id to uuid");
             }
         }
-
-        // TODO: remove once we have fully moved to names index
-        let _ = ctx
-            .sqs_client
-            .send_message_to_search_event_queue(
-                sqs_client::search::SearchQueueMessage::UpdateChatMessageMetadata(
-                    sqs_client::search::chat::UpdateChatMessageMetadata {
-                        chat_id: chat_id.to_string(),
-                    },
-                ),
-            )
-            .await
-            .inspect_err(|e| {
-                tracing::error!(error=?e, "SEARCH_QUEUE unable to enqueue message");
-            });
     }
 
     Ok(())

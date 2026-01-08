@@ -5,10 +5,13 @@ import {
   renameItem,
 } from '@core/component/FileList/itemOperations';
 import { itemToSafeName } from '@core/constant/allBlocks';
+import { type MutationCallbacks, withCallbacks } from '@queries/utils';
+import type { UnifiedSearchResponseItem } from '@service-search/generated/models';
 import type { ItemType } from '@service-storage/client';
 import type {
   PostItemsSoupParams,
   PostSoupRequest,
+  SoupApiItem,
   SoupApiSort,
   SoupDocument,
 } from '@service-storage/generated/schemas';
@@ -26,6 +29,7 @@ import { SERVER_HOSTS } from 'core/constant/servers';
 import { platformFetch } from 'core/util/platformFetch';
 import type { Accessor } from 'solid-js';
 import type {
+  ChannelEntity,
   ChatEntity,
   DocumentEntity,
   EmailEntity,
@@ -73,10 +77,12 @@ const fetchPaginatedDocumentsPost = async ({
   apiToken,
   params,
   requestBody,
+  signal,
 }: {
   apiToken?: string;
   requestBody?: PostSoupRequest;
   params?: PostItemsSoupParams;
+  signal?: AbortSignal;
 }) => {
   if (!apiToken) throw new Error('No API token provided');
   const Authorization = `Bearer ${apiToken}`;
@@ -92,6 +98,7 @@ const fetchPaginatedDocumentsPost = async ({
     headers: { Authorization, 'Content-Type': 'application/json' },
     method: 'POST',
     body: requestBody ? JSON.stringify(requestBody) : undefined,
+    signal,
   });
   if (!response.ok)
     throw new Error('Failed to fetch documents', { cause: response });
@@ -101,25 +108,28 @@ const fetchPaginatedDocumentsPost = async ({
 };
 
 export function createDssInfiniteQuery(
-  _params?: Accessor<PostItemsSoupParams>,
+  initialParams?: Accessor<PostItemsSoupParams>,
+  getRequestBody?: Accessor<PostSoupRequest>,
   options?: {
     disabled?: Accessor<boolean>;
-    requestBody?: Accessor<PostSoupRequest>;
   }
 ) {
   const params = () => {
-    const argParams = _params?.();
+    const argParams = initialParams?.();
     let limit = 100;
     let sort_method;
-    const requestBody = options?.requestBody;
+    let emailView;
 
-    if (requestBody) {
-      const body = requestBody();
+    if (getRequestBody) {
+      const body = getRequestBody();
       if (body?.limit) {
         limit = body.limit;
       }
       if (body?.sort_method) {
         sort_method = body.sort_method;
+      }
+      if (body?.emailView) {
+        emailView = body.emailView;
       }
     }
 
@@ -127,6 +137,7 @@ export function createDssInfiniteQuery(
       ...argParams,
       limit,
       sort_method,
+      emailView,
     };
   };
 
@@ -134,7 +145,7 @@ export function createDssInfiniteQuery(
   const instructionsIdQuery = useInstructionsMdIdQuery();
 
   return useInfiniteQuery(() => {
-    const requestBody = options?.requestBody?.();
+    const requestBody = getRequestBody?.();
     // Include all filters in query key so query refetches when any filter changes
     const documentFilters = requestBody?.document_filters;
     const projectFilters = requestBody?.project_filters;
@@ -160,12 +171,13 @@ export function createDssInfiniteQuery(
 
     return {
       queryKey,
-      queryHash: hashKey(queryKey),
-      queryFn: ({ pageParam }) => {
+      queryKeyHashFn: hashKey,
+      queryFn: ({ pageParam, signal }) => {
         return fetchPaginatedDocumentsPost({
           apiToken: authQuery.data,
-          requestBody: requestBody,
+          requestBody,
           params: { cursor: pageParam.cursor },
+          signal,
         });
       },
       initialPageParam: params(),
@@ -189,10 +201,13 @@ const selectData: (
   options: {
     instructionsIdQuery: UseQueryResult<string | null | undefined, Error>;
   }
-) => (DocumentEntity | ChatEntity | ProjectEntity | EmailEntity)[] = (
-  data,
-  options
-) => {
+) => (
+  | DocumentEntity
+  | ChatEntity
+  | ProjectEntity
+  | EmailEntity
+  | ChannelEntity
+)[] = (data, options) => {
   return data.pages.flatMap(({ items }) =>
     items
       .filter(
@@ -202,7 +217,14 @@ const selectData: (
           item.data.id !== options.instructionsIdQuery.data
       )
       .map(
-        (item): DocumentEntity | ChatEntity | ProjectEntity | EmailEntity => {
+        (
+          item
+        ):
+          | DocumentEntity
+          | ChatEntity
+          | ProjectEntity
+          | EmailEntity
+          | ChannelEntity => {
           if (item.tag === 'chat') {
             return {
               ...item.data,
@@ -222,7 +244,7 @@ const selectData: (
               ownerId: item.data.ownerId,
               frecencyScore: item.frecency_score,
               viewedAt: item.data.viewedAt ?? undefined,
-              parentId: item.data.parentId ?? undefined,
+              projectId: item.data.parentId ?? undefined,
               type: item.tag,
               name: item.data.name || 'New Project',
             };
@@ -248,6 +270,18 @@ const selectData: (
             };
           }
 
+          if (item.tag === 'channel') {
+            const out: ChannelEntity = {
+              ...item.data.channel,
+              channelType: item.data.channel.channel_type,
+              type: 'channel',
+              id: item.data.channel.id,
+              name: item.data.channel.name || 'New Channel',
+              ownerId: item.data.channel.owner_id,
+            };
+            return out;
+          }
+
           return {
             ...item.data,
             type: item.tag,
@@ -262,62 +296,6 @@ const selectData: (
       )
   );
 };
-
-export function createDocumentsInfiniteQuery(
-  args?: GetItemsSoupParams | Accessor<GetItemsSoupParams>
-) {
-  const params = () => {
-    const argParams = typeof args === 'function' ? args() : args;
-    const limit =
-      argParams?.limit && argParams.limit > 0 && argParams.limit <= 500
-        ? argParams.limit
-        : 500;
-    return {
-      ...argParams,
-      limit,
-    };
-  };
-
-  const authQuery = createApiTokenQuery();
-  const instructionsIdQuery = useInstructionsMdIdQuery();
-
-  return useInfiniteQuery(() => ({
-    queryKey: queryKeys.document({
-      infinite: true,
-      ...params(),
-    }),
-    queryHash: dssQueryKeyHashFn(
-      queryKeys.document({
-        infinite: true,
-        ...params(),
-      }) as DssQueryKey
-    ),
-    queryFn: ({ pageParam }) =>
-      fetchPaginatedDocumentsGet({ apiToken: authQuery.data, ...pageParam }),
-    initialPageParam: params(),
-    getNextPageParam: ({ next_cursor: cursor }) =>
-      cursor ? { ...params(), cursor } : undefined,
-    select: (data) =>
-      data.pages.flatMap(({ items }) =>
-        items
-          .filter((item) => item.tag === 'document')
-          .filter((item) => item.data.id !== instructionsIdQuery.data)
-          .map(
-            (item): DocumentEntity => ({
-              ...item.data,
-              type: item.tag,
-              frecencyScore: item.frecency_score,
-              viewedAt: item.data.viewedAt ?? undefined,
-              fileType: item.data.fileType ?? undefined,
-              projectId: item.data.projectId ?? undefined,
-              subType: item.data.subType ?? undefined,
-              name: resolveDocumentEntityName(item.data),
-            })
-          )
-      ),
-    enabled: authQuery.isSuccess,
-  }));
-}
 
 export function createChatsInfiniteQuery(
   args?: GetItemsSoupParams | Accessor<GetItemsSoupParams>
@@ -426,116 +404,193 @@ export function createBulkDeleteDssItemsMutation() {
     },
     onMutate: async (entities: EntityData[]) => {
       const deletedIDs = entities.map((e) => e.id);
+
       queryClient.cancelQueries({
-        queryKey: queryKeys.dss({ infinite: true }),
+        queryKey: queryKeys.all.dss,
       });
+      queryClient.cancelQueries({
+        queryKey: queryKeys.all.search,
+      });
+
+      function getSoupItemId(item: SoupApiItem): string {
+        switch (item.tag) {
+          case 'channel':
+            return item.data.channel.id;
+          default:
+            return item.data.id;
+        }
+      }
+
       function removeEntitiesFromQueryData(
-        prev: { pages: { items: EntityData[] }[] } | undefined
-      ): { pages: { items: EntityData[] }[] } | undefined {
+        prev: InfiniteData<SoupPage, unknown> | undefined
+      ): InfiniteData<SoupPage, unknown> | undefined {
         if (!prev) return prev;
         const pages = prev.pages.map((page) => ({
           ...page,
-          items: page.items.filter((item) => !deletedIDs.includes(item.id)),
+          items: page.items.filter((item) => {
+            const itemId = getSoupItemId(item);
+            return !deletedIDs.includes(itemId);
+          }),
         }));
         return {
           ...prev,
           pages,
         };
       }
-      queryClient.setQueriesData(
-        { queryKey: queryKeys.dss({ infinite: true }) },
-        (prev) =>
-          removeEntitiesFromQueryData(
-            prev as { pages: { items: EntityData[] }[] } | undefined
-          )
+
+      function getSearchResultId(result: UnifiedSearchResponseItem): string {
+        switch (result.type) {
+          case 'document':
+            return result.document_id;
+          case 'chat':
+            return result.chat_id;
+          case 'channel':
+            return result.channel_id;
+          case 'email':
+            return result.thread_id;
+          case 'project':
+            return result.id;
+        }
+      }
+
+      function removeEntitiesFromSearchData(
+        prev:
+          | InfiniteData<{ results: UnifiedSearchResponseItem[] }, unknown>
+          | undefined
+      ):
+        | InfiniteData<{ results: UnifiedSearchResponseItem[] }, unknown>
+        | undefined {
+        if (!prev) return prev;
+        const pages = prev.pages.map((page) => ({
+          ...page,
+          results: page.results.filter((result) => {
+            const id = getSearchResultId(result);
+            return !deletedIDs.includes(id);
+          }),
+        }));
+        return {
+          ...prev,
+          pages,
+        };
+      }
+
+      queryClient.setQueriesData({ queryKey: queryKeys.all.dss }, (prev) =>
+        removeEntitiesFromQueryData(
+          prev as InfiniteData<SoupPage, unknown> | undefined
+        )
+      );
+
+      queryClient.setQueriesData({ queryKey: queryKeys.all.search }, (prev) =>
+        removeEntitiesFromSearchData(
+          prev as
+            | InfiniteData<{ results: UnifiedSearchResponseItem[] }, unknown>
+            | undefined
+        )
       );
     },
-    onSettled: (data, error, entities) => {
-      if (error)
-        console.error(`Failed to delete dss items`, entities, data, error);
-
+    onError: (error, entities, _context) => {
+      console.error(`Failed to delete dss items`, entities, error);
+      // Rollback on error - restore the deleted items
       queryClient.invalidateQueries({
-        queryKey: queryKeys.dss({ infinite: true }),
+        queryKey: queryKeys.all.dss,
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.all.search,
       });
     },
   }));
 }
 
-export function createRenameDssEntityMutation() {
+type RenameDssEntityMutationVariables = {
+  entity: EntityData & { name: string };
+  newName: string;
+};
+
+type RenameDssEntityMutationData = {
+  success: boolean;
+};
+
+const isEntityRenameSupported = (entity: EntityData) => {
+  const type = entity.type;
+  if (entity.type === 'channel') {
+    return entity.channelType !== 'direct_message';
+  }
+  return type !== 'email';
+};
+
+/**
+ * Mutation to mark a thread as seen.
+ */
+export function createRenameDssEntityMutation(
+  callbacks?: MutationCallbacks<
+    RenameDssEntityMutationData,
+    Error,
+    RenameDssEntityMutationVariables
+  >
+) {
   return useMutation(() => ({
-    mutationFn: async ({
-      entity: { id, type },
-      newName,
-    }: {
-      entity: EntityData & { name: string };
-      newName: string;
-    }) => {
+    mutationFn: async (params: RenameDssEntityMutationVariables) => {
+      if (!isEntityRenameSupported(params.entity)) {
+        throw new Error('Unsupported entity type provided');
+      }
+
       const success = await renameItem({
-        itemType: type as ItemType,
-        id,
-        newName,
+        id: params.entity.id,
+        itemType: params.entity.type,
+        newName: params.newName,
       });
 
       return { success };
     },
-    onMutate: async ({
-      entity: { id },
-      newName,
-    }: {
-      entity: EntityData & { name: string };
-      newName: string;
-    }) => {
-      queryClient.cancelQueries({
-        queryKey: queryKeys.dss({ infinite: true }),
-      });
-      function updateEntityNameInQueryData(
-        prev: { pages: { items: EntityData[] }[] } | undefined,
-        id: string,
-        newName: string
-      ): { pages: { items: EntityData[] }[] } | undefined {
-        if (!prev) return prev;
-        const pages = prev.pages.map((page) => ({
-          ...page,
-          items: page.items.map((item) =>
-            item.id === id ? { ...item, name: newName } : item
-          ),
-        }));
-        return {
-          ...prev,
-          pages,
-        };
-      }
+    ...withCallbacks<
+      RenameDssEntityMutationData,
+      Error,
+      RenameDssEntityMutationVariables
+    >(
+      {
+        onMutate: async ({ entity: { id }, newName }) => {
+          queryClient.cancelQueries({
+            queryKey: queryKeys.dss({ infinite: true }),
+          });
+          function updateEntityNameInQueryData(
+            prev: { pages: { items: EntityData[] }[] } | undefined,
+            id: string,
+            newName: string
+          ) {
+            if (!prev) return prev;
+            const pages = prev.pages.map((page) => ({
+              ...page,
+              items: page.items.map((item) =>
+                item.id === id ? { ...item, name: newName } : item
+              ),
+            }));
+            return {
+              ...prev,
+              pages,
+            };
+          }
 
-      queryClient.setQueriesData(
-        { queryKey: queryKeys.dss({ infinite: true }) },
-        (prev) =>
-          updateEntityNameInQueryData(
-            prev as { pages: { items: EntityData[] }[] } | undefined,
-            id,
-            newName
-          )
-      );
-    },
-    onSettled: (data, error, { entity: { id } }) => {
-      if (data?.success === false || error)
-        console.error(`Failed to rename dss item ${id}`, data, error);
+          queryClient.setQueriesData(
+            { queryKey: queryKeys.dss({ infinite: true }) },
+            (prev: { pages: { items: EntityData[] }[] } | undefined) =>
+              updateEntityNameInQueryData(prev, id, newName)
+          );
+        },
+        onSettled: (data, error, { entity: { id } }) => {
+          if (data?.success === false || error)
+            console.error(`Failed to rename dss item ${id}`, data, error);
 
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.dss({ infinite: true }),
-      });
-    },
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.dss({ infinite: true }),
+          });
+        },
+      },
+      callbacks
+    ),
   }));
 }
 
 export function createBulkRenameDssEntityMutation() {
-  const isUnsupportedEntity = (entity: EntityData) => {
-    const type = entity.type;
-    if (entity.type === 'channel') {
-      return entity.channelType === 'direct_message';
-    }
-    return type === 'email';
-  };
-
   return useMutation(() => ({
     mutationFn: async ({
       entities,
@@ -544,7 +599,7 @@ export function createBulkRenameDssEntityMutation() {
       entities: (EntityData & { name: string })[];
       name: (oldName: string) => string | string;
     }) => {
-      if (entities.some(isUnsupportedEntity)) {
+      if (entities.every(isEntityRenameSupported)) {
         throw new Error(`Unsupported entity type provided`);
       }
       return await Promise.all(

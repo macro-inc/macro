@@ -7,7 +7,7 @@ import {
   expect,
   test,
 } from 'vitest';
-import type { WebSocketServer } from 'ws';
+import type { WebSocketServer, WebSocket as WsWebSocket } from 'ws';
 import type { WebsocketBuffer } from '../';
 import {
   ArrayQueue,
@@ -410,7 +410,7 @@ describe('Testsuite for Websocket', () => {
         expect(
           getListenersWithOptions(client, WebsocketEvent.Open)
         ).toHaveLength(1); // since the initial listener was a 'once'-listener, this should be empty
-        server?.clients.forEach((c) => c.close());
+        server?.clients.forEach((c: WsWebSocket) => c.close());
 
         // wait for the client to reconnect after 100ms
         await waitForClientToConnectToServer(server, clientTimeout);
@@ -425,7 +425,7 @@ describe('Testsuite for Websocket', () => {
         expect(
           getListenersWithOptions(client, WebsocketEvent.Open)
         ).toHaveLength(0);
-        server?.clients.forEach((c) => c.close());
+        server?.clients.forEach((c: WsWebSocket) => c.close());
 
         // wait for the client to reconnect after 100ms, 'open' should not fire again and timesOpenFired will still be 2
         await waitForClientToConnectToServer(server, clientTimeout);
@@ -482,7 +482,7 @@ describe('Testsuite for Websocket', () => {
           (resolve) => {
             client = new WebsocketBuilder(url)
               .onOpen(() =>
-                server?.clients.forEach((client) =>
+                server?.clients.forEach((client: WsWebSocket) =>
                   client.close(1001, 'CLOSE_GOING_AWAY')
                 )
               )
@@ -556,7 +556,9 @@ describe('Testsuite for Websocket', () => {
           (resolve) => {
             client = new WebsocketBuilder(url)
               .onOpen(() =>
-                server?.clients.forEach((client) => client.send('Hello'))
+                server?.clients.forEach((client: WsWebSocket) =>
+                  client.send('Hello')
+                )
               )
               .onMessage((instance, ev) => {
                 expect(ev.data).toBe('Hello');
@@ -601,7 +603,7 @@ describe('Testsuite for Websocket', () => {
         expect(reconnectCount).toBe(0);
 
         // disconnect all clients and give some time for the retry to happen
-        server?.clients.forEach((client) => client.close());
+        server?.clients.forEach((client: WsWebSocket) => client.close());
         await new Promise((resolve) => setTimeout(resolve, 100));
 
         // ws should have retried & reconnect
@@ -643,7 +645,7 @@ describe('Testsuite for Websocket', () => {
         expect(reconnectCount).toBe(0);
 
         // disconnect all clients and give some time for the retry to happen
-        server?.clients.forEach((client) => client.close());
+        server?.clients.forEach((client: WsWebSocket) => client.close());
         await new Promise((resolve) => setTimeout(resolve, 100));
 
         // ws should have retried & reconnect
@@ -681,7 +683,7 @@ describe('Testsuite for Websocket', () => {
         expect(reconnectCount).toBe(0);
 
         // disconnect all clients and give some time for the retry to happen
-        server?.clients.forEach((client) => client.close());
+        server?.clients.forEach((client: WsWebSocket) => client.close());
         await new Promise((resolve) => setTimeout(resolve, 100));
 
         // ws shouldn't have retried & reconnect
@@ -741,7 +743,7 @@ describe('Testsuite for Websocket', () => {
   describe('Send', () => {
     test('Websocket should send a message to the server and the server should receive it', async () => {
       const serverReceivedMessage = new Promise<string>((resolve) => {
-        server?.on('connection', (client) => {
+        server?.on('connection', (client: WsWebSocket) => {
           client?.on(
             'message',
             onStringMessageReceived((str: string) => {
@@ -774,7 +776,7 @@ describe('Testsuite for Websocket', () => {
 
     test('Websocket should send a message to the server and the server should receive it as a Uint8Array', async () => {
       const serverReceivedMessage = new Promise<Uint8Array>((resolve) => {
-        server?.on('connection', (client) => {
+        server?.on('connection', (client: WsWebSocket) => {
           client?.on('message', (message: Uint8Array) => {
             resolve(message);
           });
@@ -805,7 +807,7 @@ describe('Testsuite for Websocket', () => {
     test('Websocket should buffer messages sent before the connection is open and send them when the connection is open', async () => {
       const messagesReceived: string[] = [];
       const serverReceivedMessages = new Promise<string[]>((resolve) => {
-        server?.on('connection', (client) => {
+        server?.on('connection', (client: WsWebSocket) => {
           client?.on(
             'message',
             onStringMessageReceived((str: string) => {
@@ -867,7 +869,7 @@ describe('Testsuite for Websocket', () => {
     test('Websocket should send a message to the server and the server should receive it', async () => {
       let client: Websocket<Record<any, any>, Record<any, any>> | undefined;
       const serverReceivedMessage = new Promise<string>((resolve) => {
-        server?.on('connection', (client) => {
+        server?.on('connection', (client: WsWebSocket) => {
           client?.on(
             'message',
             onStringMessageReceived((str: string) => {
@@ -908,7 +910,7 @@ describe('Testsuite for Websocket', () => {
       let client: Websocket<Record<any, any>, Record<any, any>> | undefined;
       const messagesReceived: string[] = [];
       const serverReceivedMessages = new Promise<string[]>((resolve) => {
-        server?.on('connection', (client) => {
+        server?.on('connection', (client: WsWebSocket) => {
           client?.on(
             'message',
             onStringMessageReceived((str: string) => {
@@ -973,7 +975,7 @@ describe('Testsuite for Websocket', () => {
             new JsonSerializer<Record<any, any>, Record<any, any>>()
           )
           .onOpen(() => {
-            server?.clients.forEach((c) => {
+            server?.clients.forEach((c: WsWebSocket) => {
               c.send(JSON.stringify({ message: 'Hello' }));
             });
           })

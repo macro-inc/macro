@@ -1,3 +1,4 @@
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model::document::DocumentMetadata;
 
 /// Gets all docx files
@@ -76,23 +77,27 @@ pub async fn get_docx_files(
         limit,
         offset
     )
-    .map(|row| DocumentMetadata {
-        document_id: row.document_id,
-        document_version_id: row.document_version_id,
-        owner: row.owner,
-        document_name: row.document_name,
-        file_type: row.file_type,
-        created_at: row.created_at,
-        updated_at: row.updated_at,
-        document_bom: row.document_bom,
-        project_id: row.project_id,
-        project_name: row.project_name,
-        sha: None,
-        branched_from_id: None,
-        branched_from_version_id: None,
-        document_family_id: None,
-        modification_data: None,
-        sub_type: None,
+    .try_map(|row| {
+        Ok(DocumentMetadata {
+            document_id: row.document_id,
+            document_version_id: row.document_version_id,
+            owner: MacroUserIdStr::parse_from_str(&row.owner)
+                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
+                .into_owned(),
+            document_name: row.document_name,
+            file_type: row.file_type,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            document_bom: row.document_bom,
+            project_id: row.project_id,
+            project_name: row.project_name,
+            sha: None,
+            branched_from_id: None,
+            branched_from_version_id: None,
+            document_family_id: None,
+            modification_data: None,
+            sub_type: None,
+        })
     })
     .fetch_all(db)
     .await?;

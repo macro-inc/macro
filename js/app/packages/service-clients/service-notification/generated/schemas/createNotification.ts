@@ -4,16 +4,7 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
+import type { Entity } from './entity';
+import type { CreateNotificationAllOf } from './createNotificationAllOf';
 
-export interface CreateNotification {
-  /** The item id the notification event was created for */
-  event_item_id: string;
-  /** The item type (document, chat, project...) */
-  event_item_type: string;
-  /** Custom metadata that may be needed for the notification */
-  metadata?: unknown;
-  /** The type of notification */
-  notification_event_type: string;
-  /** The service that created the notification */
-  service_sender: string;
-}
+export type CreateNotification = Entity & CreateNotificationAllOf;

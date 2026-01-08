@@ -18,7 +18,7 @@ import {
   getChatInputStoredState,
   storeChatState,
 } from '@core/component/AI/util/storage';
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { ReferencesModal } from '@core/component/ReferencesModal';
 import { Resize } from '@core/component/Resize';
@@ -144,7 +144,7 @@ export const PersistentChatHistoryButton = (props: {
   return (
     <DropdownMenu open={showMenu()} onOpenChange={setShowMenu}>
       <DropdownMenu.Trigger>
-        <IconButton
+        <DeprecatedIconButton
           size="sm"
           icon={HistoryIcon}
           theme="current"
@@ -177,7 +177,7 @@ function TopBar(props: {
       class="h-[calc(2.5rem-1px)] border-b border-edge-muted flex items-center w-full px-2 shrink-0 grow-0"
       data-split-panel
     >
-      <IconButton
+      <DeprecatedIconButton
         size="sm"
         icon={XIcon}
         tooltip={{ label: 'Close Assistant Panel' }}
@@ -190,10 +190,10 @@ function TopBar(props: {
           }
         }}
       />
-      <IconButton
+      <DeprecatedIconButton
         size="sm"
         icon={PlusIcon}
-        tooltip={{ label: 'Start new thread' }}
+        tooltip={{ label: 'Create New Chat' }}
         theme="current"
         onClick={() => {
           createNewRightbarChat();
@@ -206,7 +206,7 @@ function TopBar(props: {
           documentName={props.chatName ?? 'New Chat'}
         />
       </Show>
-      <IconButton
+      <DeprecatedIconButton
         size="sm"
         icon={NotepadIcon}
         tooltip={{ label: 'Edit AI Instructions' }}
@@ -216,7 +216,7 @@ function TopBar(props: {
         }}
       />
       <PersistentChatHistoryButton setChatId={props.setChatId} />
-      <IconButton
+      <DeprecatedIconButton
         size="sm"
         icon={bigChatOpen() ? ContractIcon : ExpandIcon}
         tooltip={{
@@ -321,29 +321,6 @@ export function Rightbar(props: {
     props.setState.setAttachments(attached);
     props.setState.setModel(model_);
   });
-
-  // gone for now may want in future - ehayes 11/17/2025
-  // const timeString = () => {
-  //   const now = new Date().getHours();
-  //   if (now < 12) {
-  //     return 'morning';
-  //   } else if (now < 18) {
-  //     return 'afternoon';
-  //   } else {
-  //     return 'evening';
-  //   }
-  // };
-  // const userId = useUserId();
-  // const [name] = useDisplayName(userId());
-
-  // let greeting = () => {
-  //   const firstName = name().split(' ').at(0);
-  //   if (!firstName || firstName.length === 0 || firstName.includes('@')) {
-  //     return ``;
-  //   } else {
-  //     return `Good ${timeString()} ${firstName}, what can I assist you with?`;
-  //   }
-  // };
 
   const [editor, setEditor] = createSignal<LexicalEditor>();
   let borrowedFocus: Element | null = null;
@@ -458,14 +435,15 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
   const [attachHotkeys, scopeId] = useHotkeyDOMScope('ai-right-panel');
 
   const clearChatState = () => {
+    const attached = attachments();
     setStream(undefined);
     setModel(undefined);
-    setAttachments([]);
+    setAttachments(attached);
     setText(undefined);
     setMessages([]);
     setInitialChatState({
       model: undefined,
-      attachments: [],
+      attachments: attached,
       text: undefined,
     });
   };

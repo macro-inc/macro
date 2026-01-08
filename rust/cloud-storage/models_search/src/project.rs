@@ -4,7 +4,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct ProjectSearchResult {
     pub highlight: SearchHighlight,
     /// The score of the result
@@ -15,7 +15,7 @@ pub struct ProjectSearchResult {
 /// Metadata associated with Project Search, to be used with SearchResponseItem
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct ProjectSearchMetadata {
-    pub project_id: String,
+    pub project_id: uuid::Uuid,
     pub owner_id: String,
     pub updated_at: i64,
     pub created_at: i64,
@@ -23,12 +23,12 @@ pub struct ProjectSearchMetadata {
 }
 
 /// A single response item, part of the ProjectSearchResponse object
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct ProjectSearchResponseItem {
     /// Standardized fields that all item types will share.
     /// These field names are being aligned across all item types
     /// for consistency in our data model.
-    pub id: String,
+    pub id: uuid::Uuid,
     pub name: String,
     pub owner_id: String,
 
@@ -38,7 +38,7 @@ pub struct ProjectSearchResponseItem {
 }
 
 /// Metadata for a project fetched from the database
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct ProjectMetadata {
     pub created_at: i64,
     pub updated_at: i64,
@@ -50,7 +50,7 @@ pub struct ProjectMetadata {
 /// ProjectSearchResponseItem object with project metadata we fetch from macrodb. we don't store these
 /// timestamps in opensearch as they would require us to update the project record
 /// every time the project updates (specifically for updated_at and viewed_at)
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct ProjectSearchResponseItemWithMetadata {
     /// Metadata from the database. None if the project doesn't exist in the database.
     pub metadata: Option<ProjectMetadata>,

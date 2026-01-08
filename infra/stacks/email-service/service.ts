@@ -1,18 +1,18 @@
 import * as aws from '@pulumi/aws';
 import * as awsx from '@pulumi/awsx';
 import * as pulumi from '@pulumi/pulumi';
-import type * as tls from '@pulumi/tls';
 import {
-  createFrecencyTablePolicy,
   DATADOG_API_KEY,
   datadogAgentContainer,
   fargateLogRouterSidecarContainer,
   serviceLoadBalancer,
-} from '@resources';
-import { EcrImage } from '@service';
-import { BASE_DOMAIN, CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '@shared';
-import { EmailAttachmentsBucket } from '@stacks/email-service/attachments-bucket';
-import { getCloudfrontDistribution } from '@stacks/email-service/s3-cloudfront-distribution';
+} from '../../packages/resources';
+import { EcrImage } from '../../packages/service';
+import {
+  BASE_DOMAIN,
+  CLOUD_TRAIL_SNS_TOPIC_ARN,
+  stack,
+} from '../../packages/shared';
 
 const BASE_NAME = 'email-service';
 const BASE_PATH = '../../../rust/cloud-storage';
@@ -22,7 +22,7 @@ export const SERVICE_DOMAIN_NAME = `email-service${
 }.${BASE_DOMAIN}`;
 
 type Args = {
-  secretKeyArns: (pulumi.Output<string> | string)[];
+  role: aws.iam.Role;
   clusterName: pulumi.Output<string> | string;
   ecsClusterArn: pulumi.Output<string> | string;
   vpc: {
@@ -36,8 +36,6 @@ type Args = {
   containerEnvVars: { name: string; value: pulumi.Output<string> | string }[];
   healthCheckPath: string;
   tags: { [key: string]: string };
-  queueArns: pulumi.Output<string>[];
-  cfKeyPair: tls.PrivateKey;
 };
 
 export class EmailService extends pulumi.ComponentResource {
@@ -56,6 +54,7 @@ export class EmailService extends pulumi.ComponentResource {
   constructor(
     name: string,
     {
+      role,
       ecsClusterArn,
       vpc,
       platform,
@@ -65,9 +64,6 @@ export class EmailService extends pulumi.ComponentResource {
       containerEnvVars,
       clusterName,
       tags,
-      secretKeyArns,
-      queueArns,
-      cfKeyPair,
     }: Args,
     opts?: pulumi.ComponentResourceOptions
   ) {
@@ -75,76 +71,7 @@ export class EmailService extends pulumi.ComponentResource {
     this.tags = tags;
 
     this.clusterName = clusterName;
-
-    // role
-    const secretsPolicy = new aws.iam.Policy(
-      `${BASE_NAME}-secrets-policy`,
-      {
-        policy: {
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Action: ['secretsmanager:GetSecretValue'],
-              Resource: [...secretKeyArns],
-              Effect: 'Allow',
-            },
-          ],
-        },
-        tags: this.tags,
-      },
-      { parent: this }
-    );
-
-    const gmailSqsPolicy = new aws.iam.Policy(
-      `${BASE_NAME}-gmail-sqs-policy`,
-      {
-        policy: pulumi.output({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Action: ['sqs:*'],
-              Resource: queueArns,
-              Effect: 'Allow',
-            },
-          ],
-        }),
-        tags: tags,
-      },
-      { parent: this }
-    );
-
-    // Create frecency table policy
-    const frecencyPolicy = createFrecencyTablePolicy(
-      `${BASE_NAME}-frecency-policy`,
-      { parent: this }
-    );
-
-    this.role = new aws.iam.Role(
-      `${BASE_NAME}-role`,
-      {
-        name: `${BASE_NAME}-role-${stack}`,
-        assumeRolePolicy: {
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Action: 'sts:AssumeRole',
-              Principal: {
-                Service: 'ecs-tasks.amazonaws.com',
-              },
-              Effect: 'Allow',
-              Sid: '',
-            },
-          ],
-        },
-        tags: this.tags,
-        managedPolicyArns: [
-          secretsPolicy.arn,
-          gmailSqsPolicy.arn,
-          frecencyPolicy.arn,
-        ],
-      },
-      { parent: this }
-    );
+    this.role = role;
 
     // ecr image
     const image = new EcrImage(
@@ -172,46 +99,6 @@ export class EmailService extends pulumi.ComponentResource {
     });
     this.serviceAlbSg = sg.serviceAlbSg;
     this.serviceSg = sg.serviceSg;
-
-    let emailAttachmentBucket: EmailAttachmentsBucket;
-    if (stack !== 'local') {
-      emailAttachmentBucket = new EmailAttachmentsBucket(
-        `email-attachments-bucket-${stack}`,
-        {
-          emailServiceRoleArn: this.role.arn,
-        }
-      );
-    } else {
-      emailAttachmentBucket = new EmailAttachmentsBucket(
-        `email-attachments-bucket-${stack}`,
-        {}
-      );
-    }
-
-    const cloudfrontDistribution = getCloudfrontDistribution({
-      bucket: emailAttachmentBucket.bucket,
-      keyPair: cfKeyPair,
-    });
-
-    emailAttachmentBucket.attachCloudfrontPolicy({
-      cloudfrontDistributionArn: cloudfrontDistribution.distribution.arn,
-      emailServiceRoleArn: this.role.arn,
-    });
-
-    containerEnvVars.push(
-      {
-        name: 'ATTACHMENT_BUCKET',
-        value: emailAttachmentBucket.bucket.id,
-      },
-      {
-        name: 'CLOUDFRONT_DISTRIBUTION_URL',
-        value: pulumi.interpolate`${cloudfrontDistribution.domain}`,
-      },
-      {
-        name: 'CLOUDFRONT_SIGNER_PUBLIC_KEY_ID',
-        value: pulumi.interpolate`${cloudfrontDistribution.publicKey.id}`,
-      }
-    );
 
     // lb
     const { targetGroup, lb, listener } = serviceLoadBalancer(this, {
@@ -248,8 +135,8 @@ export class EmailService extends pulumi.ComponentResource {
               name: BASE_NAME,
               image: image.image.imageUri,
               stopTimeout: 10, // 10 seconds to force kill the task
-              cpu: stack === 'prod' ? 2048 : 1024,
-              memory: stack === 'prod' ? 3742 : 1742, // 2048 minimum - 256 for datadog - 50 for log_router
+              cpu: stack === 'prod' ? 1024 : 256,
+              memory: stack === 'prod' ? 1742 : 717, // 2048 minimum - 256 for datadog - 50 for log_router
               environment: [...containerEnvVars],
               logConfiguration: {
                 logDriver: 'awsfirelens',

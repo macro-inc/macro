@@ -1,6 +1,6 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '@shared';
+import { CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '../../shared';
 import { cloudStorageClusterName } from './cluster';
 import type { ServiceLoadBalancer } from './load_balancer';
 import type { Service } from './service';

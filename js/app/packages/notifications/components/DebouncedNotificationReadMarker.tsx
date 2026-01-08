@@ -1,4 +1,5 @@
 import type { Entity } from '@core/types';
+import { queryClient } from '@queries/client';
 import { useMarkThreadAsSeenMutation } from '@queries/email/thread';
 import { onCleanup, onMount } from 'solid-js';
 import {
@@ -110,7 +111,15 @@ export function EmailDebouncedReadMarker(props: {
   debounceTime?: number;
   threadId: string;
 }) {
-  const markSeenMutation = useMarkThreadAsSeenMutation();
+  const markSeenMutation = useMarkThreadAsSeenMutation({
+    onSuccess() {
+      queryClient.invalidateQueries({
+        predicate(query) {
+          return query.queryKey.includes('dss');
+        },
+      });
+    },
+  });
 
   return (
     <DebouncedMarker

@@ -11,6 +11,7 @@ use crate::{
         activity, annotations,
         documents::{
             self,
+            create_task::{CreateTaskRequest, CreateTaskResponse, PropertyInput},
             export_document::ExportDocumentResponse,
             permissions_token::{
                 create_permission_token::DocumentPermissionsTokenResponse,
@@ -108,7 +109,6 @@ use models_soup::email_thread::{
     SoupMacroAttachment, SoupMessageListVisibility,
 };
 use models_soup::item::SoupItem;
-use models_soup::item::SoupItemType;
 use models_soup::project::SoupProject;
 use soup::inbound::axum_router::{PostSoupRequest, SoupApiItem, SoupApiSort, SoupPage};
 use utoipa::OpenApi;
@@ -156,6 +156,7 @@ use utoipa::OpenApi;
         documents::permissions_token::validate_permissions_token::handler,
         documents::revert_delete_document::handler,
         documents::export_document::handler,
+        documents::create_task::create_task_handler,
 
         // instructions
         instructions::create_instructions::create_instructions_handler,
@@ -236,6 +237,12 @@ use utoipa::OpenApi;
             CreateDocumentRequest,
             CreateDocumentResponse,
             CreateDocumentResponseData, // Create document
+            CreateTaskRequest,
+            CreateTaskResponse,
+            PropertyInput,
+            models_properties::api::requests::SetPropertyValue,
+            models_properties::shared::EntityReference,
+            models_properties::shared::EntityType, // Quick create task
             CreateBulkDocumentResponseData,
             CreateBulkDocumentResponse, // Create document bulk
             GetDocumentListResult,
@@ -282,7 +289,6 @@ use utoipa::OpenApi;
             SoupDocument,
             SoupChat,
             SoupProject,
-            SoupItemType,
             SoupApiSort,
             SoupPage,
             SoupEnrichedEmailThreadPreview,

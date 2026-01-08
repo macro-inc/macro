@@ -33,6 +33,7 @@ import { SearchMatchNode } from './nodes/SearchMatchNode';
 import { UnlinkedTextNode } from './nodes/UnlinkedTextNode';
 import { UserMentionNode } from './nodes/UserMentionNode';
 import { VideoNode } from './nodes/VideoNode';
+import { WatermarkNode } from './nodes/WatermarkNode';
 
 /**
  * The pre-specified types of base editor we have configured.
@@ -87,6 +88,7 @@ export const SupportedNodeTypes = [
   DiffDeleteNode,
   HtmlRenderNode,
   ClassedBlockNode,
+  WatermarkNode,
 ] as const;
 
 export const NodeReplacements: LexicalNodeReplacement[] = [

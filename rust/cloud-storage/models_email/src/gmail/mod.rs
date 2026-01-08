@@ -1,9 +1,9 @@
 pub mod contacts;
 pub mod error;
 pub mod history;
+pub mod inbox_sync;
 pub mod labels;
 pub mod operations;
-pub mod webhook;
 
 use serde::{Deserialize, Serialize};
 

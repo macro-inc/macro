@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 /// The lowercase struct upholds the invariant that its contents are guaranteed to be
 /// lowercased unicode characters
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Lowercase<'a>(ArcCowStr<'a>);
 
 impl<'a> Lowercase<'a> {

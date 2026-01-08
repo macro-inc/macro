@@ -4,9 +4,9 @@ import { useBlockId } from '@core/block';
 import type { Completion } from '@core/client/completion';
 import { structuredOutputCompletion } from '@core/client/structuredOutput';
 import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMessageMarkdown';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { AskAi } from '@core/component/GeneralizedPopup/AskAI';
 import { GeneralizedPopup } from '@core/component/GeneralizedPopup/Popup';
-import { GlitchText } from '@core/component/GlitchText';
 import { LocationHighlight } from '@core/component/LexicalMarkdown/component/core/Highlights';
 import {
   createMenuOpenSignal,
@@ -27,7 +27,6 @@ import {
   REMOVE_HIGHLIGHT_SELECTED_NODES,
 } from '@core/component/LexicalMarkdown/plugins/popup/popupPlugin';
 import { ScopedPortal } from '@core/component/ScopedPortal';
-import { TextButton } from '@core/component/TextButton';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { blockElementSignal } from '@core/signal/blockElement';
@@ -47,6 +46,7 @@ import LinkIcon from '@phosphor-icons/core/regular/link.svg?component-solid';
 import PencilIcon from '@phosphor-icons/core/regular/pencil.svg?component-solid';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import { createCallback } from '@solid-primitives/rootless';
+import { GlitchText } from '@ui/components/GlitchText';
 import {
   $getLocationUrl,
   $getSelectionLocation,
@@ -402,12 +402,14 @@ export function MarkdownPopup(props: {
           </Show>
           <Show
             when={
-              !isMobileWidth() && !isTouchDevice && (canEdit() || canComment())
+              !isMobileWidth() &&
+              !isTouchDevice() &&
+              (canEdit() || canComment())
             }
           >
             <FormatTools withinPopup />
           </Show>
-          <TextButton
+          <DeprecatedTextButton
             width={'w-12'}
             theme="clear"
             icon={
@@ -596,8 +598,8 @@ export function MarkdownPopup(props: {
   const anchorRefPosition = () => {
     const sel = selection();
     if (!showPopup()) return { left: 0, top: 0, width: 0, height: 0 };
-    const _blockRect = blockRect();
-    if (!_blockRect) return { left: 0, top: 0, width: 0, height: 0 };
+    const currentBlockRect = blockRect();
+    if (!currentBlockRect) return { left: 0, top: 0, width: 0, height: 0 };
 
     // if their is a highlight location then we have a rewrite in progress
     // and should pin to that.
@@ -605,7 +607,7 @@ export function MarkdownPopup(props: {
     const hlRect = highlightRect();
     if (hlLocation && hlRect) {
       return {
-        left: hlRect.left - _blockRect.left,
+        left: hlRect.left - currentBlockRect.left,
         top: hlRect.top - contentTopOffset() + untrack(scrollYOffset),
         width: hlRect.width,
         height: hlRect.height,
@@ -614,7 +616,7 @@ export function MarkdownPopup(props: {
 
     if (!sel) return { left: 0, top: 0, width: 0, height: 0 };
     return {
-      left: sel.rect.left - _blockRect.left,
+      left: sel.rect.left - currentBlockRect.left,
       top: sel.rect.top - contentTopOffset() + untrack(scrollYOffset),
       width: sel.rect.width,
       height: sel.rect.height,

@@ -7,12 +7,14 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
+use indexmap::IndexMap;
 use model::{response::ErrorResponse, user::UserContext};
 use models_search::chat::{
     ChatMessageSearchResult, ChatSearchRequest, ChatSearchResponse, ChatSearchResponseItem,
     ChatSearchResponseItemWithMetadata,
 };
 use opensearch_client::search::model::SearchGotoContent;
+use sqlx::types::Uuid;
 use std::collections::HashMap;
 
 use super::SearchPaginationParams;
@@ -33,7 +35,7 @@ pub(in crate::api::search) async fn enrich_chats(
         return Ok(vec![]);
     }
     // Extract chat IDs from results
-    let chat_ids: Vec<String> = results.iter().map(|r| r.entity_id.clone()).collect();
+    let chat_ids: Vec<String> = results.iter().map(|r| r.entity_id.to_string()).collect();
 
     // Fetch chat metadata from database
     let chat_histories =
@@ -98,8 +100,8 @@ pub fn construct_search_result(
     search_results: Vec<opensearch_client::search::model::SearchHit>,
     chat_histories: HashMap<String, macro_db_client::chat::get::ChatHistoryInfo>,
 ) -> anyhow::Result<Vec<ChatSearchResponseItemWithMetadata>> {
-    // construct entity hit map of id -> vec<hits>
-    let entity_id_hit_map: HashMap<String, Vec<ChatMessageSearchResult>> = search_results
+    // construct entity hit map of id -> vec<hits> using IndexMap to preserve insertion order
+    let entity_id_hit_map: IndexMap<Uuid, Vec<ChatMessageSearchResult>> = search_results
         .into_iter()
         .map(|hit| {
             let result = if let Some(SearchGotoContent::Chats(goto)) = hit.goto {
@@ -120,16 +122,16 @@ pub fn construct_search_result(
             };
             (hit.entity_id, result)
         })
-        .fold(HashMap::new(), |mut map, (entity_id, result)| {
+        .fold(IndexMap::new(), |mut map, (entity_id, result)| {
             map.entry(entity_id).or_insert_with(Vec::new).push(result);
             map
         });
 
-    // now construct the search results
+    // now construct the search results in the original search result order
     let result: Vec<ChatSearchResponseItemWithMetadata> = entity_id_hit_map
         .into_iter()
         .filter_map(|(entity_id, hits)| {
-            if let Some(info) = chat_histories.get(&entity_id) {
+            if let Some(info) = chat_histories.get(&entity_id.to_string()) {
                 let info = info.clone();
                 let metadata = models_search::chat::ChatMetadata {
                     created_at: info.created_at.timestamp(),
@@ -141,7 +143,7 @@ pub fn construct_search_result(
                 Some(ChatSearchResponseItemWithMetadata {
                     metadata: Some(metadata),
                     extra: ChatSearchResponseItem {
-                        id: entity_id.clone(),
+                        id: entity_id,
                         chat_id: entity_id,
                         owner_id: info.user_id.clone(),
                         user_id: info.user_id,

@@ -171,14 +171,19 @@ function TextBoxEditor(props: {
     };
   });
 
-  if (props.focusOnMount) {
-    plugins.use((editor: LexicalEditor) => {
-      return editor.registerRootListener((root) => {
-        if (root === null) return;
-        Object.assign(root.style, textwrapStyles());
-      });
-    });
-  }
+  plugins.useReactive(
+    () => props.focusOnMount,
+    () => {
+      if (props.focusOnMount) {
+        return (editor) => {
+          return editor.registerRootListener((root) => {
+            if (root === null) return;
+            Object.assign(root.style, textwrapStyles());
+          });
+        };
+      }
+    }
+  );
 
   createEffect(() => {
     const val = markdownState();

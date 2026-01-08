@@ -1,5 +1,5 @@
 import * as awsx from '@pulumi/awsx';
-import { stack } from '@shared';
+import { stack } from '../../../shared';
 
 export function createImage(
   serviceName: string,

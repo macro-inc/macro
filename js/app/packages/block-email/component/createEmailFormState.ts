@@ -3,7 +3,7 @@ import type { LexicalEditor } from 'lexical';
 import { createSignal, type Setter } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { decodeBase64Utf8 } from '../util/decodeBase64';
-import { APPEND_PREVIOUS_EMAIL_COMMAND } from '../util/prepareEmailBody';
+import { TOGGLE_APPEND_EMAIL_THREAD_COMMAND } from '../util/prepareEmailBody';
 import {
   convertContactInfoToEmailRecipient,
   getReplyAllRecipients,
@@ -28,19 +28,17 @@ export function createEmailFormState(key: string) {
   const emailCtx = useEmailContext();
   const userEmail = useEmail();
 
-  const replyingTo = emailCtx.filteredMessages().find((m) => m.db_id === key);
-  const draft = emailCtx.messageDbIdToDraftChildren[key];
+  const replyingTo = emailCtx.messages.list().find((m) => m.db_id === key);
+  const draft = emailCtx.drafts.getDraftForMessage(key);
 
   const draftContainsAppendedReply = () => {
     const encoded = draft?.body_html_sanitized;
     if (!encoded) return false;
     const decodedHtml = decodeBase64Utf8(encoded);
     if (!decodedHtml) return false;
-    return (
-      new DOMParser()
-        .parseFromString(decodedHtml, 'text/html')
-        .body.querySelector('div.macro_quote') !== null
-    );
+    const parsed = new DOMParser().parseFromString(decodedHtml, 'text/html');
+
+    return parsed.body.querySelector('div.macro_quote') !== null;
   };
 
   const [replyAppended, setReplyAppended] = createSignal<boolean>(
@@ -96,7 +94,7 @@ export function createEmailFormState(key: string) {
     setRecipientsInner(field, next);
     callDirty();
     const all = [...recipients.to, ...recipients.cc, ...recipients.bcc];
-    emailCtx.onRecipientsAugment(all);
+    emailCtx.onRecipientsChange(all);
   };
 
   const initialSubject =
@@ -139,10 +137,14 @@ export function createEmailFormState(key: string) {
 
         if (rt === 'forward') {
           setReplyAppended(true);
-          capturedEditor()?.dispatchCommand(APPEND_PREVIOUS_EMAIL_COMMAND, {
-            replyingTo: replyingTo,
-            replyType: rt,
-          });
+          capturedEditor()?.dispatchCommand(
+            TOGGLE_APPEND_EMAIL_THREAD_COMMAND,
+            {
+              replyingTo: replyingTo,
+              replyType: rt,
+              visible: true,
+            }
+          );
         }
       }
     }
@@ -175,7 +177,7 @@ export function createEmailFormState(key: string) {
       ...initialRecipients.cc,
       ...initialRecipients.bcc,
     ];
-    emailCtx.onRecipientsAugment(all);
+    emailCtx.onRecipientsChange(all);
 
     // Restore subject and input focus
     setSubjectInner(initialSubject);

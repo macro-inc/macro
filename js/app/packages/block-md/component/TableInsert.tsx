@@ -1,4 +1,4 @@
-import { TextButton } from '@core/component/TextButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { INSERT_TABLE_COMMAND } from '@lexical/table';
 import { createCallback } from '@solid-primitives/rootless';
 import { createSignal, Index, type ParentProps } from 'solid-js';
@@ -115,11 +115,11 @@ export function TableInsert(
   const handleInsertTable = createCallback((rows: number, cols: number) => {
     if (rows <= 0 || cols <= 0) return;
 
-    const _cols = Math.min(cols, MAX_NUMBER_OF_COLS);
-    const _rows = Math.min(rows, MAX_NUMBER_OF_ROWS);
+    const clampedCols = Math.min(cols, MAX_NUMBER_OF_COLS);
+    const clampedRows = Math.min(rows, MAX_NUMBER_OF_ROWS);
     editor()?.dispatchCommand(INSERT_TABLE_COMMAND, {
-      columns: `${_cols}`,
-      rows: `${_rows}`,
+      columns: `${clampedCols}`,
+      rows: `${clampedRows}`,
       includeHeaders: false,
     });
     setRows(undefined);
@@ -158,7 +158,7 @@ export function TableInsert(
             on:blur={(e) => e.stopPropagation()}
           />
         </div>
-        <TextButton
+        <DeprecatedTextButton
           text="Insert Table"
           theme="base"
           disabled={!rows() || !cols()}

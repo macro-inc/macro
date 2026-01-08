@@ -1,6 +1,6 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { config, stack } from '@shared';
+import { config, stack } from '../../packages/shared';
 
 const BASE_NAME = 'link-sharing-demo-file-storage';
 

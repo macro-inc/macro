@@ -65,20 +65,20 @@ pub async fn process_macro_id(
                 match processor.upload(link_id, &attachment).await {
                     Ok(_) => {
                         success_count.fetch_add(1, Ordering::Relaxed);
-                        println!("Successfully uploaded '{}' (index: {}) for {}", attachment.filename, index, macro_id);
+                        println!("Successfully uploaded '{}' (index: {}) for {}", attachment.filename.unwrap_or("N/A".to_string()), index, macro_id);
                     }
                     Err(e) => {
                         // ignore weird file types. annoying game of whack a mole
                         if e.to_string().contains("file extension") {
                             println!(
                                 "Skipping '{}' (index: {}) for {} due to unsupported mime type {}",
-                                attachment.filename, index, macro_id, attachment.mime_type
+                                attachment.filename.unwrap_or("N/A".to_string()), index, macro_id, attachment.mime_type
                             );
                             return;
                         }
                         panic!(
                             "Failed to upload attachment - filename: {}, provider_attachment_id: {}, provider_message_id: {}, index: {}, macro_id: {}, error: {:?}",
-                            attachment.filename,
+                            attachment.filename.unwrap_or("N/A".to_string()),
                             attachment.provider_attachment_id,
                             attachment.email_provider_id,
                             index,

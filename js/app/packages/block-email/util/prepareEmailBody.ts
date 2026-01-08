@@ -1,6 +1,7 @@
 import { formatEmailDate } from '@core/util/date';
 import { $generateHtmlFromNodes, $generateNodesFromDOM } from '@lexical/html';
 import { $createQuoteNode } from '@lexical/rich-text';
+import { $dfsIterator } from '@lexical/utils';
 import {
   $createClassedBlockNode,
   $createDocumentMentionNode,
@@ -36,10 +37,11 @@ export function clearEmailBody(editor: LexicalEditor | undefined) {
   );
 }
 
-export const APPEND_PREVIOUS_EMAIL_COMMAND = createCommand<{
+export const TOGGLE_APPEND_EMAIL_THREAD_COMMAND = createCommand<{
   replyingTo: MessageWithBodyReplyless | undefined;
   replyType?: ReplyType;
-}>('APPEND_PREVIOUS_EMAIL_COMMAND');
+  visible: boolean;
+}>('TOGGLE_APPEND_EMAIL_THREAD_COMMAND');
 
 type HeaderDescriptor =
   | { kind: 'forward'; lines: string[] }
@@ -122,11 +124,18 @@ function $generateHeaderNodes(
   const emailHeader = $createClassedBlockNode({
     tag: 'div',
     classes: ['gmail_attr'],
+    attributes: replyingTo.replying_to_id
+      ? {
+          [REPLYING_TO_ID_ATTRIBUTE]: replyingTo.replying_to_id,
+        }
+      : undefined,
   });
   const emailHeaderText = $createTextNode(descriptor.text);
   emailHeader.append(emailHeaderText);
   return [emailHeader];
 }
+
+const REPLYING_TO_ID_ATTRIBUTE = 'data-replying-to-id';
 
 const $appendPreviousEmail = (
   editor: LexicalEditor,
@@ -137,6 +146,11 @@ const $appendPreviousEmail = (
   const wrapper = $createClassedBlockNode({
     tag: 'div',
     classes: ['macro_quote', 'gmail_quote'],
+    attributes: replyingTo.replying_to_id
+      ? {
+          [REPLYING_TO_ID_ATTRIBUTE]: replyingTo.replying_to_id,
+        }
+      : undefined,
   });
   const spacing = $createLineBreakNode();
   wrapper.append(spacing);
@@ -170,11 +184,59 @@ const $appendPreviousEmail = (
   return true;
 };
 
-export function registerAppendPreviousEmail(editor: LexicalEditor) {
+function* $findPreviousEmailNode(replyingToID: string | undefined) {
+  if (!replyingToID) yield;
+  for (const { node } of $dfsIterator()) {
+    if (!$isClassedBlockNode(node)) continue;
+
+    const replyingToIDAttr = node.__attributes?.[REPLYING_TO_ID_ATTRIBUTE];
+    if (!replyingToIDAttr || replyingToIDAttr !== replyingToID) {
+      // In our case, quoted text replies do not exist more than once in the
+      // same message so returning any classed block node with the proper class
+      // should be valid. This is probably fine but we might not want to do this.
+      // The backend seems to strip the html of data attributes during sanitization
+      // so we can't check for the replying id attribute
+      if (node.__classes.includes('macro_quote')) {
+        yield node;
+      }
+      continue;
+    }
+    yield node;
+  }
+  yield;
+}
+
+function removeAppendedThread(
+  editor: LexicalEditor,
+  replyingToID: string | undefined
+) {
+  if (!replyingToID) return;
+
+  editor.update(
+    () => {
+      for (const node of $findPreviousEmailNode(replyingToID)) {
+        if (!node) continue;
+
+        node.remove();
+      }
+    },
+    { discrete: true }
+  );
+}
+
+export function registerToggleAppendedThread(editor: LexicalEditor) {
   return editor.registerCommand(
-    APPEND_PREVIOUS_EMAIL_COMMAND,
-    ({ replyingTo, replyType }) => {
+    TOGGLE_APPEND_EMAIL_THREAD_COMMAND,
+    ({ replyingTo, visible, replyType }) => {
+      const replyingToID = replyingTo?.replying_to_id ?? undefined;
+
+      if (!visible) {
+        removeAppendedThread(editor, replyingToID);
+        return true;
+      }
+
       $appendPreviousEmail(editor, replyingTo, replyType);
+
       return true;
     },
     COMMAND_PRIORITY_EDITOR
@@ -268,6 +330,11 @@ function getAppendedReplyElement(
       replyingToBodyHTML,
       'text/html'
     );
+    // Extract style tags from head to preserve email styling for weirdo emails with initial style tags.
+    const styleTags = innerDom.head?.querySelectorAll('style');
+    styleTags?.forEach((style) => {
+      quote.appendChild(style);
+    });
     quote.appendChild(innerDom.body);
   }
 
@@ -340,11 +407,8 @@ export function prepareEmailBody(
   mentions: DocumentMentionInfo[];
 } | null {
   if (!editor) return null;
-  let generatedHtml = '';
-  let bodyHtml = '';
-  let bodyText = '';
-  editor.read(() => {
-    generatedHtml = $generateHtmlFromNodes(editor);
+  const generatedHtml = editor.read(() => {
+    return $generateHtmlFromNodes(editor);
   });
 
   const parsed = new DOMParser().parseFromString(generatedHtml, 'text/html');
@@ -352,7 +416,7 @@ export function prepareEmailBody(
   // Convert Macro document mentions to HTML links in the parsed DOM
   const mentions = convertMentionsToLinks(parsed.body);
 
-  if (appendReply) {
+  if (appendReply && !parsed.body.querySelector('.macro_quote')) {
     const appendedReplyElement = getAppendedReplyElement(
       appendReply.replyingTo,
       appendReply.replyType
@@ -364,8 +428,15 @@ export function prepareEmailBody(
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
     .replace(/={1,}$/, '');
-  bodyHtml = html;
-  bodyText = parsed.body.firstChild?.textContent ?? '';
+  const bodyHtml = html;
+  const bodyText = parsed.body.firstChild?.textContent ?? '';
 
   return { bodyHtml, bodyText, mentions };
+}
+
+export function prepareMacroBody(bodyMacro: string): string {
+  // Remove macro-quote blocks from the markdown string
+  // We want these in the HTML, but not in body_macro
+  // TODO (seamus + peter) Add logic for binding a markdown signal that skips certain transforms
+  return bodyMacro.replace(/<macro-quote>.*?<\/macro-quote>/gs, '').trim();
 }

@@ -6,10 +6,14 @@ import { useHandleFileUpload } from '@app/util/handleFileUpload';
 import { playSound } from '@app/util/sound';
 import { useIsAuthenticated } from '@core/auth';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
-import { Button } from '@core/component/FormControls/Button';
+import { DeprecatedButton } from '@core/component/FormControls/DeprecatedButton';
+import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { ContextMenuContent, MenuItem } from '@core/component/Menu';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { TOKENS } from '@core/hotkey/tokens';
+import type { RegisterHotkeyReturn } from '@core/hotkey/types';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { isMobileWidth } from '@core/mobile/mobileWidth';
 import {
   DEFAULT_VIEWS,
   type DefaultView,
@@ -24,6 +28,7 @@ import {
   useQueryClient as useEntityQueryClient,
 } from '@macro-entity';
 import { createEffectOnEntityTypeNotification } from '@notifications';
+import { invalidateEntityNotifications } from '@queries/notification/user-notifications';
 import { storageServiceClient } from '@service-storage/client';
 import { Navigate } from '@solidjs/router';
 import { useMutation, useQueryClient } from '@tanstack/solid-query';
@@ -39,14 +44,15 @@ import {
   onCleanup,
   type ParentComponent,
   Show,
-  Suspense,
   Switch,
 } from 'solid-js';
 import { EntityModal } from './EntityModal/EntityModal';
 import { HelpDrawer } from './HelpDrawer';
 import { PreviewPanel } from './PreviewPanel';
+import { SuspenseContextComp } from './SuspenseContext';
 import { SplitHeaderLeft } from './split-layout/components/SplitHeader';
 import { SplitTabs } from './split-layout/components/SplitTabs';
+import { SplitToolbarRight } from './split-layout/components/SplitToolbar';
 import { SplitPanelContext } from './split-layout/context';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 import { UnifiedListView } from './UnifiedListView';
@@ -70,28 +76,46 @@ const ViewTab: ParentComponent<{
   );
 };
 
+let runSuspenseWarningLog = false;
+const SuspenseUnifiedListFallback = () => {
+  const runWarningLog = () => {
+    if (!runSuspenseWarningLog) {
+      setTimeout(() => {
+        runSuspenseWarningLog = true;
+      });
+      return;
+    }
+
+    console.warn('UnifiedList Suspsense Triggered');
+  };
+
+  runWarningLog();
+
+  return null;
+};
+
 const ViewWithSearch: Component<{
   viewId: ViewId;
 }> = (props) => {
   return (
     <ViewTab viewId={props.viewId}>
       <Switch>
-        {/* <Match
-          when={props.viewId === 'emails' && DEFAULT_VIEWS.includes('emails')}
+        <Match
+          when={props.viewId === 'email' && DEFAULT_VIEWS.includes('email')}
         >
-          <Suspense>
+          <SuspenseContextComp fallback={<SuspenseUnifiedListFallback />}>
             <EmailView />
-          </Suspense>
-        </Match> */}
+          </SuspenseContextComp>
+        </Match>
         <Match when={props.viewId === 'all' && DEFAULT_VIEWS.includes('all')}>
-          <Suspense>
+          <SuspenseContextComp fallback={<SuspenseUnifiedListFallback />}>
             <AllView />
-          </Suspense>
+          </SuspenseContextComp>
         </Match>
         <Match when={true}>
-          <Suspense>
+          <SuspenseContextComp fallback={<SuspenseUnifiedListFallback />}>
             <UnifiedListView />
-          </Suspense>
+          </SuspenseContextComp>
         </Match>
       </Switch>
     </ViewTab>
@@ -129,34 +153,40 @@ export function Soup() {
 
   const entityQueryClient = useEntityQueryClient();
 
-  registerHotkey({
-    hotkey: ['shift+/'],
-    scopeId: splitHotkeyScope,
-    description: () =>
-      `${showHelpDrawer().has(selectedView()) ? 'Hide' : 'Show'} help drawer`,
-    hotkeyToken: TOKENS.split.showHelpDrawer,
-    keyDownHandler: () => {
-      if (showHelpDrawer().has(selectedView())) {
-        setShowHelpDrawer(new Set<string>());
-      } else {
-        setShowHelpDrawer(new Set(DEFAULT_VIEWS));
-      }
-      return true;
-    },
-  });
+  const hotkeyDisposers: RegisterHotkeyReturn[] = [];
 
-  registerHotkey({
-    hotkey: ['p'],
-    scopeId: splitHotkeyScope,
-    description: 'Toggle Preview',
-    hotkeyToken: TOKENS.unifiedList.togglePreview,
-    keyDownHandler: () => {
-      playSound('open');
-      setPreview((prev) => !prev);
-      return true;
-    },
-    hide: true,
-  });
+  hotkeyDisposers.push(
+    registerHotkey({
+      hotkey: ['shift+/'],
+      scopeId: splitHotkeyScope,
+      description: () =>
+        `${showHelpDrawer().has(selectedView() as DefaultView) ? 'Hide' : 'Show'} help drawer`,
+      hotkeyToken: TOKENS.split.showHelpDrawer,
+      keyDownHandler: () => {
+        if (showHelpDrawer().has(selectedView() as DefaultView)) {
+          setShowHelpDrawer(new Set<DefaultView>());
+        } else {
+          setShowHelpDrawer(new Set(DEFAULT_VIEWS));
+        }
+        return true;
+      },
+    })
+  );
+
+  hotkeyDisposers.push(
+    registerHotkey({
+      hotkey: ['p'],
+      scopeId: splitHotkeyScope,
+      description: 'Toggle Preview',
+      hotkeyToken: TOKENS.unifiedList.togglePreview,
+      keyDownHandler: () => {
+        playSound('open');
+        setPreview((prev) => !prev);
+        return true;
+      },
+      // displayPriority: 10,
+    })
+  );
 
   const [isDragging, setIsDragging] = createSignal(false);
   const [isValidDrag, setIsValidDrag] = createSignal(true);
@@ -183,11 +213,7 @@ export function Soup() {
       entityQueryClient.invalidateQueries({
         queryKey: queryKeys.all.channel,
       });
-      entityQueryClient.invalidateQueries({
-        queryKey: queryKeys.notification({
-          eventItemId: notification.eventItemId,
-        }),
-      });
+      invalidateEntityNotifications(notification.entity_id);
     }
   );
 
@@ -199,11 +225,27 @@ export function Soup() {
     });
   });
 
+  createEffectOnEntityTypeNotification(
+    notificationSource,
+    'document',
+    (notification) => {
+      if (notification.notificationEventType === 'task_assigned') {
+        entityQueryClient.invalidateQueries({
+          queryKey: queryKeys.all.dss,
+        });
+        invalidateEntityNotifications(notification.entity_id);
+      }
+    }
+  );
+
   const saveViewMutation = useUpsertSavedViewMutation();
 
   let tabsRef: HTMLDivElement | undefined;
 
-  onCleanup(() => setEntityListRef(undefined));
+  onCleanup(() => {
+    setEntityListRef(undefined);
+    hotkeyDisposers.forEach((disposer) => disposer.dispose());
+  });
 
   const TabContextMenu = (props: { value: ViewId; label: string }) => {
     const [isModalOpen, setIsModalOpen] = createSignal(false);
@@ -273,7 +315,7 @@ export function Soup() {
         </FileDropOverlay>
       </Show>
 
-      <div class="relative flex-grow min-h-0 flex flex-row size-full">
+      <div class="relative flex-grow min-h-0 flex max-sm:flex-col flex-row size-full">
         <SplitPanelContext.Provider
           value={{
             ...splitPanelContext,
@@ -286,16 +328,16 @@ export function Soup() {
             class="@container/soup [container-type:inline-size] flex flex-col gap-1 size-full overflow-x-clip"
             classList={{
               'border-r border-edge-muted': preview(),
-              'pt-2 pb-0': showHelpDrawer().has(selectedView()),
             }}
             value={selectedView()}
             onChange={setSelectedView}
           >
             <SplitHeaderLeft>
               <SplitTabs
-                list={Object.values(viewsData).map((view) => ({
+                list={Object.values(viewsData).map((view, index) => ({
                   value: view.id,
                   label: view.view,
+                  index: index,
                 }))}
                 active={selectedView}
                 contextMenu={({ value, label }) => (
@@ -303,7 +345,7 @@ export function Soup() {
                 )}
                 newButton={
                   <div class="flex items-center px-2 h-full">
-                    <Button
+                    <DeprecatedButton
                       size="Base"
                       classList={{
                         '!border-transparent hover:!border-ink/50 px-1 !text-ink !bg-panel font-medium': true,
@@ -316,7 +358,7 @@ export function Soup() {
                       }}
                     >
                       +
-                    </Button>
+                    </DeprecatedButton>
                   </div>
                 }
               />
@@ -334,7 +376,12 @@ export function Soup() {
           />
         </Show>
       </div>
-      <Show when={showHelpDrawer().has(selectedView())}>
+      <Show
+        when={
+          showHelpDrawer().has(selectedView() as DefaultView) &&
+          !(isTouchDevice() && isMobileWidth())
+        }
+      >
         <HelpDrawer viewId={view().id} />
       </Show>
     </div>
@@ -345,32 +392,32 @@ function AllView() {
   return <UnifiedListView />;
 }
 
-// function EmailView() {
-//   const {
-//     emailViewSignal: [emailView, setEmailView],
-//     viewsDataStore,
-//     selectedView,
-//   } = useSplitPanelOrThrow().unifiedListContext;
-//   const viewData = createMemo(() => viewsDataStore[selectedView()]);
+function EmailView() {
+  const {
+    emailViewSignal: [emailView, setEmailView],
+    viewsDataStore,
+    selectedView,
+  } = useSplitPanelOrThrow().unifiedListContext;
+  const viewData = createMemo(() => viewsDataStore[selectedView()]);
 
-//   return (
-//     <>
-//       <UnifiedListView />
-//       <SplitToolbarRight>
-//         <div class="flex flex-row items-center pr-2">
-//           <SegmentedControl
-//             disabled={!!viewData().searchText}
-//             size="SM"
-//             label="View"
-//             list={['inbox', 'sent', 'drafts']}
-//             value={emailView()}
-//             onChange={setEmailView}
-//           />
-//         </div>
-//       </SplitToolbarRight>
-//     </>
-//   );
-// }
+  return (
+    <>
+      <UnifiedListView />
+      <SplitToolbarRight>
+        <div class="flex flex-row items-center pr-2">
+          <SegmentedControl
+            disabled={!!viewData().searchText}
+            size="SM"
+            label="View"
+            list={['inbox', 'sent', 'drafts']}
+            value={emailView()}
+            onChange={setEmailView}
+          />
+        </div>
+      </SplitToolbarRight>
+    </>
+  );
+}
 
 export const useUpsertSavedViewMutation = () => {
   const queryClient = useQueryClient();

@@ -2,12 +2,12 @@ import {
   isDraggingOverChannelSignal,
   isValidChannelDragSignal,
 } from '@block-channel/signal/attachment';
-import type { sendMessage } from '@block-channel/signal/channel';
+import type { SendMessageArgs } from '@block-channel/signal/channel';
 import { handleFileUpload } from '@block-channel/utils/inputAttachments';
 import { isInBlock } from '@core/block';
 import { BrightJoins } from '@core/component/BrightJoins';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
-import { IconButton } from '@core/component/IconButton';
 import { setEditorStateFromMarkdown } from '@core/component/LexicalMarkdown/utils';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -66,7 +66,7 @@ type InputAttachmentsStore = {
 type BaseInputProps = {
   /** callback to be executed when the user clicks the send button
    * or presses enter */
-  onSend: (args: Parameters<typeof sendMessage>[0]) => Promise<void>;
+  onSend: (args: SendMessageArgs) => Promise<void>;
   /** callback to be executed when the user changes the input */
   onChange: (content: string) => void;
   /** initial value of the input */
@@ -96,8 +96,8 @@ type BaseInputProps = {
   /** the list of users in the channel  */
   channelUsers?: () => IUser[];
   domRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
-  /** callback to be called to "clear the input" */
-  onEmptyBlur?: () => void;
+  /** method to delete and close the draft */
+  closeDraft?: () => void;
   /** whether this input is for a reply (affects styling) */
   isReplyInput?: boolean;
 };
@@ -195,8 +195,8 @@ export function BaseInput(props: BaseInputProps) {
   } = useChannelMarkdownArea();
 
   createRenderEffect(() => {
-    const _ref = ref();
-    if (_ref) props.domRef?.(_ref);
+    const currentRef = ref();
+    if (currentRef) props.domRef?.(currentRef);
   });
 
   const allMentions: Accessor<SimpleMention[]> = () =>
@@ -210,7 +210,7 @@ export function BaseInput(props: BaseInputProps) {
   onMount(() => {
     attachFn(containerRef);
 
-    if (!isTouchDevice && !isMobileWidth()) {
+    if (!isTouchDevice() && !isMobileWidth()) {
       setTimeout(() => {
         if (
           props.autoFocusOnMount === true ||
@@ -293,7 +293,7 @@ export function BaseInput(props: BaseInputProps) {
     stopTyping();
     viewportObserver?.disconnect();
     if (markdownState().trim() === '') {
-      props.onEmptyBlur?.();
+      props.closeDraft?.();
     }
   });
 
@@ -331,14 +331,15 @@ export function BaseInput(props: BaseInputProps) {
     if (isPendingSend()) return false;
     setIsPendingSend(true);
     const content = markdownState();
-    clearMarkdownArea();
-    focusMarkdownArea();
 
     const args = {
       content: content,
       attachments: props.inputAttachments.store[key] ?? [],
       mentions: allMentions(),
     };
+
+    clearMarkdownArea();
+    focusMarkdownArea();
 
     props
       .onSend(args)
@@ -396,14 +397,6 @@ export function BaseInput(props: BaseInputProps) {
 
   const documentAttachments = () =>
     attachments().filter((a) => !isStaticAttachmentType(a.blockName));
-
-  const handleBlur = () => {
-    blurMarkdownArea();
-    if (markdownState().trim() === '') {
-      props.onEmptyBlur?.();
-    }
-    return true;
-  };
 
   return (
     <div
@@ -476,14 +469,20 @@ export function BaseInput(props: BaseInputProps) {
           onBlur={() => {
             props.onBlur?.();
             stopTyping();
-            handleBlur();
+            blurMarkdownArea();
           }}
           users={props.channelUsers}
           onChange={handleChange}
           onPasteFilesAndDirs={onMarkdownAreaPasteFilesAndDirs}
           initialValue={props.initialValue?.()}
           useBlockBoundary={true}
-          onEscape={handleBlur}
+          onEscape={() => {
+            blurMarkdownArea();
+            if (markdownState().trim() === '') {
+              props.closeDraft?.();
+            }
+            return true;
+          }}
           dontFocusOnMount
           onFocusLeaveStart={props.onFocusLeaveStart}
           onFocusLeaveEnd={onFocusLeaveEnd}
@@ -528,7 +527,7 @@ export function BaseInput(props: BaseInputProps) {
           />
         </Show>
         <div class="flex flex-row items-center gap-2">
-          <IconButton
+          <DeprecatedIconButton
             icon={showAttachMenu() ? XIcon : PlusIcon}
             theme="base"
             ref={setAttachMenuAnchorRef}
@@ -545,12 +544,12 @@ export function BaseInput(props: BaseInputProps) {
           >
             <FormatIcon width={20} height={20} />
           </ActionButton>
-          <Show when={props.onEmptyBlur}>
+          <Show when={props.isReplyInput && props.closeDraft}>
             <ActionButton
               tooltip="Delete reply"
               onClick={(e) => {
                 e.preventDefault();
-                props.onEmptyBlur?.();
+                props.closeDraft?.();
               }}
             >
               <Trash width={20} height={20} />

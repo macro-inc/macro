@@ -41,7 +41,7 @@ jobs:
           npm-rc-token: ${{ secrets.NPMRC_GH_TOKEN }}
       - name: Generate API Types
         working-directory: js/app
-        run: bun run gen-api
+        run: just gen-api
       - name: Check Types
         working-directory: js/app
         run: |
@@ -63,7 +63,7 @@ jobs:
           version: 2.2.6
       - name: Run Biome
         working-directory: js/app
-        run: biome ci --changed --no-errors-on-unmatched
+        run: biome ci --changed --no-errors-on-unmatched --error-on-warnings
 
   tailwind:
     needs: path-check
@@ -81,7 +81,7 @@ jobs:
           npm-rc-token: ${{ secrets.NPMRC_GH_TOKEN }}
       - name: Check Tailwind Classes
         working-directory: js/app
-        run: bun run check-tailwind
+        run: just check-tailwind
 
   test:
     needs: path-check

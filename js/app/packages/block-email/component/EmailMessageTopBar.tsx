@@ -1,4 +1,4 @@
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { Tooltip } from '@core/component/Tooltip';
 import { formatDate } from '@core/util/date';
 import CaretDown from '@icon/regular/caret-down.svg';
@@ -7,7 +7,7 @@ import type { MessageWithBodyReplyless } from '@service-email/generated/schemas'
 import { type Accessor, For, type Setter, Show } from 'solid-js';
 import type { SetStoreFunction } from 'solid-js/store';
 import { getFirstName } from '../util/name';
-import { MessageActions } from './MessageActions';
+import { type EmailMessageAction, MessageActions } from './MessageActions';
 
 interface EmailMessageTopBarProps {
   message: MessageWithBodyReplyless;
@@ -16,16 +16,17 @@ interface EmailMessageTopBarProps {
   isBodyExpanded: Accessor<boolean>;
   expandedHeader: Accessor<boolean>;
   setExpandedHeader: Setter<boolean>;
-  setFocusedMessageId: Setter<string | undefined>;
+  setFocusedMessageId: (messageId: string | undefined) => void;
   setShowReply: Setter<boolean>;
   isLastMessage?: boolean;
+  hiddenActions?: EmailMessageAction[];
 }
 
 export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
   return (
     <div
       class="pr-2 font-mono"
-      onPointerDown={(e) => {
+      onClick={(e) => {
         if (props.message.db_id) {
           props.setFocusedMessageId(props.message.db_id);
         }
@@ -33,9 +34,11 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
           (e.target as Element).localName === 'button' ||
           (e.target as Element).localName === 'svg' ||
           (e.target as Element).localName === 'path' ||
-          (e.target as Element).tagName === 'SPAN'
-        )
+          (e.target as Element).tagName === 'SPAN' ||
+          (e.target as Element).closest('[role="tooltip"]')
+        ) {
           return;
+        }
         if (props.isBodyExpanded() && props.message.db_id) {
           props.setExpandedMessageBodyIds(props.message.db_id, false);
         } else if (props.message.db_id) {
@@ -48,14 +51,14 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
         {/* Name and Email */}
         <div class="shrink-1 min-w-0 flex flex-row items-center text-sm gap-2">
           {/* Sender Name */}
-          <div class="truncate text-ink-muted">
+          <div class="truncate text-ink-muted select-tex cursor-text">
             {props.message.from?.name ?? props.message.from?.email}
           </div>
           {/* Sender Email */}
           <Show when={props.isBodyExpanded() && props.message.from?.name}>
             <div class="truncate flex-1 min-w-0 text-ink-muted text-xs">
               &lt;
-              <span class="text-accent-ink select-text">
+              <span class="text-accent-ink select-text cursor-text">
                 {props.message.from?.email}
               </span>
               &gt;
@@ -76,6 +79,7 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
             showActions={props.focused}
             setShowReply={props.setShowReply}
             isLastMessage={props.isLastMessage}
+            hiddenActions={props.hiddenActions}
           />
         </div>
       </div>
@@ -145,7 +149,7 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
                 </For>
               </div>
               {/* Expand Header Button */}
-              <IconButton
+              <DeprecatedIconButton
                 theme="clear"
                 icon={CaretDown}
                 onclick={() => {
@@ -187,7 +191,7 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
                     props.message.bcc.length === 0
                   }
                 >
-                  <IconButton
+                  <DeprecatedIconButton
                     theme="clear"
                     icon={CaretUp}
                     onclick={() => {
@@ -225,7 +229,7 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
                 {/* Expand Header Button */}
 
                 <Show when={props.message.bcc.length === 0}>
-                  <IconButton
+                  <DeprecatedIconButton
                     theme="clear"
                     icon={CaretUp}
                     onclick={() => {
@@ -262,7 +266,7 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
                 </For>
                 {/* Expand Header Button */}
 
-                <IconButton
+                <DeprecatedIconButton
                   theme="clear"
                   icon={CaretUp}
                   onclick={() => {

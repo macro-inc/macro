@@ -170,6 +170,7 @@ export function useCreateProject() {
       type: 'project',
       userId: '',
       updatedAt: Date.now(),
+      deletedAt: null,
     };
 
     // Optimistic update

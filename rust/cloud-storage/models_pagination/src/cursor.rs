@@ -1,7 +1,7 @@
 use base64::{DecodeError, Engine, engine::general_purpose};
 use either::Either;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
-use std::{cmp::Ordering, marker::PhantomData};
+use std::{cmp::Ordering, marker::PhantomData, ops::Deref};
 use thiserror::Error;
 
 /// struct which encapsulates a single page of cursor based pagination result
@@ -310,6 +310,14 @@ pub struct Base64Str<T> {
     data: String,
     #[serde(skip)]
     target: PhantomData<T>,
+}
+
+impl<T> Deref for Base64Str<T> {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        &self.data
+    }
 }
 
 /// Errors that can occur while working with a [Base64Str]

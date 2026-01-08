@@ -3,7 +3,11 @@ use std::collections::HashMap;
 use anyhow::Context;
 use aws_sdk_sns::types::MessageAttributeValue;
 use macro_entrypoint::MacroEntrypoint;
-use model_notifications::{APNSPushNotification, PushNotificationData};
+use serde::Serialize;
+use sns_client::{
+    APNSPushNotification, Alert, AlertDictionary, Aps, FCMMessage, MessageAttributes,
+    NotifCollapseKey, SnsTarget,
+};
 
 /// Sends a push notification to the provided ENDPOINT_ARN environment variable
 #[tokio::main]
@@ -72,38 +76,27 @@ async fn send_first(
     endpoint_arn: &str,
     collapse_key: &str,
 ) -> anyhow::Result<()> {
-    let push_notification_data = PushNotificationData {
-        notification_entity: model_notifications::NotificationEntity {
-            event_item_id: "abc".to_string(),
-            event_item_type: "document".parse().unwrap(),
+    let apns = SnsTarget::Ios(Box::new(APNSPushNotification {
+        aps: Aps {
+            alert: Some(Alert::Dictionary(AlertDictionary {
+                title: Some("GO AWAY 2".to_string()),
+                body: Some("TESTING".to_string()),
+                ..Default::default()
+            })),
+            ..Default::default()
         },
-        open_route: "".to_string(),
-        sender_id: None,
-    };
-
-    let notification_body = serde_json::json!({
-        "title": "GO AWAY 2",
-        "body": "THIS IS ME TESTING SEND",
-    });
-
-    let apns = APNSPushNotification {
-        aps: serde_json::json!({
-            "alert": notification_body
-        }),
-        push_notification_data: push_notification_data.clone(),
-    };
-
-    let message_json = serde_json::json!({
-        "APNS": serde_json::to_string(&apns).unwrap_or_else(|_| serde_json::json!({
-            "aps": apns.aps
-        }).to_string()),
-    });
+        push_notification_data: &(),
+    }));
 
     sns_client
         .push_notification(
             endpoint_arn,
-            &message_json.to_string(),
-            message_attributes(collapse_key),
+            &apns,
+            MessageAttributes {
+                push_type: sns_client::PushType::Alert,
+                apns_bundle_id: "com.macro.app.prod",
+                collapse_key: NotifCollapseKey::new_str(collapse_key),
+            },
         )
         .await
         .context("unable to send push notification")?;
@@ -116,22 +109,30 @@ async fn send_empty(
     endpoint_arn: &str,
     collapse_key: &str,
 ) -> anyhow::Result<()> {
-    let apns = serde_json::json!({
-        "aps": {
-            "content-available": 1,
-        },
-        "identifier": collapse_key,
-    });
+    #[derive(Debug, Serialize)]
+    struct ExtraData {
+        identifier: String,
+    }
 
-    let message_json = serde_json::json!({
-        "APNS": serde_json::to_string(&apns).context("could not convert apns to string")?,
-    });
+    let apns = SnsTarget::Ios(Box::new(APNSPushNotification {
+        aps: Aps {
+            content_available: Some(1),
+            ..Default::default()
+        },
+        push_notification_data: ExtraData {
+            identifier: collapse_key.to_string(),
+        },
+    }));
 
     sns_client
         .push_notification(
             endpoint_arn,
-            &message_json.to_string(),
-            message_attributes(collapse_key),
+            &apns,
+            MessageAttributes {
+                push_type: sns_client::PushType::Alert,
+                apns_bundle_id: "com.macro.app.prod",
+                collapse_key: NotifCollapseKey::new_str(collapse_key),
+            },
         )
         .await
         .context("unable to send push notification")?;

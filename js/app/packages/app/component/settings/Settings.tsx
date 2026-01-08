@@ -5,7 +5,7 @@ import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import CloseIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 import { MacroPermissions, usePermissions } from '@service-gql/client';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import ContractIcon from '@icon/regular/arrows-in.svg';
 import Organization from './Organization/Organization';
 import ExpandIcon from '@icon/regular/arrows-out.svg';
@@ -15,12 +15,19 @@ import { Subscription } from './Subscription';
 import { Appearance } from './Appearance';
 import { Tabs } from '@kobalte/core/tabs';
 import { Account } from './Account';
+import { Inbox } from './Inbox';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { isMobileWidth } from '@core/mobile/mobileWidth';
 
 const SCROLL_THRESHOLD = 10;
 
 const { track, TrackingEvents } = withAnalytics();
 
-export function SettingsPanel() {
+type SettingsPanelProps = {
+  hide?: boolean;
+};
+
+export function SettingsPanel(props: SettingsPanelProps) {
   const { settingsOpen, closeSettings, activeTabId, setActiveTabId } = useSettingsState();
   const permissions = usePermissions();
   const orgName = useOrganizationName();
@@ -113,15 +120,16 @@ export function SettingsPanel() {
     if(!orgName() && !isNativeMobilePlatform()){tabs.push({value: 'Subscription', label: 'Subscription'})}
     if(orgName() && permissions()?.includes(MacroPermissions.WriteItPanel)){tabs.push({value: 'Organization', label: 'Organization'})}
     if(isNativeMobilePlatform() && DEV_MODE_ENV){tabs.push({ value: 'Mobile', label: 'Mobile Dev Tools' })}
+    if(DEV_MODE_ENV){tabs.push({ value: 'Inbox', label: 'Inbox' })}
 
     return tabs;
   });
 
   return (
     <div
-      class="size-full invisible"
+      class="size-full"
       classList={{
-        visible: settingsOpen() || spotlight(),
+        invisible: props.hide,
       }}
     >
       <SplitlikeContainer
@@ -133,7 +141,7 @@ export function SettingsPanel() {
             <Tabs
               value={activeTabId()}
               onChange={(value: string | undefined) => {
-                if(value && (value === 'Account' || value === 'Subscription' || value === 'Organization' || value === 'Appearance' || value === 'Mobile' || value === 'AI Memory')){
+                if(value && (value === 'Account' || value === 'Subscription' || value === 'Organization' || value === 'Appearance' || value === 'Mobile' || value === 'AI Memory' || value === 'Inbox')){
                   setActiveTabId(value as SettingsTab);
                   track(TrackingEvents.SETTINGS.CHANGETAB, { tab: value });
                 }
@@ -143,13 +151,15 @@ export function SettingsPanel() {
               {/* Header with tabs */}
               <div class="relative isolate shrink-0 border-b border-edge-muted">
                 <div class="flex items-center px-2 h-[2.5rem]">
-                  <IconButton
-                    icon={CloseIcon}
-                    onClick={closeSettings}
-                    tooltip={{ label: 'Close Settings' }}
-                    theme="clear"
-                    size="sm"
-                  />
+                  <Show when={!isTouchDevice() || !isMobileWidth()}>
+                    <DeprecatedIconButton
+                      icon={CloseIcon}
+                      onClick={closeSettings}
+                      tooltip={{ label: 'Close Settings' }}
+                      theme="clear"
+                      size="sm"
+                    />
+                  </Show>
 
                   {/* Left clip boundary indicator */}
                   <div
@@ -222,15 +232,17 @@ export function SettingsPanel() {
 
                   <div class="flex-1" />
 
-                  <IconButton
-                    icon={spotlight() ? ContractIcon : ExpandIcon}
-                    onClick={() => setSpotlight(!spotlight())}
-                    tooltip={{
-                      label: spotlight() ? 'Exit Spotlight' : 'Enter Spotlight Mode'
-                    }}
-                    theme="clear"
-                    size="sm"
-                  />
+                  <Show when={!isTouchDevice() || !isMobileWidth()}>
+                    <DeprecatedIconButton
+                      icon={spotlight() ? ContractIcon : ExpandIcon}
+                      onClick={() => setSpotlight(!spotlight())}
+                      tooltip={{
+                        label: spotlight() ? 'Exit Spotlight' : 'Enter Spotlight Mode'
+                      }}
+                      theme="clear"
+                      size="sm"
+                    />
+                  </Show>
                 </div>
               </div>
 
@@ -254,6 +266,11 @@ export function SettingsPanel() {
                 <Tabs.Content value="Appearance" class="absolute inset-0">
                   <Appearance />
                 </Tabs.Content>
+                <Show when={DEV_MODE_ENV}>
+                  <Tabs.Content value="Inbox" class="absolute inset-0">
+                    <Inbox />
+                  </Tabs.Content>
+                </Show>
               </div>
             </Tabs>
           </div>

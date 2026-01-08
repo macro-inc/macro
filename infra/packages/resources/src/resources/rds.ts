@@ -1,6 +1,6 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { RDS_PORT, stack } from '@shared';
+import { RDS_PORT, stack } from '../../../shared';
 
 type DatabaseArgs = {
   publiclyAccessible: boolean;

@@ -12,9 +12,11 @@ import {
 import { registerClient } from '@core/util/mockClient';
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import type { AddPropertyOptionRequest } from './generated/schemas/addPropertyOptionRequest';
+import type { BulkEntityPropertiesRequest } from './generated/schemas/bulkEntityPropertiesRequest';
 import type { CreatePropertyDefinitionRequest } from './generated/schemas/createPropertyDefinitionRequest';
 import type { EntityPropertiesResponse } from './generated/schemas/entityPropertiesResponse';
 import type { EntityType } from './generated/schemas/entityType';
+import type { GetBulkEntityProperties200 } from './generated/schemas/getBulkEntityProperties200';
 import type { GetEntityPropertiesParams } from './generated/schemas/getEntityPropertiesParams';
 import type { ListPropertiesParams } from './generated/schemas/listPropertiesParams';
 import type { PropertyDefinition } from './generated/schemas/propertyDefinition';
@@ -60,6 +62,9 @@ type SetPropertyStatusCompleteArgs = {
   entity_type: PropertiesEntityType;
   entity_id: string;
 };
+type GetBulkEntityPropertiesArgs = {
+  body: BulkEntityPropertiesRequest;
+};
 
 const propertiesHost: string = SERVER_HOSTS['properties-service'];
 
@@ -86,6 +91,9 @@ export const propertiesServiceClient = {
     queryParams.set('scope', args.scope);
     if (args.include_options !== undefined) {
       queryParams.set('include_options', String(args.include_options));
+    }
+    if (args.for_entity_type !== undefined && args.for_entity_type !== null) {
+      queryParams.set('for_entity_type', args.for_entity_type);
     }
 
     return await propertiesFetch<PropertyDefinitionResponse[]>(
@@ -190,6 +198,16 @@ export const propertiesServiceClient = {
       method: 'PATCH',
     });
     return mapOk(result, () => ({ success: true }));
+  },
+
+  getBulkEntityProperties: async (args: GetBulkEntityPropertiesArgs) => {
+    return await propertiesFetch<GetBulkEntityProperties200>(
+      `/properties/entities/bulk`,
+      {
+        method: 'POST',
+        body: JSON.stringify(args.body),
+      }
+    );
   },
 };
 

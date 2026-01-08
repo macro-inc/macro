@@ -77,31 +77,3 @@ pub async fn process_extract_sync_message(
 
     Ok(())
 }
-
-pub async fn process_update_metadata_message(
-    opensearch_client: &OpensearchClient,
-    db: &sqlx::Pool<sqlx::Postgres>,
-    document_id: &str,
-) -> anyhow::Result<()> {
-    let document_info = match macro_db_client::document::get_basic_document(db, document_id).await {
-        Ok(document_info) => document_info,
-        Err(e) => match e {
-            sqlx::Error::RowNotFound => {
-                return Ok(());
-            }
-            _ => {
-                anyhow::bail!("unable to get document info")
-            }
-        },
-    };
-
-    if document_info.deleted_at.is_some() {
-        return Ok(());
-    }
-
-    opensearch_client
-        .update_document_metadata(document_id, document_info.document_name.as_str())
-        .await?;
-
-    Ok(())
-}

@@ -10,16 +10,21 @@ import { $getListDepth, type ListItemNode, type ListNode } from '@lexical/list';
 import type { HeadingNode, QuoteNode } from '@lexical/rich-text';
 import type { TableCellNode, TableNode, TableRowNode } from '@lexical/table';
 import {
+  $isClassedBlockNode,
+  type ClassedBlockNode,
   type ContactMentionNode,
   type DateMentionNode,
   DEFAULT_LANGUAGE,
   type DocumentMentionNode,
   type EquationNode,
   type HorizontalRuleNode,
+  type ImageNode,
   isSupportedLanguage,
   normalizedLanguage,
   SupportedNodeTypes,
   type UserMentionNode,
+  type VideoNode,
+  type WatermarkNode,
 } from '@lexical-core';
 import {
   $getRoot,
@@ -52,13 +57,16 @@ import { ENABLE_SVG_PREVIEW } from '@core/constant/featureFlags';
 import type { MarkNode } from '@lexical/mark';
 import type { SearchMatchNode } from '@lexical-core/nodes/SearchMatchNode';
 import { theme as baseTheme, createTheme } from '../../theme';
-import { setEditorStateFromMarkdown } from '../../utils';
+import { forceSingleLine, setEditorStateFromMarkdown } from '../../utils';
 import { StaticCodeBoxAccessory } from '../accessory/CodeBoxAccessory';
 import { ContactMention as ContactMentionDecorator } from '../decorator/ContactMention';
 import { DateMention as DateMentionDecorator } from '../decorator/DateMention';
 import { DocumentMention as DocumentMentionDecorator } from '../decorator/DocumentMention';
 import { Equation as EquationDecorator } from '../decorator/Equation';
+import { MarkdownImage as ImageDecorator } from '../decorator/MarkdownImage';
+import { MarkdownVideo as VideoDecorator } from '../decorator/MarkdownVideo';
 import { UserMention as UserMentionDecorator } from '../decorator/UserMention';
+import { Watermark as WatermarkDecorator } from '../decorator/Watermark';
 import { LinkWithPreview } from './LinkWithPreview';
 
 type HeadingTag = 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6';
@@ -142,42 +150,6 @@ const CodeHighlightShim = {
   },
 };
 
-/**
- * Take the first "line" of a markdown string. Handle the codeblock edge case.
- */
-export function firstLineMarkdown(md: string) {
-  if (typeof md !== 'string') return '';
-
-  // fix line endings and trim start
-  md = md.replace(/\r\n?/g, '\n').replace(/^\s*\n/, '');
-
-  const lines = md.split('\n');
-  const collapse = (s: string) => s.replace(/\s+/g, ' ').trim();
-
-  const fenceMatch = lines[0]?.match(/^\s*(```+|~~~+)\s*([a-zA-Z0-9_-]+)?\s*$/);
-  if (fenceMatch) {
-    const fence = fenceMatch[1]; // ``` or ~~~ (with count)
-    const lang = fenceMatch[2] || ''; // optional
-    let firstCode = '';
-    for (let i = 1; i < lines.length; i++) {
-      // closing fence?
-      if (new RegExp(`^\\s*${fence}\\s*$`).test(lines[i])) break;
-      if (!firstCode && lines[i].trim().length)
-        firstCode = lines[i].replace(/\s+$/, '');
-    }
-    const out =
-      (lang ? '```' + lang : '```') + '\n' + (firstCode || '') + '\n```';
-    return out;
-  }
-
-  const buf = [];
-  for (let i = 0; i < lines.length; i++) {
-    if (/^\s*$/.test(lines[i])) break;
-    buf.push(lines[i]);
-  }
-  return collapse(buf.join(' '));
-}
-
 function newStaticRenderingEditor(props: {
   parentEditor?: LexicalEditor;
   theme: EditorThemeClasses;
@@ -215,7 +187,8 @@ function getTextClassName(
     | UserMentionNode
     | DocumentMentionNode
     | ContactMentionNode
-    | DateMentionNode,
+    | DateMentionNode
+    | WatermarkNode,
   theme: EditorThemeClasses
 ): string {
   const base = theme.text?.base ?? '';
@@ -295,6 +268,20 @@ const DocumentMention: RenderableEntity<DocumentMentionNode> = {
   ),
 };
 
+const Watermark: RenderableEntity<WatermarkNode> = {
+  guard: (node: LexicalNode): node is WatermarkNode =>
+    node.__type === 'watermark',
+  render: (props) => (
+    <span class={getTextClassName(props.node, props.theme)}>
+      {WatermarkDecorator({
+        ...props.node.exportComponentProps(),
+        key: props.node.getKey(),
+        theme: props.theme,
+      })}
+    </span>
+  ),
+};
+
 const ContactMention: RenderableEntity<ContactMentionNode> = {
   guard: (node: LexicalNode): node is ContactMentionNode =>
     node.__type === 'contact-mention',
@@ -321,6 +308,16 @@ const DateMention: RenderableEntity<DateMentionNode> = {
       })}
     </span>
   ),
+};
+
+const Image: RenderableEntity<ImageNode> = {
+  guard: (node: LexicalNode): node is ImageNode => node.__type === 'image',
+  render: (props) => ImageDecorator(props.node.exportComponentProps()),
+};
+
+const Video: RenderableEntity<VideoNode> = {
+  guard: (node: LexicalNode): node is VideoNode => node.__type === 'video',
+  render: (props) => VideoDecorator(props.node.exportComponentProps()),
 };
 
 const Paragraph: RenderableElement<ParagraphNode> = {
@@ -383,8 +380,8 @@ const ListItem: RenderableElement<ListItemNode> = {
     const checked = props.node.__checked;
 
     // Get the parent list node
-    const _children = props.node.getChildren();
-    const nested = _children.some((child) => child.__type === 'list');
+    const children = props.node.getChildren();
+    const nested = children.some((child) => child.__type === 'list');
 
     // Build class names
     const classes = [
@@ -572,6 +569,25 @@ const TableCell: RenderableElement<TableCellNode> = {
   },
 };
 
+const ClassedBlock: RenderableElement<ClassedBlockNode> = {
+  guard: (node: LexicalNode): node is ClassedBlockNode =>
+    $isClassedBlockNode(node),
+  render: (props) => {
+    const tag = props.node.__tag;
+    const classes = props.node.__classes.join(' ');
+    return (
+      <Dynamic
+        component={tag}
+        class={classes}
+        data-classed-block="true"
+        {...props.node.__attributes}
+      >
+        {props.children}
+      </Dynamic>
+    );
+  },
+};
+
 // The entities that cannot have children.
 const InlineEntities: Array<RenderableEntity> = [
   Text,
@@ -580,8 +596,11 @@ const InlineEntities: Array<RenderableEntity> = [
   DocumentMention,
   ContactMention,
   DateMention,
+  Image,
+  Video,
   HorizontalRule,
   Equation,
+  Watermark,
 ] as const;
 
 const Elements: RenderableElement[] = [
@@ -597,6 +616,7 @@ const Elements: RenderableElement[] = [
   Table,
   TableRow,
   TableCell,
+  ClassedBlock,
 ] as const;
 
 function Render(props: NodeComponent | ElementNodeComponent) {
@@ -648,6 +668,7 @@ function Document(props: {
   theme: EditorThemeClasses;
   rootRef?: (ref: HTMLDivElement) => void;
   isGenerating: Accessor<boolean>;
+  singleLine?: boolean;
 }): JSX.Element {
   return (
     <div
@@ -705,9 +726,6 @@ export function StaticMarkdown(props: {
   });
 
   const content = createMemo(() => {
-    if (props.singleLine) {
-      return firstLineMarkdown(props.markdown);
-    }
     return props.markdown;
   });
 
@@ -719,6 +737,9 @@ export function StaticMarkdown(props: {
     }
 
     setEditorStateFromMarkdown(editor, content(), props.target);
+    if (props.singleLine) {
+      forceSingleLine(editor);
+    }
     setEditorState(editor.getEditorState());
   });
 
@@ -731,6 +752,9 @@ export function StaticMarkdown(props: {
       // Handle citations without affecting mentions
       replaceCitations(content()).then((content: string) => {
         setEditorStateFromMarkdown(editor, content, props.target);
+        if (props.singleLine) {
+          forceSingleLine(editor);
+        }
         setEditorState(editor.getEditorState());
       });
     }

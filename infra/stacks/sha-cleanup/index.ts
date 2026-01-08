@@ -1,7 +1,7 @@
-import { WorkerTrigger } from '@lambda';
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { config, stack } from '@shared';
+import { WorkerTrigger } from '../../packages/lambda';
+import { config, stack } from '../../packages/shared';
 import { ShaWorker } from './sha-cleanup-worker';
 
 const tags = {

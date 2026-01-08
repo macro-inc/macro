@@ -113,32 +113,32 @@ export function File(props: { node: FileNode; mode: RenderMode }) {
   });
 
   createEffect(() => {
-    const _item = item();
-    if (_item.loading) {
+    const currentItem = item();
+    if (currentItem.loading) {
       setError('LOADING');
       return;
     }
-    if ((_item as PreviewItemNoAccess).access === 'no_access') {
+    if ((currentItem as PreviewItemNoAccess).access === 'no_access') {
       setError('UNAUTHORIZED');
       return;
     }
-    if (_item.access === 'does_not_exist') {
+    if (currentItem.access === 'does_not_exist') {
       setError('MISSING');
       return;
     }
-    if (_item.access === 'access') {
+    if (currentItem.access === 'access') {
       setError();
-      if (_item.type === 'document') {
-        setFileName(_item.name);
-        setFileType(_item.fileType);
-        setBlockName(fileTypeToBlockName(_item.fileType!));
-      } else if (_item.type === 'chat') {
-        setFileName(_item.name);
+      if (currentItem.type === 'document') {
+        setFileName(currentItem.name);
+        setFileType(currentItem.fileType);
+        setBlockName(fileTypeToBlockName(currentItem.fileType!));
+      } else if (currentItem.type === 'chat') {
+        setFileName(currentItem.name);
         setFileType('chat');
         setBlockName('chat');
         setError();
-      } else if (_item.type === 'project') {
-        setFileName(_item.name);
+      } else if (currentItem.type === 'project') {
+        setFileName(currentItem.name);
         setFileType('project' as FileType);
         setBlockName('project');
         setError();
@@ -151,23 +151,27 @@ export function File(props: { node: FileNode; mode: RenderMode }) {
     <div
       class="document-mention internal-link"
       onMouseEnter={() => {
-        if (!isTouchDevice && !mouseIsDown() && selectedTool() !== Tools.Line) {
+        if (
+          !isTouchDevice() &&
+          !mouseIsDown() &&
+          selectedTool() !== Tools.Line
+        ) {
           debouncedSetPreviewOpen(true);
         }
       }}
       onMouseLeave={() => {
-        if (!isTouchDevice) {
+        if (!isTouchDevice()) {
           debouncedSetPreviewOpen.clear();
           debouncedSetPreviewOpen(false);
         }
       }}
       ontouchstart={(e) => {
-        if (isTouchDevice) {
+        if (isTouchDevice()) {
           e.preventDefault();
         }
       }}
       ontouchend={(e) => {
-        if (isTouchDevice) {
+        if (isTouchDevice()) {
           e.preventDefault();
           if (matches(item(), (i) => !i.loading && i.access === 'access')) {
             replaceOrInsertSplit({

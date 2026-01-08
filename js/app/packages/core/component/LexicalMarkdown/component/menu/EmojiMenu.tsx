@@ -146,7 +146,11 @@ export function EmojiMenu(props: EmojiMenuProps) {
         e.preventDefault();
         e.stopPropagation();
         setSelectedIndex((prev) => (prev + 1) % items.length);
-        const endIndex = virtualHandle()?.findEndIndex();
+        const handle = virtualHandle();
+        if (!handle) break;
+        const endIndex = handle.findItemIndex(
+          handle.scrollOffset + handle.viewportSize
+        );
         if (endIndex && endIndex === selectedIndex()) {
           virtualHandle()?.scrollToIndex(selectedIndex() + 1, {
             align: 'center',
@@ -159,7 +163,9 @@ export function EmojiMenu(props: EmojiMenuProps) {
         e.preventDefault();
         e.stopPropagation();
         setSelectedIndex((prev) => (prev - 1 + items.length) % items.length);
-        const startIndex = virtualHandle()?.findStartIndex();
+        const handle = virtualHandle();
+        if (!handle) break;
+        const startIndex = handle.findItemIndex(handle.scrollOffset);
         if (startIndex && startIndex === selectedIndex()) {
           virtualHandle()?.scrollToIndex(selectedIndex() - 1, {
             align: 'center',
@@ -177,8 +183,10 @@ export function EmojiMenu(props: EmojiMenuProps) {
         e.preventDefault();
         e.stopPropagation();
         if (e.shiftKey) {
+          const handle = virtualHandle();
+          if (!handle) break;
           setSelectedIndex((prev) => (prev - 1 + items.length) % items.length);
-          const startIndex = virtualHandle()?.findStartIndex();
+          const startIndex = handle.findItemIndex(handle.scrollOffset);
           if (startIndex && startIndex === selectedIndex()) {
             virtualHandle()?.scrollToIndex(selectedIndex() - 1, {
               align: 'center',
@@ -186,7 +194,11 @@ export function EmojiMenu(props: EmojiMenuProps) {
           }
         } else {
           setSelectedIndex((prev) => (prev + 1) % items.length);
-          const endIndex = virtualHandle()?.findEndIndex();
+          const handle = virtualHandle();
+          if (!handle) break;
+          const endIndex = handle.findItemIndex(
+            handle.scrollOffset + handle.viewportSize
+          );
           if (endIndex && endIndex === selectedIndex()) {
             virtualHandle()?.scrollToIndex(selectedIndex() + 1, {
               align: 'center',

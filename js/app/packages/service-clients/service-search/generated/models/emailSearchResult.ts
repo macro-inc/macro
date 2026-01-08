@@ -7,7 +7,6 @@
 import type { SearchHighlight } from './searchHighlight';
 import type { EmailSearchResultMessageId } from './emailSearchResultMessageId';
 import type { EmailSearchResultScore } from './emailSearchResultScore';
-import type { EmailSearchResultSender } from './emailSearchResultSender';
 import type { EmailSearchResultSentAt } from './emailSearchResultSentAt';
 
 /**
@@ -25,13 +24,17 @@ export interface EmailSearchResult {
   /** The email message id.
 This is only present if the search result is on the message content */
   message_id?: EmailSearchResultMessageId;
+  /** The pretty sender.
+If the match is on the subject, the pretty sender is the latest sender on the thread.
+This could be the sender's email if there is no contact name for the sender. */
+  pretty_sender: string;
   /** This is only present if the search result is on the message content */
   recipients: string[];
   /** The score of the result */
   score?: EmailSearchResultScore;
-  /** The sender
-This is only present if the search result is on the message content */
-  sender?: EmailSearchResultSender;
+  /** The sender.
+If the match is on the subject, the sender is the latest sender on the thread. */
+  sender: string;
   /** When the email message was sent
 This is only present if the search result is on the message content */
   sent_at?: EmailSearchResultSentAt;

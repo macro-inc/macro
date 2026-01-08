@@ -85,9 +85,8 @@ function ImageAttachment(props: {
         />
       </Show>
       <ImagePreview
-        id={props.attachment.attachmentId}
+        image={{ id: props.attachment.attachmentId }}
         variant="small"
-        isCurrentUser={true}
         isDss={isDssImage(props.attachment)}
         onError={(e) => {
           console.error('Failed to load image', e);
@@ -104,7 +103,6 @@ function ChatAttachment(props: {
   onRemove: () => void;
 }) {
   const { replaceOrInsertSplit } = useSplitLayout();
-
   const name = createMemo(() => {
     const attachment = props.attachment;
     if (!attachment.metadata) return '';
@@ -114,7 +112,9 @@ function ChatAttachment(props: {
         ? attachment.metadata.image_name
         : attachment.metadata.type === 'channel'
           ? attachment.metadata.channel_name
-          : attachment.metadata.email_subject;
+          : attachment.metadata.type === 'project'
+            ? attachment.metadata.project_name
+            : attachment.metadata.email_subject;
   });
 
   const block = createMemo(() => {
@@ -188,6 +188,12 @@ function ChatAttachment(props: {
             <Match when={props.attachment.attachmentType === 'email'}>
               <div class="flex gap-1 items-center">
                 <Envelope class="w-4" />
+                <div> {name()}</div>
+              </div>
+            </Match>
+            <Match when={props.attachment.attachmentType === 'project'}>
+              <div class="flex gap-1 items-center">
+                <EntityIcon targetType="project" />
                 <div> {name()}</div>
               </div>
             </Match>

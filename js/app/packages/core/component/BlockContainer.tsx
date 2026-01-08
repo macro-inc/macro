@@ -78,6 +78,9 @@ export function BlockContainer(props: BlockContainerProps) {
     if (pingInterval) clearInterval(pingInterval);
   });
 
+  const [attachHotkeys, scopeId] = useHotkeyDOMScope(blockName ?? 'block');
+  setHotkeyScope(scopeId);
+
   const resolved = children(() => props.children);
   createEffect(() => {
     const resolved_ = resolved();
@@ -89,9 +92,6 @@ export function BlockContainer(props: BlockContainerProps) {
     resolved_.dataset.blockType = blockName;
     setElement(resolved_);
   });
-
-  const [attachHotkeys, scopeId] = useHotkeyDOMScope(blockName ?? 'block');
-  setHotkeyScope(scopeId);
 
   onMount(() => {
     const resolved_ = resolved();

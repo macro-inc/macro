@@ -8,12 +8,21 @@ import { registerRichText } from '@lexical/rich-text';
 import { ALL_TRANSFORMERS, type EditorType } from '@lexical-core';
 import { HR } from '@lexical-core/transformers/transformers';
 import type { EditorState, LexicalEditor, UpdateListener } from 'lexical';
-import type { Setter } from 'solid-js';
+import {
+  type Accessor,
+  type AccessorArray,
+  createEffect,
+  createRoot,
+  on,
+  type Setter,
+} from 'solid-js';
 import { registerLoroHistory } from '../collaboration/undo';
 import { bindStateAs } from '../utils';
 import { checklistPlugin } from './checklist/';
 import { customDeletePlugin } from './custom-delete';
 import { markdownShortcutsPlugin } from './markdown-shortcuts';
+
+type PluginFunction = (editor: LexicalEditor) => () => void;
 
 /**
  * Create a binding between a LexicalEditor and the ability to register plugins
@@ -77,9 +86,35 @@ export function createPluginManager(editor: LexicalEditor, type: EditorType) {
       return pluginManager;
     },
 
-    use(pluginFn: (editor: LexicalEditor) => () => void) {
+    use(pluginFn: PluginFunction) {
       const cleanup = pluginFn(editor);
       cleanupFunctions.push(cleanup);
+      return pluginManager;
+    },
+
+    useReactive<T>(
+      deps: AccessorArray<T> | Accessor<T>,
+      pluginAccessor: Accessor<PluginFunction | undefined>
+    ) {
+      let disposeRoot!: () => void;
+      let lastCleanup = pluginAccessor()?.(editor);
+      createRoot((dispose) => {
+        disposeRoot = dispose;
+        createEffect(
+          on(
+            deps,
+            () => {
+              lastCleanup?.();
+              lastCleanup = pluginAccessor()?.(editor);
+            },
+            { defer: true }
+          )
+        );
+      });
+      cleanupFunctions.push(() => {
+        lastCleanup?.();
+        disposeRoot();
+      });
       return pluginManager;
     },
 

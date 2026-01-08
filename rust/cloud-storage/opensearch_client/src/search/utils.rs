@@ -13,6 +13,7 @@ pub fn should_wildcard_field_query_builder<'a>(
                 field.to_string(),
                 format!("*{}*", value.to_lowercase()),
                 true,
+                None,
             )
         })
         .collect();

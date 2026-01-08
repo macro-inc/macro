@@ -3,6 +3,7 @@ pub mod preview;
 pub mod utils;
 
 use chrono::serde::ts_seconds_option;
+use macro_user_id::user_id::MacroUserIdStr;
 pub use message::*;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -40,7 +41,7 @@ pub struct Chat {
     // whether the chat is persistent or not
     pub is_persistent: bool,
     /// The time the chat was deleted
-    #[serde(skip_serializing_if = "Option::is_none", with = "ts_seconds_option")]
+    #[serde(with = "ts_seconds_option")]
     #[schema(value_type = i64, nullable=true)]
     pub deleted_at: Option<chrono::DateTime<chrono::Utc>>,
 }
@@ -50,7 +51,7 @@ pub struct Chat {
 pub struct ChatBasic {
     pub id: String,
     pub name: String,
-    pub user_id: String,
+    pub user_id: MacroUserIdStr<'static>,
     pub project_id: Option<String>,
     pub deleted_at: Option<chrono::DateTime<chrono::Utc>>,
 }
@@ -64,11 +65,12 @@ pub enum AttachmentType {
     Image,
     Channel,
     Email,
+    Project,
 }
 
 #[derive(sqlx::FromRow, Serialize, Deserialize, Eq, PartialEq, Debug, Clone, ToSchema)]
 pub struct ChatAttachment {
-    /// Id of the attachment
+    /// db attachment id - unused
     pub id: String,
     /// The type of attachment
     pub attachment_type: AttachmentType,
@@ -90,6 +92,9 @@ pub enum AttachmentMetadata {
         /// Name of the document
         document_name: String,
     },
+    Project {
+        project_name: String,
+    },
     Image {
         /// jpg | png | etc
         image_extension: FileType,
@@ -101,7 +106,9 @@ pub enum AttachmentMetadata {
         channel_type: ChannelType,
     },
     /// an email thread
-    Email { email_subject: String },
+    Email {
+        email_subject: String,
+    },
 }
 
 #[derive(sqlx::FromRow, Serialize, Deserialize, Eq, PartialEq, Debug, Clone, ToSchema)]
@@ -124,6 +131,7 @@ impl ChatAttachmentWithName {
             AttachmentMetadata::Document { document_name, .. } => document_name.as_str(),
             AttachmentMetadata::Image { image_name, .. } => image_name.as_str(),
             AttachmentMetadata::Email { email_subject, .. } => email_subject.as_str(),
+            AttachmentMetadata::Project { project_name: name } => name.as_str(),
         })
     }
 

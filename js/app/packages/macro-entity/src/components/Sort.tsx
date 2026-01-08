@@ -195,14 +195,6 @@ export function notifiedSortFn<T extends WithNotification<EntityData>>(
   const bNotification = b.notifications?.()[0];
 
   if (aNotification && bNotification) {
-    if (aNotification.isImportantV0 && bNotification.isImportantV0) {
-      return bNotification.createdAt - aNotification.createdAt;
-    } else if (aNotification.isImportantV0) {
-      return -1;
-    } else if (bNotification.isImportantV0) {
-      return 1;
-    }
-
     return bNotification.createdAt - aNotification.createdAt;
   } else if (aNotification) {
     return -1;
@@ -241,7 +233,10 @@ type InferSortFn<Options extends SortOption<any, string>[]> =
     ? EntityComparator<U>
     : never;
 
-type SortComponent = (props: { size?: 'SM' | 'Base' }) => JSX.Element;
+type SortComponent = (props: {
+  size?: 'SM' | 'Base';
+  onSelectSystemSort?: () => void;
+}) => JSX.Element;
 
 export function createSort(): {
   sortFn: Accessor<EntityComparator<WithNotification<EntityData>>>;
@@ -457,12 +452,15 @@ export function createSort<
     );
   };
 
-  const SortComponent: SortComponent = (_props) => (
+  const SortComponent: SortComponent = (props) => (
     <div class="flex flex-col gap-2">
       <span class="text-xs font-medium">Sort</span>
       <SystemSortPills
         sortType={sortType}
-        onSelect={handleSelectSystemSort}
+        onSelect={(value) => {
+          handleSelectSystemSort(value);
+          props.onSelectSystemSort?.();
+        }}
         disabled={disabled}
         isSortedByProperty={isSortedByProperty}
       />

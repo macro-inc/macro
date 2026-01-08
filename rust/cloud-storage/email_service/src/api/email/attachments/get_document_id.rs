@@ -1,13 +1,15 @@
 use crate::api::context::ApiContext;
-use crate::util::upload_attachment::{UploadAttachmentContext, upload_attachment};
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
+use email_service::util::upload_attachment::{
+    UploadAttachmentContext, UploadAttachmentError, upload_attachment,
+};
 use model::response::ErrorResponse;
 use models_email::db::address::EmailRecipientType;
 use models_email::email::service::link::Link;
-use models_email::service::attachment::AttachmentUploadArgs;
+use models_email::service::attachment::{AttachmentUploadArgs, AttachmentUploadDestination};
 use strum_macros::AsRefStr;
 use thiserror::Error;
 use utoipa::ToSchema;
@@ -22,7 +24,7 @@ pub enum GetAttachmentDocumentIdError {
     DatabaseError(anyhow::Error),
 
     #[error("Failed to upload attachment")]
-    UploadError(anyhow::Error),
+    UploadError(UploadAttachmentError),
 }
 
 impl IntoResponse for GetAttachmentDocumentIdError {
@@ -113,12 +115,17 @@ pub async fn handler(
         attachment_metadata,
         recipient_emails,
         backfill: false,
+        // Frontend will soon use SFS URLs for image/video attachments directly instead of DSS
+        // Until this transition is complete, we continue uploading all attachments to DSS
+        upload_destination: AttachmentUploadDestination::Dss,
     };
 
     let ctx_upload = UploadAttachmentContext {
+        db: &ctx.db,
         redis_client: &ctx.redis_client,
         gmail_client: &ctx.gmail_client,
         dss_client: &ctx.dss_client,
+        sfs_client: &ctx.sfs_client,
         system_properties_service: &ctx.system_properties_service,
         access_token: &gmail_token,
         link: &link,

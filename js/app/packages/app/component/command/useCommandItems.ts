@@ -1,13 +1,14 @@
 import { useChannelsContext } from '@core/component/ChannelsProvider';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
 import { activeScope } from '@core/hotkey/state';
-import { useContacts } from '@core/user';
 import { mapFromListsByKey } from '@core/util/compareUtils';
+import { useHistoryQuery } from '@queries/history/history';
 import type { Channel } from '@service-comms/generated/models/channel';
 import type { ChannelType } from '@service-comms/generated/models/channelType';
-import { useHistory } from '@service-storage/history';
 import { createMemo } from 'solid-js';
 import type { CommandItemCard } from './KonsoleItem';
+
+type ChannelWithViewedAt = Channel & { viewed_at?: number };
 
 const FILTER_PERSISTENT_CHATS = false;
 
@@ -27,10 +28,9 @@ function channelsIntoCategories(channels: Channel[]) {
 }
 
 export function useCommandItems() {
-  const history = useHistory();
+  const historyQuery = useHistoryQuery();
   const channelsContext = useChannelsContext();
   const channels = () => channelsContext.channels();
-  const contactItems = useContacts();
   const activeCommands = getActiveCommandsFromScope(activeScope(), {
     sortByScopeLevel: false,
     hideShadowedCommands: false,
@@ -48,16 +48,14 @@ export function useCommandItems() {
         data: {
           id: description.replaceAll(' ', '-'),
           name: description,
-          hotkeys: command.hotkeys ?? [],
-          handler: command.keyDownHandler ?? (() => false),
-          activateCommandScopeId: command.activateCommandScopeId,
-          tags: command.tags ?? [],
+          command: command,
         },
         updatedAt: 0,
       };
     });
 
-    const items: CommandItemCard[] = history()
+    const historyData = historyQuery.data ?? [];
+    const items: CommandItemCard[] = historyData
       .filter((item) => {
         // Remove the persistent sidebar chats. Those are all called "New Chat"
         // and searching against the name is completely useless.
@@ -80,6 +78,7 @@ export function useCommandItems() {
           subType: item.type === 'document' ? item.subType : undefined,
         },
         updatedAt: item.updatedAt,
+        viewedAt: item.viewedAt,
       }));
     const bins = channelsIntoCategories(channels());
     const channels_: CommandItemCard[] = [
@@ -99,24 +98,13 @@ export function useCommandItems() {
             : undefined,
       },
       updatedAt: channel.updated_at,
+      viewedAt: (channel as ChannelWithViewedAt).viewed_at,
     }));
-
-    const contacts = contactItems().map<CommandItemCard>((contact) => {
-      return {
-        type: 'contact',
-        data: {
-          id: contact.id,
-          name: contact.name,
-          email: contact.email,
-        },
-      };
-    });
 
     return mapFromListsByKey<CommandItemCard>(
       (item) => item.data.id,
       items,
       channels_,
-      contacts,
       commands
     );
   });

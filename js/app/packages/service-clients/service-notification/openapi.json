@@ -485,6 +485,33 @@
         }
       }
     },
+    "/user_notifications/bulk/undone": {
+      "patch": {
+        "tags": ["user_notification::bulk_mark_user_notification_undone"],
+        "summary": "Marks the user's notifications as undone.",
+        "operationId": "bulk_mark_user_notification_undone",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationBulkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/user_notifications/item/bulk": {
       "post": {
         "tags": [
@@ -720,9 +747,7 @@
           {
             "type": "object",
             "required": ["invitedBy"],
-            "properties": {
-              "invitedBy": { "$ref": "#/components/schemas/String" }
-            }
+            "properties": { "invitedBy": { "type": "string" } }
           }
         ],
         "description": "Metadata for when a user is invited to a channel"
@@ -750,6 +775,9 @@
           }
         ]
       },
+      "ChannelMessageDocumentMetadata": {
+        "$ref": "#/components/schemas/DocumentMentionMetadata"
+      },
       "ChannelMessageSendMetadata": {
         "allOf": [
           { "$ref": "#/components/schemas/CommonChannelMetadata" },
@@ -766,7 +794,7 @@
                 "description": "The message id"
               },
               "sender": {
-                "$ref": "#/components/schemas/String",
+                "type": "string",
                 "description": "The user who sent the message"
               }
             }
@@ -802,7 +830,7 @@
       },
       "ChannelType": {
         "type": "string",
-        "enum": ["public", "organization", "private", "direct_message"]
+        "enum": ["public", "organization", "private", "directMessage"]
       },
       "CommonChannelMetadata": {
         "type": "object",
@@ -814,34 +842,29 @@
         }
       },
       "CreateNotification": {
-        "type": "object",
-        "required": [
-          "notification_event_type",
-          "event_item_id",
-          "event_item_type",
-          "service_sender"
-        ],
-        "properties": {
-          "event_item_id": {
-            "type": "string",
-            "description": "The item id the notification event was created for"
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Entity",
+            "description": "The [Entity] the notification event was created for"
           },
-          "event_item_type": {
-            "type": "string",
-            "description": "The item type (document, chat, project...)"
-          },
-          "metadata": {
-            "description": "Custom metadata that may be needed for the notification"
-          },
-          "notification_event_type": {
-            "type": "string",
-            "description": "The type of notification"
-          },
-          "service_sender": {
-            "type": "string",
-            "description": "The service that created the notification"
+          {
+            "type": "object",
+            "required": ["notification_event_type", "service_sender"],
+            "properties": {
+              "metadata": {
+                "description": "Custom metadata that may be needed for the notification"
+              },
+              "notification_event_type": {
+                "type": "string",
+                "description": "The type of notification"
+              },
+              "service_sender": {
+                "type": "string",
+                "description": "The service that created the notification"
+              }
+            }
           }
-        }
+        ]
       },
       "DeviceRequest": {
         "type": "object",
@@ -868,7 +891,7 @@
                 "description": "The file type of the document"
               },
               "owner": {
-                "$ref": "#/components/schemas/String",
+                "type": "string",
                 "description": "The owner of the document"
               }
             }
@@ -878,6 +901,21 @@
       "EmptyResponse": {
         "type": "object",
         "description": "Empty response is required due to custom fetch forcing `response.json()`"
+      },
+      "Entity": {
+        "type": "object",
+        "description": "The Entity describes the minimum amount of information required to describe a unique thing in Macro\nThis contains the type of the entity [EntityType] and the string id of that entity",
+        "required": ["entity_type", "entity_id"],
+        "properties": {
+          "entity_id": {
+            "type": "string",
+            "description": "The id of that entity"
+          },
+          "entity_type": {
+            "$ref": "#/components/schemas/EntityType",
+            "description": "The type of entity we are describing"
+          }
+        }
       },
       "EntityType": {
         "type": "string",
@@ -889,6 +927,7 @@
           "document",
           "project",
           "email",
+          "email_thread",
           "team"
         ]
       },
@@ -919,7 +958,7 @@
         "required": ["teamName", "teamId", "invitedBy"],
         "properties": {
           "invitedBy": {
-            "$ref": "#/components/schemas/String",
+            "type": "string",
             "description": "The user who sent the invitation"
           },
           "role": {
@@ -957,7 +996,7 @@
             "type": ["string", "null"],
             "description": "Permission level granted (read, write, admin, etc.)"
           },
-          "sharedBy": { "$ref": "#/components/schemas/String" },
+          "sharedBy": { "type": "string" },
           "userIds": {
             "type": "array",
             "items": { "type": "string" },
@@ -992,7 +1031,7 @@
             "description": "Permission level granted (read, write, admin, etc.)"
           },
           "sharedBy": {
-            "$ref": "#/components/schemas/String",
+            "type": "string",
             "description": "The user who shared the item"
           }
         }
@@ -1010,7 +1049,7 @@
       },
       "Notification": {
         "allOf": [
-          { "$ref": "#/components/schemas/NotificationEntity" },
+          { "$ref": "#/components/schemas/Entity" },
           { "$ref": "#/components/schemas/NotificationTemporalData" },
           { "$ref": "#/components/schemas/NotificationEvent" },
           {
@@ -1030,18 +1069,9 @@
         "properties": {
           "notificationIds": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": { "type": "string", "format": "uuid" },
             "description": "The ids of the notifications to handle"
           }
-        }
-      },
-      "NotificationEntity": {
-        "type": "object",
-        "description": "The entity that triggered the notification\nThis is a combination of an [EntityType] and an id (Uuid or string)",
-        "required": ["eventItemId", "eventItemType"],
-        "properties": {
-          "eventItemId": { "type": "string" },
-          "eventItemType": { "$ref": "#/components/schemas/EntityType" }
         }
       },
       "NotificationEvent": {
@@ -1161,7 +1191,7 @@
                 "enum": ["channel_message_document"]
               },
               "notificationMetadata": {
-                "$ref": "#/components/schemas/DocumentMentionMetadata",
+                "$ref": "#/components/schemas/ChannelMessageDocumentMetadata",
                 "description": "If a document is included via mention or attachment on a message"
               }
             }
@@ -1206,6 +1236,21 @@
                 "enum": ["reject_team_invite"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "A user was assigned to a task",
+            "required": ["notificationMetadata", "notificationEventType"],
+            "properties": {
+              "notificationEventType": {
+                "type": "string",
+                "enum": ["task_assigned"]
+              },
+              "notificationMetadata": {
+                "$ref": "#/components/schemas/TaskAssignedMetadata",
+                "description": "A user was assigned to a task"
+              }
+            }
           }
         ]
       },
@@ -1223,7 +1268,8 @@
           "channel_message_document",
           "new_email",
           "invite_to_team",
-          "reject_team_invite"
+          "reject_team_invite",
+          "task_assigned"
         ]
       },
       "NotificationServiceApiVersion": { "type": "string", "enum": ["v1"] },
@@ -1239,7 +1285,7 @@
       },
       "PushNotificationData": {
         "allOf": [
-          { "$ref": "#/components/schemas/NotificationEntity" },
+          { "$ref": "#/components/schemas/Entity" },
           {
             "type": "object",
             "required": ["openRoute"],
@@ -1256,7 +1302,25 @@
           }
         ]
       },
-      "String": { "type": "string" },
+      "TaskAssignedMetadata": {
+        "type": "object",
+        "description": "Metadata for when a user is assigned to a task",
+        "required": ["taskId", "assignedBy"],
+        "properties": {
+          "assignedBy": {
+            "type": "string",
+            "description": "The user who assigned the task"
+          },
+          "taskId": {
+            "type": "string",
+            "description": "The unique identifier of the task"
+          },
+          "taskName": {
+            "type": ["string", "null"],
+            "description": "The name of the task (optional)"
+          }
+        }
+      },
       "UnsubscribeItemPathParams": {
         "type": "object",
         "required": ["item_type", "item_id"],
@@ -1267,12 +1331,12 @@
       },
       "UserNotification": {
         "allOf": [
-          { "$ref": "#/components/schemas/NotificationEntity" },
+          { "$ref": "#/components/schemas/Entity" },
           { "$ref": "#/components/schemas/NotificationTemporalData" },
           { "$ref": "#/components/schemas/NotificationEvent" },
           {
             "type": "object",
-            "required": ["id", "sent", "done", "isImportantV0"],
+            "required": ["id", "sent", "done"],
             "properties": {
               "done": {
                 "type": "boolean",
@@ -1282,10 +1346,6 @@
                 "type": "string",
                 "format": "uuid",
                 "description": "The id of the notification. Self-generated uuidv7"
-              },
-              "isImportantV0": {
-                "type": "boolean",
-                "description": "if notification is important or not"
               },
               "senderId": {
                 "type": ["string", "null"],

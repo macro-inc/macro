@@ -105,10 +105,7 @@ pub async fn delete_entity_property(
         return Err(DeleteEntityPropertyErr::RequiredProperty);
     }
 
-    let entity_ref = EntityReference {
-        entity_id: property_info.entity_id,
-        entity_type: property_info.entity_type,
-    };
+    let entity_ref = EntityReference::new(property_info.entity_id, property_info.entity_type);
 
     crate::api::permissions::check_entity_edit_permission(
         &context,

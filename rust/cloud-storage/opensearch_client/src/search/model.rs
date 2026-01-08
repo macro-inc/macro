@@ -42,13 +42,47 @@ pub struct Highlight {
     /// The highlight content matches
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub content: Vec<String>,
+
+    /// The highlight match on the user (owner) of the entity
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user_id: Option<String>,
+    /// The highlight match on the sender (email only)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sender: Option<String>,
+    /// The highlight match on the recipients (email only)
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub recipients: Vec<String>,
+    /// The highlight match on the cc (email only)
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub cc: Vec<String>,
+    /// The highlight match on the bcc (email only)
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub bcc: Vec<String>,
 }
 
 pub(crate) fn parse_highlight_hit(
     highlight: HashMap<String, Vec<String>>,
     keys: Keys,
 ) -> Highlight {
+    // The highlight on the user id
+    let user_id = highlight
+        .get("user_id")
+        .and_then(|v| v.first())
+        .map(|v| v.to_string());
+
+    // If the user id is not present we should try the owner_id which is the
+    // user field in documents index
+    let user_id = if user_id.is_none() {
+        highlight
+            .get("owner_id")
+            .and_then(|v| v.first())
+            .map(|v| v.to_string())
+    } else {
+        user_id
+    };
+
     Highlight {
+        user_id,
         name: highlight
             .get(keys.title_key)
             .and_then(|v| v.first())
@@ -57,6 +91,16 @@ pub(crate) fn parse_highlight_hit(
             .get(keys.content_key)
             .map(|v| v.to_vec())
             .unwrap_or_default(),
+        sender: highlight
+            .get("sender")
+            .and_then(|v| v.first())
+            .map(|v| v.to_string()),
+        recipients: highlight
+            .get("recipients")
+            .map(|v| v.to_vec())
+            .unwrap_or_default(),
+        cc: highlight.get("cc").map(|v| v.to_vec()).unwrap_or_default(),
+        bcc: highlight.get("bcc").map(|v| v.to_vec()).unwrap_or_default(),
     }
 }
 
@@ -94,7 +138,7 @@ pub(crate) struct SearchResponse<T> {
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct NameIndex {
     /// The entity id
-    pub entity_id: String,
+    pub entity_id: uuid::Uuid,
     /// The entity type
     pub entity_type: SearchEntityType,
     /// The name of the entity
@@ -117,7 +161,7 @@ pub struct SearchGotoDocument {
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct SearchGotoChat {
     /// The chat message id
-    pub chat_message_id: String,
+    pub chat_message_id: uuid::Uuid,
     /// The role of the chat message
     pub role: String,
 }
@@ -125,7 +169,7 @@ pub struct SearchGotoChat {
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct SearchGotoEmail {
     /// The email message id
-    pub email_message_id: String,
+    pub email_message_id: uuid::Uuid,
     /// The bcc of the email
     pub bcc: Vec<String>,
     /// The cc of the email
@@ -143,8 +187,8 @@ pub struct SearchGotoEmail {
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct SearchGotoChannel {
     /// The channel message id
-    pub channel_message_id: String,
-    pub thread_id: Option<String>,
+    pub channel_message_id: uuid::Uuid,
+    pub thread_id: Option<uuid::Uuid>,
     pub sender_id: String,
     pub created_at: i64,
     pub updated_at: i64,
@@ -165,7 +209,7 @@ pub enum SearchGotoContent {
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct SearchHit {
     /// The id of the entity
-    pub entity_id: String,
+    pub entity_id: uuid::Uuid,
     /// The entity type
     pub entity_type: SearchEntityType,
     /// The score of the match

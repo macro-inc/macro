@@ -6,11 +6,11 @@ use utoipa::ToSchema;
 use crate::{MatchType, SearchHighlight, SearchOn, SearchResponseItem};
 
 /// A chat match for a given message id
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct ChatMessageSearchResult {
     /// The chat message id for the chat
     /// This is only present if the search match was on the chat message content
-    pub chat_message_id: Option<String>,
+    pub chat_message_id: Option<uuid::Uuid>,
     /// The role of the chat message
     /// This is only present if the search match was on the chat message content
     pub role: Option<String>,
@@ -22,17 +22,17 @@ pub struct ChatMessageSearchResult {
 }
 
 /// A single response item, part of the ChatSearchResponse object
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct ChatSearchResponseItem {
     /// Standardized fields that all item types will share.
     /// These field names are being aligned across all item types
     /// for consistency in our data model.
-    pub id: String,
+    pub id: uuid::Uuid,
     pub name: String,
     pub owner_id: String,
 
     /// The id of the chat
-    pub chat_id: String,
+    pub chat_id: uuid::Uuid,
     /// The id of the creator of the chat
     pub user_id: String,
     /// The search results for the chat
@@ -41,7 +41,7 @@ pub struct ChatSearchResponseItem {
 }
 
 /// Metadata for a chat fetched from the database
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct ChatMetadata {
     pub created_at: i64,
     pub updated_at: i64,
@@ -53,7 +53,7 @@ pub struct ChatMetadata {
 /// ChatSearchResponse object with channel metadata we fetch from macrodb. we don't store these
 /// timestamps in opensearch as they would require us to update each chat message record for the chat
 /// every time the chat updates (specifically for updated_at and viewed_at)
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct ChatSearchResponseItemWithMetadata {
     /// Metadata from the database. None if the chat doesn't exist in the database.
     pub metadata: Option<ChatMetadata>,
@@ -95,7 +95,7 @@ pub struct ChatSearchRequest {
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct ChatSearchMetadata {
     /// The id of the chat
-    pub chat_id: String,
+    pub chat_id: uuid::Uuid,
     /// The id of the creator of the chat
     pub user_id: String,
     /// The name of the chat
@@ -107,10 +107,10 @@ impl From<SearchResponseItem<ChatMessageSearchResult, ChatSearchMetadata>>
 {
     fn from(response: SearchResponseItem<ChatMessageSearchResult, ChatSearchMetadata>) -> Self {
         ChatSearchResponseItem {
-            id: response.metadata.chat_id.clone(),
+            id: response.metadata.chat_id,
             name: response.metadata.title.clone(),
             owner_id: response.metadata.user_id.clone(),
-            chat_id: response.metadata.chat_id.clone(),
+            chat_id: response.metadata.chat_id,
             user_id: response.metadata.user_id.clone(),
             chat_search_results: response.results,
         }

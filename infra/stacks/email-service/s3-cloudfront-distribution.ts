@@ -1,7 +1,7 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import type * as tls from '@pulumi/tls';
-import { stack } from '@shared';
+import { stack } from '../../packages/shared';
 
 // cloudfront distribution in front of attachment bucket. needed so we can set custom Cross-Origin-Resource-Policy
 // header on bucket items so we can display images inline in emails

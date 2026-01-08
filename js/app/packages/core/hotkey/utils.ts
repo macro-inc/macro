@@ -1,5 +1,6 @@
 import { IS_MAC } from '@core/constant/isMac';
-import { createEffect } from 'solid-js';
+import { logger } from '@observability/logger';
+import { createEffect, createMemo } from 'solid-js';
 import {
   macOptionReverse,
   shiftPunctuationMap,
@@ -8,11 +9,19 @@ import {
 import { registerHotkey } from './hotkeys';
 import {
   activeScope,
+  activeScopeBranch,
   hotkeyScopeTree,
   hotkeysAwaitingKeyUp,
+  hotkeyTokenMap,
   setActiveScope,
+  setActiveScopeBranch,
+  setExecutedTokens,
+  setLastExecutedCommand,
+  setPressedKeys,
 } from './state';
+import type { HotkeyToken } from './tokens';
 import type {
+  HotkeyCommand,
   HotkeyRegistrationOptions,
   ScopeNode,
   ValidHotkey,
@@ -40,19 +49,20 @@ type RegisterDOMScopeArgs = RegisterScopeArgsBase & {
 
 type RegisterCommandScopeArgs = RegisterScopeArgsBase & {
   type: 'command';
+  activationKeys?: ValidHotkey[];
 };
 
 type RegisterScopeArgs = RegisterDOMScopeArgs | RegisterCommandScopeArgs;
 
 export function registerScope(args: RegisterScopeArgs) {
   const { parentScopeId, type, scopeId, description } = args;
+  const parentScope = hotkeyScopeTree.get(parentScopeId ?? '');
 
   const baseScope = {
-    id: scopeId,
+    scopeId: scopeId,
     description: description ?? undefined,
     parentScopeId: parentScopeId,
     childScopeIds: [],
-    transitions: new Map(),
     hotkeyCommands: new Map(),
     unkeyedCommands: [],
     detached: args.detached ?? false,
@@ -68,9 +78,14 @@ export function registerScope(args: RegisterScopeArgs) {
       : {
           ...baseScope,
           type: 'command',
+          originalParentScopeId: parentScopeId ?? '',
+          activationKeys: args.activationKeys ?? [],
         };
 
   hotkeyScopeTree.set(scopeId, newScope);
+  if (parentScope) {
+    parentScope.childScopeIds.push(scopeId);
+  }
 }
 
 export function removeScope(scopeId: string) {
@@ -89,7 +104,7 @@ export function removeScope(scopeId: string) {
   if (scope.type === 'dom') {
     let currentScope = scopeTree.get(activeScope() ?? '');
     while (currentScope) {
-      if (currentScope.id === scopeId) {
+      if (currentScope.scopeId === scopeId) {
         let parentScope = hotkeyScopeTree.get(currentScope.parentScopeId ?? '');
         let foundDOMScopeParent = false;
         while (parentScope) {
@@ -98,7 +113,7 @@ export function removeScope(scopeId: string) {
             parentScope.element instanceof HTMLElement
           ) {
             parentScope.element.focus();
-            setActiveScope(parentScope.id);
+            setActiveScope(parentScope.scopeId);
             foundDOMScopeParent = true;
             break;
           }
@@ -149,7 +164,7 @@ export function activateClosestDOMScope() {
       currentScope.element instanceof HTMLElement
     ) {
       currentScope.element.focus();
-      activeScopeId = currentScope.id;
+      activeScopeId = currentScope.scopeId;
       break;
     }
 
@@ -158,6 +173,214 @@ export function activateClosestDOMScope() {
   }
 
   setActiveScope(activeScopeId);
+}
+
+export function updateActiveScopeBranch(activeScopeId: string | undefined) {
+  const branch = new Set<string>();
+
+  if (activeScopeId) {
+    let currentScope = hotkeyScopeTree.get(activeScopeId);
+    while (currentScope) {
+      branch.add(currentScope.scopeId);
+      if (!currentScope.parentScopeId) break;
+      currentScope = hotkeyScopeTree.get(currentScope.parentScopeId);
+    }
+  }
+
+  setActiveScopeBranch(branch);
+}
+
+export function isScopeInActiveBranch(scopeId: string): boolean {
+  return activeScopeBranch().has(scopeId);
+}
+
+/**
+ * Finds the first hotkey command for a given token that is in the current active scope branch
+ */
+export function getActiveCommandByToken(
+  token: HotkeyToken
+): HotkeyCommand | undefined;
+export function getActiveCommandByToken(
+  token: HotkeyToken,
+  includeDependentCommandScopes: true
+): HotkeyCommand[] | undefined;
+export function getActiveCommandByToken(
+  token: HotkeyToken,
+  includeDependentCommandScopes?: boolean
+): HotkeyCommand | HotkeyCommand[] | undefined {
+  const commands = hotkeyTokenMap().get(token);
+  if (!commands || commands.length === 0) return undefined;
+
+  const branch = activeScopeBranch();
+
+  if (includeDependentCommandScopes) {
+    // When showDependentCommandScopes is true, look for commands in command scopes whose closest DOM scope parent is in the active branch. I.e. this is a command in a command scope (or potentiall a chain of command scopes) that could be initiated from the current active scope.
+    for (const command of commands) {
+      const commandScope = hotkeyScopeTree.get(command.scopeId);
+      // Check if command is directly in the active branch
+      if (branch.has(command.scopeId)) {
+        return [command];
+      }
+
+      if (commandScope?.type === 'command') {
+        const originalParentScope = hotkeyScopeTree.get(
+          commandScope.originalParentScopeId
+        );
+        if (!originalParentScope) {
+          logger.error('Original parent scope not found for command scope:', {
+            error: new Error(
+              'Original parent scope not found for command scope'
+            ),
+            commandScopeId: commandScope?.scopeId,
+          });
+          return [];
+        }
+
+        let reverseActivationCommands: HotkeyCommand[] = [];
+
+        let closestDOMScopeParent: ScopeNode | undefined;
+
+        let currentAncestor: ScopeNode | undefined = originalParentScope;
+        let currentCommandScope: ScopeNode = commandScope;
+        while (currentAncestor) {
+          const activationKey = currentCommandScope.activationKeys?.at(0);
+          if (activationKey) {
+            const activationCommand =
+              originalParentScope.hotkeyCommands.get(activationKey);
+            if (activationCommand) {
+              reverseActivationCommands.push(activationCommand);
+            } else break;
+          }
+          if (currentAncestor.type === 'dom') {
+            closestDOMScopeParent = currentAncestor;
+            break;
+          }
+          if (currentAncestor.originalParentScopeId) {
+            const parentScope = hotkeyScopeTree.get(
+              currentAncestor.originalParentScopeId
+            );
+            currentCommandScope = currentAncestor;
+            currentAncestor = parentScope;
+          } else {
+            break;
+          }
+        }
+
+        if (
+          closestDOMScopeParent &&
+          branch.has(closestDOMScopeParent.scopeId) &&
+          reverseActivationCommands.every(
+            (cmd) => cmd.hotkeys && cmd.hotkeys.length > 0
+          )
+        ) {
+          const activationCommands = reverseActivationCommands.reverse();
+
+          return activationCommands.concat(command);
+        }
+      }
+    }
+
+    return undefined;
+  }
+
+  // Return the first command that's in the active scope branch
+  const command = commands.find((command) => branch.has(command.scopeId));
+  return command;
+}
+
+/**
+ * Returns a hotkey command for a given hotkey token. NOTE: this might not be THE command you are looking for, if there are hotkeys sharing the same token instantiated across different scopes. But this can be used in situations where you don't know or don't care about the scope you are in, e.g. when displaying hotkey metadata.
+ */
+export function getHotkeyCommandByToken(token: HotkeyToken) {
+  const command = hotkeyTokenMap().get(token)?.at(0);
+  return command;
+}
+
+// Helper function to get the primary hotkey string for a given token, pretty printed.
+export function getPrettyHotkeyStringByToken(token: HotkeyToken) {
+  const hotkey = hotkeyTokenMap().get(token)?.at(0)?.hotkeys?.[0];
+  if (!hotkey) return undefined;
+  return prettyPrintHotkeyString(hotkey);
+}
+
+/**
+ * Runs the given hotkey command. This sets the executed tokens and last executed command.
+ * @param command - The hotkey command to run.
+ * @param e - The keyboard event.
+ * @param pressedKeysString - The string of pressed keys.
+ * @param scopeId - The id of the scope that the command is from.
+ * @returns An object with the command captured and the command scope activated.
+ */
+export function runCommand(
+  command: HotkeyCommand,
+  e?: KeyboardEvent,
+  pressedKeysString?: string,
+  scopeId?: string
+) {
+  const currentScopeId = activeScope();
+
+  let commandCaptured: HotkeyCommand | undefined;
+  let commandScopeActivated = false;
+
+  if (!command.condition || command.condition()) {
+    if (command.activateCommandScopeId) {
+      const commandScope = hotkeyScopeTree.get(command.activateCommandScopeId);
+      if (commandScope) {
+        // When the command scope is activated, we set its parent scope to the active scope when it was called, so that when the command scope is deactivated, scope will return to the correct scope. The commmand scope will still get cleaned up correctly when it's original parent scope is removed.
+        commandScope.parentScopeId = currentScopeId;
+        setPressedKeys(new Set<string>());
+        setActiveScope(commandScope.scopeId);
+        if (!commandCaptured) {
+          setExecutedTokens((prev) =>
+            command.hotkeyToken
+              ? prev.includes(command.hotkeyToken)
+                ? prev
+                : [...prev, command.hotkeyToken]
+              : prev
+          );
+        }
+        commandScopeActivated = true;
+        e?.preventDefault();
+        e?.stopPropagation();
+      }
+    }
+
+    const captured = command.keyDownHandler?.(e);
+    if (captured) {
+      setPressedKeys(new Set<string>());
+      setLastExecutedCommand(command);
+      commandCaptured = command;
+      setExecutedTokens((prev) =>
+        command.hotkeyToken
+          ? prev.includes(command.hotkeyToken)
+            ? prev
+            : [...prev, command.hotkeyToken]
+          : prev
+      );
+      e?.preventDefault();
+      e?.stopPropagation();
+    }
+
+    if (
+      command.keyUpHandler &&
+      e?.type === 'keydown' &&
+      scopeId &&
+      !hotkeysAwaitingKeyUp.some(
+        (h) => h.hotkey === pressedKeysString && h.scopeId === scopeId
+      )
+    ) {
+      hotkeysAwaitingKeyUp.push({
+        hotkey: pressedKeysString as ValidHotkey,
+        scopeId: scopeId,
+        command: () => command.keyUpHandler?.(e),
+      });
+    }
+  }
+
+  return {
+    commandCaptured: commandCaptured,
+    commandScopeActivated: commandScopeActivated,
+  };
 }
 
 export function normalizeEventKeyPress(e: KeyboardEvent): string {
@@ -181,8 +404,7 @@ export function normalizeEventKeyPress(e: KeyboardEvent): string {
 }
 
 // When you specify a hotkey for, e.g. '?', you want it show as '?' even though the actual key pressed was 'shift+/'. This function prints the printed punctuation key rather than the key combo.
-export function prettyPrintHotkeyString(validHotkey?: ValidHotkey) {
-  if (!validHotkey) return undefined;
+export function prettyPrintHotkeyString(validHotkey: ValidHotkey) {
   if (validHotkey.includes('shift+')) {
     const shiftless = validHotkey.replace('shift+', '');
     if (shiftless in shiftPunctuationReverseMap) {
@@ -190,6 +412,9 @@ export function prettyPrintHotkeyString(validHotkey?: ValidHotkey) {
         shiftless as keyof typeof shiftPunctuationReverseMap
       ];
     }
+  }
+  if (validHotkey.includes('escape')) {
+    return validHotkey.replace('escape', 'esc');
   }
   return validHotkey;
 }
@@ -276,3 +501,12 @@ export function registerScopeSignalHotkey(
     };
   });
 }
+
+export const useIsInCommandScope = () => {
+  return createMemo(() => {
+    const currentScopeId = activeScope();
+    if (!currentScopeId) return false;
+    const scopeNode = hotkeyScopeTree.get(currentScopeId);
+    return scopeNode?.type === 'command';
+  });
+};

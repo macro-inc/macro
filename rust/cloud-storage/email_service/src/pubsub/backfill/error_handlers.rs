@@ -17,7 +17,11 @@ pub async fn handle_non_retryable_error(
     data: &BackfillPubsubMessage,
     e: &DetailedError,
 ) -> anyhow::Result<()> {
-    tracing::error!(error = %e, "Non-retryable error processing message. The message will be deleted.");
+    tracing::error!(
+        error = %e,
+        source = { format!("{:#}", e.source) },
+        "Non-retryable error processing message. The message will be deleted."
+    );
 
     match &data.backfill_operation {
         BackfillOperation::Init | BackfillOperation::ListThreads(_) => {
@@ -49,11 +53,17 @@ pub async fn handle_non_retryable_error(
 }
 
 /// Handles retryable errors by updating status to InProgress and adding the error message
-#[tracing::instrument(err)]
+#[tracing::instrument(
+    skip(data, _e),
+    fields(link_id = %data.link_id, error = tracing::field::Empty)
+)]
 pub async fn handle_retryable_error(
     data: &BackfillPubsubMessage,
     _e: &DetailedError,
 ) -> anyhow::Result<()> {
+    let error_chain = format!("{:#}", _e.source);
+    tracing::Span::current().record("error", &error_chain);
+
     match &data.backfill_operation {
         BackfillOperation::Init => {
             tracing::debug!("Retryable error in Init")
@@ -77,7 +87,7 @@ pub async fn handle_retryable_error(
         BackfillOperation::UpdateThreadMetadata(p) => {
             tracing::debug!(
                 thread_id = %p.thread_provider_id,
-                "Retryable error backfilling thread"
+                "Retryable error updating thread metadata"
             );
         }
         BackfillOperation::BackfillAttachment(p) => {

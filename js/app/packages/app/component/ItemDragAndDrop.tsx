@@ -28,7 +28,7 @@ export function ItemDragOverlay() {
     if (!data) return 'default';
 
     if (data.type === 'document') {
-      return fileTypeToBlockName(data.fileType, true);
+      return fileTypeToBlockName(data.subType ?? data.fileType, true);
     }
 
     if (data.type === 'channel') {

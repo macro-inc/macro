@@ -1,6 +1,6 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { stack } from '@shared';
+import { stack } from '../../packages/shared';
 
 const DOCUMENT_MAPPING_BASE_NAME = 'cloud-storage-document-mapping-table';
 

@@ -1,7 +1,7 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { Queue } from '@resources';
-import { stack } from '@shared';
+import { Queue } from '../../packages/resources';
+import { stack } from '../../packages/shared';
 
 type Args = {
   tags: { [key: string]: string };

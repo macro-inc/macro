@@ -1,23 +1,21 @@
-import { useBlockId } from '@core/block';
 import { DatePicker } from '@core/component/DatePicker';
+import { ScopedPortal } from '@core/component/ScopedPortal';
 import { type Component, createMemo } from 'solid-js';
-import { Portal, Show } from 'solid-js/web';
-import { saveEntityProperty } from '../../api';
+import { Show } from 'solid-js/web';
 import { usePropertiesContext } from '../../context/PropertiesContext';
 import type { Property } from '../../types';
-import { ERROR_MESSAGES, handlePropertyError } from '../../utils/errorHandling';
 import { useModalPosition } from '../../utils/position';
 import { CreatePropertyModal } from './CreatePropertyModal';
 import { EditPropertyValueModal } from './EditPropertyValueModal';
 import { SelectPropertyModal } from './SelectPropertyModal';
 
 export const Modals: Component = () => {
-  const blockId = useBlockId();
   const {
     entityType,
     onPropertyAdded,
     properties,
     onRefresh,
+    saveHandler,
     propertySelectorModal,
     propertyEditorModal,
     datePickerModal,
@@ -38,22 +36,12 @@ export const Modals: Component = () => {
   };
 
   const handleDateSaved = async (newDate: Date, property: Property) => {
-    const result = await saveEntityProperty(blockId, entityType, property, {
-      valueType: 'DATE',
-      value: newDate.toISOString(),
-    });
-
-    if (
-      !handlePropertyError(
-        result,
-        ERROR_MESSAGES.PROPERTY_SAVE,
-        'Modals.handleDateSaved'
-      )
-    ) {
-      return;
+    try {
+      await saveHandler.saveDate(property, newDate);
+      onRefresh();
+    } catch (error) {
+      console.error('Failed to save date property:', error);
     }
-
-    onRefresh();
     closeDatePicker();
   };
 
@@ -96,14 +84,14 @@ export const Modals: Component = () => {
           const anchor = state().anchor;
 
           return anchor ? (
-            <Portal>
+            <ScopedPortal scope="local">
               <DatePicker
                 value={dateValue}
                 onChange={(newDate) => handleDateSaved(newDate, property)}
                 onClose={closeDatePicker}
                 anchorRef={anchor}
               />
-            </Portal>
+            </ScopedPortal>
           ) : null;
         }}
       </Show>

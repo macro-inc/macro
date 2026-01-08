@@ -1,7 +1,7 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { DynamoDBTable } from '@resources';
-import { config, stack } from '@shared';
+import { DynamoDBTable } from '../../packages/resources';
+import { config, stack } from '../../packages/shared';
 import { BulkUploadBucket } from './upload-bucket';
 import { UploadExtractorLambdaHandler } from './upload-extractor-lambda-handler';
 import { UploadExtractorLambdaTrigger } from './upload-extractor-lambda-trigger';

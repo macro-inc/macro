@@ -1,3 +1,4 @@
+use crate::db;
 use chrono::{DateTime, Utc};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -20,6 +21,8 @@ pub struct Attachment {
     pub filename: Option<String>,
     pub mime_type: Option<String>,
     pub size_bytes: Option<i64>,
+    #[schemars(with = "Option<String>")]
+    pub sfs_id: Option<Uuid>,
     pub content_id: Option<String>,
 }
 
@@ -38,6 +41,23 @@ pub struct AttachmentMacro {
     pub item_type: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AttachmentSfs {
+    pub id: Uuid,
+    pub attachment_id: Option<Uuid>,
+    pub sfs_id: Uuid,
+}
+
+impl From<db::attachment::AttachmentSfs> for AttachmentSfs {
+    fn from(db: db::attachment::AttachmentSfs) -> Self {
+        Self {
+            id: db.id,
+            attachment_id: db.attachment_id,
+            sfs_id: db.sfs_id,
+        }
+    }
+}
+
 /// The metadata of an attachment we need to upload it to DSS.
 #[derive(Clone, Debug, FromRow, Eq, PartialEq, Serialize, Deserialize)]
 pub struct AttachmentUploadMetadata {
@@ -45,7 +65,7 @@ pub struct AttachmentUploadMetadata {
     pub email_provider_id: String,
     pub provider_attachment_id: String,
     pub mime_type: String,
-    pub filename: String,
+    pub filename: Option<String>,
     pub internal_date_ts: DateTime<Utc>,
     pub message_db_id: Uuid,
     pub thread_db_id: Uuid,
@@ -58,4 +78,11 @@ pub struct AttachmentUploadArgs {
     pub attachment_metadata: AttachmentUploadMetadata,
     pub recipient_emails: Vec<String>,
     pub backfill: bool,
+    pub upload_destination: AttachmentUploadDestination,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AttachmentUploadDestination {
+    Dss,
+    Sfs,
 }

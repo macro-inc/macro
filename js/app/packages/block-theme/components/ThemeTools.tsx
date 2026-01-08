@@ -4,7 +4,7 @@ import { createEffect, createMemo, createSignal, Show } from 'solid-js';
 import IconLightDark from '@macro-icons/macro-light-dark.svg';
 import IconClipboard from '@macro-icons/macro-clipboard.svg';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 // import IconFigma from '@macro-icons/macro-figma.svg';
 import IconTrash from '@macro-icons/macro-trash.svg';
 import { randomizeTheme } from './ThemeEditorBasic';
@@ -68,7 +68,7 @@ export function ThemeTools() {
       />
 
       <Show when={showTrash()}>
-        <IconButton
+        <DeprecatedIconButton
           onPointerDown={() => {
             deleteTheme(currentThemeId());
           }}
@@ -80,7 +80,7 @@ export function ThemeTools() {
       </Show>
 
       <Show when={!isThemeSaved()}>
-        <IconButton
+        <DeprecatedIconButton
           onPointerDown={() => {
             saveTheme(themeName.innerText);
           }}
@@ -102,7 +102,7 @@ export function ThemeTools() {
       </Show>*/}
 
       <Show when={DEV_MODE_ENV}>
-        <IconButton
+        <DeprecatedIconButton
           // tooltip={{label: "Copy To Clipboard"}}
           onPointerDown={exportTheme}
           icon={IconClipboard}
@@ -111,7 +111,7 @@ export function ThemeTools() {
         />
       </Show>
 
-      <IconButton
+      <DeprecatedIconButton
         // tooltip={{label: "Toggle Light / Dark"}}
         onPointerDown={invertTheme}
         icon={IconLightDark}
@@ -119,7 +119,7 @@ export function ThemeTools() {
         size="sm"
       />
 
-      <IconButton
+      <DeprecatedIconButton
         // tooltip={{label: "Randomize Theme"}}
         onPointerDown={randomizeTheme}
         icon={IconDice}

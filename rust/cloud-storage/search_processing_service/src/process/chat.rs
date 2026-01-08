@@ -3,7 +3,7 @@ use models_opensearch::SearchEntityType;
 use opensearch_client::{
     OpensearchClient, date_format::EpochSeconds, upsert::chat_message::UpsertChatMessageArgs,
 };
-use sqs_client::search::chat::{ChatMessage, RemoveChatMessage, UpdateChatMessageMetadata};
+use sqs_client::search::chat::{ChatMessage, RemoveChatMessage};
 
 /// Handles the processing of chat messages
 #[tracing::instrument(skip(opensearch_client, db))]
@@ -60,33 +60,6 @@ pub async fn remove_chat_message(
             .delete_entity_name(remove_message.chat_id.as_str(), &SearchEntityType::Chats)
             .await?;
     }
-
-    Ok(())
-}
-
-#[tracing::instrument(skip(opensearch_client, db))]
-pub async fn update_chat_message_metadata(
-    opensearch_client: &OpensearchClient,
-    db: &sqlx::Pool<sqlx::Postgres>,
-    update_message: &UpdateChatMessageMetadata,
-) -> anyhow::Result<()> {
-    let chat_id = update_message.chat_id.as_str();
-
-    let title = match macro_db_client::chat::get::get_chats_metadata_for_update(db, chat_id).await {
-        Ok(title) => title,
-        Err(e) => {
-            if e.to_string().contains("no rows in result set") {
-                tracing::trace!("chat not found in database, skipping");
-                return Ok(());
-            }
-            anyhow::bail!("failed to get chat metadata for update: {e}");
-        }
-    };
-
-    opensearch_client
-        .update_chat_metadata(chat_id, &title)
-        .await
-        .context("failed to update chat metadata")?;
 
     Ok(())
 }

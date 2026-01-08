@@ -28,6 +28,7 @@ pub enum FailureReason {
     SqsEnqueueFailed,
     AccessTokenFetchFailed,
     MessageNotFoundInProvider,
+    MessageNotFoundInDatabase,
     LinkNotFound,
     BackfillJobNotFound,
     GmailApiFailed,
@@ -40,7 +41,7 @@ pub enum FailureReason {
 /// The message we send from the email_refresh_handler lambda to the service via SQS to refresh
 /// a user's inbox subscription
 #[derive(Debug, Serialize, Deserialize)]
-pub struct RefreshMessage {
+pub struct LinkManagerMessage {
     pub link_id: Uuid,
 }
 

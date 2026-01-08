@@ -1,4 +1,5 @@
 use document_sub_type::DocumentSubType;
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 
 use crate::{chat::Chat, document::BasicDocument};
 
@@ -23,7 +24,7 @@ pub fn map_document_item(
 ) -> anyhow::Result<BasicDocument> {
     Ok(BasicDocument {
         document_id: id,
-        owner: user_id,
+        owner: MacroUserIdStr::parse_from_str(&user_id)?.into_owned(),
         document_version_id: document_version_id.unwrap().parse::<i64>().unwrap(),
         document_name: name,
         created_at,

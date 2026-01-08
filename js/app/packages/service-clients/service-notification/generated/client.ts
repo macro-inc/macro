@@ -746,6 +746,49 @@ export const bulkMarkUserNotificationSeen = async (notificationBulkRequest: Noti
 
 
 /**
+ * @summary Marks the user's notifications as undone.
+ */
+export type bulkMarkUserNotificationUndoneResponse200 = {
+  data: EmptyResponse
+  status: 200
+}
+    
+export type bulkMarkUserNotificationUndoneResponseSuccess = (bulkMarkUserNotificationUndoneResponse200) & {
+  headers: Headers;
+};
+;
+
+export type bulkMarkUserNotificationUndoneResponse = (bulkMarkUserNotificationUndoneResponseSuccess)
+
+export const getBulkMarkUserNotificationUndoneUrl = () => {
+
+
+  
+
+  return `/user_notifications/bulk/undone`
+}
+
+export const bulkMarkUserNotificationUndone = async (notificationBulkRequest: NotificationBulkRequest, options?: RequestInit): Promise<bulkMarkUserNotificationUndoneResponse> => {
+  
+  const res = await fetch(getBulkMarkUserNotificationUndoneUrl(),
+  {      
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      notificationBulkRequest,)
+  }
+)
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: bulkMarkUserNotificationUndoneResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as bulkMarkUserNotificationUndoneResponse
+}
+
+
+
+/**
  * @summary Gets the user's notifications for a provided event item ids in a paginated format.
 This will only return unseen notifications.
  */

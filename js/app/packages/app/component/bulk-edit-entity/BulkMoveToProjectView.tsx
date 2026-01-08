@@ -1,11 +1,11 @@
 import { EntityIcon } from '@core/component/EntityIcon';
+import { scrollToKeepGap } from '@core/util/scrollToKeepGap';
 import type { Project } from '@service-storage/generated/schemas';
 import { useProjects } from '@service-storage/projects';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import { createMemo, createSignal, For, onMount, Show } from 'solid-js';
 import { createBulkMoveToProjectDssEntityMutation } from '../../../macro-entity/src/queries/dss';
 import type { EntityData } from '../../../macro-entity/src/types/entity';
-import { scrollToKeepGap } from '../SoupContext';
 import {
   BulkEditEntityModalActionFooter,
   BulkEditEntityModalTitle,

@@ -13,5 +13,6 @@ serde_with = { workspace = true }
 sqlx = { workspace = true }
 strum = { workspace = true }
 thiserror = { workspace = true }
+tracing = { workspace = true }
 utoipa = { workspace = true }
 uuid = { workspace = true }

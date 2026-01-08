@@ -16,7 +16,7 @@ either a `document_id` or `project_id` or `chat_id` */
   attachment_type: AttachmentType;
   /** The id of the chat if the attachment is a chat */
   chat_id?: ChatAttachmentChatId;
-  /** Id of the attachment */
+  /** db attachment id - unused */
   id: string;
   /** The id of the message if the attachment is a message */
   message_id?: ChatAttachmentMessageId;

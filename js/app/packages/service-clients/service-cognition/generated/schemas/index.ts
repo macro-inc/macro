@@ -20,6 +20,8 @@ export * from './attachmentMetadata';
 export * from './attachmentMetadataOneOf';
 export * from './attachmentMetadataOneOfFive';
 export * from './attachmentMetadataOneOfFiveType';
+export * from './attachmentMetadataOneOfNine';
+export * from './attachmentMetadataOneOfNineType';
 export * from './attachmentMetadataOneOfSeven';
 export * from './attachmentMetadataOneOfSevenType';
 export * from './attachmentMetadataOneOfThree';

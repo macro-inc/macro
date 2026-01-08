@@ -1,3 +1,4 @@
+use models_opensearch::SearchEntityType;
 use opensearch::{Error, http::response::Response};
 
 #[derive(thiserror::Error, Debug, serde::Serialize, PartialEq)]
@@ -47,6 +48,12 @@ pub enum OpensearchClientError {
 
     #[error("bool query not built")]
     BoolQueryNotBuilt,
+
+    #[error("empty ids with ids only for {0}")]
+    EmptyIdsWithIdsOnly(SearchEntityType),
+
+    #[error("unsupported search_on")]
+    InvalidSearchOn,
 }
 
 impl From<anyhow::Error> for OpensearchClientError {

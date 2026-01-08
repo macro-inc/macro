@@ -14,19 +14,15 @@ use crate::{
 
 use crate::SearchOn;
 use models_opensearch::{SearchEntityType, SearchIndex};
-use opensearch_query_builder::{
-    BoolQueryBuilder, FieldSort, ScoreWithOrderSort, SearchRequest, SortOrder, SortType,
-    ToOpenSearchJson,
-};
+use opensearch_query_builder::{BoolQueryBuilder, SearchRequest, ToOpenSearchJson};
 use serde_json::Value;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub(crate) struct ChatIndex {
-    pub entity_id: String,
-    pub chat_message_id: String,
+    pub entity_id: uuid::Uuid,
+    pub chat_message_id: uuid::Uuid,
     pub user_id: String,
     pub role: String,
-    pub updated_at_seconds: i64,
     pub title: String,
     pub content: String,
 }
@@ -44,14 +40,6 @@ impl SearchQueryConfig for ChatSearchConfig {
     const USER_ID_KEY: &'static str = "user_id";
     const TITLE_KEY: &'static str = "name";
     const ENTITY_INDEX: SearchEntityType = SearchEntityType::Chats;
-
-    fn default_sort_types<'a>() -> Vec<SortType<'a>> {
-        vec![
-            SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
-            SortType::Field(FieldSort::new(Self::ID_KEY, SortOrder::Asc)),
-            SortType::Field(FieldSort::new("chat_message_id", SortOrder::Asc)),
-        ]
-    }
 }
 
 pub(crate) struct ChatQueryBuilder {
@@ -87,29 +75,17 @@ impl ChatQueryBuilder {
     }
 
     pub fn build_bool_query<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
-        let mut content_and_name_bool_queries = self.inner.build_content_and_name_bool_query()?;
+        let mut content_bool_query = self.inner.build_content_bool_query()?;
 
         // CUSTOM ATTRIBUTES SECTION
-        if self.inner.search_on == SearchOn::Content
-            || self.inner.search_on == SearchOn::NameContent
-        {
-            let mut bool_query = content_and_name_bool_queries
-                .content_bool_query
-                .ok_or(OpensearchClientError::BoolQueryNotBuilt)?;
-
-            // Add role to must clause if provided
-            if !self.role.is_empty() {
-                let should_query = should_wildcard_field_query_builder("role", &self.role);
-                bool_query.must(should_query);
-            }
-
-            content_and_name_bool_queries.content_bool_query = Some(bool_query);
+        // Add role to must clause if provided
+        if !self.role.is_empty() {
+            let should_query = should_wildcard_field_query_builder("role", &self.role);
+            content_bool_query.filter(should_query);
         }
         // END CUSTOM ATTRIBUTES SECTION
 
-        let bool_query = self.inner.build_bool_query(content_and_name_bool_queries)?;
-
-        Ok(bool_query)
+        Ok(content_bool_query)
     }
 
     fn build_search_request<'a>(&'a self) -> Result<SearchRequest<'a>> {
@@ -167,15 +143,12 @@ pub(crate) async fn search_chats(
     client: &opensearch::OpenSearch,
     args: ChatSearchArgs,
 ) -> Result<Vec<SearchHit>> {
-    let indices = match args.search_on {
-        SearchOn::Content => vec![SearchIndex::Chats.as_ref()],
-        SearchOn::NameContent => vec![SearchIndex::Chats.as_ref(), SearchIndex::Names.as_ref()],
-        SearchOn::Name => vec![SearchIndex::Names.as_ref()],
-    };
     let query_body = args.build()?;
 
     let response = client
-        .search(opensearch::SearchParts::Index(&indices))
+        .search(opensearch::SearchParts::Index(&[
+            SearchIndex::Chats.as_ref()
+        ]))
         .body(query_body)
         .send()
         .await

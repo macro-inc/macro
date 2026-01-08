@@ -9,7 +9,6 @@ pub async fn create_notification(
     db: &sqlx::Pool<sqlx::Postgres>,
     notification: Notification,
     user_ids: &[String],
-    is_important_v0: bool,
 ) -> anyhow::Result<Option<Notification>> {
     let mut notification_transaction = db
         .begin()
@@ -43,7 +42,6 @@ pub async fn create_notification(
         &mut notification_transaction,
         &notification.id,
         user_ids,
-        is_important_v0,
     )
     .await?;
 

@@ -13,7 +13,7 @@ export interface Chat {
   /** The time the chat was created */
   createdAt: number;
   /** The time the chat was deleted */
-  deletedAt?: ChatDeletedAt;
+  deletedAt: ChatDeletedAt;
   /** The chat uuid */
   id: string;
   isPersistent: boolean;

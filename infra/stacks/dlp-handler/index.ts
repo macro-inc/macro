@@ -1,5 +1,5 @@
 import * as aws from '@pulumi/aws';
-import { config, stack } from '@shared';
+import { config, stack } from '../../packages/shared';
 import { DlpHandler } from './dlp-handler';
 
 if (stack === 'prod') {

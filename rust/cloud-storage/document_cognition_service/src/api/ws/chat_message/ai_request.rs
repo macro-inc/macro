@@ -10,16 +10,18 @@ use anyhow::{Context, Result};
 use std::sync::Arc;
 
 // fetch documents then build request
-#[tracing::instrument(skip(ctx, chat, incoming_message), err)]
+#[tracing::instrument(skip(ctx, chat, incoming_message, static_system_prompt, jwt), err)]
 pub async fn build_chat_completion_request(
     ctx: Arc<ApiContext>,
     chat: &ChatResponse,
     incoming_message: &SendChatMessagePayload,
     static_system_prompt: &str,
+    jwt: &str,
 ) -> Result<ChatCompletionRequest> {
     let attachments = fetch::fetchium(
         ctx.scribe.clone(),
         incoming_message.attachments.clone().unwrap_or_default(),
+        jwt,
     )
     .await
     .context("failed to fetch attachment content")?;

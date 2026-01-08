@@ -1,7 +1,7 @@
-import { Lambda } from '@lambda';
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '@shared';
+import { Lambda } from '../../packages/lambda';
+import { CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '../../packages/shared';
 
 const EMAIL_LAMBDA_BASE_NAME = 'email_refresh_handler';
 const CLOUD_STORAGE_BASE = `../../../rust/cloud-storage`;
@@ -9,7 +9,7 @@ const ZIP_LOCATION = `${CLOUD_STORAGE_BASE}/target/lambda/${EMAIL_LAMBDA_BASE_NA
 
 export type EnvVars = {
   DATABASE_URL: pulumi.Output<string> | string;
-  EMAIL_REFRESH_QUEUE: pulumi.Output<string> | string;
+  LINK_MANAGER_QUEUE: pulumi.Output<string> | string;
   ENVIRONMENT: pulumi.Output<string> | string;
   RUST_LOG: pulumi.Output<string> | string;
 };

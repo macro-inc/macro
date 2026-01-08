@@ -145,9 +145,6 @@
       "@block-ai/*": [
         "./packages/block-ai/*"
       ],
-      "@block-contact/*": [
-        "./packages/block-contact/*"
-      ],
       "@macro-entity": [
         "./packages/macro-entity/src/index.tsx"
       ],
@@ -201,12 +198,18 @@
       ],
       "@queries/*": [
         "./packages/queries/*"
+      ],
+      "@ui/*": [
+        "./packages/ui/*"
       ]
     },
     "rootDir": ".",
     "outDir": "./dist"
   },
   "references": [
+    {
+      "path": "./packages/ui"
+    },
     {
       "path": "./packages/core"
     },
@@ -218,9 +221,6 @@
     },
     {
       "path": "./packages/block-pdf"
-    },
-    {
-      "path": "./packages/block-contact"
     },
     {
       "path": "./packages/observability"

@@ -26,7 +26,7 @@ export const getRecentActivityHandlerResponse = zod.object({
   "branchedFromId": zod.string().nullish().describe('The id of the document this document branched from'),
   "branchedFromVersionId": zod.number().nullish().describe('The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'),
   "createdAt": zod.number().describe('The time the document was created'),
-  "deletedAt": zod.number().nullish().describe('The time the document was deleted'),
+  "deletedAt": zod.number().nullable().describe('The time the document was deleted'),
   "documentFamilyId": zod.number().nullish().describe('The id of the document family this document belongs to'),
   "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'),
   "fileType": zod.string().nullish().describe('The file type of the document (e.g. pdf, docx)'),
@@ -42,7 +42,7 @@ export const getRecentActivityHandlerResponse = zod.object({
 }),zod.object({
   "Chat": zod.object({
   "createdAt": zod.number().describe('The time the chat was created'),
-  "deletedAt": zod.number().nullish().describe('The time the chat was deleted'),
+  "deletedAt": zod.number().nullable().describe('The time the chat was deleted'),
   "id": zod.string().describe('The chat uuid'),
   "isPersistent": zod.boolean(),
   "model": zod.string().nullish().describe('The model used to generate the chat'),
@@ -616,6 +616,67 @@ export const createDocumentHandlerResponse = zod.object({
 })
 
 
+/**
+ * This endpoint creates task metadata and sets properties atomically.
+Task content should be set separately via the sync service.
+
+NOTE: Ideally content initialization would happen here on the backend, but that requires
+adding Loro/Lexical support to initialize sync service documents server-side. Deferring
+for now — client must call `syncServiceClient.initializeFromSnapshot()` after this returns.
+ * @summary Creates a task document with properties in a single call.
+ */
+export const createTaskHandlerBody = zod.object({
+  "projectId": zod.string().nullish().describe('Optional project id to associate the task with'),
+  "propertyValues": zod.array(zod.object({
+  "propertyId": zod.string().describe('The property definition ID'),
+  "value": zod.union([zod.object({
+  "type": zod.enum(['boolean']),
+  "value": zod.boolean()
+}).describe('Boolean true/false value'),zod.object({
+  "type": zod.enum(['date']),
+  "value": zod.string().datetime({})
+}).describe('Date and time value'),zod.object({
+  "type": zod.enum(['number']),
+  "value": zod.number()
+}).describe('Numeric value'),zod.object({
+  "type": zod.enum(['string']),
+  "value": zod.string()
+}).describe('String/text value'),zod.object({
+  "option_id": zod.string().uuid(),
+  "type": zod.enum(['select_option'])
+}).describe('Select option by ID (for select-type properties)'),zod.object({
+  "option_ids": zod.array(zod.string().uuid()),
+  "type": zod.enum(['multi_select_option'])
+}).describe('Multiple select options by ID (for multi-select properties)'),zod.object({
+  "reference": zod.object({
+  "entity_id": zod.string(),
+  "entity_type": zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.'),
+  "specific_message_id": zod.string().uuid().nullish().describe('For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread/channel/chat.')
+}).describe('Entity reference for entity-type property values.'),
+  "type": zod.enum(['entity_reference'])
+}).describe('Entity reference'),zod.object({
+  "references": zod.array(zod.object({
+  "entity_id": zod.string(),
+  "entity_type": zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.'),
+  "specific_message_id": zod.string().uuid().nullish().describe('For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread/channel/chat.')
+}).describe('Entity reference for entity-type property values.')),
+  "type": zod.enum(['multi_entity_reference'])
+}).describe('Multiple entity references (for multi-select entity properties)'),zod.object({
+  "type": zod.enum(['link']),
+  "url": zod.string()
+}).describe('Link value'),zod.object({
+  "type": zod.enum(['multi_link']),
+  "urls": zod.array(zod.string())
+}).describe('Multiple link values (for multi-select link properties)')]).describe('Type-safe enum for setting entity property values - provides compile-time validation.')
+}).describe('Property input for setting a property value on the task')).nullish().describe('Optional property values to set on the task'),
+  "taskName": zod.string().describe('The name of the task')
+}).describe('Request body for create_task')
+
+export const createTaskHandlerResponse = zod.object({
+  "documentId": zod.string().describe('The document id of the created task')
+}).describe('Response for create_task')
+
+
 export const initializeUserDocumentsResponse = zod.object({
   "success": zod.boolean().describe('Indicates if the request was successful')
 })
@@ -1071,7 +1132,7 @@ export const getHistoryHandlerResponse = zod.object({
   "branchedFromId": zod.string().nullish().describe('The id of the document this document branched from'),
   "branchedFromVersionId": zod.number().nullish().describe('The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'),
   "createdAt": zod.number().describe('The time the document was created'),
-  "deletedAt": zod.number().nullish().describe('The time the document was deleted'),
+  "deletedAt": zod.number().nullable().describe('The time the document was deleted'),
   "documentFamilyId": zod.number().nullish().describe('The id of the document family this document belongs to'),
   "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'),
   "fileType": zod.string().nullish().describe('The file type of the document (e.g. pdf, docx)'),
@@ -1085,7 +1146,7 @@ export const getHistoryHandlerResponse = zod.object({
   "type": zod.enum(['document'])
 }),zod.object({
   "createdAt": zod.number().describe('The time the chat was created'),
-  "deletedAt": zod.number().nullish().describe('The time the chat was deleted'),
+  "deletedAt": zod.number().nullable().describe('The time the chat was deleted'),
   "id": zod.string().describe('The chat uuid'),
   "isPersistent": zod.boolean(),
   "model": zod.string().nullish().describe('The model used to generate the chat'),
@@ -1097,7 +1158,7 @@ export const getHistoryHandlerResponse = zod.object({
   "type": zod.enum(['chat'])
 }),zod.object({
   "createdAt": zod.number().describe('The time the project was created'),
-  "deletedAt": zod.number().nullish().describe('The time the project was deleted'),
+  "deletedAt": zod.number().nullable(),
   "id": zod.string().describe('The id of the project'),
   "name": zod.string().describe('The name of the project'),
   "parentId": zod.string().nullish().describe('The parent project id'),
@@ -1169,6 +1230,9 @@ export const getItemsSoupQueryParams = zod.object({
   "sort_method": zod.enum(['viewed_at', 'created_at', 'updated_at', 'viewed_updated', 'frecency']).optional().describe('Sort method. Options are viewed_at, created_at, updated_at, viewed_updated. Defaults to viewed_at.'),
   "cursor": zod.string().optional().describe('Base64 encoded cursor value.')
 })
+
+export const getItemsSoupResponseItemsItemDataChannelOrgIdMin = 0;
+
 
 export const getItemsSoupResponse = zod.object({
   "items": zod.array(zod.union([zod.object({
@@ -1273,6 +1337,50 @@ export const getItemsSoupResponse = zod.object({
 }))
 })),
   "tag": zod.enum(['emailThread'])
+}),zod.object({
+  "data": zod.object({
+  "channel": zod.object({
+  "channel_type": zod.enum(['public', 'organization', 'private', 'direct_message']),
+  "created_at": zod.string().datetime({}),
+  "id": zod.string().uuid(),
+  "name": zod.string().nullish(),
+  "org_id": zod.number().min(getItemsSoupResponseItemsItemDataChannelOrgIdMin).nullish(),
+  "owner_id": zod.string(),
+  "updated_at": zod.string().datetime({})
+}),
+  "participants": zod.array(zod.object({
+  "channel_id": zod.string().uuid(),
+  "joined_at": zod.string().datetime({}),
+  "left_at": zod.string().datetime({}).nullish(),
+  "role": zod.enum(['owner', 'admin', 'member']),
+  "user_id": zod.string()
+}))
+}).and(zod.object({
+  "latest_message": zod.union([zod.null(),zod.object({
+  "content": zod.string(),
+  "created_at": zod.string().datetime({}),
+  "deleted_at": zod.string().datetime({}).nullish(),
+  "mentions": zod.array(zod.string()).describe('message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`'),
+  "message_id": zod.string().uuid(),
+  "sender_id": zod.string(),
+  "thread_id": zod.string().uuid().nullish(),
+  "updated_at": zod.string().datetime({})
+})]).optional(),
+  "latest_non_thread_message": zod.union([zod.null(),zod.object({
+  "content": zod.string(),
+  "created_at": zod.string().datetime({}),
+  "deleted_at": zod.string().datetime({}).nullish(),
+  "mentions": zod.array(zod.string()).describe('message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`'),
+  "message_id": zod.string().uuid(),
+  "sender_id": zod.string(),
+  "thread_id": zod.string().uuid().nullish(),
+  "updated_at": zod.string().datetime({})
+})]).optional()
+})).and(zod.object({
+  "interacted_at": zod.string().datetime({}).nullish(),
+  "viewed_at": zod.string().datetime({}).nullish()
+})),
+  "tag": zod.enum(['channel'])
 })]).and(zod.object({
   "frecency_score": zod.number()
 }))),
@@ -1324,7 +1432,12 @@ export const postItemsSoupBody = zod.object({
   "expand": zod.boolean().nullish().describe('Whether to expand projects. Defaults to true.'),
   "limit": zod.number().min(postItemsSoupBodyLimitMin).nullish().describe('Limit the number of items returned. Defaults to 20. Max 500.'),
   "sort_method": zod.union([zod.null(),zod.enum(['viewed_at', 'created_at', 'updated_at', 'viewed_updated', 'frecency'])]).optional()
+})).and(zod.object({
+  "emailView": zod.string().optional().describe('the view of specific emails to display')
 }))
+
+export const postItemsSoupResponseItemsItemDataChannelOrgIdMin = 0;
+
 
 export const postItemsSoupResponse = zod.object({
   "items": zod.array(zod.union([zod.object({
@@ -1429,6 +1542,50 @@ export const postItemsSoupResponse = zod.object({
 }))
 })),
   "tag": zod.enum(['emailThread'])
+}),zod.object({
+  "data": zod.object({
+  "channel": zod.object({
+  "channel_type": zod.enum(['public', 'organization', 'private', 'direct_message']),
+  "created_at": zod.string().datetime({}),
+  "id": zod.string().uuid(),
+  "name": zod.string().nullish(),
+  "org_id": zod.number().min(postItemsSoupResponseItemsItemDataChannelOrgIdMin).nullish(),
+  "owner_id": zod.string(),
+  "updated_at": zod.string().datetime({})
+}),
+  "participants": zod.array(zod.object({
+  "channel_id": zod.string().uuid(),
+  "joined_at": zod.string().datetime({}),
+  "left_at": zod.string().datetime({}).nullish(),
+  "role": zod.enum(['owner', 'admin', 'member']),
+  "user_id": zod.string()
+}))
+}).and(zod.object({
+  "latest_message": zod.union([zod.null(),zod.object({
+  "content": zod.string(),
+  "created_at": zod.string().datetime({}),
+  "deleted_at": zod.string().datetime({}).nullish(),
+  "mentions": zod.array(zod.string()).describe('message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`'),
+  "message_id": zod.string().uuid(),
+  "sender_id": zod.string(),
+  "thread_id": zod.string().uuid().nullish(),
+  "updated_at": zod.string().datetime({})
+})]).optional(),
+  "latest_non_thread_message": zod.union([zod.null(),zod.object({
+  "content": zod.string(),
+  "created_at": zod.string().datetime({}),
+  "deleted_at": zod.string().datetime({}).nullish(),
+  "mentions": zod.array(zod.string()).describe('message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`'),
+  "message_id": zod.string().uuid(),
+  "sender_id": zod.string(),
+  "thread_id": zod.string().uuid().nullish(),
+  "updated_at": zod.string().datetime({})
+})]).optional()
+})).and(zod.object({
+  "interacted_at": zod.string().datetime({}).nullish(),
+  "viewed_at": zod.string().datetime({}).nullish()
+})),
+  "tag": zod.enum(['channel'])
 })]).and(zod.object({
   "frecency_score": zod.number()
 }))),
@@ -1460,7 +1617,7 @@ export const getPinsHandlerResponse = zod.object({
   "branchedFromId": zod.string().nullish().describe('The id of the document this document branched from'),
   "branchedFromVersionId": zod.number().nullish().describe('The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'),
   "createdAt": zod.number().describe('The time the document was created'),
-  "deletedAt": zod.number().nullish().describe('The time the document was deleted'),
+  "deletedAt": zod.number().nullable().describe('The time the document was deleted'),
   "documentFamilyId": zod.number().nullish().describe('The id of the document family this document belongs to'),
   "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'),
   "fileType": zod.string().nullish().describe('The file type of the document (e.g. pdf, docx)'),
@@ -1474,7 +1631,7 @@ export const getPinsHandlerResponse = zod.object({
   "type": zod.enum(['document'])
 }),zod.object({
   "createdAt": zod.number().describe('The time the chat was created'),
-  "deletedAt": zod.number().nullish().describe('The time the chat was deleted'),
+  "deletedAt": zod.number().nullable().describe('The time the chat was deleted'),
   "id": zod.string().describe('The chat uuid'),
   "isPersistent": zod.boolean(),
   "model": zod.string().nullish().describe('The model used to generate the chat'),
@@ -1486,7 +1643,7 @@ export const getPinsHandlerResponse = zod.object({
   "type": zod.enum(['chat'])
 }),zod.object({
   "createdAt": zod.number().describe('The time the project was created'),
-  "deletedAt": zod.number().nullish().describe('The time the project was deleted'),
+  "deletedAt": zod.number().nullable(),
   "id": zod.string().describe('The id of the project'),
   "name": zod.string().describe('The name of the project'),
   "parentId": zod.string().nullish().describe('The parent project id'),
@@ -1498,7 +1655,7 @@ export const getPinsHandlerResponse = zod.object({
   "branchedFromId": zod.string().nullish().describe('The id of the document this document branched from'),
   "branchedFromVersionId": zod.number().nullish().describe('The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'),
   "createdAt": zod.number().describe('The time the document was created'),
-  "deletedAt": zod.number().nullish().describe('The time the document was deleted'),
+  "deletedAt": zod.number().nullable().describe('The time the document was deleted'),
   "documentFamilyId": zod.number().nullish().describe('The id of the document family this document belongs to'),
   "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'),
   "fileType": zod.string().nullish().describe('The file type of the document (e.g. pdf, docx)'),
@@ -1512,7 +1669,7 @@ export const getPinsHandlerResponse = zod.object({
   "type": zod.enum(['document'])
 }),zod.object({
   "createdAt": zod.number().describe('The time the chat was created'),
-  "deletedAt": zod.number().nullish().describe('The time the chat was deleted'),
+  "deletedAt": zod.number().nullable().describe('The time the chat was deleted'),
   "id": zod.string().describe('The chat uuid'),
   "isPersistent": zod.boolean(),
   "model": zod.string().nullish().describe('The model used to generate the chat'),
@@ -1524,7 +1681,7 @@ export const getPinsHandlerResponse = zod.object({
   "type": zod.enum(['chat'])
 }),zod.object({
   "createdAt": zod.number().describe('The time the project was created'),
-  "deletedAt": zod.number().nullish().describe('The time the project was deleted'),
+  "deletedAt": zod.number().nullable(),
   "id": zod.string().describe('The id of the project'),
   "name": zod.string().describe('The name of the project'),
   "parentId": zod.string().nullish().describe('The parent project id'),
@@ -1602,7 +1759,7 @@ export const removePinHandlerResponse = zod.object({
 export const getProjectsHandlerResponse = zod.object({
   "data": zod.array(zod.object({
   "createdAt": zod.number().describe('The time the project was created'),
-  "deletedAt": zod.number().nullish().describe('The time the project was deleted'),
+  "deletedAt": zod.number().nullable(),
   "id": zod.string().describe('The id of the project'),
   "name": zod.string().describe('The name of the project'),
   "parentId": zod.string().nullish().describe('The parent project id'),
@@ -1626,7 +1783,7 @@ export const createProjectHandlerBody = zod.object({
 export const createProjectHandlerResponse = zod.object({
   "data": zod.object({
   "createdAt": zod.number().describe('The time the project was created'),
-  "deletedAt": zod.number().nullish().describe('The time the project was deleted'),
+  "deletedAt": zod.number().nullable(),
   "id": zod.string().describe('The id of the project'),
   "name": zod.string().describe('The name of the project'),
   "parentId": zod.string().nullish().describe('The parent project id'),
@@ -1644,7 +1801,7 @@ export const createProjectHandlerResponse = zod.object({
 export const getPendingProjectsHandlerResponse = zod.object({
   "data": zod.array(zod.object({
   "createdAt": zod.number().describe('The time the project was created'),
-  "deletedAt": zod.number().nullish().describe('The time the project was deleted'),
+  "deletedAt": zod.number().nullable(),
   "id": zod.string().describe('The id of the project'),
   "name": zod.string().describe('The name of the project'),
   "parentId": zod.string().nullish().describe('The parent project id'),
@@ -1692,7 +1849,7 @@ with projects and placing all documents in the correct location.
  */
 export const uploadFolderHandlerBody = zod.object({
   "content": zod.array(zod.object({
-  "fileType": zod.union([zod.null(),zod.enum(['docx', 'pdf', 'md', 'canvas', 'coffee', 'cson', 'iced', 'c', 'i', 'cpp', 'cppm', 'cc', 'ccm', 'cxx', 'cxxm', 'cplusplus', 'cplusplusm', 'hpp', 'hh', 'hxx', 'hplusplus', 'h', 'ii', 'ino', 'inl', 'ipp', 'ixx', 'tpp', 'txx', 'hppin', 'hin', 'cu', 'cuh', 'cs', 'csx', 'cake', 'css', 'dart', 'diff', 'patch', 'rej', 'dockerfile', 'containerfile', 'go', 'handlebars', 'hbs', 'hjs', 'hlsl', 'hlsli', 'fx', 'fxh', 'vsh', 'psh', 'cginc', 'compute', 'html', 'htm', 'shtml', 'xhtml', 'xht', 'mdoc', 'jsp', 'asp', 'aspx', 'jshtm', 'volt', 'ejs', 'rhtml', 'ini', 'conf', 'properties', 'cfg', 'directory', 'gitattributes', 'gitconfig', 'gitmodules', 'editorconfig', 'repo', 'java', 'jav', 'jsx', 'js', 'es6', 'mjs', 'cjs', 'pac', 'json', 'bowerrc', 'jscsrc', 'webmanifest', 'jsmap', 'cssmap', 'tsmap', 'har', 'jslintrc', 'jsonld', 'geojson', 'ipynb', 'vuerc', 'jsonc', 'eslintrc', 'eslintrcjson', 'jsfmtrc', 'jshintrc', 'swcrc', 'hintrc', 'babelrc', 'jsonl', 'ndjson', 'codesnippets', 'jl', 'jmd', 'sty', 'cls', 'bbx', 'cbx', 'tex', 'ltx', 'ctx', 'bib', 'less', 'log', 'lua', 'mak', 'mk', 'mkd', 'mdwn', 'mdown', 'markdown', 'markdn', 'mdtxt', 'mdtext', 'workbook', 'm', 'mm', 'pl', 'pm', 'pod', 't', 'psgi', 'raku', 'rakumod', 'rakutest', 'rakudoc', 'nqp', 'p6', 'pl6', 'pm6', 'php', 'php4', 'php5', 'phtml', 'ctp', 'ps1', 'psm1', 'psd1', 'pssc', 'psrc', 'py', 'rpy', 'pyw', 'cpy', 'gyp', 'gypi', 'pyi', 'ipy', 'pyt', 'r', 'rhistory', 'rprofile', 'rt', 'cshtml', 'razor', 'rb', 'rbx', 'rjs', 'gemspec', 'rake', 'ru', 'erb', 'podspec', 'rbi', 'rs', 'scss', 'shader', 'sh', 'bash', 'bashrc', 'bashaliases', 'bashprofile', 'bashlogin', 'ebuild', 'eclass', 'profile', 'bashlogout', 'xprofile', 'xsession', 'xsessionrc', 'zsh', 'zshrc', 'zprofile', 'zlogin', 'zlogout', 'zshenv', 'zshtheme', 'fish', 'ksh', 'csh', 'cshrc', 'tcshrc', 'yashrc', 'yashprofile', 'sql', 'dsql', 'swift', 'ts', 'cts', 'mts', 'tsx', 'tsbuildinfo', 'xml', 'xsd', 'ascx', 'atom', 'axml', 'axaml', 'bpmn', 'cpt', 'csl', 'csproj', 'csprojuser', 'dita', 'ditamap', 'dtd', 'ent', 'mod', 'dtml', 'fsproj', 'fxml', 'iml', 'isml', 'jmx', 'launch', 'menu', 'mxml', 'nuspec', 'opml', 'owl', 'proj', 'props', 'pt', 'publishsettings', 'pubxml', 'pubxmluser', 'rbxlx', 'rbxmx', 'rdf', 'rng', 'rss', 'shproj', 'storyboard', 'targets', 'tld', 'tmx', 'vbproj', 'vbprojuser', 'vcxproj', 'vcxprojfilters', 'wsdl', 'wxi', 'wxl', 'wxs', 'xaml', 'xbl', 'xib', 'xlf', 'xliff', 'xpdl', 'xul', 'xoml', 'xsl', 'xslt', 'yaml', 'yml', 'eyaml', 'eyml', 'cff', 'yamltmlanguage', 'yamltmpreferences', 'yamltmtheme', 'winget', 'txt', 'csv', 'tsv', 'jpeg', 'jpg', 'png', 'gif', 'svg', 'webp', 'avif', 'bmp', 'ico', 'tiff', 'tif', 'heic', 'heif', 'tar', 'targz', 'tgz', 'gz', 'bz2', 'tarbz2', 'tbz2', 'z', 'tarz', 'lz', 'tarlz', 'xz', 'tarxz', 'txz', 'lzma', 'tarlzma', 'rar', 'sevenz', 'zst', 'tarzst', 'tzst', 'zip', 'exe', 'msi', 'dll', 'bat', 'cmd', 'com', 'appimage', 'app', 'bin', 'deb', 'rpm', 'apk', 'dmg', 'pkg', 'crx', 'xpi', 'mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a', 'wma', 'mid', 'midi', 'mp4', 'mkv', 'webm', 'avi', 'mov', 'wmv', 'mpg', 'mpeg', 'm4v', 'flv', 'f4v', 'threegp', 'ttf', 'otf', 'woff', 'woff2', 'eot', 'rtf', 'odt', 'ods', 'odp', 'odg', 'odf', 'epub', 'mobi', 'azw', 'azw3', 'djvu', 'xls', 'ppt', 'pptx', 'xlsx', 'db', 'sqlite', 'sqlite3', 'mdb', 'accdb', 'dbf', 'plist', 'toml', 'env', 'dot', 'gv', 'torrent', 'ics', 'vcf', 'ai', 'eps', 'ps', 'dxf', 'dwg', 'stl', 'obj', 'fbx', 'blend', 'dae', 'threeds', 'gltf', 'glb', 'vhd', 'vhdx', 'vmdk', 'ova', 'ovf', 'iso', 'img', 'swf']).describe('Generates a FileType enum and associated ContentType enum with their implementations.\n\nThis macro takes a list of tuples in the format:\n(Variant, \"extension\", \"mime_type\", CONTENT_TYPE_VARIANT)\n\nFor each tuple it generates:\n- A variant in the FileType enum\n- A variant in the ContentType enum\n- Implementations for:\n  - FileType::to_str() - Converts FileType to extension string\n  - FileType::from_str() - Converts extension string to FileType\n  - From<FileType> for ContentType - Maps FileType to ContentType\n  - ContentType::mime_type() - Gets MIME type for ContentType\n')]).optional(),
+  "fileType": zod.union([zod.null(),zod.enum(['docx', 'pdf', 'md', 'canvas', 'coffee', 'cson', 'iced', 'c', 'i', 'cpp', 'cppm', 'cc', 'ccm', 'cxx', 'cxxm', 'cplusplus', 'cplusplusm', 'hpp', 'hh', 'hxx', 'hplusplus', 'h', 'ii', 'ino', 'inl', 'ipp', 'ixx', 'tpp', 'txx', 'hppin', 'hin', 'cu', 'cuh', 'cs', 'csx', 'cake', 'css', 'dart', 'diff', 'patch', 'rej', 'dockerfile', 'containerfile', 'go', 'handlebars', 'hbs', 'hjs', 'hlsl', 'hlsli', 'fx', 'fxh', 'vsh', 'psh', 'cginc', 'compute', 'html', 'htm', 'shtml', 'xhtml', 'xht', 'mdoc', 'jsp', 'asp', 'aspx', 'jshtm', 'volt', 'ejs', 'rhtml', 'ini', 'conf', 'properties', 'cfg', 'directory', 'gitattributes', 'gitconfig', 'gitmodules', 'editorconfig', 'repo', 'java', 'jav', 'jsx', 'js', 'es6', 'mjs', 'cjs', 'pac', 'json', 'bowerrc', 'jscsrc', 'webmanifest', 'jsmap', 'cssmap', 'tsmap', 'har', 'jslintrc', 'jsonld', 'geojson', 'ipynb', 'vuerc', 'jsonc', 'eslintrc', 'eslintrcjson', 'jsfmtrc', 'jshintrc', 'swcrc', 'hintrc', 'babelrc', 'jsonl', 'ndjson', 'codesnippets', 'jl', 'jmd', 'sty', 'cls', 'bbx', 'cbx', 'tex', 'ltx', 'ctx', 'bib', 'less', 'log', 'lua', 'mak', 'mk', 'mkd', 'mdwn', 'mdown', 'markdown', 'markdn', 'mdtxt', 'mdtext', 'workbook', 'm', 'mm', 'pl', 'pm', 'pod', 't', 'psgi', 'raku', 'rakumod', 'rakutest', 'rakudoc', 'nqp', 'p6', 'pl6', 'pm6', 'php', 'php4', 'php5', 'phtml', 'ctp', 'ps1', 'psm1', 'psd1', 'pssc', 'psrc', 'py', 'rpy', 'pyw', 'cpy', 'gyp', 'gypi', 'pyi', 'ipy', 'pyt', 'r', 'rhistory', 'rprofile', 'rt', 'cshtml', 'razor', 'rb', 'rbx', 'rjs', 'gemspec', 'rake', 'ru', 'erb', 'podspec', 'rbi', 'rs', 'scss', 'sass', 'shader', 'sh', 'bash', 'bashrc', 'bashaliases', 'bashprofile', 'bashlogin', 'ebuild', 'eclass', 'profile', 'bashlogout', 'xprofile', 'xsession', 'xsessionrc', 'zsh', 'zshrc', 'zprofile', 'zlogin', 'zlogout', 'zshenv', 'zshtheme', 'fish', 'ksh', 'csh', 'cshrc', 'tcshrc', 'yashrc', 'yashprofile', 'sql', 'dsql', 'swift', 'ts', 'cts', 'mts', 'tsx', 'tsbuildinfo', 'xml', 'xsd', 'ascx', 'atom', 'axml', 'axaml', 'bpmn', 'cpt', 'csl', 'csproj', 'csprojuser', 'dita', 'ditamap', 'dtd', 'ent', 'mod', 'dtml', 'fsproj', 'fxml', 'iml', 'isml', 'jmx', 'launch', 'menu', 'mxml', 'nuspec', 'opml', 'owl', 'proj', 'props', 'pt', 'publishsettings', 'pubxml', 'pubxmluser', 'rbxlx', 'rbxmx', 'rdf', 'rng', 'rss', 'shproj', 'storyboard', 'targets', 'tld', 'tmx', 'vbproj', 'vbprojuser', 'vcxproj', 'vcxprojfilters', 'wsdl', 'wxi', 'wxl', 'wxs', 'xaml', 'xbl', 'xib', 'xlf', 'xliff', 'xpdl', 'xul', 'xoml', 'xsl', 'xslt', 'yaml', 'yml', 'eyaml', 'eyml', 'cff', 'yamltmlanguage', 'yamltmpreferences', 'yamltmtheme', 'winget', 'txt', 'csv', 'tsv', 'jpeg', 'jpg', 'png', 'gif', 'svg', 'webp', 'avif', 'bmp', 'ico', 'tiff', 'tif', 'heic', 'heif', 'tar', 'targz', 'tgz', 'gz', 'bz2', 'tarbz2', 'tbz2', 'z', 'tarz', 'lz', 'tarlz', 'xz', 'tarxz', 'txz', 'lzma', 'tarlzma', 'rar', 'sevenz', 'zst', 'tarzst', 'tzst', 'zip', 'exe', 'msi', 'dll', 'bat', 'cmd', 'com', 'appimage', 'app', 'bin', 'deb', 'rpm', 'apk', 'dmg', 'pkg', 'crx', 'xpi', 'mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a', 'wma', 'mid', 'midi', 'mp4', 'mkv', 'webm', 'avi', 'mov', 'wmv', 'mpg', 'mpeg', 'm4v', 'flv', 'f4v', 'threegp', 'ttf', 'otf', 'woff', 'woff2', 'eot', 'rtf', 'odt', 'ods', 'odp', 'odg', 'odf', 'epub', 'mobi', 'azw', 'azw3', 'djvu', 'xls', 'ppt', 'pptx', 'xlsx', 'db', 'sqlite', 'sqlite3', 'mdb', 'accdb', 'dbf', 'plist', 'toml', 'env', 'dot', 'gv', 'torrent', 'ics', 'vcf', 'ai', 'eps', 'ps', 'dxf', 'dwg', 'stl', 'obj', 'fbx', 'blend', 'dae', 'threeds', 'gltf', 'glb', 'vhd', 'vhdx', 'vmdk', 'ova', 'ovf', 'iso', 'img', 'swf']).describe('Generates a FileType enum and associated ContentType enum with their implementations.\n\nThis macro takes a list of tuples in the format:\n(Variant, \"extension\", \"mime_type\", CONTENT_TYPE_VARIANT)\n\nFor each tuple it generates:\n- A variant in the FileType enum\n- A variant in the ContentType enum\n- Implementations for:\n  - FileType::to_str() - Converts FileType to extension string\n  - FileType::from_str() - Converts extension string to FileType\n  - From<FileType> for ContentType - Maps FileType to ContentType\n  - ContentType::mime_type() - Gets MIME type for ContentType\n')]).optional(),
   "fullName": zod.string().describe('The full OS name of the file for deduplication'),
   "name": zod.string().describe('The name of the file, without the extension'),
   "relativePath": zod.string().describe('The relative path of the file.\n\nThis is the `webkitRelativePath` with the name of the file stripped at the end.'),
@@ -1719,7 +1876,7 @@ export const uploadFolderHandlerResponse = zod.object({
   "fileSystem": zod.union([zod.object({
   "document_id": zod.string(),
   "item": zod.object({
-  "fileType": zod.union([zod.null(),zod.enum(['docx', 'pdf', 'md', 'canvas', 'coffee', 'cson', 'iced', 'c', 'i', 'cpp', 'cppm', 'cc', 'ccm', 'cxx', 'cxxm', 'cplusplus', 'cplusplusm', 'hpp', 'hh', 'hxx', 'hplusplus', 'h', 'ii', 'ino', 'inl', 'ipp', 'ixx', 'tpp', 'txx', 'hppin', 'hin', 'cu', 'cuh', 'cs', 'csx', 'cake', 'css', 'dart', 'diff', 'patch', 'rej', 'dockerfile', 'containerfile', 'go', 'handlebars', 'hbs', 'hjs', 'hlsl', 'hlsli', 'fx', 'fxh', 'vsh', 'psh', 'cginc', 'compute', 'html', 'htm', 'shtml', 'xhtml', 'xht', 'mdoc', 'jsp', 'asp', 'aspx', 'jshtm', 'volt', 'ejs', 'rhtml', 'ini', 'conf', 'properties', 'cfg', 'directory', 'gitattributes', 'gitconfig', 'gitmodules', 'editorconfig', 'repo', 'java', 'jav', 'jsx', 'js', 'es6', 'mjs', 'cjs', 'pac', 'json', 'bowerrc', 'jscsrc', 'webmanifest', 'jsmap', 'cssmap', 'tsmap', 'har', 'jslintrc', 'jsonld', 'geojson', 'ipynb', 'vuerc', 'jsonc', 'eslintrc', 'eslintrcjson', 'jsfmtrc', 'jshintrc', 'swcrc', 'hintrc', 'babelrc', 'jsonl', 'ndjson', 'codesnippets', 'jl', 'jmd', 'sty', 'cls', 'bbx', 'cbx', 'tex', 'ltx', 'ctx', 'bib', 'less', 'log', 'lua', 'mak', 'mk', 'mkd', 'mdwn', 'mdown', 'markdown', 'markdn', 'mdtxt', 'mdtext', 'workbook', 'm', 'mm', 'pl', 'pm', 'pod', 't', 'psgi', 'raku', 'rakumod', 'rakutest', 'rakudoc', 'nqp', 'p6', 'pl6', 'pm6', 'php', 'php4', 'php5', 'phtml', 'ctp', 'ps1', 'psm1', 'psd1', 'pssc', 'psrc', 'py', 'rpy', 'pyw', 'cpy', 'gyp', 'gypi', 'pyi', 'ipy', 'pyt', 'r', 'rhistory', 'rprofile', 'rt', 'cshtml', 'razor', 'rb', 'rbx', 'rjs', 'gemspec', 'rake', 'ru', 'erb', 'podspec', 'rbi', 'rs', 'scss', 'shader', 'sh', 'bash', 'bashrc', 'bashaliases', 'bashprofile', 'bashlogin', 'ebuild', 'eclass', 'profile', 'bashlogout', 'xprofile', 'xsession', 'xsessionrc', 'zsh', 'zshrc', 'zprofile', 'zlogin', 'zlogout', 'zshenv', 'zshtheme', 'fish', 'ksh', 'csh', 'cshrc', 'tcshrc', 'yashrc', 'yashprofile', 'sql', 'dsql', 'swift', 'ts', 'cts', 'mts', 'tsx', 'tsbuildinfo', 'xml', 'xsd', 'ascx', 'atom', 'axml', 'axaml', 'bpmn', 'cpt', 'csl', 'csproj', 'csprojuser', 'dita', 'ditamap', 'dtd', 'ent', 'mod', 'dtml', 'fsproj', 'fxml', 'iml', 'isml', 'jmx', 'launch', 'menu', 'mxml', 'nuspec', 'opml', 'owl', 'proj', 'props', 'pt', 'publishsettings', 'pubxml', 'pubxmluser', 'rbxlx', 'rbxmx', 'rdf', 'rng', 'rss', 'shproj', 'storyboard', 'targets', 'tld', 'tmx', 'vbproj', 'vbprojuser', 'vcxproj', 'vcxprojfilters', 'wsdl', 'wxi', 'wxl', 'wxs', 'xaml', 'xbl', 'xib', 'xlf', 'xliff', 'xpdl', 'xul', 'xoml', 'xsl', 'xslt', 'yaml', 'yml', 'eyaml', 'eyml', 'cff', 'yamltmlanguage', 'yamltmpreferences', 'yamltmtheme', 'winget', 'txt', 'csv', 'tsv', 'jpeg', 'jpg', 'png', 'gif', 'svg', 'webp', 'avif', 'bmp', 'ico', 'tiff', 'tif', 'heic', 'heif', 'tar', 'targz', 'tgz', 'gz', 'bz2', 'tarbz2', 'tbz2', 'z', 'tarz', 'lz', 'tarlz', 'xz', 'tarxz', 'txz', 'lzma', 'tarlzma', 'rar', 'sevenz', 'zst', 'tarzst', 'tzst', 'zip', 'exe', 'msi', 'dll', 'bat', 'cmd', 'com', 'appimage', 'app', 'bin', 'deb', 'rpm', 'apk', 'dmg', 'pkg', 'crx', 'xpi', 'mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a', 'wma', 'mid', 'midi', 'mp4', 'mkv', 'webm', 'avi', 'mov', 'wmv', 'mpg', 'mpeg', 'm4v', 'flv', 'f4v', 'threegp', 'ttf', 'otf', 'woff', 'woff2', 'eot', 'rtf', 'odt', 'ods', 'odp', 'odg', 'odf', 'epub', 'mobi', 'azw', 'azw3', 'djvu', 'xls', 'ppt', 'pptx', 'xlsx', 'db', 'sqlite', 'sqlite3', 'mdb', 'accdb', 'dbf', 'plist', 'toml', 'env', 'dot', 'gv', 'torrent', 'ics', 'vcf', 'ai', 'eps', 'ps', 'dxf', 'dwg', 'stl', 'obj', 'fbx', 'blend', 'dae', 'threeds', 'gltf', 'glb', 'vhd', 'vhdx', 'vmdk', 'ova', 'ovf', 'iso', 'img', 'swf']).describe('Generates a FileType enum and associated ContentType enum with their implementations.\n\nThis macro takes a list of tuples in the format:\n(Variant, \"extension\", \"mime_type\", CONTENT_TYPE_VARIANT)\n\nFor each tuple it generates:\n- A variant in the FileType enum\n- A variant in the ContentType enum\n- Implementations for:\n  - FileType::to_str() - Converts FileType to extension string\n  - FileType::from_str() - Converts extension string to FileType\n  - From<FileType> for ContentType - Maps FileType to ContentType\n  - ContentType::mime_type() - Gets MIME type for ContentType\n')]).optional(),
+  "fileType": zod.union([zod.null(),zod.enum(['docx', 'pdf', 'md', 'canvas', 'coffee', 'cson', 'iced', 'c', 'i', 'cpp', 'cppm', 'cc', 'ccm', 'cxx', 'cxxm', 'cplusplus', 'cplusplusm', 'hpp', 'hh', 'hxx', 'hplusplus', 'h', 'ii', 'ino', 'inl', 'ipp', 'ixx', 'tpp', 'txx', 'hppin', 'hin', 'cu', 'cuh', 'cs', 'csx', 'cake', 'css', 'dart', 'diff', 'patch', 'rej', 'dockerfile', 'containerfile', 'go', 'handlebars', 'hbs', 'hjs', 'hlsl', 'hlsli', 'fx', 'fxh', 'vsh', 'psh', 'cginc', 'compute', 'html', 'htm', 'shtml', 'xhtml', 'xht', 'mdoc', 'jsp', 'asp', 'aspx', 'jshtm', 'volt', 'ejs', 'rhtml', 'ini', 'conf', 'properties', 'cfg', 'directory', 'gitattributes', 'gitconfig', 'gitmodules', 'editorconfig', 'repo', 'java', 'jav', 'jsx', 'js', 'es6', 'mjs', 'cjs', 'pac', 'json', 'bowerrc', 'jscsrc', 'webmanifest', 'jsmap', 'cssmap', 'tsmap', 'har', 'jslintrc', 'jsonld', 'geojson', 'ipynb', 'vuerc', 'jsonc', 'eslintrc', 'eslintrcjson', 'jsfmtrc', 'jshintrc', 'swcrc', 'hintrc', 'babelrc', 'jsonl', 'ndjson', 'codesnippets', 'jl', 'jmd', 'sty', 'cls', 'bbx', 'cbx', 'tex', 'ltx', 'ctx', 'bib', 'less', 'log', 'lua', 'mak', 'mk', 'mkd', 'mdwn', 'mdown', 'markdown', 'markdn', 'mdtxt', 'mdtext', 'workbook', 'm', 'mm', 'pl', 'pm', 'pod', 't', 'psgi', 'raku', 'rakumod', 'rakutest', 'rakudoc', 'nqp', 'p6', 'pl6', 'pm6', 'php', 'php4', 'php5', 'phtml', 'ctp', 'ps1', 'psm1', 'psd1', 'pssc', 'psrc', 'py', 'rpy', 'pyw', 'cpy', 'gyp', 'gypi', 'pyi', 'ipy', 'pyt', 'r', 'rhistory', 'rprofile', 'rt', 'cshtml', 'razor', 'rb', 'rbx', 'rjs', 'gemspec', 'rake', 'ru', 'erb', 'podspec', 'rbi', 'rs', 'scss', 'sass', 'shader', 'sh', 'bash', 'bashrc', 'bashaliases', 'bashprofile', 'bashlogin', 'ebuild', 'eclass', 'profile', 'bashlogout', 'xprofile', 'xsession', 'xsessionrc', 'zsh', 'zshrc', 'zprofile', 'zlogin', 'zlogout', 'zshenv', 'zshtheme', 'fish', 'ksh', 'csh', 'cshrc', 'tcshrc', 'yashrc', 'yashprofile', 'sql', 'dsql', 'swift', 'ts', 'cts', 'mts', 'tsx', 'tsbuildinfo', 'xml', 'xsd', 'ascx', 'atom', 'axml', 'axaml', 'bpmn', 'cpt', 'csl', 'csproj', 'csprojuser', 'dita', 'ditamap', 'dtd', 'ent', 'mod', 'dtml', 'fsproj', 'fxml', 'iml', 'isml', 'jmx', 'launch', 'menu', 'mxml', 'nuspec', 'opml', 'owl', 'proj', 'props', 'pt', 'publishsettings', 'pubxml', 'pubxmluser', 'rbxlx', 'rbxmx', 'rdf', 'rng', 'rss', 'shproj', 'storyboard', 'targets', 'tld', 'tmx', 'vbproj', 'vbprojuser', 'vcxproj', 'vcxprojfilters', 'wsdl', 'wxi', 'wxl', 'wxs', 'xaml', 'xbl', 'xib', 'xlf', 'xliff', 'xpdl', 'xul', 'xoml', 'xsl', 'xslt', 'yaml', 'yml', 'eyaml', 'eyml', 'cff', 'yamltmlanguage', 'yamltmpreferences', 'yamltmtheme', 'winget', 'txt', 'csv', 'tsv', 'jpeg', 'jpg', 'png', 'gif', 'svg', 'webp', 'avif', 'bmp', 'ico', 'tiff', 'tif', 'heic', 'heif', 'tar', 'targz', 'tgz', 'gz', 'bz2', 'tarbz2', 'tbz2', 'z', 'tarz', 'lz', 'tarlz', 'xz', 'tarxz', 'txz', 'lzma', 'tarlzma', 'rar', 'sevenz', 'zst', 'tarzst', 'tzst', 'zip', 'exe', 'msi', 'dll', 'bat', 'cmd', 'com', 'appimage', 'app', 'bin', 'deb', 'rpm', 'apk', 'dmg', 'pkg', 'crx', 'xpi', 'mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a', 'wma', 'mid', 'midi', 'mp4', 'mkv', 'webm', 'avi', 'mov', 'wmv', 'mpg', 'mpeg', 'm4v', 'flv', 'f4v', 'threegp', 'ttf', 'otf', 'woff', 'woff2', 'eot', 'rtf', 'odt', 'ods', 'odp', 'odg', 'odf', 'epub', 'mobi', 'azw', 'azw3', 'djvu', 'xls', 'ppt', 'pptx', 'xlsx', 'db', 'sqlite', 'sqlite3', 'mdb', 'accdb', 'dbf', 'plist', 'toml', 'env', 'dot', 'gv', 'torrent', 'ics', 'vcf', 'ai', 'eps', 'ps', 'dxf', 'dwg', 'stl', 'obj', 'fbx', 'blend', 'dae', 'threeds', 'gltf', 'glb', 'vhd', 'vhdx', 'vmdk', 'ova', 'ovf', 'iso', 'img', 'swf']).describe('Generates a FileType enum and associated ContentType enum with their implementations.\n\nThis macro takes a list of tuples in the format:\n(Variant, \"extension\", \"mime_type\", CONTENT_TYPE_VARIANT)\n\nFor each tuple it generates:\n- A variant in the FileType enum\n- A variant in the ContentType enum\n- Implementations for:\n  - FileType::to_str() - Converts FileType to extension string\n  - FileType::from_str() - Converts extension string to FileType\n  - From<FileType> for ContentType - Maps FileType to ContentType\n  - ContentType::mime_type() - Gets MIME type for ContentType\n')]).optional(),
   "fullName": zod.string().describe('The full OS name of the file for deduplication'),
   "name": zod.string().describe('The name of the file, without the extension'),
   "relativePath": zod.string().describe('The relative path of the file.\n\nThis is the `webkitRelativePath` with the name of the file stripped at the end.'),
@@ -1764,7 +1921,7 @@ export const getProjectHandlerResponse = zod.object({
   "data": zod.object({
   "projectMetadata": zod.object({
   "createdAt": zod.number().describe('The time the project was created'),
-  "deletedAt": zod.number().nullish().describe('The time the project was deleted'),
+  "deletedAt": zod.number().nullable(),
   "id": zod.string().describe('The id of the project'),
   "name": zod.string().describe('The name of the project'),
   "parentId": zod.string().nullish().describe('The parent project id'),
@@ -1820,7 +1977,7 @@ export const getProjectContentHandlerResponse = zod.object({
   "branchedFromId": zod.string().nullish().describe('The id of the document this document branched from'),
   "branchedFromVersionId": zod.number().nullish().describe('The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'),
   "createdAt": zod.number().describe('The time the document was created'),
-  "deletedAt": zod.number().nullish().describe('The time the document was deleted'),
+  "deletedAt": zod.number().nullable().describe('The time the document was deleted'),
   "documentFamilyId": zod.number().nullish().describe('The id of the document family this document belongs to'),
   "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'),
   "fileType": zod.string().nullish().describe('The file type of the document (e.g. pdf, docx)'),
@@ -1834,7 +1991,7 @@ export const getProjectContentHandlerResponse = zod.object({
   "type": zod.enum(['document'])
 }),zod.object({
   "createdAt": zod.number().describe('The time the chat was created'),
-  "deletedAt": zod.number().nullish().describe('The time the chat was deleted'),
+  "deletedAt": zod.number().nullable().describe('The time the chat was deleted'),
   "id": zod.string().describe('The chat uuid'),
   "isPersistent": zod.boolean(),
   "model": zod.string().nullish().describe('The model used to generate the chat'),
@@ -1846,7 +2003,7 @@ export const getProjectContentHandlerResponse = zod.object({
   "type": zod.enum(['chat'])
 }),zod.object({
   "createdAt": zod.number().describe('The time the project was created'),
-  "deletedAt": zod.number().nullish().describe('The time the project was deleted'),
+  "deletedAt": zod.number().nullable(),
   "id": zod.string().describe('The id of the project'),
   "name": zod.string().describe('The name of the project'),
   "parentId": zod.string().nullish().describe('The parent project id'),
@@ -1919,7 +2076,7 @@ export const recentlyDeletedResponse = zod.object({
   "branchedFromId": zod.string().nullish().describe('The id of the document this document branched from'),
   "branchedFromVersionId": zod.number().nullish().describe('The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'),
   "createdAt": zod.number().describe('The time the document was created'),
-  "deletedAt": zod.number().nullish().describe('The time the document was deleted'),
+  "deletedAt": zod.number().nullable().describe('The time the document was deleted'),
   "documentFamilyId": zod.number().nullish().describe('The id of the document family this document belongs to'),
   "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'),
   "fileType": zod.string().nullish().describe('The file type of the document (e.g. pdf, docx)'),
@@ -1933,7 +2090,7 @@ export const recentlyDeletedResponse = zod.object({
   "type": zod.enum(['document'])
 }),zod.object({
   "createdAt": zod.number().describe('The time the chat was created'),
-  "deletedAt": zod.number().nullish().describe('The time the chat was deleted'),
+  "deletedAt": zod.number().nullable().describe('The time the chat was deleted'),
   "id": zod.string().describe('The chat uuid'),
   "isPersistent": zod.boolean(),
   "model": zod.string().nullish().describe('The model used to generate the chat'),
@@ -1945,7 +2102,7 @@ export const recentlyDeletedResponse = zod.object({
   "type": zod.enum(['chat'])
 }),zod.object({
   "createdAt": zod.number().describe('The time the project was created'),
-  "deletedAt": zod.number().nullish().describe('The time the project was deleted'),
+  "deletedAt": zod.number().nullable(),
   "id": zod.string().describe('The id of the project'),
   "name": zod.string().describe('The name of the project'),
   "parentId": zod.string().nullish().describe('The parent project id'),

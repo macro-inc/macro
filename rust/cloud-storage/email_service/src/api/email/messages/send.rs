@@ -1,6 +1,5 @@
 use crate::api::context::ApiContext;
 use crate::api::email::validation::{self, ValidationError};
-use crate::util::gmail::send;
 use anyhow::Context;
 use axum::extract::State;
 use axum::http::StatusCode;
@@ -9,6 +8,7 @@ use axum::{Extension, Json};
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use email_db_client::messages::insert::insert_message_to_send;
+use email_service::util::gmail::send;
 use model::response::ErrorResponse;
 use model::user::UserContext;
 use models_email::email::service::address::ContactInfo;
@@ -137,7 +137,7 @@ pub async fn send_handler(
     }
 
     // if we are creating a new thread, we need to have a ts for the message in the db less than
-    // the actual sent time. this is so the value gets updated in the webhook when gmail sends us the
+    // the actual sent time. this is so the value gets updated in the inbox sync when gmail sends us the
     // processed message post-send
     let before_send_ts = Utc::now();
 

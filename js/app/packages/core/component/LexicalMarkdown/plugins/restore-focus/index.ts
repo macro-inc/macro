@@ -1,0 +1,1 @@
+export { restoreFocusPlugin } from './restoreFocusPlugin';

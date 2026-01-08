@@ -1,4 +1,0 @@
-name: notification-email-poller
-description: Notification Email Poller
-runtime:
-  name: nodejs

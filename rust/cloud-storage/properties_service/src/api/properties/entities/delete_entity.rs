@@ -62,10 +62,7 @@ pub async fn delete_entity(
 ) -> Result<StatusCode, DeleteEntityErr> {
     tracing::info!("deleting all properties for entity");
 
-    let entity_reference = EntityReference {
-        entity_id: entity_id.clone(),
-        entity_type,
-    };
+    let entity_reference = EntityReference::new(entity_id.clone(), entity_type);
 
     entity_properties_delete::delete_entity(&context.db, &entity_reference)
         .await

@@ -1,3 +1,4 @@
+import type { BlockAlias, BlockName } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { isAccessiblePreviewItem, useItemPreview } from '@core/signal/preview';
 import { matches } from '@core/util/match';
@@ -13,6 +14,7 @@ import ThreeUsersIcon from '@icon/duotone/users-three-duotone.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
 import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
 import type { ItemType } from '@service-storage/client';
+import type { BasicDocumentSubType } from '@service-storage/generated/schemas';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import {
   insertProjectIntoHistory,
@@ -21,12 +23,12 @@ import {
 import { Match, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { useSplitLayout } from '../../app/component/split-layout/layout';
+import { DeprecatedTextButton } from './DeprecatedTextButton';
 import {
   ENTITY_ICON_CONFIGS,
   EntityIcon,
   ICON_SIZE_CLASSES,
 } from './EntityIcon';
-import { TextButton } from './TextButton';
 
 type ItemPreviewProps = {
   itemId: string;
@@ -43,10 +45,13 @@ function useItemPreviewData(props: ItemPreviewProps) {
   const { replaceOrInsertSplit, insertSplit } = useSplitLayout();
 
   function openItem(blockOrFileType: string, id: string, inNewSplit?: boolean) {
-    const targetBlock = fileTypeToBlockName(blockOrFileType);
+    const targetBlock: BlockName | BlockAlias =
+      fileTypeToBlockName(blockOrFileType);
+
     if (!targetBlock) {
       return;
     }
+
     if (inNewSplit) {
       const handle = insertSplit({
         type: targetBlock,
@@ -66,13 +71,14 @@ function useItemPreviewData(props: ItemPreviewProps) {
     type: ItemPreviewProps['itemType'],
     id: string,
     fileType?: FileType,
+    subType?: BasicDocumentSubType,
     altKey?: boolean
   ) {
     if (type === 'project') {
       insertProjectIntoHistory(id);
       await postNewHistoryItem('project', id);
     }
-    const _type = fileType ?? type;
+    const _type = subType ?? fileType ?? type;
     if (!_type) return;
     openItem(_type, id, altKey);
   }
@@ -121,7 +127,7 @@ function useItemPreviewData(props: ItemPreviewProps) {
 
 function ButtonNoAccess() {
   return (
-    <TextButton
+    <DeprecatedTextButton
       theme="base"
       icon={() => <EyeSlash class="text-ink-muted w-4 h-4" />}
       disabled
@@ -143,7 +149,7 @@ function InlineNoAccess() {
 
 function ButtonDeleted() {
   return (
-    <TextButton
+    <DeprecatedTextButton
       theme="base"
       icon={() => <TrashSimple class="text-ink-muted w-4 h-4" />}
       disabled
@@ -165,7 +171,7 @@ function InlineDeleted() {
 
 function ButtonLoading() {
   return (
-    <TextButton
+    <DeprecatedTextButton
       theme="base"
       icon={() => (
         <div class="w-4 h-4 animate-spin">
@@ -212,11 +218,12 @@ export function ItemPreview(props: ItemPreviewProps) {
                       itemData.type,
                       itemData.id,
                       fileType,
+                      subType,
                       e.altKey
                     )
                   );
                 return (
-                  <TextButton
+                  <DeprecatedTextButton
                     theme="base"
                     icon={() => {
                       if (itemData.type === 'channel') {
@@ -274,6 +281,7 @@ export function InlineItemPreview(props: ItemPreviewProps) {
               {(accessibleItem) => {
                 const itemData = accessibleItem();
                 const fileType = itemData.fileType;
+                const subType = itemData.subType;
                 return (
                   <span class="inline-flex items-center gap-1">
                     <span class="w-4 h-4">
@@ -287,7 +295,7 @@ export function InlineItemPreview(props: ItemPreviewProps) {
                         <EntityIcon
                           targetType={
                             itemData.type === 'document'
-                              ? fileType
+                              ? subType || fileType
                               : itemData.type
                           }
                           size="xs"

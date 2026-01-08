@@ -1,5 +1,5 @@
 import { BrightJoins } from '@core/component/BrightJoins';
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { TOKENS } from '@core/hotkey/tokens';
 import CloseIcon from '@icon/regular/x.svg';
@@ -90,9 +90,9 @@ export function SplitDrawer(
     const constrainedSize = getConstrainedSize();
 
     if (isHorizontal()) {
-      return { width: constrainedSize, top: `${contentOffsetTop()}px` };
+      return { width: constrainedSize, top: `${contentOffsetTop() + 1}px` };
     } else {
-      return { height: constrainedSize, top: `${contentOffsetTop()}px` };
+      return { height: constrainedSize, top: `${contentOffsetTop() + 1}px` };
     }
   };
 
@@ -116,11 +116,11 @@ export function SplitDrawer(
     <Show when={drawerControl.isOpen()}>
       <ScopedPortal scope="split">
         <div
-          class="inset-px bg-modal-overlay absolute transition-opacity ease-in-out pattern-edge"
+          class="inset-px bg-modal-overlay absolute"
           style={{ top: `${contentOffsetTop()}px` }}
           onClick={drawerControl.close}
         />
-        <div class={getPositionClasses()} style={getSizeStyle()}>
+        <div class={getPositionClasses()} style={{ ...getSizeStyle() }}>
           <div class={getGradientMaskClasses()} />
           <BrightJoins dots={[true, true, true, true]} />
           <div class="flex items-center justify-start gap-2 shrink-0">
@@ -130,7 +130,7 @@ export function SplitDrawer(
               </h3>
             </Show>
             <div class="grow" />
-            <IconButton
+            <DeprecatedIconButton
               icon={CloseIcon}
               theme="clear"
               size="sm"

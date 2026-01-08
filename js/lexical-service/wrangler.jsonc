@@ -13,11 +13,11 @@
   "services": [
     {
       "binding": "SYNC_SERVICE",
-      "service": "sync-service-prod"
+      "service": "sync-service-prod2"
     }
   ],
   "vars": {
-    "SYNC_SERVICE_URL": "https://sync-service-prod.macroverse.workers.dev",
+    "SYNC_SERVICE_URL": "https://sync-service-prod2.macroverse.workers.dev",
   },
   "env": {
     "local": {
@@ -40,11 +40,11 @@
       "services": [
         {
           "binding": "SYNC_SERVICE",
-          "service": "sync-service-prod"
+          "service": "sync-service-prod2"
         }
       ],
       "vars": {
-        "SYNC_SERVICE_URL": "https://sync-service-prod.macroverse.workers.dev",
+        "SYNC_SERVICE_URL": "https://sync-service-prod2.macroverse.workers.dev",
       }
     }
   },

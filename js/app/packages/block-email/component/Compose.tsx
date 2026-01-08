@@ -7,30 +7,33 @@ import { useSplitLayout } from '@app/component/split-layout/layout';
 import { useHasPaidAccess } from '@core/auth';
 import { CircleSpinner } from '@core/component/CircleSpinner';
 import { ClippedPanel } from '@core/component/ClippedPanel';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { RecipientSelector } from '@core/component/RecipientSelector';
-import { TextButton } from '@core/component/TextButton';
 import { toast } from '@core/component/Toast/Toast';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { useEmailLinks } from '@core/email-link';
+import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import {
   type ContactInfo,
+  tryMacroId,
   useDisplayName,
   type WithCustomUserInput,
 } from '@core/user';
-import { isErr } from '@core/util/maybeResult';
 import Caution from '@icon/regular/warning.svg';
+import { useEmailLinksQuery } from '@queries/email/link';
 import { useSendMessageMutation } from '@queries/email/thread';
-import { emailClient } from '@service-email/client';
 import {
   createMemo,
-  createResource,
   createSignal,
   Match,
+  onMount,
   Show,
   Suspense,
   Switch,
 } from 'solid-js';
+import { beveledCorners } from '../../block-theme/signals/themeSignals';
 import { ComposeEmailInput, type ComposeInputData } from './ComposeEmailInput';
 
 type EmailComposeErrors =
@@ -46,29 +49,55 @@ class EmailComposeError {
   ) {}
 }
 
+type EmailComposeElementRefs = {
+  directRecipientsSelector: HTMLElement | undefined;
+  ccRecipientsSelector: HTMLElement | undefined;
+  bccRecipientsSelector: HTMLElement | undefined;
+  containerRef: HTMLElement | undefined;
+  subjectInput: HTMLElement | undefined;
+  messageInput: HTMLElement | undefined;
+};
+
 export function EmailCompose() {
   const hasPaidAccess = useHasPaidAccess();
   const { showPaywall } = usePaywallState();
 
   const [subject, setSubject] = createSignal<string>('');
 
-  const [linkError, setLinkError] = createSignal<string | null>(null);
+  const emailLinksQuery = useEmailLinksQuery();
 
-  const hasLinkError = createMemo(() => linkError() != null);
+  const [refs, setRefs] = createSignal<EmailComposeElementRefs>({
+    directRecipientsSelector: undefined,
+    ccRecipientsSelector: undefined,
+    bccRecipientsSelector: undefined,
+    containerRef: undefined,
+    subjectInput: undefined,
+    messageInput: undefined,
+  });
 
-  const [link] = createResource(async () => {
-    const maybeLinks = await emailClient.getLinks();
-    if (isErr(maybeLinks)) {
-      setLinkError('Could not find linked email account.');
-      return;
+  const registerRef = (name: keyof EmailComposeElementRefs) => {
+    return (el: HTMLElement) => {
+      setRefs((p) => ({ ...p, [name]: el }));
+    };
+  };
+
+  const [attachComposeHotkeys, composeHotkeyScope] =
+    useHotkeyDOMScope('compose-email');
+
+  const link = createMemo(() => {
+    const data = emailLinksQuery.data;
+    if (data && data.links.length > 0) {
+      return data.links[0];
     }
-    const [, { links }] = maybeLinks;
-    const [link] = links;
-    if (link) {
-      return link;
-    } else {
-      setLinkError('Could not find linked email account.');
-    }
+    return undefined;
+  });
+
+  const hasLinkError = createMemo(() => {
+    if (emailLinksQuery.isPending) return false;
+    return (
+      emailLinksQuery.isError ||
+      (emailLinksQuery.data && emailLinksQuery.data.links.length === 0)
+    );
   });
 
   const { users: destinationOptions } = useCombinedRecipients();
@@ -85,6 +114,93 @@ export function EmailCompose() {
   const [showCc, setShowCc] = createSignal(false);
   const [showBcc, setShowBcc] = createSignal(false);
 
+  onMount(() => {
+    const container = refs().containerRef;
+    if (!container) return;
+    attachComposeHotkeys(container);
+  });
+
+  registerHotkey({
+    hotkey: 'shift+cmd+o',
+    scopeId: composeHotkeyScope,
+    description: 'Edit "To" recipients',
+    keyDownHandler: () => {
+      refs()?.directRecipientsSelector?.focus();
+      return true;
+    },
+    runWithInputFocused: true,
+    hotkeyToken: TOKENS.email.compose.edit.recipients,
+    shouldReturnFocusOnClose: false,
+  });
+
+  registerHotkey({
+    hotkey: 'shift+cmd+c',
+    scopeId: composeHotkeyScope,
+    description: 'Edit "Cc" recipients',
+    keyDownHandler: () => {
+      const visible = showCc();
+      if (!visible) {
+        setShowCc(true);
+        queueMicrotask(() => refs()?.ccRecipientsSelector?.focus());
+        return true;
+      }
+
+      refs()?.ccRecipientsSelector?.focus();
+
+      return true;
+    },
+    runWithInputFocused: true,
+    hotkeyToken: TOKENS.email.compose.edit.ccRecipients,
+    shouldReturnFocusOnClose: false,
+  });
+
+  registerHotkey({
+    hotkey: 'shift+cmd+b',
+    scopeId: composeHotkeyScope,
+    description: 'Edit "Bcc" recipients',
+    keyDownHandler: () => {
+      const visible = showBcc();
+      if (!visible) {
+        setShowBcc(true);
+        queueMicrotask(() => refs()?.bccRecipientsSelector?.focus());
+        return true;
+      }
+
+      refs()?.bccRecipientsSelector?.focus();
+
+      return true;
+    },
+    runWithInputFocused: true,
+    hotkeyToken: TOKENS.email.compose.edit.bccRecipients,
+    shouldReturnFocusOnClose: false,
+  });
+
+  registerHotkey({
+    hotkey: 'shift+cmd+s',
+    scopeId: composeHotkeyScope,
+    description: 'Edit subject',
+    keyDownHandler: () => {
+      refs()?.subjectInput?.focus();
+      return true;
+    },
+    runWithInputFocused: true,
+    hotkeyToken: TOKENS.email.compose.edit.subject,
+    shouldReturnFocusOnClose: false,
+  });
+
+  registerHotkey({
+    hotkey: 'shift+cmd+m',
+    scopeId: composeHotkeyScope,
+    description: 'Edit message',
+    keyDownHandler: () => {
+      refs()?.messageInput?.focus();
+      return true;
+    },
+    runWithInputFocused: true,
+    hotkeyToken: TOKENS.email.compose.edit.message,
+    shouldReturnFocusOnClose: false,
+  });
+
   const [triedToSubmit, _setTriedToSubmit] = createSignal(false);
 
   const { connect: connectEmail } = useEmailLinks();
@@ -96,7 +212,7 @@ export function EmailCompose() {
     } else if (recipients.length === 1) {
       const recipientName =
         recipients[0].kind === 'user'
-          ? useDisplayName(recipients[0].data.id)[0]()
+          ? useDisplayName(tryMacroId(recipients[0].data.id))[0]()
           : recipients[0].data.email;
       return recipientName ? `Email to ${recipientName}` : 'Draft email';
     } else {
@@ -104,7 +220,7 @@ export function EmailCompose() {
         .slice(0, 2)
         .map((r) => {
           if (r.kind === 'user') {
-            return useDisplayName(r.data.id)[0]();
+            return useDisplayName(tryMacroId(r.data.id))[0]();
           }
           return r.data.email || 'Unknown';
         })
@@ -138,7 +254,7 @@ export function EmailCompose() {
   const onSubmit = (data: ComposeInputData) => {
     setValidationError(null);
 
-    const _link = link();
+    const currentLink = link();
 
     if (!selectedRecipients().length) {
       setValidationError(
@@ -164,7 +280,7 @@ export function EmailCompose() {
       return;
     }
 
-    if (!_link) {
+    if (!currentLink) {
       setValidationError(
         new EmailComposeError('no_link', 'Unable to find linked email account')
       );
@@ -173,7 +289,7 @@ export function EmailCompose() {
 
     sendMutation.mutate({
       message: {
-        link_id: _link.id,
+        link_id: currentLink.id,
         to: convertToContactInfoArray(selectedRecipients()),
         cc:
           ccRecipients().length > 0
@@ -209,7 +325,10 @@ export function EmailCompose() {
           ]}
         />
       </SplitHeaderLeft>
-      <div class="relative flex flex-col w-full h-full panel min-h-0 overflow-hidden">
+      <div
+        ref={registerRef('containerRef')}
+        class="relative flex flex-col w-full h-full panel min-h-0 overflow-hidden"
+      >
         <Switch>
           <Match when={hasLinkError()}>
             <div class="w-full bg-alert-bg border-b border-t border-alert/20 text-alert-ink p-2">
@@ -219,7 +338,7 @@ export function EmailCompose() {
                   You have not connected an email account.
                 </span>
                 <span class="grow" />
-                <TextButton
+                <DeprecatedTextButton
                   theme="base"
                   text="Connect Email"
                   onClick={connectEmail}
@@ -233,7 +352,7 @@ export function EmailCompose() {
                 <Caution class="size-4" />
                 <span class="text-sm">You must upgrade to send email.</span>
                 <span class="grow" />
-                <TextButton
+                <DeprecatedTextButton
                   theme="base"
                   text="Upgrade"
                   onClick={() => {
@@ -246,12 +365,12 @@ export function EmailCompose() {
         </Switch>
 
         <div
-          class="macro-message-width mx-auto w-full max-h-full my-12 overflow-hidden"
+          class="macro-message-width mx-auto w-full max-h-full my-12 overflow-hidden px-4"
           classList={{
             'pointer-events-none opacity-50': hasLinkError(),
           }}
         >
-          <ClippedPanel tl tr>
+          <ClippedPanel tl={!beveledCorners()}>
             <div
               class="w-full p-4 bg-input max-h-full overflow-hidden flex flex-col min-h-0"
               classList={{
@@ -309,6 +428,7 @@ export function EmailCompose() {
                     </div>
                     <div class="flex-1">
                       <RecipientSelector<'user' | 'contact'>
+                        inputRef={registerRef('directRecipientsSelector')}
                         options={destinationOptions}
                         selectedOptions={selectedRecipients}
                         setSelectedOptions={setSelectedRecipients}
@@ -336,6 +456,7 @@ export function EmailCompose() {
                       </div>
                       <div class="flex-1">
                         <RecipientSelector<'user' | 'contact'>
+                          inputRef={registerRef('ccRecipientsSelector')}
                           options={destinationOptions}
                           selectedOptions={ccRecipients}
                           setSelectedOptions={setCcRecipients}
@@ -356,6 +477,7 @@ export function EmailCompose() {
                       </div>
                       <div class="flex-1">
                         <RecipientSelector<'user' | 'contact'>
+                          inputRef={registerRef('bccRecipientsSelector')}
                           options={destinationOptions}
                           selectedOptions={bccRecipients}
                           setSelectedOptions={setBccRecipients}
@@ -376,6 +498,7 @@ export function EmailCompose() {
 
                     <div class="flex-1">
                       <input
+                        ref={registerRef('subjectInput')}
                         type="text"
                         value={subject()}
                         placeholder="Subject"
@@ -405,6 +528,7 @@ export function EmailCompose() {
                 }}
               >
                 <ComposeEmailInput
+                  inputRef={registerRef('messageInput')}
                   onSubmit={onSubmit}
                   isSubmitting={sendMutation.isPending}
                   disabled={hasLinkError()}

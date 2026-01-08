@@ -4,6 +4,10 @@ use crate::{
     service::s3::S3,
 };
 use anyhow::Context;
+use comms::{
+    domain::service::ChannelServiceImpl,
+    outbound::{http::user_repo::UserRepoImpl, postgres::comms_repo::PgCommsRepo},
+};
 use comms_service_client::CommsServiceClient;
 use config::{Config, Environment};
 use connection_gateway_client::client::ConnectionGatewayClient;
@@ -16,6 +20,9 @@ use macro_entrypoint::MacroEntrypoint;
 use macro_env_var::env_var;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use macro_redis_cluster_client::Redis;
+use properties::{
+    NotificationServiceImpl, PermissionServiceImpl, PropertiesPgRepo, PropertiesServiceImpl,
+};
 use secretsmanager_client::SecretManager;
 use soup::{
     domain::service::SoupImpl, inbound::axum_router::SoupRouterState,
@@ -182,17 +189,56 @@ async fn main() -> anyhow::Result<()> {
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
 
+    let auth_service_secret_key = match config.environment {
+        Environment::Local => config
+            .vars
+            .authentication_service_secret_key
+            .as_ref()
+            .to_string(),
+        _ => secretsmanager_client
+            .get_secret_value(&config.vars.authentication_service_secret_key)
+            .await
+            .context("unable to get auth service secret")?
+            .to_string(),
+    };
+
     let frecency_service = FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone()));
     let email_service =
         EmailServiceImpl::new(EmailPgRepo::new(db.clone()), frecency_service.clone());
     let system_properties_service =
         SystemPropertiesServiceImpl::new(PgSystemPropertiesRepository::new(db.clone()));
+    let permission_checker = PermissionServiceImpl::new(
+        db.clone(),
+        CommsServiceClient::new(
+            dss_auth_key.as_ref().to_string(),
+            config.vars.comms_service_url.as_ref().to_string(),
+        ),
+    );
+    let notification_service = NotificationServiceImpl::new(Arc::new(macro_notify_client.clone()));
+    let properties_service = PropertiesServiceImpl::new(
+        PropertiesPgRepo::new(db.clone()),
+        Some(permission_checker),
+        Some(notification_service),
+    );
     let api_context = ApiContext {
         soup_router_state: SoupRouterState::new(
             SoupImpl::new(
                 PgSoupRepo::new(db.clone()),
                 frecency_service,
                 email_service.clone(),
+                ChannelServiceImpl::new(
+                    PgCommsRepo { pool: db.clone() },
+                    UserRepoImpl::new(
+                        auth_service_secret_key,
+                        config
+                            .vars
+                            .authentication_service_url
+                            .as_ref()
+                            .parse()
+                            .context("AUTHENTICATION_SERVICE_URL must be a valid url")?,
+                    ),
+                    FrecencyPgStorage::new(db.clone()),
+                ),
             ),
             email_service,
         ),
@@ -213,6 +259,7 @@ async fn main() -> anyhow::Result<()> {
         conn_gateway_client: Arc::new(conn_gateway_client),
         sync_service_client: Arc::new(sync_service_client),
         system_properties_service: Arc::new(system_properties_service),
+        properties_service: Arc::new(properties_service),
         config: Arc::new(config),
         jwt_validation_args,
         dss_auth_key,

@@ -1,3 +1,5 @@
+import type { MutationOptions } from '@tanstack/solid-query';
+
 /**
  * Standard mutation callback types matching TanStack Query's mutation options.
  * Use this to ensure consistent callback signatures across mutations.
@@ -7,25 +9,10 @@ export type MutationCallbacks<
   TError = Error,
   TVariables = void,
   TContext = unknown,
-> = {
-  onMutate?: (variables: TVariables) => Promise<TContext> | TContext;
-  onSuccess?: (
-    data: TData,
-    variables: TVariables,
-    context: TContext
-  ) => void | Promise<unknown>;
-  onError?: (
-    error: TError,
-    variables: TVariables,
-    context: TContext | undefined
-  ) => void | Promise<unknown>;
-  onSettled?: (
-    data: TData | undefined,
-    error: TError | null,
-    variables: TVariables,
-    context: TContext | undefined
-  ) => void | Promise<unknown>;
-};
+> = Pick<
+  MutationOptions<TData, TError, TVariables, TContext>,
+  'onMutate' | 'onError' | 'onSuccess' | 'onSettled'
+>;
 
 /**
  * Helper to merge user-provided callbacks with default mutation behavior.
@@ -46,22 +33,22 @@ export function withCallbacks<
   if (!overrides) return defaults;
 
   return {
-    onMutate: async (variables) => {
-      const defaultContext = await defaults.onMutate?.(variables);
-      const overrideContext = await overrides.onMutate?.(variables);
+    onMutate: async (...args) => {
+      const defaultContext = await defaults.onMutate?.(...args);
+      const overrideContext = await overrides.onMutate?.(...args);
       return (overrideContext ?? defaultContext) as TContext;
     },
-    onSuccess: async (data, variables, context) => {
-      await defaults.onSuccess?.(data, variables, context);
-      await overrides.onSuccess?.(data, variables, context);
+    onSuccess: async (...args) => {
+      await defaults.onSuccess?.(...args);
+      await overrides.onSuccess?.(...args);
     },
-    onError: async (error, variables, context) => {
-      await defaults.onError?.(error, variables, context);
-      await overrides.onError?.(error, variables, context);
+    onError: async (...args) => {
+      await defaults.onError?.(...args);
+      await overrides.onError?.(...args);
     },
-    onSettled: async (data, error, variables, context) => {
-      await defaults.onSettled?.(data, error, variables, context);
-      await overrides.onSettled?.(data, error, variables, context);
+    onSettled: async (...args) => {
+      await defaults.onSettled?.(...args);
+      await overrides.onSettled?.(...args);
     },
   };
 }

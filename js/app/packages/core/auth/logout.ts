@@ -2,7 +2,7 @@ import { withAnalytics } from '@coparse/analytics';
 import { useAuthUserInfo } from '@core/auth';
 import { useOrganization } from '@core/user';
 import { authServiceClient } from '@service-auth/client';
-import { gqlFetch, useUserInfo } from '@service-gql/client';
+import { useUserInfo } from '@service-gql/client';
 import { createCallback } from '@solid-primitives/rootless';
 
 const { track, TrackingEvents } = withAnalytics();
@@ -30,31 +30,23 @@ export function useLogout() {
     mutateUserInfo(() => [
       null,
       {
-        userId: undefined,
-        authenticated: false,
-        hasTrialed: false,
-        group: undefined,
+        id: '',
+        permissions: [],
+        email: '',
+        name: null,
+        licenseStatus: 'inactive',
+        tutorialComplete: false,
+        group: null,
         hasChromeExt: false,
+        authenticated: false,
+        userId: '',
+        hasTrialed: false,
       },
     ]);
     mutateOrganization(() => ({
       organizationId: undefined,
       organizationName: undefined,
     }));
-
-    // **DO NOT REMOVE**
-    // Due to legacy auth and the fact we still use macro-gql we need to have this in our logout call.
-    // This ensures we delete any legacy tokens that are in the browser.
-    try {
-      const query = `
-      mutation logout {
-        logout
-      }
-    `;
-      await gqlFetch(query);
-    } catch (_) {
-      // We don't care if this fails though.
-    }
 
     await authServiceClient.logout();
 

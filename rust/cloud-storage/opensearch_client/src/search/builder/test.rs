@@ -8,6 +8,78 @@ impl SearchQueryConfig for TestSearchConfig {
     const USER_ID_KEY: &'static str = "test_user_id";
     const TITLE_KEY: &'static str = "test_title";
     const ENTITY_INDEX: SearchEntityType = SearchEntityType::Documents;
+
+    fn append_owner_highlights<'a>(
+        highlight: opensearch_query_builder::Highlight<'a>,
+    ) -> opensearch_query_builder::Highlight<'a> {
+        highlight.field("test_user_id", create_highlight_field("plain", 1))
+    }
+}
+
+#[test]
+fn test_build_filter_query() -> anyhow::Result<()> {
+    // Test ids only
+    let ids = vec!["id1".to_string(), "id2".to_string()];
+    let builder = SearchQueryBuilder::<TestSearchConfig>::new(vec!["test".to_string()])
+        .user_id("user123")
+        .ids(ids.clone())
+        .ids_only(true);
+
+    let result = builder.build_filter_query(TestSearchConfig::USER_ID_KEY)?;
+
+    let expected = serde_json::json!({
+        "terms": {
+            "entity_id": ["id1", "id2"]
+        }
+    });
+
+    assert_eq!(result.to_json(), expected);
+
+    // Test !ids_only with no ids
+    let builder = SearchQueryBuilder::<TestSearchConfig>::new(vec!["test".to_string()])
+        .user_id("user123")
+        .ids(vec![])
+        .ids_only(false);
+
+    let result = builder.build_filter_query(TestSearchConfig::USER_ID_KEY)?;
+
+    let expected = serde_json::json!({
+        "term": {
+            "test_user_id": "user123"
+        }
+    });
+
+    assert_eq!(result.to_json(), expected);
+
+    // Test !ids_only with ids
+    let builder = SearchQueryBuilder::<TestSearchConfig>::new(vec!["test".to_string()])
+        .user_id("user123")
+        .ids(ids.clone())
+        .ids_only(false);
+
+    let result = builder.build_filter_query(TestSearchConfig::USER_ID_KEY)?;
+
+    let expected = serde_json::json!({
+        "bool": {
+            "minimum_should_match": 1,
+            "should": [
+                {
+                    "terms": {
+                        "entity_id": ["id1", "id2"]
+                    }
+                },
+                {
+                    "term": {
+                        "test_user_id": "user123"
+                    }
+                }
+            ]
+        }
+    });
+
+    assert_eq!(result.to_json(), expected);
+
+    Ok(())
 }
 
 #[test]
@@ -33,7 +105,7 @@ fn test_build_search_request() -> anyhow::Result<()> {
             "field": "entity_id"
         },
         "sort": TestSearchConfig::default_sort_types().iter().map(|s| s.to_json()).collect::<Vec<_>>(),
-        "highlight": TestSearchConfig::default_highlight().to_json(),
+        "highlight": TestSearchConfig::append_owner_highlights(TestSearchConfig::default_highlight()).to_json(),
         "query": {
             "bool": {}
         }
@@ -66,14 +138,7 @@ fn test_build_search_request() -> anyhow::Result<()> {
         "collapse": {
             "field": "entity_id"
         },
-        "sort": [
-            {
-                "_score": "desc"
-            },
-            {
-                "entity_id": "asc"
-            }
-        ],
+       "sort": TestSearchConfig::default_sort_types().iter().map(|s| s.to_json()).collect::<Vec<_>>(),
         "highlight": {
             "require_field_match": false,
             "fields": {
@@ -84,6 +149,12 @@ fn test_build_search_request() -> anyhow::Result<()> {
                     "post_tags": ["</macro_em>"],
                 },
                 "test_title": {
+                    "type": "plain",
+                    "number_of_fragments": 1,
+                    "pre_tags": ["<macro_em>"],
+                    "post_tags": ["</macro_em>"],
+                },
+                "test_user_id": {
                     "type": "plain",
                     "number_of_fragments": 1,
                     "pre_tags": ["<macro_em>"],
@@ -135,14 +206,7 @@ fn test_build_search_request() -> anyhow::Result<()> {
         "collapse": {
             "field": "entity_id"
         },
-        "sort": [
-            {
-                "_score": "desc"
-            },
-            {
-                "entity_id": "asc"
-            }
-        ],
+        "sort": TestSearchConfig::default_sort_types().iter().map(|s| s.to_json()).collect::<Vec<_>>(),
         "highlight": {
             "require_field_match": false,
             "fields": {
@@ -157,6 +221,12 @@ fn test_build_search_request() -> anyhow::Result<()> {
                     "number_of_fragments": 1,
                     "pre_tags": ["<macro_em>"],
                     "post_tags": ["</macro_em>"],
+                },
+                "test_user_id": {
+                    "type": "plain",
+                    "number_of_fragments": 1,
+                    "pre_tags": ["<macro_em>"],
+                    "post_tags": ["</macro_em>"],
                 }
             }
         },
@@ -166,6 +236,48 @@ fn test_build_search_request() -> anyhow::Result<()> {
     });
 
     assert_eq!(result.to_json(), expected);
+
+    Ok(())
+}
+
+#[test]
+fn test_build_contentquery_empty_ids() -> anyhow::Result<()> {
+    // Empty ids ok with ids only false
+    let term = vec!["test".to_string()];
+    let ids: Vec<String> = vec![];
+    let user_id = "user123";
+    let page = 1;
+    let page_size = 20;
+
+    let builder = SearchQueryBuilder::<TestSearchConfig>::new(term.clone())
+        .match_type("exact")
+        .page_size(page_size)
+        .page(page)
+        .user_id(user_id)
+        .search_on(SearchOn::Content)
+        .ids(ids.clone())
+        .ids_only(false);
+
+    let result = builder.build_content_bool_query();
+
+    assert!(result.is_ok());
+
+    // Empty ids fails with ids only true
+    let builder = SearchQueryBuilder::<TestSearchConfig>::new(term.clone())
+        .match_type("exact")
+        .page_size(page_size)
+        .page(page)
+        .user_id(user_id)
+        .search_on(SearchOn::Content)
+        .ids(ids.clone())
+        .ids_only(true);
+
+    let error = builder.build_content_bool_query().err().unwrap();
+
+    assert_eq!(
+        OpensearchClientError::EmptyIdsWithIdsOnly(SearchEntityType::Documents),
+        error
+    );
 
     Ok(())
 }
@@ -186,31 +298,45 @@ fn test_build_bool_query() -> anyhow::Result<()> {
         .search_on(SearchOn::Content)
         .ids(ids.clone());
 
-    let query = builder.build_bool_query(builder.build_content_and_name_bool_query()?)?;
+    let query = builder.build_content_bool_query()?;
 
     let expected = serde_json::json!({
         "bool": {
             "must": [
-                {
-                    "match_phrase": {
-                        "content": "test"
-                    }
-                },
-                {"term": {"_index": "documents"}},
-            ],
-            "should": [
-                {
-                    "terms": {
-                        "entity_id": ["id1", "id2"]
-                    }
-                },
-                {
-                    "term": {
-                        "test_user_id": "user123"
-                    }
+            {
+                "bool": {
+                    "minimum_should_match": 1,
+                    "should": [
+                        {
+                            "wildcard": {
+                                "test_user_id": {
+                                    "value": "macro|test*",
+                                    "case_insensitive": true,
+                                    "boost": 5000.0
+                                }
+                            }
+                        },
+                        {
+                            "match_phrase": {
+                                "content": "test"
+                            }
+                        },
+                    ],
                 }
+            },
             ],
-            "minimum_should_match": 1,
+            "filter": [
+              {
+              "bool": {
+              "minimum_should_match": 1,
+              "should": [
+                {"terms": {"entity_id": ["id1", "id2"]}},
+                {"term": {"test_user_id": "user123"}}
+              ]
+            }
+          },
+          {"term": {"_index": "documents"}}
+        ]
         }
     });
 
@@ -225,101 +351,98 @@ fn test_build_bool_query() -> anyhow::Result<()> {
         .search_on(SearchOn::Content)
         .ids(ids.clone());
 
-    let query = builder.build_bool_query(builder.build_content_and_name_bool_query()?)?;
+    let query = builder.build_content_bool_query()?;
 
     let expected = serde_json::json!({
         "bool": {
             "must": [
-                {
-                    "match_phrase_prefix": {
-                        "content": {
-                            "query": "test",
-                        }
-                    },
-                },
-                {"term": {"_index": "documents"}},
+            {
+                "bool": {
+                    "minimum_should_match": 1,
+                    "should": [
+                        {
+                            "wildcard": {
+                                "test_user_id": {
+                                    "value": "macro|test*",
+                                    "case_insensitive": true,
+                                    "boost": 5000.0
+                                }
+                            }
+                        },
+                        {
+                            "match_phrase_prefix": {
+                                "content": {
+                                    "query": "test",
+                                }
+                            }
+                        },
+                    ],
+                }
+            },
             ],
-            "should": [
-                {
-                    "terms": {
-                        "entity_id": ["id1", "id2"]
-                    }
-                },
-            ],
-            "minimum_should_match": 1,
-        }
+            "filter": [
+                {"terms": {"entity_id": ["id1", "id2"]}},
+                {"term": {"_index": "documents"}}
+        ]
+    }
     });
 
     assert_eq!(query.build().to_json(), expected);
 
-    // let builder = SearchQueryBuilder::<TestSearchConfig>::new(terms)
-    //     .match_type("partial")
-    //     .page_size(page_size)
-    //     .page(page)
-    //     .user_id(user_id)
-    //     .ids_only(true)
-    //     .search_on(SearchOn::NameContent)
-    //     .ids(ids.clone());
-    //
-    // let query = builder.build_bool_query(builder.build_content_and_name_bool_query()?)?;
-    //
-    // let expected = serde_json::json!({
-    //     "bool": {
-    //         "must": [
-    //             {
-    //                 "bool": {
-    //                     "minimum_should_match": 1,
-    //                     "should": [
-    //                         {
-    //                             "match_phrase_prefix": {
-    //                                 "test_title": {
-    //                                     "boost": 1000.0,
-    //                                     "query": "test"
-    //                                 }
-    //                             }
-    //                         },
-    //                         {
-    //                             "match_phrase_prefix": {
-    //                                 "content": {
-    //                                     "boost": 900.0,
-    //                                     "query": "test"
-    //                                 }
-    //                             }
-    //                         },
-    //                         {
-    //                             "match": {
-    //                                 "test_title": {
-    //                                     "boost": 0.1,
-    //                                     "minimum_should_match": "80%",
-    //                                     "query": "test"
-    //                                 }
-    //                             }
-    //                         },
-    //                         {
-    //                             "match": {
-    //                                 "content": {
-    //                                     "boost": 0.09,
-    //                                     "minimum_should_match": "1",
-    //                                     "query": "test"
-    //                                 }
-    //                             }
-    //                         }
-    //                     ]
-    //                 }
-    //             }
-    //         ],
-    //         "should": [
-    //             {
-    //                 "terms": {
-    //                     "entity_id": ["id1", "id2"]
-    //                 }
-    //             },
-    //         ],
-    //         "minimum_should_match": 1,
-    //     }
-    // });
-    //
-    // assert_eq!(query.build().to_json(), expected);
+    let builder = SearchQueryBuilder::<TestSearchConfig>::new(terms)
+        .match_type("partial")
+        .page_size(page_size)
+        .page(page)
+        .user_id(user_id)
+        .ids_only(true)
+        .search_on(SearchOn::NameContent)
+        .ids(ids.clone());
+
+    let query = builder.build_content_bool_query()?;
+
+    let expected = serde_json::json!({
+      "bool": {
+          "must": [
+            {
+              "bool": {
+                "minimum_should_match": 1,
+                "should": [
+                  {
+                    "wildcard": {
+                      "test_user_id": {
+                        "case_insensitive": true,
+                        "value": "macro|test*",
+                        "boost": 5000.0
+                      }
+                    }
+                  },
+                  {
+                    "match_phrase_prefix": {
+                      "content": {
+                        "query": "test"
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+          ],
+          "filter": [
+            {
+              "terms": {
+                "entity_id": ["id1", "id2"]
+              }
+            },
+            {
+                "term": {
+                    "_index": "documents",
+                }
+            }
+          ]
+        }
+    });
+
+    assert_eq!(query.build().to_json(), expected);
 
     Ok(())
 }

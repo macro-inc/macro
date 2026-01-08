@@ -1,12 +1,5 @@
-import { TextButton } from '@core/component/TextButton';
-import {
-  createEffect,
-  createSignal,
-  For,
-  onCleanup,
-  onMount,
-  Show,
-} from 'solid-js';
+import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
+import { createMemo, onCleanup, onMount } from 'solid-js';
 import {
   commandCategoryIndex,
   searchCategories,
@@ -15,8 +8,35 @@ import {
 import { konsoleOpen } from './state';
 
 export function KonsoleFilter() {
-  const [containerRef, setContainerRef] = createSignal<HTMLDivElement>();
-  const buttonRefs: HTMLDivElement[] = [];
+  const visibleCategories = createMemo(() => {
+    return searchCategories
+      .listVisible()
+      .map((category, index) => {
+        if (searchCategories.isCategoryActive(index)) {
+          return category.name;
+        }
+        return null;
+      })
+      .filter(Boolean) as string[];
+  });
+
+  const selectedCategoryName = createMemo(() => {
+    const categories = searchCategories.listVisible();
+    const index = commandCategoryIndex();
+    if (index >= 0 && index < categories.length) {
+      return categories[index].name;
+    }
+    return categories[0]?.name || '';
+  });
+
+  const handleCategoryChange = (categoryName: string) => {
+    const index = searchCategories
+      .listVisible()
+      .findIndex((cat) => cat.name === categoryName);
+    if (index !== -1) {
+      setCommandCategoryIndex(index);
+    }
+  };
 
   onMount(() => {
     const down = (e: KeyboardEvent) => {
@@ -48,62 +68,14 @@ export function KonsoleFilter() {
     });
   });
 
-  // Scroll selected category into view when selection changes
-  createEffect(() => {
-    const container = containerRef();
-    const selectedIndex = commandCategoryIndex();
-
-    if (container && buttonRefs[selectedIndex]) {
-      const selectedButtonDiv = buttonRefs[selectedIndex];
-
-      // Use requestAnimationFrame to ensure DOM updates are complete
-      requestAnimationFrame(() => {
-        const containerRect = container.getBoundingClientRect();
-        const buttonRect = selectedButtonDiv.getBoundingClientRect();
-
-        const isFullyVisible =
-          buttonRect.left >= containerRect.left &&
-          buttonRect.right <= containerRect.right;
-
-        if (!isFullyVisible) {
-          // For rightmost items like "Companies", scroll to show them fully
-          // Add some padding so the button isn't right at the edge
-          const scrollLeft =
-            selectedButtonDiv.offsetLeft -
-            container.clientWidth +
-            selectedButtonDiv.offsetWidth +
-            8;
-          container.scrollTo({
-            left: Math.max(0, scrollLeft),
-            behavior: 'smooth',
-          });
-        }
-      });
-    }
-  });
-
   return (
-    <div
-      ref={setContainerRef}
-      class="flex pb-4 overflow-x-auto scrollbar-hidden bg-transparent"
-    >
-      <For each={searchCategories.listVisible()}>
-        {(item, index) => (
-          <Show when={searchCategories.isCategoryActive(index())}>
-            <TextButton
-              ref={(el) => {
-                if (el) buttonRefs[index()] = el;
-              }}
-              theme={
-                index() === commandCategoryIndex() ? 'accentFill' : 'clear'
-              }
-              text={item.name}
-              onMouseDown={() => setCommandCategoryIndex(index())}
-              class="flex-shrink-0 h-auto *:h-7 *:px-2"
-            />
-          </Show>
-        )}
-      </For>
+    <div class="flex items-center bg-transparent border-b px-2 border-edge-muted/50 h-[40px]">
+      <SegmentedControl
+        onChange={handleCategoryChange}
+        value={selectedCategoryName()}
+        list={visibleCategories()}
+        size="SM"
+      />
     </div>
   );
 }

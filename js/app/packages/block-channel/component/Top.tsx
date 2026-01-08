@@ -3,12 +3,11 @@ import {
   SplitHeaderLeft,
   SplitHeaderRight,
 } from '@app/component/split-layout/components/SplitHeader';
-import { StaticSplitLabel } from '@app/component/split-layout/components/SplitLabel';
+import { SplitLabel } from '@app/component/split-layout/components/SplitLabel';
 import { SplitToolbarRight } from '@app/component/split-layout/components/SplitToolbar';
-import { channelStore } from '@block-channel/signal/channel';
 import { useBlockId } from '@core/block';
 import { useChannelName } from '@core/component/ChannelsProvider';
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import { NotificationsModal } from '@core/component/NotificationsModal';
 import { toast } from '@core/component/Toast/Toast';
@@ -16,6 +15,7 @@ import { UserIcon } from '@core/component/UserIcon';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import HashIcon from '@icon/regular/hash.svg';
 import LinkIcon from '@icon/regular/link.svg';
+import { useChannelQuery } from '@queries/channel/channel';
 import type { ChannelParticipant } from '@service-comms/generated/models/channelParticipant';
 import type { ChannelType } from '@service-comms/generated/models/channelType';
 import { useUserId } from '@service-gql/client';
@@ -48,11 +48,12 @@ function TopIcon(props: TopIconProps) {
   );
 }
 
-export function Top() {
-  const channel = channelStore.get;
-  const channelType = () => channel?.channel?.channel_type ?? 'private';
-  const participantCount = () => channel?.participants.length ?? 0;
-  const participants = () => channel?.participants ?? [];
+export function Top(props: { channelID: string }) {
+  const channel = useChannelQuery(() => props.channelID);
+
+  const channelType = () => channel.data?.channel?.channel_type ?? 'private';
+  const participantCount = () => channel.data?.participants.length ?? 0;
+  const participants = () => channel.data?.participants ?? [];
   const blockId = useBlockId();
   const notificationSource = useGlobalNotificationSource();
 
@@ -68,23 +69,31 @@ export function Top() {
     );
     toast.success('Link copied to clipboard');
   }
-  const channelName = useChannelName(
+  const _channelName = useChannelName(
     blockId,
-    channel?.channel?.name ?? 'New Channel'
+    channel.data?.channel?.name ?? 'New Channel'
   );
+
+  const channelName = () => {
+    return channel.data?.channel?.name ?? _channelName() ?? 'New Channel';
+  };
 
   return (
     <>
       <SplitHeaderLeft>
-        <StaticSplitLabel
-          label={channelName() ?? 'New Channel'}
-          icon={
+        <div class="h-full my-auto flex gap-2 justify-center items-center">
+          <div class="z-3 relative flex items-center gap-2 max-w-full h-full shrink">
             <TopIcon
               channelType={channelType()}
               participants={participants()}
             />
-          }
-        />
+            <SplitLabel
+              label={channelName()}
+              id={channel.data?.channel.id}
+              itemType="channel"
+            />
+          </div>
+        </div>
       </SplitHeaderLeft>
       <SplitHeaderRight>
         <BlockLiveIndicators />
@@ -92,7 +101,7 @@ export function Top() {
       <SplitToolbarRight>
         <div class="p-1 flex flex-row gap-1 items-center h-full">
           <Show when={channelType() === 'public'}>
-            <IconButton
+            <DeprecatedIconButton
               theme="clear"
               size="sm"
               tooltip={{ label: 'Copy Link to Public Channel' }}

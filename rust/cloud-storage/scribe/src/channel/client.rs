@@ -1,7 +1,7 @@
 use ai_format::{Indent, InsightContextLog};
 use anyhow::Error;
 use comms_service_client::CommsServiceClient;
-use models_comms::ChannelMetadata;
+use models_comms::channel::ChannelMetadata;
 use std::fmt::Debug;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -39,10 +39,19 @@ impl ChannelClient {
                 .await
                 .map_err(Error::from)?,
         };
-        Ok(ChannelMetadata::from((
-            response.channel_name,
-            response.channel_type,
-        )))
+        Ok(ChannelMetadata {
+            name: response.channel_name,
+            channel_type: match response.channel_type {
+                model::comms::ChannelType::Public => models_comms::channel::ChannelType::Public,
+                model::comms::ChannelType::Organization => {
+                    models_comms::channel::ChannelType::Organization
+                }
+                model::comms::ChannelType::Private => models_comms::channel::ChannelType::Private,
+                model::comms::ChannelType::DirectMessage => {
+                    models_comms::channel::ChannelType::DirectMessage
+                }
+            },
+        })
     }
 
     /// Get channel transcript (message history) by channel ID
@@ -102,7 +111,7 @@ impl ChannelClient {
                     name: "message".to_string(),
                     metadata: vec![
                         ("message_id".to_string(), msg.id.to_string()),
-                        ("sender_id".to_string(), msg.sender_id.clone()),
+                        ("sender_id".to_string(), msg.sender_id.to_string()),
                         ("created_at".to_string(), msg.created_at.to_rfc3339()),
                     ],
                     content: msg.content.clone(),

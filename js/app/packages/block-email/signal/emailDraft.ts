@@ -22,7 +22,11 @@ export async function saveEmailDraft(
 export async function deleteEmailDraft(draftId: string): Promise<boolean> {
   const deleteRes = await emailClient.deleteDraft({ id: draftId });
   if (isErr(deleteRes)) {
-    logger.error(new Error('Failed to delete draft', { cause: deleteRes[0] }));
+    logger.error(
+      new Error('Failed to delete draft', {
+        cause: new Error(`Failed to delete draft: ${deleteRes[0]}`),
+      })
+    );
     return false;
   }
   return true;

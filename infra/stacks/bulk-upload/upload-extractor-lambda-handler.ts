@@ -1,7 +1,7 @@
-import { Lambda } from '@lambda';
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '@shared';
+import { Lambda } from '../../packages/lambda';
+import { CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '../../packages/shared';
 
 export const UPLOAD_EXTRACTOR_LAMBDA_TIMEOUT_SECONDS = 300;
 const LAMBDA_BASE_NAME = 'upload_extractor_lambda_handler';

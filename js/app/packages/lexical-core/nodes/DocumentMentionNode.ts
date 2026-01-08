@@ -1,6 +1,7 @@
 import {
   $applyNodeReplacement,
   DecoratorNode,
+  type DOMConversion,
   type DOMConversionMap,
   type EditorConfig,
   type EditorThemeClasses,
@@ -143,12 +144,8 @@ export class DocumentMentionNode extends DecoratorNode<
     return false;
   }
 
-  static importDOM(): DOMConversionMap<HTMLSpanElement> | null {
+  static importDOM(): DOMConversionMap<HTMLElement> | null {
     const convert = (domNode: HTMLElement) => {
-      if (!domNode.hasAttribute('data-document-mention')) {
-        return null;
-      }
-
       const documentId = domNode.getAttribute('data-document-id');
       const documentName = domNode.getAttribute('data-document-name') || '';
       const blockName = domNode.getAttribute('data-block-name') as string;
@@ -175,10 +172,15 @@ export class DocumentMentionNode extends DecoratorNode<
       return null;
     };
 
+    const wrapInCheck = (conversion: DOMConversion) => {
+      return (node: HTMLElement) =>
+        node.hasAttribute('data-document-mention') ? conversion : null;
+    };
+
     return {
-      span: () => ({ conversion: convert, priority: 1 }),
-      div: () => ({ conversion: convert, priority: 1 }),
-      a: () => ({ conversion: convert, priority: 1 }),
+      span: wrapInCheck({ conversion: convert, priority: 1 }),
+      div: wrapInCheck({ conversion: convert, priority: 1 }),
+      a: wrapInCheck({ conversion: convert, priority: 1 }),
     };
   }
 

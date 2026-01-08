@@ -1,14 +1,16 @@
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
+import { setHotkeyRoot, useSubscribeToKeypress } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { withAnalytics } from '@coparse/analytics';
 import { useIsAuthenticated } from '@core/auth';
 import { ChannelsContextProvider } from '@core/component/ChannelsProvider';
-import { TextButton } from '@core/component/TextButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { toast } from '@core/component/Toast/Toast';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import { WebsocketDebugger } from '@core/component/WebsocketDebugger';
 import {
   ENABLE_WEBSOCKET_DEBUGGER,
+  ENABLE_WHICHKEY_OVERLAY,
   PROD_MODE_ENV,
 } from '@core/constant/featureFlags';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
@@ -16,8 +18,9 @@ import { createBlockOrchestrator } from '@core/orchestrator';
 import { formatTabTitle, tabTitleSignal } from '@core/signal/tabTitle';
 import { licenseChannel } from '@core/util/licenseUpdateBroadcastChannel';
 import { isErr } from '@core/util/maybeResult';
+import { isTauri } from '@core/util/platform';
 import { transformShortIdInUrlPathname } from '@core/util/url';
-import { isTauri, MaybeTauriProvider } from '@macro/tauri';
+import { MaybeTauriProvider } from '@macro/tauri';
 import { Provider as EntityProvider } from '@macro-entity';
 import {
   createNotificationSource,
@@ -26,6 +29,7 @@ import {
 } from '@notifications';
 import { maybeHandlePlatformNotification } from '@notifications/notification-platform';
 import { setUser, useObserveRouting } from '@observability';
+import { fetchAndCacheHistory } from '@queries/history/history';
 import { ws as connectionGatewayWebsocket } from '@service-connection/websocket';
 import { gqlServiceClient } from '@service-gql/client';
 import { MetaProvider, Title } from '@solidjs/meta';
@@ -48,7 +52,6 @@ import {
   onMount,
   type ParentProps,
   Show,
-  Suspense,
 } from 'solid-js';
 import { currentThemeId } from '../../block-theme/signals/themeSignals';
 import {
@@ -66,7 +69,10 @@ import { GlobalAppStateProvider } from './GlobalAppState';
 import { Layout } from './Layout';
 import MacroJump from './MacroJump';
 import Onboarding from './Onboarding';
+import { SuspenseContextComp } from './SuspenseContext';
 import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
+import Visor from './Visor';
+import { setOpenWhichKey, WhichKey } from './WhichKey';
 
 const { track, identify, TrackingEvents } = withAnalytics();
 
@@ -130,6 +136,10 @@ const rootPreload: RoutePreloadFunc = async (args) => {
     if (PROD_MODE_ENV) {
       identify(id, { email, os, hasChromeExt });
     }
+
+    fetchAndCacheHistory().catch(() => {
+      // Non-blocking - command menu will still work without prefetch
+    });
   }
 };
 
@@ -158,7 +168,7 @@ function BasePathComponent() {
   }
 
   const authenticated = useIsAuthenticated();
-  if (!authenticated()) return <Navigate href="/onboarding" />;
+  if (!authenticated()) return <Navigate href="/signup" />;
 
   // Preserve existing query parameters when redirecting
   const params = new URLSearchParams(window.location.search);
@@ -214,7 +224,7 @@ const ROUTES: RouteDefinition[] = [
       return (
         <div class="h-full overflow-y-hidden">
           <div class="relative flex flex-row items-center pt-4 h-full">
-            <TextButton
+            <DeprecatedTextButton
               theme="base"
               text="Close"
               onClick={() => {
@@ -231,7 +241,7 @@ const ROUTES: RouteDefinition[] = [
   {
     path: '/login',
     component: () => (
-      <div class="flex w-full h-full overflow-y-hidden">
+      <div class="flex w-full h-dvh overflow-y-hidden">
         <Login />
       </div>
     ),
@@ -239,7 +249,7 @@ const ROUTES: RouteDefinition[] = [
   {
     path: '/onboarding',
     component: () => (
-      <div class="flex *:flex-1 w-full h-full overflow-y-hidden">
+      <div class="flex *:flex-1 w-full h-dvh overflow-y-hidden">
         <Onboarding />
       </div>
     ),
@@ -294,7 +304,14 @@ const clearBodyInlineStyleColor = () => {
 
 export function Root() {
   const isAuthenticated = useIsAuthenticated();
-  useHotKeyRoot();
+  setHotkeyRoot(useHotKeyRoot());
+
+  useSubscribeToKeypress((context) => {
+    if (ENABLE_WHICHKEY_OVERLAY && context.commandScopeActivated) {
+      setOpenWhichKey(true);
+    }
+  });
+
   useSoundHover();
 
   clearBodyInlineStyleColor();
@@ -345,6 +362,25 @@ export function Root() {
 
   const [tabInfo] = tabTitleSignal;
   const tabTitle = () => formatTabTitle(tabInfo());
+  const routerBase = isTauri() ? '/' : '/app';
+
+  let runRootWarningLog = false;
+  const RootSuspenseFallback = () => {
+    const runWarningLog = () => {
+      if (!runRootWarningLog) {
+        setTimeout(() => {
+          runRootWarningLog = true;
+        });
+        return;
+      }
+
+      console.warn('Root Suspsense Triggered');
+    };
+
+    runWarningLog();
+
+    return '';
+  };
 
   return (
     <MaybeTauriProvider>
@@ -354,12 +390,16 @@ export function Root() {
             <ChannelsContextProvider>
               <Title>{tabTitle()}</Title>
               <MacroJump />
-              <Suspense fallback={''}>
+              <Visor />
+              <Show when={ENABLE_WHICHKEY_OVERLAY}>
+                <WhichKey />
+              </Show>
+              <SuspenseContextComp fallback={<RootSuspenseFallback />}>
                 <IsomorphicRouter
                   transformUrl={transformShortIdInUrlPathname}
                   root={Layout}
                   rootPreload={rootPreload}
-                  base="/app"
+                  base={routerBase}
                 >
                   {{
                     path: '/',
@@ -367,7 +407,7 @@ export function Root() {
                     children: ROUTES,
                   }}
                 </IsomorphicRouter>
-              </Suspense>
+              </SuspenseContextComp>
               <ToastRegion />
               <Show when={ENABLE_WEBSOCKET_DEBUGGER}>
                 <WebsocketDebugger />

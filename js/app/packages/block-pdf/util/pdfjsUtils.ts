@@ -232,8 +232,8 @@ function rangeToString(range: Range): string {
   else return contents.textContent ?? '';
 }
 
-function textNodeRects(_range: Range) {
-  const range = _range.cloneRange();
+function textNodeRects(inputRange: Range) {
+  const range = inputRange.cloneRange();
   const iter = document.createNodeIterator(
     range.commonAncestorContainer,
     NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT,

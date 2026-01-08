@@ -20,104 +20,164 @@ fn test_build_search_request() -> anyhow::Result<()> {
     let result = builder.build_search_request()?;
 
     let expected = serde_json::json!({
-        "from": 20,
-        "size": 20,
-        "collapse": {
-            "field": "entity_id"
-        },
-        "sort": EmailSearchConfig::default_sort_types().iter().map(|s| s.to_json()).collect::<Vec<_>>(),
-        "highlight": EmailSearchConfig::default_highlight().to_json(),
-        "query": {
+      "from": 20,
+      "size": 20,
+      "collapse": {
+          "field": "entity_id"
+      },
+      "sort": EmailSearchConfig::default_sort_types().iter().map(|s| s.to_json()).collect::<Vec<_>>(),
+      "highlight": EmailSearchConfig::append_owner_highlights(EmailSearchConfig::default_highlight()).to_json(),
+       "query": {
+      "bool": {
+        "filter": [
+          {
             "bool": {
-                "minimum_should_match": 1,
-                "must": [
-                    {
-                        "match_phrase": {
-                            "content": "test"
-                        }
-                    },
-                    {"term": {"_index": "emails"}},
-                    {
-                        "terms": {
-                            "link_id": ["link1", "link2"]
-                        }
-                    },
-                    {
-                        "bool": {
-                            "minimum_should_match": 1,
-                            "should": [
-                                {
-                                    "wildcard": {
-                                        "sender": {
-                                            "case_insensitive": true,
-                                            "value": "*sender@example.com*"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    {
-                        "bool": {
-                            "minimum_should_match": 1,
-                            "should": [
-                                {
-                                    "wildcard": {
-                                        "cc": {
-                                            "case_insensitive": true,
-                                            "value": "*cc@example.com*"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    {
-                        "bool": {
-                            "minimum_should_match": 1,
-                            "should": [
-                                {
-                                    "wildcard": {
-                                        "bcc": {
-                                            "case_insensitive": true,
-                                            "value": "*bcc@example.com*"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    {
-                        "bool": {
-                            "minimum_should_match": 1,
-                            "should": [
-                                {
-                                    "wildcard": {
-                                        "recipients": {
-                                            "case_insensitive": true,
-                                            "value": "*recipient@example.com*"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                ],
-                "should": [
-                    {
-                        "terms": {
-                            "entity_id": ["thread1", "thread2"]
-                        }
-                    },
-                    {
-                        "term": {
-                            "user_id": "user123"
-                        }
-                    }
-                ]
+              "minimum_should_match": 1,
+              "should": [
+                {
+                  "terms": {
+                    "entity_id": ["thread1", "thread2"]
+                  }
+                },
+                {
+                  "term": {
+                    "user_id": "user123"
+                  }
+                }
+              ]
             }
-        }
-    });
+          },
+          {
+            "term": {
+              "_index": "emails"
+            }
+          },
+          {
+            "terms": {
+              "link_id": ["link1", "link2"]
+            }
+          },
+          {
+            "bool": {
+              "minimum_should_match": 1,
+              "should": [
+                {
+                  "wildcard": {
+                    "sender": {
+                      "case_insensitive": true,
+                      "value": "*sender@example.com*"
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "bool": {
+              "minimum_should_match": 1,
+              "should": [
+                {
+                  "wildcard": {
+                    "cc": {
+                      "case_insensitive": true,
+                      "value": "*cc@example.com*"
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "bool": {
+              "minimum_should_match": 1,
+              "should": [
+                {
+                  "wildcard": {
+                    "bcc": {
+                      "case_insensitive": true,
+                      "value": "*bcc@example.com*"
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "bool": {
+              "minimum_should_match": 1,
+              "should": [
+                {
+                  "wildcard": {
+                    "recipients": {
+                      "case_insensitive": true,
+                      "value": "*recipient@example.com*"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "must": [
+          {
+            "bool": {
+              "minimum_should_match": 1,
+              "should": [
+                {
+                  "wildcard": {
+                    "sender": {
+                      "boost": 5000.0,
+                      "case_insensitive": true,
+                      "value": "test*"
+                    }
+                  }
+                },
+                {
+                  "wildcard": {
+                    "cc": {
+                      "boost": 5000.0,
+                      "case_insensitive": true,
+                      "value": "test*"
+                    }
+                  }
+                },
+                {
+                  "wildcard": {
+                    "bcc": {
+                      "boost": 5000.0,
+                      "case_insensitive": true,
+                      "value": "test*"
+                    }
+                  }
+                },
+                {
+                  "wildcard": {
+                    "recipients": {
+                      "boost": 5000.0,
+                      "case_insensitive": true,
+                      "value": "test*"
+                    }
+                  }
+                },
+                {
+                  "match_phrase": {
+                    "content": "test"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "must_not": [
+          {
+            "term": {
+              "labels": "TRASH"
+            }
+          }
+        ]
+      }
+    },
+        });
 
     assert_eq!(result.to_json(), expected);
 

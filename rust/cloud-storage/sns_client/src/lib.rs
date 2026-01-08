@@ -1,10 +1,315 @@
-use std::collections::HashMap;
-
-use aws_sdk_sns::operation::publish::PublishOutput;
+use aws_sdk_sns::{operation::publish::PublishOutput, types::MessageAttributeValue};
+use serde::{Serialize, Serializer};
+use std::{borrow::Cow, collections::HashMap};
 
 #[derive(Clone, Debug)]
 pub struct SNS {
     inner: aws_sdk_sns::Client,
+}
+
+#[derive(Serialize, Debug, Default)]
+#[serde(rename_all = "kebab-case")]
+pub struct Aps {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub alert: Option<Alert>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub badge: Option<u32>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sound: Option<Sound>,
+
+    /// Set to 1 for background/silent notifications
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content_available: Option<u8>,
+
+    /// Set to 1 to allow Notification Service Extension to modify
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mutable_content: Option<u8>,
+
+    /// Category identifier for actionable notifications
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub category: Option<String>,
+
+    /// Identifier for grouping notifications
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thread_id: Option<String>,
+
+    /// Relevance score for notification summary (0.0 to 1.0)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub relevance_score: Option<f64>,
+
+    /// Interruption level: passive, active, time-sensitive, critical
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub interruption_level: Option<InterruptionLevel>,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(untagged)]
+pub enum Alert {
+    Simple(String),
+    Dictionary(AlertDictionary),
+}
+
+#[derive(Serialize, Debug, Default)]
+#[serde(rename_all = "kebab-case")]
+pub struct AlertDictionary {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subtitle: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub body: Option<String>,
+
+    /// Localization key for title
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title_loc_key: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title_loc_args: Option<Vec<String>>,
+
+    /// Localization key for body
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub loc_key: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub loc_args: Option<Vec<String>>,
+
+    /// Custom launch image filename
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub launch_image: Option<String>,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(untagged)]
+pub enum Sound {
+    Default(String), // Usually "default"
+    Critical(CriticalSound),
+}
+
+#[derive(Serialize, Debug)]
+pub struct CriticalSound {
+    pub critical: u8, // 1 for critical
+    pub name: String,
+    pub volume: f64, // 0.0 to 1.0
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "kebab-case")]
+pub enum InterruptionLevel {
+    Passive,
+    Active,
+    TimeSensitive,
+    Critical,
+}
+
+// Your updated struct
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct APNSPushNotification<T> {
+    pub aps: Aps,
+
+    #[serde(flatten)]
+    pub push_notification_data: T,
+}
+
+impl<T> APNSPushNotification<T> {
+    pub fn map<F, U>(self, cb: F) -> APNSPushNotification<U>
+    where
+        F: FnOnce(T) -> U,
+    {
+        let APNSPushNotification {
+            aps,
+            push_notification_data,
+        } = self;
+        APNSPushNotification {
+            aps,
+            push_notification_data: cb(push_notification_data),
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct GCMPushNotification<T> {
+    fcm_v1_message: FCMMessage<T>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct FCMMessage<T> {
+    android: AndroidData,
+    data: T,
+}
+
+impl<T> FCMMessage<T> {
+    /// temporary method since android is currently out of scope for mobile
+    /// this just instantiates a majority blank notif
+    pub fn new_temporary_empty(data: T) -> Self {
+        FCMMessage {
+            android: AndroidData {
+                notification: "Temporary placeholder".to_string(),
+                priority: AndroidNotifPrio::Normal,
+                collapse_key: String::new(),
+            },
+            data,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+enum AndroidNotifPrio {
+    Normal,
+    #[expect(dead_code)]
+    High,
+}
+
+#[derive(Debug, Serialize)]
+pub struct AndroidData {
+    notification: String,
+    priority: AndroidNotifPrio,
+    collapse_key: String,
+}
+
+#[derive(Debug)]
+pub enum SnsTarget<T> {
+    Ios(Box<APNSPushNotification<T>>),
+    Android(FCMMessage<T>),
+}
+
+impl<T> SnsTarget<T> {
+    fn default_string(&self) -> String {
+        match self {
+            SnsTarget::Ios(apnspush_notification) => apnspush_notification
+                .aps
+                .alert
+                .as_ref()
+                .and_then(|a| match a {
+                    Alert::Simple(s) => Some(s.clone()),
+                    Alert::Dictionary(alert_dictionary) => alert_dictionary.title.clone(),
+                })
+                .unwrap_or(String::new()),
+            SnsTarget::Android(fcmmessage) => fcmmessage.android.notification.clone(),
+        }
+    }
+    fn as_payload(&self) -> SnsPayload<'_, T> {
+        match self {
+            SnsTarget::Ios(apnspush_notification) => SnsPayload::Ios {
+                default: self.default_string(),
+                apns: apnspush_notification,
+                apns_sandbox: apnspush_notification,
+            },
+            SnsTarget::Android(fcmmessage) => SnsPayload::Android {
+                default: self.default_string(),
+                gcm: fcmmessage,
+            },
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+#[serde(bound = "T: Serialize", untagged)]
+pub enum SnsPayload<'a, T> {
+    Ios {
+        default: String,
+        #[serde(rename = "APNS", serialize_with = "stringified_json")]
+        apns: &'a APNSPushNotification<T>,
+        #[serde(rename = "APNS_SANDBOX", serialize_with = "stringified_json")]
+        apns_sandbox: &'a APNSPushNotification<T>,
+    },
+    Android {
+        default: String,
+        #[serde(rename = "GCM", serialize_with = "stringified_json")]
+        gcm: &'a FCMMessage<T>,
+    },
+}
+
+fn stringified_json<T, S>(val: &T, ser: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+    T: Serialize,
+{
+    let s = serde_json::to_string(val).expect("json serialize cant fail");
+    ser.serialize_str(&s)
+}
+
+impl<'a, T> SnsPayload<'a, T>
+where
+    T: Serialize,
+{
+    fn as_json(&self) -> Result<String, serde_json::Error> {
+        serde_json::to_string(self)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum PushType {
+    Background,
+    Alert,
+}
+
+impl PushType {
+    fn as_static_str(&self) -> &'static str {
+        match self {
+            PushType::Background => "background",
+            PushType::Alert => "alert",
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct NotifCollapseKey<'a>(pub Cow<'a, str>);
+
+impl<'a> NotifCollapseKey<'a> {
+    pub fn new_str(s: &'a str) -> Self {
+        NotifCollapseKey(Cow::Borrowed(s))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct MessageAttributes<'a> {
+    pub push_type: PushType,
+    pub apns_bundle_id: &'static str,
+    pub collapse_key: NotifCollapseKey<'a>,
+}
+
+impl<'a> MessageAttributes<'a> {
+    pub fn into_json(self) -> HashMap<String, MessageAttributeValue> {
+        HashMap::from([
+            (
+                "AWS.SNS.MOBILE.APNS.TOPIC".to_string(),
+                MessageAttributeValue::builder()
+                    .data_type("String")
+                    .string_value(self.apns_bundle_id)
+                    .build()
+                    .unwrap(),
+            ),
+            (
+                "AWS.SNS.MOBILE.APNS.PUSH_TYPE".to_string(),
+                MessageAttributeValue::builder()
+                    .data_type("String")
+                    .string_value(self.push_type.as_static_str())
+                    .build()
+                    .unwrap(),
+            ),
+            (
+                "AWS.SNS.MOBILE.APNS.PRIORITY".to_string(),
+                MessageAttributeValue::builder()
+                    .data_type("String")
+                    .string_value("5") // 5 is normal, 10 is high
+                    .build()
+                    .unwrap(),
+            ),
+            (
+                "AWS.SNS.MOBILE.APNS.COLLAPSE_ID".to_string(),
+                MessageAttributeValue::builder()
+                    .data_type("String")
+                    .string_value(self.collapse_key.0.into_owned())
+                    .build()
+                    .unwrap(),
+            ),
+        ])
+    }
 }
 
 impl SNS {
@@ -100,19 +405,23 @@ impl SNS {
     ///
     /// * `Ok(())` if the notification was sent successfully
     /// * `Err` if there was an error sending the notification
-    pub async fn push_notification(
+    #[tracing::instrument(err, skip(self))]
+    pub async fn push_notification<T>(
         &self,
         endpoint_arn: &str,
-        message_json: &str,
-        message_attributes: Option<HashMap<String, aws_sdk_sns::types::MessageAttributeValue>>,
-    ) -> anyhow::Result<PublishOutput> {
+        message_json: &SnsTarget<T>,
+        message_attributes: MessageAttributes<'_>,
+    ) -> anyhow::Result<PublishOutput>
+    where
+        T: Serialize + std::fmt::Debug,
+    {
         let result = self
             .inner
             .publish()
             .target_arn(endpoint_arn)
             .message_structure("json")
-            .message(message_json)
-            .set_message_attributes(message_attributes)
+            .message(message_json.as_payload().as_json().unwrap())
+            .set_message_attributes(Some(message_attributes.into_json()))
             .send()
             .await?;
 

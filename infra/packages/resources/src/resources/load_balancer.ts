@@ -1,7 +1,7 @@
 import * as aws from '@pulumi/aws';
 import type * as pulumi from '@pulumi/pulumi';
 import type { Output } from '@pulumi/pulumi';
-import { MACRO_SUBDOMAIN_CERT, stack } from '@shared';
+import { MACRO_SUBDOMAIN_CERT, stack } from '../../../shared';
 
 export function serviceLoadBalancer(
   parent: pulumi.ComponentResource | undefined,

@@ -49,14 +49,13 @@ pub static MACRO_DOCUMENT_STORAGE_SERVICE_AUTH_HEADER_KEY: &str =
     "x-document-storage-service-auth-key";
 pub static MACRO_INTERNAL_USER_ID_HEADER_KEY: &str = "x-document-storage-service-user-id";
 
+pub const MACRO_INTERNAL_USER_ID: &str = "macro|INTERNAL@macro.com";
 // permission based constants
 pub static MACRO_READ_PROFESSIONAL_PERMISSION_ID: &str = "read:professional_features";
 
 pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
-    let cors = macro_cors::cors_layer();
-
     let app = api_router(state.clone())
-        .layer(cors.clone())
+        .merge(health::router())
         .layer(
             ServiceBuilder::new()
                 .layer(TraceLayer::new_for_http())
@@ -65,10 +64,11 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
                         service_name: VersionedApiServiceName::DocumentStorageService,
                     },
                     validate_api_version,
-                )),
+                ))
+                .layer(macro_cors::cors_layer())
+                .layer(CompressionLayer::new().gzip(true).br(true)),
         )
         // The health router is attached here so we don't attach the logging middleware to it
-        .merge(health::router().layer(cors))
         .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()));
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", state.config.port))

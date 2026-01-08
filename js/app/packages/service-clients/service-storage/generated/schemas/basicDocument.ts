@@ -24,7 +24,7 @@ the file type */
   /** The time the document was created */
   createdAt: number;
   /** The time the document was deleted */
-  deletedAt?: BasicDocumentDeletedAt;
+  deletedAt: BasicDocumentDeletedAt;
   /** The id of the document family this document belongs to */
   documentFamilyId?: BasicDocumentDocumentFamilyId;
   /** The version of the document

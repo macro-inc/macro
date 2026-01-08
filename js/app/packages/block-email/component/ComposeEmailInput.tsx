@@ -1,11 +1,22 @@
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { FormatRibbon } from '@block-channel/component/FormatRibbon';
+import { MacroSignatureButton } from '@block-email/component/MacroSignatureButton';
+import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
+import { useHasPaidAccess } from '@core/auth';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
-import { IconButton } from '@core/component/IconButton';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
-import { fileDrop } from '@core/directive/fileDrop';
+import {
+  createFilesReadyHandler,
+  getDragDropPosition,
+} from '@core/component/LexicalMarkdown/utils/fileUploadUtils';
+import { fileFolderDrop } from '@core/directive/fileFolderDrop';
+import { handleFileFolderDrop } from '@core/util/upload';
 import TextAa from '@icon/regular/text-aa.svg';
-import type { DocumentMentionInfo } from '@lexical-core';
+import {
+  $appendWatermarkNodeToLast,
+  type DocumentMentionInfo,
+} from '@lexical-core';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import ArrowFatLineUp from '@phosphor-icons/core/fill/arrow-fat-line-up-fill.svg?component-solid';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
@@ -25,7 +36,6 @@ import {
 } from 'lexical';
 import { createSignal, onMount, Show } from 'solid-js';
 import { type FocusableElement, tabbable } from 'tabbable';
-import { handleFileUpload } from '../util/handleFileUpload';
 import { makeAttachmentPublic } from '../util/makeAttachmentPublic';
 import {
   appendItemsAsMacroMentions,
@@ -33,7 +43,7 @@ import {
 } from '../util/prepareEmailBody';
 import { AttachMenu } from './AttachMenu';
 
-false && fileDrop;
+false && fileFolderDrop;
 
 export type ComposeInputData = {
   body: {
@@ -44,12 +54,15 @@ export type ComposeInputData = {
 };
 
 type ComposeEmailInputProps = {
+  inputRef?: (el: HTMLDivElement) => void;
   onSubmit: (data: ComposeInputData) => void;
   disabled?: boolean;
   isSubmitting?: boolean;
 };
 
 export function ComposeEmailInput(props: ComposeEmailInputProps) {
+  const hasPaidAccess = useHasPaidAccess();
+
   const [editor, setEditor] = createSignal<LexicalEditor>();
 
   const [isDragging, setIsDragging] = createSignal<boolean>();
@@ -100,22 +113,31 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
   }
 
   function onAttachDocuments(items: DocumentMentionInfo[]) {
-    console.log('ComposeEmailInput: onAttachDocuments called with', items);
-    console.log('ComposeEmailInput: Current editor state:', editor());
     appendItemsAsMacroMentions(editor(), items);
     items.forEach((item) => {
       makeAttachmentPublic(item.documentId);
     });
-    console.log('ComposeEmailInput: Document attachments processed');
   }
 
   // Set up hotkey scope for the compose message component
   const [attachComposeHotkeys, composeHotkeyScope] =
     useHotkeyDOMScope('compose-message');
-  let composeContainerRef: HTMLDivElement | undefined;
+  const [composeContainerRef, setComposeContainerRef] = createSignal<
+    HTMLElement | undefined
+  >();
 
   async function handleSend() {
-    const prepared = prepareEmailBody(editor());
+    const currentEditor = editor();
+
+    // We handle cleaning up the signature after we've sent the request because
+    // otherwise the `bodyMacro` signal would update after the clean up call and
+    // not contain the signature in the request data
+    const cleanupWatermark = $appendWatermarkNodeToLast(
+      currentEditor,
+      !hasPaidAccess() ? MACRO_EMAIL_SIGNATURE : undefined
+    );
+
+    const prepared = prepareEmailBody(currentEditor, undefined);
     if (!prepared) return;
 
     const bodyMacro = content();
@@ -127,37 +149,38 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
         raw: bodyMacro,
       },
     });
+
+    cleanupWatermark();
   }
 
   onMount(() => {
-    if (composeContainerRef) {
-      attachComposeHotkeys(composeContainerRef);
+    const container = composeContainerRef();
+    if (!container) return;
+    attachComposeHotkeys(container);
+  });
 
-      registerHotkey({
-        hotkey: 'cmd+enter',
-        scopeId: composeHotkeyScope,
-        description: 'Send email',
-        keyDownHandler: () => {
-          handleSend();
-          return true;
-        },
-        runWithInputFocused: true,
-        hotkeyToken: 'email.send',
-        displayPriority: 10,
-      });
-    }
+  registerHotkey({
+    hotkey: 'cmd+enter',
+    scopeId: composeHotkeyScope,
+    description: 'Send email',
+    keyDownHandler: () => {
+      handleSend();
+      return true;
+    },
+    runWithInputFocused: true,
+    hotkeyToken: 'email.send',
+    displayPriority: 10,
   });
 
   return (
     <div
-      ref={(el) => {
-        composeContainerRef = el;
-      }}
+      ref={setComposeContainerRef}
       class="relative flex flex-col flex-1 items-center justify-between min-h-0"
     >
-      <div class="w-full h-full flex flex-col overflow-hidden min-h-0">
+      <div class="w-full h-full flex flex-col min-h-0">
         <Show when={showFormatRibbon()}>
           <FormatRibbon
+            class="-ml-3"
             state={structuredClone(defaultSelectionData)}
             inlineFormat={(format: TextFormatType) => {
               editor()?.dispatchCommand(FORMAT_TEXT_COMMAND, format);
@@ -174,17 +197,30 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
           onclick={() => {
             editor()?.focus();
           }}
-          use:fileDrop={{
+          use:fileFolderDrop={{
             onDragStart: () => setIsDragging(true),
             onDragEnd: () => setIsDragging(false),
-            onDrop: async (files) => {
-              handleFileUpload(files, setIsPendingUpload, (items) => {
-                setIsDragging(false);
-                appendItemsAsMacroMentions(editor(), items);
-                items.forEach((item) => {
-                  makeAttachmentPublic(item.documentId);
-                });
-              });
+            onDrop: (fileEntries, folderEntries, e) => {
+              const editor_ = editor();
+              if (!editor_ || !e) return;
+              handleFileFolderDrop(
+                fileEntries,
+                folderEntries,
+                createFilesReadyHandler(
+                  editor_,
+                  undefined,
+                  undefined,
+                  () => getDragDropPosition(editor_, e, true),
+                  (uploadedItemIds) => {
+                    setIsDragging(false);
+                    uploadedItemIds.forEach((itemId) => {
+                      makeAttachmentPublic(itemId);
+                    });
+                    // TODO: schedule draft save, when implemented
+                  },
+                  { width: 542, height: 542 }
+                )
+              );
             },
           }}
         >
@@ -192,10 +228,12 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
             <FileDropOverlay>Drop file(s) to attach</FileDropOverlay>
           </div>
           <MarkdownTextarea
+            domRef={props.inputRef}
             captureEditor={setEditor}
             class="text-sm break-words text-ink"
             editable={() => !props.disabled}
             placeholder="Use `@` to reference files"
+            watermark={!hasPaidAccess() ? <MacroSignatureButton /> : undefined}
             onChange={setContent}
             onFocusLeaveStart={(e) => {
               e.preventDefault();
@@ -206,13 +244,33 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
               focusSibling('next');
             }}
             portalScope="local"
+            onPasteFilesAndDirs={(files, directories) => {
+              const editor_ = editor();
+              if (!editor_) return;
+              handleFileFolderDrop(
+                files,
+                directories,
+                createFilesReadyHandler(
+                  editor_,
+                  undefined,
+                  undefined,
+                  undefined,
+                  (uploadedItemIds) => {
+                    uploadedItemIds.forEach((itemId) => {
+                      makeAttachmentPublic(itemId);
+                    });
+                  },
+                  { width: 542, height: 542 }
+                )
+              );
+            }}
           />
         </div>
       </div>
       <div class="flex flex-row w-full h-8 justify-between items-center space-x-2 allow-css-brackets mt-2">
         <div class="flex flex-row items-center gap-2">
           <div class="relative" ref={attachButtonRef}>
-            <IconButton
+            <DeprecatedIconButton
               theme="base"
               icon={PaperclipIcon}
               tooltip={{ label: 'Attach' }}
@@ -229,7 +287,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
               setIsPending={setIsPendingUpload}
             />
           </div>
-          <IconButton
+          <DeprecatedIconButton
             theme="base"
             icon={TextAa}
             disabled={props.disabled}

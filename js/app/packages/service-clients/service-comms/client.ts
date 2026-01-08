@@ -10,7 +10,11 @@ import {
   type ObjectLike,
 } from '@core/util/maybeResult';
 import type { SafeFetchInit } from '@core/util/safeFetch';
-import type { GetMentionsResponse } from './generated/models';
+import type {
+  ApiActivity,
+  ApiChannelWithLatest,
+  GetMentionsResponse,
+} from './generated/models';
 import type { Activity } from './generated/models/activity';
 import type { AddParticipantsRequest } from './generated/models/addParticipantsRequest';
 import type { CreateChannelRequest } from './generated/models/createChannelRequest';
@@ -18,12 +22,10 @@ import type { CreateChannelResponse } from './generated/models/createChannelResp
 import type { CreateEntityMentionRequest } from './generated/models/createEntityMentionRequest';
 import type { CreateEntityMentionResponse } from './generated/models/createEntityMentionResponse';
 import type { DeleteEntityMentionResponse } from './generated/models/deleteEntityMentionResponse';
-import type { GetActivityResponse } from './generated/models/getActivityResponse';
 import type { GetAttachmentReferencesResponse } from './generated/models/getAttachmentReferencesResponse';
 import type { GetBatchChannelPreviewRequest } from './generated/models/getBatchChannelPreviewRequest';
 import type { GetBatchChannelPreviewResponse } from './generated/models/getBatchChannelPreviewResponse';
 import type { GetChannelResponse } from './generated/models/getChannelResponse';
-import type { GetChannelsResponse } from './generated/models/getChannelsResponse';
 import type { GetOrCreateDmRequest } from './generated/models/getOrCreateDmRequest';
 import type { GetOrCreateDmResponse } from './generated/models/getOrCreateDmResponse';
 import type { GetOrCreatePrivateRequest } from './generated/models/getOrCreatePrivateRequest';
@@ -76,7 +78,7 @@ export const commsServiceClient = {
   },
   async getChannels() {
     return mapOk(
-      await commsFetch<GetChannelsResponse>(`/channels`, {
+      await commsFetch<ApiChannelWithLatest[]>(`/channels`, {
         method: 'GET',
       }),
       (result) => result
@@ -162,7 +164,7 @@ export const commsServiceClient = {
   },
   async getActivity() {
     return mapOk(
-      await commsFetch<GetActivityResponse>(`/activity`, {
+      await commsFetch<ApiActivity[]>(`/activity`, {
         method: 'GET',
       }),
       (result) => result

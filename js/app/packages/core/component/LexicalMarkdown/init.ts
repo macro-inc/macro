@@ -10,6 +10,7 @@ import {
   ImageNode,
   UserMentionNode,
   VideoNode,
+  WatermarkNode,
 } from '@lexical-core';
 import { clearDecorators, setDecorator } from '@lexical-core/decoratorRegistry';
 import { ContactMention } from './component/decorator/ContactMention';
@@ -23,6 +24,7 @@ import { HtmlRender } from './component/decorator/HtmlRender';
 import { MarkdownImage } from './component/decorator/MarkdownImage';
 import { MarkdownVideo } from './component/decorator/MarkdownVideo';
 import { UserMention } from './component/decorator/UserMention';
+import { Watermark } from './component/decorator/Watermark';
 import { registerDiffNodeFactory } from './component/dom-factory/diff-factory';
 
 /**
@@ -41,5 +43,6 @@ export function initializeLexical() {
   setDecorator(VideoNode, MarkdownVideo);
   setDecorator(EquationNode, Equation);
   setDecorator(HtmlRenderNode, HtmlRender);
+  setDecorator(WatermarkNode, Watermark);
   registerDiffNodeFactory();
 }

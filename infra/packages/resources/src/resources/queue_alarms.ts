@@ -1,6 +1,6 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { CLOUD_TRAIL_SNS_TOPIC_ARN } from '@shared';
+import { CLOUD_TRAIL_SNS_TOPIC_ARN } from '../../../shared';
 
 type Args = {
   // The queue to create alarms for

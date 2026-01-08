@@ -1,5 +1,5 @@
 import type { BlockCanvasProps } from '@block-canvas/component/Block';
-
+import type { BlockChannelProps } from '@block-channel/component/Block';
 import type { IDocumentStorageServiceFile } from '@filesystem/file';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
@@ -115,7 +115,6 @@ export type NestedState<Name extends BlockName> = {
   parentId?: string;
   parentName?: Name;
   parentContext?: PreviewState;
-  initArgs?: BlockComponentProps[Name];
 };
 
 const allBlockNames = new Set([...BlockRegistry]);
@@ -273,8 +272,9 @@ type ExtractSuccessType<T> = T extends [null, infer S]
 export type ExtractLoadType<T extends LoadFunction<any, any>> =
   ExtractSuccessType<Awaited<ReturnType<T>>>;
 
-interface BlockComponentProps extends Record<BlockName, ObjectLike> {
+export interface BlockComponentProps extends Record<BlockName, ObjectLike> {
   canvas: BlockCanvasProps;
+  channel: BlockChannelProps;
 }
 
 interface BlockComponentLoadData extends Record<BlockName, ObjectLike> {
@@ -394,11 +394,13 @@ export type BlockEffect = (...args: any[]) => any;
  *
  * Should only be defined at the top level of a module.
  *
+ * @deprecated
  * @param {BlockEffect} fn - The function to be used as a block effect.
  */
 export const [globalBlockEffects] = createSignal<BlockEffect[]>([]);
 export const [globalBlockRenderEffects] = createSignal<BlockEffect[]>([]);
 
+/** @deprecated */
 export function createBlockEffect(fn: BlockEffect): void {
   globalBlockEffects().push(fn);
 }
@@ -535,6 +537,17 @@ export const useMaybeBlockName = (): BlockName | undefined => {
     return;
   }
   return context.name;
+};
+
+export const useMaybeBlockAliasedName = ():
+  | BlockName
+  | BlockAlias
+  | undefined => {
+  const context = useContext(BlockContext);
+  if (!context) {
+    return;
+  }
+  return context.aliasContext?.alias ?? context.name;
 };
 
 function styledConsoleError(message: string, code: string) {
@@ -711,6 +724,7 @@ export type BlockSignal<T> = [get: Accessor<T>, set: Setter<T>] & {
  *
  * Should only be defined at the top level of a module.
  *
+ * @deprecated
  * @template T - The type of the signal value.
  * @returns {BlockSignal<T | undefined>} A block signal object.
  *
@@ -836,6 +850,7 @@ export type BlockResource<T, R = unknown> = [
  *
  * Should only be defined at the top level of a module.
  *
+ * @deprecated
  * @template T - The type of the resource value.
  * @template S - The type of the source value (optional).
  * @template R - The type of the refetching value (optional).
@@ -917,6 +932,7 @@ export type BlockMemo<T> = Accessor<T>;
  *
  * Should only be defined at the top level of a module.
  *
+ * @deprecated
  * @template T - The type of the memo value.
  * @param {() => T} fn - A function that computes the derived value.
  * @param equal - An optional function that is used to see if the memo should trigger an update

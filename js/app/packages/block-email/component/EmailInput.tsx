@@ -1,12 +1,11 @@
+import { useEmailContext } from '@block-email/component/EmailContext';
 import type {
   MessageToSendDbId,
   MessageWithBodyReplyless,
 } from '@service-email/generated/schemas';
 import { type Accessor, createMemo, type Setter, Show } from 'solid-js';
-import { produce } from 'solid-js/store';
 import { decodeBase64Utf8 } from '../util/decodeBase64';
 import { BaseInput } from './BaseInput';
-import { useEmailContext } from './EmailContext';
 
 interface EmailInputProps {
   replyingTo: Accessor<MessageWithBodyReplyless>;
@@ -26,33 +25,21 @@ export function EmailInput(props: EmailInputProps) {
   });
 
   function afterSend(newMessageId: MessageToSendDbId | null) {
-    // Delete the draft from our store
-    const parentId = props.replyingTo()?.db_id?.toString();
-    if (parentId) {
-      ctx.setMessageDbIdToDraftChildren(
-        produce((state) => {
-          delete state[parentId];
-        })
-      );
-    }
-
-    props.setShowReply?.(false);
-
     // Refresh to get the new message
-    ctx.refetch();
+    ctx.query.refetch();
 
     // Set focus to new message if provided
-    if (newMessageId) ctx.setFocusedMessageId(newMessageId);
+    if (newMessageId) ctx.messages.setFocused(newMessageId);
   }
 
   return (
-    <Show when={props.draft || props.replyingTo}>
+    <Show when={props.replyingTo() && ctx.drafts.initialDraftsSettled()}>
       <BaseInput
         replyingTo={props.replyingTo}
         draft={props.draft}
         preloadedHtml={draftHTML()}
         sideEffectOnSend={afterSend}
-        onSendAndMarkDone={ctx.archiveThread}
+        onMarkDone={ctx.archiveThread}
         setShowReply={props.setShowReply}
         markdownDomRef={props.markdownDomRef}
       />

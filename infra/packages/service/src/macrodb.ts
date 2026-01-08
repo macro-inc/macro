@@ -1,4 +1,4 @@
-import { stack } from '@shared';
+import { stack } from '../../shared';
 
 export function getMacroDbSecretName() {
   return stack === 'prod' ? 'macro-db-prod' : 'macro-db-dev';

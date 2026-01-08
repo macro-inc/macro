@@ -26,6 +26,7 @@ export const definition = defineBlock({
             updatedAt: 0,
             type: ProjectType.project,
             userId: '',
+            deletedAt: null,
           },
           userAccessLevel: 'owner',
         } satisfies GetProjectResponseData);
@@ -39,6 +40,7 @@ export const definition = defineBlock({
             updatedAt: 0,
             type: ProjectType.project,
             userId: '',
+            deletedAt: null,
           },
           userAccessLevel: 'owner',
         } satisfies GetProjectResponseData);

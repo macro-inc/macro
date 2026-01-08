@@ -1,7 +1,7 @@
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { EmojiSelector } from '@core/component/Emoji/EmojiSelector';
 import type { SimpleEmoji } from '@core/component/Emoji/emojis';
 import { resolveEmojiFromUnicode } from '@core/component/Emoji/emojis';
-import { IconButton } from '@core/component/IconButton';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { Popover } from '@kobalte/core/popover';
@@ -106,7 +106,7 @@ export function ReactionQuickSelector(props: ReactionQuickSelectorProps) {
         )}
       </For>
       <Show when={!props.hideSearchButton}>
-        <IconButton
+        <DeprecatedIconButton
           icon={PlusIcon}
           iconSize={20}
           class={`h-8! w-8! bg-menu! hover:bg-hover! hover-transition-bg rounded-full! p-2 ${selectedIndex() === reactions.length ? 'ring-2 ring-offset-4 ring-accent' : ''}`}
@@ -228,7 +228,7 @@ export function ReactionSelector(props: ReactionSelectorProps) {
       open={openPopover()}
     >
       <Popover.Trigger>
-        <IconButton icon={SmileIcon} tabIndex={-1} />
+        <DeprecatedIconButton icon={SmileIcon} tabIndex={-1} />
       </Popover.Trigger>
 
       <Popover.Portal>

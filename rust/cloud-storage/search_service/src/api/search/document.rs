@@ -5,6 +5,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
+use indexmap::IndexMap;
 use model::{response::ErrorResponse, user::UserContext};
 use models_opensearch::SearchEntityType;
 use models_search::document::{
@@ -12,6 +13,7 @@ use models_search::document::{
     DocumentSearchResponseItemWithMetadata, DocumentSearchResult,
 };
 use opensearch_client::search::model::SearchGotoContent;
+use sqlx::types::Uuid;
 use std::collections::HashMap;
 
 use crate::api::ApiContext;
@@ -34,7 +36,7 @@ pub(in crate::api::search) async fn enrich_documents(
         return Ok(vec![]);
     }
     // Extract document IDs from results
-    let document_ids: Vec<String> = results.iter().map(|r| r.entity_id.clone()).collect();
+    let document_ids: Vec<String> = results.iter().map(|r| r.entity_id.to_string()).collect();
 
     // Fetch document metadata from database
     let document_histories =
@@ -105,8 +107,8 @@ pub fn construct_search_result(
         macro_db_client::document::get_document_history::DocumentHistoryInfo,
     >,
 ) -> anyhow::Result<Vec<DocumentSearchResponseItemWithMetadata>> {
-    // construct entity hit map of id -> vec<hits>
-    let entity_id_hit_map: HashMap<String, Vec<DocumentSearchResult>> = search_results
+    // construct entity hit map of id -> vec<hits> using IndexMap to preserve insertion order
+    let entity_id_hit_map: IndexMap<Uuid, Vec<DocumentSearchResult>> = search_results
         .into_iter()
         .map(|hit| {
             let result = if let Some(SearchGotoContent::Documents(goto)) = hit.goto {
@@ -127,16 +129,16 @@ pub fn construct_search_result(
             };
             (hit.entity_id, result)
         })
-        .fold(HashMap::new(), |mut map, (entity_id, result)| {
+        .fold(IndexMap::new(), |mut map, (entity_id, result)| {
             map.entry(entity_id).or_insert_with(Vec::new).push(result);
             map
         });
 
-    // now construct the search results
+    // now construct the search results in the original search result order
     let result: Vec<DocumentSearchResponseItemWithMetadata> = entity_id_hit_map
         .into_iter()
         .filter_map(|(entity_id, hits)| {
-            if let Some(info) = document_histories.get(&entity_id) {
+            if let Some(info) = document_histories.get(&entity_id.to_string()) {
                 let info = info.clone();
                 let metadata = models_search::document::DocumentMetadata {
                     created_at: info.created_at.timestamp(),
@@ -148,7 +150,7 @@ pub fn construct_search_result(
                 Some(DocumentSearchResponseItemWithMetadata {
                     metadata: Some(metadata),
                     extra: DocumentSearchResponseItem {
-                        id: entity_id.clone(),
+                        id: entity_id,
                         name: info.file_name.clone(),
                         document_id: entity_id,
                         document_name: info.file_name,

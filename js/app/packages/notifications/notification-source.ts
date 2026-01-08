@@ -1,9 +1,13 @@
 import type { Entity } from '@core/types';
-import { createNotificationsInfiniteQuery as createNotificationQuery } from '@macro-entity';
+import {
+  optimisticInsertNotification,
+  useMarkNotificationsAsDoneMutation,
+  useMarkNotificationsAsSeenMutation,
+  useUserNotificationsQuery,
+} from '@queries/notification/user-notifications';
 import type { ConnectionGatewayWebsocket } from '@service-connection/websocket';
 import { notificationServiceClient } from '@service-notification/client';
 import type { UserUnsubscribe } from '@service-notification/generated/schemas';
-import { trackStore } from '@solid-primitives/deep';
 import type {
   UseInfiniteQueryResult,
   UseQueryResult,
@@ -11,19 +15,11 @@ import type {
 import { createSocketEffect } from '@websocket/index';
 import {
   type Accessor,
-  batch,
   createEffect,
   createMemo,
   createSignal,
 } from 'solid-js';
-import {
-  createStore,
-  produce,
-  reconcile,
-  type Store,
-  unwrap,
-} from 'solid-js/store';
-import { fetchNotificationsForEntities } from './queries/entities-notifications-query';
+import { reconcile } from 'solid-js/store';
 import { createMutedEntitiesQuery } from './queries/muted-entities-query';
 import {
   type CompositeEntity,
@@ -32,17 +28,13 @@ import {
   type UnifiedNotification,
 } from './types';
 
-type NotificationStoreInner = Record<CompositeEntity, UnifiedNotification[]>;
-
-type AssertKey<T, K extends keyof T & string> = K;
-
-const NOTIFICATION_KEY: AssertKey<UnifiedNotification, 'id'> = 'id';
+type NotificationsByEntity = Record<CompositeEntity, UnifiedNotification[]>;
 
 type UnsubscribeFn = () => void;
 type SubscribeFn = (newNotification: UnifiedNotification) => void;
 
 export type NotificationSource = {
-  readonly store: Store<NotificationStoreInner>;
+  readonly notificationsByEntity: Accessor<NotificationsByEntity>;
   readonly notifications: Accessor<UnifiedNotification[]>;
   readonly mutedEntities: Accessor<UserUnsubscribe[]>;
   readonly isLoading: Accessor<boolean>;
@@ -51,6 +43,7 @@ export type NotificationSource = {
     UnifiedNotification[],
     Error
   >;
+
   readonly _mutedEntitiesQuery: UseQueryResult<UserUnsubscribe[], Error>;
 
   /** Mark a single notification as done */
@@ -83,55 +76,30 @@ export function createNotificationSource(
   ws: ConnectionGatewayWebsocket,
   onNotification?: (notification: UnifiedNotification) => void
 ): NotificationSource {
-  const [store, setStore] = createStore<NotificationStoreInner>({});
-  const notifications = createMemo(() =>
-    Object.values(trackStore(store)).flat()
-  );
-
-  let subscriptions: Set<SubscribeFn> = new Set();
+  const subscriptions: Set<SubscribeFn> = new Set();
 
   const [mutedEntities, setMutedEntities] = createSignal<UserUnsubscribe[]>([]);
 
-  const notificationsQuery = createNotificationQuery({ limit: QUERY_LIMIT });
+  const notificationsQuery = useUserNotificationsQuery({ limit: QUERY_LIMIT });
   const mutedEntitiesQuery = createMutedEntitiesQuery({ limit: QUERY_LIMIT });
 
-  /** Reconcile new notifications into the store */
-  const reconcileNotifications = (
-    notifications: UnifiedNotification[],
-    entities: Entity[] = []
-  ) => {
-    const newNotificationMap: NotificationStoreInner = Object.fromEntries(
-      entities.map((entity) => [compositeEntity(entity), []])
-    );
+  const markNotificationsAsSeenMutation = useMarkNotificationsAsSeenMutation();
+  const markNotificationsAsDoneMutation = useMarkNotificationsAsDoneMutation();
 
-    for (const notification of notifications) {
+  const notifications = createMemo(() => notificationsQuery.data ?? []);
+
+  const notificationsByEntity = createMemo(() => {
+    const data = notifications();
+    const grouped: NotificationsByEntity = {};
+
+    for (const notification of data) {
       const composite = compositeEntity(notificationEntity(notification));
-      newNotificationMap[composite] = [
-        ...(newNotificationMap[composite] ?? []),
-        notification,
-      ];
+      grouped[composite] ??= [];
+      grouped[composite].push(notification);
     }
 
-    batch(() => {
-      for (const [composite, notifications] of Object.entries(
-        newNotificationMap
-      )) {
-        setStore(
-          composite as CompositeEntity,
-          reconcile(notifications, { key: NOTIFICATION_KEY })
-        );
-      }
-    });
-  };
-
-  const entitiesFromNotifications = (notifications: UnifiedNotification[]) => {
-    return Array.from(new Set(notifications.map(notificationEntity)));
-  };
-
-  const refetchAndReconcileEntities = async (entities: Entity[]) => {
-    const notifications = await fetchNotificationsForEntities(entities);
-    reconcileNotifications(notifications, entities);
-  };
+    return grouped;
+  });
 
   createEffect(() => {
     if (!notificationsQuery.isSuccess) return;
@@ -139,13 +107,6 @@ export function createNotificationSource(
       notificationsQuery.fetchNextPage();
     }
   });
-
-  const refetchAndReconcileNotifications = async (
-    notifications: UnifiedNotification[]
-  ) => {
-    const entities = entitiesFromNotifications(notifications);
-    await refetchAndReconcileEntities(entities);
-  };
 
   const isLoading = () => {
     return notificationsQuery.isLoading || mutedEntitiesQuery.isLoading;
@@ -155,13 +116,6 @@ export function createNotificationSource(
     if (!mutedEntitiesQuery.isSuccess) return;
     const mutedEntities = mutedEntitiesQuery?.data ?? [];
     setMutedEntities(reconcile(mutedEntities));
-  });
-
-  createEffect(() => {
-    // Only update notifications if query is successful
-    if (!notificationsQuery.isSuccess) return;
-
-    reconcileNotifications(unwrap(notificationsQuery.data));
   });
 
   createSocketEffect(ws, (wsData) => {
@@ -179,38 +133,19 @@ export function createNotificationSource(
 
     subscriptions.forEach((subscribe) => subscribe(parsedNotification));
 
-    refetchAndReconcileNotifications([parsedNotification]);
+    optimisticInsertNotification(parsedNotification);
   });
 
   const bulkMarkAsDone = async (notifications: UnifiedNotification[]) => {
-    // optimistically update
-    setStore(
-      produce((state) => {
-        notifications.forEach((notification) => {
-          const notDoneNotification = state[
-            compositeEntity(notificationEntity(notification))
-          ]?.find(({ id }) => id === notification.id);
-
-          if (notDoneNotification) notDoneNotification.done = true;
-        });
-      })
-    );
-
-    const notificationIds = notifications.map(({ id }) => id);
-
-    await notificationServiceClient.bulkMarkNotificationAsDone({
-      notificationIds,
+    await markNotificationsAsDoneMutation.mutateAsync({
+      notificationIds: notifications.map((n) => n.id),
     });
-    refetchAndReconcileNotifications(notifications);
   };
 
   const bulkMarkAsRead = async (notifications: UnifiedNotification[]) => {
-    const notificationIds = notifications.map(({ id }) => id);
-    await notificationServiceClient.bulkMarkNotificationAsSeen({
-      notificationIds,
+    await markNotificationsAsSeenMutation.mutateAsync({
+      notificationIds: notifications.map((n) => n.id),
     });
-
-    refetchAndReconcileNotifications(notifications);
   };
 
   const markAsDone = async (notification: UnifiedNotification) => {
@@ -247,7 +182,7 @@ export function createNotificationSource(
   };
 
   return {
-    store,
+    notificationsByEntity,
     notifications,
     mutedEntities,
     isLoading,

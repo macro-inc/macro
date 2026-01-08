@@ -1,7 +1,7 @@
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { UnfurlLink } from '@core/component/Link';
 import { ScopedPortal } from '@core/component/ScopedPortal';
-import { TextButton } from '@core/component/TextButton';
 import { toast } from '@core/component/Toast/Toast';
 import { Tooltip } from '@core/component/Tooltip';
 import clickOutside from '@core/directive/clickOutside';
@@ -337,7 +337,7 @@ export function FloatingLinkMenu(props: { closePopup?: () => void }) {
       <Switch fallback={<div class="display-none">{props.children}</div>}>
         <Match when={linkInfo()?.linkRef !== undefined}>
           <div
-            class="p-2 fixed bg-menu top-0 left-0 text-sm z-action-menu ring ring-edge rounded-md shadow-lg min-w-80"
+            class="p-2 fixed bg-menu top-0 left-0 text-sm z-action-menu ring ring-edge min-w-100"
             use:floatWithElement={{
               element: () => linkInfo()?.linkRef,
               useBlockBoundary: true,
@@ -378,7 +378,7 @@ export function FloatingLinkMenu(props: { closePopup?: () => void }) {
           {(link) => (
             <ScopedPortal>
               <div
-                class="p-2 absolute top-0 left-0 z-10 bg-menu rounded-lg w-80 shadow-lg ring-edge ring-1"
+                class="p-2 absolute top-0 left-0 z-10 bg-menu w-80 shadow-lg ring-edge ring-1"
                 use:floatWithElement={{
                   element: () => link().linkRef,
                   useBlockBoundary: true,
@@ -436,43 +436,41 @@ export function FloatingLinkMenu(props: { closePopup?: () => void }) {
               />
             </div>
             <div class="relative flex items-center justify-end shrink">
-              <div
-                class={`flex  ease-in-out ${
-                  expanded()
-                    ? 'opacity-0 pointer-events-none w-0 -translate-x-28 pl-0'
-                    : 'opacity-100 w-28 translate-x-0 pl-1'
-                }`}
-              >
+              <div class="flex ease-in-out" classList={{ hidden: expanded() }}>
                 <Tooltip tooltip="Open in new tab">
-                  <IconButton
+                  <DeprecatedIconButton
                     onClick={openInNewTab}
-                    class="p-1 hover:bg-hover hover-transition-bg rounded-md"
+                    class="p-1 hover:bg-hover hover-transition-bg"
                     theme="accent"
                     icon={NewTab}
+                    size="sm"
                   />
                 </Tooltip>
                 <Tooltip tooltip="Edit link">
-                  <IconButton
+                  <DeprecatedIconButton
                     onClick={handleEditClick}
-                    class="p-1 hover:bg-hover hover-transition-bg rounded-md"
+                    class="p-1 hover:bg-hover hover-transition-bg"
                     theme="clear"
                     icon={Pencil}
+                    size="sm"
                   />
                 </Tooltip>
                 <Tooltip tooltip="Copy link">
-                  <IconButton
+                  <DeprecatedIconButton
                     onClick={copyLink}
-                    class="p-1 hover:bg-hover hover-transition-bg rounded-md"
+                    class="p-1 hover:bg-hover hover-transition-bg"
                     theme="clear"
                     icon={Copy}
+                    size="sm"
                   />
                 </Tooltip>
                 <Tooltip tooltip="Remove link">
-                  <IconButton
+                  <DeprecatedIconButton
                     onClick={handleUnlink}
-                    class="p-1 hover:bg-hover hover-transition-bg rounded-md"
+                    class="p-1 hover:bg-hover hover-transition-bg"
                     theme="clear"
                     icon={Trash}
+                    size="sm"
                   />
                 </Tooltip>
               </div>
@@ -524,7 +522,7 @@ export function FloatingLinkMenu(props: { closePopup?: () => void }) {
             }}
           >
             <Tooltip tooltip="Apply link changes">
-              <TextButton
+              <DeprecatedTextButton
                 onClick={handleSubmit}
                 class="focus:ring-failure focus:ring-2 focus:ring-offset-2"
                 theme="base"

@@ -10,7 +10,6 @@ import type { GetLegacyUserPermissionsResponseName } from './getLegacyUserPermis
 export interface GetLegacyUserPermissionsResponse {
   /** The user's email */
   email: string;
-  /** The user's group */
   group?: GetLegacyUserPermissionsResponseGroup;
   /** Whether the user has the chrome extension */
   hasChromeExt: boolean;

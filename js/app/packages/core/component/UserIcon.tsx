@@ -1,11 +1,14 @@
-import { Tooltip } from '@core/component/Tooltip';
-import { idToDisplayName } from '@core/user';
+import { toast } from '@core/component/Toast/Toast';
+import { macroIdToEmail, tryMacroId, useDisplayName } from '@core/user';
 import { isOk } from '@core/util/maybeResult';
+import { Tooltip } from '@kobalte/core/tooltip';
 import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
 import { commsServiceClient } from '@service-comms/client';
-import { createMemo, Match, Switch } from 'solid-js';
+import { debounce } from '@solid-primitives/scheduled';
+import { createMemo, createSignal, Match, Show, Switch } from 'solid-js';
 import { useSplitLayout } from '../../app/component/split-layout/layout';
 import { ProfilePicture } from './ProfilePicture';
+import { UserTooltip } from './UserTooltip';
 
 export type UserIconProps = {
   isDeleted?: boolean;
@@ -23,7 +26,19 @@ export type SizeClass = {
 };
 
 export function UserIcon(props: UserIconProps) {
-  const displayName = createMemo(() => idToDisplayName(props.id!));
+  const displayName = createMemo(() => {
+    if (!props.id) return () => props.email;
+    const [displayName] = useDisplayName(tryMacroId(props.id));
+    return displayName;
+  });
+
+  const email = createMemo(() => {
+    const macroId = props.id && tryMacroId(props.id);
+    if (macroId) {
+      return macroIdToEmail(macroId);
+    }
+    if (props.email) return props.email;
+  });
 
   const sizeClasses = createMemo(() => {
     switch (props.size || 'md') {
@@ -110,17 +125,40 @@ export function UserIcon(props: UserIconProps) {
     </div>
   ));
 
-  const tooltipContent = createMemo(() => (
-    <span class="text-xs">{displayName()}</span>
-  ));
+  const [copied, setCopied] = createSignal(false);
 
-  if (displayName().length > 0) {
-    return (
-      <Tooltip tooltip={tooltipContent()} class={sizeClasses().container}>
-        {icon()}
-      </Tooltip>
-    );
-  } else {
-    return icon();
+  const resetCopied = debounce(() => setCopied(false), 800);
+
+  function handleCopyEmail(e: MouseEvent) {
+    e.stopPropagation();
+    const email_ = email();
+    if (!email_) return;
+
+    setCopied(true);
+    navigator.clipboard.writeText(email_);
+    toast.success('Email copied');
+    resetCopied();
   }
+
+  return (
+    <Show when={displayName().length > 0 || email()} fallback={icon()}>
+      <Tooltip placement="bottom" gutter={8} overflowPadding={16}>
+        <Tooltip.Trigger as="div" class={sizeClasses().container}>
+          {icon()}
+        </Tooltip.Trigger>
+        <Tooltip.Portal>
+          <Tooltip.Content class="z-tool-tip">
+            <UserTooltip
+              displayName={displayName()() || ''}
+              email={email()}
+              id={props.id}
+              isDeleted={props.isDeleted}
+              copied={copied()}
+              onCopyEmail={handleCopyEmail}
+            />
+          </Tooltip.Content>
+        </Tooltip.Portal>
+      </Tooltip>
+    </Show>
+  );
 }

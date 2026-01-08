@@ -123,3 +123,36 @@ async fn test_get_user_names_with_email_not_found(pool: Pool<Postgres>) -> anyho
 
     Ok(())
 }
+
+/// only fallback to using email contact names if the user has neither first nor last name set
+/// in macro. don't use the email contact last name with the macro first name if exists.
+#[sqlx::test(fixtures(path = "../../../fixtures", scripts("user_names_with_email")))]
+async fn uses_macro_names_if_either_first_or_last_present(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let user_profile_ids = parse_user_ids(vec![
+        "macro|user_profile_4@macro.com",
+        "macro|user_profile_5@macro.com",
+    ])?;
+
+    let mut names =
+        get_user_names_with_email(&pool, "macro|user_profile_1@macro.com", user_profile_ids)
+            .await?;
+    names.sort_by(|a, b| a.id.cmp(&b.id));
+
+    let u4 = names
+        .iter()
+        .find(|n| n.id == "macro|user_profile_4@macro.com")
+        .expect("user_profile_4 should be returned");
+    assert_eq!(u4.first_name.as_deref(), Some("OnlyFirstMacro"));
+    assert_eq!(u4.last_name.as_deref(), None);
+
+    let u5 = names
+        .iter()
+        .find(|n| n.id == "macro|user_profile_5@macro.com")
+        .expect("user_profile_5 should be returned");
+    assert_eq!(u5.first_name.as_deref(), None);
+    assert_eq!(u5.last_name.as_deref(), Some("OnlyLastMacro"));
+
+    Ok(())
+}

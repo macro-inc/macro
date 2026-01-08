@@ -1,7 +1,11 @@
-import { sendMessage } from '@block-channel/signal/channel';
+import { useMessageListContext } from '@block-channel/component/MessageList/MessageList';
+import {
+  channelStore,
+  type SendMessageArgs,
+  useSendChannelMessageAction,
+} from '@block-channel/signal/channel';
 import type { ThreadStoreData } from '@block-channel/signal/threads';
 import { postTypingUpdate } from '@block-channel/signal/typing';
-import type { ThreadViewData } from '@block-channel/type/threadView';
 import {
   clearDraftMessage,
   loadDraftMessage,
@@ -9,27 +13,22 @@ import {
 } from '@block-channel/utils/draftMessages';
 import { blockElementSignal } from '@core/signal/blockElement';
 import type { InputAttachment } from '@core/store/cacheChannelInput';
-import type { Message } from '@service-comms/generated/models';
+import { channelParticipantInfo } from '@core/user/util';
 import { createCallback } from '@solid-primitives/rootless';
 import {
-  type Accessor,
   createEffect,
+  createMemo,
   createSignal,
   For,
   type Setter,
 } from 'solid-js';
 import type { SetStoreFunction } from 'solid-js/store';
 import { Portal } from 'solid-js/web';
-import type { VirtualizerHandle } from 'virtua/solid';
 import { BaseInput } from './BaseInput';
 
 export type ReplyInputsPortalerProps = {
   channelId: string;
-  orderedMessages: Accessor<Message[]>;
-  threadViewStore: ThreadViewData;
-  setThreadViewStore: SetStoreFunction<ThreadViewData>;
   threads: ThreadStoreData;
-  virtualHandle: Accessor<VirtualizerHandle | undefined>;
   threadInputAttachmentsStore: Record<string, InputAttachment[]>;
   setThreadInputAttachmentsStore: SetStoreFunction<
     Record<string, InputAttachment[]>
@@ -38,70 +37,62 @@ export type ReplyInputsPortalerProps = {
 };
 
 export function ReplyInputsPortaler(props: ReplyInputsPortalerProps) {
+  const listContext = useMessageListContext();
+  const sendMessage = useSendChannelMessageAction(() => props.channelId);
+
   const postTypingUpdate_ = createCallback(postTypingUpdate);
-  const sendMessage_ = createCallback(sendMessage);
   const blockRef = blockElementSignal.get;
+
+  const channel = channelStore.get;
+  const channelUsers = createMemo(() => {
+    const participants = channel.participants ?? [];
+    return participants.map(channelParticipantInfo);
+  });
 
   const [focusedReplyInputThreadId, setFocusedReplyInputThreadId] =
     createSignal<string>();
 
-  const onSend =
-    (threadId: string) => async (args: Parameters<typeof sendMessage>[0]) => {
-      clearDraftMessage(props.channelId, threadId);
-      await sendMessage_({ ...args, threadId });
-      // After sending, focus the message immediately after the current one in the
-      // flattened list.
-      // Use a timeout to ensure the new message mounts in the DOM first.
+  const onSend = (threadId: string) => async (args: SendMessageArgs) => {
+    clearDraftMessage(props.channelId, threadId);
+    await sendMessage({ ...args, threadId });
+    // After sending, focus the message immediately after the current one in the
+    // flattened list.
+    // Use a timeout to ensure the new message mounts in the DOM first.
+    setTimeout(() => {
+      const list = listContext.orderedMessages() ?? [];
+      const lastMessageInThreadId = props.threads[threadId]?.at(-1)?.id;
+      const currentIdx = list.findIndex((m) => m.id === lastMessageInThreadId);
+      const targetIndex = currentIdx >= 0 ? currentIdx + 1 : -1;
+      if (targetIndex < 0 || targetIndex >= list.length) return;
+      const targetMessageId = list[targetIndex]?.id;
+      if (!targetMessageId) return;
+
+      // Ensure it's scrolled into view in the virtual list
+      listContext.scrollToIndex(targetIndex, { align: 'nearest' });
+
+      // Then focus the element once mounted
       setTimeout(() => {
-        const list = props.orderedMessages() ?? [];
-        const lastMessageInThreadId = props.threads[threadId]?.at(-1)?.id;
-        const currentIdx = list.findIndex(
-          (m) => m.id === lastMessageInThreadId
-        );
-        const targetIndex = currentIdx >= 0 ? currentIdx + 1 : -1;
-        if (targetIndex < 0 || targetIndex >= list.length) return;
-        const targetMessageId = list[targetIndex]?.id;
-        if (!targetMessageId) return;
-
-        // Ensure it's scrolled into view in the virtual list
-        props.virtualHandle()?.scrollToIndex(targetIndex, { align: 'nearest' });
-
-        // Then focus the element once mounted
-        setTimeout(() => {
-          const el = document.querySelector(
-            `[data-message-body-id="${targetMessageId}"]`
-          ) as HTMLElement | null;
-          el?.focus();
-        }, 0);
-      }, 100);
-    };
-
-  const onAfterSend = (threadId: string) => () => {
-    props.setThreadViewStore(threadId, (prev) =>
-      prev
-        ? { ...prev, threadExpanded: true, hasActiveReply: false }
-        : { threadExpanded: true, hasActiveReply: false }
-    );
-    props.setThreadViewStore(threadId, (prev) =>
-      prev
-        ? { ...prev, threadExpanded: true, hasActiveReply: false }
-        : { threadExpanded: true, hasActiveReply: false }
-    );
+        const el = document.querySelector(
+          `[data-message-body-id="${targetMessageId}"]`
+        ) as HTMLElement | null;
+        el?.focus();
+      }, 0);
+    }, 100);
   };
 
-  const onEmptyBlur = (threadId: string) => () => {
+  const onAfterSend = (threadId: string) => () => {
+    listContext.closeThreadReply(threadId, true);
+  };
+
+  const closeDraft = (threadId: string) => () => {
     clearDraftMessage(props.channelId, threadId);
-    props.setThreadViewStore(threadId, (prev) =>
-      prev
-        ? { ...prev, threadExpanded: true, hasActiveReply: false }
-        : { threadExpanded: true, hasActiveReply: false }
-    );
+    listContext.closeThreadReply(threadId, true);
   };
 
   const onFocusLeaveStart = (e: KeyboardEvent, threadId: string) => {
     e.preventDefault();
     e.stopPropagation();
-    const orderedMessages = props
+    const orderedMessages = listContext
       .orderedMessages()
       .filter((item) => item.thread_id === threadId);
     if (!orderedMessages.length) return;
@@ -116,39 +107,31 @@ export function ReplyInputsPortaler(props: ReplyInputsPortalerProps) {
   let replyFocusTimeout: ReturnType<typeof setTimeout> | undefined;
 
   return (
-    <For
-      each={Object.keys(props.threadViewStore).filter(
-        (threadId) => props.threadViewStore[threadId].hasActiveReply
-      )}
-    >
+    <For each={listContext.getThreadsWithActiveReplies()}>
       {(threadId) => {
+        const threadState = createMemo(() =>
+          listContext.getThreadState(threadId)
+        );
         // This create effect maintains focus on reply inputs when the mount target changes due to new messages in the thread coming in
         // TODO: this should only fire if this reply input was focused
         createEffect((prev) => {
+          const state = threadState();
           if (
             focusedReplyInputThreadId() === threadId &&
-            props.threadViewStore[threadId].replyInputMountTarget &&
+            state?.replyInputMountTarget &&
             prev &&
-            prev !== props.threadViewStore[threadId].replyInputMountTarget
+            prev !== state?.replyInputMountTarget
           ) {
-            props.setThreadViewStore(threadId, (prev) => ({
-              ...prev,
-              replyInputShouldFocus: true,
-            }));
+            listContext.toggleReplyInputFocus(threadId, true);
           }
-          return props.threadViewStore[threadId].replyInputMountTarget;
+          return state?.replyInputMountTarget;
         });
         return (
-          <Portal
-            mount={
-              props.threadViewStore[threadId].replyInputMountTarget ??
-              document.body
-            }
-          >
+          <Portal mount={threadState()?.replyInputMountTarget ?? document.body}>
             <div
               classList={{
                 'fixed top-0 left-0 width-[1px] height-[1px] overflow-hidden opacity-0 pointer-events-none':
-                  !props.threadViewStore[threadId].replyInputMountTarget,
+                  !threadState()?.replyInputMountTarget,
               }}
             >
               <BaseInput
@@ -156,14 +139,9 @@ export function ReplyInputsPortaler(props: ReplyInputsPortalerProps) {
                 afterSend={onAfterSend(threadId)}
                 placeholder={`Send a reply`}
                 autoFocusOnMount={false}
-                shouldFocus={
-                  props.threadViewStore[threadId].replyInputShouldFocus
-                }
+                shouldFocus={threadState()?.replyInputShouldFocus}
                 clearShouldFocus={() =>
-                  props.setThreadViewStore(threadId, (prev) => ({
-                    ...prev,
-                    replyInputShouldFocus: false,
-                  }))
+                  listContext.toggleReplyInputFocus(threadId, false)
                 }
                 onFocus={() => {
                   if (replyFocusTimeout) clearTimeout(replyFocusTimeout);
@@ -181,6 +159,7 @@ export function ReplyInputsPortaler(props: ReplyInputsPortalerProps) {
                   setStore: props.setThreadInputAttachmentsStore,
                   key: threadId,
                 }}
+                channelUsers={channelUsers}
                 setLocalTyping={
                   props.setLocalTypingThreadId
                     ? (isTyping) =>
@@ -203,7 +182,7 @@ export function ReplyInputsPortaler(props: ReplyInputsPortalerProps) {
                 onFocusLeaveStart={(e) => {
                   onFocusLeaveStart(e, threadId);
                 }}
-                onEmptyBlur={onEmptyBlur(threadId)}
+                closeDraft={closeDraft(threadId)}
                 isReplyInput
               />
             </div>

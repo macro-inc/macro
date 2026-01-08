@@ -181,7 +181,8 @@ function registerChecklistPlugin(editor: LexicalEditor) {
     registerMouseEvents(editor),
     editor.registerCommand(
       KEY_ENTER_COMMAND,
-      (e: KeyboardEvent) => {
+      (e) => {
+        if (!e) return false;
         // Meta+Enter toggles check state.
         const isCommand = IS_MAC ? e.metaKey : e.ctrlKey;
         if (isCommand && !e.shiftKey) {

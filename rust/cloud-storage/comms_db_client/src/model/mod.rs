@@ -1,3 +1,4 @@
+use macro_user_id::user_id::MacroUserIdStr;
 use model::comms::ChannelType;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -18,7 +19,8 @@ pub struct Message {
     pub channel_id: Uuid,
     pub thread_id: Option<Uuid>,
     /// id of the user who sent the message
-    pub sender_id: String,
+    #[schema(value_type = String)]
+    pub sender_id: MacroUserIdStr<'static>,
     /// string content of the message
     pub content: String,
     pub created_at: chrono::DateTime<chrono::Utc>,
@@ -36,6 +38,9 @@ pub struct Attachment {
     pub message_id: Uuid,
     pub entity_type: String,
     pub entity_id: String,
+    /// dimensions of image/video
+    pub width: Option<i32>,
+    pub height: Option<i32>,
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
@@ -43,6 +48,9 @@ pub struct Attachment {
 pub struct NewAttachment {
     pub entity_type: String,
     pub entity_id: String,
+    /// dimensions of image/video
+    pub height: Option<i32>,
+    pub width: Option<i32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq)]

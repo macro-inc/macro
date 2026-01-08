@@ -330,4 +330,5 @@ export const SUPPORTED_CHAT_ATTACHMENT_BLOCKS: (BlockName | BlockAlias)[] = [
   'canvas',
   'email',
   'task',
+  'project',
 ];

@@ -1,7 +1,10 @@
+#[cfg(test)]
+mod test;
 use chrono::serde::ts_seconds_option;
 pub mod list;
 pub mod response;
 use document_sub_type::DocumentSubType;
+use macro_user_id::user_id::MacroUserIdStr;
 use utoipa::ToSchema;
 
 mod file_type;
@@ -47,7 +50,9 @@ pub struct BasicDocument {
     /// the file type
     pub document_version_id: i64,
     /// The owner of the document
-    pub owner: String,
+    #[schema(value_type = String)]
+    #[sqlx(try_from = "String")]
+    pub owner: MacroUserIdStr<'static>,
     /// The name of the document
     #[serde(rename = "name", alias = "documentName")]
     pub document_name: String,
@@ -82,7 +87,7 @@ pub struct BasicDocument {
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
 
     /// The time the document was deleted
-    #[serde(skip_serializing_if = "Option::is_none", with = "ts_seconds_option")]
+    #[serde(with = "ts_seconds_option")]
     #[schema(value_type = i64, nullable=true)]
     pub deleted_at: Option<chrono::DateTime<chrono::Utc>>,
 
@@ -118,15 +123,7 @@ pub struct BackfillSearchDocumentInformation {
     pub file_type: FileType,
 }
 #[derive(
-    sqlx::FromRow,
-    serde::Serialize,
-    serde::Deserialize,
-    Eq,
-    PartialEq,
-    Debug,
-    Clone,
-    ToSchema,
-    Default,
+    sqlx::FromRow, serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone, ToSchema,
 )]
 #[serde(rename_all = "camelCase")]
 pub struct DocumentMetadata {
@@ -137,7 +134,9 @@ pub struct DocumentMetadata {
     /// the file type
     pub document_version_id: i64,
     /// The owner of the document
-    pub owner: String,
+    #[schema(value_type = String)]
+    #[sqlx(try_from = "String")]
+    pub owner: MacroUserIdStr<'static>,
     /// The name of the document
     pub document_name: String,
     /// The file type of the document (file extension)
@@ -194,7 +193,7 @@ impl DocumentMetadata {
     pub fn new_docx(
         document_id: &str,
         document_bom_id: i64,
-        owner: &str,
+        owner: MacroUserIdStr<'static>,
         document_name: &str,
         file_type: &str,
         document_family_id: Option<i64>,
@@ -207,7 +206,7 @@ impl DocumentMetadata {
     ) -> Self {
         Self {
             document_id: document_id.to_string(),
-            owner: owner.to_string(),
+            owner,
             document_name: document_name.to_string(),
             file_type: Some(file_type.to_string()),
             sha: None,
@@ -233,7 +232,7 @@ impl DocumentMetadata {
     pub fn new_document(
         document_id: &str,
         document_instance_id: i64,
-        owner: &str,
+        owner: MacroUserIdStr<'static>,
         document_name: &str,
         file_type: Option<FileType>,
         sha: &str,
@@ -248,7 +247,7 @@ impl DocumentMetadata {
     ) -> Self {
         Self {
             document_id: document_id.to_string(),
-            owner: owner.to_string(),
+            owner,
             document_name: document_name.to_string(),
             file_type: file_type.map(|s| s.as_str().to_string()),
             sha: Some(sha.to_string()),
@@ -273,7 +272,7 @@ impl DocumentMetadata {
     pub fn document(
         document_id: &str,
         document_instance_id: i64,
-        owner: &str,
+        owner: MacroUserIdStr<'static>,
         document_name: &str,
         file_type: Option<&str>,
         sha: &str,
@@ -289,7 +288,7 @@ impl DocumentMetadata {
     ) -> Self {
         Self {
             document_id: document_id.to_string(),
-            owner: owner.to_string(),
+            owner,
             document_name: document_name.to_string(),
             file_type: file_type.map(|s| s.to_string()),
             sha: Some(sha.to_string()),

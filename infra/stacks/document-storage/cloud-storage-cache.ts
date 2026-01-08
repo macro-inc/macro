@@ -4,8 +4,8 @@ const BASE_NAME = 'cloud-storage-cache';
 import * as aws from '@pulumi/aws';
 import * as awsNative from '@pulumi/aws-native';
 import type * as pulumi from '@pulumi/pulumi';
-import { stack } from '@shared';
-import { coparse_api_vpc_filtered_subnets } from '@vpc';
+import { stack } from '../../packages/shared';
+import { coparse_api_vpc_filtered_subnets } from '../../packages/vpc';
 
 export function getRedisInstance(vpc: {
   vpcId: pulumi.Output<string> | string;

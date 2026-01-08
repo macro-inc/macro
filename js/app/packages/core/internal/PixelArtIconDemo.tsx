@@ -1,7 +1,7 @@
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
-import { IconButton } from '@core/component/IconButton';
 import { DebugSlider } from '@core/component/Slider';
-import { TextButton } from '@core/component/TextButton';
 import { Bar } from '@core/component/TopBar/Bar';
 import clickOutside from '@core/directive/clickOutside';
 import Rotate from '@icon/regular/arrow-counter-clockwise.svg';
@@ -433,7 +433,7 @@ function GlyphGrid(props: GlyphGridProps) {
             Sort Alhpa
           </button>
         </div>
-        <TextButton
+        <DeprecatedTextButton
           onClick={() => {
             props.onNewGlyph();
           }}
@@ -518,7 +518,7 @@ function GlyphGrid(props: GlyphGridProps) {
                   </div>
 
                   <div class="absolute top-1 right-1 flex gap-0 opacity-0 bg-panel group-hover:opacity-100">
-                    <IconButton
+                    <DeprecatedIconButton
                       icon={Pencil}
                       tooltip={{ label: 'Edit' }}
                       onClick={(e) => {
@@ -527,7 +527,7 @@ function GlyphGrid(props: GlyphGridProps) {
                       }}
                       theme="base"
                     />
-                    <IconButton
+                    <DeprecatedIconButton
                       icon={Trash}
                       tooltip={{ label: 'Delete' }}
                       onClick={(e) => {
@@ -796,7 +796,11 @@ function GlyphEditor(props: GlyphEditorProps) {
         >
           <div class="p-2 border-b border-edge flex items-center justify-between">
             <h2 class="font-mono text-xs">Editor</h2>
-            <IconButton icon={X} onClick={props.onClose} theme="clear" />
+            <DeprecatedIconButton
+              icon={X}
+              onClick={props.onClose}
+              theme="clear"
+            />
           </div>
 
           <div class="flex flex-1 overflow-hidden">
@@ -914,13 +918,13 @@ function GlyphEditor(props: GlyphEditorProps) {
                 </div>
 
                 <div class="grid grid-cols-2 gap-2 mb-4">
-                  <TextButton
+                  <DeprecatedTextButton
                     text="Clear Grid"
                     onClick={clearAll}
                     theme="base"
                     icon={Erase}
                   />
-                  <TextButton
+                  <DeprecatedTextButton
                     text="Fill Grid"
                     onClick={fillAll}
                     theme="base"
@@ -931,19 +935,19 @@ function GlyphEditor(props: GlyphEditorProps) {
                 <div class="space-y-2 mb-4">
                   <h4 class="font-mono text-xs text-ink-muted">Transforms</h4>
                   <div class="flex gap-2">
-                    <IconButton
+                    <DeprecatedIconButton
                       tooltip={{ label: 'Mirror X' }}
                       onClick={handleMirrorX}
                       theme="base"
                       icon={MirrorX}
                     />
-                    <IconButton
+                    <DeprecatedIconButton
                       tooltip={{ label: 'Mirror Y' }}
                       onClick={handleMirrorY}
                       theme="base"
                       icon={MirrorY}
                     />
-                    <IconButton
+                    <DeprecatedIconButton
                       tooltip={{ label: 'Rotate 90 CCW' }}
                       onClick={handleRotate90CC}
                       theme="base"
@@ -955,12 +959,16 @@ function GlyphEditor(props: GlyphEditorProps) {
 
               <div class="pt-4 border-t border-edge">
                 <div class="grid grid-cols-2 gap-2">
-                  <TextButton
+                  <DeprecatedTextButton
                     text="Cancel"
                     onClick={props.onClose}
                     theme="muted"
                   />
-                  <TextButton text="Save" onClick={handleSave} theme="accent" />
+                  <DeprecatedTextButton
+                    text="Save"
+                    onClick={handleSave}
+                    theme="accent"
+                  />
                 </div>
               </div>
             </div>
@@ -1057,25 +1065,25 @@ function GlyphSidebar(props: GlyphSidebarProps) {
         <div class="mt-6 space-y-2">
           <h4 class="font-mono text-xs text-ink-muted">Batch Operations</h4>
           <div class="grid grid-cols-1 gap-2">
-            <TextButton
+            <DeprecatedTextButton
               text="Export to Clipboard"
               onClick={props.onExportAll}
               theme="base"
               icon={Copy}
             />
-            <TextButton
+            <DeprecatedTextButton
               text="Import from Clipboard"
               onClick={props.onImportAll}
               theme="base"
               icon={Upload}
             />
-            <TextButton
+            <DeprecatedTextButton
               text="Copy SVGs"
               onClick={props.onCopyAllSVGs}
               theme="base"
               icon={Copy}
             />
-            <TextButton
+            <DeprecatedTextButton
               text="Download SVGs"
               onClick={props.onDownloadAllSVGs}
               theme="base"
@@ -1134,7 +1142,7 @@ function GlyphSidebar(props: GlyphSidebarProps) {
               </div>
 
               <div class="flex gap-2">
-                <TextButton
+                <DeprecatedTextButton
                   text="Copy Svg"
                   icon={Copy}
                   onClick={() =>
@@ -1142,7 +1150,7 @@ function GlyphSidebar(props: GlyphSidebarProps) {
                   }
                   theme="clear"
                 />
-                <TextButton
+                <DeprecatedTextButton
                   text="Download Svg"
                   icon={Download}
                   onClick={() => {
@@ -1175,7 +1183,7 @@ function GlyphSidebar(props: GlyphSidebarProps) {
               </div>
 
               <div class="flex gap-2">
-                <TextButton
+                <DeprecatedTextButton
                   text="Copy Base64"
                   icon={Copy}
                   onClick={() =>

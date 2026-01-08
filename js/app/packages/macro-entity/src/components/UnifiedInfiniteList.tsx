@@ -1,25 +1,28 @@
+import { useSuspenseContext } from '@app/component/SuspenseContext';
+import { EmptyState } from '@app/component/UnifiedListEmptyState';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
-import Fragment from '@core/util/Fragment';
+import type { ViewId } from '@core/types/view';
 import { onElementConnect } from '@solid-primitives/lifecycle';
 import { debounce } from '@solid-primitives/scheduled';
+import { createVirtualizer, type Virtualizer } from '@tanstack/solid-virtual';
 import { StaticMarkdownContext } from 'core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import {
   type Accessor,
+  createComputed,
   createEffect,
   createMemo,
   createRenderEffect,
   createSignal,
-  type JSX,
+  For,
   Match,
   on,
   onCleanup,
   type Setter,
+  Show,
   Switch,
   untrack,
 } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
-import { type VirtualizerHandle, VList } from 'virtua/solid';
-import { LIST_WRAPPER } from '../constants/classStrings';
 import type {
   EntityInfiniteQuery,
   EntityList,
@@ -39,11 +42,25 @@ import type {
 import type { WithSearch } from '../types/search';
 import { Entity } from './Entity';
 
+const DEBOUNCE_FETCH_MORE_MS = 50;
+
+// note that this must be greater than DEBOUNCE_FETCH_MORE_MS
+const DEBOUNCE_LOADING_STATE_MS = 100;
+
+const cacheMap = new Map<
+  string,
+  {
+    offset: number;
+    cache?: any; // TBD
+  }
+>();
+
 /**
  * Merges search data from two entities, preferring service source with local as fallback.
  * - Uses service entity as base
  * - Falls back to local nameHighlight if service doesn't have one
  * - Falls back to local contentHighlights if service doesn't have any
+ * - Preserves 'local' source if either entity is local (for stable ordering)
  */
 const mergeSearchEntities = <T extends EntityData>(
   first: WithSearch<T>,
@@ -51,13 +68,28 @@ const mergeSearchEntities = <T extends EntityData>(
 ): WithSearch<T> => {
   const serviceEntity = first.search.source === 'service' ? first : second;
   const localEntity = first.search.source === 'local' ? first : second;
+  const hasLocal =
+    first.search.source === 'local' || second.search.source === 'local';
+
+  // NOTE: we that the longer name highlight is more relevant since it will contain a macro highlight tag
+  let nameHighlight;
+  if (serviceEntity.search.nameHighlight && localEntity.search.nameHighlight) {
+    nameHighlight =
+      serviceEntity.search.nameHighlight.length >=
+      localEntity.search.nameHighlight.length
+        ? serviceEntity.search.nameHighlight
+        : localEntity.search.nameHighlight;
+  } else {
+    nameHighlight =
+      serviceEntity.search.nameHighlight || localEntity.search.nameHighlight;
+  }
 
   return {
     ...serviceEntity,
     search: {
       ...serviceEntity.search,
-      nameHighlight:
-        serviceEntity.search.nameHighlight || localEntity.search.nameHighlight,
+      source: hasLocal ? 'local' : 'service',
+      nameHighlight,
       contentHitData: serviceEntity.search.contentHitData?.length
         ? serviceEntity.search.contentHitData
         : localEntity.search.contentHitData,
@@ -144,29 +176,31 @@ const deduplicateEntities = <T extends EntityData>(entities: T[]): T[] => {
  * Sorts entities for search mode
  */
 const sortEntitiesForSearch = <T extends EntityData>(a: T, b: T): number => {
-  const channelsFirst = (a: WithSearch<T>, b: WithSearch<T>) => {
-    if (a.type === 'channel' && b.type !== 'channel') return -1;
-    if (a.type !== 'channel' && b.type === 'channel') return 1;
+  if (!isSearchEntity(a) || !isSearchEntity(b)) {
+    if (isSearchEntity(a)) return -1;
+    if (isSearchEntity(b)) return 1;
     return 0;
-  };
-
-  const localFirst = (a: WithSearch<T>, b: WithSearch<T>) => {
-    if (a.search.source === 'local' && b.search.source !== 'local') return -1;
-    if (a.search.source !== 'local' && b.search.source === 'local') return 1;
-    return 0;
-  };
-
-  if (isSearchEntity(a) && isSearchEntity(b)) {
-    return channelsFirst(a, b) || localFirst(a, b);
   }
 
-  return 0;
+  const channelsWithNameMatchesFirst = (a: WithSearch<T>, b: WithSearch<T>) => {
+    if (a.type === 'channel' && b.type !== 'channel' && a.search.nameHighlight)
+      return -1;
+    if (a.type !== 'channel' && b.type === 'channel' && b.search.nameHighlight)
+      return 1;
+    return 0;
+  };
+
+  // NOTE: backend returns items in descending order of updatedAt so we match that here
+  const updatedAtFirst = (a: WithSearch<T>, b: WithSearch<T>) => {
+    if (a.updatedAt && b.updatedAt) return b.updatedAt - a.updatedAt;
+    if (a.updatedAt) return -1;
+    if (b.updatedAt) return 1;
+    return 0;
+  };
+
+  // TODO: we may want to sort exact name matches first for other items too
+  return channelsWithNameMatchesFirst(a, b) || updatedAtFirst(a, b);
 };
-
-const DEBOUNCE_FETCH_MORE_MS = 50;
-
-// note that this must be greater than DEBOUNCE_FETCH_MORE_MS
-const DEBOUNCE_LOADING_STATE_MS = 100;
 
 const getGroupKey = (operations?: EntityQueryOperations): PropertyKey => {
   if (!operations) return 0;
@@ -189,6 +223,7 @@ const getOperations = <T extends Partial<EntityQueryOperations>>(
 };
 
 interface UnifiedInfiniteListContext<T extends EntityData> {
+  id: string;
   entityInfiniteQueries: Array<
     EntityQueryWithOperations<
       EntityData | WithSearch<EntityData>,
@@ -202,9 +237,11 @@ interface UnifiedInfiniteListContext<T extends EntityData> {
   entitySort?: Accessor<EntityComparator<T>>;
   searchFilter?: Accessor<EntitiesFilter<T> | undefined>;
   isSearchActive?: Accessor<boolean>;
+  disableFetchMore?: Accessor<boolean>;
 }
 
 export function createUnifiedInfiniteList<T extends EntityData>({
+  id,
   entityInfiniteQueries,
   entityQueries,
   entityMapper = (entity: EntityData) => entity as T,
@@ -213,6 +250,7 @@ export function createUnifiedInfiniteList<T extends EntityData>({
   entitySort,
   searchFilter,
   isSearchActive,
+  disableFetchMore,
 }: UnifiedInfiniteListContext<T>) {
   const [sortedEntitiesStore, setSortedEntitiesStore] = createStore<T[]>([]);
   const allEntities = createMemo(() => {
@@ -307,7 +345,7 @@ export function createUnifiedInfiniteList<T extends EntityData>({
     const searching = isSearchActive?.();
 
     if (searching) {
-      // NOTE: the default sort will be channels, then local fuzzy name, then serach service
+      // NOTE: the default sort will be channels, then local fuzzy name, then search service
       // avoiding doing an extra sort as a speed optimization
       return entities.toSorted(sortEntitiesForSearch);
     }
@@ -359,32 +397,9 @@ export function createUnifiedInfiniteList<T extends EntityData>({
     });
   });
 
-  const [showNoResults, setShowNoResults] = createSignal(false);
-  let noResultsTimeoutId: ReturnType<typeof setTimeout> | undefined;
-  createEffect(
-    on(
-      [() => sortedEntities().length, debouncedIsLoading],
-      ([entitiesLength, loading]) => {
-        if (noResultsTimeoutId) clearTimeout(noResultsTimeoutId);
-
-        if (!loading && entitiesLength === 0) {
-          noResultsTimeoutId = setTimeout(() => {
-            setShowNoResults(true);
-          }, DEBOUNCE_LOADING_STATE_MS + 50);
-        } else if (entitiesLength > 0) {
-          setShowNoResults(false);
-        }
-      }
-    )
-  );
-
-  onCleanup(() => {
-    if (noResultsTimeoutId) clearTimeout(noResultsTimeoutId);
-  });
-
   let isFetchingMore = false;
   const fetchMoreData = async () => {
-    if (isFetchingMore) return;
+    if (disableFetchMore?.() || isFetchingMore) return;
 
     isFetchingMore = true;
     const results = entityInfiniteQueries.map((query) => {
@@ -405,13 +420,39 @@ export function createUnifiedInfiniteList<T extends EntityData>({
 
   const DEFAULT_HEIGHT = 600;
   const [containerHeight, setContainerHeight] = createSignal(DEFAULT_HEIGHT);
+
   const UnifiedInfiniteList = (props: {
     children?: EntityRenderer<T>;
     entityListRef?: (ref: HTMLDivElement | undefined) => void;
-    virtualizerHandle?: Setter<VirtualizerHandle | undefined>;
-    emptyState?: JSX.Element;
-    hasRefinementsFromBase?: Accessor<boolean>;
+    virtualizerHandle?: Setter<Virtualizer<Element, Element> | undefined>;
+    hasRefinementsFromBase?: boolean;
+    viewId?: ViewId;
+    searchText?: string;
+    entityMinHeight?: number;
   }) => {
+    const [scrollParentRef, setScrollParentRef] =
+      createSignal<HTMLDivElement>();
+
+    // Estimate items per viewport and derive overscan and page size
+    // Keep a conservative default item size for estimation;
+    const entityHeight = props.entityMinHeight ?? 40;
+    const viewportItemCount = createMemo(() =>
+      Math.max(1, Math.ceil(containerHeight() / entityHeight))
+    );
+    const computedOverscan = createMemo(() =>
+      Math.max(6, Math.ceil(viewportItemCount() * 0.5))
+    );
+    const rowVirtualizer = createVirtualizer({
+      get count() {
+        return sortedEntitiesStore.length;
+      },
+      estimateSize: () => entityHeight,
+      getScrollElement: () => scrollParentRef() as Element,
+      overscan: computedOverscan(),
+    });
+
+    props.virtualizerHandle?.(rowVirtualizer);
+
     const [listRef, setListRef] = createSignal<HTMLDivElement>();
     let containerSizeObserver: ResizeObserver | null = null;
 
@@ -437,16 +478,6 @@ export function createUnifiedInfiniteList<T extends EntityData>({
       onCleanup(() => containerSizeObserver?.disconnect());
     });
 
-    // Estimate items per viewport and derive overscan and page size
-    // Keep a conservative default item size for estimation; virtua will auto-measure precisely.
-    const ENTITY_HEIGHT = 52;
-    const viewportItemCount = createMemo(() =>
-      Math.max(1, Math.ceil(containerHeight() / ENTITY_HEIGHT))
-    );
-    const computedOverscan = createMemo(() =>
-      Math.max(6, Math.ceil(viewportItemCount() * 0.5))
-    );
-
     const loadingCount = () =>
       entityQueries?.filter((query) => query.query.isLoading).length ??
       0 + entityInfiniteQueries.filter((query) => query.query.isLoading).length;
@@ -468,62 +499,196 @@ export function createUnifiedInfiniteList<T extends EntityData>({
 
     onCleanup(() => debouncedFetchMore.clear());
 
+    const cacheKey = `list-cache-${id}`;
+
+    // compose method to cache scroll position when called
+    const scrollToIndex = rowVirtualizer.scrollToIndex;
+    rowVirtualizer.scrollToIndex = (
+      index: number,
+      options?: ScrollToOptions | undefined
+    ) => {
+      // @ts-expect-error
+      scrollToIndex(index, options);
+      requestAnimationFrame(() => {
+        cacheVirtualizerHandle();
+      });
+    };
+
+    // Restore scroll position on mount
+    const restoreScrollPosition = () => {
+      const { offset: cachedOffset } = cacheMap.get(cacheKey) || { offset: 0 };
+      if (rowVirtualizer && cachedOffset != null) {
+        rowVirtualizer.scrollToOffset(cachedOffset);
+      }
+    };
+
+    const cacheVirtualizerHandle = () => {
+      const key = cacheKey;
+
+      const scrollOffset = rowVirtualizer.scrollOffset;
+      if (rowVirtualizer && key) {
+        cacheMap.set(key, { offset: scrollOffset ?? 0 });
+      }
+    };
+
+    let scrollMounted = false;
+    createEffect(
+      on(scrollParentRef, (scrollParentRef, prev) => {
+        if (scrollParentRef && prev == null) {
+          scrollMounted = true;
+          restoreScrollPosition();
+        }
+      })
+    );
+
+    const { isPending } = useSuspenseContext();
+
+    // Save scroll position and cache on cleanup
+    onCleanup(() => {
+      cacheVirtualizerHandle();
+    });
+
+    // Restore scroll after Suspense
+    createComputed(
+      on(
+        isPending,
+        (isPending, prevIsPending) => {
+          if (isPending) {
+            if (scrollMounted) {
+              cacheVirtualizerHandle();
+            }
+          }
+          if (isPending === false && prevIsPending === true) {
+            queueMicrotask(() => {
+              restoreScrollPosition();
+            });
+          }
+        },
+        { defer: true }
+      )
+    );
+
+    // stable empty state
+    const entityCount = createMemo(() => sortedEntities().length);
+    const [showEmptyState, setShowEmptyState] = createSignal<boolean>(false);
+    const [loadFinished, setLoadFinished] = createSignal<boolean>(false);
+    createEffect(() => {
+      if (entityCount() === 0) {
+        setLoadFinished(false);
+        let count = 0;
+        const timeoutId = setInterval(() => {
+          const countExceeded = ++count > 10;
+          if (countExceeded) {
+            console.warn('Too many interval iterations');
+          }
+
+          if (loadFinished() || countExceeded) clearInterval(timeoutId);
+          if (entityCount() === 0 && !debouncedIsLoading()) {
+            setLoadFinished(true);
+          }
+        }, 500);
+      }
+    });
+    createEffect(() => {
+      if (hasFinishedInitialLoad() && !debouncedIsLoading()) {
+        setLoadFinished(true);
+      }
+    });
+    createEffect(() => {
+      if (entityCount() > 0) {
+        setShowEmptyState(false);
+        return;
+      }
+      setShowEmptyState(loadFinished());
+    });
+
     return (
       <Switch>
-        <Match
-          when={
-            hasFinishedInitialLoad() &&
-            !props.hasRefinementsFromBase?.() &&
-            sortedEntities().length === 0
-          }
-        >
-          {props.emptyState}
-        </Match>
-        <Match when={showNoResults() && props.hasRefinementsFromBase?.()}>
-          <div class="flex size-full p-4">
-            <span class="font-mono text-ink-muted">No results found</span>
-          </div>
-          {/* TODO: Filtered Empty State */}
+        <Match when={showEmptyState()}>
+          <EmptyState
+            viewId={props.viewId}
+            search={!!props.searchText}
+            hasRefinementsFromBase={props.hasRefinementsFromBase}
+          />
         </Match>
         <Match when={true}>
           <div class="flex size-full relative" ref={setListRef}>
             <StaticMarkdownContext>
-              <Fragment
+              <div
+                class="size-full relative scrollbar-hidden"
+                data-unified-entity-list
                 ref={(el) => {
                   onElementConnect(el, () => {
-                    props.entityListRef?.(el as HTMLDivElement);
+                    setScrollParentRef(el as HTMLDivElement);
                   });
                 }}
+                style={{
+                  overflow: 'auto',
+                }}
               >
-                <VList
-                  ref={props.virtualizerHandle}
-                  data={sortedEntitiesStore}
-                  class={`${LIST_WRAPPER} scrollbar-hidden`}
-                  data-unified-entity-list
-                  overscan={computedOverscan()}
+                <div
+                  ref={(el) => {
+                    onElementConnect(el, () => {
+                      props.entityListRef?.(el as HTMLDivElement);
+                    });
+                  }}
+                  style={{
+                    height: `${rowVirtualizer.getTotalSize()}px`,
+                    width: '100%',
+                    position: 'relative',
+                  }}
                 >
-                  {(entity, index) => {
-                    if (
-                      untrack(index) ===
-                      Math.floor(untrack(sortedEntities).length * 0.9)
-                    )
-                      debouncedFetchMore();
-                    return <EntityRenderer entity={entity} index={index()} />;
-                  }}
-                </VList>
-                {/* <div class={LIST_WRAPPER}>
-                <Key each={sortedEntities()} by={(item) => item.id}>
-                  {(entity, index) => {
-                    if (
-                      untrack(index) ===
-                      Math.floor(untrack(sortedEntities).length * 0.9)
-                    )
-                      debouncedFetchMore();
-                    return <EntityRenderer entity={entity()} index={index()} />;
-                  }}
-                </Key>
-              </div> */}
-              </Fragment>
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      transform: `translateY(${rowVirtualizer.getVirtualItems()?.[0]?.start}px)`,
+                    }}
+                  >
+                    <For each={rowVirtualizer.getVirtualItems()}>
+                      {(virtualItem) => {
+                        if (
+                          untrack(() => virtualItem.index) >=
+                          Math.floor(untrack(sortedEntities).length * 0.9)
+                        ) {
+                          debouncedFetchMore();
+                        }
+
+                        return (
+                          <Show
+                            when={sortedEntitiesStore[virtualItem.index]?.id}
+                            keyed
+                          >
+                            {(_) => {
+                              const entity =
+                                sortedEntitiesStore[virtualItem.index];
+                              return (
+                                <Show when={entity}>
+                                  <div
+                                    data-index={virtualItem.index}
+                                    ref={(el) =>
+                                      queueMicrotask(() =>
+                                        rowVirtualizer.measureElement(el)
+                                      )
+                                    }
+                                  >
+                                    <EntityRenderer
+                                      entity={entity}
+                                      index={virtualItem.index}
+                                    />
+                                  </div>
+                                </Show>
+                              );
+                            }}
+                          </Show>
+                        );
+                      }}
+                    </For>
+                  </div>
+                </div>
+              </div>
             </StaticMarkdownContext>
             <CustomScrollbar
               scrollContainer={() => {

@@ -1,7 +1,7 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { QueueAlarms } from '@resources';
-import { CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '@shared';
+import { QueueAlarms } from '../../packages/resources';
+import { CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '../../packages/shared';
 import { UPLOAD_EXTRACTOR_LAMBDA_TIMEOUT_SECONDS } from './upload-extractor-lambda-handler';
 
 interface BulkUploadQueueArgs {

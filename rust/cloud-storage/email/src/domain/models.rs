@@ -38,6 +38,12 @@ pub enum PreviewView {
     UserLabel(String),
 }
 
+impl Default for PreviewView {
+    fn default() -> Self {
+        PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox)
+    }
+}
+
 impl std::fmt::Display for PreviewView {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

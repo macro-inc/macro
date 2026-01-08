@@ -6,7 +6,7 @@ use axum::{
 };
 use axum_extra::extract::Cached;
 use comms_db_client::participants::add_participant::{AddParticipantOptions, add_participant};
-use model::comms::{ChannelType, ParticipantRole};
+use model::comms::ParticipantRole;
 use model::user::UserContext;
 use sqlx::PgPool;
 
@@ -36,7 +36,7 @@ pub async fn join_channel_handler(
     Cached(ChannelId(channel_id)): Cached<ChannelId>,
     user_ctx: Extension<UserContext>,
 ) -> Result<StatusCode, (StatusCode, String)> {
-    if let ChannelType::DirectMessage = channel_type {
+    if let models_comms::channel::ChannelType::DirectMessage = channel_type {
         tracing::error!("user tried to join a direct message channel");
         return Err((
             StatusCode::BAD_REQUEST,

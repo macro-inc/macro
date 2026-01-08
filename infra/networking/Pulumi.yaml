@@ -1,5 +1,0 @@
-name: macro-core-networking
-runtime: nodejs
-description: Core networking infrastructure for all of macro. (VPCs, subnets, etc.)
-config:
-  aws:region: us-east-1

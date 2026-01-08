@@ -1,5 +1,5 @@
 use crate::{
-    prelude::ImageSource,
+    prelude::{ClientTool, ImageSource},
     types::request::{self, SystemPrompt},
 };
 use async_openai::types::{
@@ -328,11 +328,11 @@ impl From<ChatCompletionToolChoiceOption> for request::ToolChoice {
 
 impl From<ChatCompletionTool> for request::Tool {
     fn from(value: ChatCompletionTool) -> Self {
-        Self {
+        Self::Client(ClientTool {
             description: value.function.description,
             input_schema: value.function.parameters.unwrap_or_default(),
             name: value.function.name,
-        }
+        })
     }
 }
 

@@ -8,14 +8,14 @@ use axum::{
     response::IntoResponse,
 };
 use macro_middleware::cloud_storage::ensure_access::document::DocumentAccessExtractor;
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model::user::UserContext;
 use model::{
     document::DocumentBasic,
     response::{EmptyResponse, GenericErrorResponse, GenericResponse},
 };
-use model_notifications::{
-    DocumentMentionMetadata, NotificationEntity, NotificationEvent, NotificationQueueMessage,
-};
+use model_entity::EntityType;
+use model_notifications::{DocumentMentionMetadata, NotificationEvent, NotificationQueueMessage};
 use models_permissions::share_permission::access_level::CommentAccessLevel;
 
 #[derive(serde::Deserialize)]
@@ -55,18 +55,25 @@ pub async fn handler(
 
     if !req.mentions.is_empty() {
         let metadata = DocumentMentionMetadata {
-            document_name: document_context.document_name.clone(),
-            owner: document_context.owner.clone(),
-            file_type: document_context.file_type.clone(),
+            document_name: document_context.0.document_name,
+            owner: document_context.0.owner,
+            file_type: document_context.0.file_type,
             metadata: req.metadata,
         };
 
+        let Ok(sender_id) =
+            MacroUserIdStr::parse_from_str(&user_context.user_id).map(CowLike::into_owned)
+        else {
+            return GenericResponse::builder()
+                .message("invalid macro user id")
+                .is_error(true)
+                .send(StatusCode::BAD_REQUEST);
+        };
         let notification_queue_message = NotificationQueueMessage {
-            notification_entity: NotificationEntity::new_document(document_id),
+            notification_entity: EntityType::Document.with_entity_string(document_id),
             notification_event: NotificationEvent::DocumentMention(metadata),
-            sender_id: Some(user_context.user_id.clone()),
+            sender_id: Some(sender_id),
             recipient_ids: Some(req.mentions.clone()),
-            is_important_v0: Some(false),
         };
 
         if let Err(err) = macro_notify_client

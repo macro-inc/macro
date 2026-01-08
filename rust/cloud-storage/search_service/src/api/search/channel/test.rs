@@ -12,17 +12,17 @@ fn test_construct_search_result_empty_input() {
 
 #[test]
 fn test_construct_search_result_single_channel() {
-    let channel_uuid = "550e8400-e29b-41d4-a716-446655440000";
+    let channel_uuid: Uuid = "550e8400-e29b-41d4-a716-446655440000".parse().unwrap();
     let search_results = vec![opensearch_client::search::model::SearchHit {
-        entity_id: channel_uuid.to_string(),
+        entity_id: channel_uuid,
         entity_type: SearchEntityType::Channels,
         goto: Some(
             opensearch_client::search::model::SearchGotoContent::Channels(
                 opensearch_client::search::model::SearchGotoChannel {
-                    channel_message_id: "msg1".to_string(),
+                    channel_message_id: "11111111-1111-1111-1111-111111111111".parse().unwrap(),
                     created_at: 1234567890,
                     updated_at: 1234567891,
-                    thread_id: Some("thread1".to_string()),
+                    thread_id: Some("22222222-2222-2222-2222-222222222222".parse().unwrap()),
                     sender_id: "user1".to_string(),
                 },
             ),
@@ -31,13 +31,14 @@ fn test_construct_search_result_single_channel() {
         highlight: Highlight {
             name: None,
             content: vec!["Test message content".to_string()],
+            ..Default::default()
         },
     }];
 
     let mut channel_histories = HashMap::new();
     channel_histories.insert(
-        Uuid::parse_str(channel_uuid).unwrap(),
-        create_channel_history(channel_uuid),
+        channel_uuid,
+        create_channel_history(channel_uuid.to_string().as_str()),
     );
 
     let result = construct_search_result(search_results, channel_histories).unwrap();
@@ -49,8 +50,9 @@ fn test_construct_search_result_single_channel() {
         result[0].extra.channel_message_search_results[0]
             .message_id
             .as_ref()
-            .unwrap(),
-        "msg1"
+            .unwrap()
+            .to_string(),
+        "11111111-1111-1111-1111-111111111111"
     );
     assert_eq!(
         result[0].extra.channel_message_search_results[0]
@@ -61,24 +63,24 @@ fn test_construct_search_result_single_channel() {
     );
     assert_eq!(
         result[0].extra.channel_message_search_results[0].thread_id,
-        Some("thread1".to_string())
+        Some("22222222-2222-2222-2222-222222222222".parse().unwrap())
     );
 }
 
 #[test]
 fn test_construct_search_result_multiple_messages_same_channel() {
-    let channel_uuid = "550e8400-e29b-41d4-a716-446655440001";
+    let channel_uuid: Uuid = "550e8400-e29b-41d4-a716-446655440001".parse().unwrap();
     let search_results = vec![
         opensearch_client::search::model::SearchHit {
-            entity_id: channel_uuid.to_string(),
+            entity_id: channel_uuid,
             entity_type: SearchEntityType::Channels,
             goto: Some(
                 opensearch_client::search::model::SearchGotoContent::Channels(
                     opensearch_client::search::model::SearchGotoChannel {
-                        channel_message_id: "msg1".to_string(),
+                        channel_message_id: "11111111-1111-1111-1111-111111111111".parse().unwrap(),
                         created_at: 1234567890,
                         updated_at: 1234567891,
-                        thread_id: Some("thread1".to_string()),
+                        thread_id: Some("22222222-2222-2222-2222-222222222222".parse().unwrap()),
                         sender_id: "user1".to_string(),
                     },
                 ),
@@ -87,18 +89,19 @@ fn test_construct_search_result_multiple_messages_same_channel() {
             highlight: Highlight {
                 name: None,
                 content: vec!["First message".to_string()],
+                ..Default::default()
             },
         },
         opensearch_client::search::model::SearchHit {
-            entity_id: channel_uuid.to_string(),
+            entity_id: channel_uuid,
             entity_type: SearchEntityType::Channels,
             goto: Some(
                 opensearch_client::search::model::SearchGotoContent::Channels(
                     opensearch_client::search::model::SearchGotoChannel {
-                        channel_message_id: "msg2".to_string(),
+                        channel_message_id: "22222222-2222-2222-2222-222222222222".parse().unwrap(),
                         created_at: 1234567892,
                         updated_at: 1234567893,
-                        thread_id: Some("thread2".to_string()),
+                        thread_id: Some("33333333-3333-3333-3333-333333333333".parse().unwrap()),
                         sender_id: "user2".to_string(),
                     },
                 ),
@@ -107,14 +110,15 @@ fn test_construct_search_result_multiple_messages_same_channel() {
             highlight: Highlight {
                 name: None,
                 content: vec!["Second message".to_string()],
+                ..Default::default()
             },
         },
     ];
 
     let mut channel_histories = HashMap::new();
     channel_histories.insert(
-        Uuid::parse_str(channel_uuid).unwrap(),
-        create_channel_history(channel_uuid),
+        channel_uuid,
+        create_channel_history(channel_uuid.to_string().as_str()),
     );
 
     let result = construct_search_result(search_results, channel_histories).unwrap();
@@ -128,10 +132,10 @@ fn test_construct_search_result_multiple_messages_same_channel() {
         .extra
         .channel_message_search_results
         .iter()
-        .map(|r| r.message_id.clone().unwrap())
+        .map(|r| r.message_id.unwrap().to_string())
         .collect();
-    assert!(message_ids.contains(&"msg1".to_string()));
-    assert!(message_ids.contains(&"msg2".to_string()));
+    assert!(message_ids.contains(&"11111111-1111-1111-1111-111111111111".to_string()));
+    assert!(message_ids.contains(&"22222222-2222-2222-2222-222222222222".to_string()));
 
     let sender_ids: Vec<String> = result[0]
         .extra
@@ -145,18 +149,18 @@ fn test_construct_search_result_multiple_messages_same_channel() {
 
 #[test]
 fn test_construct_search_result_filters_messages_without_content() {
-    let channel_uuid = "550e8400-e29b-41d4-a716-446655440002";
+    let channel_uuid: Uuid = "550e8400-e29b-41d4-a716-446655440002".parse().unwrap();
     let search_results = vec![
         opensearch_client::search::model::SearchHit {
-            entity_id: channel_uuid.to_string(),
+            entity_id: channel_uuid,
             entity_type: SearchEntityType::Channels,
             goto: Some(
                 opensearch_client::search::model::SearchGotoContent::Channels(
                     opensearch_client::search::model::SearchGotoChannel {
-                        channel_message_id: "msg1".to_string(),
+                        channel_message_id: "11111111-1111-1111-1111-111111111111".parse().unwrap(),
                         created_at: 1234567890,
                         updated_at: 1234567891,
-                        thread_id: Some("thread1".to_string()),
+                        thread_id: Some("22222222-2222-2222-2222-222222222222".parse().unwrap()),
                         sender_id: "user1".to_string(),
                     },
                 ),
@@ -165,18 +169,19 @@ fn test_construct_search_result_filters_messages_without_content() {
             highlight: Highlight {
                 name: None,
                 content: vec!["Message with content".to_string()],
+                ..Default::default()
             },
         },
         opensearch_client::search::model::SearchHit {
-            entity_id: channel_uuid.to_string(),
+            entity_id: channel_uuid,
             entity_type: SearchEntityType::Channels,
             goto: Some(
                 opensearch_client::search::model::SearchGotoContent::Channels(
                     opensearch_client::search::model::SearchGotoChannel {
-                        channel_message_id: "msg2".to_string(),
+                        channel_message_id: "22222222-2222-2222-2222-222222222222".parse().unwrap(),
                         created_at: 1234567892,
                         updated_at: 1234567893,
-                        thread_id: Some("thread2".to_string()),
+                        thread_id: Some("33333333-3333-3333-3333-333333333333".parse().unwrap()),
                         sender_id: "user2".to_string(),
                     },
                 ),
@@ -185,14 +190,15 @@ fn test_construct_search_result_filters_messages_without_content() {
             highlight: Highlight {
                 name: None,
                 content: vec![],
+                ..Default::default()
             },
         },
     ];
 
     let mut channel_histories = HashMap::new();
     channel_histories.insert(
-        Uuid::parse_str(channel_uuid).unwrap(),
-        create_channel_history(channel_uuid),
+        channel_uuid,
+        create_channel_history(channel_uuid.to_string().as_str()),
     );
 
     let result = construct_search_result(search_results, channel_histories).unwrap();
@@ -203,8 +209,9 @@ fn test_construct_search_result_filters_messages_without_content() {
         result[0].extra.channel_message_search_results[0]
             .message_id
             .as_ref()
-            .unwrap(),
-        "msg1"
+            .unwrap()
+            .to_string(),
+        "11111111-1111-1111-1111-111111111111"
     );
 }
 
@@ -215,15 +222,15 @@ fn create_test_channel_response(
     content: Option<Vec<String>>,
 ) -> opensearch_client::search::model::SearchHit {
     opensearch_client::search::model::SearchHit {
-        entity_id: channel_id.to_string(),
+        entity_id: channel_id.parse().unwrap(),
         entity_type: SearchEntityType::Channels,
         goto: Some(
             opensearch_client::search::model::SearchGotoContent::Channels(
                 opensearch_client::search::model::SearchGotoChannel {
-                    channel_message_id: message_id.to_string(),
+                    channel_message_id: message_id.parse().unwrap(),
                     created_at: 1234567890,
                     updated_at: 1234567891,
-                    thread_id: Some("thread1".to_string()),
+                    thread_id: Some("22222222-2222-2222-2222-222222222222".parse().unwrap()),
                     sender_id: sender_id.to_string(),
                 },
             ),
@@ -232,6 +239,7 @@ fn create_test_channel_response(
         highlight: Highlight {
             name: None,
             content: content.unwrap_or_default(),
+            ..Default::default()
         },
     }
 }
@@ -272,7 +280,7 @@ fn test_channel_history_timestamps() {
     // Create a test response with the UUID
     let input = vec![create_test_channel_response(
         &channel_uuid.to_string(),
-        "msg_1",
+        "11111111-1111-1111-1111-111111111111",
         "user_1",
         Some(vec!["hello world".to_string()]),
     )];
@@ -296,7 +304,7 @@ fn test_channel_history_missing_entry() {
     let missing_channel_uuid = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440002").unwrap();
     let input = vec![create_test_channel_response(
         &missing_channel_uuid.to_string(),
-        "msg_1",
+        "11111111-1111-1111-1111-111111111111",
         "user_1",
         Some(vec!["hello world".to_string()]),
     )];
@@ -331,7 +339,7 @@ fn test_channel_history_null_viewed_at() {
     let channel_uuid = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440004").unwrap();
     let input = vec![create_test_channel_response(
         &channel_uuid.to_string(),
-        "msg_1",
+        "11111111-1111-1111-1111-111111111111",
         "user_1",
         Some(vec!["hello world".to_string()]),
     )];
@@ -363,4 +371,155 @@ fn test_channel_history_null_viewed_at() {
     assert_eq!(metadata.updated_at, now.timestamp());
     assert!(metadata.viewed_at.is_none());
     assert!(metadata.interacted_at.is_none());
+}
+
+#[test]
+fn test_sort_stability() {
+    let channel_ids: Vec<Uuid> = [
+        "550e8400-e29b-41d4-a716-446655440003",
+        "550e8400-e29b-41d4-a716-446655440001",
+        "550e8400-e29b-41d4-a716-446655440005",
+        "550e8400-e29b-41d4-a716-446655440002",
+        "550e8400-e29b-41d4-a716-446655440004",
+    ]
+    .iter()
+    .map(|s| s.parse().unwrap())
+    .collect::<Vec<_>>();
+
+    let input = vec![
+        opensearch_client::search::model::SearchHit {
+            entity_id: channel_ids[0],
+            entity_type: SearchEntityType::Channels,
+            goto: Some(
+                opensearch_client::search::model::SearchGotoContent::Channels(
+                    opensearch_client::search::model::SearchGotoChannel {
+                        channel_message_id: "33333333-3333-3333-3333-333333333333".parse().unwrap(),
+                        created_at: 1234567890,
+                        updated_at: 1234567891,
+                        thread_id: Some("33333333-3333-3333-3333-333333333333".parse().unwrap()),
+                        sender_id: "user1".to_string(),
+                    },
+                ),
+            ),
+            score: None,
+            highlight: Highlight {
+                name: None,
+                content: vec!["third".to_string()],
+                ..Default::default()
+            },
+        },
+        opensearch_client::search::model::SearchHit {
+            entity_id: channel_ids[1],
+            entity_type: SearchEntityType::Channels,
+            goto: Some(
+                opensearch_client::search::model::SearchGotoContent::Channels(
+                    opensearch_client::search::model::SearchGotoChannel {
+                        channel_message_id: "11111111-1111-1111-1111-111111111111".parse().unwrap(),
+                        created_at: 1234567890,
+                        updated_at: 1234567891,
+                        thread_id: Some("11111111-1111-1111-1111-111111111111".parse().unwrap()),
+                        sender_id: "user1".to_string(),
+                    },
+                ),
+            ),
+            score: None,
+            highlight: Highlight {
+                name: None,
+                content: vec!["first".to_string()],
+                ..Default::default()
+            },
+        },
+        opensearch_client::search::model::SearchHit {
+            entity_id: channel_ids[2],
+            entity_type: SearchEntityType::Channels,
+            goto: Some(
+                opensearch_client::search::model::SearchGotoContent::Channels(
+                    opensearch_client::search::model::SearchGotoChannel {
+                        channel_message_id: "55555555-5555-5555-5555-555555555555".parse().unwrap(),
+                        created_at: 1234567890,
+                        updated_at: 1234567891,
+                        thread_id: Some("55555555-5555-5555-5555-555555555555".parse().unwrap()),
+                        sender_id: "user1".to_string(),
+                    },
+                ),
+            ),
+            score: None,
+            highlight: Highlight {
+                name: None,
+                content: vec!["fifth".to_string()],
+                ..Default::default()
+            },
+        },
+        opensearch_client::search::model::SearchHit {
+            entity_id: channel_ids[3],
+            entity_type: SearchEntityType::Channels,
+            goto: Some(
+                opensearch_client::search::model::SearchGotoContent::Channels(
+                    opensearch_client::search::model::SearchGotoChannel {
+                        channel_message_id: "22222222-2222-2222-2222-222222222222".parse().unwrap(),
+                        created_at: 1234567890,
+                        updated_at: 1234567891,
+                        thread_id: Some("22222222-2222-2222-2222-222222222222".parse().unwrap()),
+                        sender_id: "user1".to_string(),
+                    },
+                ),
+            ),
+            score: None,
+            highlight: Highlight {
+                name: None,
+                content: vec!["second".to_string()],
+                ..Default::default()
+            },
+        },
+        opensearch_client::search::model::SearchHit {
+            entity_id: channel_ids[4],
+            entity_type: SearchEntityType::Channels,
+            goto: Some(
+                opensearch_client::search::model::SearchGotoContent::Channels(
+                    opensearch_client::search::model::SearchGotoChannel {
+                        channel_message_id: "44444444-4444-4444-4444-444444444444".parse().unwrap(),
+                        created_at: 1234567890,
+                        updated_at: 1234567891,
+                        thread_id: Some("44444444-4444-4444-4444-444444444444".parse().unwrap()),
+                        sender_id: "user1".to_string(),
+                    },
+                ),
+            ),
+            score: None,
+            highlight: Highlight {
+                name: None,
+                content: vec!["fourth".to_string()],
+                ..Default::default()
+            },
+        },
+    ];
+
+    let mut channel_histories = HashMap::new();
+    for channel_id in &channel_ids {
+        channel_histories.insert(
+            channel_id.clone(),
+            create_channel_history(channel_id.to_string().as_str()),
+        );
+    }
+
+    let result1 = construct_search_result(input.clone(), channel_histories.clone()).unwrap();
+    let result2 = construct_search_result(input.clone(), channel_histories.clone()).unwrap();
+    let result3 = construct_search_result(input.clone(), channel_histories.clone()).unwrap();
+
+    assert_eq!(result1.len(), 5);
+    assert_eq!(result2.len(), 5);
+    assert_eq!(result3.len(), 5);
+
+    let ids1: Vec<Uuid> = result1.iter().map(|r| r.extra.id.clone()).collect();
+    let ids2: Vec<Uuid> = result2.iter().map(|r| r.extra.id.clone()).collect();
+    let ids3: Vec<Uuid> = result3.iter().map(|r| r.extra.id.clone()).collect();
+
+    assert_eq!(ids1, ids2, "Results should be stable between runs");
+    assert_eq!(ids2, ids3, "Results should be stable between runs");
+
+    assert_eq!(
+        ids1,
+        channel_ids.to_vec(),
+        "Results should preserve original search result order"
+    );
 }

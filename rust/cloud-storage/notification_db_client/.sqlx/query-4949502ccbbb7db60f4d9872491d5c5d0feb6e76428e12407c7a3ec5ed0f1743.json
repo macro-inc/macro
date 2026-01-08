@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO user_notification (\"notification_id\", \"user_id\") \n        SELECT $1, user_id\n        FROM UNNEST($2::text[]) as user_id\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4949502ccbbb7db60f4d9872491d5c5d0feb6e76428e12407c7a3ec5ed0f1743"
+}

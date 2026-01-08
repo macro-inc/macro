@@ -28,6 +28,7 @@ import {
 } from '@core/component/LexicalMarkdown/plugins';
 import { codePlugin } from '@core/component/LexicalMarkdown/plugins/code/codePlugin';
 import { emojisPlugin } from '@core/component/LexicalMarkdown/plugins/emojis/emojisPlugin';
+import { restoreFocusPlugin } from '@core/component/LexicalMarkdown/plugins/restore-focus';
 import { createMenuOperations } from '@core/component/LexicalMarkdown/shared/inlineMenu';
 import {
   editorIsEmpty,
@@ -36,9 +37,10 @@ import {
   setEditorStateFromMarkdown,
 } from '@core/component/LexicalMarkdown/utils';
 import type { PortalScope } from '@core/component/ScopedPortal';
-import { isMobileWidth } from '@core/mobile/mobileWidth';
 import type { IUser } from '@core/user';
 import type { Item } from '@service-storage/generated/schemas/item';
+import { onElementConnect } from '@solid-primitives/lifecycle';
+import { isMobile } from '@solid-primitives/platform';
 import { filePastePlugin } from 'core/component/LexicalMarkdown/plugins/file-paste/filePastePlugin';
 import { createAccessoryStore } from 'core/component/LexicalMarkdown/plugins/node-accessory/nodeAccessoryPlugin';
 import { normalizeEnterPlugin } from 'core/component/LexicalMarkdown/plugins/normalize-enter/';
@@ -53,13 +55,13 @@ import {
   type LexicalEditor,
   type TextFormatType,
 } from 'lexical';
+
 import {
   type Accessor,
   createEffect,
   createSignal,
   type JSXElement,
   onCleanup,
-  onMount,
   type Setter,
   Show,
 } from 'solid-js';
@@ -121,7 +123,6 @@ export function useChannelMarkdownArea(): UseChannelMarkdown {
   function ChannelMarkdownArea(props: ConsumableMarkdownAreaProps) {
     return (
       <MarkdownArea
-        mountRef={mountRef}
         setMountRef={setMountRef}
         setMentions={setMentions}
         markdownState={state}
@@ -157,7 +158,6 @@ export function useChannelMarkdownArea(): UseChannelMarkdown {
 }
 
 type MarkdownAreaProps = {
-  mountRef: Accessor<HTMLDivElement | undefined>;
   setMountRef: Setter<HTMLDivElement | undefined>;
   setMentions: Setter<ItemMention[]>;
   markdownState: Accessor<string>;
@@ -192,18 +192,16 @@ export type ConsumableMarkdownAreaProps = {
 function MarkdownArea(props: MarkdownAreaProps & ConsumableMarkdownAreaProps) {
   const { editor, plugins, cleanup } = props.lexicalWrapper;
 
-  onMount(() => {
-    editor.setRootElement(props.mountRef()!);
+  const onConnect = () => {
     editor.setEditable(true);
     if (props.initialValue) {
       setEditorStateFromMarkdown(editor, props.initialValue);
     } else {
       initializeEditorEmpty(editor);
     }
-    if (!isMobileWidth() && !props.dontFocusOnMount) {
-      editor.focus();
-    }
-  });
+    if (!isMobile && !props.dontFocusOnMount) editor.focus();
+  };
+
   createEffect(() => {
     props.onChange?.(props.markdownState());
   });
@@ -239,6 +237,7 @@ function MarkdownArea(props: MarkdownAreaProps & ConsumableMarkdownAreaProps) {
     .use(textPastePlugin())
     .use(markdownPastePlugin())
     .use(normalizeEnterPlugin())
+    .use(restoreFocusPlugin())
     .use(
       tablePlugin({
         hasCellMerge: true,
@@ -285,7 +284,8 @@ function MarkdownArea(props: MarkdownAreaProps & ConsumableMarkdownAreaProps) {
     autoRegister(
       editor.registerCommand(
         KEY_ENTER_COMMAND,
-        (e: KeyboardEvent) => {
+        (e) => {
+          if (!e) return false;
           // TODO (seamus) : This is hacky. If we got a props.onEnter,then shift+enter becomes
           // the new "regular enter", so we delete the shiftKey and pass along to lexical.
           if (e.shiftKey) {
@@ -332,14 +332,6 @@ function MarkdownArea(props: MarkdownAreaProps & ConsumableMarkdownAreaProps) {
     )
   );
 
-  // better focus in handling. preserves selection on regain focus!
-  autoRegister(
-    registerRootEventListener(editor, 'focusin', (e) => {
-      e.preventDefault();
-      editor.focus();
-    })
-  );
-
   let disposeBlurFn: () => void = () => {};
   createEffect(() => {
     disposeBlurFn();
@@ -352,14 +344,21 @@ function MarkdownArea(props: MarkdownAreaProps & ConsumableMarkdownAreaProps) {
   return (
     <LexicalWrapperContext.Provider value={props.lexicalWrapper}>
       <div class="relative w-full min-h-8">
-        <div ref={(el) => props.setMountRef(el)} contentEditable={true}></div>
+        <div
+          ref={(el) => {
+            onElementConnect(el, () => {
+              editor.setRootElement(el);
+              onConnect();
+              props.setMountRef(el);
+            });
+          }}
+          contentEditable={true}
+        ></div>
         <DecoratorRenderer editor={editor} />
         <NodeAccessoryRenderer editor={editor} store={accessories} />
         <Show when={showPlaceholder()}>
           <div class="pointer-events-none text-ink-placeholder absolute top-0">
-            <p class="p-0 m-0 text-ink-placeholder">
-              {props.placeholder ?? '...'}
-            </p>
+            <p class="p-0 m-0">{props.placeholder ?? '...'}</p>
           </div>
         </Show>
         <EmojiMenu

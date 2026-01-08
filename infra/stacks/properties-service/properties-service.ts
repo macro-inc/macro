@@ -6,9 +6,13 @@ import {
   datadogAgentContainer,
   fargateLogRouterSidecarContainer,
   serviceLoadBalancer,
-} from '@resources';
-import { EcrImage } from '@service';
-import { BASE_DOMAIN, CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '@shared';
+} from '../../packages/resources';
+import { EcrImage } from '../../packages/service';
+import {
+  BASE_DOMAIN,
+  CLOUD_TRAIL_SNS_TOPIC_ARN,
+  stack,
+} from '../../packages/shared';
 
 const BASE_NAME = 'properties-service';
 const BASE_PATH = '../../../rust/cloud-storage';
@@ -32,6 +36,7 @@ type CreatePropertiesServiceArgs = {
   healthCheckPath: string;
   tags: { [key: string]: string };
   secretKeyArns: (pulumi.Output<string> | string)[];
+  notificationQueueArn: pulumi.Output<string> | string;
 };
 
 export class PropertiesService extends pulumi.ComponentResource {
@@ -60,6 +65,7 @@ export class PropertiesService extends pulumi.ComponentResource {
       cloudStorageClusterName,
       tags,
       secretKeyArns,
+      notificationQueueArn,
     }: CreatePropertiesServiceArgs,
     opts?: pulumi.ComponentResourceOptions
   ) {
@@ -132,6 +138,25 @@ export class PropertiesService extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    const queuePolicy = new aws.iam.Policy(
+      `${BASE_NAME}-queue-policy`,
+      {
+        name: `${BASE_NAME}-queue-policy-${stack}`,
+        policy: {
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: ['sqs:SendMessage'],
+              Resource: [pulumi.interpolate`${notificationQueueArn}`],
+              Effect: 'Allow',
+            },
+          ],
+        },
+        tags: this.tags,
+      },
+      { parent: this }
+    );
+
     this.role = new aws.iam.Role(
       `${BASE_NAME}-role`,
       {
@@ -149,7 +174,7 @@ export class PropertiesService extends pulumi.ComponentResource {
             },
           ],
         },
-        managedPolicyArns: [secretsManagerPolicy.arn],
+        managedPolicyArns: [secretsManagerPolicy.arn, queuePolicy.arn],
         tags: this.tags,
       },
       { parent: this }

@@ -5,6 +5,7 @@ use anyhow::Context;
 use filter::filter_emails;
 use futures::StreamExt;
 use macro_env::Environment;
+use macro_user_id::email::ReadEmailParts;
 use model_notifications::{NotificationEventType, NotificationWithRecipient};
 
 use crate::{env::SENDER_ADDRESS, notification::context::QueueWorkerContext};
@@ -16,12 +17,7 @@ use crate::{env::SENDER_ADDRESS, notification::context::QueueWorkerContext};
 pub async fn process_email_notifications(
     queue_worker_context: &QueueWorkerContext,
     notification: &NotificationWithRecipient,
-    user_ids: &[String],
 ) -> anyhow::Result<()> {
-    let user_ids = user_ids
-        .iter()
-        .map(|user_id| user_id.to_string())
-        .collect::<Vec<String>>();
     // Only include valid events we want to send emails for
     match notification.inner.notification_event.event_type() {
         // NotificationEventType::CloudStorageItemSharedUser => {}
@@ -41,7 +37,7 @@ pub async fn process_email_notifications(
                 return Ok(());
             }
 
-            if !sender_id.unwrap().ends_with("@macro.com") {
+            if sender_id.unwrap().email_part().domain_part() != "macro.com" {
                 tracing::info!(
                     "not sending notification emails for non-macro users in non-prod environment"
                 );
@@ -53,7 +49,12 @@ pub async fn process_email_notifications(
 
     let sender_address = &*SENDER_ADDRESS;
 
-    let emails = filter_emails(queue_worker_context, notification, &user_ids).await?;
+    let emails = filter_emails(
+        queue_worker_context,
+        notification,
+        &[notification.recipient_id.as_ref().to_string()],
+    )
+    .await?;
 
     if emails.is_empty() {
         tracing::info!("no valid emails to send emails to");
@@ -72,12 +73,12 @@ pub async fn process_email_notifications(
             .inner
             .sender_id
             .as_ref()
-            .map(|s| s.replace("macro|", ""))
+            .map(|s| s.email_part().email_str().to_string())
             .context("sender id should exist")?;
 
         notification_db_client::channel_notification_email_sent::upsert::upsert_channel_notification_email_sent_bulk(
                 &queue_worker_context.db,
-                &notification.inner.notification_entity.event_item_id,
+                &notification.inner.notification_entity.entity_id,
                 &channel_invite_sent_user_ids,
             )
             .await.context("unable to upsert channel notification email sent")?;

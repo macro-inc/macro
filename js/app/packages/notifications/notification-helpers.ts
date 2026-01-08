@@ -15,7 +15,8 @@ export function useNotificationsForEntity(
   entity: Entity
 ): Accessor<UnifiedNotification[]> {
   return createMemo(
-    () => notificationSource.store[compositeEntity(entity)] ?? []
+    () =>
+      notificationSource.notificationsByEntity()[compositeEntity(entity)] ?? []
   );
 }
 
@@ -30,8 +31,8 @@ export function notificationIsOfEntity(
   entity: Entity
 ): boolean {
   return (
-    notification.eventItemType === entity.type &&
-    notification.eventItemId === entity.id
+    notification.entity_type === entity.type &&
+    notification.entity_id === entity.id
   );
 }
 
@@ -39,7 +40,7 @@ export function notificationIsOfEntityType(
   notification: UnifiedNotification,
   entityType: string
 ): boolean {
-  return notification.eventItemType === entityType;
+  return notification.entity_type === entityType;
 }
 
 /**
@@ -61,7 +62,8 @@ export function entityHasUnreadNotifications(
   notificationSource: NotificationSource,
   entity: Entity
 ): boolean {
-  const notifications = notificationSource.store[compositeEntity(entity)] ?? [];
+  const notifications =
+    notificationSource.notificationsByEntity()[compositeEntity(entity)] ?? [];
 
   return notifications.some((notification) => {
     return (
@@ -140,7 +142,7 @@ export function markNotificationsForEntityAsDone(
   entity: Entity
 ): Promise<void> {
   return notificationSource.bulkMarkAsDone(
-    notificationSource.store[compositeEntity(entity)] ?? []
+    notificationSource.notificationsByEntity()[compositeEntity(entity)] ?? []
   );
 }
 
@@ -151,7 +153,7 @@ export function markNotificationForEntityIdAsRead(
   return notificationSource.bulkMarkAsRead(
     notificationSource
       .notifications()
-      .filter((n) => n.eventItemId === id && !notificationIsRead(n))
+      .filter((n) => n.entity_id === id && !notificationIsRead(n))
   );
 }
 
@@ -166,7 +168,7 @@ export function markNotificationsForEntityAsRead(
   entity: Entity
 ): Promise<void> {
   return notificationSource.bulkMarkAsRead(
-    notificationSource.store[compositeEntity(entity)] ?? []
+    notificationSource.notificationsByEntity()[compositeEntity(entity)] ?? []
   );
 }
 

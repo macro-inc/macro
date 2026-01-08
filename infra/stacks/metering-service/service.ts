@@ -6,9 +6,13 @@ import {
   datadogAgentContainer,
   fargateLogRouterSidecarContainer,
   serviceLoadBalancer,
-} from '@resources';
-import { EcrImage } from '@service';
-import { BASE_DOMAIN, CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '@shared';
+} from '../../packages/resources';
+import { EcrImage } from '../../packages/service';
+import {
+  BASE_DOMAIN,
+  CLOUD_TRAIL_SNS_TOPIC_ARN,
+  stack,
+} from '../../packages/shared';
 
 const toSnakeCase = (...parts: String[]) => parts.join('_');
 //const capitalize = (word: String) => word[0].toUpperCase() + word.slice(1)

@@ -15,7 +15,7 @@ pub struct GetProjectsResponse {
     pub data: Vec<Project>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, ToSchema)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, ToSchema, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct GetProjectContentResponse {
     /// Indicates if an error occurred

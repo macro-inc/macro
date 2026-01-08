@@ -1,7 +1,7 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { config, getSearchEventQueue, stack } from '@shared';
-import { get_coparse_api_vpc } from '@vpc';
+import { config, getSearchEventQueue, stack } from '../../packages/shared';
+import { get_coparse_api_vpc } from '../../packages/vpc';
 import { DeleteItemPoller } from './lambda';
 
 const tags = {

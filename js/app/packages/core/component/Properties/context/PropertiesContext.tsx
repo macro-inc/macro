@@ -7,7 +7,7 @@ import {
   type ParentProps,
   useContext,
 } from 'solid-js';
-import type { Property } from '../types';
+import type { Property, PropertyApiValues, Result } from '../types';
 
 // Specific modal state types with proper typing
 export interface PropertySelectorModalState {
@@ -28,6 +28,14 @@ export interface CreatePropertyModalState {
   isOpen: boolean;
 }
 
+export interface PropertySaveHandler {
+  saveProperty: (
+    property: Property,
+    value: PropertyApiValues
+  ) => Promise<Result<void>>;
+  saveDate: (property: Property, date: Date) => Promise<Result<void>>;
+}
+
 export interface PropertiesContextValue {
   entityType: EntityType;
   canEdit: boolean;
@@ -39,6 +47,7 @@ export interface PropertiesContextValue {
   onPropertyPinned?: (propertyId: string) => void;
   onPropertyUnpinned?: (propertyId: string) => void;
   pinnedPropertyIds?: () => string[];
+  saveHandler: PropertySaveHandler;
 
   // Specific modal state accessors
   propertySelectorModal: Accessor<PropertySelectorModalState | null>;
@@ -77,6 +86,7 @@ export interface PropertiesProviderProps extends ParentProps {
   onPropertyPinned?: (propertyId: string) => void;
   onPropertyUnpinned?: (propertyId: string) => void;
   pinnedPropertyIds?: () => string[];
+  saveHandler: PropertySaveHandler;
 }
 
 const PropertiesContext = createContext<PropertiesContextValue>();
@@ -181,6 +191,7 @@ export function PropertiesProvider(props: PropertiesProviderProps) {
     onPropertyPinned: props.onPropertyPinned,
     onPropertyUnpinned: props.onPropertyUnpinned,
     pinnedPropertyIds: props.pinnedPropertyIds,
+    saveHandler: props.saveHandler,
     // Specific modal state
     propertySelectorModal,
     propertyEditorModal,

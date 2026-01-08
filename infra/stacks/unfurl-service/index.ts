@@ -1,6 +1,6 @@
 import * as pulumi from '@pulumi/pulumi';
-import { stack } from '@shared';
-import { get_coparse_api_vpc } from '@vpc';
+import { stack } from '../../packages/shared';
+import { get_coparse_api_vpc } from '../../packages/vpc';
 import { UnfurlService } from './unfurl-service';
 
 const tags = {

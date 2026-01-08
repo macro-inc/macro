@@ -6,8 +6,8 @@ import {
   getMacroNotify,
   getSearchEventQueue,
   stack,
-} from '@shared';
-import { get_coparse_api_vpc } from '@vpc';
+} from '../../packages/shared';
+import { get_coparse_api_vpc } from '../../packages/vpc';
 import { AuthenticationService } from './service';
 import { UserLinkCleanupHandler } from './user-link-cleanup-lambda';
 

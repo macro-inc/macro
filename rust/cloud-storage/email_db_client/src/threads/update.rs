@@ -3,7 +3,6 @@ use anyhow::Context;
 use chrono::{DateTime, Utc};
 use models_email::email::service::message::{is_inbound, is_outbound, is_spam_or_trash};
 use models_email::service;
-use sqlx::PgPool;
 use sqlx::types::Uuid;
 
 /// Updates a thread's metadata
@@ -83,14 +82,16 @@ pub async fn update_inbox_visible_status(
     Ok(())
 }
 
-/// Updates a thread's read status
-#[tracing::instrument(skip(db))]
-pub async fn update_thread_read_status(
-    db: &PgPool,
+#[tracing::instrument(skip(executor), err)]
+pub async fn update_thread_read_status<'e, E>(
+    executor: E,
     thread_id: Uuid,
     link_id: Uuid,
     is_read: bool,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<()>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Postgres>,
+{
     sqlx::query!(
         r#"
         UPDATE email_threads
@@ -105,12 +106,8 @@ pub async fn update_thread_read_status(
         thread_id,
         link_id,
     )
-    .execute(db)
-    .await
-    .context(format!(
-        "Failed to update read status to {} for thread ID {} with link_id {}",
-        is_read, thread_id, link_id
-    ))?;
+    .execute(executor)
+    .await?;
 
     Ok(())
 }

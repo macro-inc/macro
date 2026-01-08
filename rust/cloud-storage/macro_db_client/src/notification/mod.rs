@@ -1,4 +1,5 @@
 use anyhow::Context;
+use macro_user_id::user_id::MacroUserIdStr;
 
 use crate::document::get_basic_documents;
 use crate::{
@@ -15,7 +16,7 @@ pub mod project;
 pub struct BasicCloudStorageItemMetadata {
     pub item_id: String,
     pub item_name: String,
-    pub item_owner: String,
+    pub item_owner: MacroUserIdStr<'static>,
     pub file_type: Option<String>,
 }
 

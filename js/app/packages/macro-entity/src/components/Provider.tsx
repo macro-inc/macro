@@ -49,7 +49,7 @@ export function Provider(props: ParentProps) {
     staleTime: 1000 * 10, // 10 seconds
   });
   queryClient.setQueryDefaults(queryKeys.all.dss, {
-    staleTime: 1000 * 5, // 5 seconds
+    staleTime: 1000 * 60, // 1 minute
   });
   queryClient.setQueryDefaults(queryKeys.all.email, {
     staleTime: 1000, // 1 second

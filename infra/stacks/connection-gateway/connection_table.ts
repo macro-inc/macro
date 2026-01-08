@@ -1,5 +1,5 @@
 import type * as aws from '@pulumi/aws';
-import { DynamoDBTable } from '@resources';
+import { DynamoDBTable } from '../../packages/resources';
 
 export const getConnectionGatewayTable = (): {
   table: aws.dynamodb.Table;

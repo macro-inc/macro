@@ -14,6 +14,6 @@ pub fn router() -> Router<ApiContext> {
         // Bulk operations (POST with body)
         .route(
             "/properties/entities/bulk",
-            axum::routing::post(entities::get_bulk::get_bulk_entity_properties),
+            axum::routing::post(entities::get_bulk::get_bulk_entity_properties_internal),
         )
 }

@@ -1,7 +1,7 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { createBucket } from '@resources/resources/bucket';
-import { stack } from '@shared';
+import { createBucket } from '../../packages/resources';
+import { stack } from '../../packages/shared';
 
 const isLocal = stack === 'local';
 const BASE_NAME = `macro-email-attachments-${stack}`;

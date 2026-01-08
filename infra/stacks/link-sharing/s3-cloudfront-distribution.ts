@@ -1,7 +1,11 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import * as tls from '@pulumi/tls';
-import { BASE_DOMAIN, MACRO_SUBDOMAIN_CERT, stack } from '@shared';
+import {
+  BASE_DOMAIN,
+  MACRO_SUBDOMAIN_CERT,
+  stack,
+} from '../../packages/shared';
 import type { GetStorageBucketResult } from './file-storage-bucket';
 
 export const tags = {

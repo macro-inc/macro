@@ -6,5 +6,6 @@
  */
 import type { EntityFilters } from './entityFilters';
 import type { Params } from './params';
+import type { PostSoupRequestAllOf } from './postSoupRequestAllOf';
 
-export type PostSoupRequest = EntityFilters & Params;
+export type PostSoupRequest = EntityFilters & Params & PostSoupRequestAllOf;

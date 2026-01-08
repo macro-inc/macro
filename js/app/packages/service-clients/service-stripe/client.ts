@@ -1,32 +1,27 @@
-import {
-  type FetchWithTokenErrorCode,
-  fetchWithToken,
-} from '@core/util/fetchWithToken';
-import {
-  type MaybeResult,
-  mapOk,
-  type ObjectLike,
-} from '@core/util/maybeResult';
+import { ENABLE_BEARER_TOKEN_AUTH } from '@core/constant/featureFlags';
+import { SERVER_HOSTS } from '@core/constant/servers';
 import { registerClient } from '@core/util/mockClient';
+import { getAccessToken } from '@service-auth/client';
+import { LegacyApiRpcClient } from '../../codegen/auth_service/auth_service_rpc';
 
-export const GQL_ENDPOINT = import.meta.env.__MACRO_GQL_SERVICE__;
+// Create a singleton instance of the RPC client
+let rpcClientInstance: LegacyApiRpcClient | null = null;
 
-export async function gqlFetch<T extends ObjectLike>(
-  query: string,
-  variables?: Record<string, any>
-): Promise<MaybeResult<FetchWithTokenErrorCode, T>> {
-  return mapOk(
-    await fetchWithToken<{ data: T }>(GQL_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, variables }),
-      retry: {
-        delay: 'exponential',
-        maxTries: 3,
-      },
-    }),
-    ({ data }) => data
-  );
+async function getRpcClient(): Promise<LegacyApiRpcClient> {
+  if (!rpcClientInstance) {
+    const headers = new Headers();
+
+    if (ENABLE_BEARER_TOKEN_AUTH) {
+      const token = await getAccessToken();
+      if (token) headers.set('Authorization', `Bearer ${token}`);
+    }
+
+    rpcClientInstance = LegacyApiRpcClient.construct_with_headers(
+      `${SERVER_HOSTS['auth-service']}/user`,
+      () => headers
+    );
+  }
+  return rpcClientInstance;
 }
 
 export const stripeServiceClient = {
@@ -35,69 +30,31 @@ export const stripeServiceClient = {
    * @returns The URL of the checkout session
    */
   createCheckoutSession: async (type: string = '', discount?: string) => {
-    const query = `
-      mutation createCheckoutSession($successUrl: String!, $cancelUrl: String!, $discount: String) {
-        createCheckoutSession(successUrl: $successUrl, cancelUrl: $cancelUrl, discount: $discount) {
-          __typename
-          url
-        }
-      }
-    `;
     const variables = {
       successUrl: `${window.location.origin}/app/?subscriptionSuccess=true${type ? `&type=${type}` : ''}`,
       cancelUrl: `${window.location.origin}/app`,
-      discount: discount ?? undefined,
+      discount: discount ?? null,
     };
 
-    const response = await gqlFetch<{ createCheckoutSession: { url: string } }>(
-      query,
-      variables
-    );
+    const client = await getRpcClient();
+    const data = await client.create_checkout_session(variables);
 
-    if (response[0]) {
-      throw new Error(
-        `Failed to create checkout session: ${JSON.stringify(response[0])}`
-      );
-    }
-
-    return response[1].createCheckoutSession.url;
+    return data.url;
   },
   /**
    * Creates a portal session
    * @returns
    */
   createPortalSession: async () => {
-    const query = `
-      mutation createPortalSession($returnUrl: String!) {
-        createPortalSession(returnUrl: $returnUrl) {
-          __typename
-          url
-        }
-      }
-    `;
-
     const variables = {
       returnUrl: `${window.location.origin}/app`,
     };
 
-    const response = await gqlFetch<{ createPortalSession: { url: string } }>(
-      query,
-      variables
-    );
-    if (response[0]) {
-      throw new Error(
-        `Failed to create portal session: ${JSON.stringify(response[0])}`
-      );
-    }
-    return response[1].createPortalSession.url;
+    const client = await getRpcClient();
+    const res = await client.create_portal_session(variables);
+
+    return res.url;
   },
 };
 
 registerClient('stripe', stripeServiceClient);
-
-// export const [checkoutSessionUrl, { refetch: refetchCheckoutSession }] =
-//   createResource(() => stripeServiceClient.createCheckoutSession());
-
-// // Example usage for createPortalSession
-// export const [portalSessionUrl, { refetch: refetchPortalSession }] =
-//   createResource(stripeServiceClient.createPortalSession);

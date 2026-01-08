@@ -1,9 +1,9 @@
 use std::str::FromStr;
 
-use crate::document::FileTypeExt;
-
 use super::file_type::FileType;
+use crate::document::FileTypeExt;
 use chrono::serde::ts_seconds_option;
+use macro_user_id::user_id::MacroUserIdStr;
 use utoipa::ToSchema;
 
 #[derive(sqlx::FromRow, serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug)]
@@ -101,12 +101,13 @@ pub struct VersionIDWithTimeStamps {
 }
 
 /// Returns basic information of a document used for some db queries
-#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone, ToSchema, Default)]
-#[serde(default, rename_all = "camelCase")]
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct DocumentBasic {
     pub document_id: String,
     pub document_name: String,
-    pub owner: String,
+    #[schema(value_type = String)]
+    pub owner: MacroUserIdStr<'static>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub file_type: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -117,7 +118,7 @@ pub struct DocumentBasic {
     pub document_family_id: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub project_id: Option<String>,
-    #[serde(with = "ts_seconds_option", skip_serializing_if = "Option::is_none")]
+    #[serde(with = "ts_seconds_option")]
     #[schema(value_type = i64, nullable=true)]
     pub deleted_at: Option<chrono::DateTime<chrono::Utc>>,
 }

@@ -245,7 +245,7 @@ impl AsyncTool<ToolServiceContext, RequestContext> for ListDocuments {
 mod tests {
     use super::*;
     use ai::generate_tool_input_schema;
-    use ai::tool::types::toolset::tool_object::validate_tool_schema;
+    use ai::tool::types::tool_object::validate_tool_schema;
 
     // run `cargo test -p ai_tools list::file::tests::print_input_schema -- --nocapture --include-ignored`
     #[test]
@@ -341,6 +341,6 @@ mod tests {
         assert_eq!(list_docs.min_access_level, None);
         assert_eq!(list_docs.page_offset, 0);
         assert_eq!(list_docs.page_size, DEFAULT_PAGE_SIZE);
-        assert_eq!(list_docs.exhaustive_search, false);
+        assert!(!list_docs.exhaustive_search);
     }
 }

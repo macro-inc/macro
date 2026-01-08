@@ -1,7 +1,7 @@
 import CropMarkCircle from '@macro-icons/macro-crop-circle.svg';
 import Macro from '@macro-icons/macro-macro.svg';
+import { GlitchText } from '@ui/components/GlitchText';
 import { createSignal, onMount } from 'solid-js';
-import { GlitchText } from './GlitchText';
 import { PcNoiseGrid } from './PcNoiseGrid';
 import { Uuid7Viz } from './UuidVisualizer';
 

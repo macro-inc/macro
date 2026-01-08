@@ -1,4 +1,4 @@
-import { DEFAULT_DARK_THEME, DEFAULT_LIGHT_THEME, DEFAULT_THEMES, BEVELED_CORNERS } from '../constants';
+import { DEFAULT_DARK_THEME, DEFAULT_LIGHT_THEME, DEFAULT_THEMES, BEVELED_CORNERS, BLACK_BEZELS } from '../constants';
 import { createEffect, createMemo, createSignal } from 'solid-js';
 import type { ThemeV0, ThemeV1 } from '../types/themeTypes';
 import { convertThemev0v1 } from '../utils/themeMigrations';
@@ -79,6 +79,11 @@ export const [beveledCorners, setBeveledCorners] = makePersisted(
   {name: 'macro-beveled-corners'}
 );
 
+export const [blackBezels, setBlackBezels] = makePersisted(
+  createSignal<boolean>(BLACK_BEZELS),
+  {name: 'macro-beveled-corners'}
+);
+
 export const [gutterSize, setGutterSize] = makePersisted(
   createSignal<number>(8),
   {name: 'macro-gutter-size'}
@@ -97,6 +102,15 @@ export function toggleGutterSize(){
 }
 
 createEffect(() => {
+    if(blackBezels()){
+        document.documentElement.style.setProperty('--color-page', '#000');
+    }
+    else{
+        document.documentElement.style.setProperty('--color-page', 'var(--b3)');
+    }
+});
+
+createEffect(() => {
   if(monochromeIcons()){
     document.documentElement.style.setProperty('--theme-contact', 'var(--c0)');
     document.documentElement.style.setProperty('--theme-canvas' , 'var(--c0)');
@@ -110,6 +124,7 @@ createEffect(() => {
     document.documentElement.style.setProperty('--theme-chat'   , 'var(--c0)');
     document.documentElement.style.setProperty('--theme-pdf'    , 'var(--c0)');
     document.documentElement.style.setProperty('--theme-rss'    , 'var(--c0)');
+    document.documentElement.style.setProperty('--theme-task'   , 'var(--c0)');
   }
   else{
     document.documentElement.style.setProperty( '--theme-folder', 'oklch(var(--a0l) var(--a0c) 240)');
@@ -117,11 +132,12 @@ createEffect(() => {
     document.documentElement.style.setProperty( '--theme-write' , 'oklch(var(--a0l) var(--a0c) 260)');
     document.documentElement.style.setProperty( '--theme-video' , 'oklch(var(--a0l) var(--a0c) 277)');
     document.documentElement.style.setProperty( '--theme-note'  , 'oklch(var(--a0l) var(--a0c) 293)');
-    document.documentElement.style.setProperty( '--theme-code'  , 'oklch(var(--a0l) var(--a0c) 162)');
+    document.documentElement.style.setProperty( '--theme-code'  , 'oklch(var(--a0l) var(--a0c) 180)');
     document.documentElement.style.setProperty( '--theme-chat'  , 'oklch(var(--a0l) var(--a0c) 220)');
     document.documentElement.style.setProperty( '--theme-image' , 'oklch(var(--a0l) var(--a0c)  95)');
     document.documentElement.style.setProperty( '--theme-html'  , 'oklch(var(--a0l) var(--a0c)  47)');
     document.documentElement.style.setProperty( '--theme-rss'   , 'oklch(var(--a0l) var(--a0c) 260)');
+    document.documentElement.style.setProperty( '--theme-task'  , 'oklch(var(--a0l) var(--a0c) 150)');
     document.documentElement.style.setProperty( '--theme-pdf'   , 'oklch(var(--a0l) var(--a0c)  25)');
   }
 });

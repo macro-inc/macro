@@ -21,6 +21,7 @@ const PREVIEWABLE_ENTITY_TYPES: EntityType[] = [
   'PROJECT',
   'CHAT',
   'CHANNEL',
+  'THREAD',
 ];
 
 type PropertyEntityDisplayResult = {
@@ -32,6 +33,8 @@ type PropertyEntityDisplayResult = {
   isLoading: Accessor<boolean>;
   /** Block or file type for linking (null if not linkable) */
   blockOrFileType: Accessor<string | null>;
+  /** URL params for navigation (e.g., message ID for threads) */
+  linkParams: Accessor<Record<string, string> | undefined>;
 };
 
 /**
@@ -49,15 +52,18 @@ export function usePropertyEntityDisplay(
   options?: {
     /** Custom fallback icon for unknown entity types (null to show nothing) */
     fallbackIcon?: JSX.Element | null;
+    /** Specific message ID for THREAD/CHANNEL/CHAT entities */
+    specificMessageId?: Accessor<string | null | undefined>;
   }
 ): PropertyEntityDisplayResult {
   const needsPreview = () =>
     PREVIEWABLE_ENTITY_TYPES.includes(entityType().toUpperCase() as EntityType);
 
-  // Map entity type to preview type (TASK uses 'document' for preview lookup)
+  // Map entity type to preview type
   const getPreviewType = () => {
     const type = entityType().toUpperCase();
     if (type === 'TASK') return 'document';
+    if (type === 'THREAD') return 'email';
     return type.toLowerCase() as 'document' | 'project' | 'chat' | 'channel';
   };
 
@@ -89,7 +95,8 @@ export function usePropertyEntityDisplay(
       case 'DOCUMENT':
       case 'TASK':
       case 'PROJECT':
-      case 'CHAT': {
+      case 'CHAT':
+      case 'THREAD': {
         const previewItem = preview();
         if (!previewItem || previewItem.loading) return 'Loading...';
         if (!isAccessiblePreviewItem(previewItem)) return 'Unavailable';
@@ -97,8 +104,6 @@ export function usePropertyEntityDisplay(
       }
       case 'COMPANY':
         return entityId() ?? 'Company';
-      case 'THREAD':
-        return entityId() ?? 'Thread';
       default:
         return entityId();
     }
@@ -188,6 +193,16 @@ export function usePropertyEntityDisplay(
       return type.toLowerCase();
     }
 
+    // Tasks are aliased as 'task' for routing
+    if (type === 'TASK') {
+      return 'task';
+    }
+
+    // Threads route to email block
+    if (type === 'THREAD') {
+      return 'email';
+    }
+
     // For documents, get the file type from preview
     if (type === 'DOCUMENT') {
       const previewItem = preview();
@@ -198,10 +213,31 @@ export function usePropertyEntityDisplay(
       ) {
         return null;
       }
+      // Tasks are documents with subType 'task'
+      if (previewItem.subType === 'task') {
+        return 'task';
+      }
       return previewItem.fileType || null;
     }
 
     return null;
+  });
+
+  const linkParams = createMemo((): Record<string, string> | undefined => {
+    const messageId = options?.specificMessageId?.();
+    if (!messageId) return undefined;
+
+    const type = entityType().toUpperCase();
+    switch (type) {
+      case 'THREAD':
+        return { email_message_id: messageId };
+      case 'CHANNEL':
+        return { channel_message_id: messageId };
+      case 'CHAT':
+        return { message_id: messageId };
+      default:
+        return undefined;
+    }
   });
 
   return {
@@ -209,5 +245,6 @@ export function usePropertyEntityDisplay(
     icon,
     isLoading,
     blockOrFileType,
+    linkParams,
   };
 }

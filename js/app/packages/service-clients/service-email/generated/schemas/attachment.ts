@@ -10,6 +10,7 @@ import type { AttachmentDbId } from './attachmentDbId';
 import type { AttachmentFilename } from './attachmentFilename';
 import type { AttachmentMimeType } from './attachmentMimeType';
 import type { AttachmentProviderId } from './attachmentProviderId';
+import type { AttachmentSfsId } from './attachmentSfsId';
 import type { AttachmentSizeBytes } from './attachmentSizeBytes';
 
 /**
@@ -22,5 +23,6 @@ export interface Attachment {
   filename?: AttachmentFilename;
   mime_type?: AttachmentMimeType;
   provider_id?: AttachmentProviderId;
+  sfs_id?: AttachmentSfsId;
   size_bytes?: AttachmentSizeBytes;
 }

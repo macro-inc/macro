@@ -1,8 +1,8 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { Database } from '@resources';
-import { config, stack } from '@shared';
-import { get_coparse_api_vpc } from '@vpc';
+import { Database } from '../../packages/resources';
+import { config, stack } from '../../packages/shared';
+import { get_coparse_api_vpc } from '../../packages/vpc';
 import { Service } from './service';
 
 // name of the "project". Usually the thing before "_service" or "_db_client"

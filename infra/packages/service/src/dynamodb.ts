@@ -1,7 +1,7 @@
 import * as aws from '@pulumi/aws';
 import type { TableArgs } from '@pulumi/aws/dynamodb';
 import * as pulumi from '@pulumi/pulumi';
-import { stack } from '@shared';
+import { stack } from '../../shared';
 
 type BaseDynamoDBTableArgs = {
   billingMode?: 'PROVISIONED' | 'PAY_PER_REQUEST';

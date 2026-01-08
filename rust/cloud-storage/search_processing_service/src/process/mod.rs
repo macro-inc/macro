@@ -43,14 +43,6 @@ pub async fn process_message(
             tracing::trace!(user_profile_id = user_profile_id, "removing user profile");
             user::remove_user_profile(&ctx.opensearch_client, &user_profile_id).await?;
         }
-        SearchQueueMessage::UpdateDocumentMetadata(message) => {
-            document::process_update_metadata_message(
-                &ctx.opensearch_client,
-                &ctx.db,
-                &message.document_id,
-            )
-            .await?;
-        }
         SearchQueueMessage::ChannelMessageUpdate(message) => {
             channel::process_channel_message_update(
                 &ctx.opensearch_client,
@@ -114,9 +106,6 @@ pub async fn process_message(
         }
         SearchQueueMessage::RemoveChatMessage(message) => {
             chat::remove_chat_message(&ctx.opensearch_client, &message).await?;
-        }
-        SearchQueueMessage::UpdateChatMessageMetadata(message) => {
-            chat::update_chat_message_metadata(&ctx.opensearch_client, &ctx.db, &message).await?;
         }
         SearchQueueMessage::ProjectMessage(message) => {
             project::insert_project(&ctx.opensearch_client, &ctx.db, &message).await?;

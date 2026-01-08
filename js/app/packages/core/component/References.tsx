@@ -1,6 +1,6 @@
 import { useGlobalBlockOrchestrator } from '@app/component/GlobalAppState';
 import { useSplitLayout } from '@app/component/split-layout/layout';
-import type { BlockName } from '@core/block';
+import type { BlockAlias, BlockName } from '@core/block';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import {
@@ -9,7 +9,7 @@ import {
   type PreviewItem,
   useItemPreview,
 } from '@core/signal/preview';
-import { useDisplayName } from '@core/user';
+import { tryMacroId, useDisplayName } from '@core/user';
 import { isErr } from '@core/util/maybeResult';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { commsServiceClient } from '@service-comms/client';
@@ -93,7 +93,10 @@ export function References(props: ReferenceProps) {
     messageLocation(channelId, messageId, threadId);
   };
 
-  const navigateToItem = (blockName: BlockName, blockId: string) => {
+  const navigateToItem = (
+    blockName: BlockName | BlockAlias,
+    blockId: string
+  ) => {
     replaceOrInsertSplit({
       type: blockName,
       id: blockId,
@@ -103,7 +106,7 @@ export function References(props: ReferenceProps) {
   const navigateToGenericReference = (item: PreviewItem) => {
     if (isAccessiblePreviewItem(item) && isDocumentPreviewItem(item)) {
       const blockId = item.id;
-      const blockType = fileTypeToBlockName(item.fileType) as BlockName;
+      const blockType = fileTypeToBlockName(item.fileType);
       navigateToItem(blockType, blockId);
     } else {
       toast.failure('Failed to open reference');
@@ -163,7 +166,7 @@ export function References(props: ReferenceProps) {
         <For each={sortedReferences()}>
           {(ref) => {
             if (isChannelReference(ref)) {
-              const [userName] = useDisplayName(ref.sender_id);
+              const [userName] = useDisplayName(tryMacroId(ref.sender_id));
               const hasMessageContent =
                 ref.message_content && ref.message_content.trim().length > 0;
 
@@ -205,7 +208,7 @@ export function References(props: ReferenceProps) {
 
             if (isGenericReference(ref)) {
               const userId = ref.user_id!;
-              const [userName] = useDisplayName(userId);
+              const [userName] = useDisplayName(tryMacroId(userId));
               const [item] = useItemPreview({
                 id: ref.source_entity_id,
                 type: ref.source_entity_type as any,

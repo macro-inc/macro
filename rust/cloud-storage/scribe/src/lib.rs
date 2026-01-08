@@ -6,6 +6,7 @@ mod compress_image;
 pub mod dcs;
 #[cfg(feature = "document")]
 pub mod document;
+
 #[cfg(feature = "email")]
 pub mod email;
 #[cfg(feature = "static_file")]
