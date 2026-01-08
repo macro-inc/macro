@@ -1,4 +1,4 @@
-use anyhow::anyhow;
+use anyhow::{anyhow, bail};
 use base64::Engine;
 use base64::engine::general_purpose;
 use image::{DynamicImage, GenericImageView};
@@ -31,7 +31,7 @@ impl TryFrom<FileType> for ImageFormat {
             FileType::Jpeg => Ok(Self::Jpeg),
             FileType::Png => Ok(Self::Png),
             FileType::Webp => Ok(Self::WebP),
-            _ => Err(anyhow::anyhow!("No conversion")),
+            _ => bail!("No conversion"),
         }
     }
 }
@@ -71,9 +71,9 @@ impl std::fmt::Display for ImageFormat {
             "{}",
             match self {
                 Self::WebP => "webp",
-                Self::Jpg => "Jpg",
-                Self::Jpeg => "Jpeg",
-                Self::Png => "Png",
+                Self::Jpg => "jpg",
+                Self::Jpeg => "jpeg",
+                Self::Png => "png",
             }
         )
     }
@@ -138,7 +138,7 @@ impl TryFrom<&str> for ImageFormat {
             "jpg" => Ok(Self::Jpg),
             "jpeg" => Ok(Self::Jpeg),
             "png" => Ok(Self::Png),
-            _ => Err(anyhow::anyhow!("No conversion")),
+            _ => bail!("No conversion"),
         }
     }
 }

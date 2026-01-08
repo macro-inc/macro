@@ -1,5 +1,5 @@
 use ai::types::ImageData;
-use anyhow::Error;
+use anyhow::{Error, bail};
 use model::document::{ContentType, ContentTypeExt};
 
 use models_sfs::FileMetadata;
@@ -22,7 +22,7 @@ impl TryFrom<StaticFileContent> for ImageData {
         {
             ImageData::try_from_bytes(bytes.into())
         } else {
-            Err(anyhow::anyhow!("No conversion to image"))
+            bail!("No conversion to image")
         }
     }
 }
@@ -38,7 +38,7 @@ impl StaticFileContent {
         if self.content_type.is_text_content() {
             Ok(self.data.to_string())
         } else {
-            Err(anyhow::anyhow!("Static file is not text"))
+            bail!("Static file is not text")
         }
     }
 }

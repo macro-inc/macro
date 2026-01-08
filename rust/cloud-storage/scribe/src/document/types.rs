@@ -1,5 +1,5 @@
 use ai::types::ImageData;
-use anyhow::Error;
+use anyhow::{Error, bail};
 use bytes::Bytes;
 use lexical_client::types::CognitionResponseData;
 use model::document::response::LocationResponseV3;
@@ -28,7 +28,7 @@ impl TryFrom<DocumentContent> for ImageData {
         {
             ImageData::try_from_bytes(bytes.into())
         } else {
-            Err(anyhow::anyhow!("No conversion to image"))
+            bail!("No conversion to image")
         }
     }
 }
@@ -55,7 +55,7 @@ impl DocumentContent {
         if self.file_type.is_text_content() {
             Ok(self.data.to_string())
         } else {
-            Err(anyhow::anyhow!("Document is not text"))
+            bail!("Document is not text")
         }
     }
 }
