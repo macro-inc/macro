@@ -11,7 +11,6 @@ pub mod delete_message;
 pub mod get_channel;
 pub mod get_channel_metadata;
 pub mod get_channel_transcript;
-pub mod get_channels;
 pub mod get_mentions;
 pub mod get_message_with_context;
 pub mod get_or_create_dm;
@@ -31,10 +30,6 @@ use tower_http::compression::CompressionLayer;
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/", post(create_channel::create_channel_handler))
-        .route(
-            "/",
-            get(get_channels::get_channels_handler).layer(CompressionLayer::new()),
-        )
         .route(
             "/:channel_id",
             get(get_channel::get_channel_handler).layer(compose_layers![CompressionLayer::new(),]),

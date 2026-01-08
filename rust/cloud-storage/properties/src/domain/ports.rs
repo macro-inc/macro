@@ -3,6 +3,7 @@
 //! These traits define the interfaces that the domain layer uses.
 //! Implementations live in the outbound module.
 
+use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::EntityType;
 use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_value::PropertyValue;
@@ -115,9 +116,9 @@ pub trait PermissionService: Send + Sync + 'static {
 
     /// Grant edit permissions to users for a task.
     /// This is used when task assignees are updated to ensure they can edit the task.
-    fn grant_permissions_to_task(
+    fn grant_permissions_to_task<'a>(
         &self,
-        user_ids: &[String],
+        user_ids: &[MacroUserIdStr<'a>],
         task_id: &str,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }

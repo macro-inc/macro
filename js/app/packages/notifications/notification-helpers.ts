@@ -15,7 +15,8 @@ export function useNotificationsForEntity(
   entity: Entity
 ): Accessor<UnifiedNotification[]> {
   return createMemo(
-    () => notificationSource.store[compositeEntity(entity)] ?? []
+    () =>
+      notificationSource.notificationsByEntity()[compositeEntity(entity)] ?? []
   );
 }
 
@@ -61,7 +62,8 @@ export function entityHasUnreadNotifications(
   notificationSource: NotificationSource,
   entity: Entity
 ): boolean {
-  const notifications = notificationSource.store[compositeEntity(entity)] ?? [];
+  const notifications =
+    notificationSource.notificationsByEntity()[compositeEntity(entity)] ?? [];
 
   return notifications.some((notification) => {
     return (
@@ -140,7 +142,7 @@ export function markNotificationsForEntityAsDone(
   entity: Entity
 ): Promise<void> {
   return notificationSource.bulkMarkAsDone(
-    notificationSource.store[compositeEntity(entity)] ?? []
+    notificationSource.notificationsByEntity()[compositeEntity(entity)] ?? []
   );
 }
 
@@ -166,7 +168,7 @@ export function markNotificationsForEntityAsRead(
   entity: Entity
 ): Promise<void> {
   return notificationSource.bulkMarkAsRead(
-    notificationSource.store[compositeEntity(entity)] ?? []
+    notificationSource.notificationsByEntity()[compositeEntity(entity)] ?? []
   );
 }
 

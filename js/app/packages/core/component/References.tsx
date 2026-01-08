@@ -9,7 +9,7 @@ import {
   type PreviewItem,
   useItemPreview,
 } from '@core/signal/preview';
-import { useDisplayName } from '@core/user';
+import { tryMacroId, useDisplayName } from '@core/user';
 import { isErr } from '@core/util/maybeResult';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { commsServiceClient } from '@service-comms/client';
@@ -166,7 +166,7 @@ export function References(props: ReferenceProps) {
         <For each={sortedReferences()}>
           {(ref) => {
             if (isChannelReference(ref)) {
-              const [userName] = useDisplayName(ref.sender_id);
+              const [userName] = useDisplayName(tryMacroId(ref.sender_id));
               const hasMessageContent =
                 ref.message_content && ref.message_content.trim().length > 0;
 
@@ -208,7 +208,7 @@ export function References(props: ReferenceProps) {
 
             if (isGenericReference(ref)) {
               const userId = ref.user_id!;
-              const [userName] = useDisplayName(userId);
+              const [userName] = useDisplayName(tryMacroId(userId));
               const [item] = useItemPreview({
                 id: ref.source_entity_id,
                 type: ref.source_entity_type as any,

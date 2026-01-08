@@ -33,9 +33,11 @@ axum = { workspace = true, features = ["tower-log", "ws"] }
 axum-extra = { workspace = true }
 axum-macros = { workspace = true }
 chrono = { workspace = true }
+comms = { path = "../comms", features = ["inbound", "outbound"] }
 comms_db_client = { path = "../comms_db_client", optional = true }
 connection_gateway = { path = "../connection_gateway" }
 document_storage_service_client = { path = "../document_storage_service_client" }
+doppleganger = { workspace = true }
 frecency = { path = "../frecency", features = ["postgres"] }
 futures = { workspace = true }
 http-body-util = { workspace = true }
@@ -55,6 +57,7 @@ model = { path = "../model" }
 model-entity = { path = "../model-entity" }
 model_notifications = { path = "../model_notifications" }
 models_comms = { path = "../models_comms" }
+models_opensearch = { path = "../models_opensearch" }
 models_permissions = { path = "../models_permissions" }
 reqwest.workspace = true
 secretsmanager_client = { path = "../secretsmanager_client" }
@@ -73,7 +76,6 @@ tracing = { workspace = true }
 utoipa = { workspace = true, features = ["axum_extras", "chrono", "uuid"] }
 utoipa-swagger-ui = { workspace = true, features = ["axum"] }
 uuid = { workspace = true }
-models_opensearch = { path = "../models_opensearch" }
 
 [package.metadata.cargo-machete]
 ignored = ["connection_gateway"]

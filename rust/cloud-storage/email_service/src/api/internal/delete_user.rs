@@ -39,19 +39,20 @@ pub async fn handler(
             tracing::error!(error=?e, link_id=?link.id, "Failed to update backfill job statuses");
         };
 
-        let gmail_access_token = match crate::util::gmail::auth::fetch_gmail_access_token_from_link(
-            &link,
-            &ctx.redis_client,
-            &ctx.auth_service_client,
-        )
-        .await
-        {
-            Ok(token) => Some(token),
-            Err(e) => {
-                tracing::error!(error=?e, link_id=?link.id, "unable to fetch access token - skipping stop watch");
-                None
-            }
-        };
+        let gmail_access_token =
+            match email_service::util::gmail::auth::fetch_gmail_access_token_from_link(
+                &link,
+                &ctx.redis_client,
+                &ctx.auth_service_client,
+            )
+            .await
+            {
+                Ok(token) => Some(token),
+                Err(e) => {
+                    tracing::error!(error=?e, link_id=?link.id, "unable to fetch access token - skipping stop watch");
+                    None
+                }
+            };
 
         if let Some(token) = gmail_access_token
             && let Err(e) = ctx.gmail_client.stop_watch(&token).await

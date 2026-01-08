@@ -8,11 +8,15 @@ import { useEmail } from '@service-gql/client';
 import { type Setter, Show } from 'solid-js';
 import { getEmailFormRegistry } from './EmailFormContext';
 
+const EMAIL_MESSAGE_ACTIONS = ['reply', 'reply-all', 'forward'] as const;
+export type EmailMessageAction = (typeof EMAIL_MESSAGE_ACTIONS)[number];
+
 export function MessageActions(props: {
   message: MessageWithBodyReplyless;
   showActions: boolean;
   setShowReply: Setter<boolean>;
   isLastMessage?: boolean;
+  hiddenActions?: EmailMessageAction[];
 }) {
   const formRegistry = getEmailFormRegistry();
   const userEmail = useEmail();
@@ -26,27 +30,43 @@ export function MessageActions(props: {
     return filteredTo().length + filteredCc().length > 1;
   };
 
+  const canShowActions = () => {
+    if (!props.showActions) return false;
+
+    const allActionsHidden = props.hiddenActions?.every((a) =>
+      EMAIL_MESSAGE_ACTIONS.includes(a)
+    );
+
+    return !allActionsHidden;
+  };
+
   return (
-    <Show when={props.showActions}>
+    <Show when={canShowActions()}>
       <div class="flex flex-row items-center gap-4">
         <Show
-          when={shouldShowReplyAll()}
+          when={
+            shouldShowReplyAll() && !props.hiddenActions?.includes('reply-all')
+          }
           fallback={
-            <DeprecatedIconButton
-              icon={ArrowBendUpLeft}
-              theme="clear"
-              onClick={() => {
-                if (!props.isLastMessage) {
-                  props.setShowReply(true);
-                }
-                const form = formRegistry.getOrInit(props.message.db_id ?? '');
-                form.setReplyType('reply');
-                form.setShouldFocusInput(true);
-              }}
-              tooltip={{
-                label: 'Reply',
-              }}
-            />
+            <Show when={!props.hiddenActions?.includes('reply')}>
+              <DeprecatedIconButton
+                icon={ArrowBendUpLeft}
+                theme="clear"
+                onClick={() => {
+                  if (!props.isLastMessage) {
+                    props.setShowReply(true);
+                  }
+                  const form = formRegistry.getOrInit(
+                    props.message.db_id ?? ''
+                  );
+                  form.setReplyType('reply');
+                  form.setShouldFocusInput(true);
+                }}
+                tooltip={{
+                  label: 'Reply',
+                }}
+              />
+            </Show>
           }
         >
           <DeprecatedIconButton
@@ -65,21 +85,23 @@ export function MessageActions(props: {
             }}
           />
         </Show>
-        <DeprecatedIconButton
-          icon={ArrowBendUpRight}
-          theme="clear"
-          onClick={() => {
-            if (!props.isLastMessage) {
-              props.setShowReply(true);
-            }
-            const form = formRegistry.getOrInit(props.message.db_id ?? '');
-            form.setReplyType('forward');
-            form.setShouldFocusInput(true);
-          }}
-          tooltip={{
-            label: 'Forward',
-          }}
-        />
+        <Show when={!props.hiddenActions?.includes('forward')}>
+          <DeprecatedIconButton
+            icon={ArrowBendUpRight}
+            theme="clear"
+            onClick={() => {
+              if (!props.isLastMessage) {
+                props.setShowReply(true);
+              }
+              const form = formRegistry.getOrInit(props.message.db_id ?? '');
+              form.setReplyType('forward');
+              form.setShouldFocusInput(true);
+            }}
+            tooltip={{
+              label: 'Forward',
+            }}
+          />
+        </Show>
         {/* <IconButton
           icon={EnvelopSimple}
           theme="clear"

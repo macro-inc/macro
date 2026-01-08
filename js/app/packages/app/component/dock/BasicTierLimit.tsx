@@ -11,7 +11,7 @@ const BasicTierLimitWrapper = () => {
   const aiChatsCount = createMemo(() => userQuota.data?.ai_chat_messages);
 
   return (
-    <div class="flex items-center h-full border-t border-t-edge-muted px-1 text-sm font-mono">
+    <div class="flex items-center h-full px-1 text-sm font-mono whitespace-nowrap">
       <span
         class="p-0.5 px-2 border border-accent/30 border-r-0 text-[0.625rem] text-accent uppercase font-mono"
         onClick={() => showPaywall(null)}

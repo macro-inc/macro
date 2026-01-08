@@ -3,8 +3,9 @@ use crate::api::{
     search::{
         SearchPaginationParams,
         simple::{
-            SearchError,
-            filter::{FilterVariantToSearchArgs, UnifiedSearchArgsVariant},
+            SearchError, simple_channel::search_channels, simple_chat::search_chats,
+            simple_document::search_documents, simple_email::search_emails,
+            simple_project::search_projects,
         },
     },
 };
@@ -16,15 +17,16 @@ use axum::{
 use model::{response::ErrorResponse, user::UserContext};
 use models_search::{
     SimpleSearchResponse,
-    unified::{
-        SimpleUnifiedSearchResponse, UnifiedSearchIndex, UnifiedSearchRequest,
-        generate_unified_search_indices,
-    },
+    channel::ChannelSearchRequest,
+    chat::ChatSearchRequest,
+    document::DocumentSearchRequest,
+    email::EmailSearchRequest,
+    project::ProjectSearchRequest,
+    unified::{SimpleUnifiedSearchResponse, UnifiedSearchIndex, UnifiedSearchRequest},
 };
-use opensearch_client::search::unified::UnifiedSearchArgs;
 
 /// Creates a unified search request and performs the search
-/// Returning the opensearch results
+/// by calling individual simple search endpoints for each entity type
 #[tracing::instrument(skip(ctx, user_context, query_params, req), err)]
 pub(in crate::api::search) async fn perform_unified_search(
     ctx: &ApiContext,
@@ -33,22 +35,17 @@ pub(in crate::api::search) async fn perform_unified_search(
     req: UnifiedSearchRequest,
 ) -> Result<Vec<opensearch_client::search::model::SearchHit>, SearchError> {
     let user_id = &user_context.user_id;
-    let user_organization_id = user_context.organization_id;
-    let search_on = req.search_on;
-    let collapse = req.collapse.unwrap_or(false);
 
     if user_id.is_empty() {
         return Err(SearchError::NoUserId);
     }
-
-    let page = query_params.page.unwrap_or(0);
 
     let page_size = query_params.page_size.unwrap_or(10);
     if !(0..=100).contains(&page_size) {
         return Err(SearchError::InvalidPageSize);
     }
 
-    let terms: Vec<String> = match (req.terms, req.query) {
+    let terms: Vec<String> = match (req.terms.clone(), req.query.clone()) {
         (Some(terms), _) => terms.into_iter().filter(|t| t.len() >= 3).collect(),
         (None, Some(query)) if query.len() >= 3 => vec![query],
         (None, Some(_)) => {
@@ -61,115 +58,124 @@ pub(in crate::api::search) async fn perform_unified_search(
         return Err(SearchError::NoQueryOrTermsProvided);
     }
 
-    let match_type = req.match_type;
-    let disable_recency = req.disable_recency;
-
-    let include = req.include;
-
-    // Create default filters
+    let include = &req.include;
     let filters = req.filters.unwrap_or_default();
-    let channel_filters = filters.channel.unwrap_or_default();
-    let email_filters = filters.email.unwrap_or_default();
-    let chat_filters = filters.chat.unwrap_or_default();
-    let project_filters = filters.project.unwrap_or_default();
-    let doc_filters = filters.document.unwrap_or_default();
 
     let should_include_documents =
         include.is_empty() || include.contains(&UnifiedSearchIndex::Documents);
-
     let should_include_channels =
         include.is_empty() || include.contains(&UnifiedSearchIndex::Channels);
-
     let should_include_chats = include.is_empty() || include.contains(&UnifiedSearchIndex::Chats);
-
     let should_include_projects =
         include.is_empty() || include.contains(&UnifiedSearchIndex::Projects);
-
     let should_include_emails = include.is_empty() || include.contains(&UnifiedSearchIndex::Emails);
 
-    // Await all tasks in parallel
-    let (doc_result, channel_result, chat_result, project_result, email_result) = tokio::try_join!(
-        doc_filters.filter_to_search_args(
-            ctx,
-            user_id,
-            user_organization_id,
-            should_include_documents,
-        ),
-        channel_filters.filter_to_search_args(
-            ctx,
-            user_id,
-            user_organization_id,
-            should_include_channels,
-        ),
-        chat_filters.filter_to_search_args(
-            ctx,
-            user_id,
-            user_organization_id,
-            should_include_chats,
-        ),
-        project_filters.filter_to_search_args(
-            ctx,
-            user_id,
-            user_organization_id,
-            should_include_projects,
-        ),
-        email_filters.filter_to_search_args(
-            ctx,
-            user_id,
-            user_organization_id,
-            should_include_emails,
-        ),
-    )
-    .map_err(|e| SearchError::InternalError(anyhow::anyhow!("tokio error: {:?}", e)))?;
-
-    let filter_document_response = match doc_result {
-        UnifiedSearchArgsVariant::Document(response) => response,
-        _ => unreachable!(),
+    // Build individual search requests for each entity type
+    let doc_request = DocumentSearchRequest {
+        terms: Some(terms.clone()),
+        query: req.query.clone(),
+        match_type: req.match_type,
+        search_on: req.search_on,
+        collapse: req.collapse,
+        disable_recency: req.disable_recency,
+        filters: Some(filters.document.unwrap_or_default()),
     };
 
-    let filter_channel_response = match channel_result {
-        UnifiedSearchArgsVariant::Channel(response) => response,
-        _ => unreachable!(),
+    let chat_request = ChatSearchRequest {
+        terms: Some(terms.clone()),
+        query: req.query.clone(),
+        match_type: req.match_type,
+        search_on: req.search_on,
+        collapse: req.collapse,
+        disable_recency: req.disable_recency,
+        filters: Some(filters.chat.unwrap_or_default()),
     };
 
-    let filter_chat_response = match chat_result {
-        UnifiedSearchArgsVariant::Chat(response) => response,
-        _ => unreachable!(),
+    let email_request = EmailSearchRequest {
+        terms: Some(terms.clone()),
+        query: req.query.clone(),
+        match_type: req.match_type,
+        search_on: req.search_on,
+        collapse: req.collapse,
+        disable_recency: req.disable_recency,
+        filters: Some(filters.email.unwrap_or_default()),
     };
 
-    let filter_project_response = match project_result {
-        UnifiedSearchArgsVariant::Project(response) => response,
-        _ => unreachable!(),
+    let project_request = ProjectSearchRequest {
+        terms: Some(terms.clone()),
+        query: req.query.clone(),
+        match_type: req.match_type,
+        search_on: req.search_on,
+        collapse: req.collapse,
+        disable_recency: req.disable_recency,
+        filters: Some(filters.project.unwrap_or_default()),
     };
 
-    let filter_email_response = match email_result {
-        UnifiedSearchArgsVariant::Email(response) => response,
-        _ => unreachable!(),
+    let channel_request = ChannelSearchRequest {
+        terms: Some(terms.clone()),
+        query: req.query.clone(),
+        match_type: req.match_type,
+        search_on: req.search_on,
+        collapse: req.collapse,
+        disable_recency: req.disable_recency,
+        filters: Some(filters.channel.unwrap_or_default()),
     };
 
-    let unified_search_args = UnifiedSearchArgs {
-        terms,
-        user_id: user_id.to_string(),
-        page,
-        page_size,
-        match_type: match_type.to_string(),
-        search_on: search_on.into(),
-        collapse,
-        disable_recency,
-        search_indices: generate_unified_search_indices(include),
-        document_search_args: filter_document_response,
-        email_search_args: filter_email_response,
-        channel_message_search_args: filter_channel_response,
-        chat_search_args: filter_chat_response,
-        project_search_args: filter_project_response,
-    };
+    // Call search functions in parallel for included entity types
+    let (doc_results, chat_results, email_results, project_results, channel_results) = tokio::join!(
+        async {
+            if should_include_documents {
+                search_documents(ctx, user_id, &query_params, doc_request).await
+            } else {
+                Ok(vec![])
+            }
+        },
+        async {
+            if should_include_chats {
+                search_chats(ctx, user_id, &query_params, chat_request).await
+            } else {
+                Ok(vec![])
+            }
+        },
+        async {
+            if should_include_emails {
+                search_emails(ctx, user_id, &query_params, email_request).await
+            } else {
+                Ok(vec![])
+            }
+        },
+        async {
+            if should_include_projects {
+                search_projects(ctx, user_id, &query_params, project_request).await
+            } else {
+                Ok(vec![])
+            }
+        },
+        async {
+            if should_include_channels {
+                search_channels(
+                    ctx,
+                    user_id,
+                    user_context.organization_id,
+                    &query_params,
+                    channel_request,
+                )
+                .await
+            } else {
+                Ok(vec![])
+            }
+        },
+    );
 
-    let results = ctx
-        .opensearch_client
-        .search_unified(unified_search_args)
-        .await?;
+    // Combine all results
+    let mut combined_results = Vec::new();
+    combined_results.extend(doc_results?);
+    combined_results.extend(chat_results?);
+    combined_results.extend(email_results?);
+    combined_results.extend(project_results?);
+    combined_results.extend(channel_results?);
 
-    Ok(results)
+    Ok(combined_results)
 }
 
 /// Perform a search through all items.

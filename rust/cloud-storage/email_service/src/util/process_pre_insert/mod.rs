@@ -22,7 +22,8 @@ pub async fn process_threads_pre_insert(
 }
 
 // perform necessary processing on a message before inserting into the database
-#[tracing::instrument(skip(db, sfs_client, message), fields(message_id = %message.provider_id.clone().unwrap_or_default()))]
+#[tracing::instrument(skip(db, sfs_client, message), fields(message_id = %message.provider_id.clone().unwrap_or_default()
+))]
 pub async fn process_message_pre_insert(
     db: &sqlx::PgPool,
     sfs_client: &StaticFileServiceClient,

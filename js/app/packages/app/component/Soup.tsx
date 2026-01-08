@@ -14,7 +14,8 @@ import { fileTypeToResolvedBlockName } from '@core/constant/allBlocks';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { RegisterHotkeyReturn } from '@core/hotkey/types';
-import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { isMobileWidth } from '@core/mobile/mobileWidth';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import {
   DEFAULT_VIEWS,
@@ -468,7 +469,7 @@ export function Soup() {
       <Show
         when={
           showHelpDrawer().has(selectedView() as DefaultView) &&
-          !isNativeMobilePlatform()
+          !(isTouchDevice() && isMobileWidth())
         }
       >
         <HelpDrawer viewId={view().id} />

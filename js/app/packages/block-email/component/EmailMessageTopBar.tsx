@@ -7,7 +7,7 @@ import type { MessageWithBodyReplyless } from '@service-email/generated/schemas'
 import { type Accessor, For, type Setter, Show } from 'solid-js';
 import type { SetStoreFunction } from 'solid-js/store';
 import { getFirstName } from '../util/name';
-import { MessageActions } from './MessageActions';
+import { type EmailMessageAction, MessageActions } from './MessageActions';
 
 interface EmailMessageTopBarProps {
   message: MessageWithBodyReplyless;
@@ -19,6 +19,7 @@ interface EmailMessageTopBarProps {
   setFocusedMessageId: (messageId: string | undefined) => void;
   setShowReply: Setter<boolean>;
   isLastMessage?: boolean;
+  hiddenActions?: EmailMessageAction[];
 }
 
 export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
@@ -78,6 +79,7 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
             showActions={props.focused}
             setShowReply={props.setShowReply}
             isLastMessage={props.isLastMessage}
+            hiddenActions={props.hiddenActions}
           />
         </div>
       </div>
