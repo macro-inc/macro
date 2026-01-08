@@ -1,0 +1,61 @@
+# Welcome to the `@UI` package.
+
+> *Cleverness is overhead.*\
+> *The best code is the code you never had to write.*\
+> *Abstractions don’t remove complexity. They move it to the day you’re on call.*
+>
+> — [Addy Osmani](https://addyosmani.com/blog/21-lessons/)
+
+
+**This is our lego set.** We'll add parts over time, but if it "just renders a thing", it should probably live here.
+
+If it "composes other things or provides state", or it's some major singleton application surface (eg `Dock.tsx`), then it should probably live in `@core`.
+
+## Accessing the docs 
+
+### `$ bun run storybook`
+
+## Package Structure
+
+<pre className="*:leading-normal! whitespace-pre px-2!">
+├ .storybook/
+│ └ *Configuration for [storybook](https://storybook.js.org/docs) itself*
+└ components/
+&nbsp;&nbsp;├ `*.tsx` *– Actual components*
+&nbsp;&nbsp;└ `*.stories.tsx` *- Documentation && specs*
+
+</pre>
+
+## Guidelines for Good Components
+
+### Do
+1. Be [SOLID](https://en.wikipedia.org/wiki/SOLID)
+1. Be pure functions – for the same props, they render the same results.
+1. Use tailwind, and twMerge
+1. Be as simple as possible and no simpler
+1. Have a [story](https://storybook.js.org/docs/writing-stories/) with a [play function](https://storybook.js.org/docs/writing-stories/play-function) (vitest!)
+1. Use Kobalte as a last resort
+
+### Don't
+1. [Ever have external margins](https://mxstbr.com/thoughts/margin)
+1. Use inline styles
+
+## Storybook Gotchas
+
+### Reactivity
+
+Because we are in solidJS land, unless things are built to be reactive, they **will not update** from controls.
+
+If you have a custom render function in a story, you need to use the `context` arg instead of `args`:
+
+```ts 
+const meta = {
+  component: MyComponent,
+  
+  // What storybook docs say to do *will not* react:
+  render: (args) => <MyComponent {...args} />
+
+  // Instead, use the context provided by `storybook-solidjs-vite`:
+  render: (_, context) => <MyComponent {...context.args} />
+}
+```

@@ -2,11 +2,13 @@ import { useChannelsContext } from '@core/component/ChannelsProvider';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
 import { activeScope } from '@core/hotkey/state';
 import { mapFromListsByKey } from '@core/util/compareUtils';
+import { useHistoryQuery } from '@queries/history/history';
 import type { Channel } from '@service-comms/generated/models/channel';
 import type { ChannelType } from '@service-comms/generated/models/channelType';
-import { useHistory } from '@service-storage/history';
 import { createMemo } from 'solid-js';
 import type { CommandItemCard } from './KonsoleItem';
+
+type ChannelWithViewedAt = Channel & { viewed_at?: number };
 
 const FILTER_PERSISTENT_CHATS = false;
 
@@ -26,7 +28,7 @@ function channelsIntoCategories(channels: Channel[]) {
 }
 
 export function useCommandItems() {
-  const history = useHistory();
+  const historyQuery = useHistoryQuery();
   const channelsContext = useChannelsContext();
   const channels = () => channelsContext.channels();
   const activeCommands = getActiveCommandsFromScope(activeScope(), {
@@ -52,7 +54,8 @@ export function useCommandItems() {
       };
     });
 
-    const items: CommandItemCard[] = history()
+    const historyData = historyQuery.data ?? [];
+    const items: CommandItemCard[] = historyData
       .filter((item) => {
         // Remove the persistent sidebar chats. Those are all called "New Chat"
         // and searching against the name is completely useless.
@@ -75,6 +78,7 @@ export function useCommandItems() {
           subType: item.type === 'document' ? item.subType : undefined,
         },
         updatedAt: item.updatedAt,
+        viewedAt: item.viewedAt,
       }));
     const bins = channelsIntoCategories(channels());
     const channels_: CommandItemCard[] = [
@@ -94,6 +98,7 @@ export function useCommandItems() {
             : undefined,
       },
       updatedAt: channel.updated_at,
+      viewedAt: (channel as ChannelWithViewedAt).viewed_at,
     }));
 
     return mapFromListsByKey<CommandItemCard>(

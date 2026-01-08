@@ -8,10 +8,7 @@ import {
 import { useGoToTempRedirect } from '@block-md/signal/location';
 import { mdStore } from '@block-md/signal/markdownBlockData';
 import { useBlockId } from '@core/block';
-import {
-  ENABLE_MARKDOWN_COMMENTS,
-  ENABLE_PROPERTIES_METADATA,
-} from '@core/constant/featureFlags';
+import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import {
@@ -28,7 +25,6 @@ import {
   createSignal,
   onCleanup,
   onMount,
-  Show,
   untrack,
 } from 'solid-js';
 import { FrontMatterProperties } from './FrontMatterProperties';
@@ -261,16 +257,11 @@ export function Notebook() {
     <div class={containerClasses()} ref={notebookRef}>
       <div class={contentDivClasses()} ref={contentRef}>
         <TitleEditor autoFocusOnMount={!navigatedFromJK()} />
-        <Show
-          when={ENABLE_PROPERTIES_METADATA}
+        <FrontMatterProperties
+          canEdit={canEdit()}
+          documentName={documentName()}
           fallback={<div class="h-6 w-full" />}
-        >
-          <FrontMatterProperties
-            canEdit={canEdit()}
-            documentName={documentName()}
-            fallback={<div class="h-6 w-full" />}
-          />
-        </Show>
+        />
         <MarkdownEditor autoFocusOnMount={!navigatedFromJK()} />
       </div>
       <div

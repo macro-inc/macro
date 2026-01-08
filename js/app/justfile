@@ -1,0 +1,82 @@
+dev-tauri:
+    cd packages/app && bun run --bun dev:tauri
+
+local-dcs:
+    cd packages/app && VITE_LOCAL_SERVERS='cognition-service,cognition-websocket-service' bun run --bun dev
+
+local-dss:
+    cd packages/app && VITE_LOCAL_SERVERS='document-storage-service' bun run --bun dev
+
+local-search:
+    cd packages/app && VITE_LOCAL_SERVERS='search-service' bun run --bun dev
+
+build-dev:
+    cd packages/app && MODE=development NODE_ENV=production bun run --bun build
+
+build-staging:
+    cd packages/app && MODE=staging NODE_ENV=production bun run --bun build
+
+build-prod:
+    cd packages/app && MODE=production NODE_ENV=production bun run --bun build
+
+build-tauri:
+    cd packages/app && MODE=production NODE_ENV=production bun run --bun build:tauri
+
+test-watch:
+    bunx --bun vitest
+
+preview-prod:
+    cd packages/app && MODE=production NODE_ENV=production bun run preview:prod
+
+lint-staged:
+    bunx --bun biome lint --staged
+
+lint-ci:
+    bunx --bun biome ci --changed
+
+storybook:
+    cd packages/ui && bun run storybook
+
+build-storybook:
+    cd packages/ui && bun run build-storybook
+
+java-build:
+    bun scripts/createBackend.js
+
+csharp-build:
+    bun scripts/publish-docx-server.js
+
+# Codegen
+gen-api:
+    bun scripts/generate-api-schema.ts
+
+gen-dcs-types:
+    bun scripts/generate-dcs-types.ts
+
+gen-dcs-tools:
+    bun scripts/generate-dcs-tools.ts
+
+gen-dcs-models:
+    bun scripts/generate-dcs-models.ts
+
+clean-env:
+    bun scripts/clean-env.js
+
+pkg:
+    bun scripts/pkg.ts
+
+check-tailwind:
+    bun scripts/check-tailwind.ts
+
+fix-lock:
+    git fetch origin dev:dev && git checkout dev -- bun.lock && bun i && git add bun.lock
+
+# Analysis
+cycles:
+    bunx --bun biome lint --only=nursery/noImportCycles
+
+cycles-ci:
+    bunx --bun biome lint --changed --only=nursery/noImportCycles
+
+publish-lexical:
+    cd packages/lexical-core && bun publish

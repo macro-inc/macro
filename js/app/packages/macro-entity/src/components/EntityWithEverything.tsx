@@ -279,6 +279,9 @@ function NotificationRow(props: {
     ) {
       return 'shared';
     }
+    if (props.notification.notificationEventType === 'task_assigned') {
+      return 'assigned to you';
+    }
 
     const metadata = tryToTypedNotification(
       props.notification

@@ -2,7 +2,6 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { useChannelsContext } from '@core/component/ChannelsProvider';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import { ENABLE_PROPERTIES_METADATA } from '@core/constant/featureFlags';
 import { HotkeyTags } from '@core/hotkey/constants';
 import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -415,24 +414,7 @@ export function createNavigationEntityListShortcut({
       );
 
       if (handler || hasSupportedEntity) {
-        // Check if current view filters out completed items. More robustly we would have the list of entitites itself trigger entity removal animation when the list changes, but this is complicated by our usage of queries and virtualized lists.
-        const currentViewConfig =
-          unifiedListContext.viewsDataStore[selectedView()];
-        const [collapseEntity] = unifiedListContext.collapseEntitySignal;
-        const shouldCollapse =
-          currentViewConfig?.filters?.notificationFilter === 'notDone' &&
-          collapseEntity() !== undefined;
-
-        // If the view hides completed items, collapse the entities first
-        if (shouldCollapse) {
-          const collapse = collapseEntity();
-          if (collapse) {
-            await Promise.all(
-              multiSelectEntities.map((entity) => collapse(entity.id))
-            );
-          }
-        }
-
+        // focus the correct entity first, so that the animation is not blcoking
         if (multiSelectEntities.length > 1) {
           const selectedEntityData = getSelectedEntity();
           const selectedEntityIncludedInMultiSelectedEntities =
@@ -465,6 +447,26 @@ export function createNavigationEntityListShortcut({
           }
         }
 
+        // Check if current view filters out completed items in order to know whether to run collapse animation. More robustly we would have the list of entitites itself trigger entity removal animation when the list changes, but this is complicated by our usage of queries and virtualized lists.
+        // NOTE: collapse animation is currently only enabled for touch modality, i.e. phone.
+        const currentViewConfig =
+          unifiedListContext.viewsDataStore[selectedView()];
+        const [collapseEntity] = unifiedListContext.collapseEntitySignal;
+        const shouldCollapse =
+          currentViewConfig?.filters?.notificationFilter === 'notDone' &&
+          collapseEntity() !== undefined &&
+          isModality('touch');
+
+        if (shouldCollapse) {
+          // If the view hides completed items, collapse the entities first
+          const collapse = collapseEntity();
+          if (collapse) {
+            await Promise.all(
+              multiSelectEntities.map((entity) => collapse(entity.id))
+            );
+          }
+        }
+
         for (const entity of multiSelectEntities) {
           if (handler) {
             handler(entity, {
@@ -473,7 +475,7 @@ export function createNavigationEntityListShortcut({
             });
           }
           const entityType = getPropertiesEntityType(entity);
-          if (entityType && ENABLE_PROPERTIES_METADATA) {
+          if (entityType) {
             propertiesServiceClient
               .setPropertyStatusComplete({
                 entity_type: entityType,
