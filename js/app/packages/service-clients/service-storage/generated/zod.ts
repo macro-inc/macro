@@ -31,12 +31,14 @@ export const getRecentActivityHandlerResponse = zod.object({
   "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'),
   "fileType": zod.string().nullish().describe('The file type of the document (e.g. pdf, docx)'),
   "id": zod.string().describe('The document id'),
-  "isCompleted": zod.boolean().nullish().describe('Whether the task is completed (only present when sub_type is \'task\').\nTrue if the Status property is set to \"Completed\".'),
   "name": zod.string().describe('The name of the document'),
   "owner": zod.string().describe('The owner of the document'),
   "projectId": zod.string().nullish().describe('The id of the project that this document belongs to'),
   "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
-  "subType": zod.union([zod.null(),zod.enum(['task']).describe('The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.')]).optional(),
+  "subType": zod.union([zod.null(),zod.object({
+  "is_completed": zod.boolean().describe('Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'),
+  "type": zod.enum(['task'])
+}).describe('A task document with its associated properties').describe('Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.')]).optional(),
   "updatedAt": zod.number().describe('The time the document instance / document BOM was updated'),
   "type": zod.enum(['document'])
 })
@@ -1141,12 +1143,14 @@ export const getHistoryHandlerResponse = zod.object({
   "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'),
   "fileType": zod.string().nullish().describe('The file type of the document (e.g. pdf, docx)'),
   "id": zod.string().describe('The document id'),
-  "isCompleted": zod.boolean().nullish().describe('Whether the task is completed (only present when sub_type is \'task\').\nTrue if the Status property is set to \"Completed\".'),
   "name": zod.string().describe('The name of the document'),
   "owner": zod.string().describe('The owner of the document'),
   "projectId": zod.string().nullish().describe('The id of the project that this document belongs to'),
   "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
-  "subType": zod.union([zod.null(),zod.enum(['task']).describe('The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.')]).optional(),
+  "subType": zod.union([zod.null(),zod.object({
+  "is_completed": zod.boolean().describe('Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'),
+  "type": zod.enum(['task'])
+}).describe('A task document with its associated properties').describe('Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.')]).optional(),
   "updatedAt": zod.number().describe('The time the document instance / document BOM was updated'),
   "type": zod.enum(['document'])
 }),zod.object({
@@ -1633,12 +1637,14 @@ export const getPinsHandlerResponse = zod.object({
   "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'),
   "fileType": zod.string().nullish().describe('The file type of the document (e.g. pdf, docx)'),
   "id": zod.string().describe('The document id'),
-  "isCompleted": zod.boolean().nullish().describe('Whether the task is completed (only present when sub_type is \'task\').\nTrue if the Status property is set to \"Completed\".'),
   "name": zod.string().describe('The name of the document'),
   "owner": zod.string().describe('The owner of the document'),
   "projectId": zod.string().nullish().describe('The id of the project that this document belongs to'),
   "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
-  "subType": zod.union([zod.null(),zod.enum(['task']).describe('The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.')]).optional(),
+  "subType": zod.union([zod.null(),zod.object({
+  "is_completed": zod.boolean().describe('Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'),
+  "type": zod.enum(['task'])
+}).describe('A task document with its associated properties').describe('Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.')]).optional(),
   "updatedAt": zod.number().describe('The time the document instance / document BOM was updated'),
   "type": zod.enum(['document'])
 }),zod.object({
@@ -1672,12 +1678,14 @@ export const getPinsHandlerResponse = zod.object({
   "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'),
   "fileType": zod.string().nullish().describe('The file type of the document (e.g. pdf, docx)'),
   "id": zod.string().describe('The document id'),
-  "isCompleted": zod.boolean().nullish().describe('Whether the task is completed (only present when sub_type is \'task\').\nTrue if the Status property is set to \"Completed\".'),
   "name": zod.string().describe('The name of the document'),
   "owner": zod.string().describe('The owner of the document'),
   "projectId": zod.string().nullish().describe('The id of the project that this document belongs to'),
   "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
-  "subType": zod.union([zod.null(),zod.enum(['task']).describe('The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.')]).optional(),
+  "subType": zod.union([zod.null(),zod.object({
+  "is_completed": zod.boolean().describe('Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'),
+  "type": zod.enum(['task'])
+}).describe('A task document with its associated properties').describe('Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.')]).optional(),
   "updatedAt": zod.number().describe('The time the document instance / document BOM was updated'),
   "type": zod.enum(['document'])
 }),zod.object({
@@ -1995,12 +2003,14 @@ export const getProjectContentHandlerResponse = zod.object({
   "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'),
   "fileType": zod.string().nullish().describe('The file type of the document (e.g. pdf, docx)'),
   "id": zod.string().describe('The document id'),
-  "isCompleted": zod.boolean().nullish().describe('Whether the task is completed (only present when sub_type is \'task\').\nTrue if the Status property is set to \"Completed\".'),
   "name": zod.string().describe('The name of the document'),
   "owner": zod.string().describe('The owner of the document'),
   "projectId": zod.string().nullish().describe('The id of the project that this document belongs to'),
   "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
-  "subType": zod.union([zod.null(),zod.enum(['task']).describe('The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.')]).optional(),
+  "subType": zod.union([zod.null(),zod.object({
+  "is_completed": zod.boolean().describe('Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'),
+  "type": zod.enum(['task'])
+}).describe('A task document with its associated properties').describe('Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.')]).optional(),
   "updatedAt": zod.number().describe('The time the document instance / document BOM was updated'),
   "type": zod.enum(['document'])
 }),zod.object({
@@ -2095,12 +2105,14 @@ export const recentlyDeletedResponse = zod.object({
   "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'),
   "fileType": zod.string().nullish().describe('The file type of the document (e.g. pdf, docx)'),
   "id": zod.string().describe('The document id'),
-  "isCompleted": zod.boolean().nullish().describe('Whether the task is completed (only present when sub_type is \'task\').\nTrue if the Status property is set to \"Completed\".'),
   "name": zod.string().describe('The name of the document'),
   "owner": zod.string().describe('The owner of the document'),
   "projectId": zod.string().nullish().describe('The id of the project that this document belongs to'),
   "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
-  "subType": zod.union([zod.null(),zod.enum(['task']).describe('The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.')]).optional(),
+  "subType": zod.union([zod.null(),zod.object({
+  "is_completed": zod.boolean().describe('Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'),
+  "type": zod.enum(['task'])
+}).describe('A task document with its associated properties').describe('Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.')]).optional(),
   "updatedAt": zod.number().describe('The time the document instance / document BOM was updated'),
   "type": zod.enum(['document'])
 }),zod.object({
