@@ -47,7 +47,7 @@ function parseArgs(): Args {
   return result;
 }
 
-function generatePreviewId(branchOverride?: string): string {
+export function generatePreviewId(branchOverride?: string): string {
   let branch = branchOverride;
 
   if (!branch) {
@@ -71,6 +71,13 @@ function generatePreviewId(branchOverride?: string): string {
 
   const nanoid = Math.random().toString(36).slice(2, 8);
   return `${sanitized}-${nanoid}`;
+}
+
+export const PREVIEW_URL_REGEX = /https:\/\/([a-z0-9-]+)\.preview\.macro\.com/;
+
+export function extractPreviewIdFromBody(body: string): string | null {
+  const match = body.match(PREVIEW_URL_REGEX);
+  return match?.[1] ?? null;
 }
 
 async function getExistingPreviewId(pr: number, repo: string, token: string): Promise<string | null> {
@@ -98,10 +105,7 @@ async function getExistingPreviewId(pr: number, repo: string, token: string): Pr
   );
 
   if (previewComment?.body) {
-    const match = previewComment.body.match(/https:\/\/([a-z0-9-]+)\.preview\.macro\.com/);
-    if (match?.[1]) {
-      return match[1];
-    }
+    return extractPreviewIdFromBody(previewComment.body);
   }
 
   return null;
@@ -122,4 +126,6 @@ async function main() {
   console.log(generatePreviewId(args.branch));
 }
 
-main();
+if (import.meta.main) {
+  main();
+}

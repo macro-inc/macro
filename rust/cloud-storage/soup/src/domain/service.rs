@@ -323,16 +323,16 @@ where
 
                 let comms_soup_fut = self.handle_comms_request(req.user.copied());
 
-                let (main_soup, email_soup, comms_soup) =
+                let (main_soup, email_soup, _comms_soup) =
                     tokio::join!(main_soup_fut, email_soup_fut, comms_soup_fut);
 
                 Ok(Either::Left(
                     main_soup?
                         .chain(email_soup?)
-                        .chain(match comms_soup {
-                            Ok(iter) => Either::Left(iter),
-                            Err(_) => Either::Right(None.into_iter()),
-                        })
+                        // .chain(match comms_soup {
+                        //     Ok(iter) => Either::Left(iter),
+                        //     Err(_) => Either::Right(None.into_iter()),
+                        // })
                         .paginate_on(limit.into(), sort_method)
                         .filter_on(paginate_filter)
                         .sort_desc()

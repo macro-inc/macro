@@ -221,6 +221,7 @@ type CommandItemBase = {
   height?: number;
   // Add an optional timestamp to pass to fresh search/sort
   updatedAt?: number | string;
+  viewedAt?: number | string;
 };
 
 type SimpleText = {
