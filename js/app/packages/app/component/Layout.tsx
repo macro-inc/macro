@@ -8,6 +8,8 @@ import {
   LAYOUT_CONTEXT_ID,
   setPersistedLayoutSizes,
 } from '@core/signal/layout';
+import { isEditableInput } from '@core/util/isEditableInput';
+import { isIOS } from '@solid-primitives/platform';
 import { type RouteSectionProps, useLocation } from '@solidjs/router';
 import { attachGlobalDOMScope } from 'core/hotkey/hotkeys';
 import { createEffect, onCleanup, onMount, Show, Suspense } from 'solid-js';
@@ -53,34 +55,60 @@ export function Layout(props: RouteSectionProps) {
     });
   });
 
-  // We are tracking viewport height, and using that to set a CSS variable and the viewport offset, so that we can properly constrain the viewport-height for mobile in response to changes such as the virtual keyboard appearing
-  const handleResize = () => {
-    if (window.visualViewport) {
-      // Set the CSS variable with the calculated height
-      document.documentElement.style.setProperty(
-        '--viewport-height',
-        `${window.visualViewport.height}px`
-      );
-    }
-  };
+  if (isIOS) {
+    // We are tracking viewport height, and using that to set a CSS variable and the viewport offset, so that we can properly constrain the viewport-height for mobile in response to changes such as the virtual keyboard appearing
+    let previousViewportHeight = visualViewport?.height || 0;
+    console.log('previousViewportHeight', previousViewportHeight);
+    const handleResize = () => {
+      if (window.visualViewport) {
+        const newViewportHeight = window.visualViewport.height;
+        if (newViewportHeight < previousViewportHeight) {
+          const vh = newViewportHeight * 0.01;
+          document.documentElement.style.setProperty('--dvh', `${vh}px`);
+          setTimeout(() => {
+            window.scrollTo(0, 0);
+          });
+        } else {
+          document.documentElement.style.setProperty('--dvh', '1dvh');
+        }
+        previousViewportHeight = newViewportHeight;
+      }
+    };
+
+    const handleFocusOut = (e: FocusEvent) => {
+      if (
+        e.target instanceof Element &&
+        isEditableInput(e.target) &&
+        (!e.relatedTarget ||
+          (e.relatedTarget instanceof Element &&
+            !isEditableInput(e.relatedTarget)))
+      ) {
+        document.documentElement.style.setProperty('--dvh', '1dvh');
+      }
+    };
+
+    onMount(() => {
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', handleResize);
+        handleResize();
+        window.visualViewport.addEventListener('scroll', handleResize);
+      }
+      document.addEventListener('focusout', handleFocusOut);
+
+      onCleanup(() => {
+        if (window.visualViewport) {
+          window.visualViewport.removeEventListener('resize', handleResize);
+          window.visualViewport.removeEventListener('scroll', handleResize);
+        }
+        document.removeEventListener('focusout', handleFocusOut);
+      });
+    });
+  }
 
   onMount(() => {
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', handleResize);
-      window.visualViewport.addEventListener('scroll', handleResize);
-      handleResize();
-    }
-
     if (sessionStorage.getItem('showUpgradeModal') === 'true') {
       showPaywall();
       sessionStorage.removeItem('showUpgradeModal');
-    }
-  });
-
-  onCleanup(() => {
-    if (window.visualViewport) {
-      window.visualViewport.removeEventListener('resize', handleResize);
-      window.visualViewport.removeEventListener('scroll', handleResize);
     }
   });
 
@@ -111,7 +139,7 @@ export function Layout(props: RouteSectionProps) {
 
   return (
     <div
-      class="relative flex flex-col justify-between w-dvw h-dvh"
+      class="relative flex flex-col justify-between w-dvw h-[calc(var(--dvh,1dvh)*100)]"
       style={{
         'padding-top':
           'max(env(safe-area-inset-top, 0px), var(--tauri-inset-top, 0px))',
