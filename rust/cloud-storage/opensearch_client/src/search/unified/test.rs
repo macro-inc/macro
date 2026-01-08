@@ -399,6 +399,18 @@ fn test_deserialization() -> anyhow::Result<()> {
 }
 
 #[test]
+fn test_fail_on_name_search() {
+    let err = build_unified_search_request(&UnifiedSearchArgs {
+        search_on: SearchOn::Name,
+        ..Default::default()
+    })
+    .err()
+    .unwrap();
+
+    assert_eq!(err, OpensearchClientError::InvalidSearchOn);
+}
+
+#[test]
 fn test_build_unified_search_request_content() -> anyhow::Result<()> {
     let unified_search_args = UnifiedSearchArgs {
         search_indices: vec![
