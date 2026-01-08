@@ -61,11 +61,13 @@ pub(in crate::api::search::simple) async fn search_names<'a>(
                 entity_id: n.entity_id,
                 entity_type: n.entity_type,
                 score: None,
+
                 highlight: Highlight {
                     name: Some(n.name),
                     ..Default::default()
                 },
                 goto: None,
+
                 updated_at: Some(n.updated_at),
             })
             .collect();
