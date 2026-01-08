@@ -111,3 +111,11 @@ impl From<crate::db::attachment::AttachmentDraft> for AttachmentDraft {
         }
     }
 }
+
+/// The attachment data we need to include when sending a message to a provider.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct AttachmentToSend {
+    pub file_name: String,
+    pub content_type: String,
+    pub data: Vec<u8>,
+}

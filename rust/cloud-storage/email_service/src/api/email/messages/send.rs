@@ -13,6 +13,7 @@ use model::response::ErrorResponse;
 use model::user::UserContext;
 use models_email::email::service::address::ContactInfo;
 use models_email::email::service::{message, thread};
+use models_email::service::attachment::AttachmentToSend;
 use models_email::service::link::Link;
 use sqlx::types::chrono::{DateTime, Utc};
 use strum_macros::AsRefStr;
@@ -140,6 +141,32 @@ pub async fn send_handler(
     // the actual sent time. this is so the value gets updated in the inbox sync when gmail sends us the
     // processed message post-send
     let before_send_ts = Utc::now();
+
+    let mut attachments_to_send: Vec<AttachmentToSend> = Vec::new();
+
+    if let Some(db_id) = message_to_send.db_id {
+        let db_attachments =
+            email_db_client::attachments::draft::fetch_draft_attachments_by_draft_id(
+                &ctx.db, link.id, db_id,
+            )
+            .await?;
+
+        for db_attachment in db_attachments {
+            // fetch data from s3
+            let attachment_data = ctx
+                .s3_client
+                .get(ctx.config.attachment_bucket.as_str(), &db_attachment.s3_key)
+                .await?;
+
+            attachments_to_send.push(AttachmentToSend {
+                file_name: db_attachment.file_name,
+                content_type: db_attachment.content_type,
+                data: attachment_data,
+            })
+        }
+
+        message_to_send.attachments = Some(attachments_to_send);
+    }
 
     ctx.gmail_client
         .send_message(

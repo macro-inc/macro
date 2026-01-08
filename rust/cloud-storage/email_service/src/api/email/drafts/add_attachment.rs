@@ -116,7 +116,8 @@ pub async fn handler(
     };
 
     // insert attachment into db
-    email_db_client::attachments::draft::insert_draft_attachment(&ctx.db, attachment).await?;
+    email_db_client::attachments::draft::insert_draft_attachment(&ctx.db, link.id, attachment)
+        .await?;
 
     // generate presigned url
     let upload_url = ctx
@@ -176,7 +177,7 @@ async fn validate_request(
 
     let current_total_size =
         email_db_client::attachments::draft::get_total_attachments_size_by_draft_id(
-            &ctx.db, draft_id,
+            &ctx.db, link_id, draft_id,
         )
         .await?;
 

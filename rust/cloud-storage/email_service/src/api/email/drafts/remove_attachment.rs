@@ -83,6 +83,7 @@ pub async fn handler(
 
     let rows_affected = email_db_client::attachments::draft::delete_draft_attachment(
         &ctx.db,
+        link.id,
         draft_id,
         attachment_id,
     )
