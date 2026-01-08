@@ -1,6 +1,4 @@
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { useUnfurl } from '@core/signal/unfurl';
-import DeleteIcon from '@icon/bold/x-bold.svg';
 import LinkIcon from '@icon/regular/link.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { proxyResource } from '@service-unfurl/client';
@@ -16,7 +14,11 @@ import {
   normalizeUrl,
 } from '../../utils';
 import { ERROR_MESSAGES } from '../../utils/errorHandling';
-import { AddPropertyValueButton, EmptyValue } from './ValueComponents';
+import {
+  AddPropertyValueButton,
+  EmptyValue,
+  PropertyValueDeleteButton,
+} from './ValueComponents';
 
 type LinkValueProps = {
   property: Property;
@@ -149,10 +151,10 @@ export const LinkValue: Component<LinkValueProps> = (props) => {
         }}
         placeholder="Enter URL..."
         disabled={isSaving()}
-        class="text-left text-xs px-2 py-1 border border-edge bg-transparent focus:outline-none focus:border-accent text-ink inline-block shrink-0"
+        class="text-left px-2 py-0.5 border border-edge-muted bg-transparent focus:outline-none focus:border-accent text-ink inline-block shrink-0"
       />
       <Show when={error()}>
-        <div class="text-failure-ink text-xs mt-1 w-full">{error()}</div>
+        <div class="text-failure-ink mt-1 w-full">{error()}</div>
       </Show>
     </>
   );
@@ -177,7 +179,7 @@ export const LinkValue: Component<LinkValueProps> = (props) => {
         when={!isReadOnly()}
         fallback={
           <Show when={linkValues.length === 0}>
-            <div class="text-ink-muted text-xs px-2 py-1 border border-edge bg-transparent inline-block shrink-0">
+            <div class="text-ink-muted px-2 py-0.5 border border-edge-muted bg-transparent inline-block shrink-0">
               <EmptyValue />
             </div>
           </Show>
@@ -254,9 +256,7 @@ const LinkDisplay: Component<LinkDisplayProps> = (props) => {
     >
       <button
         onClick={handleLinkClick}
-        class={`text-left text-xs px-2 py-1 border border-edge cursor-pointer bg-transparent text-ink inline-flex items-center gap-2 w-full ${
-          props.canEdit ? 'hover:bg-hover' : ''
-        }`}
+        class="text-left px-2 py-0.5 border border-edge-muted bg-transparent text-ink inline-flex items-center gap-2 w-full cursor-default"
         title={props.url}
         disabled={props.isRemoving}
       >
@@ -286,12 +286,9 @@ const LinkDisplay: Component<LinkDisplayProps> = (props) => {
       </button>
       <Show when={props.canEdit && isHovered() && !props.isRemoving}>
         <div class="absolute right-1 inset-y-0 flex items-center">
-          <DeprecatedIconButton
-            icon={DeleteIcon}
-            theme="clear"
-            size="xs"
-            class="!text-failure !bg-[#2a2a2a] hover:!bg-[#444444] !cursor-pointer !w-4 !h-4 !min-w-4 !min-h-4"
+          <PropertyValueDeleteButton
             onClick={handleRemoveClick}
+            disabled={props.isRemoving}
           />
         </div>
       </Show>

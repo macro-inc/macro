@@ -16,6 +16,7 @@ export type TooltipProps = ParentProps<{
   delayOverride?: number;
   spanMode?: boolean;
   hide?: boolean;
+  unstyled?: boolean;
 }>;
 
 /**
@@ -23,6 +24,7 @@ export type TooltipProps = ParentProps<{
  * @param props.tooltip - The JSX element to render in the tooltip.
  * @param props.placement - A optional floating ui placement string.
  * @param props.floatingOptions - A optional floating ui options object.
+ * @param props.unstyled - When true, removes default styling from the tooltip content.
  * @example
  * <Tooltip tooltip={<div class="text-xs">Hello</div>}>
  *     <DeprecatedButton>Hover over me</DeprecatedButton>
@@ -79,12 +81,14 @@ export function Tooltip(props: TooltipProps) {
             'max-width': `calc(100vw - ${2 * padding()}px)`,
           }}
         >
-          <div
-            class="flex items-center justify-center bg-ink p-1.5 text-panel text-xs wrap-break-word"
-            style={{ 'clip-path': cornerClip('0.2rem', 0, 0, 0) }}
-          >
-            {props.tooltip}
-          </div>
+          <Show when={!props.unstyled} fallback={props.tooltip}>
+            <div
+              class="flex items-center justify-center bg-ink p-1.5 text-panel text-xs wrap-break-word"
+              style={{ 'clip-path': cornerClip('0.2rem', 0, 0, 0) }}
+            >
+              {props.tooltip}
+            </div>
+          </Show>
           {/* Note disabling arrows for now. I think its more on-brand - seamus */}
           {/*<CorvuTooltip.Arrow />*/}
         </CorvuTooltip.Content>
