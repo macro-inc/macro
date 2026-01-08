@@ -9,7 +9,7 @@ use sqlx::{Pool, Postgres};
 #[derive(Debug, thiserror::Error)]
 pub enum EmailContactSearchError {
     /// Database error
-    #[error("database error occurred")]
+    #[error("database error occurred {0}")]
     DatabaseError(#[from] sqlx::Error),
     /// Empty search term
     #[error("empty search term provided")]
@@ -34,8 +34,10 @@ pub enum ContactType {
 pub struct EmailContactMatchThreadResult {
     /// The id of the thread
     pub thread_id: uuid::Uuid,
+    /// The id of the message where the match was found
+    pub message_id: uuid::Uuid,
     /// The contact name that was matched on
-    pub contact_name: String,
+    pub contact_name: Option<String>,
     /// The contact email address
     pub contact_email: String,
     /// The contact type of the match
@@ -59,52 +61,66 @@ pub async fn search_email_contacts<'a>(
 
     let rows = sqlx::query!(
         r#"
-        WITH user_links AS (
-            SELECT id FROM email_links WHERE macro_id = $1
-        ),
-        -- Sender matches (From) - search both from_name and contact name
-        sender_matches AS (
-            SELECT DISTINCT ON (t.id, c.id)
-                t.id as thread_id,
-                COALESCE(m.from_name, c.name) as contact_name,
-                c.email_address as contact_email,
-                'FROM' as contact_type,
-                t.latest_non_spam_message_ts
+        WITH paginated_threads AS (
+            SELECT t.id, t.latest_non_spam_message_ts
             FROM email_threads t
-            JOIN email_messages m ON m.thread_id = t.id
-            JOIN email_contacts c ON c.id = m.from_contact_id
-            WHERE t.link_id IN (SELECT id FROM user_links)
-              AND (m.from_name ILIKE $2 OR c.name ILIKE $2)
-            ORDER BY t.id, c.id
-        ),
-        -- Recipient matches (To/Cc/Bcc) - search both recipient name and contact name
-        recipient_matches AS (
-            SELECT DISTINCT ON (t.id, c.id, mr.recipient_type)
-                t.id as thread_id,
-                COALESCE(mr.name, c.name) as contact_name,
-                c.email_address as contact_email,
-                mr.recipient_type::text as contact_type,
-                t.latest_non_spam_message_ts
-            FROM email_threads t
-            JOIN email_messages m ON m.thread_id = t.id
-            JOIN email_message_recipients mr ON mr.message_id = m.id
-            JOIN email_contacts c ON c.id = mr.contact_id
-            WHERE t.link_id IN (SELECT id FROM user_links)
-              AND (mr.name ILIKE $2 OR c.name ILIKE $2)
-            ORDER BY t.id, c.id, mr.recipient_type
+            WHERE t.link_id = (SELECT id FROM email_links WHERE macro_id = $1)
+              AND t.latest_non_spam_message_ts IS NOT NULL
+              AND EXISTS (
+                  -- Check for sender matches
+                  SELECT 1
+                  FROM email_messages m
+                  JOIN email_contacts c ON c.id = m.from_contact_id
+                  WHERE m.thread_id = t.id
+                    AND (c.name ILIKE $2 OR c.email_address ILIKE $2 OR m.from_name ILIKE $2)
+
+                  UNION ALL
+
+                  -- Check for recipient matches
+                  SELECT 1
+                  FROM email_messages m
+                  JOIN email_message_recipients mr ON mr.message_id = m.id
+                  JOIN email_contacts c ON c.id = mr.contact_id
+                  WHERE m.thread_id = t.id
+                    AND (c.name ILIKE $2 OR c.email_address ILIKE $2 OR mr.name ILIKE $2)
+              )
+            ORDER BY t.latest_non_spam_message_ts DESC
+            LIMIT $3 OFFSET $4
         )
         SELECT
-            thread_id as "thread_id!",
-            contact_name as "contact_name!",
-            contact_email as "contact_email!",
-            contact_type as "contact_type!"
-        FROM (
-            SELECT * FROM sender_matches
-            UNION ALL
-            SELECT * FROM recipient_matches
-        ) combined
-        ORDER BY latest_non_spam_message_ts DESC NULLS LAST
-        LIMIT $3 OFFSET $4
+            pt.id as "thread_id!",
+            matches.message_id as "message_id!",
+            matches.contact_name as "contact_name?",
+            matches.contact_email as "contact_email!",
+            matches.contact_type as "contact_type!"
+        FROM paginated_threads pt
+        CROSS JOIN LATERAL (
+            -- Sender matches: check contact.name, contact.email_address, and message.from_name
+            SELECT DISTINCT
+                m.id as message_id,
+                COALESCE(m.from_name, c.name) as contact_name,
+                c.email_address as contact_email,
+                'FROM'::text as contact_type
+            FROM email_messages m
+            JOIN email_contacts c ON c.id = m.from_contact_id
+            WHERE m.thread_id = pt.id
+              AND (c.name ILIKE $2 OR c.email_address ILIKE $2 OR m.from_name ILIKE $2)
+
+            UNION
+
+            -- Recipient matches: check contact.name, contact.email_address, and recipient.name
+            SELECT DISTINCT
+                m.id as message_id,
+                COALESCE(mr.name, c.name) as contact_name,
+                c.email_address as contact_email,
+                mr.recipient_type::text as contact_type
+            FROM email_messages m
+            JOIN email_message_recipients mr ON mr.message_id = m.id
+            JOIN email_contacts c ON c.id = mr.contact_id
+            WHERE m.thread_id = pt.id
+              AND (c.name ILIKE $2 OR c.email_address ILIKE $2 OR mr.name ILIKE $2)
+        ) matches(message_id, contact_name, contact_email, contact_type)
+        ORDER BY pt.latest_non_spam_message_ts DESC
         "#,
         macro_user_id.as_ref(),
         search_pattern,
@@ -118,6 +134,7 @@ pub async fn search_email_contacts<'a>(
         .into_iter()
         .map(|row| EmailContactMatchThreadResult {
             thread_id: row.thread_id,
+            message_id: row.message_id,
             contact_name: row.contact_name,
             contact_email: row.contact_email,
             contact_type: match row.contact_type.as_str() {
