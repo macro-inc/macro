@@ -1,5 +1,4 @@
 import { match, P } from 'ts-pattern';
-import { browserWebSocketFactory } from '../platform/minimal-websocket';
 import type { Backoff } from './backoff/backoff';
 import type { WebsocketBuffer } from './websocket-buffer';
 import { WebsocketConnectionState } from './websocket-connection-state';
@@ -29,6 +28,7 @@ import {
   resolveUrl,
   type UrlResolver,
 } from './websocket-url-resolver';
+import { platformFactory } from '@websocket/platform/factory';
 
 /**
  * A websocket wrapper that can be configured to reconnect automatically and buffer messages when the websocket is not connected.
@@ -343,7 +343,7 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
       }
     );
     this.dispatchEvent(WebsocketEvent.UrlResolved, event);
-    const factory = this._options.factory ?? browserWebSocketFactory;
+    const factory = this._options.factory ?? platformFactory();
     const newSocket = factory(this.url, this.protocols); // create new browser-native websocket and add all event listeners
     this._underlyingWebsocket = newSocket;
     this._underlyingWebsocket.addEventListener(
