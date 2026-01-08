@@ -151,8 +151,15 @@ pub async fn send_handler(
     let before_send_ts = Utc::now();
 
     // Include attachments for message
-    let db_attachments =
-        fetch_and_attach_draft_attachments(&ctx, &link, &mut message_to_send).await?;
+    let db_attachments = send::fetch_and_attach_draft_attachments(
+        &ctx.db,
+        &ctx.s3_client,
+        ctx.config.attachment_bucket.as_str(),
+        &link,
+        &mut message_to_send,
+    )
+    .await
+    .map_err(SendMessageError::AttachmentError)?;
 
     ctx.gmail_client
         .send_message(
@@ -175,10 +182,19 @@ pub async fn send_handler(
 
             // Cleanup attachments in the background
             if let (Some(draft_id), Some(attachments)) = (message_to_send.db_id, db_attachments) {
-                let ctx_clone = ctx.clone();
+                let db = ctx.db.clone();
+                let bucket = ctx.config.attachment_bucket.clone();
                 let link_id = link.id;
                 tokio::spawn(async move {
-                    cleanup_draft_attachments(ctx_clone, link_id, draft_id, attachments).await;
+                    send::cleanup_draft_attachments(
+                        db,
+                        &ctx.s3_client,
+                        bucket,
+                        link_id,
+                        draft_id,
+                        attachments,
+                    )
+                    .await;
                 });
             }
 
@@ -269,90 +285,4 @@ async fn insert_sent_message(
     .context("unable to insert message to send")?;
 
     Ok(())
-}
-
-/// Fetch any attachments the user previously added to the draft from s3 and attach them to the message
-/// being sent. Return the attachment metadata so we can use it to delete the attachments from s3
-/// after the message is sent.
-async fn fetch_and_attach_draft_attachments(
-    ctx: &ApiContext,
-    link: &Link,
-    message_to_send: &mut message::MessageToSend,
-) -> Result<Option<Vec<AttachmentDraft>>, SendMessageError> {
-    if let Some(db_id) = message_to_send.db_id {
-        let db_attachments =
-            email_db_client::attachments::draft::fetch_draft_attachments_by_draft_id(
-                &ctx.db, link.id, db_id,
-            )
-            .await
-            .context("unable to fetch draft attachments from database")?;
-
-        if !db_attachments.is_empty() {
-            let fetch_futures = db_attachments.iter().map(|db_attachment| async move {
-                let attachment_data = ctx
-                    .s3_client
-                    .get(ctx.config.attachment_bucket.as_str(), &db_attachment.s3_key)
-                    .await
-                    .map_err(|e| {
-                        SendMessageError::AttachmentError(anyhow::anyhow!(
-                            "Failed to fetch attachment from S3 (key: {}): {}",
-                            db_attachment.s3_key,
-                            e
-                        ))
-                    })?;
-
-                Ok::<AttachmentToSend, SendMessageError>(AttachmentToSend {
-                    file_name: db_attachment.file_name.clone(),
-                    content_type: db_attachment.content_type.clone(),
-                    data: attachment_data,
-                })
-            });
-
-            let attachments_to_send = futures::future::try_join_all(fetch_futures).await?;
-
-            message_to_send.attachments = Some(attachments_to_send);
-            return Ok(Some(db_attachments));
-        }
-    }
-    Ok(None)
-}
-
-async fn cleanup_draft_attachments(
-    ctx: ApiContext,
-    link_id: Uuid,
-    draft_id: Uuid,
-    attachments: Vec<AttachmentDraft>,
-) {
-    for attachment in attachments {
-        // Delete from S3
-        if let Err(e) = ctx
-            .s3_client
-            .delete(ctx.config.attachment_bucket.as_str(), &attachment.s3_key)
-            .await
-        {
-            tracing::error!(
-                error = ?e,
-                s3_key = %attachment.s3_key,
-                    "Failed to delete draft attachment from S3 during cleanup; skipping database deletion"
-            );
-            continue;
-        }
-
-        // Delete from DB
-        if let Err(e) = email_db_client::attachments::draft::delete_draft_attachment(
-            &ctx.db,
-            link_id,
-            draft_id,
-            attachment.id,
-        )
-        .await
-        {
-            tracing::error!(
-                error = ?e,
-                attachment_id = attachment.id.to_string(),
-                draft_id = draft_id.to_string(),
-                "Failed to delete draft attachment from database during cleanup"
-            );
-        }
-    }
 }
