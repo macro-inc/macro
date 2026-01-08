@@ -25,7 +25,7 @@ import {
 import { downloadFile } from '@filesystem/download';
 import Download from '@icon/regular/download-simple.svg';
 import { createCallback } from '@solid-primitives/rootless';
-import { type Component, Show } from 'solid-js';
+import type { Component } from 'solid-js';
 
 const { track, TrackingEvents } = withAnalytics();
 
