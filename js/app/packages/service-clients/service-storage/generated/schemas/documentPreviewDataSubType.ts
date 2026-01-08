@@ -4,6 +4,10 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { DocumentSubType } from './documentSubType';
+import type { DocumentPreviewDataSubTypeOneOf } from './documentPreviewDataSubTypeOneOf';
 
-export type DocumentPreviewDataSubType = null | DocumentSubType;
+/**
+ * The sub type of a document preview with associated properties.
+Task-related properties are encoded within the variant to ensure valid states.
+ */
+export type DocumentPreviewDataSubType = DocumentPreviewDataSubTypeOneOf;

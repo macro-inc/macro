@@ -5022,10 +5022,6 @@
             "type": ["string", "null"],
             "description": "The file type of the document (e.g. pdf, docx)"
           },
-          "is_completed": {
-            "type": ["boolean", "null"],
-            "description": "Whether the task is completed (only present when sub_type is 'task').\nTrue if the Status property is set to \"Completed\"."
-          },
           "owner": {
             "type": "string",
             "description": "The id of the owner of the document"
@@ -5034,8 +5030,8 @@
             "oneOf": [
               { "type": "null" },
               {
-                "$ref": "#/components/schemas/DocumentSubType",
-                "description": "The sub type of the document if present."
+                "$ref": "#/components/schemas/DocumentPreviewDataSubType",
+                "description": "The sub type of the document if present.\nTask-related properties are encoded within the variant."
               }
             ]
           },
@@ -5045,6 +5041,23 @@
             "description": "The time the document was last updated"
           }
         }
+      },
+      "DocumentPreviewDataSubType": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A task document with completion status",
+            "required": ["is_completed", "type"],
+            "properties": {
+              "is_completed": {
+                "type": "boolean",
+                "description": "Whether the task is completed.\nTrue if the Status property is set to \"Completed\"."
+              },
+              "type": { "type": "string", "enum": ["task"] }
+            }
+          }
+        ],
+        "description": "The sub type of a document preview with associated properties.\nTask-related properties are encoded within the variant to ensure valid states."
       },
       "DocumentResponse": {
         "type": "object",
@@ -7271,10 +7284,6 @@
             "format": "uuid",
             "description": "The document id"
           },
-          "isCompleted": {
-            "type": ["boolean", "null"],
-            "description": "Whether the task is completed (only present when sub_type is 'task').\nTrue if the Status property is set to \"Completed\"."
-          },
           "name": {
             "type": "string",
             "description": "The name of the document"
@@ -7296,8 +7305,8 @@
             "oneOf": [
               { "type": "null" },
               {
-                "$ref": "#/components/schemas/DocumentSubType",
-                "description": "The sub type of the document if present."
+                "$ref": "#/components/schemas/SoupDocumentSubType",
+                "description": "The sub type of the document if present.\nTask-related properties are encoded within the variant."
               }
             ]
           },
@@ -7312,6 +7321,23 @@
             "description": "The time the document was last viewed"
           }
         }
+      },
+      "SoupDocumentSubType": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A task document with its associated properties",
+            "required": ["is_completed", "type"],
+            "properties": {
+              "is_completed": {
+                "type": "boolean",
+                "description": "Whether the task is completed.\nTrue if the Status property is set to \"Completed\"."
+              },
+              "type": { "type": "string", "enum": ["task"] }
+            }
+          }
+        ],
+        "description": "Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task."
       },
       "SoupEmailThreadPreview": {
         "type": "object",

@@ -8,10 +8,9 @@ import type { SoupDocumentBranchedFromId } from './soupDocumentBranchedFromId';
 import type { SoupDocumentBranchedFromVersionId } from './soupDocumentBranchedFromVersionId';
 import type { SoupDocumentDocumentFamilyId } from './soupDocumentDocumentFamilyId';
 import type { SoupDocumentFileType } from './soupDocumentFileType';
-import type { SoupDocumentIsCompleted } from './soupDocumentIsCompleted';
 import type { SoupDocumentProjectId } from './soupDocumentProjectId';
 import type { SoupDocumentSha } from './soupDocumentSha';
-import type { SoupDocumentSubType } from './soupDocumentSubType';
+import type { SoupDocumentSubTypeProperty } from './soupDocumentSubTypeProperty';
 import type { SoupDocumentViewedAt } from './soupDocumentViewedAt';
 
 export interface SoupDocument {
@@ -31,9 +30,6 @@ This could be the document_instance_id or document_bom_id depending on the file 
   fileType?: SoupDocumentFileType;
   /** The document id */
   id: string;
-  /** Whether the task is completed (only present when sub_type is 'task').
-True if the Status property is set to "Completed". */
-  isCompleted?: SoupDocumentIsCompleted;
   /** The name of the document */
   name: string;
   /** The owner of the document */
@@ -43,7 +39,7 @@ True if the Status property is set to "Completed". */
   /** If the document is a PDF, this is the SHA of the pdf
 If the document is a DOCX, this will not be present */
   sha?: SoupDocumentSha;
-  subType?: SoupDocumentSubType;
+  subType?: SoupDocumentSubTypeProperty;
   /** The time the document instance / document BOM was updated */
   updatedAt: number;
   /** The time the document was last viewed */

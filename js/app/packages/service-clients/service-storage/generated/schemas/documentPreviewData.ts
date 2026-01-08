@@ -5,8 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { DocumentPreviewDataFileType } from './documentPreviewDataFileType';
-import type { DocumentPreviewDataIsCompleted } from './documentPreviewDataIsCompleted';
-import type { DocumentPreviewDataSubType } from './documentPreviewDataSubType';
+import type { DocumentPreviewDataSubTypeProperty } from './documentPreviewDataSubTypeProperty';
 
 export interface DocumentPreviewData {
   /** The document id */
@@ -15,12 +14,9 @@ export interface DocumentPreviewData {
   document_name: string;
   /** The file type of the document (e.g. pdf, docx) */
   file_type?: DocumentPreviewDataFileType;
-  /** Whether the task is completed (only present when sub_type is 'task').
-True if the Status property is set to "Completed". */
-  is_completed?: DocumentPreviewDataIsCompleted;
   /** The id of the owner of the document */
   owner: string;
-  sub_type?: DocumentPreviewDataSubType;
+  sub_type?: DocumentPreviewDataSubTypeProperty;
   /** The time the document was last updated */
   updated_at: number;
 }
