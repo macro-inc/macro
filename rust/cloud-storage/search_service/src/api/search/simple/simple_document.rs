@@ -8,7 +8,7 @@ use axum::{
 };
 use futures::future::Either;
 use item_filters::DocumentFilters;
-use macro_user_id::user_id::MacroUserId;
+use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use model::{
     item::{ShareableItem, ShareableItemType},
     response::ErrorResponse,
@@ -22,7 +22,7 @@ use opensearch_client::search::{
     documents::DocumentSearchArgs,
     model::{Highlight, SearchHit},
 };
-use sqlx::types::Uuid;
+use sqlx::{Pool, Postgres, types::Uuid};
 
 use crate::api::ApiContext;
 
@@ -59,6 +59,7 @@ pub async fn handler(
     }))
 }
 
+#[derive(Debug)]
 pub(in crate::api::search) struct FilterDocumentResponse {
     pub document_ids: Vec<String>,
     pub ids_only: bool,
@@ -224,21 +225,14 @@ pub(in crate::api::search) async fn search_documents(
         return Ok(Vec::new());
     }
 
-    let document_uuids = filter_document_response
-        .document_ids
-        .iter()
-        .map(|d| d.parse().unwrap())
-        .collect::<Vec<Uuid>>();
-
     let name_results = match req.search_on {
-        SearchOn::Name | SearchOn::NameContent => Either::Left(name_search::search_document_names(
+        SearchOn::Name | SearchOn::NameContent => Either::Left(search_names(
             &ctx.db,
             &user_id,
-            &document_uuids,
+            &filter_document_response,
             terms[0].clone(),
-            filter_document_response.ids_only,
+            page,
             page_size,
-            page * page_size,
         )),
         SearchOn::Content => Either::Right(ready(Ok(Vec::new()))),
     };
@@ -262,23 +256,53 @@ pub(in crate::api::search) async fn search_documents(
     };
 
     let (name_result, content_result) = tokio::join!(name_results, content_results);
-    let name_result = name_result.map_err(SearchError::NameSearch)?;
+    let name_result = name_result?;
     let content_result = content_result.map_err(SearchError::Search)?;
 
-    let results: Vec<SearchHit> = name_result
-        .into_iter()
-        .map(|n| SearchHit {
-            entity_id: n.entity_id,
-            entity_type: n.entity_type,
-            score: None,
-            highlight: Highlight {
-                name: Some(n.name),
-                ..Default::default()
-            },
-            goto: None,
-        })
-        .chain(content_result)
-        .collect();
+    let results: Vec<SearchHit> = name_result.into_iter().chain(content_result).collect();
 
     Ok(results)
+}
+
+/// Performs the name search over document names
+#[tracing::instrument(skip(db), err)]
+pub(in crate::api::search::simple) async fn search_names<'a>(
+    db: &Pool<Postgres>,
+    user_id: &MacroUserId<Lowercase<'a>>,
+    filter_document_response: &FilterDocumentResponse,
+    term: String,
+    page: u32,
+    page_size: u32,
+) -> Result<Vec<SearchHit>, SearchError> {
+    let document_uuids = filter_document_response
+        .document_ids
+        .iter()
+        .map(|d| d.parse().unwrap())
+        .collect::<Vec<Uuid>>();
+
+    name_search::search_document_names(
+        db,
+        user_id,
+        &document_uuids,
+        term,
+        filter_document_response.ids_only,
+        page_size,
+        page * page_size,
+    )
+    .await
+    .map_err(SearchError::NameSearch)
+    .map(|r| {
+        r.into_iter()
+            .map(|n| SearchHit {
+                entity_id: n.entity_id,
+                entity_type: n.entity_type,
+                score: None,
+                highlight: Highlight {
+                    name: Some(n.name),
+                    ..Default::default()
+                },
+                goto: None,
+            })
+            .collect()
+    })
 }

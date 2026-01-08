@@ -9,6 +9,7 @@ use model::response::ErrorResponse;
 use name_search::NameSearchError;
 use opensearch_client::error::OpensearchClientError;
 
+pub(in crate::api) mod filter;
 pub(in crate::api) mod simple_channel;
 pub(in crate::api) mod simple_chat;
 pub(in crate::api) mod simple_document;
