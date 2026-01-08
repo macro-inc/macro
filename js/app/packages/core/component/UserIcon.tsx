@@ -1,13 +1,13 @@
 import { toast } from '@core/component/Toast/Toast';
 import { macroIdToEmail, tryMacroId, useDisplayName } from '@core/user';
 import { isOk } from '@core/util/maybeResult';
-import { Tooltip } from '@kobalte/core/tooltip';
 import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
 import { commsServiceClient } from '@service-comms/client';
 import { debounce } from '@solid-primitives/scheduled';
 import { createMemo, createSignal, Match, Show, Switch } from 'solid-js';
 import { useSplitLayout } from '../../app/component/split-layout/layout';
 import { ProfilePicture } from './ProfilePicture';
+import { Tooltip } from './Tooltip';
 import { UserTooltip } from './UserTooltip';
 
 export type UserIconProps = {
@@ -148,22 +148,21 @@ export function UserIcon(props: UserIconProps) {
       }
       fallback={icon()}
     >
-      <Tooltip placement="bottom" gutter={8} overflowPadding={16}>
-        <Tooltip.Trigger as="div" class={sizeClasses().container}>
-          {icon()}
-        </Tooltip.Trigger>
-        <Tooltip.Portal>
-          <Tooltip.Content class="z-tool-tip">
-            <UserTooltip
-              displayName={displayName()() || ''}
-              email={email()}
-              id={props.id}
-              isDeleted={props.isDeleted}
-              copied={copied()}
-              onCopyEmail={handleCopyEmail}
-            />
-          </Tooltip.Content>
-        </Tooltip.Portal>
+      <Tooltip
+        placement="bottom"
+        unstyled
+        tooltip={
+          <UserTooltip
+            displayName={displayName()() || ''}
+            email={email()}
+            id={props.id}
+            isDeleted={props.isDeleted}
+            copied={copied()}
+            onCopyEmail={handleCopyEmail}
+          />
+        }
+      >
+        {icon()}
       </Tooltip>
     </Show>
   );

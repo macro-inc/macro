@@ -35,7 +35,7 @@ export const PropertyPillTooltip = (props: PropertyPillTooltipProps) => {
           }}
           class="size-3.5 text-ink-muted"
         />
-        <span class="text-xs font-semibold">{props.property.displayName}</span>
+        <span class="text-xs">{props.property.displayName}</span>
       </div>
       {props.children}
     </div>
