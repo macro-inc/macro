@@ -1,17 +1,160 @@
-use crate::search::{
-    builder::SearchQueryConfig,
-    channels::{ChannelMessageIndex, ChannelMessageSearchConfig},
-    chats::{ChatIndex, ChatSearchConfig},
-    documents::{DocumentIndex, DocumentSearchConfig},
-    emails::{EmailIndex, EmailSearchConfig},
-    model::{
-        Hit, NameIndex, SearchGotoChannel, SearchGotoChat, SearchGotoContent, SearchGotoDocument,
-        SearchGotoEmail, SearchHit, parse_highlight_hit,
+use std::collections::HashSet;
+
+use crate::{
+    Result,
+    error::{OpensearchClientError, ResponseExt},
+    search::{
+        builder::{SearchQueryConfig, create_highlight_field, updated_at_sort},
+        channels::{
+            ChannelMessageIndex, ChannelMessageQueryBuilder, ChannelMessageSearchArgs,
+            ChannelMessageSearchConfig,
+        },
+        chats::{ChatIndex, ChatQueryBuilder, ChatSearchArgs, ChatSearchConfig},
+        documents::{
+            DocumentIndex, DocumentQueryBuilder, DocumentSearchArgs, DocumentSearchConfig,
+        },
+        emails::{EmailIndex, EmailQueryBuilder, EmailSearchArgs, EmailSearchConfig},
+        model::{
+            DefaultSearchResponse, Hit, MacroEm, SearchGotoChannel, SearchGotoChat,
+            SearchGotoContent, SearchGotoDocument, SearchGotoEmail, SearchHit, parse_highlight_hit,
+        },
+        query::Keys,
     },
-    query::Keys,
 };
 
-use models_opensearch::SearchEntityType;
+use crate::SearchOn;
+use models_opensearch::{SearchEntityType, SearchIndex};
+use opensearch_query_builder::*;
+
+#[derive(Debug, Default, Clone)]
+pub struct UnifiedSearchArgs {
+    pub terms: Vec<String>,
+    pub user_id: String,
+    pub page: u32,
+    pub page_size: u32,
+    pub match_type: String,
+    pub search_on: SearchOn,
+    pub collapse: bool,
+    pub disable_recency: bool,
+    /// The indices to search over
+    pub search_indices: HashSet<SearchEntityType>,
+    /// The document search args
+    pub document_search_args: UnifiedDocumentSearchArgs,
+    /// The email search args. If None, we do not search emails
+    pub email_search_args: UnifiedEmailSearchArgs,
+    /// The channel message search args. If None, we do not search channel messages
+    pub channel_message_search_args: UnifiedChannelMessageSearchArgs,
+    /// The chat search args. If None, we do not search chats
+    pub chat_search_args: UnifiedChatSearchArgs,
+}
+
+impl From<UnifiedSearchArgs> for DocumentSearchArgs {
+    fn from(args: UnifiedSearchArgs) -> Self {
+        DocumentSearchArgs {
+            terms: args.terms,
+            user_id: args.user_id,
+            page: args.page,
+            page_size: args.page_size,
+            match_type: args.match_type,
+            search_on: args.search_on,
+            collapse: args.collapse,
+            disable_recency: args.disable_recency,
+            ids_only: args.document_search_args.ids_only,
+            document_ids: args.document_search_args.document_ids,
+        }
+    }
+}
+
+impl From<UnifiedSearchArgs> for EmailSearchArgs {
+    fn from(args: UnifiedSearchArgs) -> Self {
+        EmailSearchArgs {
+            terms: args.terms,
+            user_id: args.user_id,
+            page: args.page,
+            page_size: args.page_size,
+            match_type: args.match_type,
+            search_on: args.search_on,
+            collapse: args.collapse,
+            ids_only: false, // Email is never ids only at the moment
+            disable_recency: args.disable_recency,
+            thread_ids: args.email_search_args.thread_ids,
+            link_ids: args.email_search_args.link_ids,
+            sender: args.email_search_args.sender,
+            cc: args.email_search_args.cc,
+            bcc: args.email_search_args.bcc,
+            recipients: args.email_search_args.recipients,
+        }
+    }
+}
+
+impl From<UnifiedSearchArgs> for ChannelMessageSearchArgs {
+    fn from(args: UnifiedSearchArgs) -> Self {
+        ChannelMessageSearchArgs {
+            terms: args.terms,
+            user_id: args.user_id,
+            page: args.page,
+            page_size: args.page_size,
+            match_type: args.match_type,
+            search_on: args.search_on,
+            collapse: args.collapse,
+            ids_only: true, // channel messages are always ids only
+            disable_recency: args.disable_recency,
+            channel_ids: args.channel_message_search_args.channel_ids,
+            thread_ids: args.channel_message_search_args.thread_ids,
+            mentions: args.channel_message_search_args.mentions,
+            sender_ids: args.channel_message_search_args.sender_ids,
+        }
+    }
+}
+
+impl From<UnifiedSearchArgs> for ChatSearchArgs {
+    fn from(args: UnifiedSearchArgs) -> Self {
+        ChatSearchArgs {
+            terms: args.terms,
+            user_id: args.user_id,
+            page: args.page,
+            page_size: args.page_size,
+            match_type: args.match_type,
+            search_on: args.search_on,
+            collapse: args.collapse,
+            disable_recency: args.disable_recency,
+            ids_only: args.chat_search_args.ids_only,
+            chat_ids: args.chat_search_args.chat_ids,
+            role: args.chat_search_args.role,
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct UnifiedChatSearchArgs {
+    pub chat_ids: Vec<String>,
+    pub role: Vec<String>,
+    pub ids_only: bool,
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct UnifiedDocumentSearchArgs {
+    pub document_ids: Vec<String>,
+    pub ids_only: bool,
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct UnifiedEmailSearchArgs {
+    pub thread_ids: Vec<String>,
+    pub link_ids: Vec<String>,
+    pub sender: Vec<String>,
+    pub cc: Vec<String>,
+    pub bcc: Vec<String>,
+    pub recipients: Vec<String>,
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct UnifiedChannelMessageSearchArgs {
+    pub channel_ids: Vec<String>,
+    pub thread_ids: Vec<String>,
+    pub mentions: Vec<String>,
+    pub sender_ids: Vec<String>,
+}
 
 /// Possible search result indices for unified search
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -21,7 +164,6 @@ pub(crate) enum UnifiedSearchIndex {
     Document(DocumentIndex),
     Chat(ChatIndex),
     Email(EmailIndex),
-    Name(NameIndex),
 }
 
 pub struct SplitUnifiedSearchResponseValues {
@@ -149,7 +291,6 @@ impl From<Hit<UnifiedSearchIndex>> for SearchHit {
                     recipients: a.recipients,
                 })),
             },
-
             UnifiedSearchIndex::Chat(a) => SearchHit {
                 entity_id: a.entity_id,
                 entity_type: SearchEntityType::Chats,
@@ -171,24 +312,156 @@ impl From<Hit<UnifiedSearchIndex>> for SearchHit {
                     role: a.role,
                 })),
             },
-            UnifiedSearchIndex::Name(a) => SearchHit {
-                entity_id: a.entity_id,
-                entity_type: a.entity_type,
-                score: index.score,
-                highlight: index
-                    .highlight
-                    .map(|h| {
-                        parse_highlight_hit(
-                            h,
-                            Keys {
-                                title_key: "name",
-                                content_key: "",
-                            },
-                        )
-                    })
-                    .unwrap_or_default(),
-                goto: None,
-            },
         }
     }
 }
+
+#[tracing::instrument(skip(args), err)]
+fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchRequest<'static>> {
+    // We don't support name search in opensearch
+    if let SearchOn::Name = args.search_on {
+        return Err(OpensearchClientError::InvalidSearchOn);
+    }
+
+    if args.search_indices.is_empty() {
+        return Err(OpensearchClientError::EmptySearchIndices);
+    }
+
+    let mut bool_query = BoolQueryBuilder::new();
+
+    // There will always be 1 query as the indices are never empty
+    bool_query.minimum_should_match(1);
+
+    if args.search_indices.contains(&SearchEntityType::Documents) {
+        let document_search_args: DocumentSearchArgs = args.clone().into();
+        let document_query_builder: DocumentQueryBuilder = document_search_args.into();
+        let document_bool_query = document_query_builder.build_bool_query()?;
+        let query_type: QueryType = document_bool_query.build().into();
+        bool_query.should(query_type.to_owned());
+    }
+
+    if args.search_indices.contains(&SearchEntityType::Emails) {
+        let email_search_args: EmailSearchArgs = args.clone().into();
+        let email_query_builder: EmailQueryBuilder = email_search_args.into();
+        let email_bool_query = email_query_builder.build_bool_query()?;
+        let query_type: QueryType = email_bool_query.build().into();
+        bool_query.should(query_type.to_owned());
+    }
+
+    // We can only search over channels if we are not explicitly searching by name
+    if args.search_indices.contains(&SearchEntityType::Channels) && args.search_on != SearchOn::Name
+    {
+        let channel_message_search_args: ChannelMessageSearchArgs = args.clone().into();
+        let channel_message_query_builder: ChannelMessageQueryBuilder =
+            channel_message_search_args.into();
+        let channel_message_bool_query = channel_message_query_builder.build_bool_query()?;
+        let query_type: QueryType = channel_message_bool_query.build().into();
+        bool_query.should(query_type.to_owned());
+    }
+
+    if args.search_indices.contains(&SearchEntityType::Chats) {
+        let chat_search_args: ChatSearchArgs = args.clone().into();
+        let chat_query_builder: ChatQueryBuilder = chat_search_args.into();
+        let chat_bool_query = chat_query_builder.build_bool_query()?;
+        let query_type: QueryType = chat_bool_query.build().into();
+        bool_query.should(query_type.to_owned());
+    }
+
+    // create the search request
+    let mut search_request_builder = SearchRequestBuilder::new();
+
+    search_request_builder.from(args.page * args.page_size);
+    search_request_builder.size(args.page_size);
+
+    if args.collapse {
+        search_request_builder.collapse(Collapse::new("entity_id"));
+    }
+
+    // Build sort
+    let sort = updated_at_sort();
+
+    for sort in sort {
+        search_request_builder.add_sort(sort);
+    }
+
+    // Build highlight
+    let mut highlight = Highlight::new().require_field_match(true).field(
+        "content",
+        HighlightField::new()
+            .highlight_type("plain")
+            .pre_tags(vec![MacroEm::Open.to_string()])
+            .post_tags(vec![MacroEm::Close.to_string()])
+            .number_of_fragments(500),
+    );
+
+    // For content and name content search, we need to add in highlights for the owner
+    // fields
+    match args.search_on {
+        SearchOn::Content | SearchOn::NameContent => {
+            // Commenting out for now as it's causing highlights on the user_id of filter matches
+            // Need to think of a different way to surface the owner matches
+            // highlight = highlight.field("user_id", create_highlight_field("plain", 1));
+            // highlight = highlight.field("owner_id", create_highlight_field("plain", 1));
+            highlight = highlight.field("sender", create_highlight_field("plain", 1));
+            highlight = highlight.field("recipients", create_highlight_field("plain", 1));
+            highlight = highlight.field("cc", create_highlight_field("plain", 1));
+            highlight = highlight.field("bcc", create_highlight_field("plain", 1));
+        }
+        SearchOn::Name => {}
+    }
+
+    search_request_builder.highlight(highlight);
+
+    let query_object = bool_query.build();
+
+    let built_query: QueryType = query_object.into();
+
+    search_request_builder.query(built_query);
+
+    Ok(search_request_builder.build())
+}
+
+#[tracing::instrument(skip(client, args), err)]
+pub(crate) async fn search_unified(
+    client: &opensearch::OpenSearch,
+    args: UnifiedSearchArgs,
+) -> Result<Vec<SearchHit>> {
+    let search_request = build_unified_search_request(&args)?.to_json();
+
+    tracing::trace!("search request {:?}", search_request);
+
+    let mut search_indices: Vec<&str> = args.search_indices.iter().map(|i| i.as_ref()).collect();
+
+    match args.search_on {
+        SearchOn::NameContent | SearchOn::Name => {
+            search_indices.push(SearchIndex::Names.as_ref());
+        }
+        SearchOn::Content => {}
+    }
+
+    let response = client
+        .search(opensearch::SearchParts::Index(&search_indices))
+        .body(search_request)
+        .send()
+        .await
+        .map_client_error()
+        .await?;
+
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|e| OpensearchClientError::HttpBytesError {
+            details: e.to_string(),
+        })?;
+
+    let result: DefaultSearchResponse<UnifiedSearchIndex> = serde_json::from_slice(&bytes)
+        .map_err(|e| OpensearchClientError::SearchDeserializationFailed {
+            details: e.to_string(),
+            raw_body: String::from_utf8_lossy(&bytes).to_string(),
+        })?;
+
+    Ok(result.hits.hits.into_iter().map(|h| h.into()).collect())
+}
+
+#[cfg(test)]
+mod test;
