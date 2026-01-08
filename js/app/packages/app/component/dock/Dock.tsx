@@ -13,7 +13,7 @@ import { PresentModeGlitch } from './PresentModeGlitch';
 import IconQuestion from '@icon/regular/question.svg';
 import { withAnalytics } from '@coparse/analytics';
 import SplitIcon from '@macro-icons/new-split.svg';
-import IconAI from '@macro-icons/pixel/ai.svg';
+import IconAI from '@macro-icons/wide/star.svg';
 import IconGear from '@macro-icons/macro-gear.svg';
 import IconLogo from '@macro-icons/macro-logo.svg';
 import { BasicTierLimit } from './BasicTierLimit';
@@ -346,7 +346,7 @@ export function Dock() {
               </Show>
 
               <Button
-                tooltip={settingsOpen() ? 'Close Settings' : 'Open Settings'}
+                tooltip={<LabelAndHotKey label={settingsOpen() ? 'Close Settings' : 'Open Settings'} hotkeyToken={TOKENS.global.toggleSettings} />}
                 onClick={() => { toggleSettings() }}
                 class="p-1 size-6"
                 classList={{

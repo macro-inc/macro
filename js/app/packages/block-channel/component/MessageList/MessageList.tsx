@@ -97,7 +97,7 @@ type MessageListContentContextValues = {
   scrollToMessage: (messageID: string, index: number, focus?: boolean) => void;
   createReply: (id: string, focus?: boolean) => void;
   toggleThread: (threadID: string, value?: boolean) => void;
-  clearThreadFocus: (threadID: string, expanded?: boolean) => void;
+  closeThreadReply: (threadID: string, expanded?: boolean) => void;
   toggleReplyInputFocus: (threadID: string, value?: boolean) => void;
   getThreadsWithActiveReplies: () => string[];
   registerThreadAppendMountTarget: (threadID: string, el: HTMLElement) => void;
@@ -200,7 +200,7 @@ export function MessageList(props: MessageListProps) {
         };
       });
     },
-    clearThreadFocus: function (threadID: string, expanded?: boolean): void {
+    closeThreadReply: function (threadID: string, expanded?: boolean): void {
       setThreadViewStore(threadID, (prev) => {
         return {
           ...prev,
@@ -795,6 +795,9 @@ function MessageListImpl(props: MessageListProps) {
                         isThreadIndexWithinCutoff()) &&
                       virtualHandle()
                     }
+                    // For the last message in the channel, we display this
+                    // empty small div. This is a temporary fix for last thread elements not rendering
+                    fallback={i() === 0 ? <div class="h-[0.05px]" /> : null}
                   >
                     <MessageContainer
                       message={row.message}
