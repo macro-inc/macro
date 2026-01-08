@@ -3,7 +3,7 @@ import type { Property } from '@core/component/Properties/types';
 import { Tooltip } from '@core/component/Tooltip';
 import CircleDashed from '@icon/regular/circle-dashed.svg';
 
-import { createEffect, createMemo, For, Show } from 'solid-js';
+import { createMemo, For, Show } from 'solid-js';
 import { PropertyPills } from './PropertyPills';
 
 type KeyPropertiesGridProps = {
