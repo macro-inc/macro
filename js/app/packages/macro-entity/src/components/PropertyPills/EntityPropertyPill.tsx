@@ -1,4 +1,3 @@
-import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 import { usePropertyEntityDisplay } from '@core/component/Properties/hooks';
 import type { Property } from '@core/component/Properties/types';
 import { PropertyDataTypeIcon } from '@core/component/Properties/utils';
@@ -24,9 +23,9 @@ export const EntityPropertyPill = (props: EntityPropertyPillProps) => {
 
   if (count() === 0) return null;
 
-  // Special handling for ASSIGNEES property - show as user avatars
-  if (props.property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.ASSIGNEES) {
-    return <AssigneesPill property={props.property} entities={entities()} />;
+  // Show user avatars for multiselect user entity properties
+  if (count() > 1 && props.property.specificEntityType === 'USER') {
+    return <UserEntityPill property={props.property} entities={entities()} />;
   }
 
   // Single entity - show name directly in pill
@@ -174,29 +173,29 @@ const EntityValuePill = (props: EntityValuePillProps) => {
   );
 };
 
-const MAX_ASSIGNEE_AVATARS = 3;
+const MAX_USER_AVATARS = 3;
 
-type AssigneesPillProps = {
+type UserEntityPillProps = {
   property: Property & { valueType: 'ENTITY' };
   entities: EntityReference[];
 };
 
 /**
- * Special pill for assignees that shows user avatars in LiveIndicators style
+ * Pill for multiselect user entity properties that shows user avatars in LiveIndicators style
  */
-const AssigneesPill = (props: AssigneesPillProps) => {
+const UserEntityPill = (props: UserEntityPillProps) => {
   const remaining = createMemo(() => {
-    if (props.entities.length <= MAX_ASSIGNEE_AVATARS) return undefined;
-    return props.entities.length - MAX_ASSIGNEE_AVATARS;
+    if (props.entities.length <= MAX_USER_AVATARS) return undefined;
+    return props.entities.length - MAX_USER_AVATARS;
   });
 
-  const displayEntities = () => props.entities.slice(0, MAX_ASSIGNEE_AVATARS);
+  const displayEntities = () => props.entities.slice(0, MAX_USER_AVATARS);
 
   return (
     <Tooltip
       unstyled
       tooltip={
-        <AssigneeTooltipContent
+        <UserEntityTooltipContent
           property={props.property}
           entities={props.entities}
         />
@@ -227,28 +226,28 @@ const AssigneesPill = (props: AssigneesPillProps) => {
   );
 };
 
-type AssigneeTooltipContentProps = {
+type UserEntityTooltipContentProps = {
   property: Property & { valueType: 'ENTITY' };
   entities: EntityReference[];
 };
 
-const AssigneeTooltipContent = (props: AssigneeTooltipContentProps) => {
+const UserEntityTooltipContent = (props: UserEntityTooltipContentProps) => {
   return (
     <PropertyPillTooltip property={props.property}>
       <div class="flex flex-col gap-1.5">
         <For each={props.entities}>
-          {(entity) => <AssigneeTooltipItem entity={entity} />}
+          {(entity) => <UserEntityTooltipItem entity={entity} />}
         </For>
       </div>
     </PropertyPillTooltip>
   );
 };
 
-type AssigneeTooltipItemProps = {
+type UserEntityTooltipItemProps = {
   entity: EntityReference;
 };
 
-const AssigneeTooltipItem = (props: AssigneeTooltipItemProps) => {
+const UserEntityTooltipItem = (props: UserEntityTooltipItemProps) => {
   const { name } = usePropertyEntityDisplay(
     () => props.entity.entity_id,
     () => props.entity.entity_type as EntityType,
