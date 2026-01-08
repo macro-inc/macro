@@ -275,7 +275,6 @@ async fn fetch_and_attach_draft_attachments(
     link: &Link,
     message_to_send: &mut message::MessageToSend,
 ) -> Result<Option<Vec<AttachmentDraft>>, SendMessageError> {
-    let mut attachments_to_send: Vec<AttachmentToSend> = Vec::new();
     if let Some(db_id) = message_to_send.db_id {
         let db_attachments =
             email_db_client::attachments::draft::fetch_draft_attachments_by_draft_id(
@@ -285,8 +284,7 @@ async fn fetch_and_attach_draft_attachments(
             .map_err(|_| SendMessageError::AttachmentError)?;
 
         if !db_attachments.is_empty() {
-            for db_attachment in &db_attachments {
-                // fetch data from s3
+            let fetch_futures = db_attachments.iter().map(|db_attachment| async move {
                 let attachment_data = ctx
                     .s3_client
                     .get(ctx.config.attachment_bucket.as_str(), &db_attachment.s3_key)
@@ -296,12 +294,14 @@ async fn fetch_and_attach_draft_attachments(
                         SendMessageError::AttachmentError
                     })?;
 
-                attachments_to_send.push(AttachmentToSend {
+                    Ok::<AttachmentToSend, SendMessageError>(AttachmentToSend {
                     file_name: db_attachment.file_name.clone(),
                     content_type: db_attachment.content_type.clone(),
                     data: attachment_data,
                 })
-            }
+                });
+
+            let attachments_to_send = futures::future::try_join_all(fetch_futures).await?;
 
             message_to_send.attachments = Some(attachments_to_send);
             return Ok(Some(db_attachments));
