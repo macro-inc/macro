@@ -4,6 +4,7 @@ import { useIsAuthenticated } from '@core/auth';
 import {
   createBlockEffect,
   createBlockResource,
+  useBlockAliasedName,
   useBlockId,
   useBlockName,
 } from '@core/block';
@@ -625,7 +626,7 @@ export function ShareButton(props: ShareButtonProps) {
   const [permissionsResource] = permissionsBlockResource;
   const blockScopeId = blockHotkeyScopeSignal.get;
   const isAuthenticated = useIsAuthenticated();
-  const blockType = useBlockName();
+  const blockType = useBlockAliasedName();
   const blockId = useBlockId();
 
   onMount(() => {
