@@ -1,5 +1,4 @@
 import { SYNC_SERVICE_HOSTS } from '@core/constant/servers';
-import { isTauri } from '@core/util/platform';
 import { getPermissionToken } from '@core/signal/token';
 import {
   type FetchWithTokenErrorCode,
@@ -12,6 +11,7 @@ import {
   type ObjectLike,
   ok,
 } from '@core/util/maybeResult';
+import { isTauri } from '@core/util/platform';
 import { platformFetch } from '@core/util/platformFetch';
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import type { SerializedEditorState } from 'lexical';
