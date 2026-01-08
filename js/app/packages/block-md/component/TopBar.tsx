@@ -30,7 +30,6 @@ import { ShareButton } from '@core/component/TopBar/ShareButton';
 import {
   ENABLE_HISTORY_COMPONENT,
   ENABLE_MARKDOWN_LIVE_COLLABORATION,
-  ENABLE_PROPERTIES_METADATA,
 } from '@core/constant/featureFlags';
 import { useCanEdit, useGetPermissions } from '@core/signal/permissions';
 import type { EntityType } from '@core/types';
@@ -116,9 +115,7 @@ export function TopBar() {
               label: `${showCommentsPreference() ? 'Hide' : 'Show'} Comments`,
             }}
           />
-          <Show when={ENABLE_PROPERTIES_METADATA}>
-            <MarkdownPropertiesModal documentId={blockId} buttonSize="sm" />
-          </Show>
+          <MarkdownPropertiesModal documentId={blockId} buttonSize="sm" />
           <div class="flex items-center">
             <SplitPermissionsBadge />
             <ShareButton
