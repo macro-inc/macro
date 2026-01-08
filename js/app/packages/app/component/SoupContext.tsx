@@ -251,12 +251,14 @@ export type NavigationResult = {
 };
 
 export function createNavigationEntityListShortcut({
+  splitName,
   splitHandle,
   splitHotkeyScope,
   unifiedListContext,
   previewState,
   getSplitCount,
 }: {
+  splitName: Accessor<string>;
   splitHandle: SplitHandle;
   splitHotkeyScope: string;
   unifiedListContext: UnifiedListContext;
@@ -1262,9 +1264,7 @@ export function createNavigationEntityListShortcut({
     setSelectedView(newViewId);
   };
 
-  const splitIsUnifiedList = createMemo(
-    () => splitHandle.content().id === 'unified-list'
-  );
+  const splitIsUnifiedList = createMemo(() => splitName() === 'unified-list');
 
   for (let i = 0; i < viewIds().length && i < 9; i++) {
     const viewId = viewIds()[i];

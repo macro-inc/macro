@@ -21,6 +21,7 @@ import {
   SplitPanelContext,
   type SplitPanelContextType,
 } from './split-layout/context';
+import { useSplitLayout } from './split-layout/layout';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 
 type PreviewPanel = {
@@ -37,6 +38,7 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
 
   if (props.selectedEntity.type === 'project') {
     const splitPanelContext = useSplitPanelOrThrow();
+    const { getSplitCount } = useSplitLayout();
     const unifiedListContext = createSoupContext({
       isRenderedFromPreview: true,
     });
@@ -59,6 +61,7 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
       splitHotkeyScope,
       unifiedListContext,
       previewState: [previewState, setPreviewState],
+      getSplitCount: getSplitCount,
     });
     scopedSplitPanelContextType.unifiedListContext = unifiedListContext;
     scopedSplitPanelContextType.previewState = [previewState, setPreviewState];

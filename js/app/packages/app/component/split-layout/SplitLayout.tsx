@@ -379,7 +379,16 @@ function SplitPanel(props: SplitPanelProps) {
       return !(content.type === 'component' && content.id === 'unified-list');
     },
   });
+
+  const splitName = createMemo(() => {
+    const { type, id } = props.split.content;
+    if (type === 'component') return id;
+
+    return type;
+  });
+
   createNavigationEntityListShortcut({
+    splitName,
     splitHandle: props.handle,
     splitHotkeyScope,
     unifiedListContext,
