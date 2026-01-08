@@ -207,17 +207,17 @@ const AssigneesPill = (props: AssigneesPillProps) => {
         shift: { padding: 8 },
       }}
     >
-      <div class="flex items-center h-fit shrink-0 overflow-hidden w-fit isolate pr-3">
+      <div class="flex items-center h-fit shrink-0 overflow-hidden w-fit isolate pr-2">
         <For each={displayEntities()}>
           {(entity) => (
-            <div class="bg-[green] size-6 rounded-full p-[2px] -mr-3">
-              <UserIcon id={entity.entity_id} isDeleted={false} size="fill" />
+            <div class="bg-panel rounded-full p-[2px] -mr-2">
+              <UserIcon id={entity.entity_id} isDeleted={false} size="xs" />
             </div>
           )}
         </For>
         <Show when={remaining()}>
           <div class="z-4">
-            <div class="size-6 bg-menu border-2 text-[10px] -mr-3 border-panel rounded-full flex flex-col justify-center items-center">
+            <div class="size-6 bg-menu border-2 text-[10px] -mr-2 border-panel rounded-full flex flex-col justify-center items-center">
               <span>+{remaining()}</span>
             </div>
           </div>

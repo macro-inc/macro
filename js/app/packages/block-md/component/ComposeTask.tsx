@@ -13,7 +13,10 @@ import {
 } from '@core/component/Properties/api/converters';
 import { Modals } from '@core/component/Properties/component/modal';
 import { PropertyGrid } from '@core/component/Properties/component/panel';
-import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
+import {
+  PROPERTY_OPTION_IDS,
+  SYSTEM_PROPERTY_IDS,
+} from '@core/component/Properties/constants';
 import {
   PropertiesProvider,
   type PropertySaveHandler,
@@ -33,6 +36,7 @@ import {
   queryKeys,
   useQueryClient as useEntityQueryClient,
 } from '@macro-entity';
+import { useUserId } from '@service-gql/client';
 import { propertiesServiceClient } from '@service-properties/client';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import { refetchHistory } from '@service-storage/history';
@@ -177,10 +181,22 @@ export function ComposeTask(props: ComposeTaskProps) {
   const [content, setContent] = createSignal(props.initialContent ?? '');
   const [bodyEditor, setBodyEditor] = createSignal<LexicalEditor>();
   const [containerRef, setContainerRef] = createSignal<HTMLDivElement>();
+  const currentUserId = useUserId();
 
   const [propertyValues, setPropertyValues] = createStore<
     Record<string, PropertyApiValues>
-  >({});
+  >({
+    [SYSTEM_PROPERTY_IDS.ASSIGNEES]: {
+      valueType: 'ENTITY',
+      refs: currentUserId()
+        ? [{ entity_id: currentUserId()!, entity_type: 'USER' }]
+        : [],
+    },
+    [SYSTEM_PROPERTY_IDS.STATUS]: {
+      valueType: 'SELECT_STRING',
+      values: [PROPERTY_OPTION_IDS.STATUS.NOT_STARTED],
+    },
+  });
 
   const systemPropertiesQuery = useQuery(() => ({
     queryKey: ['compose-task', 'system-properties'],
