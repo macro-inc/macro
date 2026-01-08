@@ -150,6 +150,7 @@ export function UserIcon(props: UserIconProps) {
     >
       <Tooltip
         placement="bottom"
+        class={sizeClasses().container}
         unstyled
         tooltip={
           <UserTooltip
