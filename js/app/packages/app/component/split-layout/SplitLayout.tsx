@@ -19,7 +19,6 @@ import {
   Suspense,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { gutterSize } from '../../../block-theme/signals/themeSignals';
 import {
   createNavigationEntityListShortcut,
   createSoupContext,
@@ -307,7 +306,7 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
     <SplitLayoutContext.Provider value={{ manager: splitManager }}>
       <Resize.Zone
         direction="horizontal"
-        gutter={gutterSize()}
+        gutter={4}
         captureResizeCtx={splitManager.setResizeContext}
       >
         <For each={ids()}>

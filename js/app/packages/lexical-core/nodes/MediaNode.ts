@@ -6,6 +6,7 @@ import type {
 } from 'lexical';
 import type { DecoratorComponent } from '../decoratorRegistry';
 import { $applyIdFromSerialized } from '../plugins/nodeIdPlugin';
+import { calculateEffectiveDimensions } from '../utils/media';
 import { DecoratorBlockNode } from './DecoratorBlockNode';
 
 export type MediaType = 'image' | 'video';
@@ -17,6 +18,8 @@ export type MediaInfo = {
   width: number;
   height: number;
   scale: number;
+  constrainedWidth?: number;
+  constrainedHeight?: number;
 };
 
 export type SerializedMediaNode<T = {}> = Spread<
@@ -32,6 +35,8 @@ export abstract class MediaNode<
   __url: string;
   __width: number;
   __height: number;
+  __constrainedWidth?: number;
+  __constrainedHeight?: number;
   __componentDirty: boolean;
   __scale: number;
   __cachedDecoratorComponent: DecoratorComponent<MediaInfo & T> | null;
@@ -42,6 +47,8 @@ export abstract class MediaNode<
     url: string,
     width: number,
     height: number,
+    constrainedWidth?: number,
+    constrainedHeight?: number,
     scale?: number,
     key?: NodeKey
   ) {
@@ -51,6 +58,8 @@ export abstract class MediaNode<
     this.__url = url;
     this.__width = width;
     this.__height = height;
+    this.__constrainedWidth = constrainedWidth;
+    this.__constrainedHeight = constrainedHeight;
     this.__scale = scale || 1;
     this.__componentDirty = true;
     this.__cachedDecoratorComponent = null;
@@ -125,6 +134,39 @@ export abstract class MediaNode<
     return writable;
   }
 
+  getConstrainedWidth() {
+    return this.__constrainedWidth;
+  }
+  setConstrainedWidth(width: number | undefined, rerender = true): this {
+    const writable = this.getWritable();
+    writable.__constrainedWidth = width;
+    if (rerender) writable.__componentDirty = true;
+    return writable;
+  }
+
+  getConstrainedHeight() {
+    return this.__constrainedHeight;
+  }
+  setConstrainedHeight(height: number | undefined, rerender = true): this {
+    const writable = this.getWritable();
+    writable.__constrainedHeight = height;
+    if (rerender) writable.__componentDirty = true;
+    return writable;
+  }
+
+  /**
+   * Calculates the effective width and height based on the more constrained dimension.
+   * Returns the width/height that should be used, respecting aspect ratio.
+   */
+  getEffectiveDimensions(): { width: number; height: number } {
+    return calculateEffectiveDimensions(
+      this.__width,
+      this.__height,
+      this.__constrainedWidth,
+      this.__constrainedHeight
+    );
+  }
+
   createDOM(): HTMLElement {
     return document.createElement('div');
   }
@@ -134,14 +176,29 @@ export abstract class MediaNode<
   }
 
   exportDOM() {
+    const wrapper = document.createElement('div');
     const element = this.getDOMElement();
+    const { width, height } = this.getEffectiveDimensions();
     element.setAttribute('src', this.__url);
-    element.setAttribute('width', this.__width.toString());
-    element.setAttribute('height', this.__height.toString());
+    element.setAttribute('width', width.toString());
+    element.setAttribute('height', height.toString());
     element.setAttribute('data-src-type', this.__srcType);
     element.setAttribute(`data-${this.getMediaType()}-id`, this.__id);
     element.setAttribute('data-scale', this.__scale.toString());
-    return { element };
+    if (this.__constrainedWidth !== undefined) {
+      element.setAttribute(
+        'data-constrained-width',
+        this.__constrainedWidth.toString()
+      );
+    }
+    if (this.__constrainedHeight !== undefined) {
+      element.setAttribute(
+        'data-constrained-height',
+        this.__constrainedHeight.toString()
+      );
+    }
+    wrapper.appendChild(element);
+    return { element: wrapper };
   }
 
   decorate(): DecoratorComponent<MediaInfo & T> | undefined {
@@ -156,7 +213,9 @@ export abstract class MediaNode<
       .setUrl(serializedNode.url)
       .setWidth(serializedNode.width)
       .setHeight(serializedNode.height)
-      .setScale(serializedNode.scale || 1);
+      .setScale(serializedNode.scale || 1)
+      .setConstrainedWidth(serializedNode.constrainedWidth, false)
+      .setConstrainedHeight(serializedNode.constrainedHeight, false);
 
     $applyIdFromSerialized(self, serializedNode);
     return self;
@@ -171,6 +230,8 @@ export abstract class MediaNode<
       width: this.__width,
       height: this.__height,
       scale: this.__scale,
+      constrainedWidth: this.__constrainedWidth,
+      constrainedHeight: this.__constrainedHeight,
     } as SerializedMediaNode<{}>;
   }
 }

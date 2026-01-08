@@ -1,6 +1,10 @@
 import { defineBlock, type ExtractLoadType, LoadErrors } from '@core/block';
 import { isErr, ok } from '@core/util/maybeResult';
-import { fetchAndCacheChannel } from '@queries/channel/channel';
+import {
+  fetchAndCacheChannel,
+  optimisticUpdateChannelViewedAt,
+} from '@queries/channel/channel';
+import { optimisticUpdateViewedAt } from '@queries/history/history';
 import ChannelBlock from './component/Block';
 
 export const definition = defineBlock({
@@ -25,6 +29,9 @@ export const definition = defineBlock({
       }
 
       const [, channelData] = channel;
+
+      optimisticUpdateViewedAt(source.id);
+      optimisticUpdateChannelViewedAt(source.id);
 
       return ok({
         ...channelData.channel,

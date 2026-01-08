@@ -10,7 +10,7 @@ import { Message } from '@core/component/Message';
 import { toast } from '@core/component/Toast/Toast';
 import { VideoPreview } from '@core/component/VideoPreview';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import { useDisplayName } from '@core/user';
+import { tryMacroId, useDisplayName } from '@core/user';
 import { isErr } from '@core/util/maybeResult';
 import { queryKeys, useQueryClient } from '@macro-entity';
 import { logger } from '@observability';
@@ -60,7 +60,7 @@ export function MessageContainer(props: MessageContainerProps) {
   const [showReply, setShowReply] = createSignal<boolean>(false);
 
   const userId = useUserId();
-  const [currentUserName] = useDisplayName(userId());
+  const [currentUserName] = useDisplayName(tryMacroId(userId() ?? ''));
 
   const isBodyExpanded = createMemo(() => {
     return props.expandedMessageBodyIds[props.message.db_id ?? ''];
@@ -205,6 +205,11 @@ export function MessageContainer(props: MessageContainerProps) {
               setFocusedMessageId={context.messages.setFocused}
               setShowReply={setShowReply}
               isLastMessage={props.isLastMessage}
+              hiddenActions={
+                !context.permissions().isOwner
+                  ? ['reply', 'reply-all', 'forward']
+                  : undefined
+              }
             />
           </Message.TopBar>
           <Message.Body>
@@ -280,19 +285,21 @@ export function MessageContainer(props: MessageContainerProps) {
             threadDepth={1}
             isFirstInThread
             isLastInThread
-            shouldShowThreadAppendInput={createSignal(true)[0]}
+            shouldShowThreadAppendInput
             setThreadAppendMountTarget={(el) => setThreadAppendMountTarget(el)}
           >
             <Message.TopBar name={currentUserName()} />
             <div class="h-4" />
           </Message>
-          <Portal mount={threadAppendMountTarget()}>
-            <EmailInput
-              replyingTo={() => props.message}
-              setShowReply={setShowReply}
-              draft={draftChild()}
-            />
-          </Portal>
+          <Show when={context.permissions().isOwner}>
+            <Portal mount={threadAppendMountTarget()}>
+              <EmailInput
+                replyingTo={() => props.message}
+                setShowReply={setShowReply}
+                draft={draftChild()}
+              />
+            </Portal>
+          </Show>
         </Show>
       </div>
     </div>

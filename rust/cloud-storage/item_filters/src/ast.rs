@@ -64,16 +64,16 @@ pub type LiteralTree<T> = Option<Arc<Expr<T>>>;
 #[non_exhaustive]
 pub struct EntityFilterAst {
     /// the filters that should be applied to the document entity
-    #[serde(default)]
+    #[serde(default, rename = "df")]
     pub document_filter: LiteralTree<DocumentLiteral>,
     /// the filters that should be applied to the project entity
-    #[serde(default)]
+    #[serde(default, rename = "pf")]
     pub project_filter: LiteralTree<ProjectLiteral>,
     /// the filters that should be applied to the chat entity
-    #[serde(default)]
+    #[serde(default, rename = "cf")]
     pub chat_filter: LiteralTree<ChatLiteral>,
     /// the filters that should be applied to the email entity
-    #[serde(default)]
+    #[serde(default, rename = "ef")]
     pub email_filter: LiteralTree<EmailLiteral>,
 }
 

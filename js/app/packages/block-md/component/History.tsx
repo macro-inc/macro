@@ -199,7 +199,7 @@ export function History(props: HistoryProps) {
 
     if (!found) return undefined;
 
-    return [found, sortedHistory()!.indexOf(found)!];
+    return [found, sortedHistory().indexOf(found)!];
   };
 
   const handleFork = async () => {

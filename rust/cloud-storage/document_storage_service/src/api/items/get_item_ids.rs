@@ -1,3 +1,4 @@
+use crate::api::MACRO_INTERNAL_USER_ID;
 use crate::api::context::ApiContext;
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
@@ -25,7 +26,7 @@ pub async fn get_item_ids_handler(
 
     let user_id = user_context.user_id.clone();
 
-    if matches!(user_id.as_str(), "" | "INTERNAL") {
+    if matches!(user_id.as_str(), "" | MACRO_INTERNAL_USER_ID) {
         return Err((
             StatusCode::UNAUTHORIZED,
             "No user id found in context".to_string(),

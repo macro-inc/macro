@@ -1,6 +1,7 @@
 use anyhow::Context;
 pub use macro_env::Environment;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
+use reqwest::Url;
 
 /// The configuration parameters for the application.
 ///
@@ -31,7 +32,7 @@ pub struct Config {
     pub contacts_queue: String,
 
     /// Auth service client
-    pub auth_service_url: String,
+    pub auth_service_url: Url,
 
     /// Auth service secret key, used for internal access
     pub auth_service_secret_key: String,
@@ -64,7 +65,9 @@ impl Config {
             std::env::var("CONTACTS_QUEUE").context("CONTACTS_QUEUE must be provided")?;
 
         let auth_service_url = std::env::var("AUTHENTICATION_SERVICE_URL")
-            .context("AUTHENTICATION_SERVICE_URL must be provided")?;
+            .map(|s| Url::parse(&s))
+            .context("AUTHENTICATION_SERVICE_URL must be provided")?
+            .context("AUTHENTICATION_SERVICE_URL must be a valid url")?;
 
         let auth_service_secret_key = std::env::var("AUTHENTICATION_SERVICE_SECRET_KEY")
             .context("AUTHENTICATION_SERVICE_SECRET_KEY must be provided")?;

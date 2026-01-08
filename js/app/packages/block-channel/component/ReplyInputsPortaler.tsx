@@ -81,12 +81,12 @@ export function ReplyInputsPortaler(props: ReplyInputsPortalerProps) {
   };
 
   const onAfterSend = (threadId: string) => () => {
-    listContext.clearThreadFocus(threadId, true);
+    listContext.closeThreadReply(threadId, true);
   };
 
-  const onEmptyBlur = (threadId: string) => () => {
+  const closeDraft = (threadId: string) => () => {
     clearDraftMessage(props.channelId, threadId);
-    listContext.clearThreadFocus(threadId, true);
+    listContext.closeThreadReply(threadId, true);
   };
 
   const onFocusLeaveStart = (e: KeyboardEvent, threadId: string) => {
@@ -182,7 +182,7 @@ export function ReplyInputsPortaler(props: ReplyInputsPortalerProps) {
                 onFocusLeaveStart={(e) => {
                   onFocusLeaveStart(e, threadId);
                 }}
-                onEmptyBlur={onEmptyBlur(threadId)}
+                closeDraft={closeDraft(threadId)}
                 isReplyInput
               />
             </div>

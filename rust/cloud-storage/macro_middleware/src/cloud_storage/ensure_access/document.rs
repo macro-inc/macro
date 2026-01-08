@@ -41,7 +41,7 @@ where
         } = parts
             .extract()
             .await
-            .map_err(|_| AccessLevelErr::InternalErr)?;
+            .map_err(|_| AccessLevelErr::UnAuthorized)?;
         let document_context: Extension<DocumentBasic> =
             <Extension<DocumentBasic>>::from_request_parts(parts, state)
                 .await

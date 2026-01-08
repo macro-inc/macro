@@ -76,6 +76,7 @@ export function parseMacroAppUrl(text: string): MacroAppUrlParsed {
       'canvas',
       'channel',
       'project',
+      'email',
     ];
     const _block: string = pathParts[1];
     if (!validTypes.includes(_block as any)) {

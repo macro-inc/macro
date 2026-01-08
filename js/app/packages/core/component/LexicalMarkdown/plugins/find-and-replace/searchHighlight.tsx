@@ -115,8 +115,8 @@ export function FloatingSearchHighlight({
             style={item.style}
             class={`z-[150] m-0 text-transparent h-[18px] absolute top-0 left-0 opacity-50 pointer-events-none ${
               item.idx === FindAndReplaceStore.get.currentMatch + 1
-                ? 'bg-purple-300'
-                : 'bg-purple-300/50'
+                ? 'bg-[oklch(0.827_0.119_306.383)]'
+                : 'bg-[oklch(0.827_0.119_306.383)]/50'
             }`}
           />
         )}

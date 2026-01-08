@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                c.id as entity_id,\n                c.name\n            FROM \"Chat\" c\n            WHERE (c.\"userId\" = $1 OR c.id = ANY($2))\n                AND c.\"deletedAt\" IS NULL\n                AND c.name ILIKE $3\n            ORDER BY c.\"updatedAt\" DESC\n            LIMIT $4\n            OFFSET $5\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entity_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray",
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "4666b1f3cddd519e0a461257e9aa91c26eb255c7a4a2eaf9143f03c3a1600fce"
+}

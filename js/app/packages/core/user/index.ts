@@ -9,6 +9,13 @@ export {
 export { useContacts } from './contactService';
 export { useDisplayName } from './displayName';
 export {
+  emailToMacroId,
+  isMacroId,
+  type MacroId,
+  macroIdToEmail,
+  tryMacroId,
+} from './macroId';
+export {
   useOrganization,
   useOrganizationId,
   useOrganizationName,
