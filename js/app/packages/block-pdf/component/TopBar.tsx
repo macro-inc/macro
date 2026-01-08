@@ -27,7 +27,6 @@ import { openLoginModal } from '@core/component/TopBar/LoginButton';
 import { ShareButton } from '@core/component/TopBar/ShareButton';
 import {
   ENABLE_PDF_MARKUP,
-  ENABLE_PROPERTIES_METADATA,
   ENABLE_REFERENCES_MODAL,
 } from '@core/constant/featureFlags';
 import { blockMetadataSignal } from '@core/signal/load';
@@ -201,13 +200,11 @@ export function TopBar() {
               buttonSize="sm"
             />
           </Show>
-          <Show when={ENABLE_PROPERTIES_METADATA}>
-            <DocumentPropertiesModal
-              documentId={documentId}
-              blockType="pdf"
-              buttonSize="sm"
-            />
-          </Show>
+          <DocumentPropertiesModal
+            documentId={documentId}
+            blockType="pdf"
+            buttonSize="sm"
+          />
           <div class="flex items-center">
             <SplitPermissionsBadge />
             <ShareButton

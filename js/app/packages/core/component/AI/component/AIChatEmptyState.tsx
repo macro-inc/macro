@@ -1,4 +1,4 @@
-import { BrightJoins } from '@core/component/BrightJoins';
+import { BrightJoins } from '@ui/components/BrightJoins';
 import { useOpenInstructionsMd } from '../util/instructions';
 
 export function AiChatEmptyState() {

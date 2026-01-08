@@ -15,10 +15,7 @@ import { getIsSpecialProject } from '@block-project/isSpecial';
 import { projectBlockDataSignal } from '@block-project/signal/projectBlockData';
 import { useBlockId } from '@core/block';
 import { ShareButton } from '@core/component/TopBar/ShareButton';
-import {
-  ENABLE_PROJECT_SHARING,
-  ENABLE_PROPERTIES_METADATA,
-} from '@core/constant/featureFlags';
+import { ENABLE_PROJECT_SHARING } from '@core/constant/featureFlags';
 import {
   useCanEdit,
   useGetPermissions,
@@ -88,7 +85,7 @@ export function TopBar() {
       <SplitToolbarRight>
         <div class="flex items-center p-1">
           <div class="flex items-center">
-            <Show when={ENABLE_PROPERTIES_METADATA && !isSpecialProject}>
+            <Show when={!isSpecialProject}>
               <ProjectPropertiesModal buttonSize="sm" name={name()} />
             </Show>
             <SplitPermissionsBadge />

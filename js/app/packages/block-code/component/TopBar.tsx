@@ -16,7 +16,6 @@ import { useBlockId } from '@core/block';
 import { DocumentPropertiesModal } from '@core/component/DocumentPropertiesModal';
 import { ReferencesModal } from '@core/component/ReferencesModal';
 import { ShareButton } from '@core/component/TopBar/ShareButton';
-import { ENABLE_PROPERTIES_METADATA } from '@core/constant/featureFlags';
 import { blockMetadataSignal, blockTextSignal } from '@core/signal/load';
 import { useGetPermissions } from '@core/signal/permissions';
 import {
@@ -26,7 +25,7 @@ import {
 import { downloadFile } from '@filesystem/download';
 import Download from '@icon/regular/download-simple.svg';
 import { createCallback } from '@solid-primitives/rootless';
-import { type Component, Show } from 'solid-js';
+import type { Component } from 'solid-js';
 
 const { track, TrackingEvents } = withAnalytics();
 
@@ -81,13 +80,11 @@ export const TopBar: Component = () => {
             documentName={name()}
             buttonSize="sm"
           />
-          <Show when={ENABLE_PROPERTIES_METADATA}>
-            <DocumentPropertiesModal
-              documentId={blockId}
-              blockType="code"
-              buttonSize="sm"
-            />
-          </Show>
+          <DocumentPropertiesModal
+            documentId={blockId}
+            blockType="code"
+            buttonSize="sm"
+          />
           <div class="flex items-center">
             <SplitPermissionsBadge />
             <ShareButton
