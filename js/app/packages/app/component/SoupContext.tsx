@@ -819,7 +819,7 @@ export function createNavigationEntityListShortcut({
     if (type === 'document') {
       const { fileType, subType } = entity;
       splitHandle.replace({
-        type: fileTypeToBlockName(subType ?? fileType),
+        type: fileTypeToBlockName(subType?.type ?? fileType),
         id,
       });
     } else {
@@ -1011,7 +1011,10 @@ export function createNavigationEntityListShortcut({
           if (type === 'document') {
             const { fileType, subType } = selectedEntity;
             splitHandle.replace(
-              { type: fileTypeToBlockName(subType ?? fileType), id },
+              {
+                type: fileTypeToBlockName(subType?.type ?? fileType),
+                id,
+              },
               true
             );
           } else {

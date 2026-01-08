@@ -69,7 +69,7 @@ export const getCombinedEntityBlockName = (
     case 'item':
       if (item.data.type === 'document')
         return fileTypeToBlockName(
-          item.data.subType || item.data.fileType,
+          item.data.subType?.type ?? item.data.fileType,
           icon
         );
       if (item.data.type === 'chat') return 'chat';

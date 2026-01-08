@@ -1,3 +1,4 @@
+import type { SubType } from '@macro-entity';
 import { createEffect } from 'solid-js';
 import { createStore, type SetStoreFunction } from 'solid-js/store';
 import { fetchBulkEntityProperties } from '../api/fetchProperties';
@@ -9,7 +10,7 @@ export type TaskPropertiesStore = Record<string, Property[]>;
 interface Entity {
   id: string;
   type: string;
-  subType?: string | null;
+  subType?: SubType;
 }
 
 const TASK_PROPERTY_DEFINITION_IDS = [
@@ -19,7 +20,7 @@ const TASK_PROPERTY_DEFINITION_IDS = [
 ];
 
 function isTaskEntity(entity: Entity): boolean {
-  return entity.type === 'document' && entity.subType === 'task';
+  return entity.type === 'document' && entity.subType?.type === 'task';
 }
 
 /**

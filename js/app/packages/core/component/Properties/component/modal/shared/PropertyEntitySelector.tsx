@@ -138,7 +138,10 @@ function getEntityType(entity: CombinedEntity): string {
     case 'channel':
       return 'CHANNEL';
     case 'item':
-      if (entity.data.type === 'document' && entity.data.subType === 'task') {
+      if (
+        entity.data.type === 'document' &&
+        entity.data.subType?.type === 'task'
+      ) {
         return 'TASK';
       }
       return entity.data.type.toUpperCase();
@@ -176,7 +179,7 @@ function getEntityIcon(entity: CombinedEntity) {
     case 'item': {
       const blockName =
         entity.data.type === 'document'
-          ? entity.data.subType === 'task'
+          ? entity.data.subType?.type === 'task'
             ? 'task'
             : fileTypeToBlockName(entity.data.fileType, true)
           : entity.data.type === 'chat'
@@ -321,7 +324,9 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
     if (specificEntityType === 'TASK') {
       return history()
-        .filter((item) => item.type === 'document' && item.subType === 'task')
+        .filter(
+          (item) => item.type === 'document' && item.subType?.type === 'task'
+        )
         .map(entityMapper('item'));
     }
 
@@ -331,7 +336,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
         .filter(
           (item) =>
             item.type.toUpperCase() === specificEntityType &&
-            !(item.type === 'document' && item.subType === 'task')
+            !(item.type === 'document' && item.subType?.type === 'task')
         )
         .map(entityMapper('item'));
     }

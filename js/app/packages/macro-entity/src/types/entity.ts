@@ -36,17 +36,26 @@ export type ChatEntity = EntityBase & {
   projectId?: string;
 };
 
+/** Named sub types - currently only 'task' */
+export type NamedSubType = 'task';
+
+/** SubType for documents - currently only tasks */
+export type SubType = {
+  type: NamedSubType;
+  is_completed?: boolean;
+} | null;
+
 export type BaseDocumentEntity = EntityBase & {
   type: 'document';
   fileType?: string;
   projectId?: string;
-  subType?: string;
+  subType?: SubType;
 };
 
 export type TaskEntity = EntityBase & {
   type: 'document';
   fileType: 'md';
-  subType: 'task';
+  subType: { type: 'task'; is_completed?: boolean };
   projectId?: string;
 };
 
@@ -58,8 +67,6 @@ export type MarkdownEntity = EntityBase & {
 };
 
 export type DocumentEntity = BaseDocumentEntity | MarkdownEntity;
-
-export type NamedSubType = 'task';
 
 export const getEntityProjectId = (e: EntityData): string | false => {
   return 'projectId' in e ? (e.projectId ?? false) : false;
@@ -111,19 +118,19 @@ export const isTaskEntity = (entity: EntityData): entity is TaskEntity => {
   return (
     entity.type === 'document' &&
     entity.fileType === 'md' &&
-    entity.subType === 'task'
+    entity.subType?.type === 'task'
   );
 };
 
 export const isPureDocumentEntity = (
   entity: EntityData
 ): entity is DocumentEntity => {
-  return entity.type === 'document' && !entity.subType;
+  return entity.type === 'document' && entity.subType?.type !== 'task';
 };
 
 export type EntityType = EntityData['type'];
 
-export type ExpandedEntityType = EntityType | NamedSubType;
+export type ExpandedEntityType = EntityType | 'task';
 
 export type EntityOf<K extends EntityType> = Extract<EntityData, { type: K }>;
 

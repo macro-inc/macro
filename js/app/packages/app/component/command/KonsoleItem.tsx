@@ -263,7 +263,7 @@ type ItemPreview = {
   id: string;
   name: string;
   fileType?: BasicDocumentFileType;
-  subType?: BasicDocumentSubType;
+  subType?: BasicDocumentSubType | null;
   itemType: Item['type'];
 };
 
@@ -438,7 +438,7 @@ function getCommandItemBlockName(
 ): BlockName | BlockAlias | undefined {
   if (item.type === 'item') {
     if (item.data.itemType === 'document') {
-      if (item.data.subType === 'task') {
+      if (item.data.subType?.type === 'task') {
         return 'task';
       }
       if (item.data.fileType) {
@@ -506,14 +506,14 @@ export function filterItemByCategory(item: CommandItemCard) {
       return (
         item.type === 'item' &&
         item.data.itemType === 'document' &&
-        item.data.subType !== 'task' &&
+        item.data.subType?.type !== 'task' &&
         fileTypeToBlockName(item.data.fileType) === 'md'
       );
     case 'Tasks':
       return (
         item.type === 'item' &&
         item.data.itemType === 'document' &&
-        item.data.subType === 'task'
+        item.data.subType?.type === 'task'
       );
     case 'Chats':
       return item.type === 'item' && item.data.itemType === 'chat';
