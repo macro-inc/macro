@@ -22,7 +22,7 @@ use opensearch_client::search::{
     chats::ChatSearchArgs,
     model::{Highlight, SearchHit},
 };
-use sqlx::types::Uuid;
+use sqlx::{Pool, Postgres, types::Uuid};
 
 use crate::api::ApiContext;
 
@@ -59,6 +59,7 @@ pub async fn handler(
     }))
 }
 
+#[derive(Debug)]
 pub(in crate::api::search) struct FilterChatResponse {
     pub chat_ids: Vec<String>,
     pub ids_only: bool,
@@ -255,4 +256,47 @@ pub(in crate::api::search) async fn search_chats(
         .collect();
 
     Ok(results)
+}
+
+/// Performs the name search over chat names
+#[tracing::instrument(skip(db), err)]
+pub(in crate::api::search::simple) async fn search_names<'a>(
+    db: &Pool<Postgres>,
+    user_id: &MacroUserId<macro_user_id::lowercased::Lowercase<'a>>,
+    filter_chat_response: &FilterChatResponse,
+    term: String,
+    page: u32,
+    page_size: u32,
+) -> Result<Vec<SearchHit>, SearchError> {
+    let chat_uuids = filter_chat_response
+        .chat_ids
+        .iter()
+        .map(|c| c.parse().unwrap())
+        .collect::<Vec<Uuid>>();
+
+    name_search::search_chat_names(
+        db,
+        user_id,
+        &chat_uuids,
+        term,
+        filter_chat_response.ids_only,
+        page_size,
+        page * page_size,
+    )
+    .await
+    .map_err(SearchError::NameSearch)
+    .map(|r| {
+        r.into_iter()
+            .map(|n| SearchHit {
+                entity_id: n.entity_id,
+                entity_type: n.entity_type,
+                score: None,
+                highlight: Highlight {
+                    name: Some(n.name),
+                    ..Default::default()
+                },
+                goto: None,
+            })
+            .collect()
+    })
 }

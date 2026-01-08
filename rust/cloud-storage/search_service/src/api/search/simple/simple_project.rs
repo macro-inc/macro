@@ -14,7 +14,7 @@ use model::{
 use models_search::project::{ProjectSearchRequest, SimpleProjectSearchResponse};
 use models_search::{SearchOn, SimpleSearchResponse};
 use opensearch_client::search::model::{Highlight, SearchHit};
-use sqlx::types::Uuid;
+use sqlx::{Pool, Postgres, types::Uuid};
 
 use crate::api::ApiContext;
 
@@ -51,6 +51,7 @@ pub async fn handler(
     }))
 }
 
+#[derive(Debug)]
 pub(in crate::api::search) struct FilterProjectResponse {
     pub project_ids: Vec<String>,
     pub ids_only: bool,
@@ -224,4 +225,47 @@ pub(in crate::api::search) async fn search_projects(
         .collect();
 
     Ok(results)
+}
+
+/// Performs the name search over project names
+#[tracing::instrument(skip(db), err)]
+pub(in crate::api::search::simple) async fn search_names<'a>(
+    db: &Pool<Postgres>,
+    user_id: &MacroUserId<macro_user_id::lowercased::Lowercase<'a>>,
+    filter_project_response: &FilterProjectResponse,
+    term: String,
+    page: u32,
+    page_size: u32,
+) -> Result<Vec<SearchHit>, SearchError> {
+    let project_uuids = filter_project_response
+        .project_ids
+        .iter()
+        .map(|p| p.parse().unwrap())
+        .collect::<Vec<Uuid>>();
+
+    name_search::search_project_names(
+        db,
+        user_id,
+        &project_uuids,
+        term,
+        filter_project_response.ids_only,
+        page_size,
+        page * page_size,
+    )
+    .await
+    .map_err(SearchError::NameSearch)
+    .map(|r| {
+        r.into_iter()
+            .map(|n| SearchHit {
+                entity_id: n.entity_id,
+                entity_type: n.entity_type,
+                score: None,
+                highlight: Highlight {
+                    name: Some(n.name),
+                    ..Default::default()
+                },
+                goto: None,
+            })
+            .collect()
+    })
 }

@@ -1,29 +1,24 @@
+use crate::api::search::simple::filter::FilterVariantToSearchArgs;
+use crate::api::search::simple::filter::UnifiedSearchArgsVariant;
+
+use crate::api::search::simple::{simple_chat, simple_document, simple_email, simple_project};
 use crate::api::{
     ApiContext,
-    search::{
-        SearchPaginationParams,
-        simple::{
-            SearchError, simple_channel::search_channels, simple_chat::search_chats,
-            simple_document::search_documents, simple_email::search_emails,
-            simple_project::search_projects,
-        },
-    },
+    search::{SearchPaginationParams, simple::SearchError},
 };
 use axum::{
     Extension,
     extract::{self, State},
     response::Json,
 };
+use macro_user_id::user_id::MacroUserId;
 use model::{response::ErrorResponse, user::UserContext};
+use models_search::unified::generate_unified_search_indices;
 use models_search::{
-    SimpleSearchResponse,
-    channel::ChannelSearchRequest,
-    chat::ChatSearchRequest,
-    document::DocumentSearchRequest,
-    email::EmailSearchRequest,
-    project::ProjectSearchRequest,
+    SearchOn, SimpleSearchResponse,
     unified::{SimpleUnifiedSearchResponse, UnifiedSearchIndex, UnifiedSearchRequest},
 };
+use opensearch_client::search::unified::UnifiedSearchArgs;
 
 /// Creates a unified search request and performs the search
 /// by calling individual simple search endpoints for each entity type
@@ -34,12 +29,20 @@ pub(in crate::api::search) async fn perform_unified_search(
     query_params: SearchPaginationParams,
     req: UnifiedSearchRequest,
 ) -> Result<Vec<opensearch_client::search::model::SearchHit>, SearchError> {
-    let user_id = &user_context.user_id;
+    let user_id = user_context.user_id.clone();
 
     if user_id.is_empty() {
         return Err(SearchError::NoUserId);
     }
+    let user_id = MacroUserId::parse_from_str(&user_id)
+        .map_err(|_| SearchError::InvalidUserId(user_id.to_string()))?
+        .lowercase();
 
+    let search_on = req.search_on;
+    let user_organization_id = user_context.organization_id;
+    let collapse = req.collapse.unwrap_or(false);
+
+    let page = query_params.page.unwrap_or(0);
     let page_size = query_params.page_size.unwrap_or(10);
     if !(0..=100).contains(&page_size) {
         return Err(SearchError::InvalidPageSize);
@@ -58,8 +61,16 @@ pub(in crate::api::search) async fn perform_unified_search(
         return Err(SearchError::NoQueryOrTermsProvided);
     }
 
-    let include = &req.include;
+    let match_type = req.match_type;
+    let disable_recency = req.disable_recency;
+    let include = req.include;
+
     let filters = req.filters.unwrap_or_default();
+    let channel_filters = filters.channel.unwrap_or_default();
+    let email_filters = filters.email.unwrap_or_default();
+    let chat_filters = filters.chat.unwrap_or_default();
+    let doc_filters = filters.document.unwrap_or_default();
+    let project_filters = filters.project.unwrap_or_default();
 
     let should_include_documents =
         include.is_empty() || include.contains(&UnifiedSearchIndex::Documents);
@@ -70,99 +81,188 @@ pub(in crate::api::search) async fn perform_unified_search(
         include.is_empty() || include.contains(&UnifiedSearchIndex::Projects);
     let should_include_emails = include.is_empty() || include.contains(&UnifiedSearchIndex::Emails);
 
-    // Build individual search requests for each entity type
-    let doc_request = DocumentSearchRequest {
-        terms: Some(terms.clone()),
-        query: req.query.clone(),
-        match_type: req.match_type,
-        search_on: req.search_on,
-        collapse: req.collapse,
-        disable_recency: req.disable_recency,
-        filters: Some(filters.document.unwrap_or_default()),
+    // Await all tasks in parallel
+    let (doc_result, channel_result, chat_result, email_result, project_result) = tokio::try_join!(
+        doc_filters.filter_to_search_args(
+            ctx,
+            user_id.as_ref(),
+            user_organization_id,
+            should_include_documents,
+        ),
+        channel_filters.filter_to_search_args(
+            ctx,
+            user_id.as_ref(),
+            user_organization_id,
+            should_include_channels,
+        ),
+        chat_filters.filter_to_search_args(
+            ctx,
+            user_id.as_ref(),
+            user_organization_id,
+            should_include_chats,
+        ),
+        email_filters.filter_to_search_args(
+            ctx,
+            user_id.as_ref(),
+            user_organization_id,
+            should_include_emails,
+        ),
+        project_filters.filter_to_search_args(
+            ctx,
+            user_id.as_ref(),
+            user_organization_id,
+            should_include_projects
+        )
+    )
+    .map_err(|e| SearchError::InternalError(anyhow::anyhow!("tokio error: {:?}", e)))?;
+
+    let filter_document_response = match doc_result {
+        UnifiedSearchArgsVariant::Document(response) => response,
+        _ => unreachable!(),
     };
 
-    let chat_request = ChatSearchRequest {
-        terms: Some(terms.clone()),
-        query: req.query.clone(),
-        match_type: req.match_type,
-        search_on: req.search_on,
-        collapse: req.collapse,
-        disable_recency: req.disable_recency,
-        filters: Some(filters.chat.unwrap_or_default()),
+    let filter_channel_response = match channel_result {
+        UnifiedSearchArgsVariant::Channel(response) => response,
+        _ => unreachable!(),
     };
 
-    let email_request = EmailSearchRequest {
-        terms: Some(terms.clone()),
-        query: req.query.clone(),
-        match_type: req.match_type,
-        search_on: req.search_on,
-        collapse: req.collapse,
-        disable_recency: req.disable_recency,
-        filters: Some(filters.email.unwrap_or_default()),
+    let filter_chat_response = match chat_result {
+        UnifiedSearchArgsVariant::Chat(response) => response,
+        _ => unreachable!(),
     };
 
-    let project_request = ProjectSearchRequest {
-        terms: Some(terms.clone()),
-        query: req.query.clone(),
-        match_type: req.match_type,
-        search_on: req.search_on,
-        collapse: req.collapse,
-        disable_recency: req.disable_recency,
-        filters: Some(filters.project.unwrap_or_default()),
+    let filter_email_response = match email_result {
+        UnifiedSearchArgsVariant::Email(response) => response,
+        _ => unreachable!(),
     };
 
-    let channel_request = ChannelSearchRequest {
-        terms: Some(terms.clone()),
-        query: req.query.clone(),
-        match_type: req.match_type,
-        search_on: req.search_on,
-        collapse: req.collapse,
-        disable_recency: req.disable_recency,
-        filters: Some(filters.channel.unwrap_or_default()),
+    let filter_project_response = match project_result {
+        UnifiedSearchArgsVariant::Project(response) => response,
+        _ => unreachable!(),
+    };
+
+    // Clone terms for use in name searches
+    let name_search_term = terms[0].clone();
+
+    let unified_search_args = UnifiedSearchArgs {
+        terms,
+        user_id: user_id.as_ref().to_string(),
+        page,
+        page_size,
+        match_type: match_type.to_string(),
+        search_on: search_on.into(),
+        collapse,
+        disable_recency,
+        search_indices: generate_unified_search_indices(include),
+        document_search_args: filter_document_response.clone(),
+        email_search_args: filter_email_response.clone(),
+        channel_message_search_args: filter_channel_response,
+        chat_search_args: filter_chat_response.clone(),
     };
 
     // Call search functions in parallel for included entity types
-    let (doc_results, chat_results, email_results, project_results, channel_results) = tokio::join!(
+    let (doc_results, chat_results, email_results, project_results, content_results) = tokio::join!(
         async {
             if should_include_documents {
-                search_documents(ctx, user_id, &query_params, doc_request).await
+                match search_on {
+                    SearchOn::Name | SearchOn::NameContent => {
+                        simple_document::search_names(
+                            &ctx.db,
+                            &user_id,
+                            &simple_document::FilterDocumentResponse {
+                                ids_only: filter_document_response.ids_only,
+                                document_ids: filter_document_response.document_ids,
+                            },
+                            name_search_term.clone(),
+                            page,
+                            page_size,
+                        )
+                        .await
+                    }
+                    SearchOn::Content => Ok(vec![]),
+                }
             } else {
                 Ok(vec![])
             }
         },
         async {
             if should_include_chats {
-                search_chats(ctx, user_id, &query_params, chat_request).await
+                match search_on {
+                    SearchOn::Name | SearchOn::NameContent => {
+                        simple_chat::search_names(
+                            &ctx.db,
+                            &user_id,
+                            &simple_chat::FilterChatResponse {
+                                ids_only: filter_chat_response.ids_only,
+                                chat_ids: filter_chat_response.chat_ids,
+                            },
+                            name_search_term.clone(),
+                            page,
+                            page_size,
+                        )
+                        .await
+                    }
+                    SearchOn::Content => Ok(vec![]),
+                }
             } else {
                 Ok(vec![])
             }
         },
         async {
             if should_include_emails {
-                search_emails(ctx, user_id, &query_params, email_request).await
+                match search_on {
+                    SearchOn::Name | SearchOn::NameContent => {
+                        simple_email::search_names(
+                            &ctx.db,
+                            &user_id,
+                            &simple_email::FilterEmailResponse {
+                                ids_only: false,
+                                thread_ids: filter_email_response.thread_ids,
+                            },
+                            name_search_term.clone(),
+                            page,
+                            page_size,
+                        )
+                        .await
+                    }
+                    SearchOn::Content => Ok(vec![]),
+                }
             } else {
                 Ok(vec![])
             }
         },
         async {
             if should_include_projects {
-                search_projects(ctx, user_id, &query_params, project_request).await
+                match search_on {
+                    SearchOn::Name | SearchOn::NameContent => {
+                        simple_project::search_names(
+                            &ctx.db,
+                            &user_id,
+                            &simple_project::FilterProjectResponse {
+                                ids_only: filter_project_response.ids_only,
+                                project_ids: filter_project_response.project_ids,
+                            },
+                            name_search_term.clone(),
+                            page,
+                            page_size,
+                        )
+                        .await
+                    }
+                    SearchOn::Content => Ok(vec![]),
+                }
             } else {
                 Ok(vec![])
             }
         },
         async {
-            if should_include_channels {
-                search_channels(
-                    ctx,
-                    user_id,
-                    user_context.organization_id,
-                    &query_params,
-                    channel_request,
-                )
-                .await
-            } else {
-                Ok(vec![])
+            // We only want to search over content if you are not searching name only
+            match search_on {
+                SearchOn::Content | SearchOn::NameContent => {
+                    ctx.opensearch_client
+                        .search_unified(unified_search_args)
+                        .await
+                }
+                SearchOn::Name => Ok(vec![]),
             }
         },
     );
@@ -173,7 +273,7 @@ pub(in crate::api::search) async fn perform_unified_search(
     combined_results.extend(chat_results?);
     combined_results.extend(email_results?);
     combined_results.extend(project_results?);
-    combined_results.extend(channel_results?);
+    combined_results.extend(content_results?);
 
     Ok(combined_results)
 }

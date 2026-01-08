@@ -17,9 +17,15 @@ use opensearch_client::search::{
     emails::EmailSearchArgs,
     model::{Highlight, SearchHit},
 };
-use sqlx::types::Uuid;
+use sqlx::{Pool, Postgres, types::Uuid};
 
 use crate::api::ApiContext;
+
+#[derive(Debug)]
+pub(in crate::api::search) struct FilterEmailResponse {
+    pub thread_ids: Vec<String>,
+    pub ids_only: bool,
+}
 
 /// Perform a search through your emails
 /// This is a simple search where we do not group your results by thread id.
@@ -156,4 +162,47 @@ pub(in crate::api::search) async fn search_emails(
         .collect();
 
     Ok(results)
+}
+
+/// Performs the name search over email subjects
+#[tracing::instrument(skip(db), err)]
+pub(in crate::api::search::simple) async fn search_names<'a>(
+    db: &Pool<Postgres>,
+    user_id: &MacroUserId<macro_user_id::lowercased::Lowercase<'a>>,
+    filter_email_response: &FilterEmailResponse,
+    term: String,
+    page: u32,
+    page_size: u32,
+) -> Result<Vec<SearchHit>, SearchError> {
+    let thread_uuids = filter_email_response
+        .thread_ids
+        .iter()
+        .map(|t| t.parse().unwrap())
+        .collect::<Vec<Uuid>>();
+
+    name_search::search_email_subjects(
+        db,
+        user_id,
+        &thread_uuids,
+        term,
+        filter_email_response.ids_only,
+        page_size,
+        page * page_size,
+    )
+    .await
+    .map_err(SearchError::NameSearch)
+    .map(|r| {
+        r.into_iter()
+            .map(|n| SearchHit {
+                entity_id: n.entity_id,
+                entity_type: n.entity_type,
+                score: None,
+                highlight: Highlight {
+                    name: Some(n.name),
+                    ..Default::default()
+                },
+                goto: None,
+            })
+            .collect()
+    })
 }

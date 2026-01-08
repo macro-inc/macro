@@ -7585,6 +7585,7 @@ dependencies = [
  "model",
  "models_email",
  "models_opensearch",
+ "models_pagination",
  "models_search",
  "name_search",
  "opensearch_client",
