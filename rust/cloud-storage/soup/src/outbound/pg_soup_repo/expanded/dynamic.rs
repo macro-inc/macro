@@ -11,7 +11,12 @@ use item_filters::ast::{
 };
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use models_pagination::{Query, SimpleSortMethod};
-use models_soup::{chat::SoupChat, document::SoupDocument, item::SoupItem, project::SoupProject};
+use models_soup::{
+    chat::SoupChat,
+    document::{SoupDocument, SoupDocumentSubType},
+    item::SoupItem,
+    project::SoupProject,
+};
 use recursion::CollapsibleExt;
 use sqlx::{PgPool, Postgres, QueryBuilder, Row, postgres::PgRow, prelude::FromRow};
 use system_properties::{StatusOption, SystemPropertyKey};
@@ -422,8 +427,7 @@ impl SoupRow {
                 created_at,
                 updated_at,
                 viewed_at,
-                sub_type,
-                is_completed,
+                sub_type: SoupDocumentSubType::from_db(sub_type, is_completed),
             }),
             SoupRow::Chat(ChatRow {
                 id,

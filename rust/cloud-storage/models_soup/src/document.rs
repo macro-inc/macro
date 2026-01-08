@@ -3,6 +3,45 @@ use document_sub_type::DocumentSubType;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
+/// Sub type of a document with associated properties encoded in each variant.
+/// This ensures type-safety: task properties only exist when the document is a task.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[cfg_attr(feature = "mock", derive(PartialEq, Eq))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum SoupDocumentSubType {
+    /// A task document with its associated properties
+    Task {
+        /// Whether the task is completed.
+        /// True if the Status property is set to "Completed".
+        is_completed: bool,
+    },
+}
+
+impl SoupDocumentSubType {
+    /// Converts from DB representation (separate sub_type and is_completed columns)
+    /// to the domain enum.
+    pub fn from_db(sub_type: Option<DocumentSubType>, is_completed: Option<bool>) -> Option<Self> {
+        match (sub_type, is_completed) {
+            (Some(DocumentSubType::Task), Some(is_completed)) => Some(Self::Task { is_completed }),
+            (Some(DocumentSubType::Task), None) => {
+                // Default to false if sub_type is Task but is_completed is None
+                Some(Self::Task {
+                    is_completed: false,
+                })
+            }
+            _ => None,
+        }
+    }
+
+    /// Returns whether this is a completed task
+    pub fn is_completed(&self) -> Option<bool> {
+        match self {
+            Self::Task { is_completed } => Some(*is_completed),
+        }
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 #[cfg_attr(feature = "mock", derive(PartialEq, Eq))]
 #[serde(rename_all = "camelCase")]
@@ -64,11 +103,7 @@ pub struct SoupDocument {
     pub viewed_at: Option<chrono::DateTime<Utc>>,
 
     /// The sub type of the document if present.
+    /// Task-related properties are encoded within the variant.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub sub_type: Option<DocumentSubType>,
-
-    /// Whether the task is completed (only present when sub_type is 'task').
-    /// True if the Status property is set to "Completed".
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub is_completed: Option<bool>,
+    pub sub_type: Option<SoupDocumentSubType>,
 }
