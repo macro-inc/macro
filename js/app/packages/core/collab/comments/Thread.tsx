@@ -2,8 +2,6 @@ import { BozzyBracketInnerSibling } from '@core/component/BozzyBracket';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { createTheme } from '@core/component/LexicalMarkdown/theme';
 import type { UserMentionRecord } from '@core/component/LexicalMarkdown/utils/mentionsUtils';
-import type { DocumentMentionLocation } from '@service-notification/client';
-import { storageServiceClient } from '@service-storage/client';
 import type { EditorThemeClasses } from 'lexical';
 import {
   type Accessor,
@@ -267,7 +265,8 @@ export function Thread(props: {
                                 {
                                   text: content,
                                   threadId: props.comment.threadId,
-                                  mentions: getAndClearCommentMentions(mentionsSignal),
+                                  mentions:
+                                    getAndClearCommentMentions(mentionsSignal),
                                 }
                               ),
                             ]);
