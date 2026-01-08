@@ -7,7 +7,6 @@ import {
   Svc,
   withFetchErrors,
 } from '@core/service';
-import { documentMentionMetadata } from '@service-notification/client';
 import { z } from 'zod';
 import * as schemas from './generated/zod';
 
