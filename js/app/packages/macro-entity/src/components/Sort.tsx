@@ -1,6 +1,6 @@
 import {
   ENABLE_FRECENCY,
-  ENABLE_PROPERTY_DISPLAY_CONTROL,
+  ENABLE_PROPERTY_SORT,
 } from '@core/constant/featureFlags';
 import ClockIcon from '@phosphor-icons/core/assets/regular/clock.svg';
 import LightningIcon from '@phosphor-icons/core/assets/regular/lightning.svg';
@@ -477,7 +477,7 @@ export function createSort<
         disabled={disabled}
         isSortedByProperty={isSortedByProperty}
       />
-      <Show when={ENABLE_PROPERTY_DISPLAY_CONTROL}>
+      <Show when={ENABLE_PROPERTY_SORT}>
         <Show
           when={isSortedByProperty()}
           fallback={

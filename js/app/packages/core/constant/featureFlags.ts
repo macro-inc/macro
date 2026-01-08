@@ -110,7 +110,9 @@ export const USE_PIXEL_BLOCK_ICONS = false;
 
 export const USE_WIDE_ICONS = true;
 
-export const ENABLE_PROPERTY_DISPLAY_CONTROL = DEV_MODE_ENV;
+export const ENABLE_PROPERTY_DISPLAY = DEV_MODE_ENV;
+export const ENABLE_PROPERTY_SORT = DEV_MODE_ENV;
+export const ENABLE_PROPERTY_FILTER = DEV_MODE_ENV;
 
 // TODO: re-enable when supported in backend
 export const ENABLE_SOUP_FROM_FILTER = false;

@@ -25,7 +25,7 @@ import {
 } from '@core/constant/allBlocks';
 import {
   ENABLE_FRECENCY,
-  ENABLE_PROPERTY_DISPLAY_CONTROL,
+  ENABLE_PROPERTY_DISPLAY,
   ENABLE_SOUP_FROM_FILTER,
   ENABLE_TASKS_TABS,
 } from '@core/constant/featureFlags';
@@ -1615,7 +1615,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       }}
                     />
                   </section>
-                  <Show when={ENABLE_PROPERTY_DISPLAY_CONTROL}>
+                  <Show when={ENABLE_PROPERTY_DISPLAY}>
                     <section class="p-2">
                       <PropertyDisplayControl
                         selectedPropertyIds={displayProperties}
