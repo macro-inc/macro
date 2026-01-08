@@ -9,7 +9,7 @@ import { queryKeys } from '@macro-entity';
 import { commsServiceClient } from '@service-comms/client';
 import type { getChannelResponseError } from '@service-comms/generated/client';
 import type {
-  ChannelWithLatest,
+  ApiChannelWithLatest,
   GetChannelResponse,
 } from '@service-comms/generated/models';
 import {
@@ -107,7 +107,7 @@ export function invalidateChannelWithID(channelID: string) {
 export function optimisticUpdateChannelViewedAt(channelId: string) {
   const now = new Date().toISOString();
 
-  queryClient.setQueryData<ChannelWithLatest[]>(
+  queryClient.setQueryData<ApiChannelWithLatest[]>(
     queryKeys.all.channel,
     (old) => {
       if (!old) return old;
