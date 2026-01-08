@@ -1,13 +1,21 @@
 {
   "name": "@ui",
+  "type": "module",
   "private": true,
   "scripts": {
     "storybook": "storybook dev -p 6006",
-    "build-storybook": "storybook build"
+    "build-storybook": "storybook build",
+    "test:storybook": "vitest --config .storybook/vitest.config.ts"
   },
   "devDependencies": {
-    "@storybook/addon-docs": "^9.1.5",
-    "storybook": "^9.1.5",
-    "storybook-solidjs-vite": "^9.0.3"
+    "@storybook/addon-a11y": "^10.1.11",
+    "@storybook/addon-designs": "^11.1.1",
+    "@storybook/addon-docs": "^10.1.11",
+    "@storybook/addon-themes": "^10.1.11",
+    "@storybook/addon-vitest": "^10.1.11",
+    "@vitest/browser": "^3.2.4",
+    "@vitest/coverage-v8": "^3.2.4",
+    "storybook": "^10.1.11",
+    "storybook-solidjs-vite": "^10.0.9"
   }
 }

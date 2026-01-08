@@ -50,26 +50,26 @@ runs:
         bun install --frozen-lockfile
         bun add -g npm
 
-    - name: Get week number (for caching Playwright)
+    - name: Get Playwright version (for caching)
       if: inputs.playwright == 'true'
       shell: bash
-      run: echo "CACHE_WEEK=$(date +%Y-%V)" >> $GITHUB_ENV
+      working-directory: js/app
+      run: echo "PW_VERSION=$(bunx playwright --version | cut -d' ' -f2)" >> $GITHUB_ENV
     - name: Restore Playwright browsers
       if: inputs.playwright == 'true'
       id: pw-browsers
       uses: runs-on/cache/restore@v4
       with:
-        path: js/app/node_modules/playwright-core/.local-browsers
-        key: pw-browsers-${{ env.CACHE_WEEK }}
-        restore-keys: pw-browsers-
+        path: ~/.cache/ms-playwright
+        key: pw-browsers-${{ runner.os }}-${{ env.PW_VERSION }}
     - name: Install Playwright Browsers
       if: inputs.playwright == 'force' || (inputs.playwright == 'true' && steps.pw-browsers.outputs.cache-hit != 'true')
       shell: bash
       working-directory: js/app
-      run: PLAYWRIGHT_BROWSERS_PATH=0 bunx playwright install chromium
+      run: bunx playwright install --with-deps chromium
     - name: Save Playwright browsers to cache
       if: inputs.playwright == 'force' || (inputs.playwright == 'true' && steps.pw-browsers.outputs.cache-hit != 'true')
       uses: runs-on/cache/save@v4
       with:
-        path: js/app/node_modules/playwright-core/.local-browsers
-        key: pw-browsers-${{ hashFiles('js/app/bun.lock')}}
+        path: ~/.cache/ms-playwright
+        key: pw-browsers-${{ runner.os }}-${{ env.PW_VERSION }}

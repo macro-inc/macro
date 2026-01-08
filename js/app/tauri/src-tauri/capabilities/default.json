@@ -33,6 +33,7 @@
     "safe-area-insets:default",
     "notification:default",
     "notifications:default",
-    "os:default"
+    "os:default",
+    "log:default"
   ]
 }
