@@ -1,4 +1,5 @@
 import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue/PropertyValueIcon';
+import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 import type { Property } from '@core/component/Properties/types';
 import {
   formatPropertyValue,
@@ -14,6 +15,8 @@ import { PropertyPillTooltip } from './PropertyPillTooltip';
 
 type PropertyPillsProps = {
   properties: Property[];
+  /** For tasks, exclude key properties (status, priority, assignees) that are shown in KeyPropertiesGrid */
+  excludeKeyProperties?: boolean;
 };
 
 /**
@@ -22,11 +25,28 @@ type PropertyPillsProps = {
  */
 const MAX_DISPLAY_PILLS = 4;
 
+const KEY_PROPERTY_IDS = [
+  SYSTEM_PROPERTY_IDS.STATUS,
+  SYSTEM_PROPERTY_IDS.PRIORITY,
+  SYSTEM_PROPERTY_IDS.ASSIGNEES,
+] as const;
+
 export const PropertyPills = (props: PropertyPillsProps) => {
-  const displayProperties = () => props.properties.slice(0, MAX_DISPLAY_PILLS);
+  const filteredProperties = () => {
+    if (props.excludeKeyProperties) {
+      return props.properties.filter(
+        (property) =>
+          !KEY_PROPERTY_IDS.includes(property.propertyDefinitionId as any)
+      );
+    }
+    return props.properties;
+  };
+
+  const displayProperties = () =>
+    filteredProperties().slice(0, MAX_DISPLAY_PILLS);
 
   return (
-    <Show when={props.properties.length > 0}>
+    <Show when={filteredProperties().length > 0}>
       <div class="flex items-center gap-1 justify-end">
         <For each={displayProperties()}>
           {(property) => <PropertyPill property={property} />}
@@ -70,6 +90,7 @@ const PropertyPill = (props: PropertyPillProps) => {
  * Uses @container/soup from Soup.tsx
  * - >= @3xl (~768px): full (icon + text)
  * - < @3xl: compact (icon only)
+ * - Status and Priority properties always show as compact (icon only)
  */
 const TextPropertyPill = (props: PropertyPillProps) => {
   const displayValue = () => formatPillValue(props.property);
@@ -79,6 +100,7 @@ const TextPropertyPill = (props: PropertyPillProps) => {
 
   return (
     <Tooltip
+      unstyled
       tooltip={<TextTooltipContent property={props.property} />}
       floatingOptions={{
         offset: 4,
@@ -86,7 +108,7 @@ const TextPropertyPill = (props: PropertyPillProps) => {
         shift: { padding: 8 },
       }}
     >
-      <div class="inline-flex items-center gap-1.5 p-1.5 @3xl/soup:px-2 @3xl/soup:py-1 text-xs leading-none text-ink-muted border border-edge-muted rounded box-border h-fit shrink-0">
+      <div class="inline-flex items-center gap-1.5 p-1.5 @3xl/soup:px-2 @3xl/soup:py-1 text-xs leading-none text-ink-muted border border-edge-muted/50 rounded box-border h-fit shrink-0">
         <PillIcon property={props.property} />
         <span class="truncate max-w-[100px] hidden @3xl/soup:inline">
           {value}

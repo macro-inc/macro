@@ -14,6 +14,7 @@ export type UserIconProps = {
   isDeleted?: boolean;
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'fill';
   suppressClick?: boolean;
+  showTooltip?: boolean;
   // TODO: remove imageUrl. not actively used.
   imageURL?: string;
   fetchUrl?: boolean;
@@ -141,7 +142,12 @@ export function UserIcon(props: UserIconProps) {
   }
 
   return (
-    <Show when={displayName().length > 0 || email()} fallback={icon()}>
+    <Show
+      when={
+        props.showTooltip !== false && (displayName().length > 0 || email())
+      }
+      fallback={icon()}
+    >
       <Tooltip placement="bottom" gutter={8} overflowPadding={16}>
         <Tooltip.Trigger as="div" class={sizeClasses().container}>
           {icon()}

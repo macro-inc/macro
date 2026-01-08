@@ -63,6 +63,7 @@ const SingleEntityPill = (props: SingleEntityPillProps) => {
 
   return (
     <Tooltip
+      unstyled
       tooltip={
         <SingleEntityTooltipContent
           property={props.property}
@@ -108,6 +109,7 @@ type MultiEntityPillProps = {
 const MultiEntityPill = (props: MultiEntityPillProps) => {
   return (
     <Tooltip
+      unstyled
       tooltip={
         <EntityTooltipContent
           property={props.property}
@@ -192,6 +194,7 @@ const AssigneesPill = (props: AssigneesPillProps) => {
 
   return (
     <Tooltip
+      unstyled
       tooltip={
         <AssigneeTooltipContent
           property={props.property}

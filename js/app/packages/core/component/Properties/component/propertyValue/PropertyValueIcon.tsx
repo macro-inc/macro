@@ -32,13 +32,19 @@ export const PropertyValueIcon: Component<PropertyValueIconProps> = (props) => {
     <Switch>
       {/* Priority */}
       <Match when={props.optionId === PROPERTY_OPTION_IDS.PRIORITY.LOW}>
-        <PriorityLow class={twMerge('size-3', props.class)} />
+        <PriorityLow
+          class={twMerge('size-3', props.class, 'text-ink-extra-muted')}
+        />
       </Match>
       <Match when={props.optionId === PROPERTY_OPTION_IDS.PRIORITY.MEDIUM}>
-        <PriorityMedium class={twMerge('size-3', props.class)} />
+        <PriorityMedium
+          class={twMerge('size-3', props.class, 'text-ink-extra-muted')}
+        />
       </Match>
       <Match when={props.optionId === PROPERTY_OPTION_IDS.PRIORITY.HIGH}>
-        <PriorityHigh class={twMerge('size-3', props.class)} />
+        <PriorityHigh
+          class={twMerge('size-3', props.class, 'text-ink-extra-muted')}
+        />
       </Match>
       <Match when={props.optionId === PROPERTY_OPTION_IDS.PRIORITY.URGENT}>
         <PriorityUrgent class={twMerge('size-3', props.class, 'text-accent')} />
