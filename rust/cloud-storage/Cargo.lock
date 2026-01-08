@@ -750,14 +750,14 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-ecs"
-version = "1.67.1"
+version = "1.104.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c8b664710a4bef80958615bf52be8f1749cee5839d9aa72a007154e964b76a65"
+checksum = "e5ad99359896318941258378c887803da47352d00a9a1b2c74f237c48d9792e4"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
  "aws-smithy-async",
- "aws-smithy-http 0.60.12",
+ "aws-smithy-http 0.62.6",
  "aws-smithy-json",
  "aws-smithy-runtime",
  "aws-smithy-runtime-api",
@@ -766,7 +766,6 @@ dependencies = [
  "bytes",
  "fastrand 2.3.0",
  "http 0.2.12",
- "once_cell",
  "regex-lite",
  "tracing",
 ]
