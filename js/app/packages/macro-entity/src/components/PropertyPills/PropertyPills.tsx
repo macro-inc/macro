@@ -25,7 +25,7 @@ type PropertyPillsProps = {
  */
 const MAX_DISPLAY_PILLS = 4;
 
-const KEY_PROPERTY_IDS = [
+const TASK_KEY_PROPERTY_IDS = [
   SYSTEM_PROPERTY_IDS.STATUS,
   SYSTEM_PROPERTY_IDS.PRIORITY,
   SYSTEM_PROPERTY_IDS.ASSIGNEES,
@@ -36,7 +36,7 @@ export const PropertyPills = (props: PropertyPillsProps) => {
     if (props.excludeKeyProperties) {
       return props.properties.filter(
         (property) =>
-          !KEY_PROPERTY_IDS.includes(property.propertyDefinitionId as any)
+          !TASK_KEY_PROPERTY_IDS.includes(property.propertyDefinitionId as any)
       );
     }
     return props.properties;
@@ -150,7 +150,7 @@ const TextTooltipContent = (props: { property: Property }) => {
       <div class="flex items-center gap-1.5 flex-wrap">
         <For each={getValues(props.property)}>
           {(value, index) => (
-            <div class="inline-flex items-center gap-1.5 px-2 py-1 text-xs leading-none text-ink-muted border border-edge-muted rounded box-border h-fit w-fit">
+            <div class="inline-flex items-center gap-1.5 px-2 py-1 text-xs leading-none text-ink-muted border border-edge-muted/50 rounded box-border h-fit w-fit">
               <TooltipValueIcon
                 property={props.property}
                 valueIndex={index()}

@@ -1,4 +1,4 @@
-import type { BlockName } from '@core/block';
+import type { BlockAlias, BlockName } from '@core/block';
 import { mergeRegister } from '@lexical/utils';
 import {
   $getSelection,
@@ -12,7 +12,7 @@ import { INSERT_DOCUMENT_MENTION_COMMAND } from '../mentions';
 type MacroAppUrlParsed = {
   isValid: boolean;
   id: string | undefined;
-  block: BlockName | undefined;
+  block: BlockName | BlockAlias | undefined;
   params: Record<string, string> | undefined;
 };
 const Hosts = {
@@ -66,11 +66,12 @@ export function parseMacroAppUrl(text: string): MacroAppUrlParsed {
       };
     }
 
-    const validTypes: BlockName[] = [
+    const validTypes: Array<BlockName | BlockAlias> = [
       'chat',
       'write',
       'pdf',
       'md',
+      'task',
       'code',
       'image',
       'canvas',
@@ -87,7 +88,7 @@ export function parseMacroAppUrl(text: string): MacroAppUrlParsed {
         params: undefined,
       };
     }
-    const block: BlockName = _block as BlockName;
+    const block: BlockName | BlockAlias = _block as BlockName | BlockAlias;
 
     const idRegex =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
