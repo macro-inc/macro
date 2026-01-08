@@ -539,9 +539,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
             value={inputValue()}
             onInput={(e) => setInputValue(e.currentTarget.value)}
             onKeyDown={(e) => {
-              console.log('KEY IS', e.key);
               if (e.key === 'Escape') {
-                console.log('ESCAPE DOWN IN');
                 e.preventDefault();
                 e.stopPropagation();
                 if (props.onClose) {

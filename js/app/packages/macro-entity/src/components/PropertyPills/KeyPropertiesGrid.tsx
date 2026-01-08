@@ -31,10 +31,6 @@ export const KeyPropertiesGrid = (props: KeyPropertiesGridProps) => {
     return KEY_PROPERTY_ORDER.map((id) => propertyMap.get(id) || null);
   });
 
-  createEffect(() => {
-    console.log(keyProperties());
-  });
-
   return (
     <div class="grid grid-cols-[1fr_1fr_4fr] gap-2 w-fit">
       <For each={keyProperties()}>
