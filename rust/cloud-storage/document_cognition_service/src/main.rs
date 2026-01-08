@@ -169,7 +169,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("initialized static file service client");
 
     api::setup_and_serve(ApiContext {
-        db,
+        db: db.clone(),
         email_service_client_external: Arc::new(EmailServiceClientExternal::new(
             email_service_client.url().to_owned(),
         )),
@@ -180,6 +180,7 @@ async fn main() -> anyhow::Result<()> {
                         .with_dss_client(document_storage_client.clone())
                         .with_lexical_client(lexical_client)
                         .with_sync_service_client(sync_service_client.clone())
+                        .with_macro_db(db.clone())
                         .build(),
                 )
                 .with_channel_client(comms_service_client.clone())

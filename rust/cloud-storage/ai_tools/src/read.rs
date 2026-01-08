@@ -58,9 +58,7 @@ pub struct DocumentMetadata {
 #[derive(Debug, JsonSchema, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DocumentItem {
-    pub document_id: String,
-    pub content: String,
-    pub metadata: DocumentMetadata,
+    pub formatted_document: String,
 }
 
 #[derive(Debug, JsonSchema, Serialize)]
@@ -236,26 +234,13 @@ impl Read {
                 }
             };
 
-            let metadata = document_with_content.metadata().clone();
-            let content_str = match document_with_content.content.text_content() {
-                Ok(content) => content,
-                Err(e) => {
-                    tracing::warn!("failed to extract text content for document {}: {}", id, e);
-                    continue;
-                }
-            };
-
-            documents.push(DocumentItem {
-                document_id: id.clone(),
-                content: content_str,
-                metadata: DocumentMetadata {
-                    document_name: metadata.document_name,
-                    owner: metadata.owner.to_string(),
-                    file_type: metadata.file_type,
-                    project_id: metadata.project_id,
-                    deleted: metadata.deleted_at.is_some(),
-                },
-            });
+            if let Some(doc) = document_with_content.text_attachment() {
+                documents.push(DocumentItem {
+                    formatted_document: doc.to_string(),
+                });
+            } else {
+                tracing::warn!("Unexpected document type for fetch");
+            }
         }
 
         if documents.is_empty() {

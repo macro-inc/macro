@@ -102,6 +102,7 @@ async fn build_completion_request(
                                     file_type: f.as_str().to_string(),
                                     name: document.name,
                                     content: context,
+                                    properties: None,
                                 }
                                 .boxed(),
                             );
@@ -129,6 +130,7 @@ async fn build_completion_request(
                                     file_type: file_type.as_str().to_string(),
                                     name: document.name,
                                     content,
+                                    properties: None,
                                 }
                                 .boxed(),
                             );

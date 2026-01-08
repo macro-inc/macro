@@ -45,6 +45,7 @@ dependencies = [
 name = "ai"
 version = "0.1.0"
 dependencies = [
+ "ai_format",
  "anthropic",
  "anyhow",
  "async-openai",
@@ -76,8 +77,8 @@ dependencies = [
 name = "ai_format"
 version = "0.1.0"
 dependencies = [
- "ai",
  "chrono",
+ "models_properties",
 ]
 
 [[package]]
@@ -7617,11 +7618,14 @@ dependencies = [
  "models_comms",
  "models_dcs",
  "models_email",
+ "models_properties",
  "models_sfs",
+ "properties_db_client",
  "reqwest",
  "s3_client",
  "serde",
  "serde_json",
+ "sqlx",
  "static_file_service_client",
  "sync_service_client",
  "thiserror 2.0.17",

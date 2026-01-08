@@ -99,6 +99,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
                 .with_dss_client(document_storage_client.clone())
                 .with_lexical_client(lexical_client)
                 .with_sync_service_client(sync_service_client)
+                .with_macro_db(pool.clone())
                 .build(),
         )
         .with_channel_client(comms_service_client.clone())
