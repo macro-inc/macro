@@ -13,12 +13,13 @@ use model::response::ErrorResponse;
 use model::user::UserContext;
 use models_email::email::service::address::ContactInfo;
 use models_email::email::service::{message, thread};
-use models_email::service::attachment::AttachmentToSend;
+use models_email::service::attachment::{AttachmentDraft, AttachmentToSend};
 use models_email::service::link::Link;
 use sqlx::types::chrono::{DateTime, Utc};
 use strum_macros::AsRefStr;
 use thiserror::Error;
 use utoipa::ToSchema;
+use uuid::Uuid;
 
 #[derive(Debug, Error, AsRefStr)]
 pub enum SendMessageError {
@@ -143,32 +144,8 @@ pub async fn send_handler(
     let before_send_ts = Utc::now();
 
     // Include attachments for message
-    let mut attachments_to_send: Vec<AttachmentToSend> = Vec::new();
-    if let Some(db_id) = message_to_send.db_id {
-        let db_attachments =
-            email_db_client::attachments::draft::fetch_draft_attachments_by_draft_id(
-                &ctx.db, link.id, db_id,
-            )
-            .await?;
-
-        if !db_attachments.is_empty() {
-            for db_attachment in db_attachments {
-                // fetch data from s3
-                let attachment_data = ctx
-                    .s3_client
-                    .get(ctx.config.attachment_bucket.as_str(), &db_attachment.s3_key)
-                    .await?;
-
-                attachments_to_send.push(AttachmentToSend {
-                    file_name: db_attachment.file_name,
-                    content_type: db_attachment.content_type,
-                    data: attachment_data,
-                })
-            }
-
-            message_to_send.attachments = Some(attachments_to_send);
-        }
-    }
+    let db_attachments =
+        fetch_and_attach_draft_attachments(&ctx, &link, &mut message_to_send).await?;
 
     ctx.gmail_client
         .send_message(
@@ -188,6 +165,16 @@ pub async fn send_handler(
     match result {
         Ok(_) => {
             tx.commit().await?;
+
+            // Cleanup attachments in the background
+            if let (Some(draft_id), Some(attachments)) = (message_to_send.db_id, db_attachments) {
+                let ctx_clone = ctx.clone();
+                let link_id = link.id;
+                tokio::spawn(async move {
+                    cleanup_draft_attachments(ctx_clone, link_id, draft_id, attachments).await;
+                });
+            }
+
             Ok((
                 StatusCode::CREATED,
                 Json(SendMessageResponse {
@@ -275,4 +262,84 @@ async fn insert_sent_message(
     .context("unable to insert message to send")?;
 
     Ok(())
+}
+
+/// Fetch any attachments the user previously added to the draft from s3 and attach them to the message
+/// being sent. Return the attachment metadata so we can use it to delete the attachments from s3
+/// after the message is sent.
+async fn fetch_and_attach_draft_attachments(
+    ctx: &ApiContext,
+    link: &Link,
+    message_to_send: &mut message::MessageToSend,
+) -> Result<Option<Vec<AttachmentDraft>>, SendMessageError> {
+    let mut attachments_to_send: Vec<AttachmentToSend> = Vec::new();
+    if let Some(db_id) = message_to_send.db_id {
+        let db_attachments =
+            email_db_client::attachments::draft::fetch_draft_attachments_by_draft_id(
+                &ctx.db, link.id, db_id,
+            )
+            .await
+            .map_err(anyhow::Error::from)
+            .map_err(SendMessageError::GmailSendError)?;
+
+        if !db_attachments.is_empty() {
+            for db_attachment in &db_attachments {
+                // fetch data from s3
+                let attachment_data = ctx
+                    .s3_client
+                    .get(ctx.config.attachment_bucket.as_str(), &db_attachment.s3_key)
+                    .await
+                    .map_err(SendMessageError::GmailSendError)?;
+
+                attachments_to_send.push(AttachmentToSend {
+                    file_name: db_attachment.file_name.clone(),
+                    content_type: db_attachment.content_type.clone(),
+                    data: attachment_data,
+                })
+            }
+
+            message_to_send.attachments = Some(attachments_to_send);
+            return Ok(Some(db_attachments));
+        }
+    }
+    Ok(None)
+}
+
+async fn cleanup_draft_attachments(
+    ctx: ApiContext,
+    link_id: Uuid,
+    draft_id: Uuid,
+    attachments: Vec<AttachmentDraft>,
+) {
+    for attachment in attachments {
+        // Delete from S3
+        if let Err(e) = ctx
+            .s3_client
+            .delete(ctx.config.attachment_bucket.as_str(), &attachment.s3_key)
+            .await
+        {
+            tracing::error!(
+                error = ?e,
+                s3_key = %attachment.s3_key,
+                "Failed to delete draft attachment from S3 during cleanup"
+            );
+        }
+
+        // Delete from DB
+        if let Err(e) = email_db_client::attachments::draft::delete_draft_attachment(
+            &ctx.db,
+            link_id,
+            draft_id,
+            attachment.id,
+        )
+        .await
+        {
+            tracing::error!(
+                error = ?e,
+                attachment_id = attachment.id.to_string(),
+                draft_id = draft_id.to_string(),
+                "Failed to delete draft attachment from database during cleanup"
+            );
+        }
+    }
 }
