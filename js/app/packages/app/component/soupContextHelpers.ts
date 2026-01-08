@@ -47,7 +47,6 @@ export const openEntityInSplitFromUnifiedList = async (
   };
 
   const replaceOrInsertSplit = (content: SplitContent) => {
-    console.log('replaceOrInsertSplit');
     const existingSplit = splitManager.getSplitByContent(
       content.type,
       content.id
