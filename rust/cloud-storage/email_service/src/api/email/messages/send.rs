@@ -38,11 +38,11 @@ pub enum SendMessageError {
     #[error("Failed to send message via Gmail")]
     GmailSendError(#[from] anyhow::Error),
 
-    #[error("Failed to fetch attachments for message")]
-    AttachmentError,
+    #[error("Failed to fetch attachments for message: {0}")]
+    AttachmentError(anyhow::Error),
 
-    #[error("A database transaction error occurred")]
-    TransactionError(#[from] sqlx::Error),
+    #[error("Internal error")]
+    InternalError(#[from] sqlx::Error),
 }
 
 impl IntoResponse for SendMessageError {
@@ -52,21 +52,25 @@ impl IntoResponse for SendMessageError {
             SendMessageError::Base64DecodeError(_) | SendMessageError::Utf8Error(_) => {
                 StatusCode::BAD_REQUEST
             }
-            SendMessageError::GmailSendError(_)
-            | SendMessageError::TransactionError(_)
-            | SendMessageError::SenderContactNotFound
-            | SendMessageError::AttachmentError => StatusCode::INTERNAL_SERVER_ERROR,
+            SendMessageError::SenderContactNotFound
+            | SendMessageError::GmailSendError(_)
+            | SendMessageError::AttachmentError(_)
+            | SendMessageError::InternalError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
-        if status_code.is_server_error() {
-            tracing::error!(
-                nested_error = ?self,
-                error_type = "SendMessageError",
-                variant = self.as_ref(),
-                "Internal server error");
-        }
+        let error_message = match &self {
+            SendMessageError::AttachmentError(_) => {
+                "Failed to fetch attachments for message".to_string()
+            }
+            SendMessageError::Validation(_)
+            | SendMessageError::SenderContactNotFound
+            | SendMessageError::Base64DecodeError(_)
+            | SendMessageError::Utf8Error(_)
+            | SendMessageError::GmailSendError(_)
+            | SendMessageError::InternalError(_) => self.to_string(),
+        };
 
-        (status_code, self.to_string()).into_response()
+        (status_code, error_message).into_response()
     }
 }
 
@@ -96,7 +100,7 @@ pub struct SendMessageResponse {
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user_context, gmail_token, request_body), fields(user_id=user_context.user_id, fusionauth_user_id=user_context.fusion_user_id))]
+#[tracing::instrument(skip(ctx, user_context, gmail_token, request_body), fields(user_id=user_context.user_id, fusionauth_user_id=user_context.fusion_user_id), err)]
 pub async fn send_handler(
     State(ctx): State<ApiContext>,
     user_context: Extension<UserContext>,
@@ -281,7 +285,7 @@ async fn fetch_and_attach_draft_attachments(
                 &ctx.db, link.id, db_id,
             )
             .await
-            .map_err(|_| SendMessageError::AttachmentError)?;
+            .context("unable to fetch draft attachments from database")?;
 
         if !db_attachments.is_empty() {
             let fetch_futures = db_attachments.iter().map(|db_attachment| async move {
@@ -290,16 +294,19 @@ async fn fetch_and_attach_draft_attachments(
                     .get(ctx.config.attachment_bucket.as_str(), &db_attachment.s3_key)
                     .await
                     .map_err(|e| {
-                        tracing::error!(error = ?e, draft_id = db_id.to_string(), s3_key = %db_attachment.s3_key, "Failed to fetch attachment from S3");
-                        SendMessageError::AttachmentError
+                        SendMessageError::AttachmentError(anyhow::anyhow!(
+                            "Failed to fetch attachment from S3 (key: {}): {}",
+                            db_attachment.s3_key,
+                            e
+                        ))
                     })?;
 
-                    Ok::<AttachmentToSend, SendMessageError>(AttachmentToSend {
+                Ok::<AttachmentToSend, SendMessageError>(AttachmentToSend {
                     file_name: db_attachment.file_name.clone(),
                     content_type: db_attachment.content_type.clone(),
                     data: attachment_data,
                 })
-                });
+            });
 
             let attachments_to_send = futures::future::try_join_all(fetch_futures).await?;
 

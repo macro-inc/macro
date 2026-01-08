@@ -35,14 +35,6 @@ impl IntoResponse for AddDraftAttachmentError {
             AddDraftAttachmentError::InternalError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
-        if status_code.is_server_error() {
-            tracing::error!(
-                nested_error = ?self,
-                error_type = "AddDraftAttachmentError",
-                variant = self.as_ref(),
-                "Internal server error");
-        }
-
         (status_code, self.to_string()).into_response()
     }
 }
@@ -82,7 +74,7 @@ pub struct AddDraftAttachmentResponse {
         (status = 500, body = ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx))]
+#[tracing::instrument(skip(ctx), err)]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     link: Extension<Link>,
