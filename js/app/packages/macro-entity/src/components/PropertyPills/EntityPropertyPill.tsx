@@ -10,6 +10,7 @@ import { PropertyPillTooltip } from './PropertyPillTooltip';
 
 type EntityPropertyPillProps = {
   property: Property & { valueType: 'ENTITY' };
+  compressed?: boolean;
 };
 
 /**
@@ -24,24 +25,41 @@ export const EntityPropertyPill = (props: EntityPropertyPillProps) => {
   if (count() === 0) return null;
 
   // Show user avatars for multiselect user entity properties
-  if (count() > 1 && props.property.specificEntityType === 'USER') {
-    return <UserEntityPill property={props.property} entities={entities()} />;
+  if (props.property.specificEntityType === 'USER') {
+    return (
+      <UserEntityPill
+        property={props.property}
+        entities={entities()}
+        compressed={props.compressed}
+      />
+    );
   }
 
   // Single entity - show name directly in pill
   if (count() === 1) {
     return (
-      <SingleEntityPill property={props.property} entity={entities()[0]} />
+      <SingleEntityPill
+        property={props.property}
+        entity={entities()[0]}
+        compressed={props.compressed}
+      />
     );
   }
 
   // Multiple entities - show count with tooltip
-  return <MultiEntityPill property={props.property} entities={entities()} />;
+  return (
+    <MultiEntityPill
+      property={props.property}
+      entities={entities()}
+      compressed={props.compressed}
+    />
+  );
 };
 
 type SingleEntityPillProps = {
   property: Property & { valueType: 'ENTITY' };
   entity: EntityReference;
+  compressed?: boolean;
 };
 
 const SingleEntityPill = (props: SingleEntityPillProps) => {
@@ -75,9 +93,19 @@ const SingleEntityPill = (props: SingleEntityPillProps) => {
         shift: { padding: 8 },
       }}
     >
-      <div class="inline-flex items-center gap-1.5 p-1.5 @3xl/soup:px-2 @3xl/soup:py-1 text-xs leading-none text-ink-muted border border-edge-muted rounded box-border h-fit">
+      <div
+        class="inline-flex items-center gap-1.5 text-xs leading-none text-ink-muted border border-edge-muted h-fit p-1.5"
+        classList={{
+          '@3xl/soup:px-2 @3xl/soup:py-1': !props.compressed,
+        }}
+      >
         <Show when={icon()}>{icon()}</Show>
-        <span class="truncate max-w-[120px] hidden @3xl/soup:inline">
+        <span
+          class="truncate max-w-[120px] hidden"
+          classList={{
+            '@3xl/soup:inline': !props.compressed,
+          }}
+        >
           {name()}
         </span>
       </div>
@@ -103,6 +131,7 @@ const SingleEntityTooltipContent = (props: SingleEntityTooltipContentProps) => {
 type MultiEntityPillProps = {
   property: Property & { valueType: 'ENTITY' };
   entities: EntityReference[];
+  compressed?: boolean;
 };
 
 const MultiEntityPill = (props: MultiEntityPillProps) => {
@@ -121,7 +150,12 @@ const MultiEntityPill = (props: MultiEntityPillProps) => {
         shift: { padding: 8 },
       }}
     >
-      <div class="inline-flex items-center gap-1.5 p-1.5 @3xl/soup:px-2 @3xl/soup:py-1 text-xs leading-none text-ink-muted border border-edge-muted rounded box-border h-fit">
+      <div
+        class="inline-flex items-center gap-1.5 text-xs leading-none text-ink-muted border border-edge-muted h-fit p-1.5"
+        classList={{
+          '@3xl/soup:px-2 @3xl/soup:py-1': !props.compressed,
+        }}
+      >
         <PropertyDataTypeIcon
           property={{
             data_type: 'ENTITY',
@@ -129,7 +163,12 @@ const MultiEntityPill = (props: MultiEntityPillProps) => {
           }}
           class="size-3.5 shrink-0"
         />
-        <span class="truncate max-w-[120px] hidden @3xl/soup:inline">
+        <span
+          class="truncate max-w-[120px] hidden"
+          classList={{
+            '@3xl/soup:inline': !props.compressed,
+          }}
+        >
           {props.property.displayName} ({props.entities.length})
         </span>
       </div>
@@ -166,7 +205,7 @@ const EntityValuePill = (props: EntityValuePillProps) => {
   );
 
   return (
-    <div class="inline-flex items-center gap-1.5 px-2 py-1 text-xs leading-none text-ink-muted border border-edge-muted rounded box-border h-fit w-fit">
+    <div class="inline-flex items-center gap-1.5 px-2 py-1 text-xs leading-none text-ink-muted border border-edge-muted h-fit w-fit">
       <Show when={icon()}>{icon()}</Show>
       <span class="truncate max-w-[150px]">{name()}</span>
     </div>
@@ -178,6 +217,7 @@ const MAX_USER_AVATARS = 3;
 type UserEntityPillProps = {
   property: Property & { valueType: 'ENTITY' };
   entities: EntityReference[];
+  compressed?: boolean;
 };
 
 /**
@@ -255,7 +295,7 @@ const UserEntityTooltipItem = (props: UserEntityTooltipItemProps) => {
   );
 
   return (
-    <div class="inline-flex items-center gap-1.5 px-2 py-1 text-xs leading-none text-ink-muted border border-edge-muted rounded box-border h-fit w-fit">
+    <div class="inline-flex items-center gap-1.5 px-2 py-1 text-xs leading-none text-ink-muted border border-edge-muted h-fit w-fit">
       <div class="size-4 rounded-full overflow-hidden shrink-0">
         <UserIcon id={props.entity.entity_id} isDeleted={false} size="fill" />
       </div>

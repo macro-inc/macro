@@ -17,6 +17,8 @@ type PropertyPillsProps = {
   properties: Property[];
   /** For tasks, exclude key properties (status, priority, assignees) that are shown in KeyPropertiesGrid */
   excludeKeyProperties?: boolean;
+  /** Force compressed styling regardless of container query */
+  compressed?: boolean;
 };
 
 /**
@@ -49,7 +51,9 @@ export const PropertyPills = (props: PropertyPillsProps) => {
     <Show when={filteredProperties().length > 0}>
       <div class="flex items-center gap-1 justify-end">
         <For each={displayProperties()}>
-          {(property) => <PropertyPill property={property} />}
+          {(property) => (
+            <PropertyPill property={property} compressed={props.compressed} />
+          )}
         </For>
       </div>
     </Show>
@@ -58,6 +62,7 @@ export const PropertyPills = (props: PropertyPillsProps) => {
 
 type PropertyPillProps = {
   property: Property;
+  compressed?: boolean;
 };
 
 /**
@@ -65,20 +70,30 @@ type PropertyPillProps = {
  */
 const PropertyPill = (props: PropertyPillProps) => {
   return (
-    <Switch fallback={<TextPropertyPill property={props.property} />}>
+    <Switch
+      fallback={
+        <TextPropertyPill
+          property={props.property}
+          compressed={props.compressed}
+        />
+      }
+    >
       <Match when={props.property.valueType === 'BOOLEAN'}>
         <BooleanPropertyPill
           property={props.property as Property & { valueType: 'BOOLEAN' }}
+          compressed={props.compressed}
         />
       </Match>
       <Match when={props.property.valueType === 'ENTITY'}>
         <EntityPropertyPill
           property={props.property as Property & { valueType: 'ENTITY' }}
+          compressed={props.compressed}
         />
       </Match>
       <Match when={props.property.valueType === 'LINK'}>
         <LinkPropertyPill
           property={props.property as Property & { valueType: 'LINK' }}
+          compressed={props.compressed}
         />
       </Match>
     </Switch>
@@ -87,9 +102,9 @@ const PropertyPill = (props: PropertyPillProps) => {
 
 /**
  * Pill - shows icon + text when wide, icon only when narrow
- * Uses @container/soup from Soup.tsx
- * - >= @3xl (~768px): full (icon + text)
- * - < @3xl: compact (icon only)
+ * Uses @container/soup from Soup.tsx and compressed prop
+ * - >= @3xl (~768px) AND not compressed: full (icon + text)
+ * - < @3xl OR compressed: compact (icon only)
  * - Status and Priority properties always show as compact (icon only)
  */
 const TextPropertyPill = (props: PropertyPillProps) => {
@@ -108,9 +123,19 @@ const TextPropertyPill = (props: PropertyPillProps) => {
         shift: { padding: 8 },
       }}
     >
-      <div class="inline-flex items-center gap-1.5 p-1.5 @3xl/soup:px-2 @3xl/soup:py-1 text-xs leading-none text-ink-muted border border-edge-muted/50 rounded box-border h-fit shrink-0">
+      <div
+        class="inline-flex items-center gap-1.5 text-xs leading-none text-ink-muted border border-edge-muted/50 h-fit shrink-0 p-1.5"
+        classList={{
+          '@3xl/soup:px-2 @3xl/soup:py-1': !props.compressed,
+        }}
+      >
         <PillIcon property={props.property} />
-        <span class="truncate max-w-[100px] hidden @3xl/soup:inline">
+        <span
+          class="truncate max-w-[100px] hidden"
+          classList={{
+            '@3xl/soup:inline': !props.compressed,
+          }}
+        >
           {value}
         </span>
       </div>
@@ -150,7 +175,7 @@ const TextTooltipContent = (props: { property: Property }) => {
       <div class="flex items-center gap-1.5 flex-wrap">
         <For each={getValues(props.property)}>
           {(value, index) => (
-            <div class="inline-flex items-center gap-1.5 px-2 py-1 text-xs leading-none text-ink-muted border border-edge-muted/50 rounded box-border h-fit w-fit">
+            <div class="inline-flex items-center gap-1.5 px-2 py-1 text-xs leading-none text-ink-muted border border-edge-muted/50 h-fit w-fit">
               <TooltipValueIcon
                 property={props.property}
                 valueIndex={index()}

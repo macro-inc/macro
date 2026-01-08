@@ -1020,9 +1020,7 @@ export function EntityWithEverything(
           </div>
           <EntityTitle />
           <Show when={isTaskEntity(props.entity) && properties().length > 0}>
-            <div class="ml-2">
-              {/*<KeyPropertiesGrid properties={properties()} />*/}
-            </div>
+            <KeyPropertiesGrid properties={properties()} />
           </Show>
         </div>
         {/* Date and user - top right on mobile, end on desktop  */}
@@ -1037,7 +1035,7 @@ export function EntityWithEverything(
               <div class="pr-2 overflow-hidden shrink min-w-0">
                 <PropertyPills
                   properties={properties()}
-                  // excludeKeyProperties={isTaskEntity(props.entity)}
+                  excludeKeyProperties={isTaskEntity(props.entity)}
                 />
               </div>
             </Show>

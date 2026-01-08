@@ -13,6 +13,7 @@ import { PropertyPillTooltip } from './PropertyPillTooltip';
 
 type LinkPropertyPillProps = {
   property: Property & { valueType: 'LINK' };
+  compressed?: boolean;
 };
 
 /**
@@ -28,16 +29,29 @@ export const LinkPropertyPill = (props: LinkPropertyPillProps) => {
 
   // Single link - show title/domain directly in pill
   if (count() === 1) {
-    return <SingleLinkPill property={props.property} url={links()[0]} />;
+    return (
+      <SingleLinkPill
+        property={props.property}
+        url={links()[0]}
+        compressed={props.compressed}
+      />
+    );
   }
 
   // Multiple links - show count with tooltip
-  return <MultiLinkPill property={props.property} urls={links()} />;
+  return (
+    <MultiLinkPill
+      property={props.property}
+      urls={links()}
+      compressed={props.compressed}
+    />
+  );
 };
 
 type SingleLinkPillProps = {
   property: Property & { valueType: 'LINK' };
   url: string;
+  compressed?: boolean;
 };
 
 const SingleLinkPill = (props: SingleLinkPillProps) => {
@@ -76,7 +90,12 @@ const SingleLinkPill = (props: SingleLinkPillProps) => {
         shift: { padding: 8 },
       }}
     >
-      <div class="inline-flex items-center gap-1.5 p-1.5 @3xl/soup:px-2 @3xl/soup:py-1 text-xs leading-none text-ink-muted border border-edge-muted rounded box-border h-fit">
+      <div
+        class="inline-flex items-center gap-1.5 text-xs leading-none text-ink-muted border border-edge-muted h-fit p-1.5"
+        classList={{
+          '@3xl/soup:px-2 @3xl/soup:py-1': !props.compressed,
+        }}
+      >
         <Show
           when={faviconUrl() && !imageError()}
           fallback={<LinkIcon class="size-4 text-ink-muted shrink-0" />}
@@ -89,7 +108,12 @@ const SingleLinkPill = (props: SingleLinkPillProps) => {
             onError={() => setImageError(true)}
           />
         </Show>
-        <span class="truncate max-w-[100px] hidden @3xl/soup:inline">
+        <span
+          class="truncate max-w-[100px] hidden"
+          classList={{
+            '@3xl/soup:inline': !props.compressed,
+          }}
+        >
           {title()}
         </span>
       </div>
@@ -114,7 +138,7 @@ const SingleLinkTooltipContent = (props: SingleLinkTooltipContentProps) => {
           href={props.url}
           target="_blank"
           rel="noopener noreferrer"
-          class="inline-flex items-center gap-1.5 px-2 py-1 text-xs leading-none text-ink-muted border border-edge-muted rounded box-border h-fit w-fit"
+          class="inline-flex items-center gap-1.5 px-2 py-1 text-xs leading-none text-ink-muted border border-edge-muted h-fit w-fit"
           title={props.url}
         >
           <Show
@@ -139,6 +163,7 @@ const SingleLinkTooltipContent = (props: SingleLinkTooltipContentProps) => {
 type MultiLinkPillProps = {
   property: Property & { valueType: 'LINK' };
   urls: string[];
+  compressed?: boolean;
 };
 
 const MultiLinkPill = (props: MultiLinkPillProps) => {
@@ -153,14 +178,24 @@ const MultiLinkPill = (props: MultiLinkPillProps) => {
         shift: { padding: 8 },
       }}
     >
-      <div class="inline-flex items-center gap-1.5 p-1.5 @3xl/soup:px-2 @3xl/soup:py-1 text-xs leading-none text-ink-muted border border-edge-muted rounded box-border h-fit">
+      <div
+        class="inline-flex items-center gap-1.5 text-xs leading-none text-ink-muted border border-edge-muted h-fit p-1.5"
+        classList={{
+          '@3xl/soup:px-2 @3xl/soup:py-1': !props.compressed,
+        }}
+      >
         <PropertyDataTypeIcon
           property={{
             data_type: 'LINK',
           }}
           class="size-3.5 shrink-0"
         />
-        <span class="truncate max-w-[120px] hidden @3xl/soup:inline">
+        <span
+          class="truncate max-w-[120px] hidden"
+          classList={{
+            '@3xl/soup:inline': !props.compressed,
+          }}
+        >
           {props.property.displayName} ({props.urls.length})
         </span>
       </div>
@@ -212,7 +247,7 @@ const LinkValuePill = (props: LinkValuePillProps) => {
       href={props.url}
       target="_blank"
       rel="noopener noreferrer"
-      class="inline-flex items-center gap-1.5 px-2 py-1 text-xs leading-none text-ink-muted border border-edge-muted rounded box-border h-fit w-fit"
+      class="inline-flex items-center gap-1.5 px-2 py-1 text-xs leading-none text-ink-muted border border-edge-muted h-fit w-fit"
       title={props.url}
     >
       <Show

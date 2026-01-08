@@ -6,6 +6,7 @@ import { PropertyPillTooltip } from './PropertyPillTooltip';
 
 type BooleanPropertyPillProps = {
   property: Property & { valueType: 'BOOLEAN' };
+  compressed?: boolean;
 };
 
 /**
@@ -25,14 +26,24 @@ export const BooleanPropertyPill = (props: BooleanPropertyPillProps) => {
         shift: { padding: 8 },
       }}
     >
-      <div class="inline-flex items-center gap-1.5 p-1.5 @3xl/soup:px-2 @3xl/soup:py-1 text-xs leading-none text-ink-muted border border-edge-muted rounded box-border h-fit">
+      <div
+        class="inline-flex items-center gap-1.5 text-xs leading-none text-ink-muted border border-edge-muted h-fit p-1.5"
+        classList={{
+          '@3xl/soup:px-2 @3xl/soup:py-1': !props.compressed,
+        }}
+      >
         <PropertyDataTypeIcon
           property={{
             data_type: 'BOOLEAN',
           }}
           class="size-3.5 shrink-0"
         />
-        <span class="truncate max-w-[120px] hidden @3xl/soup:inline">
+        <span
+          class="truncate max-w-[120px] hidden"
+          classList={{
+            '@3xl/soup:inline': !props.compressed,
+          }}
+        >
           {props.property.displayName}
         </span>
       </div>
@@ -46,7 +57,7 @@ const BooleanTooltipContent = (props: {
   return (
     <PropertyPillTooltip property={props.property}>
       <div class="flex items-center gap-1.5 flex-wrap">
-        <div class="inline-flex items-center px-2 py-1 text-xs leading-none text-ink-muted border border-edge-muted rounded box-border h-fit w-fit">
+        <div class="inline-flex items-center px-2 py-1 text-xs leading-none text-ink-muted border border-edge-muted h-fit w-fit">
           <span>True</span>
         </div>
       </div>

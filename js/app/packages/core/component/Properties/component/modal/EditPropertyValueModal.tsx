@@ -1,4 +1,3 @@
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import {
