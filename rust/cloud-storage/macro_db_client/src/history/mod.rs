@@ -9,7 +9,7 @@ use model::item::{
     Item,
     map_item::{map_chat_item, map_document_item, map_project_item},
 };
-use system_properties::domain::model::constants::{SystemPropertyKey, options::StatusOption};
+use system_properties::{StatusOption, SystemPropertyKey};
 
 /// Gets a users recently opened history.
 #[tracing::instrument(skip(db))]

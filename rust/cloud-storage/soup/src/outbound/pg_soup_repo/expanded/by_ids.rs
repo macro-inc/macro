@@ -5,7 +5,7 @@ use model_entity::{Entity, EntityType};
 use models_soup::item::SoupItem;
 use sqlx::PgPool;
 use std::str::FromStr;
-use system_properties::domain::model::constants::{SystemPropertyKey, options::StatusOption};
+use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
 
 /// Returns objects that a user has EXPLICIT and IMPLICIT access to by their IDs, excluding project items.

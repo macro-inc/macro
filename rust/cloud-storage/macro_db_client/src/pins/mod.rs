@@ -1,7 +1,7 @@
 use anyhow::Context;
 use document_sub_type::DocumentSubType;
 use sqlx::{Pool, Postgres};
-use system_properties::domain::model::constants::{SystemPropertyKey, options::StatusOption};
+use system_properties::{StatusOption, SystemPropertyKey};
 
 use model::{
     activity::map_item::{map_chat_item, map_document_item},

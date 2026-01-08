@@ -2,7 +2,7 @@ use document_sub_type::DocumentSubType;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model::{activity::Activity, chat::Chat, document::BasicDocument};
 use sqlx::{Pool, Postgres, Row};
-use system_properties::domain::model::constants::{SystemPropertyKey, options::StatusOption};
+use system_properties::{StatusOption, SystemPropertyKey};
 
 #[tracing::instrument(skip(db))]
 pub async fn get_recent_activities(

@@ -1,7 +1,7 @@
 use document_sub_type::DocumentSubType;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model::{chat::Chat, document::BasicDocument, project::Project};
-use system_properties::domain::model::constants::{SystemPropertyKey, options::StatusOption};
+use system_properties::{StatusOption, SystemPropertyKey};
 
 /// Gets all deleted sub-projects of a given project.
 /// Includes the root project itself as well.

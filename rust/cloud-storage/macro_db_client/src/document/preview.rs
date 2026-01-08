@@ -4,7 +4,7 @@ use document_sub_type::DocumentSubType;
 use model::document::{
     DocumentPreviewData, DocumentPreviewDataSubType, DocumentPreviewV2, WithDocumentId,
 };
-use system_properties::domain::model::constants::{SystemPropertyKey, options::StatusOption};
+use system_properties::{StatusOption, SystemPropertyKey};
 
 /// Intermediate struct for SQL row mapping with compile-time validation.
 #[derive(sqlx::FromRow)]

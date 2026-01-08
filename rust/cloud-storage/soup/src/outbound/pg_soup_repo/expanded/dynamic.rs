@@ -14,7 +14,7 @@ use models_pagination::{Query, SimpleSortMethod};
 use models_soup::{chat::SoupChat, document::SoupDocument, item::SoupItem, project::SoupProject};
 use recursion::CollapsibleExt;
 use sqlx::{PgPool, Postgres, QueryBuilder, Row, postgres::PgRow, prelude::FromRow};
-use system_properties::domain::model::constants::{SystemPropertyKey, options::StatusOption};
+use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
 
 use crate::outbound::pg_soup_repo::type_err;
