@@ -15,9 +15,10 @@ export const PropertyPillTooltip = (props: PropertyPillTooltipProps) => {
   const singleSelect = () => !props.property.isMultiSelect;
   return (
     <div
-      class="p-2 min-w-[240px] max-w-[280px] border border-edge-muted bg-panel"
+      class="p-2 border border-edge-muted bg-panel"
       classList={{
         'flex flex-row gap-2 items-center': singleSelect(),
+        'min-w-48 max-w-72': !singleSelect(),
       }}
     >
       <div
