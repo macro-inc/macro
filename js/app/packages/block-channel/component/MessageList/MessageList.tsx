@@ -795,6 +795,9 @@ function MessageListImpl(props: MessageListProps) {
                         isThreadIndexWithinCutoff()) &&
                       virtualHandle()
                     }
+                    // For the last message in the channel, we display this
+                    // empty small div. This is a temporary fix for last thread elements not rendering
+                    fallback={i() === 0 ? <div class="h-[0.05px]" /> : null}
                   >
                     <MessageContainer
                       message={row.message}
