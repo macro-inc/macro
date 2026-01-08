@@ -359,3 +359,32 @@ export const useMarkNotificationsAsDoneMutation = createNotificationsMutation(
     onError: notificationsMutationErrorFn,
   }
 );
+
+type NotificationItem = GetAllUserNotificationsResponse['items'][number];
+
+export function optimisticInsertNotification(
+  notification: Omit<NotificationItem, 'ownerId'>
+) {
+  const item = notification as NotificationItem;
+
+  queryClient.setQueriesData<NotificationData<UserNotificationsPageParam>>(
+    { queryKey: notificationKeys.user._def },
+    (data) => {
+      if (!data) return data;
+
+      const exists = data.pages.some((page) =>
+        page.items.some((n) => n.id === item.id)
+      );
+      if (exists) return data;
+
+      return {
+        ...data,
+        pages: data.pages.map((page, index) =>
+          index === 0 ? { ...page, items: [item, ...page.items] } : page
+        ),
+      };
+    }
+  );
+
+  invalidateUserNotifications();
+}

@@ -1,5 +1,6 @@
 import { itemToSafeName } from '@core/constant/allBlocks';
 import { isErr, isOk, ok } from '@core/util/maybeResult';
+import type { HistoryItem } from '@queries/history/transforms';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { createSingletonRoot } from '@solid-primitives/rootless';
 import { buildFileTree } from 'core/component/FileList/buildFileTree';
@@ -60,7 +61,7 @@ export const useHistoryTree = createSingletonRoot(() => {
 export const useHistory = createSingletonRoot(() => {
   const history = useFilteredHistory();
 
-  return createMemo(() => {
+  return createMemo((): HistoryItem[] => {
     const result = history();
 
     if (isOk(result))

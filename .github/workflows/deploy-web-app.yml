@@ -65,7 +65,7 @@ jobs:
           npm-rc-token: ${{ secrets.NPMRC_GH_TOKEN }}
       - name: Build
         working-directory: js/app
-        run: bun run build:${{ inputs.environment }}
+        run: just build-${{ inputs.environment }}
         env:
           VITE_DD_WEB_APP_ID: ${{ secrets.DD_WEB_APP_ID }}
           VITE_DD_WEB_APP_TOKEN: ${{ secrets.DD_WEB_APP_TOKEN }}

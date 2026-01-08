@@ -1,5 +1,4 @@
 import {
-  type BlockAlias,
   type BlockName,
   useMaybeBlockId,
   useMaybeBlockName,
@@ -10,16 +9,14 @@ import { useChannelsContext } from '@core/component/ChannelsProvider';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import { UserIcon } from '@core/component/UserIcon';
-import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { ENABLE_CHAT_CHANNEL_ATTACHMENT } from '@core/constant/featureFlags';
 import clickOutside from '@core/directive/clickOutside';
-import { trackMention } from '@core/signal/mention';
 import {
   type ChannelWithParticipants,
   type IUser,
   useContacts,
 } from '@core/user';
-import { getDateSuggestions, type ParsedDate } from '@core/util/dateParser';
+import { getDateSuggestions } from '@core/util/dateParser';
 import { createFreshSearch } from '@core/util/freshSort';
 import ClockIcon from '@icon/regular/clock.svg';
 import EmailIcon from '@icon/regular/envelope.svg';
@@ -29,9 +26,7 @@ import {
   type EmailEntity,
   useEmails,
 } from '@macro-entity';
-import type { DocumentMentionMetadata } from '@service-notification/client';
 import type { PaginatedSearchArgs } from '@service-search/client';
-import { storageServiceClient } from '@service-storage/client';
 import type { Item } from '@service-storage/generated/schemas/item';
 import { useHistory } from '@service-storage/history';
 import { debounce } from '@solid-primitives/scheduled';
@@ -51,17 +46,28 @@ import {
   Show,
   untrack,
 } from 'solid-js';
-import { v7 } from 'uuid';
 import { floatWithElement } from '../../directive/floatWithElement';
 import { floatWithSelection } from '../../directive/floatWithSelection';
 import {
   CLOSE_INLINE_SEARCH_COMMAND,
-  INSERT_DATE_MENTION_COMMAND,
-  INSERT_DOCUMENT_MENTION_COMMAND,
-  INSERT_USER_MENTION_COMMAND,
   REMOVE_INLINE_SEARCH_COMMAND,
 } from '../../plugins';
 import type { MenuOperations } from '../../shared/inlineMenu';
+import {
+  type CombinedEntity,
+  type Entity,
+  type EntityMap,
+  entityMapper,
+  getCombinedEntityBlockName,
+  getItemName,
+  type HandlerDependencies,
+  handleBasicMention,
+  handleChannelMention,
+  handleDateMention,
+  handleEmailMention,
+  handleUserMention,
+  type UserMentionRecord,
+} from '../../utils/mentionsUtils';
 
 false && clickOutside;
 false && floatWithSelection;
@@ -73,94 +79,12 @@ const MAX_ITEMS = 8;
 /** Whether to filter sidebar non-persistent-chats */
 const ONLY_REAL_CHATS = false;
 
-export type UserMentionRecord = {
-  documentId: string;
-  mentions: string[];
-  metadata: DocumentMentionMetadata;
-};
-
-type DateItem = ParsedDate & {
-  id: string;
-};
-
-type EntityMap = {
-  item: Item;
-  user: IUser;
-  channel: ChannelWithParticipants;
-  date: DateItem;
-  email: EmailEntity;
-};
-
-type Entity<T extends keyof EntityMap> = {
-  kind: T;
-  id: EntityMap[T]['id'];
-  data: EntityMap[T];
-};
-
-type PickEntity<K extends keyof EntityMap> = {
-  [P in K]: Entity<P>;
-}[K];
-
-type CombinedEntity<K extends keyof EntityMap = keyof EntityMap> =
-  PickEntity<K>;
-
-// mapper fn that converts  entity data to its entity type
-type EntityMapper<K extends keyof EntityMap> = (
-  data: EntityMap[K]
-) => PickEntity<K>;
-
-function entityMapper<K extends keyof EntityMap>(kind: K): EntityMapper<K> {
-  return (data: EntityMap[K]) => ({ kind, data, id: data.id });
-}
-
-const getUserName = (item: IUser): string => {
-  const { email, name } = item;
-  if (name === email) return email;
-  return `${name} | ${email}`;
-};
-
 const getUserSearchText = (item: IUser): string => {
   const { email, name } = item;
   // Note: we return the email twice to make users with a display name
   // able to rank above users without a display name.
   if (name === email) return `${email} | ${email}`;
   return `${name} | ${email}`;
-};
-
-const getCombinedEntityBlockName = (
-  item: CombinedEntity<'item' | 'channel' | 'email'>,
-  icon?: boolean
-): BlockName | BlockAlias => {
-  switch (item.kind) {
-    case 'item':
-      if (item.data.type === 'document')
-        return fileTypeToBlockName(
-          item.data.subType || item.data.fileType,
-          icon
-        );
-      if (item.data.type === 'chat') return 'chat';
-      if (item.data.type === 'project') return 'project';
-      return 'unknown';
-    case 'email':
-      return 'email';
-    case 'channel':
-      return 'channel';
-  }
-};
-
-const getItemName = (item: CombinedEntity): string => {
-  switch (item.kind) {
-    case 'item':
-      return item.data.name;
-    case 'user':
-      return getUserName(item.data);
-    case 'channel':
-      return item.data.name ?? '';
-    case 'email':
-      return item.data.name ?? 'No Subject';
-    case 'date':
-      return item.data.displayFormat;
-  }
 };
 
 const getItemSearchText = (item: CombinedEntity): string => {
@@ -197,189 +121,6 @@ function allItemFilter(item: CombinedEntity): boolean {
     return false;
   }
   return true;
-}
-
-/**
- * These are the stateful utils needed to handle an item of a given type. I have opted
- * to implement the handlers as smaller helpers rather than 1 giant function. So these
- * dependencies have to be injected via the component.
- */
-type HandlerDependencies = {
-  editor: LexicalEditor;
-  blockName?: BlockName;
-  blockId?: string;
-  onUserMention?: (record: UserMentionRecord) => void;
-  onDocumentMention?: (item: Item | ChannelWithParticipants) => void;
-  disableMentionTracking?: boolean;
-  onEmailMention?: (item: EmailEntity) => void;
-};
-
-/**
- * Handles user mentions by lexical inserting and potentially up-serting to the notification service.
- * @param user The user to mention.
- * @param dependencies The dependencies required to handle the user mention.
- */
-async function handleUserMention(
-  user: IUser,
-  dependencies: HandlerDependencies
-) {
-  const { editor, blockName, blockId, onUserMention, disableMentionTracking } =
-    dependencies;
-  let mentionId: string | undefined;
-
-  console.log({ blockName, blockId });
-  if (blockName !== 'channel') {
-    if (blockId) {
-      const record: UserMentionRecord = {
-        documentId: blockId,
-        mentions: [user.id],
-        metadata: {
-          mention_id: v7(),
-        },
-      };
-      if (onUserMention) {
-        onUserMention(record);
-      } else {
-        storageServiceClient.upsertUserMentions(record);
-      }
-      if (!disableMentionTracking) {
-        mentionId = await trackMention(blockId, 'user', user.id);
-      }
-    }
-  }
-
-  editor.dispatchCommand(INSERT_USER_MENTION_COMMAND, {
-    userId: user.id,
-    email: user.email,
-    mentionUuid: mentionId,
-  });
-}
-
-/**
- * Inserts a date mention.
- * @param date
- * @param dependencies
- */
-async function handleDateMention(
-  date: DateItem,
-  dependencies: HandlerDependencies
-) {
-  const { editor } = dependencies;
-  editor.dispatchCommand(INSERT_DATE_MENTION_COMMAND, {
-    date: date.date.toISOString(),
-    displayFormat: date.displayFormat,
-  });
-}
-
-async function handleEmailMention(
-  email: EmailEntity,
-  dependencies: HandlerDependencies
-) {
-  const {
-    editor,
-    blockName: parentBlockName,
-    blockId,
-    onEmailMention,
-    disableMentionTracking,
-  } = dependencies;
-  let mentionId: string | undefined;
-  if (
-    blockId &&
-    parentBlockName !== 'channel' &&
-    parentBlockName !== 'chat' &&
-    !disableMentionTracking
-  ) {
-    mentionId = await trackMention(blockId, 'document', email.id);
-  }
-  const itemName = email.name ?? 'No Subject';
-
-  onEmailMention?.(email);
-
-  editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
-    documentId: email.id,
-    documentName: itemName,
-    blockName: 'email',
-    mentionUuid: mentionId,
-  });
-}
-
-/**
- * Insert a document mentions and track it.
- * @param item
- * @param dependencies
- */
-async function handleBasicMention(
-  item: Item,
-  dependencies: HandlerDependencies
-) {
-  const {
-    editor,
-    blockName: parentBlockName,
-    blockId,
-    onDocumentMention,
-    disableMentionTracking,
-  } = dependencies;
-  let mentionId: string | undefined;
-  if (
-    blockId &&
-    parentBlockName !== 'channel' &&
-    parentBlockName !== 'chat' &&
-    !disableMentionTracking
-  ) {
-    mentionId = await trackMention(blockId, 'document', item.id);
-  }
-  const itemEntity = entityMapper('item')(item);
-  const itemBlock = getCombinedEntityBlockName(itemEntity);
-  const itemName = getItemName(itemEntity);
-
-  onDocumentMention?.(item);
-
-  editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
-    documentId: item.id,
-    documentName: itemName,
-    blockName: itemBlock,
-    mentionUuid: mentionId,
-  });
-}
-
-/**
- * Insert a channel mention and track it.
- * @param channel
- * @param dependencies
- */
-async function handleChannelMention(
-  channel: ChannelWithParticipants,
-  dependencies: HandlerDependencies
-) {
-  const {
-    editor,
-    blockName: parentBlockName,
-    blockId,
-    onDocumentMention,
-    disableMentionTracking,
-  } = dependencies;
-  let mentionId: string | undefined;
-  if (
-    blockId &&
-    parentBlockName !== 'channel' &&
-    parentBlockName !== 'chat' &&
-    !disableMentionTracking
-  ) {
-    mentionId = await trackMention(blockId, 'channel', channel.id);
-  }
-  const channelEntity = entityMapper('channel')(channel);
-  const itemBlock = getCombinedEntityBlockName(channelEntity);
-  const itemName = getItemName(channelEntity);
-
-  onDocumentMention?.(channel);
-
-  editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
-    documentId: channel.id,
-    documentName: itemName,
-    blockName: itemBlock,
-    mentionUuid: mentionId,
-    channelType: channel.channel_type,
-  });
 }
 
 /**

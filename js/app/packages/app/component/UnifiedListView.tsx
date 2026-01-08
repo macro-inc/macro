@@ -5,6 +5,7 @@ import {
 import { noiseFilter, signalFilter } from '@app/component/soupFilters';
 import type { BlockChannelProps } from '@block-channel/component/Block';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
+import { codeFileExtensions } from '@block-code/util/languageSupport';
 import { URL_PARAMS as EMAIL_PARAMS } from '@block-email/constants';
 import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/signal/location';
@@ -33,13 +34,14 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
+import { arrayEquals } from '@core/util/compareUtils';
 import { debouncedDependent } from '@core/util/debounce';
 import { fuzzyMatch } from '@core/util/fuzzy';
+import CheckIcon from '@icon/bold/check-bold.svg';
 import SearchIcon from '@icon/regular/magnifying-glass.svg?component-solid';
 import LoadingSpinner from '@icon/regular/spinner.svg?component-solid';
 import XIcon from '@icon/regular/x.svg?component-solid';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import { supportedExtensions } from '@lexical-core/utils';
 import {
   createChannelsQuery,
   createDssInfiniteQuery,
@@ -98,6 +100,7 @@ import {
   createRoot,
   createSelector,
   createSignal,
+  For,
   mergeProps,
   on,
   onCleanup,
@@ -131,6 +134,7 @@ import {
 import { EntityActionsMenuItems } from './EntityActionsMenuItems';
 import { EntityModal } from './EntityModal/EntityModal';
 import { EntitySelectionToolbarModal } from './EntitySelectionToolbarModal';
+import { EntityRow, EntityRowProvider } from './mobile/EntityRow';
 import { PropertyDisplayControl } from './PropertyDisplayControl';
 import { useUpsertSavedViewMutation } from './Soup';
 import {
@@ -150,12 +154,24 @@ import {
   VIEWCONFIG_BASE,
   VIEWCONFIG_DEFAULTS_IDS,
   VIEWCONFIG_DEFAULTS_IDS_ENUM,
+  VIEWCONFIG_FILTER_DOCUMENT_TYPE_FILTER,
   type ViewConfigBase,
   type ViewData,
 } from './ViewConfig';
 
 const SEARCH_SERVICE_DEBOUNCE_MS = 200;
 const LOCAL_FUZZY_SEARCH_DEBOUNCE_MS = 20;
+
+const NIL_UUID = '00000000-0000-0000-0000-000000000000';
+
+const FILE_TYPE_DISPLAY_LABELS: Record<DocumentTypeFilter, string> = {
+  md: 'NOTE',
+  pdf: 'PDF',
+  canvas: 'CANVAS',
+  code: 'CODE',
+  image: 'IMAGE',
+  unknown: 'OTHER',
+};
 
 const sortOptions = [
   {
@@ -186,7 +202,6 @@ export type UnifiedListViewProps = {
   defaultDisplayOptions?: Partial<DisplayOptions>;
   hideToolbar?: true;
 };
-
 export function UnifiedListView(props: UnifiedListViewProps) {
   const [contextAndModalState, setContextAndModalState] = createStore<{
     modalOpen: boolean;
@@ -237,6 +252,15 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
   const view = createMemo(() => viewsData[selectedView()]);
   const selectedEntity = createMemo(() => view()?.selectedEntity);
+
+  const entityById = createMemo(() => {
+    const list = entities_() ?? [];
+    const map = new Map<string, EntityData>();
+    for (const entity of list as any[]) {
+      if (entity?.id) map.set(entity.id, entity);
+    }
+    return map;
+  });
 
   const setSelectedEntity = (entity: EntityData | undefined) => {
     setViewDataStore(
@@ -681,46 +705,84 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     setOptionalFilters(filterFns);
   });
 
-  const unifiedSearchIncludeArray = createMemo<UnifiedSearchIndex[]>(() => {
-    let types = entityTypeFilter();
-    // NOTE: empty array means search all
-    if (types.length === 0) types = [];
-    const includeArray: UnifiedSearchIndex[] = [];
-    for (const type of types) {
-      switch (type) {
-        case 'document':
-        case 'task':
-          includeArray.push('documents');
-          break;
-        case 'chat':
-          includeArray.push('chats');
-          break;
-        case 'channel':
-          includeArray.push('channels');
-          break;
-        case 'email':
-          includeArray.push('emails');
-          break;
-        case 'project':
-          includeArray.push('projects');
-          break;
+  const unifiedSearchIncludeArray = createMemo<UnifiedSearchIndex[]>(
+    () => {
+      let types = entityTypeFilter();
+      // NOTE: empty array means search all
+      if (types.length === 0) types = [];
+      const includeArray: UnifiedSearchIndex[] = [];
+      for (const type of types) {
+        switch (type) {
+          case 'document':
+          case 'task':
+            includeArray.push('documents');
+            break;
+          case 'chat':
+            includeArray.push('chats');
+            break;
+          case 'channel':
+            includeArray.push('channels');
+            break;
+          case 'email':
+            includeArray.push('emails');
+            break;
+          case 'project':
+            includeArray.push('projects');
+            break;
+        }
       }
-    }
-    return includeArray;
-  });
+      return Array.from(new Set(includeArray));
+    },
+    [],
+    { equals: arrayEquals }
+  );
+
+  const createFileTypeFilterMemo = (type: 'soup' | 'search') =>
+    createMemo<string[]>(
+      () => {
+        let fileTypes = [];
+        if (entityTypeFilter().includes('task')) {
+          fileTypes.push('md');
+        }
+
+        if (entityTypeFilter().includes('document')) {
+          if (
+            fileTypeFilter().length > 0 &&
+            fileTypeFilter().length <
+              VIEWCONFIG_FILTER_DOCUMENT_TYPE_FILTER.length
+          ) {
+            const documentFileTypes = fileTypeFilter().flatMap((fileType) => {
+              if (fileType === 'code')
+                return type === 'soup' ? ['assoc:code'] : codeFileExtensions;
+              if (fileType === 'image')
+                return type === 'soup' ? ['assoc:image'] : [NIL_UUID];
+              if (fileType === 'unknown')
+                return type === 'soup' ? ['assoc:other'] : [NIL_UUID];
+              return [fileType];
+            });
+            fileTypes.push(...documentFileTypes);
+          } else {
+            // if we have task + document and no file type filter, we want to include all file types
+            fileTypes = [];
+          }
+        }
+
+        return Array.from(new Set(fileTypes));
+      },
+      [],
+      {
+        equals: arrayEquals,
+      }
+    );
+
+  const joinedSoupFileTypeFilter = createFileTypeFilterMemo('soup');
+  const joinedSearchFileTypeFilter = createFileTypeFilterMemo('search');
 
   const unifiedSearchFilters = createMemo<UnifiedSearchRequestFilters>(() => {
     let documentFilters: DocumentFilters | null = null;
-    if (fileTypeFilter().length > 0) {
-      const fileTypes = fileTypeFilter().flatMap((fileType) => {
-        // not ideal but it works for most cases
-        if (fileType === 'code') return supportedExtensions;
-        return [fileType];
-      });
-      documentFilters = {
-        file_types: fileTypes,
-      };
-    }
+    documentFilters = {
+      file_types: joinedSearchFileTypeFilter(),
+    };
 
     let emailFilters: EmailFilters | null = null;
     if (shouldFilterEmails()) {
@@ -794,11 +856,11 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       sort_method: sortType(),
     })
   );
-  const GARBAGE_UUID = '00000000-0000-0000-0000-000000000000';
+
   const dssQueryRequestBody = createMemo(
     (): PostSoupRequest => ({
       channel_filters: {
-        channel_ids: [GARBAGE_UUID],
+        channel_ids: [NIL_UUID],
       },
       document_filters: {
         document_ids:
@@ -806,14 +868,15 @@ export function UnifiedListView(props: UnifiedListViewProps) {
           entityTypeFilter().includes('task') ||
           entityTypeFilter().length === 0
             ? []
-            : [GARBAGE_UUID],
+            : [NIL_UUID],
         project_ids: view().viewType === 'project' ? [view().id] : [],
+        file_types: joinedSoupFileTypeFilter(),
       },
       chat_filters: {
         chat_ids:
           entityTypeFilter().includes('chat') || entityTypeFilter().length === 0
             ? []
-            : [GARBAGE_UUID],
+            : [NIL_UUID],
         project_ids: view().viewType === 'project' ? [view().id] : [],
       },
       email_filters: {
@@ -824,7 +887,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
           (entityTypeFilter().includes('email') ||
             entityTypeFilter().length === 0)
             ? []
-            : [GARBAGE_UUID],
+            : [NIL_UUID],
       },
       project_filters: {
         project_ids:
@@ -833,7 +896,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
             : entityTypeFilter().includes('project') ||
                 entityTypeFilter().length === 0
               ? []
-              : [GARBAGE_UUID],
+              : [NIL_UUID],
       },
       limit: props.defaultDisplayOptions?.limit ?? 100,
       emailView: importantFilter()
@@ -1211,6 +1274,113 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
   let lastClickedEntityId = -1;
 
+  const toggleSingleMultiSelection = (params: {
+    entity: EntityData;
+    next: boolean;
+  }) => {
+    unifiedListContext.setViewDataStore(
+      selectedView(),
+      'multiSelectEntities',
+      (prev) => {
+        if (!params.next) {
+          return prev.filter((e) => e.id !== params.entity.id);
+        }
+        return prev.concat(params.entity);
+      }
+    );
+  };
+
+  const getSelectionAnchorIndex = (params: {
+    entityList: EntityData[];
+    selectedEntitySet: Set<EntityData>;
+    lastClickedIndex: number;
+  }) => {
+    // Try to grab the last clicked item and fall back on the highest currently
+    // selected index.
+    let anchorIndex = params.lastClickedIndex;
+    if (anchorIndex === -1) {
+      for (let i = 0; i < params.entityList.length; i++) {
+        if (params.selectedEntitySet.has(params.entityList[i])) {
+          anchorIndex = i;
+        }
+      }
+    }
+    return anchorIndex;
+  };
+
+  const getNewEntitiesForShiftSelection = (params: {
+    entityList: EntityData[];
+    selectedEntitySet: Set<EntityData>;
+    anchorIndex: number;
+    targetIndex: number;
+  }) => {
+    const newEntitiesForSelection: EntityData[] = [];
+    const sign = Math.sign(params.targetIndex - params.anchorIndex);
+    if (params.anchorIndex === params.targetIndex)
+      return newEntitiesForSelection;
+
+    for (
+      let i = params.anchorIndex;
+      sign > 0 ? i <= params.targetIndex : i >= params.targetIndex;
+      i += sign
+    ) {
+      const entity = params.entityList[i];
+      if (!params.selectedEntitySet.has(entity)) {
+        newEntitiesForSelection.push(entity);
+      }
+    }
+
+    return newEntitiesForSelection;
+  };
+
+  const handleMultiSelectChecked = (params: {
+    entity: EntityData;
+    entityIndex: number;
+    next: boolean;
+    shiftKey: boolean;
+  }) => {
+    if (!params.shiftKey) {
+      toggleSingleMultiSelection({ entity: params.entity, next: params.next });
+      lastClickedEntityId = params.entityIndex;
+      return;
+    }
+
+    const entityList = unifiedListContext.entitiesSignal[0]();
+    if (!entityList) return;
+
+    const selectedEntitySet = new Set(
+      unifiedListContext.viewsDataStore[unifiedListContext.selectedView()]
+        .multiSelectEntities
+    );
+
+    const anchorIndex = getSelectionAnchorIndex({
+      entityList,
+      selectedEntitySet,
+      lastClickedIndex: lastClickedEntityId,
+    });
+
+    if (anchorIndex === -1) {
+      toggleSingleMultiSelection({ entity: params.entity, next: params.next });
+      lastClickedEntityId = params.entityIndex;
+      return;
+    }
+
+    const newEntitiesForSelection = getNewEntitiesForShiftSelection({
+      entityList,
+      selectedEntitySet,
+      anchorIndex,
+      targetIndex: params.entityIndex,
+    });
+
+    unifiedListContext.setViewDataStore(
+      selectedView(),
+      'multiSelectEntities',
+      (prev) => prev.concat(newEntitiesForSelection)
+    );
+
+    lastClickedEntityId = params.entityIndex;
+  };
+
   // reset last clicked on view change.
   createEffect(
     on(view, () => {
@@ -1374,48 +1544,17 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                   <section class="gap-1 p-2">
                     <span class="font-medium text-xs">Filetype</span>
                     <div class="flex flex-row flex-wrap items-center gap-1">
-                      <ToggleButton
-                        size="SM"
-                        pressed={fileTypeFilter().includes('md')}
-                        onChange={() => toggleFileTypeFilter('md')}
-                      >
-                        NOTE
-                      </ToggleButton>
-                      <ToggleButton
-                        size="SM"
-                        pressed={fileTypeFilter().includes('pdf')}
-                        onChange={() => toggleFileTypeFilter('pdf')}
-                      >
-                        PDF
-                      </ToggleButton>
-                      <ToggleButton
-                        size="SM"
-                        pressed={fileTypeFilter().includes('canvas')}
-                        onChange={() => toggleFileTypeFilter('canvas')}
-                      >
-                        CANVAS
-                      </ToggleButton>
-                      <ToggleButton
-                        size="SM"
-                        pressed={fileTypeFilter().includes('code')}
-                        onChange={() => toggleFileTypeFilter('code')}
-                      >
-                        CODE
-                      </ToggleButton>
-                      <ToggleButton
-                        size="SM"
-                        pressed={fileTypeFilter().includes('image')}
-                        onChange={() => toggleFileTypeFilter('image')}
-                      >
-                        IMAGE
-                      </ToggleButton>
-                      <ToggleButton
-                        size="SM"
-                        pressed={fileTypeFilter().includes('unknown')}
-                        onChange={() => toggleFileTypeFilter('unknown')}
-                      >
-                        Other
-                      </ToggleButton>
+                      <For each={[...VIEWCONFIG_FILTER_DOCUMENT_TYPE_FILTER]}>
+                        {(fileType) => (
+                          <ToggleButton
+                            size="SM"
+                            pressed={fileTypeFilter().includes(fileType)}
+                            onChange={() => toggleFileTypeFilter(fileType)}
+                          >
+                            {FILE_TYPE_DISPLAY_LABELS[fileType]}
+                          </ToggleButton>
+                        )}
+                      </For>
                     </div>
                   </section>
                   <Show when={ENABLE_SOUP_FROM_FILTER && showFromFilter()}>
@@ -1506,188 +1645,147 @@ export function UnifiedListView(props: UnifiedListViewProps) {
         }}
       >
         <ContextMenu.Trigger class="size-full unified-list-root">
-          <UnifiedListComponent
-            entityListRef={setLocalEntityListRef}
-            virtualizerHandle={setVirtualizerHandle}
-            viewId={view()?.id}
-            searchText={searchText()}
-            hasRefinementsFromBase={isViewConfigChanged()}
-            entityMinHeight={ENTITY_HEIGHT}
-          >
-            {(innerProps) => {
-              const displayDoneButton = () => {
-                if (innerProps.entity.type === 'email') {
-                  return !innerProps.entity.done;
-                }
-
-                return (innerProps.entity.notifications?.().length ?? 0) > 0;
-              };
-              const timestamp = () => {
-                switch (sortType()) {
-                  case 'viewed_at':
-                    return innerProps.entity.viewedAt;
-                  case 'created_at':
-                    return innerProps.entity.createdAt;
-                  case 'updated_at':
-                    return innerProps.entity.updatedAt;
-                }
-              };
-              return (
-                <EntityWithEverything
-                  onContextMenu={() => {
-                    if (isPanelActive() && !preview()) {
-                      setSelectedEntity(innerProps.entity);
-                    }
-
-                    setContextAndModalState((prev) => {
-                      return {
-                        ...prev,
-                        contextMenuOpen: true,
-                        selectedEntity: innerProps.entity,
-                      };
-                    });
-                  }}
-                  entity={innerProps.entity}
-                  properties={
-                    isTaskEntity(innerProps.entity)
-                      ? taskPropertiesStore[innerProps.entity.id]
-                      : undefined
-                  }
-                  timestamp={timestamp()}
-                  onClick={entityClickHandler}
-                  onClickRowAction={
-                    unifiedListContext.actionRegistry.isActionEnabled(
-                      'mark_as_done',
-                      innerProps.entity
-                    )
-                      ? (entity, type) => {
-                          if (type === 'done') {
-                            markEntityAsDone?.(entity);
-                          }
-                        }
-                      : undefined
-                  }
-                  onClickNotification={(notifiedEntity) => {
-                    const notification = tryToTypedNotification(
-                      notifiedEntity.notification
-                    );
-                    if (!notification) return;
-
-                    if (notifiedEntity.type === 'channel')
-                      gotoChannelNotification(notification);
-                  }}
-                  onMouseOver={() => {
-                    if (preview()) return;
-
-                    setViewDataStore(
-                      selectedView(),
-                      'hasUserInteractedEntity',
-                      true
-                    );
-
-                    setSelectedEntity(innerProps.entity);
-                  }}
-                  onMouseLeave={() => {}}
-                  onFocusIn={() => {
-                    if (preview()) return;
-
-                    setSelectedEntity(innerProps.entity);
-                  }}
-                  showLeftColumnIndicator={
-                    showUnreadIndicator() || importantFilter()
-                  }
-                  fadeIfRead={showUnreadIndicator()}
-                  showUnrollNotifications={showUnrollNotifications()}
-                  importantIndicatorActive={importantFilterFn(
-                    innerProps.entity
-                  )}
-                  unreadIndicatorActive={unreadFilterFn(innerProps.entity)}
-                  showDoneButton={displayDoneButton()}
-                  highlighted={
-                    isPanelActive() && focusedSelector(innerProps.entity.id)
-                  }
-                  selected={
-                    focusedSelector(innerProps.entity.id) ||
-                    contextAndModalState.selectedEntity?.id ===
-                      innerProps.entity.id
-                  }
-                  checked={multiSelectSelector(innerProps.entity.id)}
-                  onChecked={(next, shiftKey) => {
-                    const toggleSingle = () =>
-                      unifiedListContext.setViewDataStore(
-                        selectedView(),
-                        'multiSelectEntities',
-                        (p) => {
-                          if (!next) {
-                            return p.filter(
-                              (e) => e.id !== innerProps.entity.id
-                            );
-                          }
-                          return p.concat(innerProps.entity);
-                        }
-                      );
-
-                    if (shiftKey) {
-                      const entityList = unifiedListContext.entitiesSignal[0]();
-                      if (!entityList) return;
-
-                      const selectedEntitySet = new Set(
-                        unifiedListContext.viewsDataStore[
-                          unifiedListContext.selectedView()
-                        ].multiSelectEntities
-                      );
-                      const newEnititiesForSeleciton: EntityData[] = [];
-
-                      // Try to grab the last clicked item and fall back on
-                      // the highest currently selected index.
-                      let anchorIndex = lastClickedEntityId;
-                      if (anchorIndex === -1) {
-                        for (let i = 0; i < entityList.length; i++) {
-                          if (selectedEntitySet.has(entityList[i])) {
-                            anchorIndex = i;
-                          }
-                        }
-                      }
-
-                      if (anchorIndex === -1) {
-                        toggleSingle();
-                        lastClickedEntityId = innerProps.index;
-                        return;
-                      }
-
-                      const targetIndex = innerProps.index;
-                      const sign = Math.sign(targetIndex - anchorIndex);
-                      if (anchorIndex === targetIndex) {
-                        // no_op
-                      } else {
-                        for (
-                          let i = anchorIndex;
-                          sign > 0 ? i <= targetIndex : i >= targetIndex;
-                          i += sign
-                        ) {
-                          const entity = entityList[i];
-                          if (!selectedEntitySet.has(entity)) {
-                            newEnititiesForSeleciton.push(entity);
-                          }
-                        }
-                      }
-                      unifiedListContext.setViewDataStore(
-                        selectedView(),
-                        'multiSelectEntities',
-                        (p) => {
-                          return p.concat(newEnititiesForSeleciton);
-                        }
-                      );
-                      lastClickedEntityId = innerProps.index;
-                    } else {
-                      toggleSingle();
-                      lastClickedEntityId = innerProps.index;
-                    }
-                  }}
-                />
+          <EntityRowProvider
+            container={localEntityListRef}
+            canSwipeLeft={(entityId) => {
+              const entity = entityById().get(entityId);
+              if (!entity) return false;
+              return unifiedListContext.actionRegistry.isActionEnabled(
+                'mark_as_done',
+                entity
               );
             }}
-          </UnifiedListComponent>
+            onSwipeLeft={(entityId) => {
+              const entity = entityById().get(entityId);
+              if (!entity) return false;
+
+              unifiedListContext.actionRegistry.execute('mark_as_done', entity);
+            }}
+            setCollapseEntity={unifiedListContext.collapseEntitySignal[1]}
+          >
+            <UnifiedListComponent
+              entityListRef={setLocalEntityListRef}
+              virtualizerHandle={setVirtualizerHandle}
+              viewId={view()?.id}
+              searchText={searchText()}
+              hasRefinementsFromBase={isViewConfigChanged()}
+              entityMinHeight={ENTITY_HEIGHT}
+            >
+              {(innerProps) => {
+                const displayDoneButton = () => {
+                  if (innerProps.entity.type === 'email') {
+                    return !innerProps.entity.done;
+                  }
+
+                  return (innerProps.entity.notifications?.().length ?? 0) > 0;
+                };
+                const timestamp = () => {
+                  switch (sortType()) {
+                    case 'viewed_at':
+                      return innerProps.entity.viewedAt;
+                    case 'created_at':
+                      return innerProps.entity.createdAt;
+                    case 'updated_at':
+                      return innerProps.entity.updatedAt;
+                  }
+                };
+                return (
+                  <EntityRow
+                    entityId={innerProps.entity.id}
+                    swipeLeftColor="bg-success"
+                    swipeLeftRevealedComponent={
+                      <CheckIcon class="size-8 text-panel" />
+                    }
+                  >
+                    <EntityWithEverything
+                      onContextMenu={() => {
+                        if (isPanelActive() && !preview()) {
+                          setSelectedEntity(innerProps.entity);
+                        }
+                        setContextAndModalState((prev) => {
+                          return {
+                            ...prev,
+                            contextMenuOpen: true,
+                            selectedEntity: innerProps.entity,
+                          };
+                        });
+                      }}
+                      entity={innerProps.entity}
+                      properties={
+                        isTaskEntity(innerProps.entity)
+                          ? taskPropertiesStore[innerProps.entity.id]
+                          : undefined
+                      }
+                      timestamp={timestamp()}
+                      onClick={entityClickHandler}
+                      onClickRowAction={
+                        unifiedListContext.actionRegistry.isActionEnabled(
+                          'mark_as_done',
+                          innerProps.entity
+                        )
+                          ? (entity, type) => {
+                              if (type === 'done') {
+                                markEntityAsDone?.(entity);
+                              }
+                            }
+                          : undefined
+                      }
+                      onClickNotification={(notifiedEntity) => {
+                        const notification = tryToTypedNotification(
+                          notifiedEntity.notification
+                        );
+                        if (!notification) return;
+                        if (notifiedEntity.type === 'channel')
+                          gotoChannelNotification(notification);
+                      }}
+                      onMouseOver={() => {
+                        if (preview()) return;
+                        setViewDataStore(
+                          selectedView(),
+                          'hasUserInteractedEntity',
+                          true
+                        );
+                        setSelectedEntity(innerProps.entity);
+                      }}
+                      onMouseLeave={() => {}}
+                      onFocusIn={() => {
+                        if (preview()) return;
+                        setSelectedEntity(innerProps.entity);
+                      }}
+                      showLeftColumnIndicator={
+                        showUnreadIndicator() || importantFilter()
+                      }
+                      fadeIfRead={showUnreadIndicator()}
+                      showUnrollNotifications={showUnrollNotifications()}
+                      importantIndicatorActive={importantFilterFn(
+                        innerProps.entity
+                      )}
+                      unreadIndicatorActive={unreadFilterFn(innerProps.entity)}
+                      showDoneButton={displayDoneButton()}
+                      highlighted={
+                        isPanelActive() && focusedSelector(innerProps.entity.id)
+                      }
+                      selected={
+                        focusedSelector(innerProps.entity.id) ||
+                        contextAndModalState.selectedEntity?.id ===
+                          innerProps.entity.id
+                      }
+                      checked={multiSelectSelector(innerProps.entity.id)}
+                      onChecked={(next, shiftKey) =>
+                        handleMultiSelectChecked({
+                          entity: innerProps.entity,
+                          entityIndex: innerProps.index,
+                          next,
+                          shiftKey: shiftKey ?? false,
+                        })
+                      }
+                    />
+                  </EntityRow>
+                );
+              }}
+            </UnifiedListComponent>
+          </EntityRowProvider>
+
           <EntityModal
             isOpen={() =>
               !!(

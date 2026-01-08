@@ -1231,6 +1231,9 @@ export const getItemsSoupQueryParams = zod.object({
   "cursor": zod.string().optional().describe('Base64 encoded cursor value.')
 })
 
+export const getItemsSoupResponseItemsItemDataChannelOrgIdMin = 0;
+
+
 export const getItemsSoupResponse = zod.object({
   "items": zod.array(zod.union([zod.object({
   "data": zod.object({
@@ -1334,6 +1337,50 @@ export const getItemsSoupResponse = zod.object({
 }))
 })),
   "tag": zod.enum(['emailThread'])
+}),zod.object({
+  "data": zod.object({
+  "channel": zod.object({
+  "channel_type": zod.enum(['public', 'organization', 'private', 'direct_message']),
+  "created_at": zod.string().datetime({}),
+  "id": zod.string().uuid(),
+  "name": zod.string().nullish(),
+  "org_id": zod.number().min(getItemsSoupResponseItemsItemDataChannelOrgIdMin).nullish(),
+  "owner_id": zod.string(),
+  "updated_at": zod.string().datetime({})
+}),
+  "participants": zod.array(zod.object({
+  "channel_id": zod.string().uuid(),
+  "joined_at": zod.string().datetime({}),
+  "left_at": zod.string().datetime({}).nullish(),
+  "role": zod.enum(['owner', 'admin', 'member']),
+  "user_id": zod.string()
+}))
+}).and(zod.object({
+  "latest_message": zod.union([zod.null(),zod.object({
+  "content": zod.string(),
+  "created_at": zod.string().datetime({}),
+  "deleted_at": zod.string().datetime({}).nullish(),
+  "mentions": zod.array(zod.string()).describe('message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`'),
+  "message_id": zod.string().uuid(),
+  "sender_id": zod.string(),
+  "thread_id": zod.string().uuid().nullish(),
+  "updated_at": zod.string().datetime({})
+})]).optional(),
+  "latest_non_thread_message": zod.union([zod.null(),zod.object({
+  "content": zod.string(),
+  "created_at": zod.string().datetime({}),
+  "deleted_at": zod.string().datetime({}).nullish(),
+  "mentions": zod.array(zod.string()).describe('message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`'),
+  "message_id": zod.string().uuid(),
+  "sender_id": zod.string(),
+  "thread_id": zod.string().uuid().nullish(),
+  "updated_at": zod.string().datetime({})
+})]).optional()
+})).and(zod.object({
+  "interacted_at": zod.string().datetime({}).nullish(),
+  "viewed_at": zod.string().datetime({}).nullish()
+})),
+  "tag": zod.enum(['channel'])
 })]).and(zod.object({
   "frecency_score": zod.number()
 }))),
@@ -1388,6 +1435,9 @@ export const postItemsSoupBody = zod.object({
 })).and(zod.object({
   "emailView": zod.string().optional().describe('the view of specific emails to display')
 }))
+
+export const postItemsSoupResponseItemsItemDataChannelOrgIdMin = 0;
+
 
 export const postItemsSoupResponse = zod.object({
   "items": zod.array(zod.union([zod.object({
@@ -1492,6 +1542,50 @@ export const postItemsSoupResponse = zod.object({
 }))
 })),
   "tag": zod.enum(['emailThread'])
+}),zod.object({
+  "data": zod.object({
+  "channel": zod.object({
+  "channel_type": zod.enum(['public', 'organization', 'private', 'direct_message']),
+  "created_at": zod.string().datetime({}),
+  "id": zod.string().uuid(),
+  "name": zod.string().nullish(),
+  "org_id": zod.number().min(postItemsSoupResponseItemsItemDataChannelOrgIdMin).nullish(),
+  "owner_id": zod.string(),
+  "updated_at": zod.string().datetime({})
+}),
+  "participants": zod.array(zod.object({
+  "channel_id": zod.string().uuid(),
+  "joined_at": zod.string().datetime({}),
+  "left_at": zod.string().datetime({}).nullish(),
+  "role": zod.enum(['owner', 'admin', 'member']),
+  "user_id": zod.string()
+}))
+}).and(zod.object({
+  "latest_message": zod.union([zod.null(),zod.object({
+  "content": zod.string(),
+  "created_at": zod.string().datetime({}),
+  "deleted_at": zod.string().datetime({}).nullish(),
+  "mentions": zod.array(zod.string()).describe('message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`'),
+  "message_id": zod.string().uuid(),
+  "sender_id": zod.string(),
+  "thread_id": zod.string().uuid().nullish(),
+  "updated_at": zod.string().datetime({})
+})]).optional(),
+  "latest_non_thread_message": zod.union([zod.null(),zod.object({
+  "content": zod.string(),
+  "created_at": zod.string().datetime({}),
+  "deleted_at": zod.string().datetime({}).nullish(),
+  "mentions": zod.array(zod.string()).describe('message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`'),
+  "message_id": zod.string().uuid(),
+  "sender_id": zod.string(),
+  "thread_id": zod.string().uuid().nullish(),
+  "updated_at": zod.string().datetime({})
+})]).optional()
+})).and(zod.object({
+  "interacted_at": zod.string().datetime({}).nullish(),
+  "viewed_at": zod.string().datetime({}).nullish()
+})),
+  "tag": zod.enum(['channel'])
 })]).and(zod.object({
   "frecency_score": zod.number()
 }))),

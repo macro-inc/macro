@@ -76,7 +76,9 @@ type PDFPopupProps = {
 
 // SCUFFED styling: how do we want to handle this color?
 function HighlightIcon() {
-  return <div class="w-4 h-4 bg-yellow-300 rounded-full"></div>;
+  return (
+    <div class="w-4 h-4 bg-[oklch(0.905_0.182_98.111)] rounded-full"></div>
+  );
 }
 
 function LoadingContent(props: { lines: number }) {

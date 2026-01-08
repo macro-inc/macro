@@ -44,7 +44,7 @@ export type MessageRootProps = {
   isDeleted?: boolean;
   isNewMessage?: boolean;
   isParentNewMessage?: boolean;
-  shouldShowThreadAppendInput?: Accessor<boolean>;
+  shouldShowThreadAppendInput?: boolean;
   setThreadAppendMountTarget?: (el: HTMLElement) => void;
   onThreadAppend?: () => void;
   hideConnectors?: boolean;
@@ -348,10 +348,7 @@ const Root: Component<MessageRootProps> = (props) => {
             }}
           >
             <Show
-              when={
-                props.shouldShowThreadAppendInput &&
-                props.shouldShowThreadAppendInput()
-              }
+              when={props.shouldShowThreadAppendInput}
               fallback={
                 <div
                   class="w-min -translate-x-1/2 icon-plus allow-css-brackets"

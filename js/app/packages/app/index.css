@@ -136,7 +136,6 @@
   --color-ink-disabled: var(--c3);
   --color-ink-placeholder: var(--c4);
 
-
   /* accent */
   --color-accent: var(--a0);
   --color-accent-bg: oklch(from (var(--a0)) / .15);
@@ -249,6 +248,8 @@
 
 @custom-variant tauri (&:where(.tauri *));
 @custom-variant ios (&:where(.tauri-ios *));
+@custom-variant touch (&:where(html[data-touch-device="true"] *));
+@custom-variant mobile-width (@media (max-width: 639px));
 
 :root {
   --color-focus: var(--color-accent);
@@ -438,12 +439,6 @@
   box-shadow: inset 400px 400px --value(--color-*);
 }
 
-/* The above utility does not allow to use tailind "color/number" transparency, e.g. `bg-red-500/50`, this one does, but requires you to use the full color variable name, e.g. `floating-transparent-[var(--color-edge)]/30`. */
-@utility floating-transparent-* {
-  background-color: var(--color-dialog);
-  box-shadow: inset 400px 400px --value([*]);
-}
-
 @utility hover-transition-text {
   transition: color var(--transition);
 
@@ -593,7 +588,7 @@
         @apply overflow-clip overscroll-none relative m-0 p-0 font-sans optical-auto;
 
         /* SCUFFED; surface might change to surface2  */
-        background-color: var(--b3);
+        background-color: var(--color-page);
 
         width: 100dvw;
         height: 100dvh;

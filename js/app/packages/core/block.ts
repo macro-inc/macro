@@ -394,11 +394,13 @@ export type BlockEffect = (...args: any[]) => any;
  *
  * Should only be defined at the top level of a module.
  *
+ * @deprecated
  * @param {BlockEffect} fn - The function to be used as a block effect.
  */
 export const [globalBlockEffects] = createSignal<BlockEffect[]>([]);
 export const [globalBlockRenderEffects] = createSignal<BlockEffect[]>([]);
 
+/** @deprecated */
 export function createBlockEffect(fn: BlockEffect): void {
   globalBlockEffects().push(fn);
 }
@@ -722,6 +724,7 @@ export type BlockSignal<T> = [get: Accessor<T>, set: Setter<T>] & {
  *
  * Should only be defined at the top level of a module.
  *
+ * @deprecated
  * @template T - The type of the signal value.
  * @returns {BlockSignal<T | undefined>} A block signal object.
  *
@@ -847,6 +850,7 @@ export type BlockResource<T, R = unknown> = [
  *
  * Should only be defined at the top level of a module.
  *
+ * @deprecated
  * @template T - The type of the resource value.
  * @template S - The type of the source value (optional).
  * @template R - The type of the refetching value (optional).
@@ -928,6 +932,7 @@ export type BlockMemo<T> = Accessor<T>;
  *
  * Should only be defined at the top level of a module.
  *
+ * @deprecated
  * @template T - The type of the memo value.
  * @param {() => T} fn - A function that computes the derived value.
  * @param equal - An optional function that is used to see if the memo should trigger an update

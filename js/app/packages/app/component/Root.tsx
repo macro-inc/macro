@@ -29,6 +29,7 @@ import {
 } from '@notifications';
 import { maybeHandlePlatformNotification } from '@notifications/notification-platform';
 import { setUser, useObserveRouting } from '@observability';
+import { fetchAndCacheHistory } from '@queries/history/history';
 import { ws as connectionGatewayWebsocket } from '@service-connection/websocket';
 import { gqlServiceClient } from '@service-gql/client';
 import { MetaProvider, Title } from '@solidjs/meta';
@@ -135,6 +136,10 @@ const rootPreload: RoutePreloadFunc = async (args) => {
     if (PROD_MODE_ENV) {
       identify(id, { email, os, hasChromeExt });
     }
+
+    fetchAndCacheHistory().catch(() => {
+      // Non-blocking - command menu will still work without prefetch
+    });
   }
 };
 

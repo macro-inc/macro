@@ -40,8 +40,8 @@ function CommentIndicator(props: {
     <div
       class={`absolute h-full w-full rounded-full flex items-center justify-center ${
         props.isActive
-          ? `bg-indigo-300 text-indigo-800`
-          : `bg-indigo-100 text-indigo-500 hover:bg-indigo-200 hover:text-indigo-600`
+          ? `bg-[oklch(0.785_0.115_274.713)] text-[oklch(0.398_0.195_277.366)]`
+          : `bg-[oklch(0.93_0.034_272.788)] text-[oklch(0.585_0.233_277.117)] hover:bg-[oklch(0.87_0.065_274.039)] hover:text-[oklch(0.511_0.262_276.966)]`
       }`}
       on:mousedown={() => {
         setNoScrollToActiveCommentThread(true);
@@ -52,7 +52,7 @@ function CommentIndicator(props: {
       }}
     >
       {props.numComments > 1 && !props.isActive && (
-        <div class="w-2.5 h-2.5 absolute top-[-3.5px] right-[-3.5px] bg-indigo-300 text-indigo-700 flex items-center justify-center rounded-full text-[6px]">
+        <div class="w-2.5 h-2.5 absolute top-[-3.5px] right-[-3.5px] bg-[oklch(0.785_0.115_274.713)] text-[oklch(0.457_0.24_277.023)] flex items-center justify-center rounded-full text-[6px]">
           {props.numComments}
         </div>
       )}

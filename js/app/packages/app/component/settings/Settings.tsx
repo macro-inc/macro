@@ -16,6 +16,8 @@ import { Appearance } from './Appearance';
 import { Tabs } from '@kobalte/core/tabs';
 import { Account } from './Account';
 import { Inbox } from './Inbox';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { isMobileWidth } from '@core/mobile/mobileWidth';
 
 const SCROLL_THRESHOLD = 10;
 
@@ -149,7 +151,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
               {/* Header with tabs */}
               <div class="relative isolate shrink-0 border-b border-edge-muted">
                 <div class="flex items-center px-2 h-[2.5rem]">
-                  <Show when={!isNativeMobilePlatform()}>
+                  <Show when={!isTouchDevice() || !isMobileWidth()}>
                     <DeprecatedIconButton
                       icon={CloseIcon}
                       onClick={closeSettings}
@@ -230,7 +232,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
 
                   <div class="flex-1" />
 
-                  <Show when={!isNativeMobilePlatform()}>
+                  <Show when={!isTouchDevice() || !isMobileWidth()}>
                     <DeprecatedIconButton
                       icon={spotlight() ? ContractIcon : ExpandIcon}
                       onClick={() => setSpotlight(!spotlight())}
