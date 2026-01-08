@@ -1,7 +1,6 @@
 import type { BlockAlias, BlockName } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { isAccessiblePreviewItem, useItemPreview } from '@core/signal/preview';
-import type { NamedSubType } from '@macro-entity';
 import { matches } from '@core/util/match';
 import { truncateString } from '@core/util/string';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
@@ -13,6 +12,7 @@ import TrashSimple from '@icon/duotone/trash-simple-duotone.svg';
 import User from '@icon/duotone/user-duotone.svg';
 import ThreeUsersIcon from '@icon/duotone/users-three-duotone.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
+import type { NamedSubType } from '@macro-entity';
 import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
 import type { ItemType } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
