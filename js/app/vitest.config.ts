@@ -31,6 +31,12 @@ export default defineConfig({
           name: 'queries',
         },
       },
+      {
+        test: {
+          include: ['scripts/**/*.{test,spec}.{ts,tsx}'],
+          name: 'scripts',
+        },
+      },
     ],
   },
 });
