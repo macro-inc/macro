@@ -46,6 +46,8 @@ export function scrollToKeepGap({
   } else {
     const distanceToTop = targetTop - container.scrollTop;
 
+    if (container.scrollTop < distanceToTop) return;
+
     if (distanceToTop <= threshold) {
       const newScrollTop = targetTop - gap;
       container.scrollTo({ top: newScrollTop, behavior: 'auto' });

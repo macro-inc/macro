@@ -6,10 +6,12 @@ import {
 } from '@core/component/FileList/itemOperations';
 import { itemToSafeName } from '@core/constant/allBlocks';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
+import type { UnifiedSearchResponseItem } from '@service-search/generated/models';
 import type { ItemType } from '@service-storage/client';
 import type {
   PostItemsSoupParams,
   PostSoupRequest,
+  SoupApiItem,
   SoupApiSort,
   SoupDocument,
 } from '@service-storage/generated/schemas';
@@ -27,6 +29,7 @@ import { SERVER_HOSTS } from 'core/constant/servers';
 import { platformFetch } from 'core/util/platformFetch';
 import type { Accessor } from 'solid-js';
 import type {
+  ChannelEntity,
   ChatEntity,
   DocumentEntity,
   EmailEntity,
@@ -198,10 +201,13 @@ const selectData: (
   options: {
     instructionsIdQuery: UseQueryResult<string | null | undefined, Error>;
   }
-) => (DocumentEntity | ChatEntity | ProjectEntity | EmailEntity)[] = (
-  data,
-  options
-) => {
+) => (
+  | DocumentEntity
+  | ChatEntity
+  | ProjectEntity
+  | EmailEntity
+  | ChannelEntity
+)[] = (data, options) => {
   return data.pages.flatMap(({ items }) =>
     items
       .filter(
@@ -211,7 +217,14 @@ const selectData: (
           item.data.id !== options.instructionsIdQuery.data
       )
       .map(
-        (item): DocumentEntity | ChatEntity | ProjectEntity | EmailEntity => {
+        (
+          item
+        ):
+          | DocumentEntity
+          | ChatEntity
+          | ProjectEntity
+          | EmailEntity
+          | ChannelEntity => {
           if (item.tag === 'chat') {
             return {
               ...item.data,
@@ -255,6 +268,18 @@ const selectData: (
               viewedAt: item.data.viewedAt ?? undefined,
               participants,
             };
+          }
+
+          if (item.tag === 'channel') {
+            const out: ChannelEntity = {
+              ...item.data.channel,
+              channelType: item.data.channel.channel_type,
+              type: 'channel',
+              id: item.data.channel.id,
+              name: item.data.channel.name || 'New Channel',
+              ownerId: item.data.channel.owner_id,
+            };
+            return out;
           }
 
           return {
@@ -379,36 +404,98 @@ export function createBulkDeleteDssItemsMutation() {
     },
     onMutate: async (entities: EntityData[]) => {
       const deletedIDs = entities.map((e) => e.id);
+
       queryClient.cancelQueries({
-        queryKey: queryKeys.dss({ infinite: true }),
+        queryKey: queryKeys.all.dss,
       });
+      queryClient.cancelQueries({
+        queryKey: queryKeys.all.search,
+      });
+
+      function getSoupItemId(item: SoupApiItem): string {
+        switch (item.tag) {
+          case 'channel':
+            return item.data.channel.id;
+          default:
+            return item.data.id;
+        }
+      }
+
       function removeEntitiesFromQueryData(
-        prev: { pages: { items: EntityData[] }[] } | undefined
-      ): { pages: { items: EntityData[] }[] } | undefined {
+        prev: InfiniteData<SoupPage, unknown> | undefined
+      ): InfiniteData<SoupPage, unknown> | undefined {
         if (!prev) return prev;
         const pages = prev.pages.map((page) => ({
           ...page,
-          items: page.items.filter((item) => !deletedIDs.includes(item.id)),
+          items: page.items.filter((item) => {
+            const itemId = getSoupItemId(item);
+            return !deletedIDs.includes(itemId);
+          }),
         }));
         return {
           ...prev,
           pages,
         };
       }
-      queryClient.setQueriesData(
-        { queryKey: queryKeys.dss({ infinite: true }) },
-        (prev) =>
-          removeEntitiesFromQueryData(
-            prev as { pages: { items: EntityData[] }[] } | undefined
-          )
+
+      function getSearchResultId(result: UnifiedSearchResponseItem): string {
+        switch (result.type) {
+          case 'document':
+            return result.document_id;
+          case 'chat':
+            return result.chat_id;
+          case 'channel':
+            return result.channel_id;
+          case 'email':
+            return result.thread_id;
+          case 'project':
+            return result.id;
+        }
+      }
+
+      function removeEntitiesFromSearchData(
+        prev:
+          | InfiniteData<{ results: UnifiedSearchResponseItem[] }, unknown>
+          | undefined
+      ):
+        | InfiniteData<{ results: UnifiedSearchResponseItem[] }, unknown>
+        | undefined {
+        if (!prev) return prev;
+        const pages = prev.pages.map((page) => ({
+          ...page,
+          results: page.results.filter((result) => {
+            const id = getSearchResultId(result);
+            return !deletedIDs.includes(id);
+          }),
+        }));
+        return {
+          ...prev,
+          pages,
+        };
+      }
+
+      queryClient.setQueriesData({ queryKey: queryKeys.all.dss }, (prev) =>
+        removeEntitiesFromQueryData(
+          prev as InfiniteData<SoupPage, unknown> | undefined
+        )
+      );
+
+      queryClient.setQueriesData({ queryKey: queryKeys.all.search }, (prev) =>
+        removeEntitiesFromSearchData(
+          prev as
+            | InfiniteData<{ results: UnifiedSearchResponseItem[] }, unknown>
+            | undefined
+        )
       );
     },
-    onSettled: (data, error, entities) => {
-      if (error)
-        console.error(`Failed to delete dss items`, entities, data, error);
-
+    onError: (error, entities, _context) => {
+      console.error(`Failed to delete dss items`, entities, error);
+      // Rollback on error - restore the deleted items
       queryClient.invalidateQueries({
-        queryKey: queryKeys.dss({ infinite: true }),
+        queryKey: queryKeys.all.dss,
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.all.search,
       });
     },
   }));

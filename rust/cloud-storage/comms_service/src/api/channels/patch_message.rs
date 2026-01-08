@@ -16,6 +16,7 @@ use comms_db_client::{
     messages::patch_message::{patch_message, patch_message_attachments},
     model::ActivityType,
 };
+use macro_user_id::cowlike::CowLike;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -79,7 +80,7 @@ pub async fn patch_message_handler(
             })?;
 
         let participants = participants;
-        let participants: Vec<String> = if let Some(thread_id) = message.thread_id.as_ref() {
+        let participants: Vec<_> = if let Some(thread_id) = message.thread_id.as_ref() {
             comms_db_client::participants::get_participants::get_channel_participants_for_thread_id(
                 &app_state.db,
                 thread_id,
@@ -93,7 +94,7 @@ pub async fn patch_message_handler(
                 )
             })?
         } else {
-            participants.iter().map(|p| p.user_id.clone()).collect()
+            participants.iter().map(|p| p.user_id.copied()).collect()
         };
         notify::notify_message(&app_state, message, &participants)
             .await

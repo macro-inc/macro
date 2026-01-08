@@ -1777,17 +1777,43 @@ dependencies = [
 ]
 
 [[package]]
+name = "comms"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "chrono",
+ "doppleganger",
+ "frecency",
+ "macro_user_id",
+ "model-entity",
+ "model_user",
+ "models_comms",
+ "reqwest",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
 name = "comms_db_client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "cached",
  "chrono",
+ "doppleganger",
  "futures",
  "macro_db_migrator",
  "macro_user_id",
  "macro_uuid",
  "model",
+ "models_comms",
  "serde",
  "serde_json",
  "sqlx",
@@ -1812,9 +1838,11 @@ dependencies = [
  "axum-extra",
  "axum-macros",
  "chrono",
+ "comms",
  "comms_db_client",
  "connection_gateway",
  "document_storage_service_client",
+ "doppleganger",
  "frecency",
  "futures",
  "http-body-util",
@@ -2559,6 +2587,7 @@ dependencies = [
  "dashmap",
  "document_cognition_service_client",
  "document_storage_service_client",
+ "doppleganger",
  "email_service_client",
  "futures",
  "http-body-util",
@@ -2640,6 +2669,7 @@ dependencies = [
  "chrono",
  "clap",
  "cloudfront_sign",
+ "comms",
  "comms_service_client",
  "connection_gateway",
  "cool_asserts",
@@ -3741,7 +3771,7 @@ dependencies = [
  "futures-sink",
  "futures-util",
  "http 0.2.12",
- "indexmap 2.7.1",
+ "indexmap 2.12.1",
  "slab",
  "tokio",
  "tokio-util",
@@ -3760,7 +3790,7 @@ dependencies = [
  "futures-core",
  "futures-sink",
  "http 1.3.1",
- "indexmap 2.7.1",
+ "indexmap 2.12.1",
  "slab",
  "tokio",
  "tokio-util",
@@ -3803,6 +3833,12 @@ dependencies = [
  "equivalent",
  "foldhash",
 ]
+
+[[package]]
+name = "hashbrown"
+version = "0.16.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "841d1cc9bed7f9236f321df977030373f4a4163ae1a7dbfe1a51a2c1a51d9100"
 
 [[package]]
 name = "hashlink"
@@ -4370,13 +4406,14 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "2.7.1"
+version = "2.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8c9c992b02b5b4c94ea26e32fe5bccb7aa7d9f390ab5c1221ff895bc7ea8b652"
+checksum = "0ad4bb2b565bca0645f4d68c5c9af97fba094e9791da685bf83cb5f3ce74acf2"
 dependencies = [
  "equivalent",
- "hashbrown 0.15.2",
+ "hashbrown 0.16.1",
  "serde",
+ "serde_core",
 ]
 
 [[package]]
@@ -5404,6 +5441,7 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "document_sub_type",
+ "doppleganger",
  "macro_user_id",
  "model-error-response",
  "model_file_type",
@@ -5462,6 +5500,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "doppleganger",
  "macro_user_id",
  "model-entity",
  "models_comms",
@@ -5502,12 +5541,12 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "doppleganger",
+ "frecency",
+ "macro_user_id",
  "serde",
- "serde_json",
- "sqlx",
  "strum",
  "thiserror 2.0.17",
- "utoipa",
  "uuid",
 ]
 
@@ -5656,6 +5695,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "comms",
  "document_sub_type",
  "doppleganger",
  "email",
@@ -7212,6 +7252,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "rootcause"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "19b2fa24b30d915f807d1a14eb9eb0947fad76d6e63f165f3969e61a2942a928"
+dependencies = [
+ "hashbrown 0.16.1",
+ "indexmap 2.12.1",
+ "rootcause-internals",
+ "rustc-hash 2.1.1",
+ "triomphe",
+]
+
+[[package]]
+name = "rootcause-internals"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "15e09e790e6a1ade68d035e081be5054b03b9329a7b568ea5707c4395053b778"
+dependencies = [
+ "triomphe",
+]
+
+[[package]]
 name = "rs-libreoffice-bindings"
 version = "0.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7531,6 +7593,7 @@ dependencies = [
  "derive_builder",
  "document_cognition_service_client",
  "document_storage_service_client",
+ "doppleganger",
  "email_service_client",
  "futures",
  "image",
@@ -7630,7 +7693,7 @@ dependencies = [
  "email_service_client",
  "futures",
  "http-body-util",
- "indexmap 2.7.1",
+ "indexmap 2.12.1",
  "item_filters",
  "macro_auth",
  "macro_cors",
@@ -7958,7 +8021,7 @@ dependencies = [
  "chrono",
  "hex",
  "indexmap 1.9.3",
- "indexmap 2.7.1",
+ "indexmap 2.12.1",
  "serde",
  "serde_derive",
  "serde_json",
@@ -8235,6 +8298,7 @@ dependencies = [
  "axum",
  "axum-extra",
  "chrono",
+ "comms",
  "cool_asserts",
  "document_sub_type",
  "doppleganger",
@@ -8256,6 +8320,7 @@ dependencies = [
  "non_empty",
  "ordered-float",
  "recursion",
+ "rootcause",
  "serde",
  "serde_json",
  "sqlx",
@@ -8328,7 +8393,7 @@ dependencies = [
  "futures-util",
  "hashbrown 0.15.2",
  "hashlink",
- "indexmap 2.7.1",
+ "indexmap 2.12.1",
  "log",
  "memchr",
  "native-tls",
@@ -9224,6 +9289,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "triomphe"
+version = "0.1.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd69c5aa8f924c7519d6372789a74eac5b94fb0f8fcf0d4a97eb0bfc3e785f39"
+
+[[package]]
 name = "try-lock"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9536,7 +9607,7 @@ version = "5.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "435c6f69ef38c9017b4b4eea965dfb91e71e53d869e896db40d1cf2441dd75c0"
 dependencies = [
- "indexmap 2.7.1",
+ "indexmap 2.12.1",
  "serde",
  "serde_json",
  "utoipa-gen",
@@ -10340,7 +10411,7 @@ dependencies = [
  "flate2",
  "getrandom 0.3.1",
  "hmac",
- "indexmap 2.7.1",
+ "indexmap 2.12.1",
  "lzma-rs",
  "memchr",
  "pbkdf2",

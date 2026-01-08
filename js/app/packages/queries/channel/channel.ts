@@ -5,9 +5,13 @@ import {
   ok,
   throwOnErr,
 } from '@core/util/maybeResult';
+import { queryKeys } from '@macro-entity';
 import { commsServiceClient } from '@service-comms/client';
 import type { getChannelResponseError } from '@service-comms/generated/client';
-import type { GetChannelResponse } from '@service-comms/generated/models';
+import type {
+  ApiChannelWithLatest,
+  GetChannelResponse,
+} from '@service-comms/generated/models';
 import {
   type QueryClient,
   type UseBaseQueryOptions,
@@ -22,9 +26,6 @@ type ChannelQueryOptions = UseBaseQueryOptions<
   getChannelResponseError
 >;
 
-/**
- * Shared query options for getting a channel with an ID
- */
 function channelQueryOptions(channelId: string): ChannelQueryOptions {
   return {
     queryKey: channelKeys.withID(channelId).queryKey,
@@ -42,12 +43,6 @@ function channelQueryOptions(channelId: string): ChannelQueryOptions {
   };
 }
 
-/**
- * Imperatively fetch a channel (for use outside of components).
- * Returns cached data if fresh, otherwise fetches from server.
- * Ensures the query data will be available for the next time the query is
- * accessed if it's before the stale time period.
- */
 export async function fetchAndCacheChannel(
   channelId: string
 ): Promise<MaybeResult<string, { channel: GetChannelResponse }>> {
@@ -63,9 +58,6 @@ export async function fetchAndCacheChannel(
   return ok({ channel: result[1] });
 }
 
-/**
- * Query hook for fetching a channel
- */
 export function useChannelQuery(
   channelId: Accessor<string>,
   options?: Accessor<Omit<ChannelQueryOptions, 'queryKey' | 'queryFn'>>,
@@ -110,4 +102,18 @@ export function invalidateChannelWithID(channelID: string) {
   queryClient.invalidateQueries({
     queryKey: channelKeys.withID(channelID).queryKey,
   });
+}
+
+export function optimisticUpdateChannelViewedAt(channelId: string) {
+  const now = new Date().toISOString();
+
+  queryClient.setQueryData<ApiChannelWithLatest[]>(
+    queryKeys.all.channel,
+    (old) => {
+      if (!old) return old;
+      return old.map((channel) =>
+        channel.id === channelId ? { ...channel, viewed_at: now } : channel
+      );
+    }
+  );
 }
