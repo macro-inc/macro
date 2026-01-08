@@ -3,6 +3,7 @@ use axum::Extension;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
+use email_service::util::gmail::send::cleanup_draft_attachments;
 use model::response::{EmptyResponse, ErrorResponse};
 use models_email::service::link::Link;
 use models_opensearch::SearchEntityType;
@@ -11,7 +12,6 @@ use sqs_client::search::name::EntityName;
 use strum_macros::AsRefStr;
 use thiserror::Error;
 use uuid::Uuid;
-use email_service::util::gmail::send::cleanup_draft_attachments;
 
 #[derive(Debug, Error, AsRefStr)]
 pub enum DeleteDraftError {
@@ -86,11 +86,10 @@ pub async fn handler(
     }
 
     // Fetch draft attachments before deletion so we can clean up S3
-    let draft_attachments = email_db_client::attachments::draft::fetch_draft_attachments_by_draft_id(
-        &ctx.db,
-        link.id,
-        draft_id,
-    )
+    let draft_attachments =
+        email_db_client::attachments::draft::fetch_draft_attachments_by_draft_id(
+            &ctx.db, link.id, draft_id,
+        )
         .await
         .map_err(anyhow::Error::from)?;
 
@@ -122,7 +121,7 @@ pub async fn handler(
                         draft_id,
                         draft_attachments,
                     )
-                        .await;
+                    .await;
                 });
             }
 
