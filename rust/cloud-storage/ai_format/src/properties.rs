@@ -123,7 +123,10 @@ fn format_property_value(
             if refs.is_empty() {
                 None
             } else {
-                let ids: Vec<String> = refs.iter().map(|r| r.entity_id.clone()).collect();
+                let ids: Vec<String> = refs
+                    .iter()
+                    .map(|r| format!("{}:{}", r.entity_type, r.entity_id))
+                    .collect();
                 Some(ids.join(", "))
             }
         }
