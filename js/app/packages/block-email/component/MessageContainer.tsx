@@ -293,7 +293,7 @@ export function MessageContainer(props: MessageContainerProps) {
             </div>
           </Show>
         </Message>
-        <Show when={(showReply() || draftChild()) && !props.isLastMessage}>
+        <Show when={isBodyExpanded() && (showReply() || draftChild()) && !props.isLastMessage}>
           <Message
             focused={false}
             unfocusable
