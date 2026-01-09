@@ -4,7 +4,7 @@ import { getPrettyHotkeyStringByToken } from '@core/hotkey/utils';
 import { createMemo, For, type JSX, Show, splitProps } from 'solid-js';
 import type { Theme } from './Themes';
 
-const modifierMap = {
+export const modifierMap = {
   cmd: IS_MAC ? '⌘' : 'Ctrl',
   opt: IS_MAC ? '⌥' : 'Alt',
   shift: IS_MAC ? '⇧' : 'Shift',
