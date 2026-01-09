@@ -198,7 +198,7 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
   const [isHovering, setIsHovering] = createSignal(false);
   const userEmail = useEmail();
 
-  const isFromCurrentUser = createMemo(() =>
+  const _isFromCurrentUser = createMemo(() =>
     isMessageFromCurrentUser(props.message, userEmail())
   );
 
