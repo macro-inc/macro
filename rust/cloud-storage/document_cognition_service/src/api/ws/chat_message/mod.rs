@@ -307,11 +307,7 @@ pub async fn handle_send_chat_message(
             }
         })?;
     let is_first_message = chat.messages.is_empty();
-    let model = if incoming_message.model == Model::Claude45Opus {
-        Model::Claude45Opus
-    } else {
-        FALLBACK_MODEL
-    };
+    let model = FALLBACK_MODEL;
 
     let user_message_id =
         store_incoming_message(ctx.clone(), user_id, &chat, model, &incoming_message)
