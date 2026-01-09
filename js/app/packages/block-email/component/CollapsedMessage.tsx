@@ -1,6 +1,7 @@
 import { BozzyBracket } from '@core/component/BozzyBracket';
 import { UserIcon } from '@core/component/UserIcon';
 import type { MessageWithBodyReplyless } from '@service-email/generated/schemas';
+import { useEmail, useUserId } from '@service-gql/client';
 import { createMemo, createSignal } from 'solid-js';
 import { getFirstName } from '../util/name';
 
@@ -17,8 +18,19 @@ interface CollapsedMessageProps {
  */
 export function CollapsedMessage(props: CollapsedMessageProps) {
   const [hover, setHover] = createSignal(false);
+  const currentUserEmail = useEmail();
+  const currentUserId = useUserId();
+
+  const isFromCurrentUser = createMemo(() => {
+    const fromEmail = props.message.from?.email?.toLowerCase();
+    const userEmail = currentUserEmail()?.toLowerCase();
+    return fromEmail && userEmail && fromEmail === userEmail;
+  });
 
   const senderDisplay = createMemo(() => {
+    if (isFromCurrentUser()) {
+      return 'Me';
+    }
     const from = props.message.from;
     if (!from) return 'Unknown';
     // Use email if no name, otherwise use first name
@@ -86,7 +98,10 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
               }}
             >
               <UserIcon
-                id={props.message.from?.email ?? ''}
+                {...(isFromCurrentUser()
+                  ? { id: currentUserId() ?? '' }
+                  : { email: props.message.from?.email ?? '' }
+                )}
                 isDeleted={false}
                 size="fill"
                 suppressClick={true}

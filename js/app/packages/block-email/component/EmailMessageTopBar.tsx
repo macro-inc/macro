@@ -50,8 +50,18 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
   const [isHovering, setIsHovering] = createSignal(false);
   const userEmail = useEmail();
 
-  // Get sender first name
+  // Check if sender is current user
+  const isFromCurrentUser = createMemo(() => {
+    const fromEmail = props.message.from?.email?.toLowerCase();
+    const currentEmail = userEmail()?.toLowerCase();
+    return fromEmail && currentEmail && fromEmail === currentEmail;
+  });
+
+  // Get sender first name (show "Me" if from current user)
   const senderName = createMemo(() => {
+    if (isFromCurrentUser()) {
+      return 'Me';
+    }
     const from = props.message.from;
     if (!from) return 'Unknown';
     return from.name ? getFirstName(from.name) : from.email?.split('@')[0] ?? 'Unknown';
