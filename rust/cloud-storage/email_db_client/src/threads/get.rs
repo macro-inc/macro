@@ -44,7 +44,7 @@ pub async fn fetch_thread_with_messages_paginated(
     thread_db_id: Uuid,
     offset: i64,
     limit: i64,
-) -> anyhow::Result<thread::Thread> {
+) -> anyhow::Result<Option<thread::Thread>> {
     if offset < 0 || limit <= 0 {
         return Err(anyhow!(
             "Offset must be non-negative and limit must be positive"
@@ -64,8 +64,12 @@ pub async fn fetch_thread_with_messages_paginated(
     )
     .fetch_optional(pool)
     .await
-    .with_context(|| format!("Failed to fetch thread with DB ID {}", thread_db_id))?
-    .ok_or_else(|| anyhow!("Thread with ID {} not found", thread_db_id,))?;
+    .with_context(|| format!("Failed to fetch thread with DB ID {}", thread_db_id))?;
+
+    let db_thread = match db_thread {
+        Some(t) => t,
+        None => return Ok(None),
+    };
 
     let db_messages = sqlx::query_as!(
         db::message::Message,
@@ -167,7 +171,7 @@ pub async fn fetch_thread_with_messages_paginated(
 
     let full_thread = db_to_service::map_db_thread_to_service(db_thread, processed_messages);
 
-    Ok(full_thread)
+    Ok(Some(full_thread))
 }
 
 /// get the ids of the latest-updated threads for the user.
