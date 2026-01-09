@@ -135,6 +135,7 @@ import { EntitySelectionToolbarModal } from './EntitySelectionToolbarModal';
 import { EntityRow, EntityRowProvider } from './mobile/EntityRow';
 import { PropertyDisplayControl } from './PropertyDisplayControl';
 import { PropertyFilterControl } from './PropertyFilterControl';
+import type { PropertyFilter } from './PropertyFilterTypes';
 import { useUpsertSavedViewMutation } from './Soup';
 import { openEntityInSplitFromUnifiedList } from './soupContextHelpers';
 import {
@@ -403,6 +404,14 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   > = (...args: any[]) => {
     // @ts-ignore narrowing set store function is annoying due to function overloading
     setViewDataStore(selectedView(), 'filters', 'fromFilter', ...args);
+  };
+
+  // Property filters
+  const propertyFilters = createMemo(
+    () => view()?.filters.propertyFilters ?? []
+  );
+  const setPropertyFilters = (filters: PropertyFilter[]) => {
+    setViewDataStore(selectedView(), 'filters', 'propertyFilters', filters);
   };
 
   const getSystemSortOption = (
@@ -1602,7 +1611,10 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                   <Show when={ENABLE_PROPERTY_DISPLAY}>
                     <section class="gap-1 grid p-2">
                       <span class="font-medium text-xs">Property</span>
-                      <PropertyFilterControl />
+                      <PropertyFilterControl
+                        propertyFilters={propertyFilters}
+                        setPropertyFilters={setPropertyFilters}
+                      />
                     </section>
                   </Show>
                 </div>
