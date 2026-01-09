@@ -35,15 +35,17 @@ interface Recipient {
 }
 
 function formatFullDate(timestamp: string): string {
-  return new Date(timestamp).toLocaleString('en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    timeZoneName: 'short',
-  }).replace(',', '');
+  return new Date(timestamp)
+    .toLocaleString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZoneName: 'short',
+    })
+    .replace(',', '');
 }
 
 function formatShortDate(timestamp: string): string {
@@ -79,7 +81,9 @@ function RecipientRow(props: {
           <For each={props.recipients}>
             {(r, index) => (
               <>
-                <span classList={{ 'font-semibold': props.bold, 'text-ink': true }}>
+                <span
+                  classList={{ 'font-semibold': props.bold, 'text-ink': true }}
+                >
                   {r.name ?? r.email}
                 </span>
                 <Show when={r.name && r.email}>
@@ -111,7 +115,8 @@ function ExpandedHeader(props: {
           </span>
           <Show when={props.message.from?.name && props.message.from?.email}>
             <span class="text-ink-muted">
-              {' '}&lt;{props.message.from?.email}&gt;
+              {' '}
+              &lt;{props.message.from?.email}&gt;
             </span>
           </Show>
         </span>
@@ -203,13 +208,17 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
     if (isFromCurrentUser()) return 'Me';
     const from = props.message.from;
     if (!from) return 'Unknown';
-    return from.name ? getFirstName(from.name) : (from.email?.split('@')[0] ?? 'Unknown');
+    return from.name
+      ? getFirstName(from.name)
+      : (from.email?.split('@')[0] ?? 'Unknown');
   });
 
   const recipientSummary = createMemo(() => {
     const currentEmail = userEmail();
     const allRecipients = [...props.message.to, ...props.message.cc];
-    const names = allRecipients.map((r) => getRecipientDisplayName(r, currentEmail));
+    const names = allRecipients.map((r) =>
+      getRecipientDisplayName(r, currentEmail)
+    );
     return formatRecipientList(names);
   });
 
