@@ -283,7 +283,7 @@ function ChatInput(props: ChatInputInternalProps) {
                   <div
                     class="flex items-center gap-1.5"
                     classList={{
-                      'text-accent': pressedKeys().has("ctrl"),
+                      'text-accent': pressedKeys().has('ctrl'),
                     }}
                   >
                     <span class="">Stop</span>
@@ -308,7 +308,7 @@ function ChatInput(props: ChatInputInternalProps) {
                 <div
                   class="flex items-center gap-1.5"
                   classList={{
-                    'text-accent': pressedKeys().has("cmd"),
+                    'text-accent': pressedKeys().has('cmd'),
                   }}
                 >
                   <span>Opus</span>
