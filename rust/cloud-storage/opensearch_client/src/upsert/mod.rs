@@ -3,4 +3,3 @@ pub mod chat_message;
 pub mod document;
 pub mod email;
 pub mod name;
-pub mod project;

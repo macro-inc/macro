@@ -9,7 +9,6 @@ import {
   DOCUMENT_INDEX,
   EMAIL_INDEX,
   IS_DRY_RUN,
-  PROJECT_INDEX,
 } from '../constants';
 import { addFieldToIndex } from '../utils/add_field';
 import { checkIndexExists } from '../utils/check_index_exists';
@@ -22,7 +21,6 @@ const MIGRATIONS: string[] = [
   CHAT_INDEX,
   DOCUMENT_INDEX,
   EMAIL_INDEX,
-  PROJECT_INDEX,
 ];
 
 async function run(dryRun: boolean = true) {

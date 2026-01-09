@@ -7,7 +7,6 @@ import {
   CHAT_INDEX,
   DOCUMENT_INDEX,
   EMAIL_INDEX,
-  PROJECT_INDEX,
 } from '../constants';
 
 interface DateField {
@@ -40,13 +39,6 @@ const MIGRATIONS: IndexMigration[] = [
     dateFields: [
       { fieldName: 'updated_at_seconds' },
       { fieldName: 'sent_at_seconds' },
-    ],
-  },
-  {
-    indexName: PROJECT_INDEX,
-    dateFields: [
-      { fieldName: 'created_at_seconds' },
-      { fieldName: 'updated_at_seconds' },
     ],
   },
 ];
