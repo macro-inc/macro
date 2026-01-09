@@ -45,7 +45,7 @@ export function FloatingInputLoader(props: FloatingInputLoaderProps) {
 
   onCleanup(clearTimeouts);
 
-  // Only react to isLoading changes, not loaderState changes
+  // Use on() to only react to isLoading changes, not loaderState changes
   createEffect(
     on(
       () => props.isLoading(),
@@ -53,30 +53,25 @@ export function FloatingInputLoader(props: FloatingInputLoaderProps) {
         const currentState = loaderState();
 
         if (loading) {
-          // Starting to load - only transition if we're hidden
           if (currentState === 'hidden') {
             clearTimeouts();
             loadingStartTime = Date.now();
             setDisplayState('loading');
             setLoaderState('loading');
           }
-          // If we're in 'loading' or 'success' state, ignore new loading signals
-        } else {
-          // Stopped loading - transition if we're in loading state
-          if (currentState === 'loading') {
-            const elapsed = loadingStartTime ? Date.now() - loadingStartTime : 0;
-            const remaining = Math.max(0, minShowTime - elapsed);
+        } else if (currentState === 'loading') {
+          const elapsed = loadingStartTime ? Date.now() - loadingStartTime : 0;
+          const remaining = Math.max(0, minShowTime - elapsed);
 
-            minTimeTimeoutId = setTimeout(() => {
-              setDisplayState('success');
-              setLoaderState('success');
-              successTimeoutId = setTimeout(() => {
-                // Only update loaderState, keep displayState as 'success' during fade-out
-                setLoaderState('hidden');
-                loadingStartTime = null;
-              }, successDuration);
-            }, remaining);
-          }
+          minTimeTimeoutId = setTimeout(() => {
+            setDisplayState('success');
+            setLoaderState('success');
+            successTimeoutId = setTimeout(() => {
+              // Keep displayState as 'success' during fade-out to prevent flash
+              setLoaderState('hidden');
+              loadingStartTime = null;
+            }, successDuration);
+          }, remaining);
         }
       }
     )
