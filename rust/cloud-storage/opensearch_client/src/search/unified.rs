@@ -21,8 +21,8 @@ use crate::{
         query::Keys,
     },
 };
-use chrono::DateTime;
-use models_search_cursor::SearchCursorOption;
+use chrono::{DateTime, Utc};
+use models_search_cursor::{SearchCursorOption, SearchMethodCursor};
 
 use crate::SearchOn;
 use models_opensearch::{SearchEntityType, SearchIndex};
@@ -269,7 +269,9 @@ impl From<Hit<UnifiedSearchIndex>> for SearchHit {
                     node_id: a.node_id,
                     raw_content: a.raw_content,
                 })),
-                updated_at: None,
+                updated_at: a
+                    .updated_at_seconds
+                    .and_then(|s| DateTime::from_timestamp(s, 0)),
             },
             UnifiedSearchIndex::Email(a) => SearchHit {
                 entity_id: a.entity_id,
@@ -320,7 +322,9 @@ impl From<Hit<UnifiedSearchIndex>> for SearchHit {
                     chat_message_id: a.chat_message_id,
                     role: a.role,
                 })),
-                updated_at: None,
+                updated_at: a
+                    .updated_at_seconds
+                    .and_then(|s| DateTime::from_timestamp(s, 0)),
             },
         }
     }
@@ -390,7 +394,7 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         search_request_builder.set_search_after(search_after(cursor));
     }
 
-    search_request_builder.size(args.page_size);
+    search_request_builder.size(args.page_size + 1);
 
     if args.collapse {
         search_request_builder.collapse(Collapse::new("entity_id"));
@@ -440,7 +444,7 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
 pub(crate) async fn search_unified(
     client: &opensearch::OpenSearch,
     args: UnifiedSearchArgs,
-) -> Result<Vec<SearchHit>> {
+) -> Result<(Vec<SearchHit>, SearchCursorOption)> {
     let search_request = build_unified_search_request(&args)?.to_json();
 
     tracing::trace!("search request {:?}", search_request);
@@ -475,7 +479,27 @@ pub(crate) async fn search_unified(
             raw_body: String::from_utf8_lossy(&bytes).to_string(),
         })?;
 
-    Ok(result.hits.hits.into_iter().map(|h| h.into()).collect())
+    let mut results: Vec<SearchHit> = result.hits.hits.into_iter().map(|h| h.into()).collect();
+
+    let has_more = results.len() > args.page_size as usize;
+
+    if has_more {
+        results.pop(); // Remove the extra item
+    }
+
+    let cursor = if has_more {
+        SearchCursorOption::NotDone(results.last().map(|last| {
+            println!("{:?}", last);
+            SearchMethodCursor {
+                entity_id: last.entity_id,
+                updated_at: last.updated_at.unwrap_or(Utc::now()),
+            }
+        }))
+    } else {
+        SearchCursorOption::Done
+    };
+
+    Ok((results, cursor))
 }
 
 #[cfg(test)]
