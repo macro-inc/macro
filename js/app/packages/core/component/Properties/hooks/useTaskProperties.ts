@@ -28,15 +28,17 @@ export function useTaskProperties(
 ): () => TaskPropertiesStore {
   const taskEntityRefs = createMemo(() => {
     const allEntities = entities() ?? [];
-    return allEntities
-      .filter(isTaskEntity)
-      .map((e) => ({ entity_id: e.id, entity_type: 'TASK' as const }));
+    const taskEntities = allEntities.filter(isTaskEntity);
+    console.log('[useTaskProperties] allEntities:', allEntities.length, 'taskEntities:', taskEntities.length);
+    return taskEntities.map((e) => ({ entity_id: e.id, entity_type: 'TASK' as const }));
   });
 
   const query = useBulkEntityPropertiesQuery(
     taskEntityRefs,
     TASK_PROPERTY_DEFINITION_IDS
   );
+
+  console.log('[useTaskProperties] query status:', query.status, 'data keys:', Object.keys(query.data ?? {}));
 
   return () => query.data ?? {};
 }

@@ -118,7 +118,7 @@ export function useBulkEntityPropertiesQuery(
       }
       return {
         initialData: placeholder,
-        staleTime: 30_000,
+        staleTime: 0,
         enabled: currentEntities.length > 0,
         ...options?.(),
         ...bulkEntityPropertiesQueryOptions({
