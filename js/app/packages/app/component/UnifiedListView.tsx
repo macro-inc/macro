@@ -55,7 +55,7 @@ import {
   importantFilterFn,
   isTaskEntity,
   notDoneFilterFn,
-  SearchLocation,
+  type SearchLocation,
   type SortOption,
   sortByCreatedAt,
   sortByFrecencyScore,
@@ -113,7 +113,7 @@ import {
   type SetStoreFunction,
   unwrap,
 } from 'solid-js/store';
-import { EntityPointerDownHandler } from '../../macro-entity/src/components/Entity';
+import type { EntityPointerDownHandler } from '../../macro-entity/src/components/Entity';
 import {
   ENTITY_HEIGHT,
   EntityWithEverything,
