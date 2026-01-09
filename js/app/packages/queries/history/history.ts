@@ -1,4 +1,3 @@
-import { TitlePlaceholderSignal } from '@block-md/component/TitleEditor';
 import { throwOnErr } from '@core/util/maybeResult';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { storageServiceClient } from '@service-storage/client';
