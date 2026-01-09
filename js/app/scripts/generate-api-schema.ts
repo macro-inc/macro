@@ -175,7 +175,7 @@ async function main() {
 
   // In check mode, verify no uncommitted changes
   if (checkMode) {
-    const diff = await $`git diff --name-only ${serviceClientsDir}`.text();
+    const diff = await $`git diff ${serviceClientsDir}`.text();
     const untrackedFiles = await $`git ls-files --others --exclude-standard ${serviceClientsDir}`.text();
 
     if (diff.trim() || untrackedFiles.trim()) {
