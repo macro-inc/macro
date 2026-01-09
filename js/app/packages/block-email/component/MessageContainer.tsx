@@ -20,7 +20,7 @@ import type {
   Attachment,
   MessageWithBodyReplyless,
 } from '@service-email/generated/schemas';
-import { useUserId } from '@service-gql/client';
+import { useEmail, useUserId } from '@service-gql/client';
 import { storageServiceClient } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import {
@@ -70,7 +70,14 @@ export function MessageContainer(props: MessageContainerProps) {
   };
 
   const userId = useUserId();
+  const currentUserEmail = useEmail();
   const [currentUserName] = useDisplayName(tryMacroId(userId() ?? ''));
+
+  const isFromCurrentUser = createMemo(() => {
+    const fromEmail = props.message.from?.email?.toLowerCase();
+    const userEmail = currentUserEmail()?.toLowerCase();
+    return fromEmail && userEmail && fromEmail === userEmail;
+  });
 
   const isBodyExpanded = createMemo(() => {
     return context.messages.isBodyExpanded(props.message.db_id ?? '');
@@ -218,7 +225,7 @@ export function MessageContainer(props: MessageContainerProps) {
             focused={props.isFocused}
             isFirstMessage={props.isFirstMessage}
             isLastMessage={props.isLastMessage}
-            senderId={props.message.from?.email}
+            senderId={isFromCurrentUser() ? userId() : props.message.from?.email}
             isNewMessage={isNewMessage()}
             isTarget={props.isTarget}
           >
