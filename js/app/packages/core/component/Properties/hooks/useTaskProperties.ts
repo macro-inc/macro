@@ -29,7 +29,10 @@ export function useTaskProperties(
   const taskEntityRefs = createMemo(() => {
     const allEntities = entities() ?? [];
     const taskEntities = allEntities.filter(isTaskEntity);
-    return taskEntities.map((e) => ({ entity_id: e.id, entity_type: 'TASK' as const }));
+    return taskEntities.map((e) => ({
+      entity_id: e.id,
+      entity_type: 'TASK' as const,
+    }));
   });
 
   const query = useBulkEntityPropertiesQuery(
