@@ -22,7 +22,6 @@ const serviceToCrate: Record<string, string> = {
   'contacts-service': 'contacts_service',
   'unfurl-service': 'unfurl_service',
   'email-service': 'email_service',
-  'insight-service': 'insight_service',
   'search-service': 'search_service',
   'properties-service': 'properties_service',
   'organization-service': 'organization_service',
