@@ -1,4 +1,4 @@
-use std::{collections::HashMap, str::FromStr};
+use std::str::FromStr;
 
 use crate::api::context::ApiContext;
 
@@ -12,7 +12,7 @@ use macro_db_client::document::build_pdf_modification_data::{
     get_complete_pdf_modification_data, get_pdf_modification_data_for_document,
 };
 use model::{
-    document::{DocumentBasic, FileType, modification_data::PdfModificationData},
+    document::{DocumentBasic, FileType},
     response::{GenericErrorResponse, GenericResponse},
     user::UserContext,
 };
