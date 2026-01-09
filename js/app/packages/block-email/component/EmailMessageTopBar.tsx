@@ -64,8 +64,9 @@ function formatRecipientList(recipients: string[]): string {
   if (recipients.length === 0) return '';
   if (recipients.length === 1) return recipients[0];
   if (recipients.length === 2) return `${recipients[0]} & ${recipients[1]}`;
-  const last = recipients.pop();
-  return `${recipients.join(', ')} & ${last}`;
+  const rest = recipients.slice(0, -1);
+  const last = recipients[recipients.length - 1];
+  return `${rest.join(', ')} & ${last}`;
 }
 
 function RecipientRow(props: {

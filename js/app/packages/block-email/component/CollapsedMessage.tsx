@@ -28,7 +28,6 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
     }
     const from = props.message.from;
     if (!from) return 'Unknown';
-    // Use email if no name, otherwise use first name
     if (from.name) {
       return getFirstName(from.name);
     }

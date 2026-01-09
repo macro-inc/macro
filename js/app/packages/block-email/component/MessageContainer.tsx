@@ -58,12 +58,10 @@ export function MessageContainer(props: MessageContainerProps) {
   const [showReplyInternal, setShowReplyInternal] =
     createSignal<boolean>(false);
 
-  // Combined showReply that checks both local state and context
   const showReply = () =>
     showReplyInternal() ||
     context.messages.replyingToMessageId() === props.message.db_id;
 
-  // Wrapper to also clear context replyingToMessageId when hiding reply
   const setShowReply = (value: boolean | ((prev: boolean) => boolean)) => {
     const newValue =
       typeof value === 'function' ? value(showReplyInternal()) : value;
@@ -145,7 +143,6 @@ export function MessageContainer(props: MessageContainerProps) {
     );
   });
 
-  // expand appropriate messages
   createEffect(() => {
     const id = props.message.db_id;
     if (props.isLastMessage && id) {
