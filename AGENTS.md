@@ -1,8 +1,8 @@
 ## Development Commands
-`bun run test`: run tests
-`bun run check`: check typescript changes
-`bun run lint`: lint with biome
-`bun run format`: format changes with biome
+- `bun run test`: run tests 
+- `bun run check`: check typescript changes 
+- `bun run lint`: lint with biome 
+- `bun run format`: format changes with biome 
 
 ## Developments Notes
 1. **Follow existing code styles** - check neighboring files for patterns.
