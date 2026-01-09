@@ -9,6 +9,7 @@ import {
   createMemo,
   createSignal,
   For,
+  type JSX,
   type Setter,
   Show,
 } from 'solid-js';
@@ -28,13 +29,13 @@ interface EmailMessageTopBarProps {
   hiddenActions?: EmailMessageAction[];
 }
 
-/**
- * Formats a date for the expanded header view
- * e.g., "Friday, January 9 2026 at 1:50 PM EST"
- */
+interface Recipient {
+  name?: string | null;
+  email?: string | null;
+}
+
 function formatFullDate(timestamp: string): string {
-  const date = new Date(timestamp);
-  const options: Intl.DateTimeFormatOptions = {
+  return new Date(timestamp).toLocaleString('en-US', {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
@@ -42,269 +43,218 @@ function formatFullDate(timestamp: string): string {
     hour: 'numeric',
     minute: '2-digit',
     timeZoneName: 'short',
-  };
-  return date.toLocaleString('en-US', options).replace(',', '');
+  }).replace(',', '');
+}
+
+function formatShortDate(timestamp: string): string {
+  return new Date(timestamp).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+function getRecipientDisplayName(r: Recipient, currentEmail?: string): string {
+  if (r.email === currentEmail) return 'Me';
+  return r.name ? getFirstName(r.name) : (r.email?.split('@')[0] ?? '');
+}
+
+function formatRecipientList(recipients: string[]): string {
+  if (recipients.length === 0) return '';
+  if (recipients.length === 1) return recipients[0];
+  if (recipients.length === 2) return `${recipients[0]} & ${recipients[1]}`;
+  const last = recipients.pop();
+  return `${recipients.join(', ')} & ${last}`;
+}
+
+function RecipientRow(props: {
+  label: string;
+  recipients: Recipient[];
+  bold?: boolean;
+}): JSX.Element {
+  return (
+    <Show when={props.recipients.length > 0}>
+      <div class="flex flex-row gap-2">
+        <span class="text-ink-extra-muted min-w-10">{props.label}</span>
+        <span class="select-text cursor-text">
+          <For each={props.recipients}>
+            {(r, index) => (
+              <>
+                <span classList={{ 'font-semibold': props.bold, 'text-ink': true }}>
+                  {r.name ?? r.email}
+                </span>
+                <Show when={r.name && r.email}>
+                  <span class="text-ink-muted"> &lt;{r.email}&gt;</span>
+                </Show>
+                <Show when={index() < props.recipients.length - 1}>
+                  <span class="text-ink-muted">, </span>
+                </Show>
+              </>
+            )}
+          </For>
+        </span>
+      </div>
+    </Show>
+  );
+}
+
+function ExpandedHeader(props: {
+  message: MessageWithBodyReplyless;
+  onClose: () => void;
+}): JSX.Element {
+  return (
+    <div class="flex flex-col gap-1 text-sm">
+      <div class="flex flex-row gap-2">
+        <span class="text-ink-extra-muted min-w-10">From</span>
+        <span class="select-text cursor-text">
+          <span class="font-semibold text-ink">
+            {props.message.from?.name ?? props.message.from?.email}
+          </span>
+          <Show when={props.message.from?.name && props.message.from?.email}>
+            <span class="text-ink-muted">
+              {' '}&lt;{props.message.from?.email}&gt;
+            </span>
+          </Show>
+        </span>
+      </div>
+      <RecipientRow label="To" recipients={props.message.to} />
+      <RecipientRow label="Cc" recipients={props.message.cc} bold />
+      <RecipientRow label="Bcc" recipients={props.message.bcc} bold />
+      <div class="flex flex-row items-center gap-2 text-ink-extra-muted">
+        <Show when={props.message.internal_date_ts}>
+          <span>{formatFullDate(props.message.internal_date_ts!)}</span>
+        </Show>
+        <DeprecatedIconButton
+          theme="clear"
+          icon={X}
+          onclick={props.onClose}
+          iconSize={12}
+        />
+      </div>
+    </div>
+  );
+}
+
+function CollapsedHeader(props: {
+  senderName: string;
+  recipientSummary: string;
+  isHovering: boolean;
+  onExpand: () => void;
+  message: MessageWithBodyReplyless;
+  focused: boolean;
+  setShowReply: Setter<boolean>;
+  isLastMessage?: boolean;
+  hiddenActions?: EmailMessageAction[];
+}): JSX.Element {
+  return (
+    <div class="flex flex-row w-full items-center justify-between">
+      <div class="flex flex-row items-center gap-1 text-sm min-w-0">
+        <span class="text-ink-muted truncate">
+          {props.senderName} to {props.recipientSummary}
+        </span>
+        <div
+          class="transition-opacity"
+          classList={{
+            'opacity-0': !props.isHovering,
+            'opacity-100': props.isHovering,
+          }}
+        >
+          <Tooltip tooltip={<span class="text-xs">Expand Message Header</span>}>
+            <DeprecatedIconButton
+              theme="clear"
+              icon={CaretDown}
+              onclick={(e) => {
+                e.stopPropagation();
+                props.onExpand();
+              }}
+              iconSize={12}
+            />
+          </Tooltip>
+        </div>
+      </div>
+      <div class="flex flex-row gap-4 items-center shrink-0">
+        <MessageActions
+          message={props.message}
+          showActions={props.focused}
+          setShowReply={props.setShowReply}
+          isLastMessage={props.isLastMessage}
+          hiddenActions={props.hiddenActions}
+        />
+        <Show when={props.message.internal_date_ts}>
+          <div class="text-xs text-ink-muted">
+            {formatShortDate(props.message.internal_date_ts!)}
+          </div>
+        </Show>
+      </div>
+    </div>
+  );
 }
 
 export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
   const [isHovering, setIsHovering] = createSignal(false);
   const userEmail = useEmail();
 
-  // Check if sender is current user
   const isFromCurrentUser = createMemo(() => {
     const fromEmail = props.message.from?.email?.toLowerCase();
     const currentEmail = userEmail()?.toLowerCase();
     return fromEmail && currentEmail && fromEmail === currentEmail;
   });
 
-  // Get sender first name (show "Me" if from current user)
   const senderName = createMemo(() => {
-    if (isFromCurrentUser()) {
-      return 'Me';
-    }
+    if (isFromCurrentUser()) return 'Me';
     const from = props.message.from;
     if (!from) return 'Unknown';
-    return from.name
-      ? getFirstName(from.name)
-      : (from.email?.split('@')[0] ?? 'Unknown');
+    return from.name ? getFirstName(from.name) : (from.email?.split('@')[0] ?? 'Unknown');
   });
 
-  // Build recipient summary: "Me, Jackson & Will" style
   const recipientSummary = createMemo(() => {
-    const recipients: string[] = [];
     const currentEmail = userEmail();
-
-    // Add To recipients
-    for (const r of props.message.to) {
-      if (r.email === currentEmail) {
-        recipients.push('Me');
-      } else {
-        recipients.push(
-          r.name ? getFirstName(r.name) : (r.email?.split('@')[0] ?? '')
-        );
-      }
-    }
-
-    // Add Cc recipients
-    for (const r of props.message.cc) {
-      if (r.email === currentEmail) {
-        recipients.push('Me');
-      } else {
-        recipients.push(
-          r.name ? getFirstName(r.name) : (r.email?.split('@')[0] ?? '')
-        );
-      }
-    }
-
-    if (recipients.length === 0) return '';
-    if (recipients.length === 1) return recipients[0];
-    if (recipients.length === 2) return `${recipients[0]} & ${recipients[1]}`;
-
-    // For 3+: "A, B & C"
-    const last = recipients.pop();
-    return `${recipients.join(', ')} & ${last}`;
+    const allRecipients = [...props.message.to, ...props.message.cc];
+    const names = allRecipients.map((r) => getRecipientDisplayName(r, currentEmail));
+    return formatRecipientList(names);
   });
+
+  const shouldIgnoreClick = (target: Element) =>
+    target.localName === 'button' ||
+    target.localName === 'svg' ||
+    target.localName === 'path' ||
+    target.tagName === 'SPAN' ||
+    target.closest('[role="tooltip"]');
+
+  const handleClick = (e: MouseEvent) => {
+    const id = props.message.db_id;
+    if (id) props.setFocusedMessageId(id);
+    if (shouldIgnoreClick(e.target as Element)) return;
+    if (id) props.setExpandedBodyId(id, !props.isBodyExpanded());
+  };
 
   return (
     <div
       class="pr-2 font-mono"
       onMouseEnter={() => setIsHovering(true)}
       onMouseLeave={() => setIsHovering(false)}
-      onClick={(e) => {
-        if (props.message.db_id) {
-          props.setFocusedMessageId(props.message.db_id);
-        }
-        if (
-          (e.target as Element).localName === 'button' ||
-          (e.target as Element).localName === 'svg' ||
-          (e.target as Element).localName === 'path' ||
-          (e.target as Element).tagName === 'SPAN' ||
-          (e.target as Element).closest('[role="tooltip"]')
-        ) {
-          return;
-        }
-        if (props.isBodyExpanded() && props.message.db_id) {
-          props.setExpandedBodyId(props.message.db_id, false);
-        } else if (props.message.db_id) {
-          props.setExpandedBodyId(props.message.db_id, true);
-        }
-      }}
+      onClick={handleClick}
     >
-      {/* Main Row - always visible when body is expanded */}
       <Show when={props.isBodyExpanded()}>
         <Show
           when={!props.expandedHeader()}
           fallback={
-            /* Expanded Header View */
-            <div class="flex flex-col gap-1 text-sm">
-              {/* From */}
-              <div class="flex flex-row gap-2">
-                <span class="text-ink-extra-muted min-w-10">From</span>
-                <span class="select-text cursor-text">
-                  <span class="font-semibold text-ink">
-                    {props.message.from?.name ?? props.message.from?.email}
-                  </span>
-                  <Show
-                    when={props.message.from?.name && props.message.from?.email}
-                  >
-                    <span class="text-ink-muted">
-                      {' '}
-                      &lt;{props.message.from?.email}&gt;
-                    </span>
-                  </Show>
-                </span>
-              </div>
-
-              {/* To */}
-              <Show when={props.message.to.length > 0}>
-                <div class="flex flex-row gap-2">
-                  <span class="text-ink-extra-muted min-w-10">To</span>
-                  <span class="select-text cursor-text">
-                    <For each={props.message.to}>
-                      {(r, index) => (
-                        <>
-                          <span class="text-ink">{r.name ?? r.email}</span>
-                          <Show when={r.name && r.email}>
-                            <span class="text-ink-muted">
-                              {' '}
-                              &lt;{r.email}&gt;
-                            </span>
-                          </Show>
-                          <Show when={index() < props.message.to.length - 1}>
-                            <span class="text-ink-muted">, </span>
-                          </Show>
-                        </>
-                      )}
-                    </For>
-                  </span>
-                </div>
-              </Show>
-
-              {/* Cc */}
-              <Show when={props.message.cc.length > 0}>
-                <div class="flex flex-row gap-2">
-                  <span class="text-ink-extra-muted min-w-10">Cc</span>
-                  <span class="select-text cursor-text">
-                    <For each={props.message.cc}>
-                      {(r, index) => (
-                        <>
-                          <span class="font-semibold text-ink">
-                            {r.name ?? r.email}
-                          </span>
-                          <Show when={r.name && r.email}>
-                            <span class="text-ink-muted">
-                              {' '}
-                              &lt;{r.email}&gt;
-                            </span>
-                          </Show>
-                          <Show when={index() < props.message.cc.length - 1}>
-                            <span class="text-ink-muted">, </span>
-                          </Show>
-                        </>
-                      )}
-                    </For>
-                  </span>
-                </div>
-              </Show>
-
-              {/* Bcc */}
-              <Show when={props.message.bcc.length > 0}>
-                <div class="flex flex-row gap-2">
-                  <span class="text-ink-extra-muted min-w-10">Bcc</span>
-                  <span class="select-text cursor-text">
-                    <For each={props.message.bcc}>
-                      {(r, index) => (
-                        <>
-                          <span class="font-semibold text-ink">
-                            {r.name ?? r.email}
-                          </span>
-                          <Show when={r.name && r.email}>
-                            <span class="text-ink-muted">
-                              {' '}
-                              &lt;{r.email}&gt;
-                            </span>
-                          </Show>
-                          <Show when={index() < props.message.bcc.length - 1}>
-                            <span class="text-ink-muted">, </span>
-                          </Show>
-                        </>
-                      )}
-                    </For>
-                  </span>
-                </div>
-              </Show>
-
-              {/* Date with close button */}
-              <div class="flex flex-row items-center gap-2 text-ink-extra-muted">
-                <Show when={props.message.internal_date_ts}>
-                  <span>{formatFullDate(props.message.internal_date_ts!)}</span>
-                </Show>
-                <DeprecatedIconButton
-                  theme="clear"
-                  icon={X}
-                  onclick={() => props.setExpandedHeader(false)}
-                  iconSize={12}
-                />
-              </div>
-            </div>
+            <ExpandedHeader
+              message={props.message}
+              onClose={() => props.setExpandedHeader(false)}
+            />
           }
         >
-          {/* Collapsed Header View - Superhuman style */}
-          <div class="flex flex-row w-full items-center justify-between">
-            <div class="flex flex-row items-center gap-1 text-sm min-w-0">
-              {/* "Sender to Recipients" */}
-              <span class="text-ink-muted truncate">
-                {senderName()} to {recipientSummary()}
-              </span>
-              {/* Expand button - show on hover */}
-              <div
-                class="transition-opacity"
-                classList={{
-                  'opacity-0': !isHovering(),
-                  'opacity-100': isHovering(),
-                }}
-              >
-                <Tooltip
-                  tooltip={
-                    <div class="flex items-center gap-2 text-xs">
-                      <span>Expand Message Header</span>
-                    </div>
-                  }
-                >
-                  <DeprecatedIconButton
-                    theme="clear"
-                    icon={CaretDown}
-                    onclick={(e) => {
-                      e.stopPropagation();
-                      props.setExpandedHeader(true);
-                    }}
-                    iconSize={12}
-                  />
-                </Tooltip>
-              </div>
-            </div>
-            {/* Actions and Date */}
-            <div class="flex flex-row gap-4 items-center shrink-0">
-              <MessageActions
-                message={props.message}
-                showActions={props.focused}
-                setShowReply={props.setShowReply}
-                isLastMessage={props.isLastMessage}
-                hiddenActions={props.hiddenActions}
-              />
-              {/* Date */}
-              <div class="text-xs text-ink-muted">
-                {props.message.internal_date_ts &&
-                  new Date(props.message.internal_date_ts).toLocaleDateString(
-                    'en-US',
-                    {
-                      month: 'short',
-                      day: 'numeric',
-                    }
-                  )}
-              </div>
-            </div>
-          </div>
+          <CollapsedHeader
+            senderName={senderName()}
+            recipientSummary={recipientSummary()}
+            isHovering={isHovering()}
+            onExpand={() => props.setExpandedHeader(true)}
+            message={props.message}
+            focused={props.focused}
+            setShowReply={props.setShowReply}
+            isLastMessage={props.isLastMessage}
+            hiddenActions={props.hiddenActions}
+          />
         </Show>
       </Show>
     </div>
