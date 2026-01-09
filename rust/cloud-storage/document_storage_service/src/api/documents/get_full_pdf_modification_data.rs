@@ -75,13 +75,9 @@ pub async fn handler(
     }
 
     let initial_modification_data = match file_type {
-        FileType::Pdf => get_pdf_modification_data_for_document(&ctx.db, &document_id).await,
-        FileType::Docx => Ok(PdfModificationData {
-            highlights: Some(HashMap::new()),
-            bookmarks: Vec::new(),
-            placeables: Vec::new(),
-            pinned_terms_names: Vec::new(),
-        }),
+        FileType::Docx | FileType::Pdf => {
+            get_pdf_modification_data_for_document(&ctx.db, &document_id).await
+        }
         _ => unreachable!(),
     };
 
