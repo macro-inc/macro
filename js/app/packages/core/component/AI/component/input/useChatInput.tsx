@@ -1,4 +1,3 @@
-import { pressedKeys } from '@core/hotkey/state';
 import { withAnalytics } from '@coparse/analytics';
 import { useBuildChatSendRequest } from '@core/component/AI/component/input/buildRequest';
 import { DEFAULT_MODEL, SMART_MODE_MODEL } from '@core/component/AI/constant';
@@ -19,6 +18,7 @@ import { useUploadAttachment } from '@core/component/AI/util/uploadToChat';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { Hotkey, modifierMap } from '@core/component/Hotkey';
 import { Tooltip } from '@core/component/Tooltip';
+import { pressedKeys } from '@core/hotkey/state';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import PlusIcon from '@icon/regular/plus.svg';
 import XIcon from '@icon/regular/x.svg';
@@ -26,12 +26,7 @@ import { createCallback } from '@solid-primitives/rootless';
 import { BrightJoins } from '@ui/components/BrightJoins';
 import type { LexicalEditor } from 'lexical';
 import type { Accessor, Component, Setter } from 'solid-js';
-import {
-  createEffect,
-  createSignal,
-  on,
-  Show,
-} from 'solid-js';
+import { createEffect, createSignal, on, Show } from 'solid-js';
 import { useTabAttachments } from '../../signal/tabAttachments';
 import { AttachmentList } from './Attachment';
 import { ChatAttachMenu } from './ChatAttachMenu';
