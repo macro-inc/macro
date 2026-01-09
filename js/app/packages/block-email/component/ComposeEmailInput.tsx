@@ -161,6 +161,36 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
     attachComposeHotkeys(container);
   });
 
+  const onAddFilesAndDirs = (
+    files: FileSystemFileEntry[],
+    directories: FileSystemDirectoryEntry[],
+    dropEvent?: DragEvent
+  ) => {
+    const editor_ = editor();
+    if (!editor_) return;
+
+    const getPositionCallback = dropEvent
+      ? () => getDragDropPosition(editor_, dropEvent, true)
+      : undefined;
+
+    handleFileFolderDrop(
+      files,
+      directories,
+      createFilesReadyHandler(
+        editor_,
+        undefined,
+        undefined,
+        getPositionCallback,
+        (uploadedItemIds) => {
+          uploadedItemIds.forEach((itemId) => {
+            makeAttachmentPublic(itemId);
+          });
+        },
+        { width: 542, height: 542 }
+      )
+    );
+  };
+
   registerHotkey({
     hotkey: 'cmd+enter',
     scopeId: composeHotkeyScope,
@@ -202,28 +232,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
           use:fileFolderDrop={{
             onDragStart: () => setIsDragging(true),
             onDragEnd: () => setIsDragging(false),
-            onDrop: (fileEntries, folderEntries, e) => {
-              const editor_ = editor();
-              if (!editor_ || !e) return;
-              handleFileFolderDrop(
-                fileEntries,
-                folderEntries,
-                createFilesReadyHandler(
-                  editor_,
-                  undefined,
-                  undefined,
-                  () => getDragDropPosition(editor_, e, true),
-                  (uploadedItemIds) => {
-                    setIsDragging(false);
-                    uploadedItemIds.forEach((itemId) => {
-                      makeAttachmentPublic(itemId);
-                    });
-                    // TODO: schedule draft save, when implemented
-                  },
-                  { width: 542, height: 542 }
-                )
-              );
-            },
+            onDrop: onAddFilesAndDirs,
           }}
         >
           <div class={`${!isDragging() && 'hidden'} absolute inset-0`}>
@@ -246,26 +255,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
               focusSibling('next');
             }}
             portalScope="local"
-            onPasteFilesAndDirs={(files, directories) => {
-              const editor_ = editor();
-              if (!editor_) return;
-              handleFileFolderDrop(
-                files,
-                directories,
-                createFilesReadyHandler(
-                  editor_,
-                  undefined,
-                  undefined,
-                  undefined,
-                  (uploadedItemIds) => {
-                    uploadedItemIds.forEach((itemId) => {
-                      makeAttachmentPublic(itemId);
-                    });
-                  },
-                  { width: 542, height: 542 }
-                )
-              );
-            }}
+            onPasteFilesAndDirs={onAddFilesAndDirs}
           />
         </div>
         <div class="flex flex-wrap items-center gap-2">
