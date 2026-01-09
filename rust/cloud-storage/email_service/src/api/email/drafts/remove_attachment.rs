@@ -74,24 +74,24 @@ pub async fn handler(
         return Err(RemoveDraftAttachmentError::DraftNotFound);
     }
 
-    let s3_key = generate_attachment_s3_key!(draft_id, attachment_id);
-
-    // will not error if attachment does not exist in S3
-    ctx.s3_client
-        .delete(&ctx.config.attachment_bucket, &s3_key)
-        .await?;
-
     let rows_affected = email_db_client::attachments::draft::delete_draft_attachment(
         &ctx.db,
         link.id,
         draft_id,
         attachment_id,
     )
-    .await?;
+        .await?;
 
     if rows_affected == 0 {
         return Err(RemoveDraftAttachmentError::AttachmentNotFound);
     }
+
+    let s3_key = generate_attachment_s3_key!(draft_id, attachment_id);
+
+    // will not error if attachment does not exist in S3
+    ctx.s3_client
+        .delete(&ctx.config.attachment_bucket, &s3_key)
+        .await?;
 
     Ok(StatusCode::NO_CONTENT)
 }
