@@ -118,7 +118,10 @@ export function EmailDebouncedReadMarker(props: {
     const data = queryClient.getQueryData(
       emailKeys.threadMessages(props.threadId).queryKey
     );
-    return (data as { pages?: { is_read?: boolean }[] })?.pages?.[0]?.is_read === true;
+    return (
+      (data as { pages?: { is_read?: boolean }[] })?.pages?.[0]?.is_read ===
+      true
+    );
   };
 
   return (

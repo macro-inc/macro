@@ -178,7 +178,10 @@ function threadSeenOnMutate(params: MarkThreadAsSeenParams): void {
         pages: old.pages.map((page) => ({
           ...page,
           items: page.items.map((item) => {
-            if (item.tag === 'emailThread' && item.data.id === params.threadId) {
+            if (
+              item.tag === 'emailThread' &&
+              item.data.id === params.threadId
+            ) {
               return {
                 ...item,
                 data: {
