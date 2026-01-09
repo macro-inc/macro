@@ -104,27 +104,26 @@ pub fn map_db_macro_attachment_to_service(
     }
 }
 
-#[tracing::instrument(skip(db_message, sender_res, recipients_res, labels_res, attachments_res,))]
-pub fn map_db_message_to_service(
-    db_message: db::message::Message,
-    sender_res: Option<db::contact::Contact>,
-    recipients_res: Vec<(db::contact::Contact, db::address::EmailRecipientType)>,
-    scheduled_res: Option<db::message::ScheduledMessage>,
-    labels_res: Vec<db::label::Label>,
-    attachments_res: Vec<attachment::Attachment>,
-    macro_attachments_res: Vec<attachment::AttachmentMacro>,
+#[tracing::instrument(skip(
+    service_message,
+    attachments_res,
+    macro_attachments_res,
+    draft_attachments_res
+))]
+pub fn map_db_message_attachments_to_service(
+    mut service_message: message::Message,
+    attachments_res: Vec<db::attachment::Attachment>,
+    macro_attachments_res: Vec<db::attachment::AttachmentMacro>,
+    draft_attachments_res: Vec<db::attachment::AttachmentDraft>,
 ) -> anyhow::Result<message::Message> {
-    let mut service_message = map_attachmentless_db_message_to_service(
-        db_message,
-        sender_res,
-        recipients_res,
-        scheduled_res,
-        labels_res,
-    );
-
     service_message.attachments = map_db_attachments_to_service(attachments_res);
 
     service_message.attachments_macro = map_db_macro_attachments_to_service(macro_attachments_res);
+
+    service_message.attachments_draft = draft_attachments_res
+        .into_iter()
+        .map(|a| a.into())
+        .collect();
 
     Ok(service_message)
 }
@@ -215,6 +214,7 @@ pub fn map_attachmentless_db_message_to_service(
         body_macro: db_message.body_macro,
         attachments: Vec::new(),
         attachments_macro: Vec::new(),
+        attachments_draft: Vec::new(),
         headers_json: db_message.headers_jsonb,
         created_at: db_message.created_at,
         updated_at: db_message.updated_at,

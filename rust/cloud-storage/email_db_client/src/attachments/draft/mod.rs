@@ -123,3 +123,24 @@ pub async fn fetch_draft_attachments_by_draft_id(
 
     Ok(service_attachments)
 }
+
+#[tracing::instrument(skip(pool), err)]
+pub async fn fetch_db_draft_attachments(
+    pool: &PgPool,
+    draft_id: Uuid,
+) -> anyhow::Result<Vec<db::attachment::AttachmentDraft>> {
+    let db_attachments = sqlx::query_as!(
+        db::attachment::AttachmentDraft,
+        r#"
+            SELECT id, draft_id, file_name, content_type, sha, size, s3_key
+            FROM email_attachments_drafts
+            WHERE draft_id = $1
+            ORDER BY file_name ASC
+            "#,
+        draft_id,
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(db_attachments)
+}

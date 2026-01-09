@@ -100,6 +100,7 @@ pub fn map_message_resource_to_service(
         body_macro: None,
         attachments,
         attachments_macro: Vec::new(),
+        attachments_draft: Vec::new(),
         headers_json: Some(serde_json::to_value(parsed_payload.all_headers)?),
         created_at: Utc::now(), // Omitted - set default/ignored
         updated_at: Utc::now(), // Omitted - set default/ignored
