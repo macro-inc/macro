@@ -6009,6 +6009,7 @@ dependencies = [
  "chrono",
  "macro_entrypoint",
  "models_opensearch",
+ "models_search_cursor",
  "opensearch",
  "opensearch_query_builder",
  "serde",
