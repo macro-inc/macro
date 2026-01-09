@@ -132,7 +132,7 @@ export const FilterPropertySelect: Component<FilterPropertySelectProps> = (
                     e.stopPropagation();
                     handleSelectProperty(property);
                   }}
-                  class="w-full px-2 py-1.5 text-[10px] text-ink hover:bg-hover flex items-center gap-2 text-left cursor-pointer"
+                  class="w-full px-2 py-1.5 text-[10px] text-ink hover:bg-hover flex items-center gap-2 text-left"
                 >
                   <PropertyDataTypeIcon property={property} />
                   <span class="truncate flex-1">{property.display_name}</span>

@@ -122,7 +122,7 @@ export const FilterValueSelect: Component<FilterValueSelectProps> = (props) => {
           <button
             type="button"
             onClick={handleClick}
-            class="h-6 px-2 w-fit text-[10px] border border-edge hover:bg-hover text-left font-mono cursor-pointer flex items-center"
+            class="h-6 px-2 w-fit text-[10px] border border-edge hover:bg-hover text-left font-mono flex items-center"
             classList={{
               'text-ink': props.value !== null,
               'text-ink-muted': props.value === null,
@@ -166,7 +166,7 @@ export const FilterValueSelect: Component<FilterValueSelectProps> = (props) => {
                     e.stopPropagation();
                     handleSelectOption(option);
                   }}
-                  class="w-full px-2 py-1.5 text-[10px] text-ink hover:bg-hover text-left cursor-pointer"
+                  class="w-full px-2 py-1.5 text-[10px] text-ink hover:bg-hover text-left"
                   classList={{
                     'bg-hover': props.value === option.id,
                   }}

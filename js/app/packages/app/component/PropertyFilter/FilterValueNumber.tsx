@@ -66,7 +66,7 @@ export const FilterValueNumber: Component<FilterValueNumberProps> = (props) => {
         <button
           type="button"
           onClick={handleClick}
-          class="h-6 px-2 w-fit text-[10px] border border-edge hover:bg-hover text-left font-mono cursor-pointer flex items-center"
+          class="h-6 px-2 w-fit text-[10px] border border-edge hover:bg-hover text-left font-mono flex items-center"
           classList={{
             'text-ink': props.value !== null,
             'text-ink-muted': props.value === null,

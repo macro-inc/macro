@@ -340,7 +340,7 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
           <button
             type="button"
             onClick={props.onCancel}
-            class="h-6 w-6 flex items-center justify-center text-ink hover:text-failure-ink hover:bg-hover cursor-pointer"
+            class="h-6 w-6 flex items-center justify-center text-ink hover:text-failure-ink hover:bg-hover"
           >
             <XIcon class="size-3" />
           </button>
@@ -352,7 +352,7 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
         <button
           type="button"
           onClick={handleStartEditProperty}
-          class="h-6 px-2 text-[10px] text-ink border border-edge hover:bg-hover text-left flex items-center gap-1.5 font-mono cursor-pointer shrink-0"
+          class="h-6 px-2 text-[10px] text-ink border border-edge hover:bg-hover text-left flex items-center gap-1.5 font-mono shrink-0"
         >
           <PropertyDataTypeIcon
             property={selectedProperty()!}
@@ -378,7 +378,7 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
             fallback={
               <button
                 type="button"
-                class="h-6  px-2 w-fit text-[10px] text-ink-muted font-mono border border-edge hover:bg-hover text-left cursor-pointer flex items-center"
+                class="h-6  px-2 w-fit text-[10px] text-ink-muted font-mono border border-edge hover:bg-hover text-left flex items-center"
               >
                 {values().length > 0 ? values().join(', ') : '...'}
               </button>
@@ -486,7 +486,7 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
             type="button"
             onClick={handleConfirm}
             disabled={!canConfirm()}
-            class="h-6 w-6 flex items-center justify-center text-ink hover:bg-hover border border-edge cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+            class="h-6 w-6 flex items-center justify-center text-ink hover:bg-hover border border-edge disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
           >
             <CheckIcon class="size-4" />
           </button>
@@ -496,7 +496,7 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
         <button
           type="button"
           onClick={props.onCancel}
-          class="h-6 w-6 flex items-center justify-center text-ink hover:text-failure-ink hover:bg-hover cursor-pointer shrink-0"
+          class="h-6 w-6 flex items-center justify-center text-ink hover:text-failure-ink hover:bg-hover shrink-0"
         >
           <XIcon class="size-3" />
         </button>

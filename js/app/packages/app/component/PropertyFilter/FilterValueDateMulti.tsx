@@ -62,7 +62,7 @@ export const FilterValueDateMulti: Component<FilterValueDateMultiProps> = (
             <button
               type="button"
               onClick={() => handleRemoveDate(dateStr)}
-              class="absolute inset-0 flex items-center justify-end pr-1 bg-gradient-to-l from-panel via-panel to-transparent opacity-0 group-hover:opacity-100 hover:text-failure-ink cursor-pointer"
+              class="absolute inset-0 flex items-center justify-end pr-1 bg-gradient-to-l from-panel via-panel to-transparent opacity-0 group-hover:opacity-100 hover:text-failure-ink"
             >
               <XIcon class="size-3" />
             </button>
@@ -76,7 +76,7 @@ export const FilterValueDateMulti: Component<FilterValueDateMultiProps> = (
           ref={addButtonRef}
           type="button"
           onClick={() => setIsPickerOpen(true)}
-          class="h-6 px-2 text-[10px] text-ink-muted border border-edge hover:bg-hover cursor-pointer font-mono flex items-center"
+          class="h-6 px-2 text-[10px] text-ink-muted border border-edge hover:bg-hover font-mono flex items-center"
         >
           {props.values.length === 0 ? 'Add date...' : '+'}
         </button>

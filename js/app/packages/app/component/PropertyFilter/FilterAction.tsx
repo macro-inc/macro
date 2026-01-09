@@ -69,7 +69,7 @@ export const FilterActionSelect: Component<FilterActionSelectProps> = (
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen())}
-        class="h-6 px-2 min-w-fit text-[10px] border border-edge hover:bg-hover text-left font-mono cursor-pointer flex items-center"
+        class="h-6 px-2 min-w-fit text-[10px] border border-edge hover:bg-hover text-left font-mono flex items-center"
         classList={{
           'text-ink': props.selectedAction !== null,
           'text-ink-muted': props.selectedAction === null,
@@ -102,7 +102,7 @@ export const FilterActionSelect: Component<FilterActionSelectProps> = (
                     e.stopPropagation();
                     handleSelectAction(action);
                   }}
-                  class="w-full px-2 py-1.5 text-[10px] text-ink hover:bg-hover text-left cursor-pointer"
+                  class="w-full px-2 py-1.5 text-[10px] text-ink hover:bg-hover text-left"
                   classList={{
                     'bg-hover': props.selectedAction === action,
                   }}

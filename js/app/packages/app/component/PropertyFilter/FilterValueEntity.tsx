@@ -61,7 +61,7 @@ const EntityPill: Component<{
       <button
         type="button"
         onClick={props.onRemove}
-        class="absolute inset-0 flex items-center justify-end pr-1 bg-gradient-to-l from-panel via-panel to-transparent opacity-0 group-hover:opacity-100 hover:text-failure-ink cursor-pointer"
+        class="absolute inset-0 flex items-center justify-end pr-1 bg-gradient-to-l from-panel via-panel to-transparent opacity-0 group-hover:opacity-100 hover:text-failure-ink"
       >
         <XIcon class="size-3" />
       </button>
@@ -279,7 +279,7 @@ export const FilterValueEntity: Component<FilterValueEntityProps> = (props) => {
             <button
               type="button"
               onClick={handleAddClick}
-              class="h-6 px-2 text-[10px] text-ink-muted border border-edge hover:bg-hover cursor-pointer font-mono flex items-center"
+              class="h-6 px-2 text-[10px] text-ink-muted border border-edge hover:bg-hover font-mono flex items-center"
             >
               {getPlaceholderText()}
             </button>
@@ -344,7 +344,7 @@ const DropdownEntityRow: Component<{
         e.stopPropagation();
         props.onSelect();
       }}
-      class="w-full px-2 py-1.5 text-[10px] text-ink hover:bg-hover text-left cursor-pointer flex items-center gap-2"
+      class="w-full px-2 py-1.5 text-[10px] text-ink hover:bg-hover text-left flex items-center gap-2"
     >
       <span class="size-3 flex items-center justify-center shrink-0">
         {icon()}
