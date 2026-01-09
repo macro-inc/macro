@@ -4,6 +4,22 @@
 
 use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
 
+/// Required trait to be able to create a cursor from a Sortable list of items
+pub trait SearchCursorAttributes {
+    /// Gets the entity id
+    fn entity_id(&self) -> uuid::Uuid;
+    /// Gets the updated_at
+    fn updated_at(&self) -> chrono::DateTime<chrono::Utc>;
+}
+
+/// Result of processing sorted results for pagination
+pub struct PaginatedResult<T> {
+    /// The items to return (with extra item removed if present)
+    pub items: Vec<T>,
+    /// The cursor for fetching the next page
+    pub cursor: SearchCursorOption,
+}
+
 /// Used to store individual cursor information for a given search method.
 /// This could be document names, email subject, content etc.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -38,6 +54,34 @@ impl SearchCursorOption {
     /// Returns true if the cursor is exhausted (no more results)
     pub fn is_done(&self) -> bool {
         matches!(self, SearchCursorOption::Done)
+    }
+
+    /// Processes sorted results for pagination.
+    ///
+    /// Expects the query to have fetched `limit + 1` items. Returns the trimmed
+    /// items (at most `limit`) and the appropriate cursor.
+    pub fn paginate<T: SearchCursorAttributes>(
+        mut items: Vec<T>,
+        limit: usize,
+    ) -> PaginatedResult<T> {
+        let has_more = items.len() > limit;
+        if has_more {
+            items.pop();
+        }
+
+        let cursor = if has_more {
+            match items.last() {
+                Some(last) => SearchCursorOption::NotDone(Some(SearchMethodCursor {
+                    entity_id: last.entity_id(),
+                    updated_at: last.updated_at(),
+                })),
+                None => SearchCursorOption::Done,
+            }
+        } else {
+            SearchCursorOption::Done
+        };
+
+        PaginatedResult { items, cursor }
     }
 }
 
