@@ -1,5 +1,5 @@
 import type { Accessor, Component } from 'solid-js';
-import { createEffect, createMemo, For, on, Show } from 'solid-js';
+import { createEffect, createMemo, For, Show } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { FilterPropertyPill } from './PropertyFilter';
 import type { PropertyFilter } from './PropertyFilterTypes';
@@ -15,6 +15,8 @@ type PropertyFilterControlProps = {
   setPropertyFilters: (filters: PropertyFilter[]) => void;
   /** Called when incomplete filter state changes */
   onIncompleteFiltersChange?: (hasIncomplete: boolean) => void;
+  /** Register a clear handler that parent can call to clear all filters */
+  registerClearHandler?: (clearFn: () => void) => void;
 };
 
 export const PropertyFilterControl: Component<PropertyFilterControlProps> = (
@@ -59,19 +61,13 @@ export const PropertyFilterControl: Component<PropertyFilterControlProps> = (
     createEntriesFromProps()
   );
 
-  // Sync from props when they change externally (e.g., CLEAR button)
-  createEffect(
-    on(
-      () => props.propertyFilters(),
-      (propFilters) => {
-        // If props are empty but we have filters, it's a CLEAR
-        if (propFilters.length === 0 && filters.length > 0) {
-          setFilters(reconcile([]));
-        }
-      },
-      { defer: true } // Don't run on initial mount
-    )
-  );
+  // Clear all local filters (called by parent via registerClearHandler)
+  const clearFilters = () => {
+    setFilters(reconcile([]));
+  };
+
+  // Register clear handler with parent
+  props.registerClearHandler?.(clearFilters);
 
   // Sync only complete filters to props
   const syncCompleteFiltersToProps = (entries: FilterEntry[]) => {

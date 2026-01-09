@@ -418,6 +418,8 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   // Track incomplete property filters for toast warning on save
   const [hasIncompletePropertyFilters, setHasIncompletePropertyFilters] =
     createSignal(false);
+  // Store clear handler from PropertyFilterControl
+  let clearPropertyFilters: (() => void) | undefined;
 
   const getSystemSortOption = (
     sort: SortOptions | undefined
@@ -1306,6 +1308,8 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       setViewDataStore(selectedView(), 'sort', initialConfigObj.sort);
       setViewDataStore(selectedView(), 'display', initialConfigObj.display);
     });
+    // Clear property filter UI state
+    clearPropertyFilters?.();
   };
 
   // Set initialConfig when it's not present (on load or after save/refetch)
@@ -1627,6 +1631,9 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                         onIncompleteFiltersChange={
                           setHasIncompletePropertyFilters
                         }
+                        registerClearHandler={(fn) => {
+                          clearPropertyFilters = fn;
+                        }}
                       />
                     </section>
                   </Show>
