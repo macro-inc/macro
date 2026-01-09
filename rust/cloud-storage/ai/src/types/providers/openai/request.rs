@@ -2,9 +2,8 @@ use crate::traits::Metadata;
 use crate::types::ChatCompletionRequest;
 use anyhow::Context;
 use async_openai::types::{
-    ChatCompletionRequestMessage, ChatCompletionRequestMessageContentPartText,
-    ChatCompletionRequestSystemMessage, ChatCompletionRequestSystemMessageContent,
-    ChatCompletionRequestSystemMessageContentPart, CreateChatCompletionRequest,
+    ChatCompletionRequestMessage, ChatCompletionRequestSystemMessage,
+    ChatCompletionRequestSystemMessageContent, CreateChatCompletionRequest,
     CreateChatCompletionRequestArgs, ResponseFormat, ResponseFormatJsonSchema,
 };
 use schemars::{JsonSchema, schema_for};
@@ -13,21 +12,12 @@ use serde::Deserialize;
 impl ChatCompletionRequest {
     pub fn openai_messages(&self) -> Vec<ChatCompletionRequestMessage> {
         let mut all_messages = vec![];
-        let system_message_parts = self
-            .system_prompt
-            .clone()
-            .format_for_caching(4)
-            .into_iter()
-            .map(|part| {
-                ChatCompletionRequestSystemMessageContentPart::Text(
-                    ChatCompletionRequestMessageContentPartText { text: part },
-                )
-            })
-            .collect::<Vec<_>>();
 
         let system_message =
             ChatCompletionRequestMessage::System(ChatCompletionRequestSystemMessage {
-                content: ChatCompletionRequestSystemMessageContent::Array(system_message_parts),
+                content: ChatCompletionRequestSystemMessageContent::Text(
+                    self.system_prompt.to_string(),
+                ),
                 name: None,
             });
 

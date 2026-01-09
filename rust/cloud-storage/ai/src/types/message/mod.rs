@@ -1,10 +1,14 @@
+mod base_64_image;
 mod chat_message;
 mod message_builder;
+mod prompt_attachments;
 mod system_prompt;
 
+pub use base_64_image::*;
 pub use chat_message::*;
 pub use message_builder::*;
-pub use system_prompt::*;
+pub use prompt_attachments::*;
+pub use system_prompt::SystemPrompt;
 
 use serde::{Deserialize, Serialize};
 use strum::{AsRefStr, Display, EnumString};

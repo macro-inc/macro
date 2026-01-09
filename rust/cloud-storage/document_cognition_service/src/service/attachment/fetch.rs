@@ -1,6 +1,7 @@
 use crate::api::context::DcsScribe;
 use crate::core::constants::CHANNEL_TRANSCRIPT_MAX_MESSAGES;
-use ai::types::{Attachment, PromptAttachment};
+use ai::types::{Attachment, ImageData};
+use ai_format::document::Document;
 use ai_tools::read::EmailMessage;
 use model::{
     chat::{AttachmentType, ChatAttachmentWithName},
@@ -32,23 +33,25 @@ pub async fn fetchium(
                     .content()
                     .await?
                     .to_string();
-                Ok(Attachment::Text(PromptAttachment {
-                    id: attachment.attachment_id.clone(),
-                    file_type: "Project".into(),
-                    name: attachment.name().unwrap_or_default().into(),
-                    content: project_items,
-                }))
+                Ok(Attachment::Text(
+                    Document {
+                        id: attachment.attachment_id.clone(),
+                        file_type: "Project".into(),
+                        name: attachment.name().unwrap_or_default().into(),
+                        content: project_items,
+                    }
+                    .boxed(),
+                ))
             }
             AttachmentType::Image => {
-                let base64_image = scribe
+                let image = scribe
                     .static_file
                     .fetch(attachment.attachment_id.clone())
                     .file_content()
                     .await?
-                    .content
-                    .base64_compressed_webp()?;
+                    .content;
 
-                Ok(Attachment::ImageUrl(base64_image))
+                Ok(Attachment::Image(ImageData::try_from(image)?))
             }
             AttachmentType::Channel => {
                 let transcript = scribe
@@ -61,12 +64,15 @@ pub async fn fetchium(
                     )
                     .await?;
 
-                Ok(Attachment::Text(PromptAttachment {
-                    content: transcript,
-                    file_type: "channel".into(),
-                    id: attachment.attachment_id.clone(),
-                    name: "unknown channel name".into(),
-                }))
+                Ok(Attachment::Text(
+                    Document {
+                        content: transcript,
+                        file_type: "channel".into(),
+                        id: attachment.attachment_id.clone(),
+                        name: "unknown channel name".into(),
+                    }
+                    .boxed(),
+                ))
             }
             AttachmentType::Document => {
                 let document = scribe
@@ -75,16 +81,17 @@ pub async fn fetchium(
                     .document_content()
                     .await?;
                 if document.file_type().is_image() {
-                    Ok(Attachment::ImageUrl(
-                        document.content.base64_compressed_webp()?,
-                    ))
+                    Ok(Attachment::Image(ImageData::try_from(document.content)?))
                 } else {
-                    Ok(Attachment::Text(PromptAttachment {
-                        id: attachment.attachment_id,
-                        name: document.metadata().document_name.clone(),
-                        file_type: document.file_type().to_string(),
-                        content: document.content.text_content()?,
-                    }))
+                    Ok(Attachment::Text(
+                        Document {
+                            id: attachment.attachment_id,
+                            name: document.metadata().document_name.clone(),
+                            file_type: document.file_type().to_string(),
+                            content: document.content.text_content()?,
+                        }
+                        .boxed(),
+                    ))
                 }
             }
             AttachmentType::Email => {
@@ -117,12 +124,15 @@ pub async fn fetchium(
 
                 let content = serde_json::to_string_pretty(&formatted_content)?;
 
-                Ok(Attachment::Text(PromptAttachment {
-                    id: attachment.attachment_id,
-                    name: subject.clone(),
-                    file_type: "email".to_string(),
-                    content,
-                }))
+                Ok(Attachment::Text(
+                    Document {
+                        id: attachment.attachment_id,
+                        name: subject.clone(),
+                        file_type: "email".to_string(),
+                        content,
+                    }
+                    .boxed(),
+                ))
             }
         }
     }

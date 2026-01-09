@@ -8,7 +8,9 @@ use async_openai::types::{
     ChatCompletionRequestUserMessageContentPart, FunctionCall, ImageDetail, ImageUrl,
 };
 
-use crate::types::{AssistantMessagePart, ChatMessage, ChatMessageContent, ChatMessages, Role};
+use crate::types::{
+    AssistantMessagePart, ChatMessage, ChatMessageContent, ChatMessages, ImageData, Role,
+};
 use serde::Serialize;
 use std::collections::HashMap;
 
@@ -19,6 +21,21 @@ struct ToolResponseParseError {
     error: String,
     raw_response: String,
     parse_error: String,
+}
+
+impl From<ImageData> for ImageUrl {
+    fn from(value: ImageData) -> Self {
+        match value {
+            ImageData::Url(url) => Self {
+                url,
+                detail: IMAGE_PROCESS_QUALITY,
+            },
+            ImageData::Bytes(base_64_image) => Self {
+                url: base_64_image.to_string(),
+                detail: IMAGE_PROCESS_QUALITY,
+            },
+        }
+    }
 }
 
 impl From<ChatMessage> for Vec<ChatCompletionRequestMessage> {
@@ -47,10 +64,7 @@ impl From<ChatMessage> for Vec<ChatCompletionRequestMessage> {
                             user_message_content.extend(images.into_iter().map(|url| {
                                 ChatCompletionRequestUserMessageContentPart::ImageUrl(
                                     ChatCompletionRequestMessageContentPartImage {
-                                        image_url: ImageUrl {
-                                            detail: IMAGE_PROCESS_QUALITY,
-                                            url,
-                                        },
+                                        image_url: url.into(),
                                     },
                                 )
                             }));
@@ -249,6 +263,26 @@ pub fn convert_message(
                     (content, image_urls)
                 }
             };
+
+            let image_urls = match image_urls
+                .unwrap_or_default()
+                .into_iter()
+                .map(ImageData::dangerously_try_from_string)
+                .collect::<Result<Vec<_>, _>>()
+            {
+                Ok(urls) => {
+                    if urls.is_empty() {
+                        None
+                    } else {
+                        Some(urls)
+                    }
+                }
+                Err(e) => {
+                    tracing::error!(error=?e,"failed to convert images");
+                    None
+                }
+            };
+
             ChatMessage {
                 role: Role::User,
                 content,
@@ -497,7 +531,9 @@ mod tests {
         let original = ChatMessage {
             role: Role::User,
             content: ChatMessageContent::Text("What's in this image?".to_string()),
-            image_urls: Some(vec!["https://example.com/image.jpg".to_string()]),
+            image_urls: Some(vec![ImageData::Url(
+                "https://example.com/image.jpg".to_string(),
+            )]),
         };
 
         let openai_msgs: Vec<ChatCompletionRequestMessage> = original.clone().into();
@@ -667,8 +703,8 @@ mod tests {
             role: Role::User,
             content: ChatMessageContent::Text("Compare these images".to_string()),
             image_urls: Some(vec![
-                "https://example.com/image1.jpg".to_string(),
-                "https://example.com/image2.jpg".to_string(),
+                ImageData::Url("https://example.com/image1.jpg".to_string()),
+                ImageData::Url("https://example.com/image2.jpg".to_string()),
             ]),
         };
 
