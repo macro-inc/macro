@@ -5,7 +5,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use macro_db_client::{
-    chat::get_chat_ids_for_messages, insight::chat_insight_context::get_chat_history_for_messages,
+    chat::get_chat_ids_for_messages, chat_history::get_chat_history_for_messages,
     share_permission::access_level::chat::get_highest_access_level_for_chats,
 };
 use model::chat::ChatHistory;

@@ -38,8 +38,6 @@ members = [
   "experiment_service",
   "frecency",
   "gmail_client",
-  "insight_service",
-  "insight_service_client",
   "integration_tests/*",
   "lambda_client",
   "lexical_client",

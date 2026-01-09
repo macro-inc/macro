@@ -5,7 +5,6 @@ use config::{Config, Environment};
 use document_cognition_service_client::DocumentCognitionServiceClient;
 use document_storage_service_client::DocumentStorageServiceClient;
 use email_service_client::{EmailServiceClient, EmailServiceClientExternal};
-use insight_service_client::InsightContextProvider;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
@@ -78,7 +77,6 @@ async fn main() -> anyhow::Result<()> {
     let sqs_client = sqs_client::SQS::new(queue_aws_client)
         .document_text_extractor_queue(&config.document_text_extractor_queue)
         .chat_delete_queue(&config.chat_delete_queue)
-        .insight_context_queue(&config.insight_context_queue)
         .search_event_queue(&config.search_event_queue);
 
     let secretsmanager_client =
@@ -189,10 +187,6 @@ async fn main() -> anyhow::Result<()> {
                 .with_email_client(email_service_client)
                 .with_static_file_client(static_file_service_client.clone()),
         ),
-        context_provider_client: Arc::new(InsightContextProvider::create(
-            sqs_client.clone(),
-            "chat",
-        )),
         sqs_client: Arc::new(sqs_client),
         document_storage_client: Arc::new(document_storage_client),
         macro_notify_client: Arc::new(macro_notify_client),

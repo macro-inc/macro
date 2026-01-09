@@ -40,7 +40,6 @@ doppleganger = { workspace = true }
 email_service_client = { path = "../email_service_client" }
 futures = { workspace = true }
 http-body-util = { workspace = true }
-insight_service_client = { path = "../insight_service_client" }
 lazy_static = { workspace = true }
 lexical_client = { path = "../lexical_client" }
 log = { workspace = true }

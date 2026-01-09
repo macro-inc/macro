@@ -118,10 +118,7 @@
       "name": "fusion-auth",
       "version": "0.0.0",
     },
-    "stacks/insight-service": {
-      "name": "insight-service-stack",
-      "version": "0.0.0",
-    },
+
     "stacks/link-sharing": {
       "name": "link-sharing-stack",
       "version": "0.0.0",
@@ -712,7 +709,6 @@
 
     "ini": ["ini@2.0.0", "", {}, "sha512-7PnF4oN3CvZF23ADhA5wRaYEQpJ8qygSkbtTXWBeXWXmEVRXK+1ITciHWwHhsjv1TmW0MgacIv6hEi5pX5NQdA=="],
 
-    "insight-service-stack": ["insight-service-stack@workspace:stacks/insight-service"],
 
     "ip-address": ["ip-address@9.0.5", "", { "dependencies": { "jsbn": "1.1.0", "sprintf-js": "^1.1.3" } }, "sha512-zHtQzGojZXTwZTHQqra+ETKd4Sn3vgi7uBmlPoXVWZqYvuKmtI0l/VZTjqGmJY9x88GGOaZ9+G9ES8hC4T4X8g=="],
 

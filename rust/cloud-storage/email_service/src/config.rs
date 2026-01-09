@@ -32,9 +32,6 @@ pub struct Config {
     /// The SQS queue name for search event
     pub search_event_queue: String,
 
-    /// Insight context queue
-    pub insight_context_queue: String,
-
     /// The GCP queue name that has the subscription that hits our webhook endpoint
     pub gmail_gcp_queue: String,
 
@@ -154,9 +151,6 @@ impl Config {
 
         let search_event_queue =
             std::env::var("SEARCH_EVENT_QUEUE").context("SEARCH_EVENT_QUEUE must be provided")?;
-
-        let insight_context_queue = std::env::var("INSIGHT_CONTEXT_QUEUE")
-            .context("INSIGHT_CONTEXT_QUEUE must be provided")?;
 
         let gmail_gcp_queue =
             std::env::var("GMAIL_GCP_QUEUE").context("GMAIL_GCP_QUEUE must be provided")?;
@@ -279,7 +273,6 @@ impl Config {
             gmail_inbox_sync_queue,
             gmail_inbox_sync_retry_queue,
             search_event_queue,
-            insight_context_queue,
             gmail_gcp_queue,
             notification_queue,
             backfill_queue,

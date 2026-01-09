@@ -2,6 +2,7 @@
 pub mod account_merge_request;
 pub mod activity;
 pub mod annotations;
+pub mod chat_history;
 pub mod blocked_email;
 pub mod chat;
 pub mod convert;
@@ -15,8 +16,6 @@ pub mod experiment_log;
 pub mod history;
 pub mod in_progress_email_link;
 pub mod in_progress_user_link;
-pub mod insight;
-pub mod insights_backfill;
 pub mod instructions;
 pub mod item_access;
 pub mod items;

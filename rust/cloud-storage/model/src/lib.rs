@@ -12,7 +12,6 @@ pub mod document;
 pub mod document_storage_service_internal;
 pub mod experiment;
 pub mod folder;
-pub mod insight_context;
 pub mod item;
 pub mod macros;
 pub mod organization;

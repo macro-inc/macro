@@ -31,8 +31,6 @@ pub struct Config {
     pub notification_queue: String,
     /// comms service url
     pub comms_service_url: String,
-    /// the sqs to to send chat context to
-    pub insight_context_queue: String,
     pub search_event_queue: String,
     pub sync_service_url: String,
     pub sync_service_auth_key: String,
@@ -81,9 +79,6 @@ impl Config {
         let comms_service_url =
             std::env::var("COMMS_SERVICE_URL").context("COMMS_SERVICE_URL must be provided")?;
 
-        let insight_context_queue = std::env::var("INSIGHT_CONTEXT_QUEUE")
-            .context("INSIGHT_CONTEXT_QUEUE must be provided")?;
-
         let search_event_queue =
             std::env::var("SEARCH_EVENT_QUEUE").context("SEARCH_EVENT_QUEUE must be provided")?;
 
@@ -130,7 +125,6 @@ impl Config {
             chat_delete_queue,
             notification_queue,
             comms_service_url,
-            insight_context_queue,
             search_event_queue,
             sync_service_auth_key,
             sync_service_url,
@@ -157,7 +151,6 @@ impl Config {
             chat_delete_queue: Default::default(),
             notification_queue: Default::default(),
             comms_service_url: Default::default(),
-            insight_context_queue: Default::default(),
             search_event_queue: Default::default(),
             sync_service_url: Default::default(),
             sync_service_auth_key: Default::default(),

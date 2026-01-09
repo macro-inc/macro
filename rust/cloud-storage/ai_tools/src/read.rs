@@ -400,7 +400,7 @@ impl Read {
             .get_chat_history_for_messages(message_ids, Some(&request_context.jwt_token))
             .await
             .map_err(|e| ToolCallError {
-                description: format!("failed to fetch chat message: {}", e),
+                description: format!("failed to fetch chat messages: {}", e),
                 internal_error: e,
             })?;
 
