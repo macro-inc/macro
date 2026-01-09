@@ -3,6 +3,9 @@ import type { Item } from '@service-storage/generated/schemas/item';
 
 export function getItemBlockName(item: Item, icon?: boolean) {
   if (item.type === 'document')
-    return fileTypeToBlockName(item.subType?.type ?? item.fileType, icon);
+    return fileTypeToBlockName(
+      (item.subType?.type as string | undefined) ?? item.fileType,
+      icon
+    );
   return item.type;
 }
