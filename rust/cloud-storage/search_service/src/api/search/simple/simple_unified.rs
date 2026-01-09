@@ -1,5 +1,4 @@
 use crate::api::search::simple::filter::FilterVariantToSearchArgs;
-use crate::api::search::simple::filter::UnifiedSearchArgsVariant;
 
 use crate::api::search::simple::{simple_chat, simple_document, simple_email, simple_project};
 use crate::api::{
@@ -127,7 +126,13 @@ pub(in crate::api::search) async fn perform_unified_search(
     let should_include_emails = include.is_empty() || include.contains(&UnifiedSearchIndex::Emails);
 
     // Await all tasks in parallel
-    let (doc_result, channel_result, chat_result, email_result, project_result) = tokio::try_join!(
+    let (
+        filter_document_response,
+        filter_channel_response,
+        filter_chat_response,
+        filter_email_response,
+        filter_project_response,
+    ) = tokio::try_join!(
         doc_filters.filter_to_search_args(
             ctx,
             user_id.as_ref(),
@@ -160,31 +165,6 @@ pub(in crate::api::search) async fn perform_unified_search(
         )
     )
     .map_err(|e| SearchError::InternalError(anyhow::anyhow!("tokio error: {:?}", e)))?;
-
-    let filter_document_response = match doc_result {
-        UnifiedSearchArgsVariant::Document(response) => response,
-        _ => unreachable!(),
-    };
-
-    let filter_channel_response = match channel_result {
-        UnifiedSearchArgsVariant::Channel(response) => response,
-        _ => unreachable!(),
-    };
-
-    let filter_chat_response = match chat_result {
-        UnifiedSearchArgsVariant::Chat(response) => response,
-        _ => unreachable!(),
-    };
-
-    let filter_email_response = match email_result {
-        UnifiedSearchArgsVariant::Email(response) => response,
-        _ => unreachable!(),
-    };
-
-    let filter_project_response = match project_result {
-        UnifiedSearchArgsVariant::Project(response) => response,
-        _ => unreachable!(),
-    };
 
     // Clone terms for use in name searches
     let name_search_term = terms[0].clone();
