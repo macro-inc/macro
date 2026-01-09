@@ -80,7 +80,7 @@ pub async fn handler(
         draft_id,
         attachment_id,
     )
-        .await?;
+    .await?;
 
     if rows_affected == 0 {
         return Err(RemoveDraftAttachmentError::AttachmentNotFound);
