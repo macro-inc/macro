@@ -1,5 +1,6 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { EmailAttachmentPill } from '@block-email/component/AttachmentPill';
+import { CollapsedMessageRow } from '@block-email/component/CollapsedMessageRow';
 import { useEmailContext } from '@block-email/component/EmailContext';
 import { EmailInput } from '@block-email/component/EmailInput';
 import { EmailMessageBody } from '@block-email/component/EmailMessageBody';
@@ -183,7 +184,12 @@ export function MessageContainer(props: MessageContainerProps) {
   };
 
   return (
-    <div class="shrink-0 flex justify-center w-full">
+    <div
+      class="shrink-0 flex justify-center w-full transition-opacity"
+      classList={{
+        'opacity-60 hover:opacity-80': !isBodyExpanded(),
+      }}
+    >
       <div class="macro-message-width w-full">
         <Message
           id={props.message.db_id ?? undefined}
@@ -213,18 +219,33 @@ export function MessageContainer(props: MessageContainerProps) {
             />
           </Message.TopBar>
           <Message.Body>
-            <EmailMessageBody
-              message={props.message}
-              isBodyExpanded={isBodyExpanded}
-              setExpandedMessageBody={(id) =>
-                props.setExpandedMessageBodyIds(id, true)
+            <Show
+              when={isBodyExpanded()}
+              fallback={
+                <CollapsedMessageRow
+                  message={props.message}
+                  onClick={() => {
+                    if (props.message.db_id) {
+                      props.setExpandedMessageBodyIds(props.message.db_id, true);
+                      context.messages.setFocused(props.message.db_id);
+                    }
+                  }}
+                />
               }
-              setFocusedMessageId={context.messages.setFocused}
-              isFirstMessageInThread={props.isFirstMessage}
-            />
+            >
+              <EmailMessageBody
+                message={props.message}
+                isBodyExpanded={isBodyExpanded}
+                setExpandedMessageBody={(id) =>
+                  props.setExpandedMessageBodyIds(id, true)
+                }
+                setFocusedMessageId={context.messages.setFocused}
+                isFirstMessageInThread={props.isFirstMessage}
+              />
+            </Show>
           </Message.Body>
-          {/* Image attachments */}
-          <Show when={imageAttachmentsWithSfs().length > 0}>
+          {/* Image attachments - only show when expanded */}
+          <Show when={isBodyExpanded() && imageAttachmentsWithSfs().length > 0}>
             <Switch>
               <Match when={imageAttachmentsWithSfs().length === 1}>
                 <div class="max-w-[400px] w-fit mt-2">
@@ -252,8 +273,8 @@ export function MessageContainer(props: MessageContainerProps) {
             </Switch>
           </Show>
 
-          {/* Video attachments */}
-          <Show when={videoAttachmentsWithSfs().length > 0}>
+          {/* Video attachments - only show when expanded */}
+          <Show when={isBodyExpanded() && videoAttachmentsWithSfs().length > 0}>
             <For each={videoAttachmentsWithSfs()}>
               {(attachment) => (
                 <VideoPreview id={attachment.sfs_id!} variant="dynamic" />
@@ -261,8 +282,8 @@ export function MessageContainer(props: MessageContainerProps) {
             </For>
           </Show>
 
-          {/* Other attachments (non-media or without sfs_id) */}
-          <Show when={otherAttachments().length > 0}>
+          {/* Other attachments (non-media or without sfs_id) - only show when expanded */}
+          <Show when={isBodyExpanded() && otherAttachments().length > 0}>
             <div class="flex flex-row overflow-x-scroll mt-2 gap-2">
               <For each={otherAttachments()}>
                 {(attachment) => (
