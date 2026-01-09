@@ -1,6 +1,9 @@
 use sqlx::PgPool;
 use uuid::Uuid;
 
+#[cfg(test)]
+mod tests;
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct DbBasicNotification<T> {
     pub event_item_id: String,
