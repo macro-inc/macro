@@ -19,7 +19,6 @@ import { useUploadAttachment } from '@core/component/AI/util/uploadToChat';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { Hotkey, modifierMap } from '@core/component/Hotkey';
 import { Tooltip } from '@core/component/Tooltip';
-import { activeScope } from '@core/hotkey/state';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import PlusIcon from '@icon/regular/plus.svg';
 import XIcon from '@icon/regular/x.svg';
@@ -31,8 +30,6 @@ import {
   createEffect,
   createSignal,
   on,
-  onCleanup,
-  onMount,
   Show,
 } from 'solid-js';
 import { useTabAttachments } from '../../signal/tabAttachments';
