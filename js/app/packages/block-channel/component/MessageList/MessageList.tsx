@@ -767,6 +767,7 @@ function MessageListImpl(props: MessageListProps) {
               data-channel-message-list
               data={rows() ?? []}
               shift={isPrepend()}
+              itemSize={BASE_ITEM_SIZE}
               bufferSize={10 * BASE_ITEM_SIZE}
               keepMounted={keepMountedIndices()}
               onScroll={handleScroll}
