@@ -288,23 +288,13 @@ export function Document() {
     if (!blockEl) return;
     const viewer = getRootViewer();
     const size = documentSize();
-    console.log(
-      '[MOUNT EFFECT] documentSize:',
-      size,
-      'viewer:',
-      viewer,
-      'isMounted:',
-      viewer?.isMounted
-    );
     if (!size) return;
     // wait for valid dimensions
     if (size.width === 0 || size.height === 0) {
       return;
     }
     if (!mountRef || !viewer || viewer.isMounted) return;
-    console.log('[MOUNT EFFECT] About to mount with size:', size);
     viewer.mount(mountRef, blockEl);
-    console.log('[MOUNT EFFECT] Mount complete, isMounted:', viewer.isMounted);
   });
 
   onCleanup(() => {
@@ -362,12 +352,6 @@ export function Document() {
       const { documentId } = documentMetadata;
       if (documentId === prevDocumentId) return documentId;
 
-      console.log(
-        '[LOAD EFFECT] Loading document:',
-        documentId,
-        'rootViewer.isMounted:',
-        rootPdfViewer.isMounted
-      );
       rootPdfViewer.load(documentProxy);
       popupPdfViewer.load(documentProxy);
 
@@ -710,14 +694,8 @@ export function Document() {
       <ViewerPopupProvider>
         <div
           use:observedSize={{
-            setSize: ((size) => {
-              console.log('[OBSERVED SIZE] New size:', size);
-              setDocumentSize(size);
-            }) as typeof setDocumentSize,
-            setInitialized: ((init) => {
-              console.log('[OBSERVED SIZE] Initialized:', init);
-              setInitialized(init);
-            }) as typeof setInitialized,
+            setSize: setDocumentSize,
+            setInitialized: setInitialized,
           }}
           class={`${disableClick() ? 'noClickParse' : ''} w-full h-full relative outline-none`}
           ref={(ref) => {
