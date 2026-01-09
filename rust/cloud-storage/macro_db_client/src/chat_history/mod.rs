@@ -71,9 +71,8 @@ where
 }
 
 fn build_chat_history(rows: Vec<ChatHistoryRow>) -> ChatHistory {
-    type  Chats = HashMap<String, (String, Vec<(String, DateTime<Utc>, Vec<String>)>)>;
-    let mut chats: Chats =
-        HashMap::new();
+    type Chats = HashMap<String, (String, Vec<(String, DateTime<Utc>, Vec<String>)>)>;
+    let mut chats: Chats = HashMap::new();
 
     for row in rows {
         let chat_entry = chats

@@ -21,7 +21,6 @@ pub mod email;
 #[cfg(feature = "gmail")]
 pub mod gmail;
 
-
 #[cfg(feature = "organization_retention")]
 mod organization_retention;
 

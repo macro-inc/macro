@@ -2,9 +2,9 @@
 pub mod account_merge_request;
 pub mod activity;
 pub mod annotations;
-pub mod chat_history;
 pub mod blocked_email;
 pub mod chat;
+pub mod chat_history;
 pub mod convert;
 pub mod dcs;
 pub mod document;

@@ -359,8 +359,6 @@ async fn handle_contacts_sync(
     Ok(())
 }
 
-
-
 /// Process and insert email threads by handling attachments and images
 #[tracing::instrument(skip(ctx, gmail_access_token))]
 async fn fetch_and_insert_thread(
