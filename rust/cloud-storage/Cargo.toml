@@ -67,6 +67,7 @@ members = [
   "models_permissions",
   "models_properties",
   "models_search",
+  "models_search_cursor",
   "models_sfs",
   "models_soup",
   "models_team",

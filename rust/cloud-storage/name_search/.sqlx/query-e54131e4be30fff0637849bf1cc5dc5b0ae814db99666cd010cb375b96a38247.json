@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH oldest_messages AS (\n                SELECT DISTINCT ON (thread_id)\n                    thread_id,\n                    subject\n                FROM email_messages\n                WHERE link_id IN (\n                    SELECT id FROM email_links WHERE macro_id = $1\n                )\n                AND (thread_id = ANY($2) OR $3)\n                ORDER BY thread_id, internal_date_ts ASC\n            )\n            SELECT\n                t.id as entity_id,\n                om.subject as \"name!\",\n                t.latest_non_spam_message_ts as updated_at\n            FROM email_threads t\n            INNER JOIN oldest_messages om ON om.thread_id = t.id\n            WHERE t.link_id IN (\n                SELECT id FROM email_links WHERE macro_id = $1\n            )\n            AND om.subject ILIKE $4\n            AND (\n                $6::timestamptz IS NULL\n                OR (t.latest_non_spam_message_ts, t.id) < ($6, $7)\n            )\n            ORDER BY t.latest_non_spam_message_ts DESC, t.id DESC\n            LIMIT $5\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entity_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "UuidArray",
+        "Bool",
+        "Text",
+        "Int8",
+        "Timestamptz",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "e54131e4be30fff0637849bf1cc5dc5b0ae814db99666cd010cb375b96a38247"
+}

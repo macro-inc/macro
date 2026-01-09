@@ -10,6 +10,7 @@ pub use chat::*;
 pub use document::*;
 pub use email::*;
 pub use models_opensearch::SearchEntityType;
+pub use models_search_cursor::SearchMethodCursor;
 pub use project::*;
 
 /// Errors for name search crate
@@ -35,4 +36,15 @@ pub struct NameSearchResult {
     pub entity_type: SearchEntityType,
     /// The name that was matched
     pub name: String,
+    /// The timestamp used for cursor-based pagination
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Paginated response containing results and next cursor
+#[derive(Debug, serde::Serialize)]
+pub struct NameSearchResponse {
+    /// The search results
+    pub results: Vec<NameSearchResult>,
+    /// The cursor for the next page, if there are more results
+    pub next_cursor: Option<SearchMethodCursor>,
 }

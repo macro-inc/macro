@@ -1,0 +1,38 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH oldest_messages AS (\n                SELECT DISTINCT ON (thread_id)\n                    thread_id,\n                    subject\n                FROM email_messages\n                WHERE thread_id = ANY($1)\n                ORDER BY thread_id, internal_date_ts ASC\n            )\n            SELECT\n                t.id as entity_id,\n                om.subject as \"name!\",\n                t.latest_non_spam_message_ts as updated_at\n            FROM email_threads t\n            INNER JOIN oldest_messages om ON om.thread_id = t.id\n            WHERE om.subject ILIKE $2\n                AND (\n                    $4::timestamptz IS NULL\n                    OR (t.latest_non_spam_message_ts, t.id) < ($4, $5)\n                )\n            ORDER BY t.latest_non_spam_message_ts DESC, t.id DESC\n            LIMIT $3\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entity_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Text",
+        "Int8",
+        "Timestamptz",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "8d18ac9753eb716a5e7efdbc0ec3e9fa9dff65e704d1694f81113f4ef76676a4"
+}
