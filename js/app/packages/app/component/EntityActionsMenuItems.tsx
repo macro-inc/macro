@@ -92,7 +92,7 @@ export const EntityActionsMenuItems = (props: EntityActionsMenuItemsProps) => {
             const { fileType, id, subType } = props.entity;
             splitManager.createNewSplit({
               content: {
-                type: fileTypeToBlockName(subType ?? fileType),
+                type: fileTypeToBlockName(subType?.type ?? fileType),
                 id,
               },
               referredFrom: 'entity-actions-menu',

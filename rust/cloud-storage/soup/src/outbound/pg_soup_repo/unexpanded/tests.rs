@@ -9,7 +9,7 @@ use models_pagination::Identify;
 use models_pagination::{PaginateOn, Query, SimpleSortMethod};
 use models_soup::item::SoupItem;
 use sqlx::{Pool, Postgres};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 // testing the sorting methods work as expected
@@ -692,6 +692,72 @@ async fn test_no_frecency_unexpanded_cursor_pagination(pool: Pool<Postgres>) -> 
         }
         _ => panic!("Fourth item should be a chat"),
     }
+
+    Ok(())
+}
+
+// Test that is_completed field is correctly set based on task status
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("tasks_with_is_completed")
+    )
+)]
+async fn test_is_completed_field(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let user_id = MacroUserIdStr::parse_from_str("macro|user@user.com").unwrap();
+
+    let result = unexpanded_generic_cursor_soup(
+        &pool,
+        user_id,
+        10,
+        Query::Sort(SimpleSortMethod::UpdatedAt, ()),
+    )
+    .await?;
+
+    assert_eq!(result.len(), 4, "Should return 4 documents");
+
+    // Create a map of document IDs to their is_completed values
+    let mut is_completed_map: HashMap<Uuid, Option<bool>> = HashMap::new();
+
+    for item in &result {
+        if let SoupItem::Document(doc) = item {
+            is_completed_map.insert(
+                doc.id,
+                doc.sub_type.as_ref().and_then(|st| st.is_task_completed()),
+            );
+        }
+    }
+
+    // Verify is_completed values
+    let completed_task_id = Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap();
+    let incomplete_task_id = Uuid::parse_str("22222222-2222-2222-2222-222222222222").unwrap();
+    let task_no_status_id = Uuid::parse_str("33333333-3333-3333-3333-333333333333").unwrap();
+    let regular_doc_id = Uuid::parse_str("44444444-4444-4444-4444-444444444444").unwrap();
+
+    assert_eq!(
+        is_completed_map.get(&completed_task_id),
+        Some(&Some(true)),
+        "Completed task should have is_completed = true"
+    );
+
+    assert_eq!(
+        is_completed_map.get(&incomplete_task_id),
+        Some(&Some(false)),
+        "Incomplete task should have is_completed = false"
+    );
+
+    assert_eq!(
+        is_completed_map.get(&task_no_status_id),
+        Some(&Some(false)),
+        "Task without status should have is_completed = false"
+    );
+
+    assert_eq!(
+        is_completed_map.get(&regular_doc_id),
+        Some(&None),
+        "Regular document should have is_completed = None"
+    );
 
     Ok(())
 }

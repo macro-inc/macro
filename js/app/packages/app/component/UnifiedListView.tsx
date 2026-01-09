@@ -1113,7 +1113,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     let entityPath: string;
     if (entity.type === 'document') {
       const { fileType, subType } = entity;
-      const blockName = fileTypeToBlockName(subType ?? fileType);
+      const blockName = fileTypeToBlockName(subType?.type ?? fileType);
       entityPath = `/app/${blockName}/${entity.id}`;
     } else {
       entityPath = `/app/${entity.type}/${entity.id}`;

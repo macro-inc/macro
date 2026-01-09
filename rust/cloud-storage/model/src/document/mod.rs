@@ -37,6 +37,31 @@ pub struct DocumentPermissionsToken {
     pub iss: String,
 }
 
+/// Sub type of a document with associated properties encoded in each variant.
+/// This ensures type-safety: task properties only exist when the document is a task.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone, ToSchema)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum BasicDocumentSubType {
+    /// A task document with its associated properties
+    Task {
+        /// Whether the task is completed.
+        /// True if the Status property is set to "Completed".
+        is_completed: bool,
+    },
+}
+
+impl BasicDocumentSubType {
+    /// Converts from DB representation (separate sub_type and is_completed columns)
+    /// to the domain enum.
+    pub fn from_db(sub_type: Option<DocumentSubType>, is_completed: Option<bool>) -> Option<Self> {
+        match sub_type? {
+            DocumentSubType::Task => Some(Self::Task {
+                is_completed: is_completed.unwrap_or_default(),
+            }),
+        }
+    }
+}
+
 #[derive(
     sqlx::FromRow, serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone, ToSchema,
 )]
@@ -92,8 +117,9 @@ pub struct BasicDocument {
     pub deleted_at: Option<chrono::DateTime<chrono::Utc>>,
 
     /// The sub type of the document if present.
+    /// Task-related properties are encoded within the variant.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub sub_type: Option<DocumentSubType>,
+    pub sub_type: Option<BasicDocumentSubType>,
 }
 
 #[derive(sqlx::FromRow, serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
@@ -315,9 +341,32 @@ pub enum DocumentPreview {
     DoesNotExist(WithDocumentId),
 }
 
-#[derive(
-    sqlx::FromRow, serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone, ToSchema,
-)]
+/// The sub type of a document preview with associated properties.
+/// Task-related properties are encoded within the variant to ensure valid states.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone, ToSchema)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum DocumentPreviewDataSubType {
+    /// A task document with completion status
+    Task {
+        /// Whether the task is completed.
+        /// True if the Status property is set to "Completed".
+        is_completed: bool,
+    },
+}
+
+impl DocumentPreviewDataSubType {
+    /// Converts from DB representation (separate sub_type and is_completed columns)
+    /// to the domain enum.
+    pub fn from_db(sub_type: Option<DocumentSubType>, is_completed: Option<bool>) -> Option<Self> {
+        match sub_type? {
+            DocumentSubType::Task => Some(Self::Task {
+                is_completed: is_completed.unwrap_or_default(),
+            }),
+        }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone, ToSchema)]
 pub struct DocumentPreviewData {
     /// The document id
     pub document_id: String,
@@ -333,8 +382,9 @@ pub struct DocumentPreviewData {
     #[schema(value_type = i64, nullable=false)]
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
     /// The sub type of the document if present.
+    /// Task-related properties are encoded within the variant.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub sub_type: Option<DocumentSubType>,
+    pub sub_type: Option<DocumentPreviewDataSubType>,
 }
 
 #[derive(

@@ -52,6 +52,7 @@ export function useHistoryQuery(options?: {
 
   return useQuery(() => ({
     ...historyQueryOptions(),
+    placeholderData: (prev) => prev,
     select: (data: HistoryQueryResponse): HistoryItem[] => {
       const instructionsId = instructionsIdQuery.isSuccess
         ? instructionsIdQuery.data

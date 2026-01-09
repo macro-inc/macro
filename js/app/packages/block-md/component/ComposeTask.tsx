@@ -187,7 +187,10 @@ function TaskToastPreview(props: { title: string; body: string; id: string }) {
           <EntityIcon targetType="task" />
           <span class="text-base font-medium">
             {props.title ||
-              itemToSafeName({ type: 'document', subType: 'task' })}
+              itemToSafeName({
+                type: 'document',
+                subType: { type: 'task' },
+              })}
           </span>
         </div>
         <div class="text-ink-muted text-sm h-fit max-h-18 w-full truncate">

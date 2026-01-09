@@ -5,7 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { DocumentPreviewDataFileType } from './documentPreviewDataFileType';
-import type { DocumentPreviewDataSubType } from './documentPreviewDataSubType';
+import type { DocumentPreviewDataSubTypeProperty } from './documentPreviewDataSubTypeProperty';
 
 export interface DocumentPreviewData {
   /** The document id */
@@ -16,7 +16,7 @@ export interface DocumentPreviewData {
   file_type?: DocumentPreviewDataFileType;
   /** The id of the owner of the document */
   owner: string;
-  sub_type?: DocumentPreviewDataSubType;
+  sub_type?: DocumentPreviewDataSubTypeProperty;
   /** The time the document was last updated */
   updated_at: number;
 }

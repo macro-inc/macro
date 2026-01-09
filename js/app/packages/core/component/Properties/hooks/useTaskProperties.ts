@@ -1,3 +1,4 @@
+import type { SubType } from '@macro-entity';
 import { useBulkEntityPropertiesQuery } from '@queries/properties/bulk';
 import { createMemo } from 'solid-js';
 import { SYSTEM_PROPERTY_IDS } from '../constants';
@@ -8,7 +9,7 @@ export type TaskPropertiesStore = Record<string, Property[]>;
 interface Entity {
   id: string;
   type: string;
-  subType?: string | null;
+  subType?: SubType;
 }
 
 const TASK_PROPERTY_DEFINITION_IDS = [
@@ -19,8 +20,8 @@ const TASK_PROPERTY_DEFINITION_IDS = [
 
 function isTaskEntity(
   entity: Entity
-): entity is Entity & { type: 'document'; subType: 'task' } {
-  return entity.type === 'document' && entity.subType === 'task';
+): entity is Entity & { type: 'document'; subType: { type: 'task' } } {
+  return entity.type === 'document' && entity.subType?.type === 'task';
 }
 
 export function useTaskProperties(

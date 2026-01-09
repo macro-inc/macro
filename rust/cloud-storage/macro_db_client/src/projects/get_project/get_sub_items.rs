@@ -1,6 +1,11 @@
 use document_sub_type::DocumentSubType;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
-use model::{chat::Chat, document::BasicDocument, project::Project};
+use model::{
+    chat::Chat,
+    document::{BasicDocument, BasicDocumentSubType},
+    project::Project,
+};
+use system_properties::{StatusOption, SystemPropertyKey};
 
 /// Gets all deleted sub-projects of a given project.
 /// Includes the root project itself as well.
@@ -76,6 +81,9 @@ pub async fn get_sub_documents(
     transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     project_id: &str,
 ) -> anyhow::Result<Vec<BasicDocument>> {
+    let status_property_id = SystemPropertyKey::STATUS_UUID;
+    let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
+
     let documents: Vec<BasicDocument> = sqlx::query!(
         r#"
             SELECT
@@ -87,10 +95,23 @@ pub async fn get_sub_documents(
                 d."createdAt"::timestamptz as created_at,
                 d."updatedAt"::timestamptz as updated_at,
                 d."projectId" as "project_id?",
-                dt.sub_type as "sub_type?: DocumentSubType"
+                dt.sub_type as "sub_type?: DocumentSubType",
+                CASE 
+                    WHEN dt.sub_type = 'task' 
+                        AND ep_status.values->'value' ? $2
+                    THEN true 
+                    WHEN dt.sub_type = 'task'
+                    THEN false
+                    ELSE NULL 
+                END as "is_completed"
             FROM
                 "Document" d
             LEFT JOIN document_sub_type dt ON dt.document_id = d.id
+            LEFT JOIN entity_properties ep_status 
+                ON dt.sub_type = 'task'
+                AND ep_status.entity_id = d.id 
+                AND ep_status.entity_type = 'TASK'
+                AND ep_status.property_definition_id = $3
             LEFT JOIN LATERAL (
                 SELECT
                     b.id
@@ -119,6 +140,8 @@ pub async fn get_sub_documents(
             WHERE d."projectId" = $1 AND d."deletedAt" IS NULL
         "#,
         project_id,
+        completed_option_id,
+        status_property_id,
     )
     .try_map(|row| {
         Ok(BasicDocument {
@@ -137,7 +160,7 @@ pub async fn get_sub_documents(
             created_at: row.created_at,
             updated_at: row.updated_at,
             deleted_at: None, // Don't care about the deleted_at
-            sub_type: row.sub_type,
+            sub_type: BasicDocumentSubType::from_db(row.sub_type, row.is_completed),
         })
     })
     .fetch_all(transaction.as_mut())
