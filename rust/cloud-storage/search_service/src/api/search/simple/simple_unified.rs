@@ -18,6 +18,7 @@ use models_search::{
     SearchOn, SimpleSearchResponse,
     unified::{SimpleUnifiedSearchResponse, UnifiedSearchIndex, UnifiedSearchRequest},
 };
+use models_search_cursor::SearchCursor;
 use opensearch_client::search::unified::UnifiedSearchArgs;
 
 /// Creates a unified search request and performs the search
@@ -28,7 +29,7 @@ pub(in crate::api::search) async fn perform_unified_search(
     user_context: &UserContext,
     query_params: SearchPaginationParams,
     req: UnifiedSearchRequest,
-) -> Result<Vec<opensearch_client::search::model::SearchHit>, SearchError> {
+) -> Result<(Vec<opensearch_client::search::model::SearchHit>, Option<String>), SearchError> {
     let user_id = user_context.user_id.clone();
 
     if user_id.is_empty() {
@@ -42,7 +43,12 @@ pub(in crate::api::search) async fn perform_unified_search(
     let user_organization_id = user_context.organization_id;
     let collapse = req.collapse.unwrap_or(false);
 
-    let page = query_params.page.unwrap_or(0);
+    // Parse cursor from query params
+    let cursor: Option<SearchCursor> = query_params
+        .cursor
+        .as_ref()
+        .and_then(|c| SearchCursor::decode(c));
+
     let page_size = query_params.page_size.unwrap_or(10);
     if !(0..=100).contains(&page_size) {
         return Err(SearchError::InvalidPageSize);
@@ -144,10 +150,16 @@ pub(in crate::api::search) async fn perform_unified_search(
     // Clone terms for use in name searches
     let name_search_term = terms[0].clone();
 
+    // Extract individual cursors from the combined cursor
+    let document_cursor = cursor.as_ref().and_then(|c| c.document_name_cursor.clone());
+    let chat_cursor = cursor.as_ref().and_then(|c| c.chat_name_cursor.clone());
+    let email_cursor = cursor.as_ref().and_then(|c| c.email_subject_cursor.clone());
+    let project_cursor = cursor.as_ref().and_then(|c| c.project_name_cursor.clone());
+
     let unified_search_args = UnifiedSearchArgs {
         terms,
         user_id: user_id.as_ref().to_string(),
-        page,
+        page: 0, // With cursor-based pagination, we always start from "page 0" relative to cursor
         page_size,
         match_type: match_type.to_string(),
         search_on: search_on.into(),
@@ -161,7 +173,7 @@ pub(in crate::api::search) async fn perform_unified_search(
     };
 
     // Call search functions in parallel for included entity types
-    let (doc_results, chat_results, email_results, project_results, content_results) = tokio::join!(
+    let (doc_name_results, chat_results, email_results, project_results, content_results) = tokio::join!(
         async {
             if should_include_documents {
                 match search_on {
@@ -174,15 +186,15 @@ pub(in crate::api::search) async fn perform_unified_search(
                                 document_ids: filter_document_response.document_ids,
                             },
                             name_search_term.clone(),
-                            page,
                             page_size,
+                            document_cursor,
                         )
                         .await
                     }
-                    SearchOn::Content => Ok(vec![]),
+                    SearchOn::Content => Ok((vec![], None)),
                 }
             } else {
-                Ok(vec![])
+                Ok((vec![], None))
             }
         },
         async {
@@ -197,15 +209,15 @@ pub(in crate::api::search) async fn perform_unified_search(
                                 chat_ids: filter_chat_response.chat_ids,
                             },
                             name_search_term.clone(),
-                            page,
                             page_size,
+                            chat_cursor,
                         )
                         .await
                     }
-                    SearchOn::Content => Ok(vec![]),
+                    SearchOn::Content => Ok((vec![], None)),
                 }
             } else {
-                Ok(vec![])
+                Ok((vec![], None))
             }
         },
         async {
@@ -220,15 +232,15 @@ pub(in crate::api::search) async fn perform_unified_search(
                                 thread_ids: filter_email_response.thread_ids,
                             },
                             name_search_term.clone(),
-                            page,
                             page_size,
+                            email_cursor,
                         )
                         .await
                     }
-                    SearchOn::Content => Ok(vec![]),
+                    SearchOn::Content => Ok((vec![], None)),
                 }
             } else {
-                Ok(vec![])
+                Ok((vec![], None))
             }
         },
         async {
@@ -243,15 +255,15 @@ pub(in crate::api::search) async fn perform_unified_search(
                                 project_ids: filter_project_response.project_ids,
                             },
                             name_search_term.clone(),
-                            page,
                             page_size,
+                            project_cursor,
                         )
                         .await
                     }
-                    SearchOn::Content => Ok(vec![]),
+                    SearchOn::Content => Ok((vec![], None)),
                 }
             } else {
-                Ok(vec![])
+                Ok((vec![], None))
             }
         },
         async {
@@ -267,15 +279,41 @@ pub(in crate::api::search) async fn perform_unified_search(
         },
     );
 
+    // Extract results and next cursors
+    let (doc_hits, doc_next_cursor) = doc_name_results?;
+    let (chat_hits, chat_next_cursor) = chat_results?;
+    let (email_hits, email_next_cursor) = email_results?;
+    let (project_hits, project_next_cursor) = project_results?;
+    let content_hits = content_results?;
+
     // Combine all results
     let mut combined_results = Vec::new();
-    combined_results.extend(doc_results?);
-    combined_results.extend(chat_results?);
-    combined_results.extend(email_results?);
-    combined_results.extend(project_results?);
-    combined_results.extend(content_results?);
+    combined_results.extend(doc_hits);
+    combined_results.extend(chat_hits);
+    combined_results.extend(email_hits);
+    combined_results.extend(project_hits);
+    combined_results.extend(content_hits);
 
-    Ok(combined_results)
+    // Build next cursor if any search has more results
+    let has_more = doc_next_cursor.is_some()
+        || chat_next_cursor.is_some()
+        || email_next_cursor.is_some()
+        || project_next_cursor.is_some();
+
+    let next_cursor = if has_more {
+        let cursor = SearchCursor {
+            document_name_cursor: doc_next_cursor,
+            chat_name_cursor: chat_next_cursor,
+            content_cursor: None, // Content search cursor not yet implemented
+            email_subject_cursor: email_next_cursor,
+            project_name_cursor: project_next_cursor,
+        };
+        cursor.encode()
+    } else {
+        None
+    };
+
+    Ok((combined_results, next_cursor))
 }
 
 /// Perform a search through all items.
@@ -285,8 +323,8 @@ pub(in crate::api::search) async fn perform_unified_search(
     path = "/search/simple",
     operation_id = "simple_unified_search",
     params(
-            ("page" = i64, Query, description = "The page. Defaults to 0."),
             ("page_size" = i64, Query, description = "The page size. Defaults to 10."),
+            ("cursor" = Option<String>, Query, description = "Base64 encoded cursor for pagination."),
     ),
     responses(
             (status = 200, body=SimpleUnifiedSearchResponse),
@@ -304,9 +342,11 @@ pub async fn handler(
 ) -> Result<Json<SimpleSearchResponse>, SearchError> {
     tracing::info!("simple_unified_search");
 
-    let results = perform_unified_search(&ctx, &user_context, query_params, req).await?;
+    let (results, _next_cursor) = perform_unified_search(&ctx, &user_context, query_params, req).await?;
 
     let results = results.into_iter().map(|a| a.into()).collect();
 
+    // Note: SimpleSearchResponse doesn't have a next_cursor field
+    // The cursor is returned by the unified search endpoint (/search)
     Ok(Json(SimpleSearchResponse { results }))
 }

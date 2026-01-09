@@ -159,7 +159,7 @@ pub(in crate::api::search) async fn search_projects(
         .map_err(|_| SearchError::InvalidUserId(user_id.to_string()))?
         .lowercase();
 
-    let page = query_params.page.unwrap_or(0);
+    let _page = query_params.page.unwrap_or(0);
 
     let page_size = if let Some(page_size) = query_params.page_size {
         if !(0..=100).contains(&page_size) {
@@ -199,18 +199,19 @@ pub(in crate::api::search) async fn search_projects(
         .map(|p| p.parse().unwrap())
         .collect::<Vec<Uuid>>();
 
-    let results = name_search::search_project_names(
+    let response = name_search::search_project_names(
         &ctx.db,
         &user_id,
         &project_ids,
         terms[0].clone(),
         filter_project_response.ids_only,
         page_size,
-        page * page_size,
+        None, // Individual endpoint doesn't support cursor pagination
     )
     .await?;
 
-    let results: Vec<SearchHit> = results
+    let results: Vec<SearchHit> = response
+        .results
         .into_iter()
         .map(|n| SearchHit {
             entity_id: n.entity_id,
@@ -234,9 +235,9 @@ pub(in crate::api::search::simple) async fn search_names<'a>(
     user_id: &MacroUserId<macro_user_id::lowercased::Lowercase<'a>>,
     filter_project_response: &FilterProjectResponse,
     term: String,
-    page: u32,
-    page_size: u32,
-) -> Result<Vec<SearchHit>, SearchError> {
+    limit: u32,
+    cursor: Option<name_search::SearchMethodCursor>,
+) -> Result<(Vec<SearchHit>, Option<name_search::SearchMethodCursor>), SearchError> {
     let project_uuids = filter_project_response
         .project_ids
         .iter()
@@ -249,13 +250,15 @@ pub(in crate::api::search::simple) async fn search_names<'a>(
         &project_uuids,
         term,
         filter_project_response.ids_only,
-        page_size,
-        page * page_size,
+        limit,
+        cursor,
     )
     .await
     .map_err(SearchError::NameSearch)
-    .map(|r| {
-        r.into_iter()
+    .map(|response| {
+        let hits = response
+            .results
+            .into_iter()
             .map(|n| SearchHit {
                 entity_id: n.entity_id,
                 entity_type: n.entity_type,
@@ -266,6 +269,7 @@ pub(in crate::api::search::simple) async fn search_names<'a>(
                 },
                 goto: None,
             })
-            .collect()
+            .collect();
+        (hits, response.next_cursor)
     })
 }

@@ -114,9 +114,12 @@ pub(in crate::api::search) async fn search_emails(
             terms[0].clone(),
             false, // ids_only is false since we're not pre-filtering
             page_size,
-            page * page_size,
+            None, // Individual endpoint doesn't support cursor pagination
         )),
-        SearchOn::Content => Either::Right(ready(Ok(Vec::new()))),
+        SearchOn::Content => Either::Right(ready(Ok(name_search::NameSearchResponse {
+            results: vec![],
+            next_cursor: None,
+        }))),
     };
 
     let content_results = match req.search_on {
@@ -143,10 +146,11 @@ pub(in crate::api::search) async fn search_emails(
     };
 
     let (name_result, content_result) = tokio::join!(name_results, content_results);
-    let name_result = name_result.map_err(SearchError::NameSearch)?;
+    let name_response = name_result.map_err(SearchError::NameSearch)?;
     let content_result = content_result.map_err(SearchError::Search)?;
 
-    let results: Vec<SearchHit> = name_result
+    let results: Vec<SearchHit> = name_response
+        .results
         .into_iter()
         .map(|n| SearchHit {
             entity_id: n.entity_id,
@@ -171,9 +175,9 @@ pub(in crate::api::search::simple) async fn search_names<'a>(
     user_id: &MacroUserId<macro_user_id::lowercased::Lowercase<'a>>,
     filter_email_response: &FilterEmailResponse,
     term: String,
-    page: u32,
-    page_size: u32,
-) -> Result<Vec<SearchHit>, SearchError> {
+    limit: u32,
+    cursor: Option<name_search::SearchMethodCursor>,
+) -> Result<(Vec<SearchHit>, Option<name_search::SearchMethodCursor>), SearchError> {
     let thread_uuids = filter_email_response
         .thread_ids
         .iter()
@@ -186,13 +190,15 @@ pub(in crate::api::search::simple) async fn search_names<'a>(
         &thread_uuids,
         term,
         filter_email_response.ids_only,
-        page_size,
-        page * page_size,
+        limit,
+        cursor,
     )
     .await
     .map_err(SearchError::NameSearch)
-    .map(|r| {
-        r.into_iter()
+    .map(|response| {
+        let hits = response
+            .results
+            .into_iter()
             .map(|n| SearchHit {
                 entity_id: n.entity_id,
                 entity_type: n.entity_type,
@@ -203,6 +209,7 @@ pub(in crate::api::search::simple) async fn search_names<'a>(
                 },
                 goto: None,
             })
-            .collect()
+            .collect();
+        (hits, response.next_cursor)
     })
 }

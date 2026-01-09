@@ -171,7 +171,10 @@ impl UnifiedSearchResponseItem {
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, Default)]
 pub struct UnifiedSearchResponse {
+    /// The search results
     pub results: Vec<UnifiedSearchResponseItem>,
+    /// The next cursor to use for paginating results
+    pub next_cursor: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
