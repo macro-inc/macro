@@ -855,22 +855,22 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-sesv2"
-version = "1.68.0"
+version = "1.110.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "668cc84d38aa1d03235ecfa4ab80df6c9cd239fc5360e07611ce8e06c26c7338"
+checksum = "c4d66e803366fd4342170a7d982025e54cc66ecdf2ac8368e97d590ee06bc528"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
  "aws-smithy-async",
- "aws-smithy-http 0.60.12",
+ "aws-smithy-http 0.62.6",
  "aws-smithy-json",
  "aws-smithy-runtime",
  "aws-smithy-runtime-api",
  "aws-smithy-types",
  "aws-types",
  "bytes",
+ "fastrand 2.3.0",
  "http 0.2.12",
- "once_cell",
  "regex-lite",
  "tracing",
 ]
