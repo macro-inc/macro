@@ -23,6 +23,7 @@ import {
 import {
   ENABLE_FRECENCY,
   ENABLE_PROPERTY_DISPLAY,
+  ENABLE_PROPERTY_FILTER,
   ENABLE_SOUP_FROM_FILTER,
   ENABLE_TASKS_TABS,
 } from '@core/constant/featureFlags';
@@ -1617,7 +1618,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       />
                     </section>
                   </Show>
-                  <Show when={ENABLE_PROPERTY_DISPLAY}>
+                  <Show when={ENABLE_PROPERTY_FILTER}>
                     <section class="gap-1 grid p-2">
                       <span class="font-medium text-xs">Property</span>
                       <PropertyFilterControl
