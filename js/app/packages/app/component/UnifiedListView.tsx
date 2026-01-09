@@ -154,7 +154,6 @@ import {
   type SortOptions,
   type SystemSortOption,
   VIEWCONFIG_BASE,
-  VIEWCONFIG_DEFAULTS_IDS,
   VIEWCONFIG_DEFAULTS_IDS_ENUM,
   VIEWCONFIG_FILTER_DOCUMENT_TYPE_FILTER,
   type ViewConfigBase,
@@ -553,9 +552,12 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     const propertyId = sort?.propertyId ?? null;
     const sortOrder = sort?.sortOrder ?? null;
 
+    // Spread filters with propertyFilters explicitly accessed to ensure reactivity tracking
+    const filters = viewsData[viewKey]?.filters;
+
     return {
       display: viewsData[viewKey]?.display,
-      filters: viewsData[viewKey]?.filters,
+      filters: { ...filters, propertyFilters: filters.propertyFilters },
       sort: {
         type: sortType,
         sortBy,
@@ -1269,7 +1271,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     }
   });
 
-  const onClickSaveViewConfigChanges = () => {
+  const onClickSaveViewConfigChanges = async () => {
     const view_ = view();
     const config = currentViewConfigBase();
     if (!view_ || !config) return;
@@ -1279,18 +1281,17 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       toast.alert('Incomplete property filters were not saved');
     }
 
-    saveViewMutation.mutate({
+    // Wait for mutation to complete (including query refetch) before updating initialConfig
+    await saveViewMutation.mutateAsync({
       id: view_.id,
       name: view_.view,
       config,
     });
-    // only for default views
-    if (VIEWCONFIG_DEFAULTS_IDS.includes(view_.id as any)) {
-      // Reset initialConfigSignal to current config after save
-      const currentConfig = stringifiedCurrentViewConfigBase();
-      if (currentConfig !== null && currentConfig !== undefined) {
-        setViewDataStore(selectedView(), 'initialConfig', currentConfig);
-      }
+
+    // Reset initialConfig after save + refetch so isViewConfigChanged returns false
+    const currentConfig = stringifiedCurrentViewConfigBase();
+    if (currentConfig !== null && currentConfig !== undefined) {
+      setViewDataStore(selectedView(), 'initialConfig', currentConfig);
     }
   };
 

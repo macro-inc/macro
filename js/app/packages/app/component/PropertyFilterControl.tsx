@@ -1,5 +1,14 @@
+import { listPropertiesFlat } from '@core/component/Properties/utils';
+import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import type { Accessor, Component } from 'solid-js';
-import { createEffect, createMemo, For, Show } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  onMount,
+  Show,
+} from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { FilterPropertyPill } from './PropertyFilter';
 import type { PropertyFilter } from './PropertyFilterTypes';
@@ -22,6 +31,20 @@ type PropertyFilterControlProps = {
 export const PropertyFilterControl: Component<PropertyFilterControlProps> = (
   props
 ) => {
+  // Fetch all properties once for looking up saved filters
+  const [allProperties, setAllProperties] = createSignal<PropertyDefinition[]>(
+    []
+  );
+
+  onMount(async () => {
+    const properties = await listPropertiesFlat('all');
+    setAllProperties(properties);
+  });
+
+  // Look up property definition by ID
+  const getPropertyById = (id: string): PropertyDefinition | undefined =>
+    allProperties().find((p) => p.id === id);
+
   // Simple incrementing ID generator (unique within component lifetime)
   let nextFilterId = 0;
   const getNextFilterId = () => `property-filter-${nextFilterId++}`;
@@ -121,6 +144,10 @@ export const PropertyFilterControl: Component<PropertyFilterControlProps> = (
     props.onIncompleteFiltersChange?.(hasIncompleteFilters());
   });
 
+  // Show loading if we have saved filters but properties haven't loaded yet
+  const isLoading = () =>
+    filters.some((f) => f.data !== null) && allProperties().length === 0;
+
   return (
     <div class="flex flex-col gap-1">
       {/* Conflict warnings */}
@@ -130,27 +157,37 @@ export const PropertyFilterControl: Component<PropertyFilterControlProps> = (
         </div>
       </Show>
 
-      {/* TODO: Optimization opportunity - fetch properties once here and pass
-          initialProperty to each pill to avoid N API calls on restore.
-          Also add controlled editing state (editingPropertyId) so only one
-          dropdown is open at a time. */}
-      <For each={filters}>
-        {(filter, index) => (
-          <>
-            <FilterPropertyPill
-              id={filter.id}
-              savedData={filter.data}
-              onSave={(data) => updateFilter(filter.id, data)}
-              onCancel={() => removeFilter(filter.id)}
-            />
-            <Show when={index() < filters.length - 1}>
-              <span class="text-[10px] text-ink-muted font-mono pl-3 pt-0.25 leading-none">
-                AND
-              </span>
-            </Show>
-          </>
-        )}
-      </For>
+      <Show
+        when={!isLoading()}
+        fallback={
+          <div class="text-xs text-ink-muted px-2 py-1">Loading filters...</div>
+        }
+      >
+        {/* TODO: Add controlled editing state (editingPropertyId) so only one
+            dropdown is open at a time. */}
+        <For each={filters}>
+          {(filter, index) => (
+            <>
+              <FilterPropertyPill
+                id={filter.id}
+                savedData={filter.data}
+                initialProperty={
+                  filter.data?.propertyId
+                    ? getPropertyById(filter.data.propertyId)
+                    : undefined
+                }
+                onSave={(data) => updateFilter(filter.id, data)}
+                onCancel={() => removeFilter(filter.id)}
+              />
+              <Show when={index() < filters.length - 1}>
+                <span class="text-[10px] text-ink-muted font-mono pl-3 pt-0.25 leading-none">
+                  AND
+                </span>
+              </Show>
+            </>
+          )}
+        </For>
+      </Show>
 
       {/* Add filter button */}
       <button

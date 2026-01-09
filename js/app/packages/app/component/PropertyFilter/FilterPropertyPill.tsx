@@ -24,24 +24,107 @@ import { FilterValueSelectMulti } from './FilterValueSelectMulti';
 type FilterPillProps = {
   id: string;
   savedData: PropertyFilter | null; // null = pending, non-null = saved
+  /** Property definition for restoring saved filters (looked up by parent) */
+  initialProperty?: PropertyDefinition;
   onSave: (data: PropertyFilter) => void;
   onCancel: () => void;
 };
 
 export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
-  // Internal editing state
+  // Initialize state from savedData if available
+  const initBooleanValue = (): boolean | null => {
+    if (props.savedData?.dataType === 'BOOLEAN' && 'value' in props.savedData) {
+      return props.savedData.value as boolean;
+    }
+    return null;
+  };
+
+  const initDateValue = (): string | null => {
+    if (props.savedData?.dataType === 'DATE' && 'value' in props.savedData) {
+      return props.savedData.value as string;
+    }
+    return null;
+  };
+
+  const initDateValues = (): string[] => {
+    if (props.savedData?.dataType === 'DATE' && 'values' in props.savedData) {
+      return props.savedData.values as string[];
+    }
+    return [];
+  };
+
+  const initNumberValue = (): number | null => {
+    if (props.savedData?.dataType === 'NUMBER' && 'value' in props.savedData) {
+      return props.savedData.value as number;
+    }
+    return null;
+  };
+
+  const initNumberValues = (): number[] => {
+    if (props.savedData?.dataType === 'NUMBER' && 'values' in props.savedData) {
+      return props.savedData.values as number[];
+    }
+    return [];
+  };
+
+  const initSelectValue = (): string | null => {
+    if (
+      (props.savedData?.dataType === 'SELECT_STRING' ||
+        props.savedData?.dataType === 'SELECT_NUMBER') &&
+      'value' in props.savedData
+    ) {
+      return String(props.savedData.value);
+    }
+    return null;
+  };
+
+  const initSelectValues = (): string[] => {
+    if (
+      (props.savedData?.dataType === 'SELECT_STRING' ||
+        props.savedData?.dataType === 'SELECT_NUMBER') &&
+      'values' in props.savedData
+    ) {
+      return (props.savedData.values as (string | number)[]).map(String);
+    }
+    return [];
+  };
+
+  const initEntityValues = (): EntityFilterValue[] => {
+    if (props.savedData?.dataType === 'ENTITY' && 'values' in props.savedData) {
+      return props.savedData.values as EntityFilterValue[];
+    }
+    return [];
+  };
+
+  // Internal editing state - initialized from props
   const [selectedProperty, setSelectedProperty] =
-    createSignal<PropertyDefinition | null>(null);
-  const [action, setAction] = createSignal<FilterAction | null>(null);
+    createSignal<PropertyDefinition | null>(props.initialProperty ?? null);
+  const [action, setAction] = createSignal<FilterAction | null>(
+    props.savedData?.action ?? null
+  );
   const [values, _setValues] = createSignal<string[]>([]);
-  const [booleanValue, setBooleanValue] = createSignal<boolean | null>(null);
-  const [dateValue, setDateValue] = createSignal<string | null>(null);
-  const [dateValues, setDateValues] = createSignal<string[]>([]); // Multi-date for equality actions
-  const [numberValue, setNumberValue] = createSignal<number | null>(null);
-  const [numberValues, setNumberValues] = createSignal<number[]>([]); // Multi-number for equality actions
-  const [selectValue, setSelectValue] = createSignal<string | null>(null); // option ID for SELECT types
-  const [selectValues, setSelectValues] = createSignal<string[]>([]); // Multi-select for equality actions
-  const [entityValues, setEntityValues] = createSignal<EntityFilterValue[]>([]); // Entity values for ENTITY type
+  const [booleanValue, setBooleanValue] = createSignal<boolean | null>(
+    initBooleanValue()
+  );
+  const [dateValue, setDateValue] = createSignal<string | null>(
+    initDateValue()
+  );
+  const [dateValues, setDateValues] = createSignal<string[]>(initDateValues());
+  const [numberValue, setNumberValue] = createSignal<number | null>(
+    initNumberValue()
+  );
+  const [numberValues, setNumberValues] = createSignal<number[]>(
+    initNumberValues()
+  );
+  const [selectValue, setSelectValue] = createSignal<string | null>(
+    initSelectValue()
+  );
+  const [selectValues, setSelectValues] = createSignal<string[]>(
+    initSelectValues()
+  );
+  const [entityValues, setEntityValues] = createSignal<EntityFilterValue[]>(
+    initEntityValues()
+  );
 
   // Track if user is editing property (to show search instead of pill)
   const [previousProperty, setPreviousProperty] =

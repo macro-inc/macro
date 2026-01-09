@@ -121,18 +121,27 @@ export const FilterValueSelectMulti: Component<FilterValueSelectMultiProps> = (
     });
   });
 
+  // Resolve display values for selected options
+  const getDisplayValue = (optionId: string): string => {
+    const option = getOptionById(optionId);
+    return option ? getOptionDisplayValue(option) : optionId;
+  };
+
   return (
     <div class="flex flex-wrap items-center gap-0.5 min-w-0">
-      {/* Selected value pills */}
-      <For each={props.values}>
-        {(optionId) => {
-          const option = getOptionById(optionId);
-          const displayValue = option
-            ? getOptionDisplayValue(option)
-            : optionId;
-          return (
+      {/* Selected value pills - show loading if we have values but options not loaded */}
+      <Show
+        when={!isLoading() || props.values.length === 0}
+        fallback={
+          <div class="h-6 px-1.5 text-[10px] text-ink-muted border border-edge font-mono flex items-center">
+            ...
+          </div>
+        }
+      >
+        <For each={props.values}>
+          {(optionId) => (
             <div class="group relative h-6 px-1.5 text-[10px] text-ink border border-edge bg-panel font-mono flex items-center">
-              <span class="whitespace-nowrap">{displayValue}</span>
+              <span class="whitespace-nowrap">{getDisplayValue(optionId)}</span>
               {/* X shows on hover, overlays the text */}
               <button
                 type="button"
@@ -142,9 +151,9 @@ export const FilterValueSelectMulti: Component<FilterValueSelectMultiProps> = (
                 <XIcon class="size-3" />
               </button>
             </div>
-          );
-        }}
-      </For>
+          )}
+        </For>
+      </Show>
 
       {/* Add button / input */}
       <div ref={containerRef} class="relative flex items-center">
