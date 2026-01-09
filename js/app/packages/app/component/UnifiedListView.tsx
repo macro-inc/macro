@@ -1599,7 +1599,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       />
                     </section>
                   </Show>
-                  <Show when={ENABLE_PROPERTY_DISPLAY_CONTROL}>
+                  <Show when={ENABLE_PROPERTY_DISPLAY}>
                     <section class="gap-1 grid p-2">
                       <span class="font-medium text-xs">Property</span>
                       <PropertyFilterControl />
