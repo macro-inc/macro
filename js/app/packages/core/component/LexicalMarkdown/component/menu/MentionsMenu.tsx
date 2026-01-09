@@ -410,9 +410,11 @@ export function MentionsMenu(props: {
     props.menu.searchTerm()
   );
   const historyQuery = useHistoryQuery();
-  const historyAccessor = props.history ?? (() => historyQuery.data ?? []);
   const history = createMemo(() => {
-    return historyAccessor().map(entityMapper('item'));
+    if (props.history) {
+      return props.history().map(entityMapper('item'));
+    }
+    return historyQuery.data?.map(entityMapper('item')) ?? [];
   });
 
   let emails: Accessor<Entity<'email'>[]>;
