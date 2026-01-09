@@ -147,30 +147,16 @@ export function useThreadQuery<Options extends UseThreadQueryOptions>(
 }
 
 type MarkThreadAsSeenParams = { threadId: string };
-type MarkThreadAsSeenContext = {
-  previousThreadData: InfiniteData<Thread, number> | undefined;
-};
 
 /**
- * When marking a thread as seen we optimistically flip the `is_read` field to true
- * on both the thread query and the soup query.
- *
- * Note: We don't await cancelQueries to avoid triggering suspense boundaries
- * during the synchronous optimistic update phase.
+ * Optimistically update thread and soup queries when marking as seen.
+ * Does not await cancelQueries to avoid triggering suspense boundaries.
  */
-function threadSeenOnMutate(
-  params: MarkThreadAsSeenParams
-): MarkThreadAsSeenContext {
-  // Cancel without awaiting to avoid suspense triggers
+function threadSeenOnMutate(params: MarkThreadAsSeenParams): void {
   queryClient.cancelQueries({
     queryKey: emailKeys.threadMessages(params.threadId).queryKey,
   });
 
-  const previousThreadData = queryClient.getQueryData<
-    InfiniteData<Thread, number>
-  >(emailKeys.threadMessages(params.threadId).queryKey);
-
-  // Optimistically update thread query
   queryClient.setQueryData<InfiniteData<Thread, number>>(
     emailKeys.threadMessages(params.threadId).queryKey,
     (old) =>
@@ -183,7 +169,6 @@ function threadSeenOnMutate(
       }
   );
 
-  // Optimistically update soup queries to mark email as read
   queryClient.setQueriesData<InfiniteData<SoupPage, unknown>>(
     { queryKey: queryKeys.all.dss },
     (old) => {
@@ -208,20 +193,13 @@ function threadSeenOnMutate(
       };
     }
   );
-
-  return { previousThreadData };
 }
 
 /**
  * Mutation to mark a thread as seen.
  */
 export function useMarkThreadAsSeenMutation(
-  callbacks?: MutationCallbacks<
-    void,
-    Error,
-    MarkThreadAsSeenParams,
-    MarkThreadAsSeenContext
-  >
+  callbacks?: MutationCallbacks<void, Error, MarkThreadAsSeenParams>
 ) {
   return useMutation(() => ({
     mutationFn: async (params: MarkThreadAsSeenParams) =>
@@ -231,16 +209,10 @@ export function useMarkThreadAsSeenMutation(
             thread_id: params.threadId,
           })
       )),
-    ...withCallbacks<
-      void,
-      Error,
-      MarkThreadAsSeenParams,
-      MarkThreadAsSeenContext
-    >(
+    ...withCallbacks<void, Error, MarkThreadAsSeenParams>(
       {
-        onMutate: (params: MarkThreadAsSeenParams) => threadSeenOnMutate(params),
+        onMutate: threadSeenOnMutate,
         onSuccess: (_, params) => {
-          // Invalidate to ensure server state is synced
           queryClient.invalidateQueries({
             queryKey: emailKeys.threadMessages(params.threadId).queryKey,
           });
@@ -259,9 +231,7 @@ type ArchiveThreadContext = {
   previousData: InfiniteData<Thread, number> | undefined;
 };
 
-/*
- * When archiving a thread we optimistically set `inbox_visible` to the new value
- */
+/** Optimistically set `inbox_visible` when archiving a thread. */
 async function threadArchiveOnMutate(params: ArchiveThreadParams) {
   await queryClient.cancelQueries({
     queryKey: emailKeys.threadMessages(params.threadId).queryKey,
