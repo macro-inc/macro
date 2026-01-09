@@ -322,13 +322,25 @@ function EmailContent(props: EmailViewProps) {
     hotkey: 'enter',
     description: 'Focus Email Input',
     keyDownHandler: () => {
-      // If a message is focused and collapsed, expand it instead of focusing input
       const focusedId = context.messages.focusedID();
+
+      // If a message is focused and collapsed, expand it
       if (focusedId && !context.messages.isBodyExpanded(focusedId)) {
         context.messages.setExpandedBodyId(focusedId, true);
         return true;
       }
-      // Otherwise, focus the email input
+
+      // If message is expanded and not the last message, trigger reply to that message
+      if (focusedId && context.messages.isBodyExpanded(focusedId)) {
+        const messages = context.messages.list();
+        const lastMessage = messages[messages.length - 1];
+        if (lastMessage?.db_id !== focusedId) {
+          context.messages.setReplyingToMessageId(focusedId);
+          return true;
+        }
+      }
+
+      // Otherwise, focus the main email input
       if (markdownDomRef) {
         markdownDomRef.focus();
         return true;
@@ -336,6 +348,44 @@ function EmailContent(props: EmailViewProps) {
       return false;
     },
     hotkeyToken: TOKENS.block.focus,
+    hide: true,
+  });
+
+  registerScopeSignalHotkey(scopeId, {
+    hotkey: 'escape',
+    description: 'Collapse message',
+    keyDownHandler: () => {
+      // Skip if focus is in an editable area (compose input handles its own Escape)
+      const activeEl = document.activeElement;
+      if (
+        activeEl?.tagName === 'INPUT' ||
+        activeEl?.tagName === 'TEXTAREA' ||
+        activeEl?.getAttribute('contenteditable') === 'true'
+      ) {
+        return false;
+      }
+
+      const focusedId = context.messages.focusedID();
+      if (!focusedId) return false;
+
+      // If there's an active reply, just clear it (don't collapse the message)
+      if (context.messages.replyingToMessageId() === focusedId) {
+        context.messages.setReplyingToMessageId(undefined);
+        return true;
+      }
+
+      // If message is expanded and not the last message, collapse it
+      if (context.messages.isBodyExpanded(focusedId)) {
+        const messages = context.messages.list();
+        const lastMessage = messages[messages.length - 1];
+        if (lastMessage?.db_id !== focusedId) {
+          context.messages.setExpandedBodyId(focusedId, false);
+          return true;
+        }
+      }
+      return false;
+    },
+    hotkeyToken: TOKENS.email.cancelReply,
     hide: true,
   });
 
