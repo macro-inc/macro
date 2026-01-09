@@ -84,7 +84,6 @@ export function MessageList(props: MessageListProps) {
           }}
         </For>
       </StaticMarkdownContext>
-      {/* Title at top - placed last in DOM due to flex-col-reverse */}
       <Show when={props.title}>
         <div class="shrink-0 w-full flex justify-center pb-4">
           <div class="macro-message-width w-full">
