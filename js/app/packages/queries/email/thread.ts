@@ -202,13 +202,11 @@ export function useMarkThreadAsSeenMutation(
   callbacks?: MutationCallbacks<void, Error, MarkThreadAsSeenParams>
 ) {
   return useMutation(() => ({
-    mutationFn: async (params: MarkThreadAsSeenParams) =>
-      void (await throwOnErr(
-        async () =>
-          await emailClient.markThreadAsSeen({
-            thread_id: params.threadId,
-          })
-      )),
+    mutationFn: async (params: MarkThreadAsSeenParams) => {
+      await throwOnErr(() =>
+        emailClient.markThreadAsSeen({ thread_id: params.threadId })
+      );
+    },
     ...withCallbacks<void, Error, MarkThreadAsSeenParams>(
       {
         onMutate: threadSeenOnMutate,
