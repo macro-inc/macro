@@ -7,7 +7,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { runCommand } from '@core/hotkey/utils';
 import { isModality } from '@core/mobile/inputModality';
-import { DEFAULT_VIEWS, type DefaultView, type ViewId } from '@core/types/view';
+import type { DefaultView, ViewId } from '@core/types/view';
 import { getActualTarget } from '@core/util/getActualTarget';
 import { isInteractiveElement } from '@core/util/isInteractiveElement';
 import { filterMap } from '@core/util/list';

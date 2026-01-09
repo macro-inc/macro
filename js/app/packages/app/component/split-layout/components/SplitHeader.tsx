@@ -12,7 +12,6 @@ import IconGear from '@macro-icons/macro-gear.svg';
 import { Button } from '@ui/components/Button';
 import {
   createEffect,
-  createMemo,
   createSignal,
   type ParentProps,
   type Setter,
@@ -95,10 +94,10 @@ function SplitCloseButton() {
   const context = useContext(SplitPanelContext);
   const { getSplitCount } = useSplitLayout();
   if (!context) return null;
-  
+
   // Only show close button when there are multiple splits
   const hasMultipleSplits = () => getSplitCount() > 1;
-  
+
   return (
     <Show when={hasMultipleSplits()}>
       <Button

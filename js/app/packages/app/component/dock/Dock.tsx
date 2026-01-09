@@ -17,7 +17,6 @@ import IconGear from '@macro-icons/macro-gear.svg';
 import IconLogo from '@macro-icons/macro-logo.svg';
 import { BasicTierLimit } from './BasicTierLimit';
 import { setKonsoleOpen } from '../command/state';
-import { getActiveCommandByToken, runCommand } from '@core/hotkey/utils';
 import { Hotkey } from '@core/component/Hotkey';
 import { setCreateMenuOpen } from '../Launcher';
 import { useHasPaidAccess } from '@core/auth';

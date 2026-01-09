@@ -262,9 +262,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       view()?.filters?.importantFilter ?? defaultFilterOptions.importantFilter
   );
 
-  const unreadOnly = createMemo(
-    () => view()?.filters?.unreadOnly ?? false
-  );
+  const unreadOnly = createMemo(() => view()?.filters?.unreadOnly ?? false);
 
   const entityTypeFilter = createMemo(
     () => view()?.filters?.typeFilter ?? defaultFilterOptions.typeFilter
@@ -1216,257 +1214,257 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   });
 
   return (
-      <ContextMenu
-        forceMount={contextAndModalState.contextMenuOpen}
-        onOpenChange={(open) => {
-          setContextAndModalState((prev) => {
-            if (open) {
-              return {
-                ...prev,
-                contextMenuOpen: open,
-                prevSelectedEntity: prev.selectedEntity,
-              };
-            }
+    <ContextMenu
+      forceMount={contextAndModalState.contextMenuOpen}
+      onOpenChange={(open) => {
+        setContextAndModalState((prev) => {
+          if (open) {
             return {
               ...prev,
               contextMenuOpen: open,
-              selectedEntity: undefined,
+              prevSelectedEntity: prev.selectedEntity,
             };
-          });
-        }}
-      >
-        <ContextMenu.Trigger class="size-full unified-list-root">
-          <EntityRowProvider
-            container={localEntityListRef}
-            canSwipeLeft={(entityId) => {
-              const entity = entityById().get(entityId);
-              if (!entity) return false;
-              return soupContext.actionRegistry.isActionEnabled(
-                'mark_as_done',
-                entity
+          }
+          return {
+            ...prev,
+            contextMenuOpen: open,
+            selectedEntity: undefined,
+          };
+        });
+      }}
+    >
+      <ContextMenu.Trigger class="size-full unified-list-root">
+        <EntityRowProvider
+          container={localEntityListRef}
+          canSwipeLeft={(entityId) => {
+            const entity = entityById().get(entityId);
+            if (!entity) return false;
+            return soupContext.actionRegistry.isActionEnabled(
+              'mark_as_done',
+              entity
+            );
+          }}
+          onSwipeLeft={(entityId) => {
+            const entity = entityById().get(entityId);
+            if (!entity) return false;
+
+            soupContext.actionRegistry.execute('mark_as_done', entity);
+          }}
+          setCollapseEntity={soupContext.collapseEntitySignal[1]}
+        >
+          <UnifiedListComponent
+            entityListRef={setLocalEntityListRef}
+            virtualizerHandle={setVirtualizerHandle}
+            viewId={view()?.id}
+            searchText={searchText()}
+            hasRefinementsFromBase={isViewConfigChanged()}
+            entityMinHeight={ENTITY_HEIGHT}
+          >
+            {(innerProps) => {
+              const displayDoneButton = () => {
+                if (innerProps.entity.type === 'email') {
+                  return !innerProps.entity.done;
+                }
+
+                return (innerProps.entity.notifications?.().length ?? 0) > 0;
+              };
+              const timestamp = () => {
+                switch (sortType()) {
+                  case 'viewed_at':
+                    return innerProps.entity.viewedAt;
+                  case 'created_at':
+                    return innerProps.entity.createdAt;
+                  case 'updated_at':
+                    return innerProps.entity.updatedAt;
+                }
+              };
+
+              const properties = () => {
+                if (isTaskEntity(innerProps.entity)) {
+                  return taskPropertiesStore()[innerProps.entity.id] ?? [];
+                }
+                return undefined;
+              };
+
+              return (
+                <EntityRow
+                  entityId={innerProps.entity.id}
+                  swipeLeftColor="bg-success"
+                  swipeLeftRevealedComponent={
+                    <CheckIcon class="size-8 text-panel" />
+                  }
+                >
+                  <EntityWithEverything
+                    onContextMenu={() => {
+                      if (isPanelActive() && !preview()) {
+                        setSelectedEntity(innerProps.entity);
+                      }
+                      setContextAndModalState((prev) => {
+                        return {
+                          ...prev,
+                          contextMenuOpen: true,
+                          selectedEntity: innerProps.entity,
+                        };
+                      });
+                    }}
+                    entity={innerProps.entity}
+                    properties={properties()}
+                    timestamp={timestamp()}
+                    onClick={entityClickHandler}
+                    onPointerDown={entityPointerDownHandler}
+                    onClickRowAction={
+                      soupContext.actionRegistry.isActionEnabled(
+                        'mark_as_done',
+                        innerProps.entity
+                      )
+                        ? (entity, type) => {
+                            if (type === 'done') {
+                              markEntityAsDone?.(entity);
+                            }
+                          }
+                        : undefined
+                    }
+                    onClickNotification={(notifiedEntity) => {
+                      const notification = tryToTypedNotification(
+                        notifiedEntity.notification
+                      );
+                      if (!notification) return;
+                      if (notifiedEntity.type === 'channel')
+                        gotoChannelNotification(notification);
+                    }}
+                    onMouseOver={() => {
+                      if (preview()) return;
+                      setViewDataStore(
+                        selectedView(),
+                        'hasUserInteractedEntity',
+                        true
+                      );
+                      setSelectedEntity(innerProps.entity);
+                    }}
+                    onMouseLeave={() => {}}
+                    onFocusIn={() => {
+                      if (preview()) return;
+                      setSelectedEntity(innerProps.entity);
+                    }}
+                    showLeftColumnIndicator={true}
+                    showUnrollNotifications={showUnrollNotifications()}
+                    importantIndicatorActive={importantFilterFn(
+                      innerProps.entity
+                    )}
+                    unreadIndicatorActive={unreadFilterFn(innerProps.entity)}
+                    showDoneButton={displayDoneButton()}
+                    highlighted={
+                      isPanelActive() && focusedSelector(innerProps.entity.id)
+                    }
+                    selected={
+                      focusedSelector(innerProps.entity.id) ||
+                      contextAndModalState.selectedEntity?.id ===
+                        innerProps.entity.id
+                    }
+                    checked={multiSelectSelector(innerProps.entity.id)}
+                    onChecked={(next, shiftKey) =>
+                      handleMultiSelectChecked({
+                        entity: innerProps.entity,
+                        entityIndex: innerProps.index,
+                        next,
+                        shiftKey: shiftKey ?? false,
+                      })
+                    }
+                  />
+                </EntityRow>
               );
             }}
-            onSwipeLeft={(entityId) => {
-              const entity = entityById().get(entityId);
-              if (!entity) return false;
+          </UnifiedListComponent>
+        </EntityRowProvider>
 
-              soupContext.actionRegistry.execute('mark_as_done', entity);
-            }}
-            setCollapseEntity={soupContext.collapseEntitySignal[1]}
-          >
-            <UnifiedListComponent
-              entityListRef={setLocalEntityListRef}
-              virtualizerHandle={setVirtualizerHandle}
-              viewId={view()?.id}
-              searchText={searchText()}
-              hasRefinementsFromBase={isViewConfigChanged()}
-              entityMinHeight={ENTITY_HEIGHT}
-            >
-              {(innerProps) => {
-                const displayDoneButton = () => {
-                  if (innerProps.entity.type === 'email') {
-                    return !innerProps.entity.done;
-                  }
-
-                  return (innerProps.entity.notifications?.().length ?? 0) > 0;
-                };
-                const timestamp = () => {
-                  switch (sortType()) {
-                    case 'viewed_at':
-                      return innerProps.entity.viewedAt;
-                    case 'created_at':
-                      return innerProps.entity.createdAt;
-                    case 'updated_at':
-                      return innerProps.entity.updatedAt;
-                  }
-                };
-
-                const properties = () => {
-                  if (isTaskEntity(innerProps.entity)) {
-                    return taskPropertiesStore()[innerProps.entity.id] ?? [];
-                  }
-                  return undefined;
-                };
-
-                return (
-                  <EntityRow
-                    entityId={innerProps.entity.id}
-                    swipeLeftColor="bg-success"
-                    swipeLeftRevealedComponent={
-                      <CheckIcon class="size-8 text-panel" />
-                    }
-                  >
-                    <EntityWithEverything
-                      onContextMenu={() => {
-                        if (isPanelActive() && !preview()) {
-                          setSelectedEntity(innerProps.entity);
-                        }
-                        setContextAndModalState((prev) => {
-                          return {
-                            ...prev,
-                            contextMenuOpen: true,
-                            selectedEntity: innerProps.entity,
-                          };
-                        });
-                      }}
-                      entity={innerProps.entity}
-                      properties={properties()}
-                      timestamp={timestamp()}
-                      onClick={entityClickHandler}
-                      onPointerDown={entityPointerDownHandler}
-                      onClickRowAction={
-                        soupContext.actionRegistry.isActionEnabled(
-                          'mark_as_done',
-                          innerProps.entity
-                        )
-                          ? (entity, type) => {
-                              if (type === 'done') {
-                                markEntityAsDone?.(entity);
-                              }
-                            }
-                          : undefined
-                      }
-                      onClickNotification={(notifiedEntity) => {
-                        const notification = tryToTypedNotification(
-                          notifiedEntity.notification
-                        );
-                        if (!notification) return;
-                        if (notifiedEntity.type === 'channel')
-                          gotoChannelNotification(notification);
-                      }}
-                      onMouseOver={() => {
-                        if (preview()) return;
-                        setViewDataStore(
-                          selectedView(),
-                          'hasUserInteractedEntity',
-                          true
-                        );
-                        setSelectedEntity(innerProps.entity);
-                      }}
-                      onMouseLeave={() => {}}
-                      onFocusIn={() => {
-                        if (preview()) return;
-                        setSelectedEntity(innerProps.entity);
-                      }}
-                      showLeftColumnIndicator={true}
-                      showUnrollNotifications={showUnrollNotifications()}
-                      importantIndicatorActive={importantFilterFn(
-                        innerProps.entity
-                      )}
-                      unreadIndicatorActive={unreadFilterFn(innerProps.entity)}
-                      showDoneButton={displayDoneButton()}
-                      highlighted={
-                        isPanelActive() && focusedSelector(innerProps.entity.id)
-                      }
-                      selected={
-                        focusedSelector(innerProps.entity.id) ||
-                        contextAndModalState.selectedEntity?.id ===
-                          innerProps.entity.id
-                      }
-                      checked={multiSelectSelector(innerProps.entity.id)}
-                      onChecked={(next, shiftKey) =>
-                        handleMultiSelectChecked({
-                          entity: innerProps.entity,
-                          entityIndex: innerProps.index,
-                          next,
-                          shiftKey: shiftKey ?? false,
-                        })
-                      }
-                    />
-                  </EntityRow>
-                );
-              }}
-            </UnifiedListComponent>
-          </EntityRowProvider>
-
-          <EntityModal
-            isOpen={() =>
-              !!(
-                contextAndModalState.modalOpen &&
-                contextAndModalState.selectedEntity?.id
-              )
-            }
-            setIsOpen={() =>
-              setContextAndModalState((prev) => ({
-                ...prev,
-                modalOpen: !prev.modalOpen,
-              }))
-            }
-            view={() => contextAndModalState.modalView}
-            entity={contextAndModalState.selectedEntity}
-          />
-          <ContextMenu.Portal>
-            <Show when={contextAndModalState.selectedEntity}>
-              {(selectedEntity) => (
-                <ContextMenuContent mobileFullScreen>
-                  <Show when={isTouchDevice() && isMobileWidth()}>
-                    <Entity
-                      entity={selectedEntity()}
-                      timestamp={
-                        sortType() === 'viewed_at'
-                          ? selectedEntity().viewedAt
-                          : sortType() === 'created_at'
-                            ? selectedEntity().createdAt
-                            : undefined
-                      }
-                    />
-                    <MenuSeparator />
-                  </Show>
-                  <EntityActionsMenuItems
+        <EntityModal
+          isOpen={() =>
+            !!(
+              contextAndModalState.modalOpen &&
+              contextAndModalState.selectedEntity?.id
+            )
+          }
+          setIsOpen={() =>
+            setContextAndModalState((prev) => ({
+              ...prev,
+              modalOpen: !prev.modalOpen,
+            }))
+          }
+          view={() => contextAndModalState.modalView}
+          entity={contextAndModalState.selectedEntity}
+        />
+        <ContextMenu.Portal>
+          <Show when={contextAndModalState.selectedEntity}>
+            {(selectedEntity) => (
+              <ContextMenuContent mobileFullScreen>
+                <Show when={isTouchDevice() && isMobileWidth()}>
+                  <Entity
                     entity={selectedEntity()}
-                    onSelectAction={() => {}}
+                    timestamp={
+                      sortType() === 'viewed_at'
+                        ? selectedEntity().viewedAt
+                        : sortType() === 'created_at'
+                          ? selectedEntity().createdAt
+                          : undefined
+                    }
                   />
-                </ContextMenuContent>
-              )}
-            </Show>
-          </ContextMenu.Portal>
-        </ContextMenu.Trigger>
-        <Show when={view()?.multiSelectEntities.length}>
-          <EntitySelectionToolbarModal
-            multiSelectEntities={view()?.multiSelectEntities ?? []}
-            onClose={() =>
-              soupContext.setViewDataStore(
-                selectedView(),
-                'multiSelectEntities',
-                []
-              )
+                  <MenuSeparator />
+                </Show>
+                <EntityActionsMenuItems
+                  entity={selectedEntity()}
+                  onSelectAction={() => {}}
+                />
+              </ContextMenuContent>
+            )}
+          </Show>
+        </ContextMenu.Portal>
+      </ContextMenu.Trigger>
+      <Show when={view()?.multiSelectEntities.length}>
+        <EntitySelectionToolbarModal
+          multiSelectEntities={view()?.multiSelectEntities ?? []}
+          onClose={() =>
+            soupContext.setViewDataStore(
+              selectedView(),
+              'multiSelectEntities',
+              []
+            )
+          }
+          onAction={() => {
+            const multiSelectEntities =
+              viewsData[selectedView()].multiSelectEntities;
+            const hasSelection = multiSelectEntities.length > 0;
+            if (hasSelection) {
+              setKonsoleMode('SELECTION_MODIFICATION');
+              const selectionIndex =
+                searchCategories.getCategoryIndex('Selection');
+
+              if (selectionIndex === undefined) return false;
+
+              setCommandCategoryIndex(selectionIndex);
+
+              searchCategories.showCategory('Selection');
+
+              setKonsoleContextInformation({
+                selectedEntities: multiSelectEntities.slice(),
+                clearSelection: () => {
+                  soupContext.setViewDataStore(
+                    selectedView(),
+                    'multiSelectEntities',
+                    []
+                  );
+                },
+              });
+
+              toggleKonsoleVisibility();
+              return true;
             }
-            onAction={() => {
-              const multiSelectEntities =
-                viewsData[selectedView()].multiSelectEntities;
-              const hasSelection = multiSelectEntities.length > 0;
-              if (hasSelection) {
-                setKonsoleMode('SELECTION_MODIFICATION');
-                const selectionIndex =
-                  searchCategories.getCategoryIndex('Selection');
-
-                if (selectionIndex === undefined) return false;
-
-                setCommandCategoryIndex(selectionIndex);
-
-                searchCategories.showCategory('Selection');
-
-                setKonsoleContextInformation({
-                  selectedEntities: multiSelectEntities.slice(),
-                  clearSelection: () => {
-                    soupContext.setViewDataStore(
-                      selectedView(),
-                      'multiSelectEntities',
-                      []
-                    );
-                  },
-                });
-
-                toggleKonsoleVisibility();
-                return true;
-              }
-              searchCategories.hideCategory('Selection');
-              resetCommandCategoryIndex();
-              resetKonsoleMode();
-              return false;
-            }}
-          />
-        </Show>{' '}
-      </ContextMenu>
+            searchCategories.hideCategory('Selection');
+            resetCommandCategoryIndex();
+            resetKonsoleMode();
+            return false;
+          }}
+        />
+      </Show>{' '}
+    </ContextMenu>
   );
 }

@@ -2,26 +2,17 @@ import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
 } from '@app/component/GlobalAppState';
-import { createElementSize } from '@solid-primitives/resize-observer';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
 import { playSound } from '@app/util/sound';
 import { useIsAuthenticated } from '@core/auth';
 import type { BlockAliasContext } from '@core/block';
 import { getIconConfig } from '@core/component/EntityIcon';
-import SignalIcon from '@macro-icons/wide/signal.svg';
-import NoiseIcon from '@macro-icons/wide/noise.svg';
-import PreviewIcon from '@macro-icons/wide/preview.svg';
-import SortIcon from '@macro-icons/wide/sort.svg';
-import { Popover } from '@kobalte/core/popover';
-import { cornerClip } from '@core/util/clipPath';
-import type { SystemSortOption } from './ViewConfig';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import { fileTypeToResolvedBlockName } from '@core/constant/allBlocks';
 import { ENABLE_TASKS_TABS } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
-import IconGear from '@macro-icons/macro-gear.svg';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { RegisterHotkeyReturn, ValidHotkey } from '@core/hotkey/types';
@@ -32,7 +23,10 @@ import {
   type ViewId,
   type ViewLabel,
 } from '@core/types/view';
+import { cornerClip } from '@core/util/clipPath';
+import { unwrapSignals } from '@core/util/unwrapSignals';
 import { handleFileFolderDrop } from '@core/util/upload';
+import { Popover } from '@kobalte/core/popover';
 import { Tabs } from '@kobalte/core/tabs';
 import type { EntityData, ExpandedEntityType } from '@macro-entity';
 import {
@@ -40,9 +34,15 @@ import {
   queryKeys,
   useQueryClient as useEntityQueryClient,
 } from '@macro-entity';
+import IconGear from '@macro-icons/macro-gear.svg';
+import NoiseIcon from '@macro-icons/wide/noise.svg';
+import PreviewIcon from '@macro-icons/wide/preview.svg';
+import SignalIcon from '@macro-icons/wide/signal.svg';
+import SortIcon from '@macro-icons/wide/sort.svg';
 import { createEffectOnEntityTypeNotification } from '@notifications';
 import { invalidateEntityNotifications } from '@queries/notification/user-notifications';
 import { storageServiceClient } from '@service-storage/client';
+import { createElementSize } from '@solid-primitives/resize-observer';
 import { Navigate } from '@solidjs/router';
 import { useMutation, useQueryClient } from '@tanstack/solid-query';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
@@ -64,20 +64,23 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { SuspenseContextComp } from './SuspenseContext';
-import { SplitHeaderLeft, SplitHeaderRight } from './split-layout/components/SplitHeader';
+import {
+  SplitHeaderLeft,
+  SplitHeaderRight,
+} from './split-layout/components/SplitHeader';
 import { SplitToolbarRight } from './split-layout/components/SplitToolbar';
 import type { SplitPanelContextType } from './split-layout/context';
 import { SplitPanelContext } from './split-layout/context';
 import { useSplitLayout } from './split-layout/layout';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 import { UnifiedListView } from './UnifiedListView';
+import type { SystemSortOption } from './ViewConfig';
 import {
   isConfigEqual,
   VIEWCONFIG_BASE,
   VIEWCONFIG_DEFAULTS_IDS,
   type ViewConfigBase,
 } from './ViewConfig';
-import { unwrapSignals } from '@core/util/unwrapSignals';
 
 false && fileFolderDrop;
 
@@ -89,12 +92,48 @@ const ENTITY_TYPE_FILTERS: {
   enabled: boolean;
   shortcut: string;
 }[] = [
-  { type: 'document', label: 'Files', iconType: 'md', enabled: true, shortcut: 'd' },
-  { type: 'chat', label: 'Chats', iconType: 'chat', enabled: true, shortcut: 'a' },
-  { type: 'channel', label: 'Channels', iconType: 'channel', enabled: true, shortcut: 'm' },
-  { type: 'task', label: 'Tasks', iconType: 'task', enabled: ENABLE_TASKS_TABS, shortcut: 't' },
-  { type: 'email', label: 'Email', iconType: 'email', enabled: true, shortcut: 'l' },
-  { type: 'project', label: 'Folders', iconType: 'project', enabled: true, shortcut: 'f' },
+  {
+    type: 'document',
+    label: 'Files',
+    iconType: 'md',
+    enabled: true,
+    shortcut: 'd',
+  },
+  {
+    type: 'chat',
+    label: 'Chats',
+    iconType: 'chat',
+    enabled: true,
+    shortcut: 'a',
+  },
+  {
+    type: 'channel',
+    label: 'Channels',
+    iconType: 'channel',
+    enabled: true,
+    shortcut: 'm',
+  },
+  {
+    type: 'task',
+    label: 'Tasks',
+    iconType: 'task',
+    enabled: ENABLE_TASKS_TABS,
+    shortcut: 't',
+  },
+  {
+    type: 'email',
+    label: 'Email',
+    iconType: 'email',
+    enabled: true,
+    shortcut: 'l',
+  },
+  {
+    type: 'project',
+    label: 'Folders',
+    iconType: 'project',
+    enabled: true,
+    shortcut: 'f',
+  },
 ];
 
 function EntityTypeIconFilter() {
@@ -102,14 +141,21 @@ function EntityTypeIconFilter() {
   const {
     splitHotkeyScope,
     previewState,
-    soupContext: { viewsDataStore, setViewDataStore, selectedView, setSelectedView },
+    soupContext: {
+      viewsDataStore,
+      setViewDataStore,
+      selectedView,
+      setSelectedView,
+    },
   } = splitContext;
   const [preview, setPreview] = previewState;
 
   // Get all views (excluding default views to show only custom/saved views)
   const customViews = createMemo(() => {
     const allViews = Object.entries(viewsDataStore);
-    return allViews.filter(([id]) => !VIEWCONFIG_DEFAULTS_IDS.includes(id as any));
+    return allViews.filter(
+      ([id]) => !VIEWCONFIG_DEFAULTS_IDS.includes(id as any)
+    );
   });
 
   const [viewsDropdownOpen, setViewsDropdownOpen] = createSignal(false);
@@ -118,14 +164,14 @@ function EntityTypeIconFilter() {
   const [editingViewName, setEditingViewName] = createSignal('');
 
   const queryClient = useQueryClient();
-  
+
   const handleRenameView = async (viewId: string) => {
     const newName = editingViewName().trim();
     if (!newName) return;
-    
+
     const viewData = viewsDataStore[viewId];
     if (!viewData) return;
-    
+
     try {
       await storageServiceClient.views.patchView({
         saved_view_id: viewId,
@@ -140,7 +186,7 @@ function EntityTypeIconFilter() {
     } catch (e) {
       console.error('Failed to rename view:', e);
     }
-    
+
     setEditingViewId(null);
     setEditingViewName('');
   };
@@ -151,7 +197,7 @@ function EntityTypeIconFilter() {
         savedViewId: viewId,
       });
       queryClient.invalidateQueries({ queryKey: ['savedViews'] });
-      
+
       // If we deleted the currently selected view, switch to default
       if (selectedView() === viewId) {
         setSelectedView('all');
@@ -260,12 +306,7 @@ function EntityTypeIconFilter() {
     });
     // Reset document type filter when toggling off document type
     if (type === 'document' && entityTypeFilter().includes('document')) {
-      setViewDataStore(
-        selectedView(),
-        'filters',
-        'documentTypeFilter',
-        []
-      );
+      setViewDataStore(selectedView(), 'filters', 'documentTypeFilter', []);
     }
   };
 
@@ -281,7 +322,7 @@ function EntityTypeIconFilter() {
       const current = focusFilters() ?? [];
       const inInbox = isInboxMode();
       const isCurrentlyActive = current.includes(filter);
-      
+
       if (inInbox) {
         // In inbox mode (both selected) - clicking one deselects it, leaving the other
         const other = filter === 'signal' ? 'noise' : 'signal';
@@ -293,10 +334,20 @@ function EntityTypeIconFilter() {
         if (newFilters.length === 0) {
           // No focus filters left - reset to show all
           setViewDataStore(selectedView(), 'filters', 'focusFilters', []);
-          setViewDataStore(selectedView(), 'filters', 'notificationFilter', 'all');
+          setViewDataStore(
+            selectedView(),
+            'filters',
+            'notificationFilter',
+            'all'
+          );
         } else {
           // Still have one filter active
-          setViewDataStore(selectedView(), 'filters', 'focusFilters', newFilters);
+          setViewDataStore(
+            selectedView(),
+            'filters',
+            'focusFilters',
+            newFilters
+          );
           // Keep notDone filter since we still have a focus filter
         }
       } else {
@@ -305,11 +356,26 @@ function EntityTypeIconFilter() {
         if (newFilters.length === 2) {
           // Both signal and noise selected = Inbox (notDone without focus filter)
           setViewDataStore(selectedView(), 'filters', 'focusFilters', []);
-          setViewDataStore(selectedView(), 'filters', 'notificationFilter', 'notDone');
+          setViewDataStore(
+            selectedView(),
+            'filters',
+            'notificationFilter',
+            'notDone'
+          );
         } else {
           // Only one filter - apply it with notDone
-          setViewDataStore(selectedView(), 'filters', 'focusFilters', newFilters);
-          setViewDataStore(selectedView(), 'filters', 'notificationFilter', 'notDone');
+          setViewDataStore(
+            selectedView(),
+            'filters',
+            'focusFilters',
+            newFilters
+          );
+          setViewDataStore(
+            selectedView(),
+            'filters',
+            'notificationFilter',
+            'notDone'
+          );
         }
       }
     });
@@ -365,7 +431,12 @@ function EntityTypeIconFilter() {
 
   const setSortType = (sortBy: SystemSortOption) => {
     batch(() => {
-      (setViewDataStore as any)(selectedView(), 'sort', 'type', 'systemSortOption');
+      (setViewDataStore as any)(
+        selectedView(),
+        'sort',
+        'type',
+        'systemSortOption'
+      );
       (setViewDataStore as any)(selectedView(), 'sort', 'sortBy', sortBy);
     });
   };
@@ -374,19 +445,57 @@ function EntityTypeIconFilter() {
   const [sortFocusedIndex, setSortFocusedIndex] = createSignal(0);
 
   // Register all hotkeys
-  const hotkeyConfigs: { hotkey: ValidHotkey; description: string; handler: () => void }[] = [
-    { hotkey: '1', description: 'Filter by Signal', handler: () => toggleFocusFilter('signal') },
-    { hotkey: '2', description: 'Filter by Noise', handler: () => toggleFocusFilter('noise') },
+  const hotkeyConfigs: {
+    hotkey: ValidHotkey;
+    description: string;
+    handler: () => void;
+  }[] = [
+    {
+      hotkey: '1',
+      description: 'Filter by Signal',
+      handler: () => toggleFocusFilter('signal'),
+    },
+    {
+      hotkey: '2',
+      description: 'Filter by Noise',
+      handler: () => toggleFocusFilter('noise'),
+    },
     ...ENTITY_TYPE_FILTERS.filter((f) => f.enabled).map((f) => ({
       hotkey: f.shortcut as ValidHotkey,
       description: `Filter by ${f.label}`,
       handler: () => toggleEntityTypeFilter(f.type),
     })),
-    { hotkey: 'u', description: 'Filter by Unread', handler: () => toggleUnreadFilter() },
-    { hotkey: 's', description: 'Open sort menu', handler: () => setSortDropdownOpen((prev) => !prev) },
-    { hotkey: '0', description: 'Open views menu', handler: () => setViewsDropdownOpen((prev) => !prev) },
-    { hotkey: '/', description: 'Clear filters', handler: () => { clearAllFilters(); setViewDataStore('all', 'searchText', ''); } },
-    { hotkey: 'cmd+f', description: 'Search', handler: () => { searchInputRef?.focus(); if (searchInputRef?.value) searchInputRef.select(); } },
+    {
+      hotkey: 'u',
+      description: 'Filter by Unread',
+      handler: () => toggleUnreadFilter(),
+    },
+    {
+      hotkey: 's',
+      description: 'Open sort menu',
+      handler: () => setSortDropdownOpen((prev) => !prev),
+    },
+    {
+      hotkey: '0',
+      description: 'Open views menu',
+      handler: () => setViewsDropdownOpen((prev) => !prev),
+    },
+    {
+      hotkey: '/',
+      description: 'Clear filters',
+      handler: () => {
+        clearAllFilters();
+        setViewDataStore('all', 'searchText', '');
+      },
+    },
+    {
+      hotkey: 'cmd+f',
+      description: 'Search',
+      handler: () => {
+        searchInputRef?.focus();
+        if (searchInputRef?.value) searchInputRef.select();
+      },
+    },
   ];
 
   const hotkeyDisposers = hotkeyConfigs.map((config) =>
@@ -394,7 +503,10 @@ function EntityTypeIconFilter() {
       hotkey: [config.hotkey],
       scopeId: splitHotkeyScope,
       description: config.description,
-      keyDownHandler: () => { config.handler(); return true; },
+      keyDownHandler: () => {
+        config.handler();
+        return true;
+      },
     })
   );
 
@@ -455,402 +567,483 @@ function EntityTypeIconFilter() {
         class="flex items-center h-full gap-0.5 px-1 overflow-x-auto scrollbar-hidden overscroll-none"
         ref={setScrollRef}
       >
-      {/* Signal/Noise buttons */}
-      <div class="flex items-center gap-0.5 mr-1 shrink-0">
-        <Tooltip tooltip={<LabelAndHotKey label="Signal - Important items" shortcut="1" />}>
-          <button
-            type="button"
-            class="relative flex items-center justify-center size-7 border border-transparent active:border-accent active:bg-accent active:text-panel"
-            classList={{
-              'bg-accent text-panel border-accent': isFocusFilterActive('signal'),
-              'text-ink-muted hover:text-accent hover:bg-accent/20': !isFocusFilterActive('signal'),
-            }}
-            style={{ 'clip-path': cornerClip('3px') }}
-            onClick={() => toggleFocusFilter('signal')}
-          >
-            <SignalIcon />
-            <span class="absolute bottom-0 right-0.5 text-[9px] font-mono font-bold leading-none opacity-60">1</span>
-          </button>
-        </Tooltip>
-        <Tooltip tooltip={<LabelAndHotKey label="Noise - Less important items" shortcut="2" />}>
-          <button
-            type="button"
-            class="relative flex items-center justify-center size-7 border border-transparent active:border-accent active:bg-accent active:text-panel"
-            classList={{
-              'bg-accent text-panel border-accent': isFocusFilterActive('noise'),
-              'text-ink-muted hover:text-accent hover:bg-accent/20': !isFocusFilterActive('noise'),
-            }}
-            style={{ 'clip-path': cornerClip('3px') }}
-            onClick={() => toggleFocusFilter('noise')}
-          >
-            <NoiseIcon />
-            <span class="absolute bottom-0 right-0.5 text-[9px] font-mono font-bold leading-none opacity-60">2</span>
-          </button>
-        </Tooltip>
-      </div>
-      {/* Separator */}
-      <div class="h-4 w-px bg-edge-muted mx-1 shrink-0" />
-      {/* Entity type icons */}
-      <For each={ENTITY_TYPE_FILTERS.filter((f) => f.enabled)}>
-        {(filter) => {
-          const iconConfig = () => getIconConfig(filter.iconType);
-          const isActive = () => isFilterActive(filter.type);
-
-          return (
-            <Tooltip tooltip={<LabelAndHotKey label={filter.label} shortcut={filter.shortcut} />}>
-              <button
-                type="button"
-                class="relative flex items-center justify-center size-7 border border-transparent active:border-accent active:bg-accent active:text-panel"
-                classList={{
-                  'bg-accent text-panel border-accent': isActive(),
-                  'text-ink-muted hover:text-accent hover:bg-accent/20': !isActive(),
-                }}
-                style={{ 'clip-path': cornerClip('3px') }}
-                onClick={() => toggleEntityTypeFilter(filter.type)}
-              >
-                <Dynamic
-                  component={iconConfig().icon}
-                  class="size-4"
-                />
-                <span class="absolute bottom-0 right-0.5 text-[9px] font-mono font-bold leading-none opacity-60">{filter.shortcut}</span>
-              </button>
-            </Tooltip>
-          );
-        }}
-      </For>
-      {/* Separator before unread/preview */}
-      <div class="h-4 w-px bg-edge-muted mx-1 shrink-0" />
-      {/* Unread filter */}
-      <Tooltip tooltip={<LabelAndHotKey label="Unread Only" shortcut="u" />}>
-        <button
-          type="button"
-          class="relative flex items-center justify-center size-7 border border-transparent active:border-accent active:bg-accent active:text-panel"
-          classList={{
-            'bg-accent text-panel border-accent': isUnreadFilterActive(),
-            'text-ink-muted hover:text-accent hover:bg-accent/20': !isUnreadFilterActive(),
-          }}
-          style={{ 'clip-path': cornerClip('3px') }}
-          onClick={() => toggleUnreadFilter()}
-        >
-          <svg width="100%" height="100%" viewBox="0 0 24 24" fill="currentColor" stroke="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="12" cy="12" r="4" />
-          </svg>
-          <span class="absolute bottom-0 right-0.5 text-[9px] font-mono font-bold leading-none opacity-60">u</span>
-        </button>
-      </Tooltip>
-      {/* Preview toggle */}
-      <Tooltip tooltip={<LabelAndHotKey label="Toggle Preview" shortcut="p" />}>
-        <button
-          type="button"
-          class="relative flex items-center justify-center size-7 border border-transparent active:border-accent active:bg-accent active:text-panel"
-          classList={{
-            'bg-accent text-panel border-accent': preview(),
-            'text-ink-muted hover:text-accent hover:bg-accent/20': !preview(),
-          }}
-          style={{ 'clip-path': cornerClip('3px') }}
-          onClick={() => {
-            playSound('open');
-            setPreview((prev) => !prev);
-          }}
-        >
-          <PreviewIcon class="size-5.5" />
-          <span class="absolute bottom-0 right-0.5 text-[9px] font-mono font-bold leading-none opacity-60">p</span>
-        </button>
-      </Tooltip>
-      {/* Sort dropdown */}
-      <Popover 
-        open={sortDropdownOpen()} 
-        onOpenChange={(open) => {
-          setSortDropdownOpen(open);
-          if (open) setSortFocusedIndex(0);
-        }} 
-        placement="bottom-start" 
-        gutter={4}
-      >
-        <Popover.Trigger
-          as="button"
-          type="button"
-          class="relative flex items-center justify-center size-7 shrink-0 text-ink-muted hover:text-accent hover:bg-accent/20 active:border-accent active:bg-accent active:text-panel border border-transparent"
-          style={{ 'clip-path': cornerClip('3px') }}
-        >
-          <SortIcon />
-          <span class="absolute bottom-0 right-0.5 text-[9px] font-mono font-bold leading-none opacity-60">s</span>
-        </Popover.Trigger>
-        <Popover.Portal>
-          <Popover.Content 
-            class="z-50 bg-panel border border-edge-muted shadow-lg"
-            tabIndex={0}
-            ref={(el) => setTimeout(() => el?.focus(), 0)}
-            onKeyDown={(e: KeyboardEvent) => {
-              const totalItems = SORT_OPTIONS.length;
-              if (e.key === 'ArrowDown') {
-                e.preventDefault();
-                setSortFocusedIndex((prev) => (prev + 1) % totalItems);
-              } else if (e.key === 'ArrowUp') {
-                e.preventDefault();
-                setSortFocusedIndex((prev) => (prev - 1 + totalItems) % totalItems);
-              } else if (e.key === 'Enter') {
-                e.preventDefault();
-                setSortType(SORT_OPTIONS[sortFocusedIndex()].value);
-                setSortDropdownOpen(false);
-              } else if (e.key === 'Escape') {
-                e.preventDefault();
-                setSortDropdownOpen(false);
-              }
-            }}
-          >
-            <div class="flex flex-col gap-1 p-2 min-w-[140px]">
-              <For each={SORT_OPTIONS}>
-                {(option, index) => (
-                  <button
-                    type="button"
-                    class="flex items-center justify-between px-2 py-1.5 text-sm hover:bg-hover"
-                    classList={{
-                      'bg-hover text-ink': sortType() === option.value,
-                      'text-ink': sortType() !== option.value,
-                      'bg-hover': sortFocusedIndex() === index(),
-                    }}
-                    onClick={() => {
-                      setSortType(option.value);
-                      setSortDropdownOpen(false);
-                    }}
-                    onMouseEnter={() => setSortFocusedIndex(index())}
-                  >
-                    <span>{option.label}</span>
-                    <Show when={sortType() === option.value}>
-                      <span class="text-ink">✓</span>
-                    </Show>
-                  </button>
-                )}
-              </For>
-            </div>
-          </Popover.Content>
-        </Popover.Portal>
-      </Popover>
-      {/* Views dropdown - show if there are custom views or unsaved changes */}
-      <Show when={customViews().length > 0 || isViewConfigChanged()}>
-        {/* Separator before views */}
-        <div class="h-4 w-px bg-edge-muted mx-1 shrink-0" />
-        {/* Views dropdown */}
-        <Popover
-          open={viewsDropdownOpen()}
-          onOpenChange={(open) => {
-            setViewsDropdownOpen(open);
-            if (!open) {
-              setEditingViewId(null);
-              setEditingViewName('');
-            } else {
-              // Reset focus to first item when opening
-              setViewsFocusedIndex(0);
+        {/* Signal/Noise buttons */}
+        <div class="flex items-center gap-0.5 mr-1 shrink-0">
+          <Tooltip
+            tooltip={
+              <LabelAndHotKey label="Signal - Important items" shortcut="1" />
             }
+          >
+            <button
+              type="button"
+              class="relative flex items-center justify-center size-7 border border-transparent active:border-accent active:bg-accent active:text-panel"
+              classList={{
+                'bg-accent text-panel border-accent':
+                  isFocusFilterActive('signal'),
+                'text-ink-muted hover:text-accent hover:bg-accent/20':
+                  !isFocusFilterActive('signal'),
+              }}
+              style={{ 'clip-path': cornerClip('3px') }}
+              onClick={() => toggleFocusFilter('signal')}
+            >
+              <SignalIcon />
+              <span class="absolute bottom-0 right-0.5 text-[9px] font-mono font-bold leading-none opacity-60">
+                1
+              </span>
+            </button>
+          </Tooltip>
+          <Tooltip
+            tooltip={
+              <LabelAndHotKey
+                label="Noise - Less important items"
+                shortcut="2"
+              />
+            }
+          >
+            <button
+              type="button"
+              class="relative flex items-center justify-center size-7 border border-transparent active:border-accent active:bg-accent active:text-panel"
+              classList={{
+                'bg-accent text-panel border-accent':
+                  isFocusFilterActive('noise'),
+                'text-ink-muted hover:text-accent hover:bg-accent/20':
+                  !isFocusFilterActive('noise'),
+              }}
+              style={{ 'clip-path': cornerClip('3px') }}
+              onClick={() => toggleFocusFilter('noise')}
+            >
+              <NoiseIcon />
+              <span class="absolute bottom-0 right-0.5 text-[9px] font-mono font-bold leading-none opacity-60">
+                2
+              </span>
+            </button>
+          </Tooltip>
+        </div>
+        {/* Separator */}
+        <div class="h-4 w-px bg-edge-muted mx-1 shrink-0" />
+        {/* Entity type icons */}
+        <For each={ENTITY_TYPE_FILTERS.filter((f) => f.enabled)}>
+          {(filter) => {
+            const iconConfig = () => getIconConfig(filter.iconType);
+            const isActive = () => isFilterActive(filter.type);
+
+            return (
+              <Tooltip
+                tooltip={
+                  <LabelAndHotKey
+                    label={filter.label}
+                    shortcut={filter.shortcut}
+                  />
+                }
+              >
+                <button
+                  type="button"
+                  class="relative flex items-center justify-center size-7 border border-transparent active:border-accent active:bg-accent active:text-panel"
+                  classList={{
+                    'bg-accent text-panel border-accent': isActive(),
+                    'text-ink-muted hover:text-accent hover:bg-accent/20':
+                      !isActive(),
+                  }}
+                  style={{ 'clip-path': cornerClip('3px') }}
+                  onClick={() => toggleEntityTypeFilter(filter.type)}
+                >
+                  <Dynamic component={iconConfig().icon} class="size-4" />
+                  <span class="absolute bottom-0 right-0.5 text-[9px] font-mono font-bold leading-none opacity-60">
+                    {filter.shortcut}
+                  </span>
+                </button>
+              </Tooltip>
+            );
+          }}
+        </For>
+        {/* Separator before unread/preview */}
+        <div class="h-4 w-px bg-edge-muted mx-1 shrink-0" />
+        {/* Unread filter */}
+        <Tooltip tooltip={<LabelAndHotKey label="Unread Only" shortcut="u" />}>
+          <button
+            type="button"
+            class="relative flex items-center justify-center size-7 border border-transparent active:border-accent active:bg-accent active:text-panel"
+            classList={{
+              'bg-accent text-panel border-accent': isUnreadFilterActive(),
+              'text-ink-muted hover:text-accent hover:bg-accent/20':
+                !isUnreadFilterActive(),
+            }}
+            style={{ 'clip-path': cornerClip('3px') }}
+            onClick={() => toggleUnreadFilter()}
+          >
+            <svg
+              width="100%"
+              height="100%"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              stroke="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <circle cx="12" cy="12" r="4" />
+            </svg>
+            <span class="absolute bottom-0 right-0.5 text-[9px] font-mono font-bold leading-none opacity-60">
+              u
+            </span>
+          </button>
+        </Tooltip>
+        {/* Preview toggle */}
+        <Tooltip
+          tooltip={<LabelAndHotKey label="Toggle Preview" shortcut="p" />}
+        >
+          <button
+            type="button"
+            class="relative flex items-center justify-center size-7 border border-transparent active:border-accent active:bg-accent active:text-panel"
+            classList={{
+              'bg-accent text-panel border-accent': preview(),
+              'text-ink-muted hover:text-accent hover:bg-accent/20': !preview(),
+            }}
+            style={{ 'clip-path': cornerClip('3px') }}
+            onClick={() => {
+              playSound('open');
+              setPreview((prev) => !prev);
+            }}
+          >
+            <PreviewIcon class="size-5.5" />
+            <span class="absolute bottom-0 right-0.5 text-[9px] font-mono font-bold leading-none opacity-60">
+              p
+            </span>
+          </button>
+        </Tooltip>
+        {/* Sort dropdown */}
+        <Popover
+          open={sortDropdownOpen()}
+          onOpenChange={(open) => {
+            setSortDropdownOpen(open);
+            if (open) setSortFocusedIndex(0);
           }}
           placement="bottom-start"
           gutter={4}
         >
           <Popover.Trigger
-            as={(props: any) => (
-              <Tooltip tooltip={<LabelAndHotKey label="Saved Views" shortcut="0" />}>
-                <button
-                  type="button"
-                  class="relative flex items-center justify-center size-7 text-ink-muted hover:text-accent hover:bg-accent/20 border border-transparent active:border-accent active:bg-accent active:text-panel"
-                  style={{ 'clip-path': cornerClip('3px') }}
-                  {...props}
-                >
-                  <svg width="100%" height="100%" viewBox="0 0 24 24" fill="currentColor" stroke="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M4 5H20V7H4V5ZM4 11H20V13H4V11ZM4 17H20V19H4V17Z"/>
-                  </svg>
-                  <span class="absolute bottom-0 right-0.5 text-[9px] font-mono font-bold leading-none opacity-60">0</span>
-                </button>
-              </Tooltip>
-            )}
-          />
+            as="button"
+            type="button"
+            class="relative flex items-center justify-center size-7 shrink-0 text-ink-muted hover:text-accent hover:bg-accent/20 active:border-accent active:bg-accent active:text-panel border border-transparent"
+            style={{ 'clip-path': cornerClip('3px') }}
+          >
+            <SortIcon />
+            <span class="absolute bottom-0 right-0.5 text-[9px] font-mono font-bold leading-none opacity-60">
+              s
+            </span>
+          </Popover.Trigger>
           <Popover.Portal>
-            <Popover.Content 
+            <Popover.Content
               class="z-50 bg-panel border border-edge-muted shadow-lg"
-              onKeyDown={(e: KeyboardEvent) => {
-                const views = customViews();
-                // Count total items: views + save options if changed
-                const hasChangeOptions = isViewConfigChanged();
-                const totalItems = views.length + (hasChangeOptions ? 2 : 0);
-                
-                if (e.key === 'ArrowDown') {
-                  e.preventDefault();
-                  setViewsFocusedIndex((prev) => (prev + 1) % totalItems);
-                } else if (e.key === 'ArrowUp') {
-                  e.preventDefault();
-                  setViewsFocusedIndex((prev) => (prev - 1 + totalItems) % totalItems);
-                } else if (e.key === 'Enter') {
-                  e.preventDefault();
-                  const idx = viewsFocusedIndex();
-                  if (idx < views.length) {
-                    // Select view
-                    const [viewId] = views[idx];
-                    setSelectedView(viewId);
-                    setViewsDropdownOpen(false);
-                  } else if (hasChangeOptions) {
-                    // Save options
-                    if (idx === views.length) {
-                      onClickSaveViewConfigChanges();
-                    } else {
-                      onClickSaveAsNewView();
-                    }
-                    setViewsDropdownOpen(false);
-                  }
-                } else if (e.key === 'Escape') {
-                  e.preventDefault();
-                  setViewsDropdownOpen(false);
-                }
-              }}
               tabIndex={0}
               ref={(el) => setTimeout(() => el?.focus(), 0)}
+              onKeyDown={(e: KeyboardEvent) => {
+                const totalItems = SORT_OPTIONS.length;
+                if (e.key === 'ArrowDown') {
+                  e.preventDefault();
+                  setSortFocusedIndex((prev) => (prev + 1) % totalItems);
+                } else if (e.key === 'ArrowUp') {
+                  e.preventDefault();
+                  setSortFocusedIndex(
+                    (prev) => (prev - 1 + totalItems) % totalItems
+                  );
+                } else if (e.key === 'Enter') {
+                  e.preventDefault();
+                  setSortType(SORT_OPTIONS[sortFocusedIndex()].value);
+                  setSortDropdownOpen(false);
+                } else if (e.key === 'Escape') {
+                  e.preventDefault();
+                  setSortDropdownOpen(false);
+                }
+              }}
             >
-              <div class="flex flex-col gap-1 p-2 min-w-[200px]">
-                <For each={customViews()}>
-                  {([viewId, viewData], index) => (
-                    <div class="flex items-center gap-1 group">
-                      <Show
-                        when={editingViewId() === viewId}
-                        fallback={
-                          <button
-                            type="button"
-                            class="flex-1 flex items-center justify-between px-2 py-1.5 text-sm hover:bg-hover"
-                            classList={{
-                              'bg-hover text-ink': selectedView() === viewId,
-                              'text-ink': selectedView() !== viewId,
-                              'bg-hover': viewsFocusedIndex() === index(),
-                            }}
-                            onClick={() => {
-                              setSelectedView(viewId);
-                              setViewsDropdownOpen(false);
-                            }}
-                            onMouseEnter={() => setViewsFocusedIndex(index())}
-                          >
-                            <span class="truncate max-w-[100px]">{viewData.view || viewId}</span>
-                            <Show when={selectedView() === viewId}>
-                              <span class="text-accent ml-2">✓</span>
-                            </Show>
-                          </button>
-                        }
-                      >
-                        <input
-                          type="text"
-                          value={editingViewName()}
-                          onInput={(e) => setEditingViewName(e.currentTarget.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              handleRenameView(viewId);
-                            } else if (e.key === 'Escape') {
-                              e.preventDefault();
-                              setEditingViewId(null);
-                              setEditingViewName('');
-                            }
-                          }}
-                          class="flex-1 px-2 py-1 text-sm bg-surface border border-edge rounded focus:outline-none focus:border-accent"
-                          ref={(el) => setTimeout(() => el.focus(), 0)}
-                        />
-                        <button
-                          type="button"
-                          class="p-1 text-accent hover:bg-accent/20 rounded"
-                          onClick={() => handleRenameView(viewId)}
-                        >
-                          ✓
-                        </button>
+              <div class="flex flex-col gap-1 p-2 min-w-[140px]">
+                <For each={SORT_OPTIONS}>
+                  {(option, index) => (
+                    <button
+                      type="button"
+                      class="flex items-center justify-between px-2 py-1.5 text-sm hover:bg-hover"
+                      classList={{
+                        'bg-hover text-ink': sortType() === option.value,
+                        'text-ink': sortType() !== option.value,
+                        'bg-hover': sortFocusedIndex() === index(),
+                      }}
+                      onClick={() => {
+                        setSortType(option.value);
+                        setSortDropdownOpen(false);
+                      }}
+                      onMouseEnter={() => setSortFocusedIndex(index())}
+                    >
+                      <span>{option.label}</span>
+                      <Show when={sortType() === option.value}>
+                        <span class="text-ink">✓</span>
                       </Show>
-                      <Show when={editingViewId() !== viewId}>
-                        <button
-                          type="button"
-                          class="p-1 text-ink-muted hover:text-ink hover:bg-hover opacity-0 group-hover:opacity-100"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditingViewId(viewId);
-                            setEditingViewName(viewData.view || viewId);
-                          }}
-                          title="Rename"
-                        >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
-                          </svg>
-                        </button>
-                        <button
-                          type="button"
-                          class="p-1 text-ink-muted hover:text-red-500 hover:bg-red-500/10 opacity-0 group-hover:opacity-100"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteView(viewId);
-                          }}
-                          title="Delete"
-                        >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
-                          </svg>
-                        </button>
-                      </Show>
-                    </div>
+                    </button>
                   )}
                 </For>
-                {/* Save options when view config has changed */}
-                <Show when={isViewConfigChanged()}>
-                  <div class="border-t border-edge-muted my-1" />
-                  <button
-                    type="button"
-                    class="flex items-center px-2 py-1.5 text-sm hover:bg-hover text-ink"
-                    classList={{
-                      'bg-hover': viewsFocusedIndex() === customViews().length,
-                    }}
-                    onClick={() => {
-                      onClickSaveViewConfigChanges();
-                      setViewsDropdownOpen(false);
-                    }}
-                    onMouseEnter={() => setViewsFocusedIndex(customViews().length)}
-                  >
-                    Save Changes
-                  </button>
-                  <button
-                    type="button"
-                    class="flex items-center px-2 py-1.5 text-sm hover:bg-hover text-ink"
-                    classList={{
-                      'bg-hover': viewsFocusedIndex() === customViews().length + 1,
-                    }}
-                    onClick={() => {
-                      onClickSaveAsNewView();
-                      setViewsDropdownOpen(false);
-                    }}
-                    onMouseEnter={() => setViewsFocusedIndex(customViews().length + 1)}
-                  >
-                    Save as New View
-                  </button>
-                </Show>
               </div>
             </Popover.Content>
           </Popover.Portal>
         </Popover>
-      </Show>
-      {/* Separator before search */}
-      <div class="h-4 w-px bg-edge-muted mx-1 shrink-0" />
-      {/* Compact search bar */}
-      <div class="flex items-center gap-1 shrink-0">
-        <Tooltip tooltip={<LabelAndHotKey label="Search" shortcut="⌘F" />}>
-          <div class="relative flex items-center">
-            <input
-              ref={(el) => {
-                searchInputRef = el;
-              }}
-              type="text"
-              placeholder="⌘F"
-              value={searchText()}
-              onInput={(e) => setSearchText(e.currentTarget.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape' || e.key === 'Enter' || e.key === 'ArrowDown') {
-                  e.preventDefault();
-                  e.currentTarget.blur();
-                }
-              }}
-              class="w-24 px-1 py-1 text-xs bg-transparent border-none outline-none ring-0 focus:outline-none focus:ring-0 placeholder:text-ink-muted placeholder:select-none"
+        {/* Views dropdown - show if there are custom views or unsaved changes */}
+        <Show when={customViews().length > 0 || isViewConfigChanged()}>
+          {/* Separator before views */}
+          <div class="h-4 w-px bg-edge-muted mx-1 shrink-0" />
+          {/* Views dropdown */}
+          <Popover
+            open={viewsDropdownOpen()}
+            onOpenChange={(open) => {
+              setViewsDropdownOpen(open);
+              if (!open) {
+                setEditingViewId(null);
+                setEditingViewName('');
+              } else {
+                // Reset focus to first item when opening
+                setViewsFocusedIndex(0);
+              }
+            }}
+            placement="bottom-start"
+            gutter={4}
+          >
+            <Popover.Trigger
+              as={(props: any) => (
+                <Tooltip
+                  tooltip={<LabelAndHotKey label="Saved Views" shortcut="0" />}
+                >
+                  <button
+                    type="button"
+                    class="relative flex items-center justify-center size-7 text-ink-muted hover:text-accent hover:bg-accent/20 border border-transparent active:border-accent active:bg-accent active:text-panel"
+                    style={{ 'clip-path': cornerClip('3px') }}
+                    {...props}
+                  >
+                    <svg
+                      width="100%"
+                      height="100%"
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                      stroke="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path d="M4 5H20V7H4V5ZM4 11H20V13H4V11ZM4 17H20V19H4V17Z" />
+                    </svg>
+                    <span class="absolute bottom-0 right-0.5 text-[9px] font-mono font-bold leading-none opacity-60">
+                      0
+                    </span>
+                  </button>
+                </Tooltip>
+              )}
             />
-          </div>
-        </Tooltip>
-      </div>
+            <Popover.Portal>
+              <Popover.Content
+                class="z-50 bg-panel border border-edge-muted shadow-lg"
+                onKeyDown={(e: KeyboardEvent) => {
+                  const views = customViews();
+                  // Count total items: views + save options if changed
+                  const hasChangeOptions = isViewConfigChanged();
+                  const totalItems = views.length + (hasChangeOptions ? 2 : 0);
+
+                  if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    setViewsFocusedIndex((prev) => (prev + 1) % totalItems);
+                  } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    setViewsFocusedIndex(
+                      (prev) => (prev - 1 + totalItems) % totalItems
+                    );
+                  } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const idx = viewsFocusedIndex();
+                    if (idx < views.length) {
+                      // Select view
+                      const [viewId] = views[idx];
+                      setSelectedView(viewId);
+                      setViewsDropdownOpen(false);
+                    } else if (hasChangeOptions) {
+                      // Save options
+                      if (idx === views.length) {
+                        onClickSaveViewConfigChanges();
+                      } else {
+                        onClickSaveAsNewView();
+                      }
+                      setViewsDropdownOpen(false);
+                    }
+                  } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    setViewsDropdownOpen(false);
+                  }
+                }}
+                tabIndex={0}
+                ref={(el) => setTimeout(() => el?.focus(), 0)}
+              >
+                <div class="flex flex-col gap-1 p-2 min-w-[200px]">
+                  <For each={customViews()}>
+                    {([viewId, viewData], index) => (
+                      <div class="flex items-center gap-1 group">
+                        <Show
+                          when={editingViewId() === viewId}
+                          fallback={
+                            <button
+                              type="button"
+                              class="flex-1 flex items-center justify-between px-2 py-1.5 text-sm hover:bg-hover"
+                              classList={{
+                                'bg-hover text-ink': selectedView() === viewId,
+                                'text-ink': selectedView() !== viewId,
+                                'bg-hover': viewsFocusedIndex() === index(),
+                              }}
+                              onClick={() => {
+                                setSelectedView(viewId);
+                                setViewsDropdownOpen(false);
+                              }}
+                              onMouseEnter={() => setViewsFocusedIndex(index())}
+                            >
+                              <span class="truncate max-w-[100px]">
+                                {viewData.view || viewId}
+                              </span>
+                              <Show when={selectedView() === viewId}>
+                                <span class="text-accent ml-2">✓</span>
+                              </Show>
+                            </button>
+                          }
+                        >
+                          <input
+                            type="text"
+                            value={editingViewName()}
+                            onInput={(e) =>
+                              setEditingViewName(e.currentTarget.value)
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleRenameView(viewId);
+                              } else if (e.key === 'Escape') {
+                                e.preventDefault();
+                                setEditingViewId(null);
+                                setEditingViewName('');
+                              }
+                            }}
+                            class="flex-1 px-2 py-1 text-sm bg-surface border border-edge rounded focus:outline-none focus:border-accent"
+                            ref={(el) => setTimeout(() => el.focus(), 0)}
+                          />
+                          <button
+                            type="button"
+                            class="p-1 text-accent hover:bg-accent/20 rounded"
+                            onClick={() => handleRenameView(viewId)}
+                          >
+                            ✓
+                          </button>
+                        </Show>
+                        <Show when={editingViewId() !== viewId}>
+                          <button
+                            type="button"
+                            class="p-1 text-ink-muted hover:text-ink hover:bg-hover opacity-0 group-hover:opacity-100"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingViewId(viewId);
+                              setEditingViewName(viewData.view || viewId);
+                            }}
+                            title="Rename"
+                          >
+                            <svg
+                              width="14"
+                              height="14"
+                              viewBox="0 0 24 24"
+                              fill="currentColor"
+                            >
+                              <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            class="p-1 text-ink-muted hover:text-red-500 hover:bg-red-500/10 opacity-0 group-hover:opacity-100"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteView(viewId);
+                            }}
+                            title="Delete"
+                          >
+                            <svg
+                              width="14"
+                              height="14"
+                              viewBox="0 0 24 24"
+                              fill="currentColor"
+                            >
+                              <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
+                            </svg>
+                          </button>
+                        </Show>
+                      </div>
+                    )}
+                  </For>
+                  {/* Save options when view config has changed */}
+                  <Show when={isViewConfigChanged()}>
+                    <div class="border-t border-edge-muted my-1" />
+                    <button
+                      type="button"
+                      class="flex items-center px-2 py-1.5 text-sm hover:bg-hover text-ink"
+                      classList={{
+                        'bg-hover':
+                          viewsFocusedIndex() === customViews().length,
+                      }}
+                      onClick={() => {
+                        onClickSaveViewConfigChanges();
+                        setViewsDropdownOpen(false);
+                      }}
+                      onMouseEnter={() =>
+                        setViewsFocusedIndex(customViews().length)
+                      }
+                    >
+                      Save Changes
+                    </button>
+                    <button
+                      type="button"
+                      class="flex items-center px-2 py-1.5 text-sm hover:bg-hover text-ink"
+                      classList={{
+                        'bg-hover':
+                          viewsFocusedIndex() === customViews().length + 1,
+                      }}
+                      onClick={() => {
+                        onClickSaveAsNewView();
+                        setViewsDropdownOpen(false);
+                      }}
+                      onMouseEnter={() =>
+                        setViewsFocusedIndex(customViews().length + 1)
+                      }
+                    >
+                      Save as New View
+                    </button>
+                  </Show>
+                </div>
+              </Popover.Content>
+            </Popover.Portal>
+          </Popover>
+        </Show>
+        {/* Separator before search */}
+        <div class="h-4 w-px bg-edge-muted mx-1 shrink-0" />
+        {/* Compact search bar */}
+        <div class="flex items-center gap-1 shrink-0">
+          <Tooltip tooltip={<LabelAndHotKey label="Search" shortcut="⌘F" />}>
+            <div class="relative flex items-center">
+              <input
+                ref={(el) => {
+                  searchInputRef = el;
+                }}
+                type="text"
+                placeholder="⌘F"
+                value={searchText()}
+                onInput={(e) => setSearchText(e.currentTarget.value)}
+                onKeyDown={(e) => {
+                  if (
+                    e.key === 'Escape' ||
+                    e.key === 'Enter' ||
+                    e.key === 'ArrowDown'
+                  ) {
+                    e.preventDefault();
+                    e.currentTarget.blur();
+                  }
+                }}
+                class="w-24 px-1 py-1 text-xs bg-transparent border-none outline-none ring-0 focus:outline-none focus:ring-0 placeholder:text-ink-muted placeholder:select-none"
+              />
+            </div>
+          </Tooltip>
+        </div>
       </div>
     </div>
   );
@@ -883,7 +1076,9 @@ function ClearFiltersButton() {
         onClick={clearAllFilters}
       >
         ✕
-        <span class="absolute bottom-0 right-0.5 text-[9px] font-mono font-bold leading-none opacity-60">/</span>
+        <span class="absolute bottom-0 right-0.5 text-[9px] font-mono font-bold leading-none opacity-60">
+          /
+        </span>
       </button>
     </Tooltip>
   );
@@ -892,19 +1087,27 @@ function ClearFiltersButton() {
 function SettingsButton() {
   const { settingsOpen, toggleSettings } = useSettingsState();
   const { getSplitCount } = useSplitLayout();
-  
+
   // Hide settings button when there are multiple splits
   const isSingleSplit = () => getSplitCount() <= 1;
-  
+
   return (
     <Show when={isSingleSplit()}>
-      <Tooltip tooltip={<LabelAndHotKey label={settingsOpen() ? 'Close Settings' : 'Open Settings'} hotkeyToken={TOKENS.global.toggleSettings} />}>
+      <Tooltip
+        tooltip={
+          <LabelAndHotKey
+            label={settingsOpen() ? 'Close Settings' : 'Open Settings'}
+            hotkeyToken={TOKENS.global.toggleSettings}
+          />
+        }
+      >
         <button
           type="button"
           class="relative flex items-center justify-center size-7 border border-transparent active:border-accent active:bg-accent active:text-panel"
           classList={{
             'bg-hover text-ink': settingsOpen(),
-            'text-ink-muted hover:text-accent hover:bg-accent/20': !settingsOpen(),
+            'text-ink-muted hover:text-accent hover:bg-accent/20':
+              !settingsOpen(),
           }}
           style={{ 'clip-path': cornerClip('3px') }}
           onClick={() => toggleSettings()}
