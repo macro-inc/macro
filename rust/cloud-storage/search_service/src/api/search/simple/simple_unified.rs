@@ -208,17 +208,24 @@ pub(in crate::api::search) async fn perform_unified_search(
         .map(|c| c.project_name_cursor.clone())
         .unwrap_or_default();
 
+    let content_cursor = cursor
+        .as_ref()
+        .map(|c| c.content_cursor.clone())
+        .unwrap_or_default();
+
     // Clone cursors for passing to search functions (originals needed for cursor regeneration)
     let document_cursor_for_search = document_cursor.clone();
     let chat_cursor_for_search = chat_cursor.clone();
     let email_cursor_for_search = email_cursor.clone();
     let project_cursor_for_search = project_cursor.clone();
+    let content_cursor_for_search = content_cursor.clone();
 
     let unified_search_args = UnifiedSearchArgs {
         terms,
         user_id: user_id.as_ref().to_string(),
         page: 0, // With cursor-based pagination, we always start from "page 0" relative to cursor
         page_size,
+        cursor: content_cursor_for_search,
         match_type: match_type.to_string(),
         search_on: search_on.into(),
         collapse,
@@ -253,7 +260,7 @@ pub(in crate::api::search) async fn perform_unified_search(
                     SearchOn::Content => Ok((vec![], SearchCursorOption::Done)),
                 }
             } else {
-                Ok((vec![], SearchCursorOption::default()))
+                Ok((vec![], SearchCursorOption::Done))
             }
         },
         async {
@@ -276,7 +283,7 @@ pub(in crate::api::search) async fn perform_unified_search(
                     SearchOn::Content => Ok((vec![], SearchCursorOption::Done)),
                 }
             } else {
-                Ok((vec![], SearchCursorOption::default()))
+                Ok((vec![], SearchCursorOption::Done))
             }
         },
         async {
@@ -299,7 +306,7 @@ pub(in crate::api::search) async fn perform_unified_search(
                     SearchOn::Content => Ok((vec![], SearchCursorOption::Done)),
                 }
             } else {
-                Ok((vec![], SearchCursorOption::default()))
+                Ok((vec![], SearchCursorOption::Done))
             }
         },
         async {
@@ -322,7 +329,7 @@ pub(in crate::api::search) async fn perform_unified_search(
                     SearchOn::Content => Ok((vec![], SearchCursorOption::Done)),
                 }
             } else {
-                Ok((vec![], SearchCursorOption::default()))
+                Ok((vec![], SearchCursorOption::Done))
             }
         },
         async {
