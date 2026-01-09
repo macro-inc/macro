@@ -15,6 +15,7 @@ import { ContextMenuContent, MenuSeparator } from '@core/component/Menu';
 import { useTaskProperties } from '@core/component/Properties/hooks';
 import { getSuggestedProperties } from '@core/component/Properties/utils';
 import { RecipientSelector } from '@core/component/RecipientSelector';
+import { toast } from '@core/component/Toast/Toast';
 import {
   blockAcceptsFileExtension,
   fileTypeToBlockName,
@@ -413,6 +414,9 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const setPropertyFilters = (filters: PropertyFilter[]) => {
     setViewDataStore(selectedView(), 'filters', 'propertyFilters', filters);
   };
+  // Track incomplete property filters for toast warning on save
+  const [hasIncompletePropertyFilters, setHasIncompletePropertyFilters] =
+    createSignal(false);
 
   const getSystemSortOption = (
     sort: SortOptions | undefined
@@ -1267,6 +1271,11 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     const config = currentViewConfigBase();
     if (!view_ || !config) return;
 
+    // Warn if there are incomplete property filters (they won't be saved)
+    if (hasIncompletePropertyFilters()) {
+      toast.alert('Incomplete property filters were not saved');
+    }
+
     saveViewMutation.mutate({
       id: view_.id,
       name: view_.view,
@@ -1614,6 +1623,9 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       <PropertyFilterControl
                         propertyFilters={propertyFilters}
                         setPropertyFilters={setPropertyFilters}
+                        onIncompleteFiltersChange={
+                          setHasIncompletePropertyFilters
+                        }
                       />
                     </section>
                   </Show>

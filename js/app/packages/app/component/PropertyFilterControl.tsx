@@ -13,6 +13,8 @@ type FilterEntry = {
 type PropertyFilterControlProps = {
   propertyFilters: Accessor<PropertyFilter[]>;
   setPropertyFilters: (filters: PropertyFilter[]) => void;
+  /** Called when incomplete filter state changes */
+  onIncompleteFiltersChange?: (hasIncomplete: boolean) => void;
 };
 
 export const PropertyFilterControl: Component<PropertyFilterControlProps> = (
@@ -111,6 +113,16 @@ export const PropertyFilterControl: Component<PropertyFilterControlProps> = (
     }
 
     return errors;
+  });
+
+  // Check if there are any incomplete filters
+  const hasIncompleteFilters = createMemo(() =>
+    filters.some((f) => !isFilterComplete(f.data))
+  );
+
+  // Notify parent when incomplete filter state changes
+  createEffect(() => {
+    props.onIncompleteFiltersChange?.(hasIncompleteFilters());
   });
 
   return (
