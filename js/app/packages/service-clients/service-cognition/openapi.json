@@ -904,24 +904,6 @@
         }
       }
     },
-    "/tools/schemas": {
-      "get": {
-        "tags": ["tools"],
-        "summary": "Get all available tool schemas as JSON Schema definitions",
-        "operationId": "get_tool_schemas",
-        "responses": {
-          "200": {
-            "description": "Tool schemas retrieved successfully",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ToolSchemasResponse" }
-              }
-            }
-          },
-          "500": { "description": "Internal server error" }
-        }
-      }
-    },
     "/v2/chats/{chat_id}/permissions": {
       "get": {
         "tags": ["get_chat_permissions"],
@@ -1426,9 +1408,7 @@
           "chat_id": { "type": "string" },
           "messages": {
             "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/MessageWithAttachmentSummary"
-            }
+            "items": { "$ref": "#/components/schemas/MessageWithAttachments" }
           },
           "title": { "type": "string" }
         }
@@ -1494,17 +1474,6 @@
             ]
           }
         ]
-      },
-      "DocumentSummary": {
-        "type": "object",
-        "required": ["document_id", "summary", "version_id"],
-        "properties": {
-          "created_at": { "type": ["string", "null"], "format": "date-time" },
-          "document_id": { "type": "string" },
-          "id": { "type": ["string", "null"] },
-          "summary": { "type": "string" },
-          "version_id": { "type": "string" }
-        }
       },
       "DocumentTextPart": {
         "type": "object",
@@ -1740,6 +1709,7 @@
           "rbi",
           "rs",
           "scss",
+          "sass",
           "shader",
           "sh",
           "bash",
@@ -2448,14 +2418,11 @@
           }
         }
       },
-      "MessageWithAttachmentSummary": {
+      "MessageWithAttachments": {
         "type": "object",
-        "required": ["content", "date", "attachment_summaries"],
+        "required": ["content", "date", "attachmentIds"],
         "properties": {
-          "attachment_summaries": {
-            "type": "array",
-            "items": { "$ref": "#/components/schemas/Summary" }
-          },
+          "attachmentIds": { "type": "array", "items": { "type": "string" } },
           "content": { "type": "string" },
           "date": { "type": "string", "format": "date-time" }
         }
@@ -2473,13 +2440,13 @@
           "gpt-4o-mini",
           "o1",
           "gpt-4o-search-preview",
-          "gpt-4o-mini-search-preview",
           "o3",
           "claude-3-5-sonnet",
           "claude-3-7-sonnet",
           "claude-sonnet-4",
           "claude-sonnet-4-5",
-          "claude-haiku-4-5"
+          "claude-haiku-4-5",
+          "claude-opus-4-5"
         ]
       },
       "ModelMetadata": {
@@ -2757,28 +2724,6 @@
           }
         }
       },
-      "Summary": {
-        "oneOf": [
-          {
-            "type": "object",
-            "required": ["Summary"],
-            "properties": {
-              "Summary": { "$ref": "#/components/schemas/DocumentSummary" }
-            }
-          },
-          {
-            "type": "object",
-            "required": ["NoSummary"],
-            "properties": {
-              "NoSummary": {
-                "type": "object",
-                "required": ["document_id"],
-                "properties": { "document_id": { "type": "string" } }
-              }
-            }
-          }
-        ]
-      },
       "ToWebSocketMessage": {
         "oneOf": [
           {
@@ -2910,7 +2855,7 @@
           "outputSchema": {}
         }
       },
-      "ToolSchemasResponse": {
+      "ToolSchemas": {
         "type": "object",
         "required": ["schemas"],
         "properties": {

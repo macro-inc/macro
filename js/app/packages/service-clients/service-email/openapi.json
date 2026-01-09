@@ -422,6 +422,141 @@
         }
       }
     },
+    "/email/drafts/{id}/attachments": {
+      "post": {
+        "tags": ["Drafts"],
+        "summary": "Add an attachment to a draft.",
+        "operationId": "add_draft_attachment",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The ID of the draft to add the attachment to.",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddDraftAttachmentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddDraftAttachmentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/drafts/{id}/attachments/{attachment_id}": {
+      "delete": {
+        "tags": ["Drafts"],
+        "summary": "Remove an attachment from a draft.",
+        "operationId": "remove_draft_attachment",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The ID of the draft to remove the attachment from.",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "attachment_id",
+            "in": "path",
+            "description": "The ID of the attachment to remove.",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/email/init": {
       "post": {
         "tags": ["Init"],
@@ -622,6 +757,15 @@
         "tags": ["Links"],
         "summary": "List all links belonging to the user.",
         "operationId": "list_links",
+        "parameters": [
+          {
+            "name": "include_signature",
+            "in": "query",
+            "description": "If the user's gmail signature should be included in the response. Defaults to false.",
+            "required": false,
+            "schema": { "type": "boolean" }
+          }
+        ],
         "responses": {
           "200": {
             "description": "",
@@ -1435,6 +1579,45 @@
         "description": "Ordered from least to most access top -> bottom",
         "enum": ["view", "comment", "edit", "owner"]
       },
+      "AddDraftAttachmentRequest": {
+        "type": "object",
+        "description": "The request passed to send a message",
+        "required": ["file_name", "sha", "size"],
+        "properties": {
+          "file_name": {
+            "type": "string",
+            "description": "The name of the file being uploaded."
+          },
+          "sha": {
+            "type": "string",
+            "description": "The SHA256 hash of the file being uploaded."
+          },
+          "size": {
+            "type": "integer",
+            "format": "int32",
+            "description": "The size of the file in bytes."
+          }
+        }
+      },
+      "AddDraftAttachmentResponse": {
+        "type": "object",
+        "required": ["attachment_id", "upload_url", "content_type"],
+        "properties": {
+          "attachment_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The ID of the attachment in the database."
+          },
+          "content_type": {
+            "type": "string",
+            "description": "The MIME type of the attachment."
+          },
+          "upload_url": {
+            "type": "string",
+            "description": "The URL to upload the attachment to."
+          }
+        }
+      },
       "ApiAttachment": {
         "type": "object",
         "required": ["id", "messageId", "createdAt"],
@@ -1623,6 +1806,19 @@
           "item_id": { "type": "string", "format": "uuid" },
           "item_type": { "type": "string" },
           "message_id": { "type": ["string", "null"], "format": "uuid" }
+        }
+      },
+      "AttachmentToSend": {
+        "type": "object",
+        "description": "The attachment data we need to include when sending a message to a provider.",
+        "required": ["file_name", "content_type", "data"],
+        "properties": {
+          "content_type": { "type": "string" },
+          "data": {
+            "type": "array",
+            "items": { "type": "integer", "format": "int32", "minimum": 0 }
+          },
+          "file_name": { "type": "string" }
         }
       },
       "BackfillJob": {
@@ -2022,7 +2218,7 @@
         "properties": {
           "attachments": {
             "type": ["array", "null"],
-            "items": { "$ref": "#/components/schemas/Attachment" }
+            "items": { "$ref": "#/components/schemas/AttachmentToSend" }
           },
           "attachments_macro": {
             "type": ["array", "null"],

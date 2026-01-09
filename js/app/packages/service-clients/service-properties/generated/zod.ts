@@ -208,7 +208,7 @@ export const getBulkEntityPropertiesBody = zod.object({
   "entity_type": zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.'),
   "specific_message_id": zod.string().uuid().nullish().describe('For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread/channel/chat.')
 }).describe('Entity reference for entity-type property values.')).describe('Array of entity references (entity_id and entity_type pairs)'),
-  "property_ids": zod.array(zod.string().uuid()).nullish().describe('Optional: only return properties with these definition IDs. If empty/None, returns all.')
+  "property_ids": zod.array(zod.string().uuid()).optional().describe('Optional: only return properties with these definition IDs. If empty, returns all.')
 }).describe('Request for getting properties for multiple entities in bulk')
 
 export const getBulkEntityPropertiesResponse = zod.record(zod.string(), zod.object({

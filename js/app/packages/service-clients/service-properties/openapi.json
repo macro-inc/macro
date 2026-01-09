@@ -420,9 +420,9 @@
             "description": "Array of entity references (entity_id and entity_type pairs)"
           },
           "property_ids": {
-            "type": ["array", "null"],
+            "type": "array",
             "items": { "type": "string", "format": "uuid" },
-            "description": "Optional: only return properties with these definition IDs. If empty/None, returns all."
+            "description": "Optional: only return properties with these definition IDs. If empty, returns all."
           }
         }
       },

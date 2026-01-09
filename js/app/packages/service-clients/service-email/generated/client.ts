@@ -5,6 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type {
+  AddDraftAttachmentRequest,
+  AddDraftAttachmentResponse,
   ApiPaginatedThreadCursor,
   ArchiveThreadRequest,
   CancelBackfillParams,
@@ -24,6 +26,7 @@ import type {
   InitResponse,
   ListContactsResponse,
   ListLabelsResponse,
+  ListLinksParams,
   ListLinksResponse,
   ParsedMessage,
   PatchSettingsRequest,
@@ -525,6 +528,138 @@ export const deleteDraft = async (id: string, options?: RequestInit): Promise<de
 
 
 /**
+ * @summary Add an attachment to a draft.
+ */
+export type addDraftAttachmentResponse201 = {
+  data: AddDraftAttachmentResponse
+  status: 201
+}
+
+export type addDraftAttachmentResponse400 = {
+  data: ErrorResponse
+  status: 400
+}
+
+export type addDraftAttachmentResponse401 = {
+  data: ErrorResponse
+  status: 401
+}
+
+export type addDraftAttachmentResponse404 = {
+  data: ErrorResponse
+  status: 404
+}
+
+export type addDraftAttachmentResponse500 = {
+  data: ErrorResponse
+  status: 500
+}
+    
+export type addDraftAttachmentResponseSuccess = (addDraftAttachmentResponse201) & {
+  headers: Headers;
+};
+export type addDraftAttachmentResponseError = (addDraftAttachmentResponse400 | addDraftAttachmentResponse401 | addDraftAttachmentResponse404 | addDraftAttachmentResponse500) & {
+  headers: Headers;
+};
+
+export type addDraftAttachmentResponse = (addDraftAttachmentResponseSuccess | addDraftAttachmentResponseError)
+
+export const getAddDraftAttachmentUrl = (id: string,) => {
+
+
+  
+
+  return `/email/drafts/${id}/attachments`
+}
+
+export const addDraftAttachment = async (id: string,
+    addDraftAttachmentRequest: AddDraftAttachmentRequest, options?: RequestInit): Promise<addDraftAttachmentResponse> => {
+  
+  const res = await fetch(getAddDraftAttachmentUrl(id),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      addDraftAttachmentRequest,)
+  }
+)
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: addDraftAttachmentResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as addDraftAttachmentResponse
+}
+
+
+
+/**
+ * @summary Remove an attachment from a draft.
+ */
+export type removeDraftAttachmentResponse201 = {
+  data: EmptyResponse
+  status: 201
+}
+
+export type removeDraftAttachmentResponse400 = {
+  data: ErrorResponse
+  status: 400
+}
+
+export type removeDraftAttachmentResponse401 = {
+  data: ErrorResponse
+  status: 401
+}
+
+export type removeDraftAttachmentResponse404 = {
+  data: ErrorResponse
+  status: 404
+}
+
+export type removeDraftAttachmentResponse500 = {
+  data: ErrorResponse
+  status: 500
+}
+    
+export type removeDraftAttachmentResponseSuccess = (removeDraftAttachmentResponse201) & {
+  headers: Headers;
+};
+export type removeDraftAttachmentResponseError = (removeDraftAttachmentResponse400 | removeDraftAttachmentResponse401 | removeDraftAttachmentResponse404 | removeDraftAttachmentResponse500) & {
+  headers: Headers;
+};
+
+export type removeDraftAttachmentResponse = (removeDraftAttachmentResponseSuccess | removeDraftAttachmentResponseError)
+
+export const getRemoveDraftAttachmentUrl = (id: string,
+    attachmentId: string,) => {
+
+
+  
+
+  return `/email/drafts/${id}/attachments/${attachmentId}`
+}
+
+export const removeDraftAttachment = async (id: string,
+    attachmentId: string, options?: RequestInit): Promise<removeDraftAttachmentResponse> => {
+  
+  const res = await fetch(getRemoveDraftAttachmentUrl(id,attachmentId),
+  {      
+    ...options,
+    method: 'DELETE'
+    
+    
+  }
+)
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: removeDraftAttachmentResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as removeDraftAttachmentResponse
+}
+
+
+
+/**
  * @summary Initialize email functionality for the user. Populates initial threads and enables inbox syncing.
  */
 export type initUserResponse200 = {
@@ -803,17 +938,24 @@ export type listLinksResponseError = (listLinksResponse401 | listLinksResponse40
 
 export type listLinksResponse = (listLinksResponseSuccess | listLinksResponseError)
 
-export const getListLinksUrl = () => {
+export const getListLinksUrl = (params?: ListLinksParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
+    
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
 
-  
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/email/links`
+  return stringifiedParams.length > 0 ? `/email/links?${stringifiedParams}` : `/email/links`
 }
 
-export const listLinks = async ( options?: RequestInit): Promise<listLinksResponse> => {
+export const listLinks = async (params?: ListLinksParams, options?: RequestInit): Promise<listLinksResponse> => {
   
-  const res = await fetch(getListLinksUrl(),
+  const res = await fetch(getListLinksUrl(params),
   {      
     ...options,
     method: 'GET'

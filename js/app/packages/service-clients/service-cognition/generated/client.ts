@@ -32,7 +32,6 @@ import type {
   StructedOutputCompletionRequest,
   StructedOutputCompletionResponse,
   SuccessResponse,
-  ToolSchemasResponse,
   VerifyAttachmentsRequest,
   VerifyAttachmentsResponse
 } from './schemas';
@@ -1482,55 +1481,6 @@ export const wsHandler = async ( options?: RequestInit): Promise<wsHandlerRespon
   
   const data: wsHandlerResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as wsHandlerResponse
-}
-
-
-
-/**
- * @summary Get all available tool schemas as JSON Schema definitions
- */
-export type getToolSchemasResponse200 = {
-  data: ToolSchemasResponse
-  status: 200
-}
-
-export type getToolSchemasResponse500 = {
-  data: void
-  status: 500
-}
-    
-export type getToolSchemasResponseSuccess = (getToolSchemasResponse200) & {
-  headers: Headers;
-};
-export type getToolSchemasResponseError = (getToolSchemasResponse500) & {
-  headers: Headers;
-};
-
-export type getToolSchemasResponse = (getToolSchemasResponseSuccess | getToolSchemasResponseError)
-
-export const getGetToolSchemasUrl = () => {
-
-
-  
-
-  return `/tools/schemas`
-}
-
-export const getToolSchemas = async ( options?: RequestInit): Promise<getToolSchemasResponse> => {
-  
-  const res = await fetch(getGetToolSchemasUrl(),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-)
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: getToolSchemasResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getToolSchemasResponse
 }
 
 

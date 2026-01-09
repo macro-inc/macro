@@ -4,10 +4,10 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
-import type { MessageWithAttachmentSummary } from './messageWithAttachmentSummary';
+import type { MessageWithAttachments } from './messageWithAttachments';
 
 export interface ConversationRecord {
   chat_id: string;
-  messages: MessageWithAttachmentSummary[];
+  messages: MessageWithAttachments[];
   title: string;
 }
