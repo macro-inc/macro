@@ -347,7 +347,7 @@ function EmailContent(props: EmailViewProps) {
           class="w-full flex-1 flex flex-col items-center overflow-hidden"
           ref={context.registerMessagesContainer}
         >
-          <MessageList initialLoadComplete={context.initialLoadComplete()} />
+          <MessageList initialLoadComplete={context.initialLoadComplete()} title={props.title()} />
         </div>
         <Show
           when={

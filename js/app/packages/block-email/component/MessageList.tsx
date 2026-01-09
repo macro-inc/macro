@@ -1,11 +1,12 @@
 import { useEmailContext } from '@block-email/component/EmailContext';
 import { isScrollingToMessage } from '@block-email/signal/scrollState';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { createMemo, createSelector, For } from 'solid-js';
+import { createMemo, createSelector, For, Show } from 'solid-js';
 import { MessageContainer } from './MessageContainer';
 
 interface MessageListProps {
   initialLoadComplete: boolean;
+  title: string;
 }
 
 export function MessageList(props: MessageListProps) {
@@ -83,6 +84,14 @@ export function MessageList(props: MessageListProps) {
           }}
         </For>
       </StaticMarkdownContext>
+      {/* Title at top - placed last in DOM due to flex-col-reverse */}
+      <Show when={props.title}>
+        <div class="shrink-0 w-full flex justify-center pb-4">
+          <div class="macro-message-width w-full">
+            <h1 class="text-4xl font-semibold text-ink pt-8 pb-4">{props.title}</h1>
+          </div>
+        </div>
+      </Show>
     </div>
   );
 }

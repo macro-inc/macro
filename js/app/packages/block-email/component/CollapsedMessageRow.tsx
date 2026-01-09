@@ -29,7 +29,7 @@ export function CollapsedMessageRow(props: CollapsedMessageRowProps) {
 
   return (
     <div
-      class="text-ink-extra-muted truncate text-sm py-1 -my-1 cursor-pointer hover:text-ink-muted transition-colors"
+      class="text-ink-extra-muted truncate text-sm pt-1 pb-2 cursor-pointer hover:text-ink-muted transition-colors"
       onClick={props.onClick}
     >
       {snippet()}
