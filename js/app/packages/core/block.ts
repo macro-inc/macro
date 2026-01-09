@@ -71,7 +71,7 @@ export type BlockName = (typeof BlockRegistry)[BlockNameKeys];
  * List of strongly-typed, valid aliases that can be used as pseudo-differentiated
  * block types.
  */
-export const BlockAliasRegistry = ['task'] as const;
+export const BlockAliasRegistry = ['csv', 'task'] as const;
 
 type BlockAliasKeys = keyof typeof BlockAliasRegistry & number;
 
