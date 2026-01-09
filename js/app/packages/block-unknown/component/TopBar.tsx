@@ -16,7 +16,10 @@ import { ReferencesModal } from '@core/component/ReferencesModal';
 import { ShareButton } from '@core/component/TopBar/ShareButton';
 import { blockMetadataSignal } from '@core/signal/load';
 import { useGetPermissions } from '@core/signal/permissions';
-import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
+import {
+  useBlockDocumentDownloadName,
+  useBlockDocumentName,
+} from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
 import DownloadSimple from '@icon/regular/download-simple.svg';
 import { createCallback } from '@solid-primitives/rootless';
@@ -26,13 +29,14 @@ import { useGetFileBlob } from '../signal/blockData';
 export function TopBar() {
   const blockId = useBlockId();
   const fileName = useBlockDocumentName();
+  const downloadName = useBlockDocumentDownloadName();
   const getBlob = useGetFileBlob();
   const userPermissions = useGetPermissions();
 
   const downloadDocument = createCallback(async () => {
     try {
       const blob = await getBlob();
-      downloadFile(blob, fileName());
+      downloadFile(blob, downloadName());
     } catch (e) {
       console.error('error downloading file', e);
       toast.failure('Error downloading file');

@@ -1,7 +1,8 @@
-use crate::{config::Config, util::redis::RedisClient};
 use axum::extract::FromRef;
 use document_storage_service_client::DocumentStorageServiceClient;
 use email::{domain::service::EmailServiceImpl, inbound::EmailPreviewState, outbound::EmailPgRepo};
+use email_service::config::Config;
+use email_service::util::redis::RedisClient;
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;

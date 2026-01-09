@@ -35,7 +35,10 @@ export const getRecentActivityHandlerResponse = zod.object({
   "owner": zod.string().describe('The owner of the document'),
   "projectId": zod.string().nullish().describe('The id of the project that this document belongs to'),
   "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
-  "subType": zod.union([zod.null(),zod.enum(['task']).describe('The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.')]).optional(),
+  "subType": zod.union([zod.null(),zod.object({
+  "is_completed": zod.boolean().describe('Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'),
+  "type": zod.enum(['task'])
+}).describe('A task document with its associated properties').describe('Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.')]).optional(),
   "updatedAt": zod.number().describe('The time the document instance / document BOM was updated'),
   "type": zod.enum(['document'])
 })
@@ -769,7 +772,10 @@ export const getBatchPreviewHandlerResponse = zod.object({
   "document_name": zod.string().describe('The name of the document'),
   "file_type": zod.string().nullish().describe('The file type of the document (e.g. pdf, docx)'),
   "owner": zod.string().describe('The id of the owner of the document'),
-  "sub_type": zod.union([zod.null(),zod.enum(['task']).describe('The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.')]).optional(),
+  "sub_type": zod.union([zod.null(),zod.object({
+  "is_completed": zod.boolean().describe('Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'),
+  "type": zod.enum(['task'])
+}).describe('A task document with completion status').describe('The sub type of a document preview with associated properties.\nTask-related properties are encoded within the variant to ensure valid states.')]).optional(),
   "updated_at": zod.number().describe('The time the document was last updated')
 }).and(zod.object({
   "type": zod.enum(['access'])
@@ -1141,7 +1147,10 @@ export const getHistoryHandlerResponse = zod.object({
   "owner": zod.string().describe('The owner of the document'),
   "projectId": zod.string().nullish().describe('The id of the project that this document belongs to'),
   "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
-  "subType": zod.union([zod.null(),zod.enum(['task']).describe('The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.')]).optional(),
+  "subType": zod.union([zod.null(),zod.object({
+  "is_completed": zod.boolean().describe('Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'),
+  "type": zod.enum(['task'])
+}).describe('A task document with its associated properties').describe('Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.')]).optional(),
   "updatedAt": zod.number().describe('The time the document instance / document BOM was updated'),
   "type": zod.enum(['document'])
 }),zod.object({
@@ -1231,6 +1240,9 @@ export const getItemsSoupQueryParams = zod.object({
   "cursor": zod.string().optional().describe('Base64 encoded cursor value.')
 })
 
+export const getItemsSoupResponseItemsItemDataChannelOrgIdMin = 0;
+
+
 export const getItemsSoupResponse = zod.object({
   "items": zod.array(zod.union([zod.object({
   "data": zod.object({
@@ -1245,7 +1257,10 @@ export const getItemsSoupResponse = zod.object({
   "ownerId": zod.string().describe('The owner of the document'),
   "projectId": zod.string().uuid().nullish().describe('The id of the project that this document belongs to'),
   "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
-  "subType": zod.union([zod.null(),zod.enum(['task']).describe('The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.')]).optional(),
+  "subType": zod.union([zod.null(),zod.object({
+  "is_completed": zod.boolean().describe('Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'),
+  "type": zod.enum(['task'])
+}).describe('A task document with its associated properties').describe('Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.')]).optional(),
   "updatedAt": zod.number().describe('The time the document instance / document BOM was updated'),
   "viewedAt": zod.number().nullable().describe('The time the document was last viewed')
 }),
@@ -1334,6 +1349,50 @@ export const getItemsSoupResponse = zod.object({
 }))
 })),
   "tag": zod.enum(['emailThread'])
+}),zod.object({
+  "data": zod.object({
+  "channel": zod.object({
+  "channel_type": zod.enum(['public', 'organization', 'private', 'direct_message']),
+  "created_at": zod.string().datetime({}),
+  "id": zod.string().uuid(),
+  "name": zod.string().nullish(),
+  "org_id": zod.number().min(getItemsSoupResponseItemsItemDataChannelOrgIdMin).nullish(),
+  "owner_id": zod.string(),
+  "updated_at": zod.string().datetime({})
+}),
+  "participants": zod.array(zod.object({
+  "channel_id": zod.string().uuid(),
+  "joined_at": zod.string().datetime({}),
+  "left_at": zod.string().datetime({}).nullish(),
+  "role": zod.enum(['owner', 'admin', 'member']),
+  "user_id": zod.string()
+}))
+}).and(zod.object({
+  "latest_message": zod.union([zod.null(),zod.object({
+  "content": zod.string(),
+  "created_at": zod.string().datetime({}),
+  "deleted_at": zod.string().datetime({}).nullish(),
+  "mentions": zod.array(zod.string()).describe('message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`'),
+  "message_id": zod.string().uuid(),
+  "sender_id": zod.string(),
+  "thread_id": zod.string().uuid().nullish(),
+  "updated_at": zod.string().datetime({})
+})]).optional(),
+  "latest_non_thread_message": zod.union([zod.null(),zod.object({
+  "content": zod.string(),
+  "created_at": zod.string().datetime({}),
+  "deleted_at": zod.string().datetime({}).nullish(),
+  "mentions": zod.array(zod.string()).describe('message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`'),
+  "message_id": zod.string().uuid(),
+  "sender_id": zod.string(),
+  "thread_id": zod.string().uuid().nullish(),
+  "updated_at": zod.string().datetime({})
+})]).optional()
+})).and(zod.object({
+  "interacted_at": zod.string().datetime({}).nullish(),
+  "viewed_at": zod.string().datetime({}).nullish()
+})),
+  "tag": zod.enum(['channel'])
 })]).and(zod.object({
   "frecency_score": zod.number()
 }))),
@@ -1389,6 +1448,9 @@ export const postItemsSoupBody = zod.object({
   "emailView": zod.string().optional().describe('the view of specific emails to display')
 }))
 
+export const postItemsSoupResponseItemsItemDataChannelOrgIdMin = 0;
+
+
 export const postItemsSoupResponse = zod.object({
   "items": zod.array(zod.union([zod.object({
   "data": zod.object({
@@ -1403,7 +1465,10 @@ export const postItemsSoupResponse = zod.object({
   "ownerId": zod.string().describe('The owner of the document'),
   "projectId": zod.string().uuid().nullish().describe('The id of the project that this document belongs to'),
   "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
-  "subType": zod.union([zod.null(),zod.enum(['task']).describe('The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.')]).optional(),
+  "subType": zod.union([zod.null(),zod.object({
+  "is_completed": zod.boolean().describe('Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'),
+  "type": zod.enum(['task'])
+}).describe('A task document with its associated properties').describe('Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.')]).optional(),
   "updatedAt": zod.number().describe('The time the document instance / document BOM was updated'),
   "viewedAt": zod.number().nullable().describe('The time the document was last viewed')
 }),
@@ -1492,6 +1557,50 @@ export const postItemsSoupResponse = zod.object({
 }))
 })),
   "tag": zod.enum(['emailThread'])
+}),zod.object({
+  "data": zod.object({
+  "channel": zod.object({
+  "channel_type": zod.enum(['public', 'organization', 'private', 'direct_message']),
+  "created_at": zod.string().datetime({}),
+  "id": zod.string().uuid(),
+  "name": zod.string().nullish(),
+  "org_id": zod.number().min(postItemsSoupResponseItemsItemDataChannelOrgIdMin).nullish(),
+  "owner_id": zod.string(),
+  "updated_at": zod.string().datetime({})
+}),
+  "participants": zod.array(zod.object({
+  "channel_id": zod.string().uuid(),
+  "joined_at": zod.string().datetime({}),
+  "left_at": zod.string().datetime({}).nullish(),
+  "role": zod.enum(['owner', 'admin', 'member']),
+  "user_id": zod.string()
+}))
+}).and(zod.object({
+  "latest_message": zod.union([zod.null(),zod.object({
+  "content": zod.string(),
+  "created_at": zod.string().datetime({}),
+  "deleted_at": zod.string().datetime({}).nullish(),
+  "mentions": zod.array(zod.string()).describe('message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`'),
+  "message_id": zod.string().uuid(),
+  "sender_id": zod.string(),
+  "thread_id": zod.string().uuid().nullish(),
+  "updated_at": zod.string().datetime({})
+})]).optional(),
+  "latest_non_thread_message": zod.union([zod.null(),zod.object({
+  "content": zod.string(),
+  "created_at": zod.string().datetime({}),
+  "deleted_at": zod.string().datetime({}).nullish(),
+  "mentions": zod.array(zod.string()).describe('message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`'),
+  "message_id": zod.string().uuid(),
+  "sender_id": zod.string(),
+  "thread_id": zod.string().uuid().nullish(),
+  "updated_at": zod.string().datetime({})
+})]).optional()
+})).and(zod.object({
+  "interacted_at": zod.string().datetime({}).nullish(),
+  "viewed_at": zod.string().datetime({}).nullish()
+})),
+  "tag": zod.enum(['channel'])
 })]).and(zod.object({
   "frecency_score": zod.number()
 }))),
@@ -1532,7 +1641,10 @@ export const getPinsHandlerResponse = zod.object({
   "owner": zod.string().describe('The owner of the document'),
   "projectId": zod.string().nullish().describe('The id of the project that this document belongs to'),
   "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
-  "subType": zod.union([zod.null(),zod.enum(['task']).describe('The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.')]).optional(),
+  "subType": zod.union([zod.null(),zod.object({
+  "is_completed": zod.boolean().describe('Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'),
+  "type": zod.enum(['task'])
+}).describe('A task document with its associated properties').describe('Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.')]).optional(),
   "updatedAt": zod.number().describe('The time the document instance / document BOM was updated'),
   "type": zod.enum(['document'])
 }),zod.object({
@@ -1570,7 +1682,10 @@ export const getPinsHandlerResponse = zod.object({
   "owner": zod.string().describe('The owner of the document'),
   "projectId": zod.string().nullish().describe('The id of the project that this document belongs to'),
   "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
-  "subType": zod.union([zod.null(),zod.enum(['task']).describe('The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.')]).optional(),
+  "subType": zod.union([zod.null(),zod.object({
+  "is_completed": zod.boolean().describe('Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'),
+  "type": zod.enum(['task'])
+}).describe('A task document with its associated properties').describe('Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.')]).optional(),
   "updatedAt": zod.number().describe('The time the document instance / document BOM was updated'),
   "type": zod.enum(['document'])
 }),zod.object({
@@ -1892,7 +2007,10 @@ export const getProjectContentHandlerResponse = zod.object({
   "owner": zod.string().describe('The owner of the document'),
   "projectId": zod.string().nullish().describe('The id of the project that this document belongs to'),
   "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
-  "subType": zod.union([zod.null(),zod.enum(['task']).describe('The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.')]).optional(),
+  "subType": zod.union([zod.null(),zod.object({
+  "is_completed": zod.boolean().describe('Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'),
+  "type": zod.enum(['task'])
+}).describe('A task document with its associated properties').describe('Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.')]).optional(),
   "updatedAt": zod.number().describe('The time the document instance / document BOM was updated'),
   "type": zod.enum(['document'])
 }),zod.object({
@@ -1991,7 +2109,10 @@ export const recentlyDeletedResponse = zod.object({
   "owner": zod.string().describe('The owner of the document'),
   "projectId": zod.string().nullish().describe('The id of the project that this document belongs to'),
   "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
-  "subType": zod.union([zod.null(),zod.enum(['task']).describe('The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.')]).optional(),
+  "subType": zod.union([zod.null(),zod.object({
+  "is_completed": zod.boolean().describe('Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'),
+  "type": zod.enum(['task'])
+}).describe('A task document with its associated properties').describe('Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.')]).optional(),
   "updatedAt": zod.number().describe('The time the document instance / document BOM was updated'),
   "type": zod.enum(['document'])
 }),zod.object({

@@ -3,6 +3,7 @@ use axum::Extension;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
+use email_service::util::gmail::send::cleanup_draft_attachments;
 use model::response::{EmptyResponse, ErrorResponse};
 use models_email::service::link::Link;
 use models_opensearch::SearchEntityType;
@@ -84,6 +85,13 @@ pub async fn handler(
         return Err(DeleteDraftError::NotADraft(draft_id));
     }
 
+    // Fetch draft attachments before deletion so we can clean up S3
+    let draft_attachments =
+        email_db_client::attachments::draft::fetch_draft_attachments_by_draft_id(
+            &ctx.db, link.id, draft_id,
+        )
+        .await?;
+
     let mut tx = ctx.db.begin().await?;
 
     let result = email_db_client::messages::delete::delete_message_with_tx(
@@ -96,6 +104,25 @@ pub async fn handler(
     match result {
         Ok(deleted_thread) => {
             tx.commit().await?;
+
+            // cleanup attachments in the background
+            if !draft_attachments.is_empty() {
+                let db = ctx.db.clone();
+                let s3_client = ctx.s3_client.clone();
+                let bucket = ctx.config.attachment_bucket.clone();
+                let link_id = link.id;
+                tokio::spawn(async move {
+                    cleanup_draft_attachments(
+                        db,
+                        &s3_client,
+                        bucket,
+                        link_id,
+                        draft_id,
+                        draft_attachments,
+                    )
+                    .await;
+                });
+            }
 
             if let Some(thread_id) = deleted_thread {
                 tokio::spawn(async move {

@@ -49,6 +49,7 @@ import PixelWord from '@macro-icons/pixel/write.svg';
 import WideBook from '@macro-icons/wide/book.svg';
 import WideChannel from '@macro-icons/wide/channel.svg';
 import WideChat from '@macro-icons/wide/chat.svg';
+import WideCsv from '@macro-icons/wide/csv.svg';
 import WideDiagram from '@macro-icons/wide/diagram.svg';
 import WideDocx from '@macro-icons/wide/docx.svg';
 import WideEmail from '@macro-icons/wide/email.svg';
@@ -127,6 +128,12 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     foreground: 'text-code',
     background: 'bg-code-bg',
     prettyName: 'Code',
+  },
+  csv: {
+    icon: WideCsv,
+    foreground: 'text-code',
+    background: 'bg-code-bg',
+    prettyName: 'CSV',
   },
   pdf: {
     icon: FilePdf,
@@ -258,6 +265,7 @@ export const PIXEL_ICONS: Record<EntityWithValidIcon, Component> = {
   company: PixelBuilding,
   email: PixelEmail,
   code: PixelCode,
+  csv: PixelCode,
   pdf: PixelPdf,
   md: PixelMd,
   image: PixelImage,
@@ -283,6 +291,7 @@ export const WIDE_ICONS: Record<EntityWithValidIcon, Component> = {
   company: Building,
   email: WideEmail,
   code: WideFileCode,
+  csv: WideCsv,
   pdf: WideBook,
   md: WideFileMd,
   image: WideFileImage,

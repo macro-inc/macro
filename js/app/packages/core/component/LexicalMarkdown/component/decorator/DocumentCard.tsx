@@ -3,8 +3,8 @@ import {
   useBlockOwner,
   useMaybeBlockName,
 } from '@core/block';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { EntityIcon } from '@core/component/EntityIcon';
-import { IconButton } from '@core/component/IconButton';
 import {
   DropdownMenuContent,
   MenuItem,
@@ -341,7 +341,7 @@ export function DocumentCard(props: DocumentCardDecoratorProps) {
                 <EntityIcon
                   targetType={
                     props.item.type === 'document'
-                      ? (props.item.subType ?? props.item.fileType)
+                      ? (props.item.subType?.type ?? props.item.fileType)
                       : props.item.type
                   }
                   size="sm"
@@ -367,7 +367,11 @@ export function DocumentCard(props: DocumentCardDecoratorProps) {
           </div>
           <DropdownMenu open={dropdownOpen()} onOpenChange={setDropdownOpen}>
             <DropdownMenu.Trigger>
-              <IconButton theme="clear" icon={DotsThree} tabIndex={-1} />
+              <DeprecatedIconButton
+                theme="clear"
+                icon={DotsThree}
+                tabIndex={-1}
+              />
             </DropdownMenu.Trigger>
             <ScopedPortal scope="block">
               <DropdownMenuContent class="z-action-menu">

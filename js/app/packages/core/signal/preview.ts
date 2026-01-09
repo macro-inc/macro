@@ -1,12 +1,12 @@
 import { itemToSafeName } from '@core/constant/allBlocks';
 import { debounce } from '@core/util/debounce';
 import { isErr } from '@core/util/maybeResult';
+import type { SubType } from '@macro-entity';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
 import { commsServiceClient } from '@service-comms/client';
 import { emailClient } from '@service-email/client';
 import { type ItemType, storageServiceClient } from '@service-storage/client';
-import type { DocumentSubType } from '@service-storage/generated/schemas';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import { syncServiceClient } from '@service-sync/client';
 import { type Accessor, createEffect, createSignal } from 'solid-js';
@@ -36,7 +36,7 @@ export type PreviewItemAccess = {
   loading: false;
   name: string;
   fileType?: FileType;
-  subType?: DocumentSubType;
+  subType?: SubType;
   channelType?: never;
 } & BasePreviewItem<Exclude<ItemType, 'project'>>;
 
@@ -54,7 +54,7 @@ export type PreviewDocumentAccess = {
   loading: false;
   name: string;
   fileType: FileType;
-  subType?: DocumentSubType;
+  subType?: SubType;
   channelType?: never;
 } & BasePreviewItem<'document'>;
 

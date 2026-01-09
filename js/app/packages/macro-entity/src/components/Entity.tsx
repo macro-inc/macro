@@ -11,9 +11,18 @@ import type { SearchLocation } from '../types/search';
 export type EntityClickEvent = Parameters<
   JSX.EventHandler<HTMLDivElement, MouseEvent>
 >[0];
+type EntityPointerDownEvent = Parameters<
+  JSX.EventHandler<HTMLDivElement, PointerEvent>
+>[0];
 export type EntityClickHandler<T extends EntityData> = (
   entity: T,
   event: EntityClickEvent,
+  location?: SearchLocation,
+  options?: { ignorePreview?: boolean }
+) => void;
+export type EntityPointerDownHandler<T extends EntityData> = (
+  entity: T,
+  event: EntityPointerDownEvent,
   location?: SearchLocation,
   options?: { ignorePreview?: boolean }
 ) => void;
@@ -146,10 +155,11 @@ export function Entity<T extends EntityData = EntityData>(
   );
 }
 
+// SCUFFED THEME: how do we want to handle these colors?
 function UserIcon(props: { id: string; name?: string }) {
   const fallbackName = () => props.name || props.id.replace('macro|', '');
   const Fallback = () => (
-    <span class="flex size-8 items-center justify-center rounded-full bg-gray-500">
+    <span class="flex size-8 items-center justify-center rounded-full bg-[oklch(0.551_0.027_264.364)]">
       <span class="font-medium text-sm text-white">
         {fallbackName().charAt(0).toUpperCase()}
       </span>
@@ -160,7 +170,7 @@ function UserIcon(props: { id: string; name?: string }) {
 
   const profilePicQuery = createProfilePictureQuery(props.id);
   const Loading = () => (
-    <div class="flex size-8 animate-pulse rounded-full bg-gray-600" />
+    <div class="flex size-8 animate-pulse rounded-full bg-[oklch(0.446_0.03_256.802)]" />
   );
   return (
     <Suspense fallback={<Loading />}>
@@ -168,7 +178,7 @@ function UserIcon(props: { id: string; name?: string }) {
         {(url) => (
           <img
             src={url()}
-            class="inline-block size-8 rounded-full bg-gray-500"
+            class="inline-block size-8 rounded-full bg-[oklch(0.551_0.027_264.364)]"
           />
         )}
       </Show>

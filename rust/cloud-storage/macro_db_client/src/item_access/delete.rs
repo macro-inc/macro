@@ -1,4 +1,5 @@
 use anyhow::Context;
+use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::{Postgres, Transaction};
 
 /// Deletes all user access records for a specific item
@@ -85,7 +86,7 @@ pub async fn delete_user_item_access(
 #[tracing::instrument(skip_all)]
 pub async fn delete_user_item_access_by_users_and_channel(
     executor: impl sqlx::Executor<'_, Database = Postgres>,
-    user_ids: &[String],
+    user_ids: &[MacroUserIdStr<'_>],
     item_id: &str,
     item_type: &str,
     granted_from_channel_id: uuid::Uuid,
@@ -93,6 +94,8 @@ pub async fn delete_user_item_access_by_users_and_channel(
     if user_ids.is_empty() {
         return Ok(0);
     }
+
+    let macro_ids: Vec<String> = user_ids.iter().map(|s| s.to_string()).collect();
 
     let result = sqlx::query!(
         r#"
@@ -102,7 +105,7 @@ pub async fn delete_user_item_access_by_users_and_channel(
           AND "item_type" = $3
           AND "granted_from_channel_id" = $4
         "#,
-        user_ids,
+        macro_ids.as_slice(),
         item_id,
         item_type,
         granted_from_channel_id,
@@ -182,7 +185,7 @@ mod tests {
 
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("user_item_access.sql")))]
     async fn test_delete_user_item_access(pool: Pool<Postgres>) -> anyhow::Result<()> {
-        let user_id = "test-user";
+        let user_id = "macro|test-user@test.com";
         let item_id = "test-item";
         let item_type = "document";
 
@@ -308,7 +311,10 @@ mod tests {
         let item_id = "channel-shared-item";
         let item_type = "document";
         let channel_id = uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000001")?;
-        let user_ids = vec!["user1".to_string(), "user2".to_string()];
+        let user_ids = vec![
+            MacroUserIdStr::parse_from_str("macro|user1@test.com").unwrap(),
+            MacroUserIdStr::parse_from_str("macro|user2@test.com").unwrap(),
+        ];
 
         // First ensure test data exists
         for user_id in &user_ids {
@@ -319,7 +325,7 @@ mod tests {
             ON CONFLICT DO NOTHING
             "#,
             uuid::Uuid::now_v7(),
-            user_id,
+            user_id.as_ref(),
             item_id,
             item_type,
             channel_id,
@@ -336,6 +342,8 @@ mod tests {
 
         assert_eq!(affected, 2, "Should have deleted exactly two records");
 
+        let ids: Vec<_> = user_ids.iter().map(|x| x.to_string()).collect();
+
         // Verify they're gone
         let result = sqlx::query!(
         r#"
@@ -343,7 +351,7 @@ mod tests {
         FROM "UserItemAccess"
         WHERE "user_id" = ANY($1) AND "item_id" = $2 AND "item_type" = $3 AND "granted_from_channel_id" = $4
         "#,
-        &user_ids,
+        &ids,
         item_id,
         item_type,
         channel_id

@@ -53,7 +53,11 @@ pub fn fill_channel_invite_template(
         &channel_url,
         &channel_metadata.invited_by.to_string(),
         Some(&channel_metadata.common.channel_name),
-        &channel_metadata.common.channel_type.to_string(),
+        &channel_metadata
+            .common
+            .channel_type
+            .to_model_comms()
+            .to_string(),
     );
 
     Ok((content, subject.to_string()))

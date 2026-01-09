@@ -6,7 +6,6 @@ use anyhow::Result;
 use axum::{Json, extract::State, http::StatusCode};
 use axum_extra::extract::Cached;
 use comms_db_client::channels::patch_channel::{self, PatchChannelOptions};
-use model::comms::ChannelType;
 use models_opensearch::SearchEntityType;
 use tracing::Instrument;
 
@@ -31,7 +30,11 @@ pub async fn patch_channel_handler(
     Cached(ChannelTypeExtractor(channel_type)): Cached<ChannelTypeExtractor>,
     Json(req): Json<PatchChannelOptions>,
 ) -> Result<(StatusCode, String), (StatusCode, String)> {
-    if channel_type == ChannelType::DirectMessage && req.channel_name.is_some() {
+    if matches!(
+        channel_type,
+        models_comms::channel::ChannelType::DirectMessage
+    ) && req.channel_name.is_some()
+    {
         return Err((
             StatusCode::BAD_REQUEST,
             "cannot change channel_name for direct message channels".to_string(),

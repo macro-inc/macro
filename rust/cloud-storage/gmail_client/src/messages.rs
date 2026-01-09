@@ -171,10 +171,15 @@ pub(crate) async fn send_message(
         builder = builder.html_body(html_body);
     }
 
-    let email_string = builder
-        .write_to_string()
-        .context("building message error")?;
-    let base64_email_content = URL_SAFE_NO_PAD.encode(email_string.as_bytes());
+    if let Some(attachments) = message.attachments.take() {
+        for att in attachments {
+            builder = builder.attachment(att.content_type, att.file_name, att.data);
+        }
+    }
+
+    let email_bytes = builder.write_to_vec().context("building message error")?;
+
+    let base64_email_content = URL_SAFE_NO_PAD.encode(email_bytes);
 
     let payload = SendMessagePayload {
         raw: base64_email_content,

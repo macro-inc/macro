@@ -1,19 +1,20 @@
 use super::Role;
 use crate::tokens::{TokenCount, count_tokens};
+use crate::types::request::ImageData;
 use anyhow::Result;
 use async_openai::types::ChatCompletionRequestMessage;
 use serde::{self, Deserialize, Serialize};
 use std::fmt::{Display, Write};
 use utoipa::ToSchema;
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct ChatMessages(pub Vec<ChatMessage>);
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct ChatMessage {
     pub content: ChatMessageContent,
     pub role: Role,
-    pub image_urls: Option<Vec<String>>,
+    pub image_urls: Option<Vec<ImageData>>,
 }
 
 impl TokenCount for ChatMessage {

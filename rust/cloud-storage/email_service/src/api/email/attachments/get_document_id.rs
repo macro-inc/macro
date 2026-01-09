@@ -1,11 +1,11 @@
 use crate::api::context::ApiContext;
-use crate::util::upload_attachment::{
-    UploadAttachmentContext, UploadAttachmentError, upload_attachment,
-};
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
+use email_service::util::upload_attachment::{
+    UploadAttachmentContext, UploadAttachmentError, upload_attachment,
+};
 use model::response::ErrorResponse;
 use models_email::db::address::EmailRecipientType;
 use models_email::email::service::link::Link;

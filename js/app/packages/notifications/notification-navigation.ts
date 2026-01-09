@@ -41,8 +41,8 @@ function openSplitIfNotOpen(
 
   if (!isSplitOpen) {
     layoutManager.createNewSplit({
-      type,
-      id,
+      content: { type, id },
+      referredFrom: null,
     });
   }
 }

@@ -1,6 +1,6 @@
 import PencilSimpleLine from '@icon/regular/pencil-simple-line.svg';
 import { createSignal, Show } from 'solid-js';
-import { EditingTextButton } from './TextButton';
+import { DeprecatedEditingTextButton } from './DeprecatedTextButton';
 
 export interface EditableFieldProps {
   label?: string;
@@ -50,7 +50,7 @@ const EditableField = (props: EditableFieldProps) => {
         }
       >
         <div class="space-y-2 inline-block">
-          <EditingTextButton
+          <DeprecatedEditingTextButton
             handleSubmitEdit={handleSave}
             handleCancelEdit={handleCancel}
             labelText={props.value || inputValue() || ''}

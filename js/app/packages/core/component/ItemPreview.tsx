@@ -12,9 +12,9 @@ import TrashSimple from '@icon/duotone/trash-simple-duotone.svg';
 import User from '@icon/duotone/user-duotone.svg';
 import ThreeUsersIcon from '@icon/duotone/users-three-duotone.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
+import type { NamedSubType } from '@macro-entity';
 import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
 import type { ItemType } from '@service-storage/client';
-import type { BasicDocumentSubType } from '@service-storage/generated/schemas';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import {
   insertProjectIntoHistory,
@@ -23,12 +23,12 @@ import {
 import { Match, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { useSplitLayout } from '../../app/component/split-layout/layout';
+import { DeprecatedTextButton } from './DeprecatedTextButton';
 import {
   ENTITY_ICON_CONFIGS,
   EntityIcon,
   ICON_SIZE_CLASSES,
 } from './EntityIcon';
-import { TextButton } from './TextButton';
 
 type ItemPreviewProps = {
   itemId: string;
@@ -71,7 +71,7 @@ function useItemPreviewData(props: ItemPreviewProps) {
     type: ItemPreviewProps['itemType'],
     id: string,
     fileType?: FileType,
-    subType?: BasicDocumentSubType,
+    subType?: NamedSubType,
     altKey?: boolean
   ) {
     if (type === 'project') {
@@ -127,7 +127,7 @@ function useItemPreviewData(props: ItemPreviewProps) {
 
 function ButtonNoAccess() {
   return (
-    <TextButton
+    <DeprecatedTextButton
       theme="base"
       icon={() => <EyeSlash class="text-ink-muted w-4 h-4" />}
       disabled
@@ -149,7 +149,7 @@ function InlineNoAccess() {
 
 function ButtonDeleted() {
   return (
-    <TextButton
+    <DeprecatedTextButton
       theme="base"
       icon={() => <TrashSimple class="text-ink-muted w-4 h-4" />}
       disabled
@@ -171,7 +171,7 @@ function InlineDeleted() {
 
 function ButtonLoading() {
   return (
-    <TextButton
+    <DeprecatedTextButton
       theme="base"
       icon={() => (
         <div class="w-4 h-4 animate-spin">
@@ -211,7 +211,7 @@ export function ItemPreview(props: ItemPreviewProps) {
               {(accessibleItem) => {
                 const itemData = accessibleItem();
                 const fileType = itemData.fileType;
-                const subType = itemData.subType;
+                const subType = itemData.subType?.type;
                 const navHandlers =
                   useSplitNavigationHandler<HTMLButtonElement>((e) =>
                     onPreviewClick(
@@ -223,7 +223,7 @@ export function ItemPreview(props: ItemPreviewProps) {
                     )
                   );
                 return (
-                  <TextButton
+                  <DeprecatedTextButton
                     theme="base"
                     icon={() => {
                       if (itemData.type === 'channel') {
@@ -281,7 +281,7 @@ export function InlineItemPreview(props: ItemPreviewProps) {
               {(accessibleItem) => {
                 const itemData = accessibleItem();
                 const fileType = itemData.fileType;
-                const subType = itemData.subType;
+                const subType = itemData.subType?.type;
                 return (
                   <span class="inline-flex items-center gap-1">
                     <span class="w-4 h-4">

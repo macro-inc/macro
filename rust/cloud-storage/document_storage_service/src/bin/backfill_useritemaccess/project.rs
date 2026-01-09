@@ -45,10 +45,10 @@ pub async fn process_single_project(
             })?;
 
         for participant in participants {
-            if participant.user_id != user_id {
+            if participant.user_id.as_ref() != user_id {
                 generated_items.push(UserItemAccess {
                     id: macro_uuid::generate_uuid_v7(),
-                    user_id: participant.user_id,
+                    user_id: participant.user_id.to_string(),
                     item_id: project_id.clone(),
                     item_type: "project".to_string(),
                     access_level: csp.access_level,

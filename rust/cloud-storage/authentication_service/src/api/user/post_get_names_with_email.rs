@@ -5,8 +5,8 @@ use axum::{
     http::StatusCode,
 };
 use macro_db_client::user::get_user_name::get_user_names_with_email;
-use macro_user_id::lowercased::Lowercase;
-use macro_user_id::user_id::{MacroUserId, MacroUserIdStr};
+use macro_user_id::user_id::MacroUserId;
+use macro_user_id::{cowlike::CowLike, lowercased::Lowercase};
 
 use model::response::ErrorResponse;
 use model::user::{UserContext, UserNames};
@@ -14,8 +14,7 @@ use non_empty::NonEmpty;
 
 #[derive(Default, Debug, serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
 pub struct GetNamesWithEmailRequestBody {
-    #[schema(value_type = Vec<String>)]
-    pub user_ids: Vec<MacroUserIdStr<'static>>,
+    pub user_ids: Vec<String>,
 }
 
 /// Gets names for passed user profile ids, falling back to the requesting user's email contact names
@@ -36,13 +35,22 @@ pub async fn handler(
     user_context: Extension<UserContext>,
     extract::Json(req): extract::Json<GetNamesWithEmailRequestBody>,
 ) -> Result<Json<UserNames>, (StatusCode, String)> {
-    let user_profile_ids: NonEmpty<Vec<MacroUserId<Lowercase>>> =
-        NonEmpty::new(req.user_ids.into_iter().map(|id| id.0).collect()).map_err(|_| {
-            (
-                StatusCode::BAD_REQUEST,
-                "user_ids cannot be empty".to_string(),
-            )
-        })?;
+    let user_profile_ids: NonEmpty<Vec<MacroUserId<Lowercase>>> = NonEmpty::new(
+        req.user_ids
+            .into_iter()
+            .filter_map(|id| {
+                MacroUserId::parse_from_str(&id)
+                    .map(|i| i.into_owned().lowercase())
+                    .ok()
+            })
+            .collect(),
+    )
+    .map_err(|_| {
+        (
+            StatusCode::BAD_REQUEST,
+            "user_ids cannot be empty".to_string(),
+        )
+    })?;
 
     let user_names = get_user_names_with_email(&ctx.db, &user_context.user_id, user_profile_ids)
         .await

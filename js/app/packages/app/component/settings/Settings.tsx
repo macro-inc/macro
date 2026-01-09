@@ -5,7 +5,7 @@ import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import CloseIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 import { MacroPermissions, usePermissions } from '@service-gql/client';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import ContractIcon from '@icon/regular/arrows-in.svg';
 import Organization from './Organization/Organization';
 import ExpandIcon from '@icon/regular/arrows-out.svg';
@@ -16,6 +16,8 @@ import { Appearance } from './Appearance';
 import { Tabs } from '@kobalte/core/tabs';
 import { Account } from './Account';
 import { Inbox } from './Inbox';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { isMobileWidth } from '@core/mobile/mobileWidth';
 
 const SCROLL_THRESHOLD = 10;
 
@@ -149,8 +151,8 @@ export function SettingsPanel(props: SettingsPanelProps) {
               {/* Header with tabs */}
               <div class="relative isolate shrink-0 border-b border-edge-muted">
                 <div class="flex items-center px-2 h-[2.5rem]">
-                  <Show when={!isNativeMobilePlatform()}>
-                    <IconButton
+                  <Show when={!isTouchDevice() || !isMobileWidth()}>
+                    <DeprecatedIconButton
                       icon={CloseIcon}
                       onClick={closeSettings}
                       tooltip={{ label: 'Close Settings' }}
@@ -230,8 +232,8 @@ export function SettingsPanel(props: SettingsPanelProps) {
 
                   <div class="flex-1" />
 
-                  <Show when={!isNativeMobilePlatform()}>
-                    <IconButton
+                  <Show when={!isTouchDevice() || !isMobileWidth()}>
+                    <DeprecatedIconButton
                       icon={spotlight() ? ContractIcon : ExpandIcon}
                       onClick={() => setSpotlight(!spotlight())}
                       tooltip={{

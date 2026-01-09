@@ -1,6 +1,6 @@
 import { InlineItemPreview } from '@core/component/ItemPreview';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { useDisplayName } from '@core/user/displayName';
+import { tryMacroId, useDisplayName } from '@core/user';
 import { formatDate } from '@core/util/date';
 import {
   extractNotificationData,
@@ -32,7 +32,7 @@ export function NotificationRenderer(props: NotificationRendererProps) {
     <Show when={data()}>
       {(d) => {
         const actorId = d().actor?.id ?? '';
-        const [actorName] = useDisplayName(actorId);
+        const [actorName] = useDisplayName(tryMacroId(actorId));
 
         const displayName = () => actorName() || 'Someone';
 

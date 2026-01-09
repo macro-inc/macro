@@ -62,3 +62,53 @@ export function extractSearchSnippet(highlightedContent: string): string {
 export function mergeAdjacentMacroEmTags(highlightedContent: string): string {
   return highlightedContent.replace(/<\/macro_em>(\s+)<macro_em>/g, '$1');
 }
+
+/**
+ * Truncate markdown returned from the search service so that the *first*
+ * <macro_em> match is visible within a fixed character window.
+ *
+ * Behavior:
+ * - Only the first line containing a <macro_em> tag is considered.
+ * - Other <macro_em> tags on the same line are preserved verbatim.
+ * - If the match line is not the first line, the result is prefixed with "...".
+ * - If the opening <macro_em> tag starts beyond the allowed window,
+ *   content is trimmed from the front (preferably at a word boundary)
+ *   until the tag is within the window.
+ * - When front-trimming occurs, "..." is prepended.
+ *
+ * @param text - Markdown source content from search results.
+ * @param chars - Maximum visible character window (excluding ellipsis).
+ * @returns A truncated string that guarantees visibility of the first match.
+ */
+export function truncateSearchMatch(text: string, chars: number): string {
+  const lines = text.split('\n');
+  const macroOpen = '<macro_em>';
+
+  const lineIndex = lines.findIndex((l) => l.includes(macroOpen));
+  if (lineIndex === -1) {
+    return text;
+  }
+
+  let line = lines[lineIndex];
+  let needsEllipsis = lineIndex > 0;
+
+  const tagIndex = line.indexOf(macroOpen);
+
+  if (tagIndex <= chars) {
+    return (needsEllipsis ? '...' : '') + line;
+  }
+
+  const targetStart = Math.max(0, tagIndex - chars);
+
+  // prefer trimming at a word boundary
+  let cutIndex = targetStart;
+  for (let i = targetStart; i < tagIndex; i++) {
+    if (/\s/.test(line[i])) {
+      cutIndex = i + 1;
+      break;
+    }
+  }
+
+  line = line.slice(cutIndex);
+  return '...' + line;
+}

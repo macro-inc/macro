@@ -1,5 +1,5 @@
 import { useBlockId } from '@core/block';
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { toast } from '@core/component/Toast/Toast';
 import { MODAL_VIEWPORT_CLASSES } from '@core/util/modalUtils';
 import CheckIcon from '@icon/bold/check-bold.svg';
@@ -141,7 +141,7 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
   return (
     <Portal>
       <div
-        class="fixed inset-0 bg-overlay z-modal-overlay"
+        class="fixed inset-0 z-modal-overlay"
         onClick={() => props.onClose()}
         onKeyDown={(e) => e.key === 'Escape' && props.onClose()}
         role="dialog"
@@ -161,7 +161,7 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
         >
           <div class="flex items-center justify-between p-4">
             <h3 class="text-base font-semibold text-ink">Add Properties</h3>
-            <IconButton
+            <DeprecatedIconButton
               icon={XIcon}
               theme="clear"
               size="sm"

@@ -17,8 +17,7 @@ import type {
   PropertyApiValues,
 } from './types';
 
-const CONTAINER_CLASSES =
-  'h-full overflow-hidden relative font-mono flex flex-col';
+const CONTAINER_CLASSES = 'h-full overflow-hidden relative flex flex-col';
 const LOADING_CONTAINER_CLASSES = 'flex items-center justify-center py-8';
 const SPINNER_CLASSES = 'w-5 h-5 animate-spin';
 

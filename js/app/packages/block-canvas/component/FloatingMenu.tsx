@@ -1,7 +1,7 @@
 import { useAlign } from '@block-canvas/signal/align';
 import { clamp } from '@block-canvas/util/math';
 import { vec2 } from '@block-canvas/util/vector2';
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import {
   type DropdownPreset,
   SlidableNumberInput,
@@ -224,7 +224,7 @@ function MobileDeleteButton() {
   return (
     <Show when={selection.active() && isMobileWidth()}>
       <div class="max-h-12 flex p-2 bg-menu cursor-auto justify-center items-center rounded shadow-md ring ring-edge">
-        <IconButton
+        <DeprecatedIconButton
           icon={TrashSimple}
           onClick={deleteSelection}
           class="text-failure"

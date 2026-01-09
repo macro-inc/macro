@@ -6,9 +6,9 @@ use axum::{
     routing::post,
 };
 use model::response::ErrorResponse;
+use name_search::NameSearchError;
 use opensearch_client::error::OpensearchClientError;
 
-pub(in crate::api::search::simple) mod filter;
 pub(in crate::api) mod simple_channel;
 pub(in crate::api) mod simple_chat;
 pub(in crate::api) mod simple_document;
@@ -31,6 +31,9 @@ pub enum SearchError {
     /// No user id found in user context
     #[error("no user id found in user context")]
     NoUserId,
+    /// Invalid macro user id
+    #[error("invalid macro user id {0}")]
+    InvalidUserId(String),
     /// Invalid page size
     #[error("page_size must be between 0 and 100")]
     InvalidPageSize,
@@ -43,6 +46,9 @@ pub enum SearchError {
     /// Opensearch error occurred
     #[error("unable to search")]
     Search(#[from] OpensearchClientError),
+    /// Name search error occurred
+    #[error("unable to name search")]
+    NameSearch(#[from] NameSearchError),
     /// Internal error occurred
     #[error("internal error")]
     InternalError(#[from] anyhow::Error),
@@ -51,12 +57,13 @@ pub enum SearchError {
 impl IntoResponse for SearchError {
     fn into_response(self) -> Response {
         let status_code = match self {
-            SearchError::NoUserId => StatusCode::UNAUTHORIZED,
+            SearchError::NoUserId | SearchError::InvalidUserId(_) => StatusCode::UNAUTHORIZED,
             SearchError::InvalidPageSize
             | SearchError::InvalidQuerySize
             | SearchError::NoQueryOrTermsProvided => StatusCode::BAD_REQUEST,
-            SearchError::Search(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            SearchError::InternalError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            SearchError::Search(_) | SearchError::NameSearch(_) | SearchError::InternalError(_) => {
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
         };
 
         (

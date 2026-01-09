@@ -39,3 +39,4 @@ tracing = { workspace = true }
 user_quota = { path = "../user_quota" }
 uuid = { workspace = true }
 document_sub_type = { path = "../document_sub_type" }
+system_properties = { path = "../system_properties" }

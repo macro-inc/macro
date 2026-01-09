@@ -2,7 +2,7 @@ import type { BlockName } from '@core/block';
 import { itemToResolvedBlockName } from '@core/constant/allBlocks';
 import { isAccessiblePreviewItem, useItemPreview } from '@core/signal/preview';
 import type { EntityType } from '@core/types';
-import { useDisplayName } from '@core/user/displayName';
+import { tryMacroId, useDisplayName } from '@core/user';
 import type { ItemType } from '@service-storage/client';
 import { raceTimeout, until } from '@solid-primitives/promise';
 
@@ -20,7 +20,7 @@ export type NotificationBlockNameResolver = (
 const RESOLVER_TIMEOUT = 1000;
 
 export const DefaultUserNameResolver: UserNameResolver = async (id: string) =>
-  raceTimeout(until(useDisplayName(id)[0]), RESOLVER_TIMEOUT);
+  raceTimeout(until(useDisplayName(tryMacroId(id))[0]), RESOLVER_TIMEOUT);
 
 const getPreview = async (id: string, type: EntityType) => {
   const [preview] = useItemPreview({ id, type: type as ItemType });

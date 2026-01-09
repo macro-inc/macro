@@ -18,17 +18,7 @@ pub use simple::*;
 pub use timestamp::*;
 
 #[derive(
-    Serialize,
-    Deserialize,
-    Debug,
-    ToSchema,
-    Copy,
-    Clone,
-    EnumString,
-    Display,
-    PartialEq,
-    JsonSchema,
-    Default,
+    Serialize, Deserialize, Debug, ToSchema, Copy, Clone, EnumString, Display, JsonSchema, Default,
 )]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]

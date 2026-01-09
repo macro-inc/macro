@@ -1,4 +1,5 @@
 import { BozzyBracketInnerSibling } from '@core/component/BozzyBracket';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { Hotkey } from '@core/component/Hotkey';
 import { DecoratorRenderer } from '@core/component/LexicalMarkdown/component/core/DecoratorRenderer';
 import { NodeAccessoryRenderer } from '@core/component/LexicalMarkdown/component/core/NodeAccessoryRenderer';
@@ -34,7 +35,6 @@ import {
 } from '@core/component/LexicalMarkdown/utils';
 import { getDestinationFromOptions } from '@core/component/NewMessage';
 import { RecipientSelector } from '@core/component/RecipientSelector';
-import { TextButton } from '@core/component/TextButton';
 import { toast } from '@core/component/Toast/Toast';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import { IS_MAC } from '@core/constant/isMac';
@@ -205,10 +205,13 @@ export function QuickCreateMenuInner(props: QuickCreateMenuProps) {
     }
 
     if (goToNote && documentId) {
-      replaceOrInsertSplit({
-        type: 'md',
-        id: documentId,
-      });
+      replaceOrInsertSplit(
+        {
+          type: 'md',
+          id: documentId,
+        },
+        'launcher'
+      );
       return true;
     }
 
@@ -296,10 +299,13 @@ export function QuickCreateMenuInner(props: QuickCreateMenuProps) {
     }
 
     if (goTo) {
-      replaceOrInsertSplit({
-        type: 'email',
-        id: 'new',
-      });
+      replaceOrInsertSplit(
+        {
+          type: 'email',
+          id: 'new',
+        },
+        'launcher'
+      );
     }
 
     return true;
@@ -717,8 +723,12 @@ export function QuickCreateMenuInner(props: QuickCreateMenuProps) {
           <span>to create & open</span>
         </div>
         <div class="flex w-32 justify-between font-mono">
-          <Dialog.CloseButton as={TextButton} text="Cancel" theme="clear" />
-          <TextButton
+          <Dialog.CloseButton
+            as={DeprecatedTextButton}
+            text="Cancel"
+            theme="clear"
+          />
+          <DeprecatedTextButton
             text={selectedType() === 'note' ? 'CREATE' : 'SEND'}
             theme="accentFill"
             class="w-18"

@@ -3,8 +3,8 @@ import { isErr } from '@core/util/maybeResult';
 import { authServiceClient } from '@service-auth/client';
 import { createEffect, createSignal } from 'solid-js';
 import { createStore, unwrap } from 'solid-js/store';
+import { type MacroId, macroIdToEmail } from './macroId';
 import type { UserNameItem, UserNamePreviewFetcher } from './types';
-import { idToEmail } from './util';
 
 const DEFAULT_CACHE_TIME_SECONDS = 60 * 10;
 
@@ -24,7 +24,8 @@ function queueItemsForFetch(items: string[]) {
 }
 
 function defaultNameTransform(item: UserNameItem): string {
-  const email = idToEmail(item.id);
+  // TODO: UserNameItem needs to be ported to use MacroId
+  const email = macroIdToEmail(item.id as MacroId);
 
   if (item.loading) return email;
 
@@ -93,7 +94,7 @@ async function batchFetchNames(ids: string[]) {
 }
 
 export function useDisplayName(
-  id: string | undefined | null
+  id: MacroId | undefined | null
 ): UserNamePreviewFetcher {
   if (!id) {
     const dummy_accessor = () => {

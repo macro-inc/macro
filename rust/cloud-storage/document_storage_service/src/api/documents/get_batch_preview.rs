@@ -9,7 +9,7 @@ use anyhow::Result;
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, extract::Json};
-use model::document::{DocumentPreview, DocumentPreviewData, DocumentPreviewV2, WithDocumentId};
+use model::document::{DocumentPreview, DocumentPreviewV2, WithDocumentId};
 use model::response::{GenericErrorResponse, GenericResponse};
 use model::user::UserContext;
 use reqwest::StatusCode;
@@ -50,16 +50,7 @@ pub async fn get_batch_preview_handler(
     let result: Vec<DocumentPreview> = document_preview_results
         .iter()
         .map(|d| match d {
-            DocumentPreviewV2::Found(preview_data) => {
-                DocumentPreview::Access(DocumentPreviewData {
-                    document_id: preview_data.document_id.clone(),
-                    document_name: preview_data.document_name.clone(),
-                    file_type: preview_data.file_type.clone(),
-                    owner: preview_data.owner.clone(),
-                    updated_at: preview_data.updated_at,
-                    sub_type: preview_data.sub_type,
-                })
-            }
+            DocumentPreviewV2::Found(preview_data) => DocumentPreview::Access(preview_data.clone()),
             DocumentPreviewV2::DoesNotExist(preview_data) => {
                 DocumentPreview::DoesNotExist(WithDocumentId {
                     document_id: preview_data.document_id.clone(),

@@ -3,20 +3,23 @@ import { MacroSignatureButton } from '@block-email/component/MacroSignatureButto
 import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
 import { useHasPaidAccess } from '@core/auth';
 import { useBlockId } from '@core/block';
-import { BrightJoins } from '@core/component/BrightJoins';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
-import { IconButton } from '@core/component/IconButton';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
-import type { UserMentionRecord } from '@core/component/LexicalMarkdown/component/menu/MentionsMenu';
+import {
+  createFilesReadyHandler,
+  getDragDropPosition,
+} from '@core/component/LexicalMarkdown/utils/fileUploadUtils';
+import type { UserMentionRecord } from '@core/component/LexicalMarkdown/utils/mentionsUtils';
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { toast } from '@core/component/Toast/Toast';
 import { Tooltip } from '@core/component/Tooltip';
-import { fileDrop } from '@core/directive/fileDrop';
+import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { trackMention } from '@core/signal/mention';
-import { useDisplayName } from '@core/user';
+import { tryMacroId, useDisplayName } from '@core/user';
+import { handleFileFolderDrop } from '@core/util/upload';
 import ArrowUp from '@icon/bold/arrow-up-bold.svg';
 import Spinner from '@icon/bold/spinner-gap-bold.svg';
 import ReplyAll from '@icon/regular/arrow-bend-double-up-left.svg';
@@ -45,6 +48,8 @@ import type {
 import { useEmail, useUserId } from '@service-gql/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import type { Item } from '@service-storage/generated/schemas/item';
+import { BrightJoins } from '@ui/components/BrightJoins';
+import { Button } from '@ui/components/Button';
 import {
   defaultSelectionData,
   lazyRegister,
@@ -73,9 +78,8 @@ import {
   Show,
   untrack,
 } from 'solid-js';
-import { createStore, produce } from 'solid-js/store';
+import { createStore } from 'solid-js/store';
 import { deleteEmailDraft, saveEmailDraft } from '../signal/emailDraft';
-import { handleFileUpload } from '../util/handleFileUpload';
 import { makeAttachmentPublic } from '../util/makeAttachmentPublic';
 import { getFirstName } from '../util/name';
 import {
@@ -92,7 +96,7 @@ import { AttachMenu } from './AttachMenu';
 import { type EmailRecipient, useEmailContext } from './EmailContext';
 import { getOrInitEmailFormContext } from './EmailFormContext';
 
-false && fileDrop;
+false && fileFolderDrop;
 
 const getRecipientDisplayName = (item: EmailRecipient): string => {
   switch (item.kind) {
@@ -188,6 +192,7 @@ export function BaseInput(props: {
       });
       pendingMentions = [];
       await deleteDraftAndReset();
+      refetchThreadMessages();
       props.sideEffectOnSend?.(message.db_id ?? null);
       if (shouldMarkDoneOnSuccess()) {
         props.onMarkDone?.();
@@ -198,6 +203,10 @@ export function BaseInput(props: {
       toast.failure('Failed to send email');
     },
   });
+
+  function refetchThreadMessages() {
+    ctx.query.refetch();
+  }
 
   // Attach side-effect handlers on mount; they replay against current state
   onMount(() => {
@@ -235,7 +244,7 @@ export function BaseInput(props: {
 
   const userEmail = useEmail();
   const userId = useUserId();
-  const [userName] = useDisplayName(userId());
+  const [userName] = useDisplayName(tryMacroId(userId() ?? ''));
 
   let bodyDiv!: HTMLDivElement;
   let attachButtonRef!: HTMLDivElement;
@@ -277,11 +286,12 @@ export function BaseInput(props: {
       const draftId = savedDraftId();
       if (draftId) {
         await deleteEmailDraft(draftId);
+        refetchThreadMessages();
       }
       setSavedDraftId(undefined);
       return;
     }
-    const currentThread = ctx.threadData();
+    const currentThread = ctx.thread();
     const newMessage = props.newMessage ?? false;
 
     if (!currentThread && !newMessage) {
@@ -328,6 +338,7 @@ export function BaseInput(props: {
     if (draftResponse) {
       setSavedDraftId(draftResponse);
     }
+    refetchThreadMessages();
   }
 
   function scheduleDraftSave() {
@@ -412,7 +423,7 @@ export function BaseInput(props: {
       return;
     }
 
-    const currentThread = ctx.threadData();
+    const currentThread = ctx.thread();
     const newMessage = props.newMessage ?? false;
 
     if (!currentThread && !newMessage) {
@@ -503,14 +514,11 @@ export function BaseInput(props: {
     const draftId = savedDraftId();
     if (draftId) {
       await deleteEmailDraft(draftId);
+      refetchThreadMessages();
     }
     const replyingToId = props.replyingTo()?.db_id;
     if (replyingToId) {
-      ctx.setMessageDbIdToDraftChildren(
-        produce((state) => {
-          delete state[replyingToId];
-        })
-      );
+      ctx.drafts.deleteDraftForMessage(replyingToId);
     }
     resetState();
     props.setShowReply?.(false);
@@ -600,13 +608,18 @@ export function BaseInput(props: {
   });
 
   const ReplyIcon = createMemo(() => {
-    if (effectiveReplyType() === 'reply') {
-      return <IconButton icon={Reply} showChevron />;
-    } else if (effectiveReplyType() === 'reply-all') {
-      return <IconButton icon={ReplyAll} showChevron />;
-    } else {
-      return <IconButton icon={Forward} showChevron />;
-    }
+    let Icon =
+      effectiveReplyType() === 'reply'
+        ? Reply
+        : effectiveReplyType() === 'reply-all'
+          ? ReplyAll
+          : Forward;
+
+    return (
+      <Button showChevron>
+        <Icon class="h-7 p-1" />
+      </Button>
+    );
   });
 
   return (
@@ -805,18 +818,30 @@ export function BaseInput(props: {
           onclick={() => {
             editor()?.focus();
           }}
-          use:fileDrop={{
+          use:fileFolderDrop={{
             onDragStart: () => setIsDragging(true),
             onDragEnd: () => setIsDragging(false),
-            onDrop: async (files) => {
-              handleFileUpload(files, setIsPendingUpload, (items) => {
-                setIsDragging(false);
-                appendItemsAsMacroMentions(editor(), items);
-                items.forEach((item) => {
-                  makeAttachmentPublic(item.documentId);
-                });
-                scheduleDraftSave();
-              });
+            onDrop: (fileEntries, folderEntries, e) => {
+              const editor_ = editor();
+              if (!editor_ || !e) return;
+              handleFileFolderDrop(
+                fileEntries,
+                folderEntries,
+                createFilesReadyHandler(
+                  editor_,
+                  blockId,
+                  'email',
+                  () => getDragDropPosition(editor_, e, true),
+                  (uploadedItemIds) => {
+                    setIsDragging(false);
+                    uploadedItemIds.forEach((itemId) => {
+                      makeAttachmentPublic(itemId);
+                    });
+                    scheduleDraftSave();
+                  },
+                  { width: 542, height: 542 }
+                )
+              );
             },
           }}
         >
@@ -839,24 +864,47 @@ export function BaseInput(props: {
             onChange={handleChange}
             onDocumentMention={(item) => {
               makeAttachmentPublic(item.id);
+              scheduleDraftSave();
             }}
             onUserMention={handleUserMention}
             portalScope="local"
             formatState={formatState}
             setFormatState={setFormatState}
             domRef={props.markdownDomRef}
+            onPasteFilesAndDirs={(files, directories) => {
+              const editor_ = editor();
+              if (!editor_) return;
+              handleFileFolderDrop(
+                files,
+                directories,
+                createFilesReadyHandler(
+                  editor_,
+                  blockId,
+                  'email',
+                  undefined,
+                  (uploadedItemIds) => {
+                    uploadedItemIds.forEach((itemId) => {
+                      makeAttachmentPublic(itemId);
+                    });
+                    scheduleDraftSave();
+                  },
+                  { width: 542, height: 542 }
+                )
+              );
+            }}
           />
         </div>
-
         <div class="flex flex-row w-full h-8 justify-between items-center py-2 px-2 mb-2 space-x-2 allow-css-brackets">
           <div class="flex flex-row items-center gap-2">
             <div class="relative" ref={attachButtonRef}>
-              <IconButton
-                theme="base"
-                icon={Plus}
-                tooltip={{ label: 'Attach' }}
-                onClick={() => setAttachMenuOpen(true)}
-              />
+              <Button
+                onclick={() => setAttachMenuOpen(true)}
+                tooltip="Attach"
+                class="aspect-square *:h-5 p-1"
+              >
+                <Plus />
+              </Button>
+
               <AttachMenu
                 open={attachMenuOpen()}
                 close={() => setAttachMenuOpen(false)}
@@ -867,13 +915,16 @@ export function BaseInput(props: {
                 setIsPending={setIsPendingUpload}
               />
             </div>
-            <IconButton
-              theme="base"
-              icon={TextAa}
+
+            <Button
               onclick={() => {
                 setShowFormatRibbon(!showFormatRibbon());
               }}
-            />
+              tooltip="Show formatting toolbar"
+              class="aspect-square *:h-5 p-1"
+            >
+              <TextAa />
+            </Button>
 
             <Tooltip
               tooltip={
@@ -912,32 +963,30 @@ export function BaseInput(props: {
               </KToggleButton>
             </Tooltip>
             <Show when={savedDraftId()}>
-              <IconButton
-                theme="base"
-                icon={Trash}
+              <Button
                 onclick={deleteDraftAndReset}
-                tooltip={{ label: 'Delete draft' }}
-              />
+                tooltip="Delete draft"
+                class="aspect-square *:h-5 p-1"
+              >
+                <Trash />
+              </Button>
             </Show>
           </div>
-          <div class="flex flex-row items-center">
-            <button
-              disabled={isPendingUpload() || sendMutation.isPending}
-              onClick={() => sendEmail()}
-              class="text-ink-muted hover:scale-115 transition ease-in-out flex flex-col justify-center items-center size-6 rounded-full"
+
+          <Button
+            disabled={isPendingUpload() || sendMutation.isPending}
+            onClick={() => sendEmail()}
+            class="text-ink-muted hover:scale-115 transition ease-in-out flex-col items-center rounded-full p-[0.25lh] hover:bg-transparent"
+          >
+            <Show
+              when={!isPendingUpload() && !sendMutation.isPending}
+              fallback={<Spinner class="size-6 animate-spin cursor-disabled" />}
             >
-              <Show
-                when={!isPendingUpload() && !sendMutation.isPending}
-                fallback={
-                  <Spinner class="size-6 animate-spin cursor-disabled" />
-                }
-              >
-                <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center">
-                  <ArrowUp class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
-                </div>
-              </Show>
-            </button>
-          </div>
+              <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center p-0">
+                <ArrowUp class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
+              </div>
+            </Show>
+          </Button>
         </div>
       </div>
     </div>

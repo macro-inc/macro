@@ -4,9 +4,8 @@ import { EntityIcon } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import type { ChannelWithParticipants, IUser } from '@core/user';
-import { idToEmail, useContacts, useDisplayName } from '@core/user';
+import { idToEmail, tryMacroId, useContacts, useDisplayName } from '@core/user';
 import { createFreshSearch } from '@core/util/freshSort';
-import CheckIcon from '@icon/bold/check-bold.svg';
 import CompanyIcon from '@icon/duotone/building-duotone.svg';
 import ChannelBuildingIcon from '@icon/duotone/building-office-duotone.svg';
 import ThreadIcon from '@icon/duotone/envelope-duotone.svg';
@@ -31,12 +30,14 @@ import {
   createSignal,
   For,
   on,
+  onCleanup,
+  onMount,
   Show,
 } from 'solid-js';
 import { usePropertiesContext } from '../../../context/PropertiesContext';
-import { PROPERTY_STYLES } from '../../../styles/styles';
 import type { Property } from '../../../types';
 import { useSearchInputFocus } from '../../../utils';
+import { OptionCheckBox } from './OptionCheckBox';
 
 type EntityInputProps = {
   property: Property;
@@ -46,12 +47,9 @@ type EntityInputProps = {
     entityInfo?: { id: string; entity_type: string }[]
   ) => void;
   setHasChanges: (hasChanges: boolean) => void;
+  onClose?: () => void;
 };
 
-const INPUT_CLASSES = PROPERTY_STYLES.input.search;
-const ENTITY_ITEM_BASE =
-  'flex items-center justify-between gap-2 py-1.5 px-2 border border-edge cursor-pointer min-w-0';
-const CHECKBOX_BASE = 'w-4 h-4 border flex items-center justify-center';
 const ICON_CLASSES = 'size-4 text-ink-muted';
 
 function getEntityTypePluralLabel(
@@ -140,7 +138,10 @@ function getEntityType(entity: CombinedEntity): string {
     case 'channel':
       return 'CHANNEL';
     case 'item':
-      if (entity.data.type === 'document' && entity.data.subType === 'task') {
+      if (
+        entity.data.type === 'document' &&
+        entity.data.subType?.type === 'task'
+      ) {
         return 'TASK';
       }
       return entity.data.type.toUpperCase();
@@ -178,7 +179,7 @@ function getEntityIcon(entity: CombinedEntity) {
     case 'item': {
       const blockName =
         entity.data.type === 'document'
-          ? entity.data.subType === 'task'
+          ? entity.data.subType?.type === 'task'
             ? 'task'
             : fileTypeToBlockName(entity.data.fileType, true)
           : entity.data.type === 'chat'
@@ -198,6 +199,9 @@ function getEntityIcon(entity: CombinedEntity) {
 export function PropertyEntitySelector(props: EntityInputProps) {
   const [inputValue, setInputValue] = createSignal('');
   const [searchTerm, setSearchTerm] = createSignal('');
+  const [selectedIndex, setSelectedIndex] = createSignal(0);
+  const [keyboardNavigationTimeout, setKeyboardNavigationTimeout] =
+    createSignal<number | null>(null);
 
   // Debounce search term updates (60ms like MentionsMenu)
   const debouncedSetSearchTerm = debounce(
@@ -219,7 +223,9 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
   // Get current user info for injection into contacts
   const currentUserId = useUserId();
-  const [currentUserDisplayName] = useDisplayName(currentUserId());
+  const [currentUserDisplayName] = useDisplayName(
+    tryMacroId(currentUserId() ?? '')
+  );
 
   // Contacts with current user injected at the beginning
   const contactsWithCurrentUser = createMemo((): IUser[] => {
@@ -318,7 +324,9 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
     if (specificEntityType === 'TASK') {
       return history()
-        .filter((item) => item.type === 'document' && item.subType === 'task')
+        .filter(
+          (item) => item.type === 'document' && item.subType?.type === 'task'
+        )
         .map(entityMapper('item'));
     }
 
@@ -328,7 +336,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
         .filter(
           (item) =>
             item.type.toUpperCase() === specificEntityType &&
-            !(item.type === 'document' && item.subType === 'task')
+            !(item.type === 'document' && item.subType?.type === 'task')
         )
         .map(entityMapper('item'));
     }
@@ -452,73 +460,155 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       },
     ]);
     props.setHasChanges(true);
+
+    if (!props.property.isMultiSelect && props.onClose) {
+      props.onClose();
+    } else if (props.property.isMultiSelect && searchInputRef) {
+      // Keep input focused when multiselect is enabled
+      setTimeout(() => searchInputRef.focus(), 0);
+    }
   };
+
+  // Reset selected index when sortedEntities change
+  createEffect(() => {
+    const entities = sortedEntities();
+    if (entities.length === 0) {
+      setSelectedIndex(0);
+    } else {
+      setSelectedIndex(Math.min(selectedIndex(), entities.length - 1));
+    }
+  });
+
+  const isKeyboardNavigating = () => {
+    const timeout = keyboardNavigationTimeout();
+    return timeout !== null && Date.now() - timeout < 150;
+  };
+
+  const scrollSelectedIntoView = () => {
+    const entities = sortedEntities();
+    const currentIndex = selectedIndex();
+    if (currentIndex >= 0 && currentIndex < entities.length) {
+      const element = document.querySelector(
+        `[data-entity-index="${currentIndex}"]`
+      );
+      if (element) {
+        element.scrollIntoView({ block: 'nearest' });
+      }
+    }
+  };
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    const entities = sortedEntities();
+    if (entities.length === 0) return;
+
+    if (e.key === 'ArrowDown' || (e.ctrlKey && e.key === 'j')) {
+      e.preventDefault();
+      setKeyboardNavigationTimeout(Date.now());
+      setSelectedIndex((prev) => (prev + 1) % entities.length);
+      scrollSelectedIntoView();
+    } else if (e.key === 'ArrowUp' || (e.ctrlKey && e.key === 'k')) {
+      e.preventDefault();
+      setKeyboardNavigationTimeout(Date.now());
+      setSelectedIndex(
+        (prev) => (prev - 1 + entities.length) % entities.length
+      );
+      scrollSelectedIntoView();
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const selectedEntity = entities[selectedIndex()];
+      if (selectedEntity) {
+        toggleEntity(selectedEntity);
+      }
+    }
+  };
+
+  onMount(() => {
+    document.addEventListener('keydown', handleKeyDown);
+  });
+
+  onCleanup(() => {
+    document.removeEventListener('keydown', handleKeyDown);
+  });
 
   useSearchInputFocus(() => searchInputRef);
 
   return (
-    <div class="space-y-3">
-      <div class="space-y-2" data-entity-search>
-        <div class="relative">
-          <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none z-10">
-            <SearchIcon class="h-4 w-4 text-ink-muted" />
-          </div>
+    <div>
+      <div class="relative">
+        <div class="flex w-full items-center py-1 gap-2 px-2 border-b border-edge-muted">
+          <SearchIcon class="h-4 w-4 text-ink-muted" />
           <input
+            class="w-full caret-accent"
             ref={searchInputRef}
             type="text"
             value={inputValue()}
             onInput={(e) => setInputValue(e.currentTarget.value)}
-            placeholder={`Search ${props.property.valueType === 'ENTITY' ? 'entities' : props.property.valueType + 's'}...`}
-            class={`${INPUT_CLASSES} relative z-0`}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                e.stopPropagation();
+                if (props.onClose) {
+                  props.onClose();
+                }
+              }
+            }}
+            placeholder={`${props.property.isMultiSelect ? 'Add' : 'Change'} ${props.property.displayName.toLowerCase()}...`}
           />
         </div>
+      </div>
 
-        <Show when={sortedEntities().length > 0}>
-          <div class="max-h-48 overflow-y-auto overflow-x-hidden space-y-1">
+      <Show when={sortedEntities().length > 0}>
+        <div class="p-1">
+          <div class="max-h-48 overflow-y-auto overflow-x-hidden scrollbar-hidden">
             <For each={sortedEntities()}>
-              {(entity, _index) => {
+              {(entity, index) => {
                 const isSelected = () => props.selectedOptions().has(entity.id);
+                const isKeyboardSelected = () => index() === selectedIndex();
 
                 return (
                   <div
-                    class={`${ENTITY_ITEM_BASE} ${isSelected() ? 'bg-active text-accent-ink' : 'hover:bg-hover text-ink'}`}
+                    data-entity-index={index()}
+                    class="flex items-center justify-between gap-2 py-1.5 px-2 min-w-0 h-8"
+                    classList={{
+                      'bg-hover': isKeyboardSelected(),
+                      'bg-accent/10': isSelected(),
+                    }}
                     onClick={() => toggleEntity(entity)}
                     onKeyDown={(e) => e.key === 'Enter' && toggleEntity(entity)}
+                    onMouseEnter={() => {
+                      if (!isKeyboardNavigating()) {
+                        setSelectedIndex(index());
+                      }
+                    }}
                   >
                     <div class="flex items-center gap-2 flex-1 min-w-0">
                       <div class="flex-shrink-0">{getEntityIcon(entity)}</div>
-                      <span class="text-sm truncate min-w-0">
+                      <span class="truncate min-w-0">
                         {getEntityName(entity)}
                       </span>
                     </div>
                     <div class="flex-shrink-0">
-                      <div
-                        class={`${CHECKBOX_BASE} border-edge bg-transparent`}
-                      >
-                        <Show when={isSelected()}>
-                          <CheckIcon class="w-3 h-3 text-accent" />
-                        </Show>
-                      </div>
+                      <OptionCheckBox
+                        checked={isSelected()}
+                        multiselect={props.property.isMultiSelect}
+                      />
                     </div>
                   </div>
                 );
               }}
             </For>
           </div>
-        </Show>
+        </div>
+      </Show>
 
-        <Show when={sortedEntities().length === 0}>
-          <div class="text-center py-4 text-ink-muted text-sm">
-            <Show
-              when={!isLoadingEntities()}
-              fallback={<span>Loading...</span>}
-            >
-              No {getEntityTypePluralLabel(props.property.specificEntityType)}{' '}
-              found
-            </Show>
-          </div>
-        </Show>
-      </div>
+      <Show when={sortedEntities().length === 0}>
+        <div class="text-center py-4 text-ink-muted text-sm">
+          <Show when={!isLoadingEntities()} fallback={<span>Loading...</span>}>
+            No {getEntityTypePluralLabel(props.property.specificEntityType)}{' '}
+            found
+          </Show>
+        </div>
+      </Show>
     </div>
   );
 }

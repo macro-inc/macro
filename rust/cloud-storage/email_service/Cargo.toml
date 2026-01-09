@@ -25,6 +25,10 @@ path = "src/bin/backfill_search/backfill_search.rs"
 name = "backfill_sfs_attachments"
 path = "src/bin/backfill_sfs_attachments/backfill_sfs_attachments.rs"
 
+[[bin]]
+name = "pubsub_workers"
+path = "src/bin/pubsub_workers/pubsub_workers.rs"
+
 [features]
 attachment_upload = []
 connection_gateway = []
@@ -81,6 +85,7 @@ macro_uuid = { path = "../macro_uuid" }
 mime_guess = "2.0.5"
 model = { path = "../model" }
 model-entity = { path = "../model-entity" }
+model_file_type = { path = "../model_file_type" }
 model_notifications = { path = "../model_notifications" }
 models_email = { path = "../models_email" }
 models_opensearch = { path = "../models_opensearch" }
@@ -113,7 +118,7 @@ static_file_service_client = { path = "../static_file_service_client" }
 strum_macros = { workspace = true }
 system_properties = { path = "../system_properties" }
 thiserror = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["signal"] }
 tower = { workspace = true }
 tower-http = { workspace = true, features = [
   "compression-br",

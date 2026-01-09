@@ -1,12 +1,12 @@
 use crate::api::context::ApiContext;
-use crate::config::CloudfrontSignerPrivateKey;
 use anyhow::Context;
-use config::{Config, Environment};
 use document_storage_service_client::DocumentStorageServiceClient;
 use email::{domain::service::EmailServiceImpl, inbound::EmailPreviewState, outbound::EmailPgRepo};
+use email_service::config::CloudfrontSignerPrivateKey;
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
+use macro_env::Environment;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use secretsmanager_client::{LocalOrRemoteSecret, SecretManager};
 use sqlx::postgres::PgPoolOptions;
@@ -15,9 +15,6 @@ use std::sync::Arc;
 use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
 
 mod api;
-mod config;
-mod pubsub;
-mod util;
 mod utils;
 
 #[tokio::main]
@@ -43,7 +40,7 @@ async fn main() -> anyhow::Result<()> {
         .await?;
 
     // Parse our configuration from the environment.
-    let config = Config::from_env(cloudfront_signer_private_key)
+    let config = email_service::config::Config::from_env(cloudfront_signer_private_key)
         .context("expected to be able to generate config")?;
 
     let auth_service_secret_key = match config.environment {
@@ -55,18 +52,11 @@ async fn main() -> anyhow::Result<()> {
             .to_string(),
     };
 
-    // limiting to max of 400 connections (25% of macrodb total) in prod. (10 service + 30 backfill) * 10 pod max
+    // limiting to max of 200 connections (12.5% of macrodb total) in prod.
     let (min_connections, max_connections): (u32, u32) = match config.environment {
-        Environment::Production => (3, 30),
+        Environment::Production => (3, 20),
         Environment::Develop => (1, 10),
         Environment::Local => (1, 10),
-    };
-
-    let (min_connections_backfill, max_connections_backfill): (u32, u32) = match config.environment
-    {
-        Environment::Production => (3, 30),
-        Environment::Develop => (1, 30),
-        Environment::Local => (1, 50),
     };
 
     let db = PgPoolOptions::new()
@@ -75,13 +65,6 @@ async fn main() -> anyhow::Result<()> {
         .connect(&config.macro_db_url)
         .await
         .context("could not connect to db")?;
-
-    let db_backfill = PgPoolOptions::new()
-        .min_connections(min_connections_backfill)
-        .max_connections(max_connections_backfill)
-        .connect(&config.macro_db_url)
-        .await
-        .context("could not connect to backfill db")?;
 
     let gmail_queue_aws_config = if cfg!(feature = "local_queue") {
         aws_config::defaults(aws_config::BehaviorVersion::latest())
@@ -106,70 +89,6 @@ async fn main() -> anyhow::Result<()> {
         .sfs_uploader_queue(&config.sfs_uploader_queue)
         .contacts_queue(&config.contacts_queue);
 
-    let macro_notify_client = macro_notify::MacroNotify::new(
-        config.notification_queue.clone(),
-        "email_service".to_string(),
-    )
-    .await;
-
-    let link_manager_worker = sqs_worker::SQSWorker::new(
-        aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
-        config.link_manager_queue.clone(),
-        config.queue_max_messages,
-        config.queue_wait_time_seconds,
-    );
-
-    let scheduled_worker = sqs_worker::SQSWorker::new(
-        aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
-        config.email_scheduled_queue.clone(),
-        config.queue_max_messages,
-        config.queue_wait_time_seconds,
-    );
-
-    let sfs_uploader_workers = (0..config.sfs_uploader_workers)
-        .map(|_| {
-            sqs_worker::SQSWorker::new(
-                aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
-                config.sfs_uploader_queue.clone(),
-                config.queue_max_messages,
-                config.queue_wait_time_seconds,
-            )
-        })
-        .collect::<Vec<_>>();
-
-    let backfill_workers = (0..config.backfill_queue_workers)
-        .map(|_| {
-            sqs_worker::SQSWorker::new(
-                aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
-                config.backfill_queue.clone(),
-                config.backfill_queue_max_messages,
-                config.queue_wait_time_seconds,
-            )
-        })
-        .collect::<Vec<_>>();
-
-    let inbox_sync_workers = (0..config.inbox_sync_queue_workers)
-        .map(|_| {
-            sqs_worker::SQSWorker::new(
-                aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
-                config.gmail_inbox_sync_queue.clone(),
-                config.inbox_sync_queue_max_messages,
-                config.queue_wait_time_seconds,
-            )
-        })
-        .collect::<Vec<_>>();
-
-    let inbox_sync_retry_workers = (0..config.inbox_sync_retry_queue_workers)
-        .map(|_| {
-            sqs_worker::SQSWorker::new(
-                aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
-                config.gmail_inbox_sync_retry_queue.clone(),
-                config.inbox_sync_retry_queue_max_messages,
-                config.queue_wait_time_seconds,
-            )
-        })
-        .collect::<Vec<_>>();
-
     let auth_service_client = authentication_service_client::AuthServiceClient::new(
         auth_service_secret_key,
         config.auth_service_url.clone(),
@@ -189,7 +108,7 @@ async fn main() -> anyhow::Result<()> {
         })
         .context("failed to connect to redis")?;
 
-    let redis_client = util::redis::RedisClient::new(
+    let redis_client = email_service::util::redis::RedisClient::new(
         redis_inner_client,
         config.redis_rate_limit_reqs,
         config.redis_rate_limit_reqs_backfill,
@@ -208,175 +127,9 @@ async fn main() -> anyhow::Result<()> {
         config.document_storage_service_url.clone(),
     );
 
-    let connection_gateway_client = connection_gateway_client::client::ConnectionGatewayClient::new(
-        internal_auth_key.as_ref().to_string(),
-        config.connection_gateway_url.clone(),
-    );
-
     let system_properties_service = Arc::new(SystemPropertiesServiceImpl::new(
         PgSystemPropertiesRepository::new(db.clone()),
     ));
-
-    // process user inbox updates from gmail inbox_sync queue, triggered by update pubsub messages from Google
-    for worker in inbox_sync_workers {
-        let db_inbox_sync = db.clone();
-        let sqs_client_inbox_sync = sqs_client.clone();
-        let gmail_client_inbox_sync = gmail_client.clone();
-        let auth_service_client_inbox_sync = auth_service_client.clone();
-        let redis_client_inbox_sync = redis_client.clone();
-        let macro_notify_client_inbox_sync = macro_notify_client.clone();
-        let sfs_client_inbox_sync = sfs_client.clone();
-        let connection_gateway_client_inbox_sync = connection_gateway_client.clone();
-        let dss_client_inbox_sync = dss_client.clone();
-        let system_properties_service_inbox_sync = system_properties_service.clone();
-        tokio::spawn(async move {
-            pubsub::inbox_sync::worker::run_worker(
-                db_inbox_sync,
-                worker,
-                sqs_client_inbox_sync,
-                gmail_client_inbox_sync,
-                auth_service_client_inbox_sync,
-                redis_client_inbox_sync,
-                macro_notify_client_inbox_sync,
-                sfs_client_inbox_sync,
-                connection_gateway_client_inbox_sync,
-                dss_client_inbox_sync,
-                system_properties_service_inbox_sync,
-                config.notifications_enabled,
-                false,
-            )
-            .await;
-        });
-    }
-    tracing::info!(
-        num_workers = config.inbox_sync_queue_workers,
-        "inbox_sync workers started"
-    );
-
-    // separate queue for retries to avoid backups for large inbox updates that hit gmail api rate limit
-    for worker in inbox_sync_retry_workers {
-        let db_inbox_sync = db.clone();
-        let sqs_client_inbox_sync = sqs_client.clone();
-        let gmail_client_inbox_sync = gmail_client.clone();
-        let auth_service_client_inbox_sync = auth_service_client.clone();
-        let redis_client_inbox_sync = redis_client.clone();
-        let macro_notify_client_inbox_sync = macro_notify_client.clone();
-        let sfs_client_inbox_sync = sfs_client.clone();
-        let connection_gateway_client_inbox_sync = connection_gateway_client.clone();
-        let dss_client_inbox_sync = dss_client.clone();
-        let system_properties_service_inbox_sync = system_properties_service.clone();
-        tokio::spawn(async move {
-            pubsub::inbox_sync::worker::run_worker(
-                db_inbox_sync,
-                worker,
-                sqs_client_inbox_sync,
-                gmail_client_inbox_sync,
-                auth_service_client_inbox_sync,
-                redis_client_inbox_sync,
-                macro_notify_client_inbox_sync,
-                sfs_client_inbox_sync,
-                connection_gateway_client_inbox_sync,
-                dss_client_inbox_sync,
-                system_properties_service_inbox_sync,
-                config.notifications_enabled,
-                true,
-            )
-            .await;
-        });
-    }
-    tracing::info!(
-        num_workers = config.inbox_sync_queue_workers,
-        "inbox_sync workers started"
-    );
-
-    // backfill user emails upon signup
-    for worker in backfill_workers {
-        let db_backfill = db_backfill.clone();
-        let sqs_client_backfill = sqs_client.clone();
-        let gmail_client_backfill = gmail_client.clone();
-        let auth_service_client_backfill = auth_service_client.clone();
-        let redis_client_backfill = redis_client.clone();
-        let macro_notify_client_backfill = macro_notify_client.clone();
-        let sfs_client_backfill = sfs_client.clone();
-        let connection_gateway_client_backfill = connection_gateway_client.clone();
-        let dss_client_backfill = dss_client.clone();
-        let system_properties_service_backfill = system_properties_service.clone();
-        tokio::spawn(async move {
-            pubsub::backfill::worker::run_worker(
-                db_backfill,
-                worker,
-                sqs_client_backfill,
-                gmail_client_backfill,
-                auth_service_client_backfill,
-                redis_client_backfill,
-                macro_notify_client_backfill,
-                sfs_client_backfill,
-                connection_gateway_client_backfill,
-                dss_client_backfill,
-                system_properties_service_backfill,
-                config.notifications_enabled,
-            )
-            .await;
-        });
-    }
-    tracing::info!(
-        num_workers = config.backfill_queue_workers,
-        "backfill workers started"
-    );
-
-    let db_link_manager = db.clone();
-    let gmail_client_link_manager = gmail_client.clone();
-    let auth_service_client_link_manager = auth_service_client.clone();
-    let redis_client_link_manager = redis_client.clone();
-    let sqs_client_link_manager = sqs_client.clone();
-    // daily link_manager operations for user contacts and inbox subscriptions
-    tokio::spawn(async move {
-        pubsub::link_manager::worker::run_worker(
-            link_manager_worker,
-            db_link_manager,
-            gmail_client_link_manager,
-            auth_service_client_link_manager,
-            redis_client_link_manager,
-            sqs_client_link_manager,
-        )
-        .await;
-    });
-
-    let db_scheduled = db.clone();
-    let gmail_client_scheduled = gmail_client.clone();
-    let auth_service_client_scheduled = auth_service_client.clone();
-    let redis_client_scheduled = redis_client.clone();
-    // send scheduled emails
-    tokio::spawn(async move {
-        pubsub::scheduled::worker::run_worker(
-            scheduled_worker,
-            db_scheduled,
-            gmail_client_scheduled,
-            auth_service_client_scheduled,
-            redis_client_scheduled,
-        )
-        .await;
-    });
-
-    if cfg!(feature = "sfs_map") {
-        for worker in sfs_uploader_workers {
-            let db_sfs_uploader = db.clone();
-            let sfs_client_sfs_uploader = sfs_client.clone();
-            // upload user contact images to sfs from contact sync
-            tokio::spawn(async move {
-                pubsub::sfs_uploader::worker::run_worker(
-                    worker,
-                    db_sfs_uploader,
-                    sfs_client_sfs_uploader,
-                )
-                .await;
-            });
-        }
-        tracing::info!(
-            num_workers = config.sfs_uploader_workers,
-            "sfs uploader workers started"
-        );
-    }
 
     let jwt_args =
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)

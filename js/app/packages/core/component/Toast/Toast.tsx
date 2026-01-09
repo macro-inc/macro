@@ -61,14 +61,15 @@ const TOAST_STYLES: Record<ToastType, ToastStyle> = {
     },
   },
   [ToastType.LOADING]: {
-    background: 'floating-accent-bg',
-    border: 'border-blue-200',
-    text: 'text-blue-700',
+    // SCUFFED: how do we want to handle these color?
+    background: 'bg-[oklch(0.623_0.214_259.815)/0.15]',
+    border: 'border-[color:oklch(0.882_0.059_254.128)]',
+    text: 'text-[oklch(0.488_0.243_264.376)]',
     icon: Spinner,
     button: {
-      background: 'bg-blue-100',
-      hover: 'hover:bg-blue-200',
-      text: 'text-blue-700',
+      background: 'bg-[oklch(0.932_0.032_255.585)]',
+      hover: 'hover:bg-[oklch(0.882_0.059_254.128)]',
+      text: 'text-[oklch(0.488_0.243_264.376)]',
     },
   },
 };
@@ -144,8 +145,8 @@ function ToastContent(props: {
         ${TOAST_STYLES[props.toastType].background}
         ${TOAST_STYLES[props.toastType].border}
         ${TOAST_STYLES[props.toastType].text}
-        ui-opened:animate-slide-in ui-closed:animate-hide transition-transform ui-swipe-move:translate-x-[var(--kb-toast-swipe-move-x)]
-        ui-swipe-cancel:translate-x-0 ui-swipe-cancel:ease-out ui-swipe-cancel:duration-200 ui-swipe-end:animate-swipe-out`}
+        data-opened:animate-slide-in data-closed:animate-hide transition-transform data-[swipe=move]:translate-x-[var(--kb-toast-swipe-move-x)]
+        data-[swipe=cancel]:translate-x-0 data-[swipe=cancel]:ease-out data-[swipe=cancel]:duration-200 data-[swipe=end]:animate-swipe-out`}
       duration={props.duration}
       persistent={props.persistent}
     >
@@ -303,8 +304,8 @@ function embed(
       <Toast
         toastId={props.toastId}
         class="flex flex-col items-center justify-between gap-2 border rounded-md p-3 pointer-events-auto border-edge-muted bg-panel relative
-          ui-opened:animate-slide-in ui-closed:animate-hide transition-transform ui-swipe-move:translate-x-[var(--kb-toast-swipe-move-x)]
-          ui-swipe-cancel:translate-x-0 ui-swipe-cancel:ease-out ui-swipe-cancel:duration-200 ui-swipe-end:animate-swipe-out"
+          data-opened:animate-slide-in data-closed:animate-hide transition-transform data-[swipe=move]:translate-x-[var(--kb-toast-swipe-move-x)]
+          data-[swipe=cancel]:translate-x-0 data-[swipe=cancel]:ease-out data-[swipe=cancel]:duration-200 data-[swipe=end]:animate-swipe-out"
         duration={options?.duration}
         persistent={options?.persistent}
       >
@@ -312,7 +313,7 @@ function embed(
           <Dynamic component={component} />
         </div>
         <Toast.CloseButton class="ml-auto absolute top-2 right-2 z-1">
-          <XIcon class="h-5 ml-4 text-gray-500" />
+          <XIcon class="h-5 ml-4 text-[oklch(0.551_0.027_264.364)]" />
         </Toast.CloseButton>
       </Toast>
     ),
@@ -326,17 +327,17 @@ export function createUploadToast(message: string) {
       <Toast
         toastId={props.toastId}
         persistent={true}
-        class={`flex flex-col items-center justify-between gap-2 border rounded-md p-3 shadow-lg bg-amber-50 border-amber-300 text-amber-700 pointer-events-auto
-                ui-opened:animate-slide-in ui-closed:animate-hide transition-transform ui-swipe-move:translate-x-[var(--kb-toast-swipe-move-x)]
-                ui-swipe-cancel:translate-x-0 ui-swipe-cancel:ease-out ui-swipe-cancel:duration-200 ui-swipe-end:animate-swipe-out`}
+        class={`flex flex-col items-center justify-between gap-2 border rounded-md p-3 shadow-lg bg-menu border-edge-muted pointer-events-auto
+                data-opened:animate-slide-in data-closed:animate-hide transition-transform data-[swipe=move]:translate-x-[var(--kb-toast-swipe-move-x)]
+                data-[swipe=cancel]:translate-x-0 data-[swipe=cancel]:ease-out data-[swipe=cancel]:duration-200 data-[swipe=end]:animate-swipe-out`}
       >
         <div class="flex items-center w-full">
-          <Spinner class="fill-amber-700 mr-3 h-7 animate-spin shrink-0" />
+          <Spinner class="mr-3 h-7 animate-spin shrink-0" />
           <div>
             <Toast.Title>{message}</Toast.Title>
           </div>
           <Toast.CloseButton class="ml-auto">
-            <XIcon class={`h-5 ml-4 fill-amber-700`} />
+            <XIcon class={`h-5 ml-4`} />
           </Toast.CloseButton>
         </div>
       </Toast>

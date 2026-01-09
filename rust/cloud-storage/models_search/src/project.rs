@@ -4,7 +4,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct ProjectSearchResult {
     pub highlight: SearchHighlight,
     /// The score of the result
@@ -23,7 +23,7 @@ pub struct ProjectSearchMetadata {
 }
 
 /// A single response item, part of the ProjectSearchResponse object
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct ProjectSearchResponseItem {
     /// Standardized fields that all item types will share.
     /// These field names are being aligned across all item types
@@ -38,7 +38,7 @@ pub struct ProjectSearchResponseItem {
 }
 
 /// Metadata for a project fetched from the database
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct ProjectMetadata {
     pub created_at: i64,
     pub updated_at: i64,
@@ -50,7 +50,7 @@ pub struct ProjectMetadata {
 /// ProjectSearchResponseItem object with project metadata we fetch from macrodb. we don't store these
 /// timestamps in opensearch as they would require us to update the project record
 /// every time the project updates (specifically for updated_at and viewed_at)
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct ProjectSearchResponseItemWithMetadata {
     /// Metadata from the database. None if the project doesn't exist in the database.
     pub metadata: Option<ProjectMetadata>,

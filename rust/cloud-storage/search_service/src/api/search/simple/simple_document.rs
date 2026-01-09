@@ -1,20 +1,28 @@
+use std::future::ready;
+
 use crate::api::search::{SearchPaginationParams, simple::SearchError};
 use axum::{
     Extension,
     extract::{self, State},
     response::Json,
 };
+use futures::future::Either;
 use item_filters::DocumentFilters;
+use macro_user_id::user_id::MacroUserId;
 use model::{
     item::{ShareableItem, ShareableItemType},
     response::ErrorResponse,
     user::UserContext,
 };
 use models_search::{
-    SimpleSearchResponse,
+    SearchOn, SimpleSearchResponse,
     document::{DocumentSearchRequest, SimpleDocumentSearchResponse},
 };
-use opensearch_client::search::documents::DocumentSearchArgs;
+use opensearch_client::search::{
+    documents::DocumentSearchArgs,
+    model::{Highlight, SearchHit},
+};
+use sqlx::types::Uuid;
 
 use crate::api::ApiContext;
 
@@ -174,10 +182,14 @@ pub(in crate::api::search) async fn search_documents(
     user_id: &str,
     query_params: &SearchPaginationParams,
     req: DocumentSearchRequest,
-) -> Result<Vec<opensearch_client::search::model::SearchHit>, SearchError> {
+) -> Result<Vec<SearchHit>, SearchError> {
     if user_id.is_empty() {
         return Err(SearchError::NoUserId);
     }
+
+    let user_id = MacroUserId::parse_from_str(user_id)
+        .map_err(|_| SearchError::InvalidUserId(user_id.to_string()))?
+        .lowercase();
 
     let page = query_params.page.unwrap_or(0);
 
@@ -206,28 +218,67 @@ pub(in crate::api::search) async fn search_documents(
     };
 
     let filter_document_response =
-        filter_documents(ctx, user_id, &req.filters.unwrap_or_default()).await?;
+        filter_documents(ctx, user_id.as_ref(), &req.filters.unwrap_or_default()).await?;
 
     if filter_document_response.document_ids.is_empty() && filter_document_response.ids_only {
         return Ok(Vec::new());
     }
 
-    let results = ctx
-        .opensearch_client
-        .search_documents(DocumentSearchArgs {
-            terms,
-            user_id: user_id.to_string(),
-            document_ids: filter_document_response.document_ids,
-            page,
+    let document_uuids = filter_document_response
+        .document_ids
+        .iter()
+        .map(|d| d.parse().unwrap())
+        .collect::<Vec<Uuid>>();
+
+    let name_results = match req.search_on {
+        SearchOn::Name | SearchOn::NameContent => Either::Left(name_search::search_document_names(
+            &ctx.db,
+            &user_id,
+            &document_uuids,
+            terms[0].clone(),
+            filter_document_response.ids_only,
             page_size,
-            match_type: req.match_type.to_string(),
-            search_on: req.search_on.into(),
-            collapse: req.collapse.unwrap_or(false),
-            ids_only: filter_document_response.ids_only,
-            disable_recency: req.disable_recency,
+            page * page_size,
+        )),
+        SearchOn::Content => Either::Right(ready(Ok(Vec::new()))),
+    };
+
+    let content_results = match req.search_on {
+        SearchOn::Content | SearchOn::NameContent => {
+            Either::Left(ctx.opensearch_client.search_documents(DocumentSearchArgs {
+                terms: terms.clone(),
+                user_id: user_id.as_ref().to_string(),
+                document_ids: filter_document_response.document_ids.clone(),
+                page,
+                page_size,
+                match_type: req.match_type.to_string(),
+                search_on: req.search_on.into(),
+                collapse: req.collapse.unwrap_or(false),
+                ids_only: filter_document_response.ids_only,
+                disable_recency: req.disable_recency,
+            }))
+        }
+        SearchOn::Name => Either::Right(ready(Ok(Vec::new()))),
+    };
+
+    let (name_result, content_result) = tokio::join!(name_results, content_results);
+    let name_result = name_result.map_err(SearchError::NameSearch)?;
+    let content_result = content_result.map_err(SearchError::Search)?;
+
+    let results: Vec<SearchHit> = name_result
+        .into_iter()
+        .map(|n| SearchHit {
+            entity_id: n.entity_id,
+            entity_type: n.entity_type,
+            score: None,
+            highlight: Highlight {
+                name: Some(n.name),
+                ..Default::default()
+            },
+            goto: None,
         })
-        .await
-        .map_err(SearchError::Search)?;
+        .chain(content_result)
+        .collect();
 
     Ok(results)
 }

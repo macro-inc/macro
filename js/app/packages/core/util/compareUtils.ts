@@ -1,20 +1,16 @@
 export function setEquals<T>(a: Set<T>, b: Set<T>): boolean {
   if (a.size !== b.size) return false;
-
   for (const item of a.values()) {
     if (!b.has(item)) return false;
   }
-
   return true;
 }
 
 export function arrayEquals<T extends ArrayLike<any>>(a: T, b: T): boolean {
   if (a.length !== b.length) return false;
-
   for (let i = 0; i < a.length; i++) {
     if (a[i] !== b[i]) return false;
   }
-
   return true;
 }
 
@@ -23,16 +19,12 @@ export function mergeByKey<T extends Record<string, any>, K extends keyof T>(
   ...lists: T[][]
 ): T[] {
   const map = new Map<T[K], T>();
-
   for (const list of lists) {
     for (const item of list) {
       const id = item[key];
-      if (!map.has(id)) {
-        map.set(id, item);
-      }
+      if (!map.has(id)) map.set(id, item);
     }
   }
-
   return Array.from(map.values());
 }
 
@@ -44,10 +36,29 @@ export function mapFromListsByKey<T extends Record<string, any>>(
   for (const list of lists) {
     for (const item of list) {
       const id = extractor(item);
-      if (!map.has(id)) {
-        map.set(id, item);
-      }
+      if (!map.has(id)) map.set(id, item);
     }
   }
   return map;
+}
+
+export function uniqueByKey<T>(
+  items: readonly T[],
+  keyOf: (item: T) => string
+): T[] {
+  const map = new Map<string, T>();
+  for (const item of items) {
+    const key = keyOf(item);
+    if (!map.has(key)) map.set(key, item);
+  }
+  return [...map.values()];
+}
+
+export function uniqueByKeySorted<T>(
+  items: readonly T[],
+  keyOf: (item: T) => string
+): T[] {
+  return uniqueByKey(items, keyOf).toSorted((a, b) =>
+    keyOf(a).localeCompare(keyOf(b))
+  );
 }

@@ -56,10 +56,13 @@ export function useHandleFileUpload({
 
     const upload = successfulUploads[0];
     if (upload.type === 'document') {
-      replaceOrInsertSplit({
-        type: fileTypeToBlockName(upload.fileType),
-        id: upload.documentId,
-      });
+      replaceOrInsertSplit(
+        {
+          type: fileTypeToBlockName(upload.fileType),
+          id: upload.documentId,
+        },
+        'file-upload'
+      );
     }
   };
 }

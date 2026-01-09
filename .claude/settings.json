@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:heyapi.dev)",
+      "WebFetch(domain:tanstack.com)",
+      "Bash(npm run)",
+      "Bash(npm run check:*)",
+      "Bash(bun run check:*)",
+      "Bash(bun run check:types:*)",
+      "Bash(grep:*)",
+      "Bash(ls *)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git branch*)",
+      "Bash(git show*)",
+      "Bash(lsof*)",
+      "Bash(ps *)",
+      "Bash(bun run build)",
+      "Bash(bun run test)",
+      "Bash(bun run check)",
+      "Bash(bun run format)",
+      "Bash(bun run lint)",
+      "Bash(bun run fix)",
+      "mcp__plugin_playwright_playwright__browser_snapshot",
+      "mcp__plugin_playwright_playwright__browser_navigate",
+      "mcp__plugin_playwright_playwright__browser_press_key"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

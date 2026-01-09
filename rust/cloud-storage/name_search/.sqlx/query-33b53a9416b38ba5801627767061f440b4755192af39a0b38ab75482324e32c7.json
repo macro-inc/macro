@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                d.id as entity_id,\n                d.name\n            FROM \"Document\" d\n            WHERE (d.owner = $1 OR d.id = ANY($2))\n                AND d.\"deletedAt\" IS NULL\n                AND d.name ILIKE $3\n            ORDER BY d.\"updatedAt\" DESC\n            LIMIT $4\n            OFFSET $5\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entity_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray",
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "33b53a9416b38ba5801627767061f440b4755192af39a0b38ab75482324e32c7"
+}

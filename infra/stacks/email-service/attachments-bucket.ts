@@ -33,11 +33,10 @@ export class EmailAttachmentsBucket extends pulumi.ComponentResource {
       transferAcceleration: stack === 'prod',
       lifecycleRules: [
         {
-          id: `email-attachments-${stack}-cleanup`,
+          id: `temp-files-1d-${stack}`,
           enabled: true,
-          expiration: {
-            days: 1,
-          },
+          prefix: 'temp/',
+          expiration: { days: 1 },
         },
       ],
     });
@@ -103,6 +102,7 @@ export class EmailAttachmentsBucket extends pulumi.ComponentResource {
             Action: [
               's3:GetObject',
               's3:PutObject',
+              's3:DeleteObject',
               's3:GetObjectAttributes',
               's3:ListBucket',
             ],

@@ -2,7 +2,7 @@ import {
   activePlaceableIdSignal,
   newPlaceableSignal,
 } from '@block-pdf/signal/placeables';
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { Content, Modal, Overlay } from '@core/component/Modal';
 import Check from '@icon/regular/check.svg';
 import Trash from '@icon/regular/trash-simple.svg';
@@ -76,14 +76,14 @@ function SignatureEditor(props: SignatureEditorProps) {
             }}
           />
           <div class="flex flex-row w-full justify-center items-center border-t border-edge">
-            <IconButton
+            <DeprecatedIconButton
               icon={Check}
               theme="clear"
               onClick={(e: MouseEvent | KeyboardEvent) =>
                 updatePlaceable(e as MouseEvent)
               }
             />
-            <IconButton
+            <DeprecatedIconButton
               icon={Trash}
               theme="clear"
               onClick={() => {

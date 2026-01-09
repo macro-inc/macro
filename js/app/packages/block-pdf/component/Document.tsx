@@ -287,7 +287,12 @@ export function Document() {
     const blockEl = blockElement();
     if (!blockEl) return;
     const viewer = getRootViewer();
-    if (!documentSize()) return;
+    const size = documentSize();
+    if (!size) return;
+    // wait for valid dimensions
+    if (size.width === 0 || size.height === 0) {
+      return;
+    }
     if (!mountRef || !viewer || viewer.isMounted) return;
     viewer.mount(mountRef, blockEl);
   });

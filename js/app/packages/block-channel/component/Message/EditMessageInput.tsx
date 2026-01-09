@@ -1,4 +1,4 @@
-import { TextButton } from '@core/component/TextButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import FormatIcon from '@icon/regular/text-aa.svg';
 import Check from '@phosphor-icons/core/regular/check.svg?component-solid';
@@ -82,13 +82,13 @@ export function EditMessageInput(props: {
           <FormatIcon width={20} height={20} />
         </ActionButton>
         <div class="flex flex-row gap-1 items-center">
-          <TextButton
+          <DeprecatedTextButton
             icon={XIcon}
             text="Cancel"
             theme="clear"
             onClick={() => props.setEditing(false)}
           />
-          <TextButton
+          <DeprecatedTextButton
             icon={Check}
             text="Save"
             theme="accent"

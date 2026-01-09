@@ -221,6 +221,7 @@ type CommandItemBase = {
   height?: number;
   // Add an optional timestamp to pass to fresh search/sort
   updatedAt?: number | string;
+  viewedAt?: number | string;
 };
 
 type SimpleText = {
@@ -262,7 +263,7 @@ type ItemPreview = {
   id: string;
   name: string;
   fileType?: BasicDocumentFileType;
-  subType?: BasicDocumentSubType;
+  subType?: BasicDocumentSubType | null;
   itemType: Item['type'];
 };
 
@@ -373,10 +374,16 @@ export function useCommandItemAction(args: {
     if (!item) return;
     const blockName = getCommandItemBlockName(item);
     const id = item.data.id;
-    const split = action === 'new-split' ? insertSplit : replaceSplit;
 
     if (blockName) {
-      split({ type: blockName, id });
+      if (action === 'new-split') {
+        insertSplit({ type: blockName, id }, 'kommand-menu');
+      } else {
+        replaceSplit({
+          content: { type: blockName, id },
+          referredFrom: 'kommand-menu',
+        });
+      }
       if (item.snippet) {
         gotoSnippetLocation(blockOrchestrator, id, item.snippet, cleanQuery());
       }
@@ -437,7 +444,7 @@ function getCommandItemBlockName(
 ): BlockName | BlockAlias | undefined {
   if (item.type === 'item') {
     if (item.data.itemType === 'document') {
-      if (item.data.subType === 'task') {
+      if (item.data.subType?.type === 'task') {
         return 'task';
       }
       if (item.data.fileType) {
@@ -505,14 +512,14 @@ export function filterItemByCategory(item: CommandItemCard) {
       return (
         item.type === 'item' &&
         item.data.itemType === 'document' &&
-        item.data.subType !== 'task' &&
+        item.data.subType?.type !== 'task' &&
         fileTypeToBlockName(item.data.fileType) === 'md'
       );
     case 'Tasks':
       return (
         item.type === 'item' &&
         item.data.itemType === 'document' &&
-        item.data.subType === 'task'
+        item.data.subType?.type === 'task'
       );
     case 'Chats':
       return item.type === 'item' && item.data.itemType === 'chat';

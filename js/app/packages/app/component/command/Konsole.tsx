@@ -126,11 +126,23 @@ export function KommandMenuInner(props: {
   });
   const channelsContext = useChannelsContext();
 
-  const freshSearch = createFreshSearch<CommandItemCard>({}, (item) => {
-    return item.data.name;
+  const freshSearchConfig = createMemo(() => {
+    const query = debouncedLocalQuery();
+    const hasQuery = query && query.trim().length > 0;
+    return {
+      useViewedAt: true,
+      channelBoost: hasQuery ? 1.5 : 1.0,
+      fuzzyWeight: hasQuery ? 0.7 : 0.1,
+      timeWeight: hasQuery ? 0.3 : 0.9,
+      minFuzzyThreshold: hasQuery ? 0.1 : 0,
+    };
   });
 
   const searchItems = createMemo(() => {
+    const freshSearch = createFreshSearch<CommandItemCard>(
+      freshSearchConfig(),
+      (item) => item.data.name
+    );
     return freshSearch(allItems(), debouncedLocalQuery()).map(
       (result) => result.item
     );

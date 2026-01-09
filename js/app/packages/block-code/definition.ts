@@ -12,6 +12,7 @@ import { supportedExtensions } from './util/languageSupport';
 export const definition = defineBlock({
   name: 'code',
   description: 'Edit code files with syntax highlighting and formatting',
+  aliases: [{ name: 'csv', defaultFileName: 'New CSV' }],
   component: BlockCode,
   async load(source, intent) {
     if (intent === 'preload') {

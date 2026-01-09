@@ -11,9 +11,15 @@ use item_filters::ast::{
 };
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use models_pagination::{Query, SimpleSortMethod};
-use models_soup::{chat::SoupChat, document::SoupDocument, item::SoupItem, project::SoupProject};
+use models_soup::{
+    chat::SoupChat,
+    document::{SoupDocument, SoupDocumentSubType},
+    item::SoupItem,
+    project::SoupProject,
+};
 use recursion::CollapsibleExt;
 use sqlx::{PgPool, Postgres, QueryBuilder, Row, postgres::PgRow, prelude::FromRow};
+use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
 
 use crate::outbound::pg_soup_repo::type_err;
@@ -85,9 +91,22 @@ static DOCUMENT_CLAUSE: &str = r#"
             WHEN 'viewed_at' THEN COALESCE(uh."updatedAt", '1970-01-01 00:00:00+00')
             WHEN 'created_at' THEN d."createdAt"
             ELSE d."updatedAt"
-        END::timestamptz as "sort_ts"
+        END::timestamptz as "sort_ts",
+        CASE 
+            WHEN dt.sub_type = 'task' 
+                AND ep_status.values->'value' ? $6
+            THEN true 
+            WHEN dt.sub_type = 'task'
+            THEN false
+            ELSE NULL 
+        END as "is_completed"
     FROM "Document" d
     LEFT JOIN document_sub_type dt ON dt.document_id = d.id
+    LEFT JOIN entity_properties ep_status 
+        ON dt.sub_type = 'task'
+        AND ep_status.entity_id = d.id 
+        AND ep_status.entity_type = 'TASK'
+        AND ep_status.property_definition_id = $7
     INNER JOIN UserAccessibleItems uai ON uai.item_id = d.id AND uai.item_type = 'document'
     -- This MUST be a LEFT JOIN to support all three sort methods
     LEFT JOIN "UserHistory" uh ON uh."itemId" = d.id AND uh."itemType" = 'document' AND uh."userId" = $1
@@ -131,7 +150,8 @@ static CHAT_CLAUSE: &str = r#"
             WHEN 'viewed_at' THEN COALESCE(uh."updatedAt", '1970-01-01 00:00:00+00')
             WHEN 'created_at' THEN c."createdAt"
             ELSE c."updatedAt"
-        END::timestamptz as "sort_ts"
+        END::timestamptz as "sort_ts",
+        NULL as "is_completed"
     FROM "Chat" c
     INNER JOIN UserAccessibleItems uai ON uai.item_id = c.id AND uai.item_type = 'chat'
     LEFT JOIN "UserHistory" uh ON uh."itemId" = c.id AND uh."itemType" = 'chat' AND uh."userId" = $1
@@ -161,7 +181,8 @@ static PROJECT_CLAUSE: &str = r#"
             WHEN 'viewed_at' THEN COALESCE(uh."updatedAt", '1970-01-01 00:00:00+00')
             WHEN 'created_at'  THEN p."createdAt"
             ELSE p."updatedAt"
-        END::timestamptz as "sort_ts"
+        END::timestamptz as "sort_ts",
+        NULL as "is_completed"
     FROM "Project" p
     INNER JOIN UserAccessibleItems uai
         ON uai.item_id = p.id
@@ -313,6 +334,7 @@ struct DocumentRow {
     updated_at: DateTime<Utc>,
     viewed_at: Option<DateTime<Utc>>,
     sub_type: Option<DocumentSubType>,
+    is_completed: Option<bool>,
 }
 
 #[derive(Debug, FromRow)]
@@ -378,6 +400,7 @@ impl SoupRow {
                 updated_at,
                 viewed_at,
                 sub_type,
+                is_completed,
             }) => SoupItem::Document(SoupDocument {
                 id: Uuid::parse_str(&id).map_err(type_err)?,
                 document_version_id: document_version_id
@@ -404,7 +427,7 @@ impl SoupRow {
                 created_at,
                 updated_at,
                 viewed_at,
-                sub_type,
+                sub_type: SoupDocumentSubType::from_db(sub_type, is_completed),
             }),
             SoupRow::Chat(ChatRow {
                 id,
@@ -486,6 +509,8 @@ pub(crate) async fn expanded_dynamic_cursor_soup(
     let sort_method_str = cursor.sort_method().to_string();
     let (cursor_id, cursor_timestamp) = cursor.vals();
     let cursor_id_str = cursor_id.as_ref().map(|u| u.to_string());
+    let status_property_id = SystemPropertyKey::STATUS_UUID;
+    let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
 
     build_query(cursor.filter(), exclude_frecency)
         .build()
@@ -494,6 +519,8 @@ pub(crate) async fn expanded_dynamic_cursor_soup(
         .bind(query_limit)
         .bind(cursor_timestamp)
         .bind(cursor_id_str)
+        .bind(completed_option_id)
+        .bind(status_property_id)
         .try_map(|row| SoupRow::from_row(&row)?.into_soup_item())
         .fetch_all(db)
         .await

@@ -40,6 +40,18 @@ impl S3 {
         put::put(&self.inner, bucket, key, content).await
     }
 
+    /// Generates a presigned URL for uploading a file to a bucket.
+    #[tracing::instrument(skip(self))]
+    pub async fn put_presigned_url(
+        &self,
+        bucket: &str,
+        key: &str,
+        sha: &str,
+        mime_type: &str,
+    ) -> anyhow::Result<String> {
+        put::put_presigned_url(&self.inner, bucket, key, sha, mime_type).await
+    }
+
     /// Checks if a given key exists in the bucket.
     #[tracing::instrument(skip(self))]
     pub async fn exists(&self, bucket: &str, key: &str) -> anyhow::Result<bool> {
