@@ -110,7 +110,7 @@ const MESSAGE_MAX: i64 = 100;
 pub async fn get_thread_handler(
     State(ctx): State<ApiContext>,
     user_context: Extension<UserContext>,
-    link: Extension<Link>,
+    link: Extension<Option<Link>>,
     Path(PathParams { id: thread_id }): Path<PathParams>,
     extract::Query(query_params): extract::Query<GetThreadParams>,
 ) -> Result<Response, GetThreadError> {
@@ -127,12 +127,24 @@ pub async fn get_thread_handler(
         return Err(GetThreadError::ThreadNotFound);
     }
 
-    // if the requester doesn't own the thread, check if it has been shared with the requester
-    let access_level = if thread.link_id != link.id {
-        // call will fail if user doesn't have an access level. otherwise, we can return the thread
+    // Check if user owns the thread via their link
+    let is_owner = link
+        .as_ref()
+        .map(|l| thread.link_id == l.id)
+        .unwrap_or(false);
+
+    let access_level = if is_owner {
+        AccessLevel::Owner
+    } else {
+        // If user doesn't have email enabled (and thus has no link), use user_context's macro_id
+        let macro_id = link
+            .as_ref()
+            .map(|l| l.macro_id.as_ref())
+            .unwrap_or(&user_context.user_id);
+
         let access_level = ctx
             .dss_client
-            .get_thread_access_level(link.macro_id.as_ref(), &thread.db_id.unwrap().to_string())
+            .get_thread_access_level(macro_id, &thread.db_id.unwrap().to_string())
             .await
             .map_err(|e| {
                 tracing::error!(error=?e, "unable to get access level for thread for user");
@@ -141,9 +153,6 @@ pub async fn get_thread_handler(
         // don't include the owner's drafts if it's a shared thread
         thread.messages.retain(|m| !m.is_draft);
         access_level
-    } else {
-        // it's the user's thread
-        AccessLevel::Owner
     };
 
     let tasks: Vec<_> = thread
