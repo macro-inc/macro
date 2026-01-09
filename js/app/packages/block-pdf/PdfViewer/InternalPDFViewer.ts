@@ -280,6 +280,21 @@ export class InternalPDFViewer {
   }
 
   mount(mountpoint: HTMLElement, eventListenerElement: HTMLElement) {
+    const viewerType = this._popupViewer != null ? 'ROOT' : 'POPUP';
+    console.log('[VIEWER MOUNT] mounting viewer:', viewerType);
+    console.log('[VIEWER MOUNT] mountpoint dimensions:', {
+      width: mountpoint.clientWidth,
+      height: mountpoint.clientHeight,
+      offsetWidth: mountpoint.offsetWidth,
+      offsetHeight: mountpoint.offsetHeight,
+      boundingRect: mountpoint.getBoundingClientRect(),
+    });
+    console.log('[VIEWER MOUNT] container dimensions:', {
+      width: this._container.clientWidth,
+      height: this._container.clientHeight,
+      offsetWidth: this._container.offsetWidth,
+      offsetHeight: this._container.offsetHeight,
+    });
     this._mountpoint = mountpoint;
     this._eventListenerElement = eventListenerElement;
     mountpoint.replaceChildren(this._container);
@@ -317,6 +332,8 @@ export class InternalPDFViewer {
     }
 
     this._viewer._firstPageCapability.promise.then(() => {
+      console.log('[VIEWER MOUNT] _firstPageCapability resolved');
+      console.log('[VIEWER MOUNT] currentScale:', this._viewer._currentScale);
       // if the page views aren't ready, then the zoom/scale value won't be calculated
       if (this._popupViewer != null) {
         this._viewer._setScale('auto', true);
@@ -521,12 +538,17 @@ export class InternalPDFViewer {
       return this.#warnRootViewerOnly();
     }
     let scale = this._viewer._currentScale;
+    console.log('scalePopupToRootScale', scale);
     // NOTE: don't allow negative scale values
     if (scale < 0) {
       scale = null;
     }
     const popupViewer = this._popupViewer;
     popupViewer._viewer._pagesCapability.promise.then(() => {
+      if (popupViewer._container.offsetParent == null) {
+        console.warn('offsetParent is null, cannot scale popup');
+        return;
+      }
       popupViewer._viewer._setScale(scale || 'auto', false);
     });
   }

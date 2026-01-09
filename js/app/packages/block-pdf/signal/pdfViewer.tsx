@@ -174,12 +174,21 @@ export const useAttachViewerSignals = () => {
       return;
     }
 
-    viewer.event.on('pagesloaded', setPagesLoaded);
-    viewer.event.on('scalechanging', setScaleChanging);
+    viewer.event.on('pagesloaded', (e) => {
+      console.log('[SIGNAL] pagesloaded event:', e);
+      setPagesLoaded(e);
+    });
+    viewer.event.on('scalechanging', (e) => {
+      console.log('[SIGNAL] scalechanging event:', e);
+      setScaleChanging(e);
+    });
     viewer.event.on('pagechanging', setPageChanging);
     viewer.event.on('overlayViewsChanged', setOverlayViewsChanged);
     viewer.event.on('popupvisibilitychanged', setPopupVisibilityChanged);
-    viewer.event.on('updateviewarea', setVisiblePagesChanged);
+    viewer.event.on('updateviewarea', (e) => {
+      console.log('[SIGNAL] updateviewarea event:', e);
+      setVisiblePagesChanged(e);
+    });
     viewer.event.on('updatefindcontrolstate', setUpdateFindControlState);
     viewer.event.on('updatefindmatchescount', setUpdateFindMatchesCount);
   };
@@ -261,9 +270,12 @@ export const useOverlayViewsChanged = () => {
 export const viewerHasVisiblePagesSignal = createBlockSignal<boolean>(false);
 
 createBlockEffect(() => {
-  const visiblePages = visiblePagesChangedSignal()?.visiblePages;
+  const visiblePagesEvent = visiblePagesChangedSignal();
+  console.log('[VISIBLE PAGES EFFECT] visiblePagesChangedSignal event:', visiblePagesEvent);
+  const visiblePages = visiblePagesEvent?.visiblePages;
   const loadedIds = visiblePages?.ids;
   const hasVisiblePages = loadedIds ? loadedIds.size > 0 : false;
+  console.log('[VISIBLE PAGES EFFECT] setting hasVisiblePages:', hasVisiblePages, 'ids:', loadedIds);
   viewerHasVisiblePagesSignal.set(hasVisiblePages);
 });
 
