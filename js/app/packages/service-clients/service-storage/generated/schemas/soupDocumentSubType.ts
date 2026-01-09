@@ -4,6 +4,10 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { DocumentSubType } from './documentSubType';
+import type { SoupDocumentSubTypeOneOf } from './soupDocumentSubTypeOneOf';
 
-export type SoupDocumentSubType = null | DocumentSubType;
+/**
+ * Sub type of a document with associated properties encoded in each variant.
+This ensures type-safety: task properties only exist when the document is a task.
+ */
+export type SoupDocumentSubType = SoupDocumentSubTypeOneOf;

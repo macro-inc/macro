@@ -123,3 +123,36 @@ where
         Ok(Self(res, PhantomData))
     }
 }
+
+/// Extractor that returns `Option<Link>` - returns `None` if no link is found
+/// instead of failing with a 404 error.
+pub struct OptionalEmailLinkExtractor<U>(pub Option<Link>, pub PhantomData<U>);
+
+impl<U> Clone for OptionalEmailLinkExtractor<U> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), PhantomData)
+    }
+}
+
+#[async_trait]
+impl<S, U> FromRequestParts<S> for OptionalEmailLinkExtractor<U>
+where
+    EmailPreviewState<U>: FromRef<S>,
+    U: EmailService,
+    S: Send + Sync + 'static,
+{
+    type Rejection = EmailLinkErr;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let Cached(MacroUserExtractor {
+            macro_user_id,
+            user_context,
+            ..
+        }) = parts.extract_with_state(state).await?;
+        let res = <EmailPreviewState<U>>::from_ref(state)
+            .inner
+            .get_link_by_auth_id_and_macro_id(&user_context.fusion_user_id, macro_user_id)
+            .await?;
+        Ok(Self(res, PhantomData))
+    }
+}

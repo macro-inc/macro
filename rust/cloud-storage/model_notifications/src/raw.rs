@@ -102,6 +102,7 @@ impl TryFrom<&RawNotification> for NotificationEventType {
 // Account for legacy notification event types
 impl TryFrom<&RawUserNotification> for NotificationEventType {
     type Error = anyhow::Error;
+    #[tracing::instrument(err)]
     fn try_from(raw: &RawUserNotification) -> Result<Self, Self::Error> {
         if raw.notification_event_type == "mention" {
             match &raw.entity.entity_type {
@@ -172,6 +173,7 @@ impl TryFrom<RawNotification> for Notification {
 impl TryFrom<RawUserNotification> for UserNotification {
     type Error = anyhow::Error;
 
+    #[tracing::instrument(err)]
     fn try_from(raw: RawUserNotification) -> Result<Self, Self::Error> {
         let event_type = NotificationEventType::try_from(&raw).context(format!(
             "Failed to parse notification event type {:?}",
@@ -179,8 +181,7 @@ impl TryFrom<RawUserNotification> for UserNotification {
         ))?;
 
         let notification_event =
-            NotificationEvent::try_from_type_and_meta(event_type, raw.notification_metadata)
-                .context("Failed to parse notification event ")?;
+            NotificationEvent::try_from_type_and_meta(event_type, raw.notification_metadata)?;
 
         Ok(UserNotification {
             id: raw.notification_id,

@@ -116,7 +116,7 @@ export const Dropdown = <T extends string | number>(
         ref={buttonRef}
         type="button"
         onClick={() => setIsOpen(!isOpen())}
-        class="w-full px-3 py-1.5 border border-edge bg-menu text-sm text-ink text-left flex items-center gap-2 hover:bg-hover font-mono"
+        class="w-full px-3 py-1.5 border border-edge-muted bg-menu text-sm text-ink text-left flex items-center gap-2 hover:bg-hover font-mono"
       >
         {props.renderValue?.(selectedOption()) ??
           defaultRenderValue(selectedOption())}

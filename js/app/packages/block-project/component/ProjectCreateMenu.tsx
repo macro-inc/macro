@@ -70,11 +70,19 @@ function MenuContent(props: { projectId: string }) {
 
       const block = { type: blockName, id };
 
-      shouldInsert ? insertSplit(block) : replaceSplit(block);
+      shouldInsert
+        ? insertSplit(block, 'entity-actions-menu')
+        : replaceSplit({ content: block, referredFrom: 'entity-actions-menu' });
     } else {
       const split = shouldInsert
-        ? insertSplit({ type: 'component', id: 'loading' })
-        : replaceSplit({ type: 'component', id: 'loading' });
+        ? insertSplit(
+            { type: 'component', id: 'loading' },
+            'entity-actions-menu'
+          )
+        : replaceSplit({
+            content: { type: 'component', id: 'loading' },
+            referredFrom: 'entity-actions-menu',
+          });
 
       const id = await tryCreate();
       if (!id) {
@@ -82,7 +90,12 @@ function MenuContent(props: { projectId: string }) {
         return;
       }
 
-      if (split) split.replace({ type: blockName, id }, true);
+      if (split)
+        split.replace({
+          next: { type: blockName, id },
+          mergeHistory: true,
+          referredFrom: 'entity-actions-menu',
+        });
     }
   };
 

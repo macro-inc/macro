@@ -52,6 +52,7 @@ export function useHistoryQuery(options?: {
 
   return useQuery(() => ({
     ...historyQueryOptions(),
+    placeholderData: (prev) => prev,
     select: (data: HistoryQueryResponse): HistoryItem[] => {
       const instructionsId = instructionsIdQuery.isSuccess
         ? instructionsIdQuery.data
@@ -143,6 +144,94 @@ export function useTrackViewedMutation(
           );
 
           optimisticUpdateViewedAt(params.itemId);
+
+          return { previousData };
+        },
+        onError: (_err, _params, context) => {
+          if (context?.previousData) {
+            queryClient.setQueryData(
+              historyKeys.list.queryKey,
+              context.previousData
+            );
+          }
+        },
+        onSettled: () => {
+          queryClient.invalidateQueries({
+            queryKey: historyKeys.list.queryKey,
+          });
+        },
+      },
+      callbacks
+    ),
+  }));
+}
+
+type UpsertToHistoryParams = {
+  itemId: string;
+  itemType: CloudStorageItemType;
+};
+
+type UpsertToHistoryContext = {
+  previousData: HistoryQueryResponse | undefined;
+};
+
+export function useUpsertToHistoryMutation(
+  callbacks?: MutationCallbacks<
+    void,
+    Error,
+    UpsertToHistoryParams,
+    UpsertToHistoryContext
+  >
+) {
+  return useMutation(() => ({
+    mutationFn: async (params: UpsertToHistoryParams) => {
+      await throwOnErr(
+        async () =>
+          await storageServiceClient.upsertItemToUserHistory({
+            itemId: params.itemId,
+            itemType: params.itemType,
+          })
+      );
+    },
+    ...withCallbacks<
+      void,
+      Error,
+      UpsertToHistoryParams,
+      UpsertToHistoryContext
+    >(
+      {
+        onMutate: async (params) => {
+          await queryClient.cancelQueries({
+            queryKey: historyKeys.list.queryKey,
+          });
+
+          const previousData = queryClient.getQueryData<HistoryQueryResponse>(
+            historyKeys.list.queryKey
+          );
+
+          queryClient.setQueryData<HistoryQueryResponse>(
+            historyKeys.list.queryKey,
+            (old) => {
+              if (!old) return old;
+              const existsIndex = old.data.findIndex(
+                (item) => item.id === params.itemId
+              );
+              if (existsIndex >= 0) {
+                const updatedData = updateItemViewedAt(
+                  old.data,
+                  params.itemId,
+                  Date.now()
+                );
+                const [updatedItem] = updatedData.splice(existsIndex, 1);
+                return {
+                  ...old,
+                  data: [updatedItem, ...updatedData],
+                };
+              } else {
+                return old;
+              }
+            }
+          );
 
           return { previousData };
         },

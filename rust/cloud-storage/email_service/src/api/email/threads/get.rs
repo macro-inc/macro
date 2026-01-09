@@ -4,6 +4,8 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json, extract};
+use email::domain::ports::EmailService;
+use email::inbound::OptionalEmailLinkExtractor;
 use futures::future::join_all;
 use model::response::ErrorResponse;
 use model::user::UserContext;
@@ -106,14 +108,15 @@ const MESSAGE_MAX: i64 = 100;
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user_context), fields(user_id=user_context.user_id, fusionauth_user_id=user_context.fusion_user_id))]
-pub async fn get_thread_handler(
+#[tracing::instrument(skip(ctx, user_context, link), fields(user_id=user_context.user_id, fusionauth_user_id=user_context.fusion_user_id))]
+pub async fn get_thread_handler<U: EmailService>(
     State(ctx): State<ApiContext>,
     user_context: Extension<UserContext>,
-    link: Extension<Link>,
+    link: OptionalEmailLinkExtractor<U>,
     Path(PathParams { id: thread_id }): Path<PathParams>,
     extract::Query(query_params): extract::Query<GetThreadParams>,
 ) -> Result<Response, GetThreadError> {
+    let link = link.0;
     let p = process_get_thread_params(&query_params);
 
     let mut thread = email_db_client::threads::get::fetch_thread_with_messages_paginated(
@@ -127,12 +130,24 @@ pub async fn get_thread_handler(
         return Err(GetThreadError::ThreadNotFound);
     }
 
-    // if the requester doesn't own the thread, check if it has been shared with the requester
-    let access_level = if thread.link_id != link.id {
-        // call will fail if user doesn't have an access level. otherwise, we can return the thread
+    // Check if user owns the thread via their link
+    let is_owner = link
+        .as_ref()
+        .map(|l| thread.link_id == l.id)
+        .unwrap_or(false);
+
+    let access_level = if is_owner {
+        AccessLevel::Owner
+    } else {
+        // If user doesn't have email enabled (and thus has no link), use user_context's macro_id
+        let macro_id = link
+            .as_ref()
+            .map(|l| l.macro_id.as_ref())
+            .unwrap_or(&user_context.user_id);
+
         let access_level = ctx
             .dss_client
-            .get_thread_access_level(link.macro_id.as_ref(), &thread.db_id.unwrap().to_string())
+            .get_thread_access_level(macro_id, &thread.db_id.unwrap().to_string())
             .await
             .map_err(|e| {
                 tracing::error!(error=?e, "unable to get access level for thread for user");
@@ -141,9 +156,6 @@ pub async fn get_thread_handler(
         // don't include the owner's drafts if it's a shared thread
         thread.messages.retain(|m| !m.is_draft);
         access_level
-    } else {
-        // it's the user's thread
-        AccessLevel::Owner
     };
 
     let tasks: Vec<_> = thread

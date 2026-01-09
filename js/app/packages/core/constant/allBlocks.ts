@@ -6,6 +6,7 @@ import {
   type FileTypeString,
   type MimeType,
 } from '@core/block';
+import type { SubType } from '@macro-entity';
 import type { ItemType } from '@service-storage/client';
 import type { BasicDocumentFileType } from '@service-storage/generated/schemas/basicDocumentFileType';
 import { ENABLE_DOCX_TO_PDF } from './featureFlags';
@@ -205,7 +206,7 @@ export function blockNameToDefaultFile(block?: BlockName | string | null) {
 type ItemLike = {
   type: ItemType;
   fileType?: BasicDocumentFileType;
-  subType?: string | null;
+  subType?: SubType;
   name?: string;
 };
 
@@ -214,15 +215,16 @@ type ItemLike = {
  * @example
  * itemToBlockName({ type: 'document', fileType: 'docx' }) // 'write'
  * itemToBlockName({ type: 'document', fileType: 'py' }) // 'code'
- * itemToBlockName({ type: 'document', fileType: 'md', subType: 'task' }) // 'task'
+ * itemToBlockName({ type: 'document', fileType: 'md', subType: { type: 'task', is_completed: false } }) // 'task'
  * itemToBlockName({ type: 'chat' }) // 'chat'
  * @return The block name or undefined if there is no appropriate block.
  */
 export function itemToBlockName(
   item: ItemLike
 ): BlockName | BlockAlias | undefined {
-  if (item.subType && isBlockAlias(item.subType)) {
-    return item.subType;
+  const subTypeName = item.subType?.type;
+  if (subTypeName && isBlockAlias(subTypeName)) {
+    return subTypeName;
   }
   if (item.fileType) {
     return fileTypeToBlockName(item.fileType);

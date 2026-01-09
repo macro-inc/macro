@@ -1,5 +1,6 @@
 import type { Entity } from '@core/types';
 import { queryClient } from '@queries/client';
+import { emailKeys } from '@queries/email/keys';
 import { useMarkThreadAsSeenMutation } from '@queries/email/thread';
 import { onCleanup, onMount } from 'solid-js';
 import {
@@ -111,20 +112,25 @@ export function EmailDebouncedReadMarker(props: {
   debounceTime?: number;
   threadId: string;
 }) {
-  const markSeenMutation = useMarkThreadAsSeenMutation({
-    onSuccess() {
-      queryClient.invalidateQueries({
-        predicate(query) {
-          return query.queryKey.includes('dss');
-        },
-      });
-    },
-  });
+  const markSeenMutation = useMarkThreadAsSeenMutation();
+
+  const isAlreadySeen = () => {
+    const data = queryClient.getQueryData(
+      emailKeys.threadMessages(props.threadId).queryKey
+    );
+    return (
+      (data as { pages?: { is_read?: boolean }[] })?.pages?.[0]?.is_read ===
+      true
+    );
+  };
 
   return (
     <DebouncedMarker
       debounceTime={props.debounceTime}
-      debouncedFn={() => markSeenMutation.mutate({ threadId: props.threadId })}
+      debouncedFn={() => {
+        if (isAlreadySeen()) return;
+        markSeenMutation.mutate({ threadId: props.threadId });
+      }}
     />
   );
 }

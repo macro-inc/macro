@@ -19,7 +19,7 @@ import {
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { waitForSignal } from '@core/util/waitForSignal';
 import { createCallback } from '@solid-primitives/rootless';
-import type { Accessor } from 'solid-js';
+import { type Accessor, createMemo } from 'solid-js';
 import { z } from 'zod';
 import { pdfViewLocation } from './document';
 import {
@@ -143,14 +143,19 @@ export const pendingLocationParamsSignal =
 
 export const searchLocationPendingSignal = createBlockSignal<boolean>(false);
 
+const useIsViewerReadyForScroll = () => {
+  const viewerHasVisiblePages = viewerHasVisiblePagesSignal.get;
+  return createMemo(() => viewerReadySignal() && viewerHasVisiblePages());
+};
+
 createBlockEffect(() => {
   const getViewer = useGetRootViewer();
   const goToLinkLocationFromParams = useGoToLinkLocationFromParams();
+  const isViewerReady = useIsViewerReadyForScroll();
 
-  const viewerReady = viewerReadySignal() && viewerHasVisiblePagesSignal.get();
   const params = pendingLocationParamsSignal();
 
-  if (viewerReady && params) {
+  if (isViewerReady() && params) {
     // TODO: do we need to clear all overlays here
     getViewer()?.clearAllOverlays();
 
@@ -724,15 +729,18 @@ function useGoToPdfLocation() {
 const useGoToPreviousLocation = () => {
   const getViewer = useGetRootViewer();
   const getViewLocation = pdfViewLocation.get;
+  const isViewerReady = useIsViewerReadyForScroll();
 
   return async () => {
     const viewer = getViewer();
 
     await waitForSignal(getViewLocation, (location) => !!location, 300).then(
       (prevLocationHash) => {
-        if (viewer && prevLocationHash) {
-          viewer.goToLocationHash(prevLocationHash);
-        }
+        waitForSignal(isViewerReady).then(() => {
+          if (viewer && prevLocationHash) {
+            viewer.goToLocationHash(prevLocationHash);
+          }
+        });
       }
     );
   };

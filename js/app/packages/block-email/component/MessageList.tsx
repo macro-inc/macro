@@ -1,8 +1,7 @@
 import { useEmailContext } from '@block-email/component/EmailContext';
 import { isScrollingToMessage } from '@block-email/signal/scrollState';
-import { CircleSpinner } from '@core/component/CircleSpinner';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { createMemo, createSelector, For, Show } from 'solid-js';
+import { createMemo, createSelector, For } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { MessageContainer } from './MessageContainer';
 
@@ -89,12 +88,6 @@ export function MessageList(props: MessageListProps) {
             );
           }}
         </For>
-
-        <Show when={context.query.isFetching()}>
-          <div class="flex items-center justify-center h-16">
-            <CircleSpinner />
-          </div>
-        </Show>
       </StaticMarkdownContext>
     </div>
   );

@@ -413,10 +413,16 @@ function MessageListImpl(props: MessageListProps) {
 
   const [isPrepend, setIsPrepend] = createSignal(false);
 
-  createEffect(() => {
-    props.messages;
-    setIsPrepend(true);
-  });
+  createEffect(
+    on(
+      () => props.messages,
+      () => {
+        props.messages;
+        setIsPrepend(true);
+      },
+      { defer: true }
+    )
+  );
 
   createEffect(
     on(flattenedThreaded, (flat, prev) => {
@@ -761,7 +767,8 @@ function MessageListImpl(props: MessageListProps) {
               data-channel-message-list
               data={rows() ?? []}
               shift={isPrepend()}
-              bufferSize={30 * BASE_ITEM_SIZE}
+              itemSize={BASE_ITEM_SIZE}
+              bufferSize={10 * BASE_ITEM_SIZE}
               keepMounted={keepMountedIndices()}
               onScroll={handleScroll}
               onScrollEnd={() => {

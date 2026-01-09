@@ -74,10 +74,13 @@ function QuickAccessItem(props: QuickAccessItemProps) {
     messageId: string,
     threadId?: string
   ) => {
-    replaceOrInsertSplit({
-      type: 'channel',
-      id: channelId,
-    });
+    replaceOrInsertSplit(
+      {
+        type: 'channel',
+        id: channelId,
+      },
+      'quick-access'
+    );
     messageLocation(channelId, messageId, threadId);
   };
 
@@ -103,11 +106,14 @@ function QuickAccessItem(props: QuickAccessItemProps) {
           metadata.threadId || undefined
         );
       } else {
-        replaceOrInsertSplit({ type: 'channel', id: channelId });
+        replaceOrInsertSplit(
+          { type: 'channel', id: channelId },
+          'quick-access'
+        );
       }
     } else {
       // Default to channel for other notifications
-      replaceOrInsertSplit({ type: 'channel', id: channelId });
+      replaceOrInsertSplit({ type: 'channel', id: channelId }, 'quick-access');
     }
 
     const nextIndex = (currentNotificationIndex() + 1) % notifications.length;

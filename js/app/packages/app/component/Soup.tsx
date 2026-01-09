@@ -102,7 +102,7 @@ function EntityTypeIconFilter() {
   const {
     splitHotkeyScope,
     previewState,
-    unifiedListContext: { viewsDataStore, setViewDataStore, selectedView, setSelectedView },
+    soupContext: { viewsDataStore, setViewDataStore, selectedView, setSelectedView },
   } = splitContext;
   const [preview, setPreview] = previewState;
 
@@ -862,7 +862,7 @@ function EntityTypeIconFilter() {
 function ClearFiltersButton() {
   const splitContext = useSplitPanelOrThrow();
   const {
-    unifiedListContext: { setViewDataStore, setSelectedView },
+    soupContext: { setViewDataStore, setSelectedView },
   } = splitContext;
 
   const clearAllFilters = () => {
@@ -1080,7 +1080,7 @@ export function Soup() {
   const {
     handle,
     splitHotkeyScope,
-    unifiedListContext: {
+    soupContext: {
       viewsDataStore: viewsData,
       selectedView,
       setSelectedView,
@@ -1253,7 +1253,7 @@ function EmailView() {
     emailViewSignal: [emailView, setEmailView],
     viewsDataStore,
     selectedView,
-  } = useSplitPanelOrThrow().unifiedListContext;
+  } = useSplitPanelOrThrow().soupContext;
   const viewData = createMemo(() => viewsDataStore[selectedView()]);
 
   return (

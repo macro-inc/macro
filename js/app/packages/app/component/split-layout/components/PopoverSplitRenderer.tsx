@@ -84,13 +84,14 @@ function PopoverSplitModal(props: {
       props.popover.mount.kind === 'component'
         ? (props.popover.mount as any).updateMeta
         : undefined,
+    referredFrom: () => null,
   };
 
   const stubPanelContext: SplitPanelContextType = {
     handle: stubHandle,
     splitHotkeyScope: `popover-${props.popover.id}`,
     isPanelActive: () => true,
-    unifiedListContext: createStubSoupContext(),
+    soupContext: createStubSoupContext(),
     panelRef,
     panelSize: { width: null, height: null },
     contentOffsetTop,

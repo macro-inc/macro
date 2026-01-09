@@ -3,6 +3,40 @@ use document_sub_type::DocumentSubType;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
+/// Sub type of a document with associated properties encoded in each variant.
+/// This ensures type-safety: task properties only exist when the document is a task.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[cfg_attr(feature = "mock", derive(PartialEq, Eq))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum SoupDocumentSubType {
+    /// A task document with its associated properties
+    Task {
+        /// Whether the task is completed.
+        /// True if the Status property is set to "Completed".
+        is_completed: bool,
+    },
+}
+
+impl SoupDocumentSubType {
+    /// Converts from DB representation (separate sub_type and is_completed columns)
+    /// to the domain enum.
+    pub fn from_db(sub_type: Option<DocumentSubType>, is_completed: Option<bool>) -> Option<Self> {
+        match sub_type? {
+            DocumentSubType::Task => Some(Self::Task {
+                is_completed: is_completed.unwrap_or_default(),
+            }),
+        }
+    }
+
+    /// Returns whether this is a completed task
+    pub fn is_task_completed(&self) -> Option<bool> {
+        match self {
+            Self::Task { is_completed } => Some(*is_completed),
+        }
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 #[cfg_attr(feature = "mock", derive(PartialEq, Eq))]
 #[serde(rename_all = "camelCase")]
@@ -64,6 +98,7 @@ pub struct SoupDocument {
     pub viewed_at: Option<chrono::DateTime<Utc>>,
 
     /// The sub type of the document if present.
+    /// Task-related properties are encoded within the variant.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub sub_type: Option<DocumentSubType>,
+    pub sub_type: Option<SoupDocumentSubType>,
 }

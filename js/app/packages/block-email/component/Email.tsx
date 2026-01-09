@@ -2,6 +2,7 @@ import {
   EmailProvider,
   useEmailContext,
 } from '@block-email/component/EmailContext';
+import { FloatingInputLoader } from '@core/component/FloatingInputLoader';
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerScopeSignalHotkey } from '@core/hotkey/utils';
 import {
@@ -351,7 +352,11 @@ function EmailContent(props: EmailViewProps) {
           {(lastMessage) => {
             return (
               <div class="shrink-0 w-full px-4 pb-2">
-                <div class="w-full flex flex-row justify-center bg-panel macro-message-width mx-auto">
+                <div class="relative w-full flex flex-row justify-center bg-panel macro-message-width mx-auto">
+                  <FloatingInputLoader
+                    isLoading={context.query.isFetching}
+                    loadingText="Loading messages"
+                  />
                   <EmailInput
                     replyingTo={lastMessage}
                     draft={

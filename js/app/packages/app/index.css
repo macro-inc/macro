@@ -2,7 +2,9 @@
 /* explicitly add all tsx files for all packages instead of relying on Vite */
 @source '../**/*.tsx';
 @source '../../packages/core/component/LexicalMarkdown/theme.ts';
-@config '../../tailwind.config.ts';
+
+/* Legacy PDF viewer stackingContext stuff. Should be deprecated. */
+@plugin '../../tailwind-plugins/zIndex.ts';
 
 /* custom cursor */
 /* must be imported inside base layer to prevent tag element default properties overriding TW cursor utility  */

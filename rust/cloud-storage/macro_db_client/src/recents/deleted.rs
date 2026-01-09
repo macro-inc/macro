@@ -3,6 +3,7 @@ use model::item::{
     Item,
     map_item::{map_chat_item, map_document_item, map_project_item},
 };
+use system_properties::{StatusOption, SystemPropertyKey};
 
 /// Gets the users recently deleted items.
 /// Supports pagination.
@@ -11,6 +12,9 @@ pub async fn get_recently_deleted(
     db: &sqlx::Pool<sqlx::Postgres>,
     user_id: &str,
 ) -> anyhow::Result<Vec<Item>> {
+    let status_property_id = SystemPropertyKey::STATUS_UUID;
+    let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
+
     // NOTE: we may need to support pagination here at some point.
     let result: Vec<Item> = sqlx::query!(
         r#"
@@ -26,9 +30,22 @@ pub async fn get_recently_deleted(
             d."deletedAt"::timestamptz as "deleted_at",
             d."projectId" as "project_id",
             NULL as "is_persistent",
-            dt.sub_type as "sub_type?: DocumentSubType"
+            dt.sub_type as "sub_type?: DocumentSubType",
+            CASE 
+                WHEN dt.sub_type = 'task' 
+                    AND ep_status.values->'value' ? $2
+                THEN true 
+                WHEN dt.sub_type = 'task'
+                THEN false
+                ELSE NULL 
+            END as "is_completed"
         FROM "Document" d
         LEFT JOIN document_sub_type dt ON dt.document_id = d.id
+        LEFT JOIN entity_properties ep_status 
+            ON dt.sub_type = 'task'
+            AND ep_status.entity_id = d.id 
+            AND ep_status.entity_type = 'TASK'
+            AND ep_status.property_definition_id = $3
         LEFT JOIN LATERAL (
             SELECT
                 b.id
@@ -65,7 +82,8 @@ pub async fn get_recently_deleted(
             c."deletedAt"::timestamptz as "deleted_at",
             c."projectId" as "project_id",
             c."isPersistent" as "is_persistent",
-            NULL as "sub_type"
+            NULL as "sub_type",
+            NULL as "is_completed"
         FROM "Chat" c
         WHERE c."userId" = $1 AND c."deletedAt" IS NOT NULL
         UNION ALL
@@ -81,12 +99,15 @@ pub async fn get_recently_deleted(
             p."deletedAt"::timestamptz as "deleted_at",
             p."parentId" as "project_id",
             NULL as "is_persistent",
-            NULL as "sub_type"
+            NULL as "sub_type",
+            NULL as "is_completed"
         FROM "Project" p
         WHERE p."userId" = $1 AND p."deletedAt" IS NOT NULL
     ORDER BY deleted_at DESC
     "#,
         user_id,
+        completed_option_id,
+        status_property_id,
     )
     .try_map(|r| match r.item_type.as_ref() {
         "document" => {
@@ -105,6 +126,7 @@ pub async fn get_recently_deleted(
                 None, // don't care about branched_from_version_id
                 r.project_id,
                 r.sub_type,
+                r.is_completed,
             )
             .map_err(|e| sqlx::Error::TypeNotFound {
                 type_name: e.to_string(),

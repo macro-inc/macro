@@ -194,7 +194,7 @@ const useMapSearchResponseItem = () => {
         }
         return {
           type: 'document',
-          subType: result.sub_type ?? undefined,
+          subType: result.sub_type === 'task' ? { type: 'task' } : null,
           id: result.document_id,
           name: result.name || blockNameToDefaultFile(result.file_type),
           ownerId: result.owner_id,

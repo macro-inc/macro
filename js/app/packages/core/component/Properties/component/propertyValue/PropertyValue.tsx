@@ -59,6 +59,7 @@ export const PropertyValue: Component<PropertyValueProps> = (props) => {
           property={props.property}
           canEdit={canEdit}
           onEdit={props.onEdit}
+          onRefresh={onRefresh}
         />
       );
 

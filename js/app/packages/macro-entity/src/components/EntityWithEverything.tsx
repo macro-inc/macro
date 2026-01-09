@@ -50,7 +50,7 @@ import type {
   WithSearch,
 } from '../types/search';
 import type { EntityClickEvent, EntityClickHandler } from './Entity';
-import { PropertyPills } from './PropertyPills';
+import { KeyPropertiesGrid, PropertyPills } from './PropertyPills';
 
 export const ENTITY_HEIGHT = 40;
 
@@ -430,6 +430,7 @@ interface EntityProps<T extends WithNotification<EntityData>>
   focused?: boolean;
   timestamp?: number;
   onClick?: EntityClickHandler<T>;
+  onPointerDown?: EntityClickHandler<T>;
   onClickRowAction?: (entity: T, type: 'done') => void;
   onClickNotification?: NotificationClickHandler<T>;
   onMouseOver?: () => void;
@@ -899,6 +900,10 @@ export function EntityWithEverything(
           if (blocksNavigation(e)) return;
           e.preventDefault();
         }}
+        onPointerDown={(e) => {
+          if (blocksNavigation(e)) return;
+          props.onPointerDown?.(props.entity, e);
+        }}
         // Action List is also rendered based on focus, but when focused via Shift+Tab, parent is focused due to Action List dom not present. Here we check if current browser task has captured Shift+Tab focus on Action List
         onFocusIn={(e) => {
           if (
@@ -1011,13 +1016,19 @@ export function EntityWithEverything(
             </div>
           </div>
           <EntityTitle />
+          <Show when={isTaskEntity(props.entity) && properties().length > 0}>
+            <KeyPropertiesGrid properties={properties()} />
+          </Show>
         </div>
         {/* Date and user - top right on mobile, end on desktop  */}
         <div class="row-1 ml-2 @md:ml-4 self-center min-w-0 col-3 @max-md/split:col-auto @max-md/split:row-auto @max-md/split:ml-0 @max-md/split:mt-1 @max-md/split:self-start @max-md/split:w-full">
           <div class="flex flex-row items-center justify-end gap-2 min-w-0 @max-md/split:justify-start @max-md/split:flex-wrap">
             <Show when={properties().length > 0}>
               <div class="pr-2 overflow-hidden shrink min-w-0">
-                <PropertyPills properties={properties()} />
+                <PropertyPills
+                  properties={properties()}
+                  excludeKeyProperties={isTaskEntity(props.entity)}
+                />
               </div>
             </Show>
             <Show when={sharedData()}>

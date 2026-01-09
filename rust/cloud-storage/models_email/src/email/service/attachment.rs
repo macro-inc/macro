@@ -86,3 +86,43 @@ pub enum AttachmentUploadDestination {
     Dss,
     Sfs,
 }
+
+#[derive(Debug, Clone)]
+pub struct AttachmentDraft {
+    /// Unique identifier for the attachment.
+    pub id: Uuid,
+    /// The ID of the draft message this attachment belongs to.
+    pub draft_id: Uuid,
+    /// Original file name of the attachment.
+    pub file_name: String,
+    /// MIME type of the attachment (e.g., "application/pdf", "image/png").
+    pub content_type: String,
+    /// SHA-256 hash of the file content for integrity verification.
+    pub sha: String,
+    /// File size in bytes.
+    pub size: i32,
+    /// S3 object key where the attachment content is stored.
+    pub s3_key: String,
+}
+
+impl From<crate::db::attachment::AttachmentDraft> for AttachmentDraft {
+    fn from(db: crate::db::attachment::AttachmentDraft) -> Self {
+        Self {
+            id: db.id,
+            draft_id: db.draft_id,
+            file_name: db.file_name,
+            content_type: db.content_type,
+            sha: db.sha,
+            size: db.size,
+            s3_key: db.s3_key,
+        }
+    }
+}
+
+/// The attachment data we need to include when sending a message to a provider.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct AttachmentToSend {
+    pub file_name: String,
+    pub content_type: String,
+    pub data: Vec<u8>,
+}

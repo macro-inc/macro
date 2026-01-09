@@ -85,6 +85,7 @@ macro_uuid = { path = "../macro_uuid" }
 mime_guess = "2.0.5"
 model = { path = "../model" }
 model-entity = { path = "../model-entity" }
+model_file_type = { path = "../model_file_type" }
 model_notifications = { path = "../model_notifications" }
 models_email = { path = "../models_email" }
 models_opensearch = { path = "../models_opensearch" }
