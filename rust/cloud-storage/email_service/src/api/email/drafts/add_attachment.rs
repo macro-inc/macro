@@ -1,5 +1,5 @@
 use crate::api::context::ApiContext;
-use crate::api::email::drafts::generate_attachment_s3_key;
+use crate::generate_attachment_s3_key;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
@@ -35,7 +35,13 @@ impl IntoResponse for AddDraftAttachmentError {
             AddDraftAttachmentError::InternalError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
-        (status_code, self.to_string()).into_response()
+        (
+            status_code,
+            Json(ErrorResponse {
+                message: self.to_string().as_str(),
+            }),
+        )
+            .into_response()
     }
 }
 
@@ -47,15 +53,21 @@ pub struct PathParams {
 /// The request passed to send a message
 #[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema)]
 pub struct AddDraftAttachmentRequest {
+    /// The name of the file being uploaded.
     pub file_name: String,
+    /// The SHA256 hash of the file being uploaded.
     pub sha: String,
+    /// The size of the file in bytes.
     pub size: i32,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema)]
 pub struct AddDraftAttachmentResponse {
+    /// The ID of the attachment in the database.
     pub attachment_id: Uuid,
+    /// The URL to upload the attachment to.
     pub upload_url: String,
+    /// The MIME type of the attachment.
     pub content_type: String,
 }
 
@@ -94,7 +106,7 @@ pub async fn handler(
     let content_type: ContentType = file_type.into();
 
     let attachment_id = macro_uuid::generate_uuid_v7();
-    let s3_key = generate_attachment_s3_key(draft_id, attachment_id);
+    let s3_key = generate_attachment_s3_key!(draft_id, attachment_id);
     let mime_type = content_type.mime_type().to_string();
 
     let attachment = service::attachment::AttachmentDraft {

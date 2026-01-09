@@ -89,12 +89,19 @@ pub enum AttachmentUploadDestination {
 
 #[derive(Debug, Clone)]
 pub struct AttachmentDraft {
+    /// Unique identifier for the attachment.
     pub id: Uuid,
+    /// The ID of the draft message this attachment belongs to.
     pub draft_id: Uuid,
+    /// Original file name of the attachment.
     pub file_name: String,
+    /// MIME type of the attachment (e.g., "application/pdf", "image/png").
     pub content_type: String,
+    /// SHA-256 hash of the file content for integrity verification.
     pub sha: String,
+    /// File size in bytes.
     pub size: i32,
+    /// S3 object key where the attachment content is stored.
     pub s3_key: String,
 }
 

@@ -1,13 +1,15 @@
 use crate::api::context::ApiContext;
-use axum::Extension;
+use crate::generate_attachment_s3_key;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
+use axum::{Extension, Json};
 use model::response::{EmptyResponse, ErrorResponse};
 use models_email::service::link::Link;
 use strum_macros::AsRefStr;
 use thiserror::Error;
 use uuid::Uuid;
+
 #[derive(Debug, Error, AsRefStr)]
 pub enum RemoveDraftAttachmentError {
     #[error("Draft not found")]
@@ -28,7 +30,13 @@ impl IntoResponse for RemoveDraftAttachmentError {
             RemoveDraftAttachmentError::InternalError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
-        (status_code, self.to_string()).into_response()
+        (
+            status_code,
+            Json(ErrorResponse {
+                message: self.to_string().as_str(),
+            }),
+        )
+            .into_response()
     }
 }
 
@@ -66,7 +74,7 @@ pub async fn handler(
         return Err(RemoveDraftAttachmentError::DraftNotFound);
     }
 
-    let s3_key = super::generate_attachment_s3_key(draft_id, attachment_id);
+    let s3_key = generate_attachment_s3_key!(draft_id, attachment_id);
 
     // will not error if attachment does not exist in S3
     ctx.s3_client

@@ -13,13 +13,11 @@ use model::response::ErrorResponse;
 use model::user::UserContext;
 use models_email::email::service::address::ContactInfo;
 use models_email::email::service::{message, thread};
-use models_email::service::attachment::{AttachmentDraft, AttachmentToSend};
 use models_email::service::link::Link;
 use sqlx::types::chrono::{DateTime, Utc};
 use strum_macros::AsRefStr;
 use thiserror::Error;
 use utoipa::ToSchema;
-use uuid::Uuid;
 
 #[derive(Debug, Error, AsRefStr)]
 pub enum SendMessageError {
@@ -70,7 +68,13 @@ impl IntoResponse for SendMessageError {
             | SendMessageError::InternalError(_) => self.to_string(),
         };
 
-        (status_code, error_message).into_response()
+        (
+            status_code,
+            Json(ErrorResponse {
+                message: error_message.as_str(),
+            }),
+        )
+            .into_response()
     }
 }
 

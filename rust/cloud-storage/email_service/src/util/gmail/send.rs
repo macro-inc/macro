@@ -57,6 +57,10 @@ pub async fn generate_email_threading_headers(
 /// Fetch any attachments the user previously added to the draft from s3 and attach them to the message
 /// being sent. Return the attachment metadata so we can use it to delete the attachments from s3
 /// after the message is sent.
+#[tracing::instrument(
+    skip(db, s3_client, message_to_send),
+    fields(message_db_id = ?message_to_send.db_id)
+)]
 pub async fn fetch_and_attach_draft_attachments(
     db: &sqlx::PgPool,
     s3_client: &s3_client::S3,
@@ -100,6 +104,7 @@ pub async fn fetch_and_attach_draft_attachments(
     Ok(None)
 }
 
+#[tracing::instrument(skip(db, s3_client))]
 pub async fn cleanup_draft_attachments(
     db: sqlx::PgPool,
     s3_client: &s3_client::S3,

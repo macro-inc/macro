@@ -23,6 +23,10 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         ))
 }
 
-pub fn generate_attachment_s3_key(draft_id: uuid::Uuid, attachment_id: uuid::Uuid) -> String {
-    format!("draft/{}/{}", draft_id, attachment_id)
+/// generate an S3 key for an attachment based on the draft_id and attachment_id.
+#[macro_export]
+macro_rules! generate_attachment_s3_key {
+    ($draft_id:expr, $attachment_id:expr) => {
+        format!("draft/{}/{}", $draft_id, $attachment_id)
+    };
 }
