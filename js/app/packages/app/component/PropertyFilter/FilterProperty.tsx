@@ -1,9 +1,8 @@
-import type { PropertyDefinitionFlat } from '@core/component/Properties/types';
+import { listPropertiesFlat } from '@core/component/Properties/utils';
 import { PropertyDataTypeIcon } from '@core/component/Properties/utils/PropertyDataTypeIcon';
 import { zSidePanelSearchAndFilter } from '@core/constant/stackingContext';
-import { isErr } from '@core/util/maybeResult';
 import MagnifyingGlassIcon from '@phosphor-icons/core/assets/regular/magnifying-glass.svg';
-import { propertiesServiceClient } from '@service-properties/client';
+import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import type { Component } from 'solid-js';
 import {
   createEffect,
@@ -17,7 +16,7 @@ import {
 import { isFilterableDataType } from '../PropertyFilterTypes';
 
 export type FilterPropertySelectProps = {
-  onSelectProperty: (property: PropertyDefinitionFlat) => void;
+  onSelectProperty: (property: PropertyDefinition) => void;
   onCancel?: () => void;
 };
 
@@ -25,7 +24,7 @@ export const FilterPropertySelect: Component<FilterPropertySelectProps> = (
   props
 ) => {
   const [availableProperties, setAvailableProperties] = createSignal<
-    PropertyDefinitionFlat[]
+    PropertyDefinition[]
   >([]);
   const [searchQuery, setSearchQuery] = createSignal('');
   const [isDropdownOpen, setIsDropdownOpen] = createSignal(false);
@@ -35,22 +34,8 @@ export const FilterPropertySelect: Component<FilterPropertySelectProps> = (
   let containerRef!: HTMLDivElement;
 
   const fetchAvailableProperties = async () => {
-    try {
-      const result = await propertiesServiceClient.listProperties({
-        scope: 'all',
-        include_options: false,
-      });
-
-      if (isErr(result)) {
-        return;
-      }
-
-      const [, data] = result;
-      const properties = Array.isArray(data) ? data : [];
-      setAvailableProperties(properties);
-    } catch (_apiError) {
-      // Silently fail
-    }
+    const properties = await listPropertiesFlat('all');
+    setAvailableProperties(properties);
   };
 
   // Filter to only filterable properties (exclude COMPANY entity type)
@@ -74,7 +59,7 @@ export const FilterPropertySelect: Component<FilterPropertySelectProps> = (
     });
   });
 
-  const handleSelectProperty = (property: PropertyDefinitionFlat) => {
+  const handleSelectProperty = (property: PropertyDefinition) => {
     props.onSelectProperty(property);
     setSearchQuery('');
     setIsDropdownOpen(false);

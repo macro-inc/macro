@@ -1,5 +1,5 @@
-import type { PropertyDefinitionFlat } from '@core/component/Properties/types';
 import { zSidePanelSearchAndFilter } from '@core/constant/stackingContext';
+import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import type { Component } from 'solid-js';
 import {
   createEffect,
@@ -17,7 +17,7 @@ import {
 } from '../PropertyFilterTypes';
 
 export type FilterActionSelectProps = {
-  property: PropertyDefinitionFlat;
+  property: PropertyDefinition;
   selectedAction: FilterAction | null;
   onSelectAction: (action: FilterAction) => void;
 };

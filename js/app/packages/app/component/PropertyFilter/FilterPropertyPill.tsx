@@ -1,7 +1,7 @@
-import type { PropertyDefinitionFlat } from '@core/component/Properties/types';
 import { PropertyDataTypeIcon } from '@core/component/Properties/utils/PropertyDataTypeIcon';
 import CheckIcon from '@phosphor-icons/core/assets/regular/check.svg';
 import XIcon from '@phosphor-icons/core/assets/regular/x.svg';
+import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import type { Component } from 'solid-js';
 import { createSignal, Match, Show, Switch } from 'solid-js';
 import type {
@@ -31,7 +31,7 @@ type FilterPillProps = {
 export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
   // Internal editing state
   const [selectedProperty, setSelectedProperty] =
-    createSignal<PropertyDefinitionFlat | null>(null);
+    createSignal<PropertyDefinition | null>(null);
   const [action, setAction] = createSignal<FilterAction | null>(null);
   const [values, _setValues] = createSignal<string[]>([]);
   const [booleanValue, setBooleanValue] = createSignal<boolean | null>(null);
@@ -45,7 +45,7 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
 
   // Track if user is editing property (to show search instead of pill)
   const [previousProperty, setPreviousProperty] =
-    createSignal<PropertyDefinitionFlat | null>(null);
+    createSignal<PropertyDefinition | null>(null);
 
   const isPending = () => props.savedData === null;
 
@@ -93,7 +93,7 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
 
   const canConfirm = () => selectedProperty() && action() && hasValue();
 
-  const handleSelectProperty = (property: PropertyDefinitionFlat) => {
+  const handleSelectProperty = (property: PropertyDefinition) => {
     // Only clear action/values if property actually changed
     const prev = previousProperty();
     if (prev && prev.id !== property.id) {
@@ -244,7 +244,7 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
 
   // Build a PropertyFilter from the current state
   const buildPartialFilter = (
-    property: PropertyDefinitionFlat,
+    property: PropertyDefinition,
     filterAction: FilterAction,
     _filterValues: string[] = []
   ): PropertyFilter | null => {
