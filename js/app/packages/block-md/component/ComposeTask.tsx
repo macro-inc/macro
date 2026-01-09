@@ -1,7 +1,7 @@
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { EntityIcon } from '@core/component/EntityIcon';
+import { MiniToggleSwitch } from '@core/component/FormControls/MiniToggleSwitch';
 import { BlockLink } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
@@ -28,23 +28,28 @@ import type {
 } from '@core/component/Properties/types';
 import { toast } from '@core/component/Toast/Toast';
 import { itemToSafeName } from '@core/constant/allBlocks';
+import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { createTask } from '@core/util/create';
 import { filterMap } from '@core/util/list';
 import { isErr } from '@core/util/maybeResult';
+import { buildSimpleEntityUrl } from '@core/util/url';
+import LinkIcon from '@icon/regular/link-simple.svg';
 import TrashIcon from '@icon/regular/trash.svg';
 import XIcon from '@icon/regular/x.svg';
 import {
   queryKeys,
   useQueryClient as useEntityQueryClient,
 } from '@macro-entity';
+import { useUpsertToHistoryMutation } from '@queries/history/history';
 import { useUserId } from '@service-gql/client';
 import { propertiesServiceClient } from '@service-properties/client';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
-import { refetchHistory } from '@service-storage/history';
+
 import { debounce } from '@solid-primitives/scheduled';
 import { useQuery } from '@tanstack/solid-query';
+import { Button } from '@ui/components/Button';
 import type { LexicalEditor } from 'lexical';
-import { createEffect, createSignal, Show, Suspense } from 'solid-js';
+import { createEffect, createSignal, onMount, Show, Suspense } from 'solid-js';
 import { createStore, reconcile, type Store, unwrap } from 'solid-js/store';
 import { tabbable } from 'tabbable';
 import {
@@ -74,7 +79,8 @@ async function createTaskWithProperties(
   taskTitle: string,
   taskContent: string,
   properties: Array<[string, PropertyApiValues]>,
-  definitions: Map<string, PropertyDefinition>
+  definitions: Map<string, PropertyDefinition>,
+  upsertToHistory: (params: { itemId: string; itemType: 'document' }) => void
 ) {
   // Convert properties to API format (filter out null values)
   const propertyValues = properties.flatMap(([id, value]) => {
@@ -104,12 +110,17 @@ async function createTaskWithProperties(
     }
   );
 
-  // Invalidate queries to refresh DSS and history
+  // Invalidate queries to refresh DSS and add to history
   const entityQueryClient = useEntityQueryClient();
   entityQueryClient.invalidateQueries({
     queryKey: queryKeys.all.dss,
   });
-  refetchHistory();
+
+  // Upsert the new task to history
+  upsertToHistory({
+    itemId: documentId,
+    itemType: 'document',
+  });
 
   return documentId;
 }
@@ -153,9 +164,25 @@ function extractPropertyValue(
  * @returns
  */
 function TaskToastPreview(props: { title: string; body: string; id: string }) {
+  const [linkCopied, setLinkCopied] = createSignal(false);
+  onMount(() => {
+    try {
+      const url = buildSimpleEntityUrl(
+        {
+          type: 'task',
+          id: props.id,
+        },
+        {}
+      );
+      navigator.clipboard.writeText(url);
+      setLinkCopied(true);
+    } finally {
+    }
+  });
+
   return (
     <BlockLink blockOrFileName="task" id={props.id}>
-      <div class="text-ink size-full w-44">
+      <div class="text-ink size-full w-96">
         <div class="flex row items-center gap-2 mb-4">
           <EntityIcon targetType="task" />
           <span class="text-base font-medium">
@@ -170,6 +197,12 @@ function TaskToastPreview(props: { title: string; body: string; id: string }) {
             singleLine
           />
         </div>
+        <Show when={linkCopied()}>
+          <div class="text-xs flex items-center gap-2 bg-success-bg text-success-ink rounded-sm mt-2 p-1">
+            <LinkIcon class="size-4" />
+            Link Copied to Clipboard
+          </div>
+        </Show>
       </div>
     </BlockLink>
   );
@@ -227,13 +260,22 @@ export function ComposeTask(props: ComposeTaskProps) {
   const [content, setContent] = createSignal(initialState.content);
   const [bodyEditor, setBodyEditor] = createSignal<LexicalEditor>();
   const [containerRef, setContainerRef] = createSignal<HTMLDivElement>();
+  const [attachHotkeys, composeHotkeyScope] = useHotkeyDOMScope(
+    'compose-task',
+    true
+  );
   const [isDraftLoaded, setIsDraftLoaded] = createSignal(
     initialState.isDraftLoaded
   );
+  const [createMore, setCreateMore] = createSignal(false);
+  const [errorMessage, setErrorMessage] = createSignal<string>('');
 
   const [propertyValues, setPropertyValues] = createStore<
     Record<string, PropertyApiValues>
   >(initialState.propertyValues);
+
+  // History upsert mutation
+  const upsertToHistoryMutation = useUpsertToHistoryMutation();
 
   // draft saving logic
   let hasInitializedFromDraft = isDraftLoaded();
@@ -337,9 +379,22 @@ export function ComposeTask(props: ComposeTaskProps) {
   const handleCreateTask = async () => {
     const taskTitle = title().trim();
     const taskContent = content().trim();
+
+    if (!taskTitle) {
+      setErrorMessage('Please give this task a title');
+      return;
+    }
+    setErrorMessage('');
+
     const properties = structuredClone(Object.entries(unwrap(propertyValues)));
 
-    createTaskWithProperties(taskTitle, taskContent, properties, definitions());
+    createTaskWithProperties(
+      taskTitle,
+      taskContent,
+      properties,
+      definitions(),
+      (params) => upsertToHistoryMutation.mutate(params)
+    );
 
     // Clear draft and reset form
     clearTaskComposerDraft();
@@ -351,12 +406,15 @@ export function ComposeTask(props: ComposeTaskProps) {
     const ed = bodyEditor();
     ed && initializeEditorEmpty(ed);
 
-    if (splitPanel?.handle.isPopover()) {
-      splitPanel.handle.close();
+    if (!createMore()) {
+      if (splitPanel?.handle.isPopover()) {
+        splitPanel.handle.close();
+      }
+      props.onCreateTask?.(taskTitle, taskContent);
+      props.onClose?.();
+    } else {
+      props.onCreateTask?.(taskTitle, taskContent);
     }
-
-    props.onCreateTask?.(taskTitle, taskContent);
-    props.onClose?.();
   };
 
   const handleClose = () => {
@@ -395,6 +453,24 @@ export function ComposeTask(props: ComposeTaskProps) {
       e.stopPropagation();
     }
   };
+
+  onMount(() => {
+    const container = containerRef();
+    if (container) {
+      attachHotkeys(container);
+    }
+  });
+
+  registerHotkey({
+    hotkey: 'cmd+enter',
+    scopeId: composeHotkeyScope,
+    description: 'Create task',
+    keyDownHandler: () => {
+      handleCreateTask();
+      return true;
+    },
+    runWithInputFocused: true,
+  });
 
   return (
     <div
@@ -436,7 +512,12 @@ export function ComposeTask(props: ComposeTaskProps) {
             type="text"
             placeholder="Task Title"
             value={title()}
-            onInput={(e) => setTitle(e.currentTarget.value)}
+            onInput={(e) => {
+              setTitle(e.currentTarget.value);
+              if (errorMessage()) {
+                setErrorMessage('');
+              }
+            }}
             class="w-full py-2 text-xl font-medium placeholder-ink-placeholder/50"
             on:keydown={(e) => {
               if (e.key === 'Escape') {
@@ -497,14 +578,30 @@ export function ComposeTask(props: ComposeTaskProps) {
         </Suspense>
       </div>
 
+      <Show when={errorMessage()}>
+        <div class="w-full border-b border-edge-muted/50" />
+        <div class="px-2 py-2">
+          <div class="text-sm text-failure-ink px-3 py-2">{errorMessage()}</div>
+        </div>
+      </Show>
+
       <div class="w-full border-b border-edge-muted/50" />
-      <div class="flex-shrink-0 flex justify-end p-2">
-        <DeprecatedTextButton
-          icon={() => <EntityIcon targetType="task" theme="monochrome" />}
-          onClick={handleCreateTask}
-          text="Create Task"
-          theme="accent"
+      <div class="flex-shrink-0 flex justify-between items-center p-2 gap-2">
+        <MiniToggleSwitch
+          size="SM"
+          label="Create More"
+          labelClass="text-ink-muted font-normal"
+          checked={createMore()}
+          onChange={setCreateMore}
         />
+        <Button
+          onClick={handleCreateTask}
+          class="border border-edge-muted"
+          disabled={title().trim().length === 0}
+        >
+          <EntityIcon targetType="task" theme="monochrome" />
+          Create Task
+        </Button>
       </div>
     </div>
   );

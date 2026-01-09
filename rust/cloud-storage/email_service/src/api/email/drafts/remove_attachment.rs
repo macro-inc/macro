@@ -8,6 +8,7 @@ use model::response::{EmptyResponse, ErrorResponse};
 use models_email::service::link::Link;
 use strum_macros::AsRefStr;
 use thiserror::Error;
+use utoipa::IntoParams;
 use uuid::Uuid;
 
 #[derive(Debug, Error, AsRefStr)]
@@ -40,9 +41,11 @@ impl IntoResponse for RemoveDraftAttachmentError {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, IntoParams)]
 pub struct PathParams {
+    /// The ID of the draft to remove the attachment from.
     pub id: Uuid,
+    /// The ID of the attachment to remove.
     pub attachment_id: Uuid,
 }
 
@@ -52,6 +55,7 @@ pub struct PathParams {
     tag = "Drafts",
     path = "/email/drafts/{id}/attachments/{attachment_id}",
     operation_id = "remove_draft_attachment",
+    params(PathParams),
     responses(
         (status = 201, body = EmptyResponse),
         (status = 400, body = ErrorResponse),

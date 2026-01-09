@@ -12,7 +12,7 @@ use models_email::service::link::Link;
 use std::str::FromStr;
 use strum_macros::AsRefStr;
 use thiserror::Error;
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 #[derive(Debug, Error, AsRefStr)]
@@ -45,8 +45,9 @@ impl IntoResponse for AddDraftAttachmentError {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, IntoParams)]
 pub struct PathParams {
+    /// The ID of the draft to add the attachment to.
     pub id: Uuid,
 }
 
@@ -77,6 +78,7 @@ pub struct AddDraftAttachmentResponse {
     tag = "Drafts",
     path = "/email/drafts/{id}/attachments",
     operation_id = "add_draft_attachment",
+    params(PathParams),
     request_body = AddDraftAttachmentRequest,
     responses(
         (status = 201, body = AddDraftAttachmentResponse),
