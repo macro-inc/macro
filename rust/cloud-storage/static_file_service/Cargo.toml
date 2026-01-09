@@ -9,7 +9,7 @@ name = "static_file_service"
 path = "src/main.rs"
 
 [[bin]]
-name = "openapi"
+name = "static_file_service_openapi"
 path = "src/openapi.rs"
 
 [features]

@@ -9,7 +9,7 @@ name = "organization_service"
 path = "src/main.rs"
 
 [[bin]]
-name = "openapi"
+name = "organization_service_openapi"
 path = "src/openapi.rs"
 
 [dependencies]

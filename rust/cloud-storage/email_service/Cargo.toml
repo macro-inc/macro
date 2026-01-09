@@ -30,7 +30,7 @@ name = "pubsub_workers"
 path = "src/bin/pubsub_workers/pubsub_workers.rs"
 
 [[bin]]
-name = "openapi"
+name = "email_service_openapi"
 path = "src/openapi.rs"
 
 [features]

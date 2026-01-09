@@ -14,7 +14,7 @@ name = "backfill_dcs_search"
 path = "src/bin/backfill_search.rs"
 
 [[bin]]
-name = "openapi"
+name = "document_cognition_service_openapi"
 path = "src/openapi.rs"
 
 [features]

@@ -20,7 +20,7 @@ name = "stale_connections"
 path = "scripts/stale_connections.rs"
 
 [[bin]]
-name = "openapi"
+name = "connection_gateway_openapi"
 path = "src/openapi.rs"
 
 [dependencies]

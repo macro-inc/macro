@@ -16,7 +16,7 @@ path = "src/bin/backfill_search.rs"
 required-features = []
 
 [[bin]]
-name = "openapi"
+name = "comms_service_openapi"
 path = "src/openapi.rs"
 
 [features]

@@ -62,7 +62,7 @@ const getTargetServices = () => process.argv.slice(2).filter(arg => arg !== '--c
 
 
 async function generateOpenApiFromCrate(crateName: string, rustCloudStorageDir = getRustCloudStorageDir()): Promise<string> {
-  const result = await $`cd ${rustCloudStorageDir} && SQLX_OFFLINE=true cargo run -p ${crateName} --bin openapi`.text();
+  const result = await $`cd ${rustCloudStorageDir} && SQLX_OFFLINE=true cargo run -p ${crateName} --bin ${crateName}_openapi`.text();
   return result;
 }
 

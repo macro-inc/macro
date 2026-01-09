@@ -14,7 +14,7 @@ name = "notification_service"
 path = "src/main.rs"
 
 [[bin]]
-name = "openapi"
+name = "notification_service_openapi"
 path = "src/openapi.rs"
 
 [features]

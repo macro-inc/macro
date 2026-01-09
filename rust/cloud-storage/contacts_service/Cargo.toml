@@ -10,7 +10,7 @@ name = "contacts_service"
 path = "src/main.rs"
 
 [[bin]]
-name = "openapi"
+name = "contacts_service_openapi"
 path = "src/openapi.rs"
 
 [dependencies]

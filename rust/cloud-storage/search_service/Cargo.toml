@@ -9,7 +9,7 @@ name = "search_service"
 path = "src/main.rs"
 
 [[bin]]
-name = "openapi"
+name = "search_service_openapi"
 path = "src/openapi.rs"
 
 [dependencies]
