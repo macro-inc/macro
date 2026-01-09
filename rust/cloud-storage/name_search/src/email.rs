@@ -1,5 +1,5 @@
 //! This module contains logic for searching email threads by oldest message subject
-use crate::{NameSearchError, NameSearchResponse, NameSearchResult, SearchEntityType};
+use crate::{NameSearchError, NameSearchResult, PaginatedResult, SearchEntityType};
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use models_search_cursor::{SearchCursorOption, SearchMethodCursor};
 use sqlx::{Pool, Postgres};
@@ -12,7 +12,7 @@ async fn ids_search(
     search_pattern: String,
     limit: u32,
     cursor: Option<SearchMethodCursor>,
-) -> Result<NameSearchResponse, NameSearchError> {
+) -> Result<PaginatedResult<NameSearchResult>, NameSearchError> {
     if thread_ids.is_empty() {
         return Err(NameSearchError::EmptyIdsWithIdsOnly);
     }
@@ -59,7 +59,7 @@ async fn ids_search(
     .await
     .map_err(NameSearchError::DatabaseError)?;
 
-    let mut results: Vec<NameSearchResult> = rows
+    let results: Vec<NameSearchResult> = rows
         .into_iter()
         .filter_map(|row| {
             row.updated_at.map(|updated_at| NameSearchResult {
@@ -71,26 +71,7 @@ async fn ids_search(
         })
         .collect();
 
-    // If we got more than limit, there are more results
-    let has_more = results.len() > limit as usize;
-    if has_more {
-        results.pop(); // Remove the extra item
-    }
-
-    // Cursor is based on the last returned item
-    let next_cursor = if has_more {
-        SearchCursorOption::NotDone(results.last().map(|last| SearchMethodCursor {
-            entity_id: last.entity_id,
-            updated_at: last.updated_at,
-        }))
-    } else {
-        SearchCursorOption::Done
-    };
-
-    Ok(NameSearchResponse {
-        results,
-        next_cursor,
-    })
+    Ok(SearchCursorOption::paginate(results, limit as usize))
 }
 
 /// Searches email threads by owner or IDs
@@ -101,7 +82,7 @@ async fn owner_search<'a>(
     search_pattern: String,
     limit: u32,
     cursor: Option<SearchMethodCursor>,
-) -> Result<NameSearchResponse, NameSearchError> {
+) -> Result<PaginatedResult<NameSearchResult>, NameSearchError> {
     let (cursor_updated_at, cursor_entity_id) = cursor
         .as_ref()
         .map(|c| (Some(c.updated_at), Some(c.entity_id)))
@@ -152,7 +133,7 @@ async fn owner_search<'a>(
     .await
     .map_err(NameSearchError::DatabaseError)?;
 
-    let mut results: Vec<NameSearchResult> = rows
+    let results: Vec<NameSearchResult> = rows
         .into_iter()
         .filter_map(|row| {
             row.updated_at.map(|updated_at| NameSearchResult {
@@ -164,26 +145,7 @@ async fn owner_search<'a>(
         })
         .collect();
 
-    // If we got more than limit, there are more results
-    let has_more = results.len() > limit as usize;
-    if has_more {
-        results.pop(); // Remove the extra item
-    }
-
-    // Cursor is based on the last returned item
-    let next_cursor = if has_more {
-        SearchCursorOption::NotDone(results.last().map(|last| SearchMethodCursor {
-            entity_id: last.entity_id,
-            updated_at: last.updated_at,
-        }))
-    } else {
-        SearchCursorOption::Done
-    };
-
-    Ok(NameSearchResponse {
-        results,
-        next_cursor,
-    })
+    Ok(SearchCursorOption::paginate(results, limit as usize))
 }
 
 /// Searches over email threads by the subject of the oldest message in each thread
@@ -196,7 +158,7 @@ pub async fn search_email_subjects<'a>(
     ids_only: bool,
     limit: u32,
     cursor: Option<SearchMethodCursor>,
-) -> Result<NameSearchResponse, NameSearchError> {
+) -> Result<PaginatedResult<NameSearchResult>, NameSearchError> {
     if term.is_empty() {
         return Err(NameSearchError::EmptySearchTerm);
     }

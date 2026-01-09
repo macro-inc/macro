@@ -13,6 +13,7 @@ pub trait SearchCursorAttributes {
 }
 
 /// Result of processing sorted results for pagination
+#[derive(Debug)]
 pub struct PaginatedResult<T> {
     /// The items to return (with extra item removed if present)
     pub items: Vec<T>,

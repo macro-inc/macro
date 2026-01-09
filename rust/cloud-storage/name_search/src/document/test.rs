@@ -78,21 +78,21 @@ async fn test_search_document_names_ids_only_mode(pool: Pool<Postgres>) -> anyho
     .await?;
 
     // Should only return the 2 documents that match "report" from the provided IDs
-    assert_eq!(response.results.len(), 2);
+    assert_eq!(response.items.len(), 2);
 
     // Verify results contain expected documents (ordered by updatedAt DESC)
     assert_eq!(
-        response.results[0].entity_id.to_string(),
+        response.items[0].entity_id.to_string(),
         "22222222-2222-2222-2222-222222222222"
     );
-    assert_eq!(response.results[0].entity_type, SearchEntityType::Documents);
-    assert_eq!(response.results[0].name, "Sales Report December");
+    assert_eq!(response.items[0].entity_type, SearchEntityType::Documents);
+    assert_eq!(response.items[0].name, "Sales Report December");
 
     assert_eq!(
-        response.results[1].entity_id.to_string(),
+        response.items[1].entity_id.to_string(),
         "11111111-1111-1111-1111-111111111111"
     );
-    assert_eq!(response.results[1].name, "Quarterly Report 2024");
+    assert_eq!(response.items[1].name, "Quarterly Report 2024");
 
     Ok(())
 }
@@ -113,20 +113,20 @@ async fn test_search_document_names_normal_mode_owned_documents(
         search_document_names(&pool, &user_id, &[], "report".to_string(), false, 10, None).await?;
 
     // Should return 4 documents matching "report" (3 lowercase + 1 uppercase)
-    assert_eq!(response.results.len(), 4);
+    assert_eq!(response.items.len(), 4);
 
     // Verify ordering by updatedAt DESC
     assert_eq!(
-        response.results[0].entity_id.to_string(),
+        response.items[0].entity_id.to_string(),
         "88888888-8888-8888-8888-888888888888"
     );
-    assert_eq!(response.results[0].name, "ANNUAL REPORT 2024");
+    assert_eq!(response.items[0].name, "ANNUAL REPORT 2024");
 
     assert_eq!(
-        response.results[1].entity_id.to_string(),
+        response.items[1].entity_id.to_string(),
         "33333333-3333-3333-3333-333333333333"
     );
-    assert_eq!(response.results[1].name, "Financial Report Q3");
+    assert_eq!(response.items[1].name, "Financial Report Q3");
 
     Ok(())
 }
@@ -144,19 +144,19 @@ async fn test_search_document_names_case_insensitive(pool: Pool<Postgres>) -> an
     let response =
         search_document_names(&pool, &user_id, &[], "REPORT".to_string(), false, 10, None).await?;
 
-    assert_eq!(response.results.len(), 4);
+    assert_eq!(response.items.len(), 4);
 
     // Search with lowercase term should also match both
     let response =
         search_document_names(&pool, &user_id, &[], "report".to_string(), false, 10, None).await?;
 
-    assert_eq!(response.results.len(), 4);
+    assert_eq!(response.items.len(), 4);
 
     // Search with mixed case
     let response =
         search_document_names(&pool, &user_id, &[], "RePoRt".to_string(), false, 10, None).await?;
 
-    assert_eq!(response.results.len(), 4);
+    assert_eq!(response.items.len(), 4);
 
     Ok(())
 }
@@ -187,10 +187,10 @@ async fn test_search_document_names_with_shared_documents(
     .await?;
 
     // Should return user1's 4 "report" documents + user3's 1 "report" document
-    assert_eq!(response.results.len(), 5);
+    assert_eq!(response.items.len(), 5);
 
     // Verify user3's document is included
-    let user3_doc = response.results.iter().find(|r| {
+    let user3_doc = response.items.iter().find(|r| {
         r.entity_id
             .to_string()
             .eq("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
@@ -214,20 +214,20 @@ async fn test_search_document_names_pagination_limit(pool: Pool<Postgres>) -> an
     let response =
         search_document_names(&pool, &user_id, &[], "report".to_string(), false, 2, None).await?;
 
-    assert_eq!(response.results.len(), 2);
+    assert_eq!(response.items.len(), 2);
 
     // Should get the 2 most recently updated documents with "report"
     assert_eq!(
-        response.results[0].entity_id.to_string(),
+        response.items[0].entity_id.to_string(),
         "88888888-8888-8888-8888-888888888888"
     );
     assert_eq!(
-        response.results[1].entity_id.to_string(),
+        response.items[1].entity_id.to_string(),
         "33333333-3333-3333-3333-333333333333"
     );
 
     // Should have a next_cursor since there are more results
-    assert!(response.next_cursor.has_more());
+    assert!(response.cursor.has_more());
 
     Ok(())
 }
@@ -245,11 +245,11 @@ async fn test_search_document_names_pagination_cursor(pool: Pool<Postgres>) -> a
     let first_response =
         search_document_names(&pool, &user_id, &[], "report".to_string(), false, 2, None).await?;
 
-    assert_eq!(first_response.results.len(), 2);
-    assert!(first_response.next_cursor.has_more());
+    assert_eq!(first_response.items.len(), 2);
+    assert!(first_response.cursor.has_more());
 
     // Extract cursor for second page
-    let cursor = match first_response.next_cursor {
+    let cursor = match first_response.cursor {
         SearchCursorOption::NotDone(c) => c,
         SearchCursorOption::Done => panic!("Expected more results"),
     };
@@ -258,29 +258,29 @@ async fn test_search_document_names_pagination_cursor(pool: Pool<Postgres>) -> a
     let second_response =
         search_document_names(&pool, &user_id, &[], "report".to_string(), false, 2, cursor).await?;
 
-    assert_eq!(second_response.results.len(), 2);
+    assert_eq!(second_response.items.len(), 2);
 
     // Should get the next 2 documents (skipping the first 2)
     assert_eq!(
-        second_response.results[0].entity_id.to_string(),
+        second_response.items[0].entity_id.to_string(),
         "22222222-2222-2222-2222-222222222222"
     );
     assert_eq!(
-        second_response.results[1].entity_id.to_string(),
+        second_response.items[1].entity_id.to_string(),
         "11111111-1111-1111-1111-111111111111"
     );
 
     // Should NOT have next_cursor since we've reached the end (fetched limit+1, got only 2)
-    assert!(second_response.next_cursor.is_done());
+    assert!(second_response.cursor.is_done());
 
     // Verify no overlap between pages
     let first_ids: Vec<String> = first_response
-        .results
+        .items
         .iter()
         .map(|r| r.entity_id.to_string())
         .collect();
     let second_ids: Vec<String> = second_response
-        .results
+        .items
         .iter()
         .map(|r| r.entity_id.to_string())
         .collect();
@@ -317,8 +317,8 @@ async fn test_search_document_names_no_results(pool: Pool<Postgres>) -> anyhow::
     )
     .await?;
 
-    assert_eq!(response.results.len(), 0);
-    assert!(response.next_cursor.is_done());
+    assert_eq!(response.items.len(), 0);
+    assert!(response.cursor.is_done());
 
     Ok(())
 }
@@ -336,18 +336,18 @@ async fn test_search_document_names_partial_match(pool: Pool<Postgres>) -> anyho
     let response =
         search_document_names(&pool, &user_id, &[], "meet".to_string(), false, 10, None).await?;
 
-    assert_eq!(response.results.len(), 2);
+    assert_eq!(response.items.len(), 2);
     assert_eq!(
-        response.results[0].entity_id.to_string(),
+        response.items[0].entity_id.to_string(),
         "55555555-5555-5555-5555-555555555555"
     );
-    assert_eq!(response.results[0].name, "Client Meeting Agenda");
+    assert_eq!(response.items[0].name, "Client Meeting Agenda");
 
     assert_eq!(
-        response.results[1].entity_id.to_string(),
+        response.items[1].entity_id.to_string(),
         "44444444-4444-4444-4444-444444444444"
     );
-    assert_eq!(response.results[1].name, "Team Meeting Notes");
+    assert_eq!(response.items[1].name, "Team Meeting Notes");
 
     Ok(())
 }
@@ -366,7 +366,7 @@ async fn test_search_document_names_user_isolation(pool: Pool<Postgres>) -> anyh
         search_document_names(&pool, &user_id, &[], "User2".to_string(), false, 10, None).await?;
 
     // Should return 0 results (user2's documents are not owned by user1 and not shared)
-    assert_eq!(response.results.len(), 0);
+    assert_eq!(response.items.len(), 0);
 
     Ok(())
 }
