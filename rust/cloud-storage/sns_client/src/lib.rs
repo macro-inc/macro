@@ -1,9 +1,6 @@
 use aws_sdk_sns::{operation::publish::PublishOutput, types::MessageAttributeValue};
 use serde::{Serialize, Serializer};
-use std::{
-    collections::HashMap,
-    hash::{DefaultHasher, Hasher},
-};
+use std::collections::HashMap;
 
 #[derive(Clone, Debug)]
 pub struct SNS {
@@ -304,6 +301,32 @@ impl MessageAttributes {
                     .unwrap(),
             ),
         ])
+    }
+}
+
+pub trait NotificationSender: Send + Sync + 'static {
+    fn push_notification<T>(
+        &self,
+        endpoint_arn: &str,
+        message_json: &SnsTarget<T>,
+        message_attributes: MessageAttributes,
+    ) -> impl Future<Output = anyhow::Result<PublishOutput>> + Send
+    where
+        T: Serialize + std::fmt::Debug + Sync;
+}
+
+impl NotificationSender for SNS {
+    async fn push_notification<T>(
+        &self,
+        endpoint_arn: &str,
+        message_json: &SnsTarget<T>,
+        message_attributes: MessageAttributes,
+    ) -> anyhow::Result<PublishOutput>
+    where
+        T: Serialize + std::fmt::Debug + Sync,
+    {
+        self.push_notification(endpoint_arn, message_json, message_attributes)
+            .await
     }
 }
 

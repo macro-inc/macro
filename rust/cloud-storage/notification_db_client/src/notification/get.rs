@@ -1,3 +1,4 @@
+use sqlx::PgPool;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -57,7 +58,7 @@ pub async fn get_basic_notification(
 #[tracing::instrument(err, skip(db))]
 pub async fn update_collapse_key(
     db: &sqlx::PgPool,
-    notification_id: &str,
+    notification_id: &Uuid,
     collapse_key: &str,
 ) -> anyhow::Result<DbBasicNotification<String>> {
     let notification = sqlx::query_as!(
@@ -72,11 +73,43 @@ pub async fn update_collapse_key(
             notification_event_type,
             apns_collapse_key as "apns_collapse_key!"
         "#,
-        macro_uuid::string_to_uuid(notification_id)?,
+        notification_id,
         collapse_key
     )
     .fetch_one(db)
     .await?;
 
     Ok(notification)
+}
+
+pub trait BasicNotificationRepo: Send + Sync + 'static {
+    fn update_collapse_key(
+        &self,
+        notification_id: &Uuid,
+        collapse_key: &str,
+    ) -> impl Future<Output = anyhow::Result<DbBasicNotification<String>>> + Send;
+
+    fn get_basic_notification(
+        &self,
+        notification_id: &Uuid,
+    ) -> impl Future<Output = anyhow::Result<DbBasicNotification<Option<String>>>> + Send;
+}
+
+pub struct BasicNotifRepoImpl(pub PgPool);
+
+impl BasicNotificationRepo for BasicNotifRepoImpl {
+    fn update_collapse_key(
+        &self,
+        notification_id: &Uuid,
+        collapse_key: &str,
+    ) -> impl Future<Output = anyhow::Result<DbBasicNotification<String>>> + Send {
+        update_collapse_key(&self.0, notification_id, collapse_key)
+    }
+
+    fn get_basic_notification(
+        &self,
+        notification_id: &Uuid,
+    ) -> impl Future<Output = anyhow::Result<DbBasicNotification<Option<String>>>> + Send {
+        get_basic_notification(&self.0, notification_id)
+    }
 }

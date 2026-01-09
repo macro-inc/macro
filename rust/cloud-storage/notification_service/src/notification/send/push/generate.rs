@@ -69,6 +69,7 @@ impl XmlFormatter for PlainTextFormatter {
     }
 }
 
+#[tracing::instrument(err)]
 pub fn generate_apns_notification<T: XmlFormatter>(
     notif: &NotificationWithRecipient,
 ) -> Result<Option<APNSPushNotification<PushNotificationData>>, NotificationErr> {

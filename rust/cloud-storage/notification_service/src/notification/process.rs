@@ -199,8 +199,8 @@ pub(crate) async fn process_message(
         #[cfg(feature = "push_notification")]
         {
             send::push::process::process_push_notifications(
-                &ctx.db,
-                &ctx.sns_client,
+                ctx.db.clone(),
+                ctx.sns_client.clone(),
                 &notifications_with_user_data,
             )
             .await?

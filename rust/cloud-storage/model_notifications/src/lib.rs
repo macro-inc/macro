@@ -203,6 +203,12 @@ pub struct NotifCollapseKey(DefaultHasher);
 #[derive(Debug, Clone)]
 pub struct HashedCollapseKey(String);
 
+impl AsRef<str> for HashedCollapseKey {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
 impl HashedCollapseKey {
     pub fn from_hashed(s: String) -> Self {
         Self(s)
