@@ -64,16 +64,9 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
             </div>
           </Show>
         </div>
-        {/* Date and Actions - only show when expanded */}
+        {/* Actions and Date - only show when expanded */}
         <Show when={props.isBodyExpanded()}>
           <div class="flex flex-row gap-4 items-center">
-            {/* Date */}
-            <div class="text-xs text-ink-muted">
-              {props.message.internal_date_ts &&
-                formatDate(
-                  new Date(props.message.internal_date_ts).getTime() / 1000
-                )}
-            </div>
             <MessageActions
               message={props.message}
               showActions={props.focused}
@@ -81,6 +74,13 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
               isLastMessage={props.isLastMessage}
               hiddenActions={props.hiddenActions}
             />
+            {/* Date */}
+            <div class="text-xs text-ink-muted">
+              {props.message.internal_date_ts &&
+                formatDate(
+                  new Date(props.message.internal_date_ts).getTime() / 1000
+                )}
+            </div>
           </div>
         </Show>
       </div>
