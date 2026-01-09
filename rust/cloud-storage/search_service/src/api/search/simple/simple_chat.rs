@@ -1,20 +1,28 @@
+use std::future::ready;
+
 use crate::api::search::{SearchPaginationParams, simple::SearchError};
 use axum::{
     Extension,
     extract::{self, State},
     response::Json,
 };
+use futures::future::Either;
 use item_filters::ChatFilters;
+use macro_user_id::user_id::MacroUserId;
 use model::{
     item::{ShareableItem, ShareableItemType},
     response::ErrorResponse,
     user::UserContext,
 };
 use models_search::{
-    SimpleSearchResponse,
+    SearchOn, SimpleSearchResponse,
     chat::{ChatSearchRequest, SimpleChatSearchResponse},
 };
-use opensearch_client::search::chats::ChatSearchArgs;
+use opensearch_client::search::{
+    chats::ChatSearchArgs,
+    model::{Highlight, SearchHit},
+};
+use sqlx::types::Uuid;
 
 use crate::api::ApiContext;
 
@@ -151,6 +159,10 @@ pub(in crate::api::search) async fn search_chats(
         return Err(SearchError::NoUserId);
     }
 
+    let user_id = MacroUserId::parse_from_str(user_id)
+        .map_err(|_| SearchError::InvalidUserId(user_id.to_string()))?
+        .lowercase();
+
     let page = query_params.page.unwrap_or(0);
 
     let page_size = if let Some(page_size) = query_params.page_size {
@@ -179,29 +191,68 @@ pub(in crate::api::search) async fn search_chats(
 
     let filters = req.filters.unwrap_or_default();
 
-    let filter_chat_response = filter_chats(ctx, user_id, &filters).await?;
+    let filter_chat_response = filter_chats(ctx, user_id.as_ref(), &filters).await?;
 
     if filter_chat_response.chat_ids.is_empty() && filter_chat_response.ids_only {
         return Ok(Vec::new());
     }
 
-    let results = ctx
-        .opensearch_client
-        .search_chats(ChatSearchArgs {
-            terms,
-            user_id: user_id.to_string(),
-            chat_ids: filter_chat_response.chat_ids,
-            page,
+    let chat_uuids = filter_chat_response
+        .chat_ids
+        .iter()
+        .map(|c| c.parse().unwrap())
+        .collect::<Vec<Uuid>>();
+
+    let name_results = match req.search_on {
+        SearchOn::Name | SearchOn::NameContent => Either::Left(name_search::search_chat_names(
+            &ctx.db,
+            &user_id,
+            &chat_uuids,
+            terms[0].clone(),
+            filter_chat_response.ids_only,
             page_size,
-            match_type: req.match_type.to_string(),
-            role: filters.role,
-            search_on: req.search_on.into(),
-            collapse: req.collapse.unwrap_or(false),
-            ids_only: filter_chat_response.ids_only,
-            disable_recency: req.disable_recency,
+            page * page_size,
+        )),
+        SearchOn::Content => Either::Right(ready(Ok(Vec::new()))),
+    };
+
+    let content_results = match req.search_on {
+        SearchOn::Content | SearchOn::NameContent => {
+            Either::Left(ctx.opensearch_client.search_chats(ChatSearchArgs {
+                terms,
+                user_id: user_id.as_ref().to_string(),
+                chat_ids: filter_chat_response.chat_ids,
+                page,
+                page_size,
+                match_type: req.match_type.to_string(),
+                role: filters.role,
+                search_on: req.search_on.into(),
+                collapse: req.collapse.unwrap_or(false),
+                ids_only: filter_chat_response.ids_only,
+                disable_recency: req.disable_recency,
+            }))
+        }
+        SearchOn::Name => Either::Right(ready(Ok(Vec::new()))),
+    };
+
+    let (name_result, content_result) = tokio::join!(name_results, content_results);
+    let name_result = name_result.map_err(SearchError::NameSearch)?;
+    let content_result = content_result.map_err(SearchError::Search)?;
+
+    let results: Vec<SearchHit> = name_result
+        .into_iter()
+        .map(|n| SearchHit {
+            entity_id: n.entity_id,
+            entity_type: n.entity_type,
+            score: None,
+            highlight: Highlight {
+                name: Some(n.name),
+                ..Default::default()
+            },
+            goto: None,
         })
-        .await
-        .map_err(SearchError::Search)?;
+        .chain(content_result)
+        .collect();
 
     Ok(results)
 }

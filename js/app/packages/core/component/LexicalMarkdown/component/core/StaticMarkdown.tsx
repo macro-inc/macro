@@ -18,10 +18,12 @@ import {
   type DocumentMentionNode,
   type EquationNode,
   type HorizontalRuleNode,
+  type ImageNode,
   isSupportedLanguage,
   normalizedLanguage,
   SupportedNodeTypes,
   type UserMentionNode,
+  type VideoNode,
   type WatermarkNode,
 } from '@lexical-core';
 import {
@@ -61,6 +63,8 @@ import { ContactMention as ContactMentionDecorator } from '../decorator/ContactM
 import { DateMention as DateMentionDecorator } from '../decorator/DateMention';
 import { DocumentMention as DocumentMentionDecorator } from '../decorator/DocumentMention';
 import { Equation as EquationDecorator } from '../decorator/Equation';
+import { MarkdownImage as ImageDecorator } from '../decorator/MarkdownImage';
+import { MarkdownVideo as VideoDecorator } from '../decorator/MarkdownVideo';
 import { UserMention as UserMentionDecorator } from '../decorator/UserMention';
 import { Watermark as WatermarkDecorator } from '../decorator/Watermark';
 import { LinkWithPreview } from './LinkWithPreview';
@@ -304,6 +308,16 @@ const DateMention: RenderableEntity<DateMentionNode> = {
       })}
     </span>
   ),
+};
+
+const Image: RenderableEntity<ImageNode> = {
+  guard: (node: LexicalNode): node is ImageNode => node.__type === 'image',
+  render: (props) => ImageDecorator(props.node.exportComponentProps()),
+};
+
+const Video: RenderableEntity<VideoNode> = {
+  guard: (node: LexicalNode): node is VideoNode => node.__type === 'video',
+  render: (props) => VideoDecorator(props.node.exportComponentProps()),
 };
 
 const Paragraph: RenderableElement<ParagraphNode> = {
@@ -582,6 +596,8 @@ const InlineEntities: Array<RenderableEntity> = [
   DocumentMention,
   ContactMention,
   DateMention,
+  Image,
+  Video,
   HorizontalRule,
   Equation,
   Watermark,

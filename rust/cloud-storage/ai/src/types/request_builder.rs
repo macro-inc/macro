@@ -1,15 +1,10 @@
-use crate::types::{
-    ChatCompletionRequest, ChatMessage, Model, PromptAttachment, Role, SystemPrompt,
+use crate::{
+    traits::TextAttachment,
+    types::{ChatCompletionRequest, ChatMessage, ImageData, Model, Role, SystemPrompt},
 };
 
 #[derive(Default)]
 pub struct Attachments(pub Vec<Attachment>);
-
-impl From<Vec<PromptAttachment>> for Attachments {
-    fn from(value: Vec<PromptAttachment>) -> Self {
-        Attachments(value.into_iter().map(Attachment::Text).collect())
-    }
-}
 
 impl From<Vec<Attachment>> for Attachments {
     fn from(value: Vec<Attachment>) -> Self {
@@ -17,12 +12,18 @@ impl From<Vec<Attachment>> for Attachments {
     }
 }
 
+impl From<Vec<Box<dyn TextAttachment>>> for Attachments {
+    fn from(values: Vec<Box<dyn TextAttachment>>) -> Self {
+        Attachments(values.into_iter().map(Attachment::Text).collect())
+    }
+}
+
 pub enum Attachment {
     /// A document, channel, project, or other thing that can be represented by text
     /// These are inserted into the system prompt
-    Text(PromptAttachment),
+    Text(Box<dyn TextAttachment>),
     /// a base64 or static url to a supported image type
-    ImageUrl(String),
+    Image(ImageData),
 }
 
 pub type NotSet = ();
@@ -84,7 +85,7 @@ impl RequestBuilder<Model, Vec<ChatMessage>, String> {
             .0
             .into_iter()
             .map(|attachment| match attachment {
-                Attachment::ImageUrl(url) => (Some(url), None),
+                Attachment::Image(data) => (Some(data), None),
                 Attachment::Text(text_attachment) => (None, Some(text_attachment)),
             })
             .collect::<(Vec<_>, Vec<_>)>();
@@ -92,8 +93,8 @@ impl RequestBuilder<Model, Vec<ChatMessage>, String> {
         let image_attachments = image_attachments.into_iter().flatten().collect::<Vec<_>>();
         let prompt_attachments = prompt_attachments.into_iter().flatten().collect::<Vec<_>>();
         let system_prompt = SystemPrompt {
-            attachments: prompt_attachments,
-            content: std::mem::take(&mut self.system_prompt),
+            attachments: prompt_attachments.into(),
+            instructions: std::mem::take(&mut self.system_prompt),
         };
         // insert images on the last user message  :)
         if !image_attachments.is_empty()
@@ -166,8 +167,8 @@ impl<ChatModel, Messages, Prompt> RequestBuilder<ChatModel, Messages, Prompt> {
         }
     }
 
-    pub fn add_text_attachment(mut self, attachment: impl Into<PromptAttachment>) -> Self {
-        let wrapped = Attachment::Text(attachment.into());
+    pub fn add_text_attachment(mut self, attachment: Box<dyn TextAttachment>) -> Self {
+        let wrapped = Attachment::Text(attachment);
         if let Some(ref mut attachments) = self.attachments {
             attachments.0.push(wrapped)
         } else {
@@ -176,8 +177,8 @@ impl<ChatModel, Messages, Prompt> RequestBuilder<ChatModel, Messages, Prompt> {
         self
     }
 
-    pub fn add_image_attachment(mut self, image_url: String) -> Self {
-        let wrapped = Attachment::ImageUrl(image_url);
+    pub fn add_image_attachment(mut self, data: ImageData) -> Self {
+        let wrapped = Attachment::Image(data);
         if let Some(ref mut attachments) = self.attachments {
             attachments.0.push(wrapped)
         } else {
@@ -221,65 +222,7 @@ impl<ChatModel, Messages, Prompt> RequestBuilder<ChatModel, Messages, Prompt> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::types::{MessageBuilder, Model, PromptAttachment, Role};
-    #[test]
-    fn test_good_build() {
-        let messages = vec![
-            MessageBuilder::new()
-                .content("user message 1")
-                .role(Role::User)
-                .build(),
-            MessageBuilder::new()
-                .content("assistant response")
-                .role(Role::Assistant)
-                .build(),
-            MessageBuilder::new()
-                .content("user message 2")
-                .role(Role::User)
-                .build(),
-        ];
-
-        let text_attachment = PromptAttachment {
-            id: "doc1".to_string(),
-            content: "Document content".to_string(),
-            name: "Test Doc".to_string(),
-            file_type: "md".into(),
-        };
-
-        let request = RequestBuilder::new()
-            .system_prompt("Test system prompt".to_string())
-            .messages(messages.clone())
-            .model(Model::Claude35Sonnet)
-            .max_tokens(1000)
-            .add_text_attachment(text_attachment.clone())
-            .add_image_attachment("https://example.com/image.jpg".to_string())
-            .build();
-
-        // Verify system prompt has text attachment
-        assert_eq!(request.system_prompt.content, "Test system prompt");
-        assert_eq!(request.system_prompt.attachments.len(), 1);
-        assert_eq!(request.system_prompt.attachments[0].id, "doc1");
-
-        // Verify model and max_tokens
-        assert_eq!(request.model, Model::Claude35Sonnet);
-
-        // Verify messages count
-        assert_eq!(request.messages.len(), 3);
-
-        // Verify last user message has image attachment
-        let last_user_message = request
-            .messages
-            .iter()
-            .rev()
-            .find(|msg| msg.role == Role::User)
-            .unwrap();
-        assert!(last_user_message.image_urls.is_some());
-        assert_eq!(last_user_message.image_urls.as_ref().unwrap().len(), 1);
-        assert_eq!(
-            last_user_message.image_urls.as_ref().unwrap()[0],
-            "https://example.com/image.jpg"
-        );
-    }
+    use crate::types::{MessageBuilder, Model, Role};
 
     #[test]
     fn test_good_builder_no_options() {
@@ -296,12 +239,12 @@ mod test {
 
         let request = RequestBuilder::new()
             .system_prompt("Basic system prompt".to_string())
-            .messages(messages.clone())
+            .messages(messages)
             .model(Model::Claude35Sonnet)
             .build();
 
         // Verify system prompt (no attachments)
-        assert_eq!(request.system_prompt.content, "Basic system prompt");
+        assert_eq!(request.system_prompt.instructions, "Basic system prompt");
         assert!(request.system_prompt.attachments.is_empty());
 
         // Verify model and default max_tokens

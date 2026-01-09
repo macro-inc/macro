@@ -5,7 +5,7 @@ import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 
 export function useNavigatedFromJK() {
   const {
-    unifiedListContext: {
+    soupContext: {
       entitiesSignal: [_entities],
     },
   } = useSplitPanelOrThrow();

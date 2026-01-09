@@ -8,7 +8,6 @@ use model_notifications::{
     ChannelInviteMetadata, ChannelMentionMetadata, ChannelMessageSendMetadata,
     ChannelReplyMetadata, DocumentMentionMetadata, TaskAssignedMetadata,
 };
-use models_comms::ChannelType;
 use sns_client::{APNSPushNotification, Aps};
 use std::str::FromStr;
 use thiserror::Error;
@@ -210,7 +209,9 @@ impl BuildNotification for ChannelMessageSendMetadata {
             aps: Aps {
                 alert: Some(sns_client::Alert::Dictionary(sns_client::AlertDictionary {
                     title: Some(match self.common.channel_type {
-                        ChannelType::DirectMessage => self.common.channel_name.to_string(),
+                        model_notifications::ChannelType::DirectMessage => {
+                            self.sender.email_part().local_part().to_string()
+                        }
                         _ => format!(
                             "{} <{}>",
                             self.sender.email_part().local_part(),
@@ -233,14 +234,20 @@ impl BuildNotification for ChannelMentionMetadata {
         &self,
         ctx: Self::Ctx<'_>,
     ) -> Result<APNSPushNotification<()>, NotificationErr> {
+        let title = match self.common.channel_type {
+            model_notifications::ChannelType::DirectMessage => {
+                format!("{} mentioned you", ctx.email_part().local_part())
+            }
+            _ => format!(
+                "{} mentioned you in #{}",
+                ctx.email_part().local_part(),
+                &self.common.channel_name
+            ),
+        };
         Ok(APNSPushNotification {
             aps: Aps {
                 alert: Some(sns_client::Alert::Dictionary(sns_client::AlertDictionary {
-                    title: Some(format!(
-                        "{} mentioned you in #{}",
-                        ctx.email_part().as_ref(),
-                        &self.common.channel_name
-                    )),
+                    title: Some(title),
                     body: Some(T::format_xml_text(ParsedXmlText::parse(&self.message_content)?).0),
                     ..Default::default()
                 })),

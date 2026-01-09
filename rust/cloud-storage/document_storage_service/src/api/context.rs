@@ -1,5 +1,9 @@
 use crate::{config::Config, service::s3::S3};
 use axum::extract::FromRef;
+use comms::{
+    domain::service::ChannelServiceImpl,
+    outbound::{http::user_repo::UserRepoImpl, postgres::comms_repo::PgCommsRepo},
+};
 use connection_gateway_client::client::ConnectionGatewayClient;
 use dynamodb_client::DynamodbClient;
 use email::{domain::service::EmailServiceImpl, outbound::EmailPgRepo};
@@ -30,6 +34,7 @@ type DssSoupState = SoupRouterState<
         PgSoupRepo,
         FrecencyQueryServiceImpl<FrecencyPgStorage>,
         EmailServiceImpl<EmailPgRepo, FrecencyQueryServiceImpl<FrecencyPgStorage>>,
+        ChannelServiceImpl<PgCommsRepo, UserRepoImpl, FrecencyPgStorage>,
     >,
     EmailServiceImpl<EmailPgRepo, FrecencyQueryServiceImpl<FrecencyPgStorage>>,
 >;

@@ -12,37 +12,39 @@ axum = { workspace = true }
 chrono = { workspace = true }
 comms_service_client = { path = "../comms_service_client" }
 document_storage_service_client = { path = "../document_storage_service_client" }
+document_sub_type = { path = "../document_sub_type" }
 email_service_client = { path = "../email_service_client" }
 futures = { workspace = true }
-indexmap = "2"
 http-body-util = { workspace = true }
+indexmap = "2"
+item_filters = { path = "../item_filters" }
 macro_auth = { path = "../macro_auth" }
-macro_db_client = { path = "../macro_db_client" }
 macro_cors = { path = "../macro_cors" }
+macro_db_client = { path = "../macro_db_client" }
 macro_entrypoint = { path = "../macro_entrypoint" }
 macro_env = { path = "../macro_env" }
 macro_middleware = { path = "../macro_middleware", default-features = false, features = [
-    "auth",
+  "auth",
 ] }
+macro_user_id = { path = "../macro_user_id" }
 model = { path = "../model" }
 models_email = { path = "../models_email" }
+models_opensearch = { path = "../models_opensearch" }
 models_search = { path = "../models_search" }
+name_search = { path = "../name_search" }
 opensearch_client = { path = "../opensearch_client" }
 secretsmanager_client = { path = "../secretsmanager_client" }
 serde = { workspace = true }
 serde_json = { workspace = true }
-strum = { workspace = true }
 sqlx = { workspace = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
 tokio = { workspace = true }
 tower = { workspace = true }
 tower-http = { workspace = true }
 tracing = { workspace = true }
 utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
-item_filters = { path = "../item_filters" }
-thiserror = { workspace = true }
-models_opensearch = { path = "../models_opensearch" }
-document_sub_type = { path = "../document_sub_type" }
 
 [dev-dependencies]
 macro_auth = { path = "../macro_auth", features = ["testing"] }

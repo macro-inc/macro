@@ -1,7 +1,7 @@
 import { BozzyBracketInnerSibling } from '@core/component/BozzyBracket';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import type { UserMentionRecord } from '@core/component/LexicalMarkdown/component/menu/MentionsMenu';
 import { createTheme } from '@core/component/LexicalMarkdown/theme';
+import type { UserMentionRecord } from '@core/component/LexicalMarkdown/utils/mentionsUtils';
 import type { DocumentMentionLocation } from '@service-notification/client';
 import { storageServiceClient } from '@service-storage/client';
 import type { EditorThemeClasses } from 'lexical';

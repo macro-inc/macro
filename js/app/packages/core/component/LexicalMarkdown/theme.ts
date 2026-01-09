@@ -203,6 +203,7 @@ export const embeddedCodeBlock = createTheme({
 
 export const unifiedListMarkdownTheme = createTheme({
   code: 'font-mono overflow-hidden px-1.5 py-0.5 rounded bg-edge/20 inline-block',
+  quote: 'border-l-2 border-current/20 pl-1 italic text-current/80',
   static: {
     'code-container':
       'font-mono md-code-box no-accessory overflow-hidden flex items-center',

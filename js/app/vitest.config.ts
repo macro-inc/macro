@@ -31,6 +31,19 @@ export default defineConfig({
           name: 'queries',
         },
       },
+      {
+        // @ui package Storybook component tests
+        extends: './packages/ui/.storybook/vitest.config.ts',
+        test: {
+          name: 'storybook',
+        },
+      },
+      {
+        test: {
+          include: ['scripts/**/*.{test,spec}.{ts,tsx}'],
+          name: 'scripts',
+        },
+      },
     ],
   },
 });

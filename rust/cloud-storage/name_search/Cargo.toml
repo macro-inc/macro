@@ -1,0 +1,20 @@
+[package]
+edition = "2024"
+name = "name_search"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+macro_user_id = { path = "../macro_user_id" }
+models_opensearch = { path = "../models_opensearch" }
+non_empty = { path = "../non_empty" }
+serde = { workspace = true }
+sqlx = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+macro_db_migrator = { path = "../macro_db_migrator" }
+tokio = { workspace = true }

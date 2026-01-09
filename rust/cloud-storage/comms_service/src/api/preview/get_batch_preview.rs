@@ -1,11 +1,11 @@
 use crate::utils::previews::resolve_previews;
 use anyhow::Result;
+use axum::extract::Json;
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
-use axum::{Extension, extract::Json};
 use comms_db_client::model::ChannelPreview;
 use model::response::{GenericErrorResponse, GenericResponse};
-use model::user::UserContext;
+use model::user::axum_extractor::MacroUserExtractor;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
@@ -36,13 +36,17 @@ pub struct GetBatchChannelPreviewResponse {
 )]
 pub async fn handler(
     State(db): State<PgPool>,
-    user_context: Extension<UserContext>,
+    MacroUserExtractor {
+        macro_user_id,
+        user_context,
+        ..
+    }: MacroUserExtractor,
     Json(req): Json<GetBatchChannelPreviewRequest>,
 ) -> Result<(StatusCode, Json<GetBatchChannelPreviewResponse>), Response> {
     let raw_previews = comms_db_client::preview::batch_get_channel_preview(
         &db,
         &req.channel_ids,
-        &user_context.user_id,
+        macro_user_id.as_ref(),
         user_context.organization_id.map(|org_id| org_id as i64),
     )
     .await
@@ -57,7 +61,7 @@ pub async fn handler(
 
     // TODO: if previews include direct messages or private group chats, generate lookup table
     // somehow
-    let previews = resolve_previews(&user_context, raw_previews, None);
+    let previews = resolve_previews(macro_user_id, raw_previews, &Default::default());
 
     Ok((
         StatusCode::OK,

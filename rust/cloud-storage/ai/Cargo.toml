@@ -8,7 +8,6 @@ version = "0.1.0"
 tokio = { workspace = true }
 
 [dependencies]
-ai_format = { path = "../ai_format" }
 anyhow = { workspace = true }
 async-openai = { workspace = true }
 async-stream = { workspace = true }
@@ -30,3 +29,7 @@ tokio.workspace = true
 tracing = { workspace = true }
 utoipa = { workspace = true }
 anthropic = { path = "../anthropic" }
+base64 = { workspace = true }
+image = "0.25.9"
+webp = "0.3.1"
+model_file_type = { path = "../model_file_type"}

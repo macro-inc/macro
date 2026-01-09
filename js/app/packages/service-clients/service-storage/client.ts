@@ -138,6 +138,7 @@ const itemTypeSet = new Set([
   'email',
   'chat',
   'project',
+  'thread',
 ]);
 
 export function isItemType(str: string): str is ItemType {
@@ -147,7 +148,9 @@ export function isItemType(str: string): str is ItemType {
 const mapMetadataDocumentName = (
   metadata: DocumentMetadata
 ): DocumentMetadata => {
-  const name = formatDocumentName(metadata.documentName, metadata.fileType);
+  const name = formatDocumentName(metadata.documentName, metadata.fileType, {
+    fullyQualifiedBlockName: true,
+  });
 
   return {
     ...metadata,
@@ -158,7 +161,9 @@ const mapMetadataDocumentName = (
 const mapItemDocumentName = (item: Item): Item => {
   if (item.type !== 'document') return item;
 
-  const name = formatDocumentName(item.name, item.fileType);
+  const name = formatDocumentName(item.name, item.fileType, {
+    fullyQualifiedBlockName: true,
+  });
 
   return {
     ...item,
@@ -169,7 +174,9 @@ const mapItemDocumentName = (item: Item): Item => {
 const mapPreviewDocumentName = (preview: DocumentPreview): DocumentPreview => {
   if (!('document_name' in preview)) return preview;
 
-  const name = formatDocumentName(preview.document_name, preview.file_type);
+  const name = formatDocumentName(preview.document_name, preview.file_type, {
+    fullyQualifiedBlockName: true,
+  });
   return {
     ...preview,
     document_name: name,
@@ -195,6 +202,10 @@ export function blockNameToItemType(
 
 export function stringToItemType(str: string): ItemType | undefined {
   switch (str) {
+    case 'email':
+    case 'thread': {
+      return 'email';
+    }
     case 'chat':
     case 'document':
     case 'project':
@@ -1283,6 +1294,18 @@ export const storageServiceClient = {
         body: JSON.stringify(params),
       });
     },
+  },
+  async editThread(params) {
+    const { threadId, ...body } = params;
+
+    return mapOk(
+      await dssFetch<SuccessResponse>(`/threads/${threadId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      }),
+
+      (result) => result.data
+    );
   },
 } satisfies StorageServiceClient & typeof enhancements;
 

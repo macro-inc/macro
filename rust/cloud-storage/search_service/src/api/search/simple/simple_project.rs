@@ -5,6 +5,7 @@ use axum::{
     response::Json,
 };
 use item_filters::ProjectFilters;
+use macro_user_id::user_id::MacroUserId;
 use model::{
     item::{ShareableItem, ShareableItemType},
     response::ErrorResponse,
@@ -12,7 +13,8 @@ use model::{
 };
 use models_search::project::{ProjectSearchRequest, SimpleProjectSearchResponse};
 use models_search::{SearchOn, SimpleSearchResponse};
-use opensearch_client::search::projects::ProjectSearchArgs;
+use opensearch_client::search::model::{Highlight, SearchHit};
+use sqlx::types::Uuid;
 
 use crate::api::ApiContext;
 
@@ -144,13 +146,17 @@ pub(in crate::api::search) async fn search_projects(
     req: ProjectSearchRequest,
 ) -> Result<Vec<opensearch_client::search::model::SearchHit>, SearchError> {
     // content search is not applicable for projects
-    if req.search_on == SearchOn::Content {
+    if let SearchOn::Content = req.search_on {
         return Ok(Vec::new());
     }
 
     if user_id.is_empty() {
         return Err(SearchError::NoUserId);
     }
+
+    let user_id = MacroUserId::parse_from_str(user_id)
+        .map_err(|_| SearchError::InvalidUserId(user_id.to_string()))?
+        .lowercase();
 
     let page = query_params.page.unwrap_or(0);
 
@@ -180,28 +186,42 @@ pub(in crate::api::search) async fn search_projects(
 
     let filters = req.filters.unwrap_or_default();
 
-    let filter_project_response = filter_projects(ctx, user_id, &filters).await?;
+    let filter_project_response = filter_projects(ctx, user_id.as_ref(), &filters).await?;
 
     if filter_project_response.project_ids.is_empty() && filter_project_response.ids_only {
         return Ok(Vec::new());
     }
 
-    let results = ctx
-        .opensearch_client
-        .search_project(ProjectSearchArgs {
-            terms,
-            user_id: user_id.to_string(),
-            page,
-            page_size,
-            match_type: req.match_type.to_string(),
-            project_ids: filter_project_response.project_ids,
-            search_on: req.search_on.into(),
-            collapse: req.collapse.unwrap_or(false),
-            ids_only: filter_project_response.ids_only,
-            disable_recency: req.disable_recency,
+    let project_ids = filter_project_response
+        .project_ids
+        .iter()
+        .map(|p| p.parse().unwrap())
+        .collect::<Vec<Uuid>>();
+
+    let results = name_search::search_project_names(
+        &ctx.db,
+        &user_id,
+        &project_ids,
+        terms[0].clone(),
+        filter_project_response.ids_only,
+        page_size,
+        page * page_size,
+    )
+    .await?;
+
+    let results: Vec<SearchHit> = results
+        .into_iter()
+        .map(|n| SearchHit {
+            entity_id: n.entity_id,
+            entity_type: n.entity_type,
+            score: None,
+            highlight: Highlight {
+                name: Some(n.name),
+                ..Default::default()
+            },
+            goto: None,
         })
-        .await
-        .map_err(SearchError::Search)?;
+        .collect();
 
     Ok(results)
 }

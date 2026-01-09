@@ -1,4 +1,4 @@
-import { TextButton } from '@core/component/TextButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import ResetIcon from '@icon/regular/arrow-clockwise.svg';
 import HomeIcon from '@icon/regular/house.svg';
 import { logger } from '@observability';
@@ -38,7 +38,7 @@ export function FatalError(props: FatalErrorProps) {
           </p>
 
           <div class="flex flex-row gap-4 justify-center">
-            <TextButton
+            <DeprecatedTextButton
               theme="accent"
               onClick={() => {
                 window.location.href = window.location.origin + '/app';
@@ -46,7 +46,7 @@ export function FatalError(props: FatalErrorProps) {
               text="Home"
               icon={HomeIcon}
             />
-            <TextButton
+            <DeprecatedTextButton
               theme="base"
               onClick={props.reset}
               text="Try Again"

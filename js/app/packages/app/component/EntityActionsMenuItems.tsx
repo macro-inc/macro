@@ -13,8 +13,9 @@ interface EntityActionsMenuItemsProps {
 }
 
 export const EntityActionsMenuItems = (props: EntityActionsMenuItemsProps) => {
-  const { unifiedListContext } = useSplitPanelOrThrow();
-  const { actionRegistry, viewsDataStore, selectedView } = unifiedListContext;
+  const { soupContext } = useSplitPanelOrThrow();
+
+  const { actionRegistry, viewsDataStore, selectedView } = soupContext;
 
   const entities = () => {
     const { multiSelectEntities } = viewsDataStore[selectedView()];
@@ -38,7 +39,7 @@ export const EntityActionsMenuItems = (props: EntityActionsMenuItemsProps) => {
   };
 
   const setSelection: Setter<EntityData[]> = (entities) => {
-    return unifiedListContext.setViewDataStore(
+    return soupContext.setViewDataStore(
       selectedView(),
       'multiSelectEntities',
       entities
@@ -90,14 +91,20 @@ export const EntityActionsMenuItems = (props: EntityActionsMenuItemsProps) => {
           if (props.entity.type === 'document') {
             const { fileType, id, subType } = props.entity;
             splitManager.createNewSplit({
-              type: fileTypeToBlockName(subType ?? fileType),
-              id,
+              content: {
+                type: fileTypeToBlockName(subType ?? fileType),
+                id,
+              },
+              referredFrom: 'entity-actions-menu',
             });
           } else {
             const { id, type } = props.entity;
             splitManager.createNewSplit({
-              type,
-              id,
+              content: {
+                type,
+                id,
+              },
+              referredFrom: 'entity-actions-menu',
             });
           }
         }}

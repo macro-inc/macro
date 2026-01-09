@@ -1,6 +1,6 @@
 import { useBlockName } from '@core/block';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { useItemOperations } from '@core/component/FileList/useItemOperations';
-import { IconButton } from '@core/component/IconButton';
 import { MenuItem } from '@core/component/Menu';
 import { useIsDocumentOwner } from '@core/signal/permissions';
 import Unpin from '@icon/fill/push-pin-slash-fill.svg';
@@ -146,10 +146,13 @@ export function SplitFileMenu(props: {
                     name: props.name,
                   });
                   if (res) {
-                    replaceOrInsertSplit({
-                      id: res,
-                      type: blockName,
-                    });
+                    replaceOrInsertSplit(
+                      {
+                        id: res,
+                        type: blockName,
+                      },
+                      'entity-actions-menu'
+                    );
                   }
                 },
                 icon: Copy,
@@ -183,7 +186,7 @@ export function SplitFileMenu(props: {
   return (
     <DropdownMenu open={open()} onOpenChange={setOpen} boundary={ctx.panelRef}>
       <DropdownMenu.Trigger
-        as={IconButton}
+        as={DeprecatedIconButton}
         theme={open() ? 'accent' : 'clear'}
         size="sm"
         icon={ThreeDots}

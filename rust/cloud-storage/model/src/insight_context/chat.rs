@@ -1,4 +1,5 @@
-use ai_format::{Indent, InsightContextLog, Truncate, format_date};
+use ai_format::insight_context_log::InsightContextLog;
+use ai_format::util::{Indent, Truncate, format_date};
 use chrono::{DateTime, Utc};
 
 #[derive(Debug, Clone)]

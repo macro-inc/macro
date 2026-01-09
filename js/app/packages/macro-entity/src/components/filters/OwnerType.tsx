@@ -1,3 +1,4 @@
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import FunnelClearIcon from '@phosphor-icons/core/assets/regular/funnel-simple-x.svg';
 import UserSwitchIcon from '@phosphor-icons/core/assets/regular/user-switch.svg';
@@ -6,7 +7,6 @@ import {
   MenuItem,
   MenuSeparator,
 } from 'core/component/Menu';
-import { TextButton } from 'core/component/TextButton';
 import { createMemo, createSignal } from 'solid-js';
 import { useFilterContext } from '../../contexts/filter';
 
@@ -29,7 +29,7 @@ export function OwnerTypeFilter() {
         class="flex items-center justify-end gap-2 px-1 align-middle"
         as="div"
       >
-        <TextButton
+        <DeprecatedTextButton
           theme="clear"
           icon={UserSwitchIcon}
           class={`${hasFilters() ? 'text-accent-ink!' : ''} ${isOpen() ? 'bg-active!' : ''}`}

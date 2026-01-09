@@ -14,7 +14,7 @@ import {
   isDocumentPreviewItem,
   useItemPreview,
 } from '@core/signal/preview';
-import { useDisplayName } from '@core/user';
+import { tryMacroId, useDisplayName } from '@core/user';
 import { isErr } from '@core/util/maybeResult';
 import BracketLeft from '@macro-icons/macro-group-bracket-left.svg';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
@@ -151,7 +151,7 @@ function AttachmentItem(props: AttachmentItemProps) {
   });
 
   const senderId = () => message()?.sender_id || '';
-  const [userName] = useDisplayName(senderId());
+  const [userName] = useDisplayName(tryMacroId(senderId()));
 
   const [preview] = useItemPreview({
     id: props.attachment.entity_id,

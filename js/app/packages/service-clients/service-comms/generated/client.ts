@@ -7,19 +7,19 @@
 import type {
   Activity,
   AddParticipantsRequest,
+  ApiActivity,
+  ApiChannelWithLatest,
   CreateChannelRequest,
   CreateChannelResponse,
   CreateEntityMentionRequest,
   CreateEntityMentionResponse,
   DeleteEntityMentionResponse,
   GenericErrorResponse,
-  GetActivityResponse,
   GetAttachmentReferencesResponse,
   GetBatchChannelPreviewRequest,
   GetBatchChannelPreviewResponse,
   GetChannelParams,
   GetChannelResponse,
-  GetChannelsResponse,
   GetMentionsResponse,
   GetMessageWithContextParams,
   GetMessageWithContextResponse,
@@ -38,7 +38,7 @@ import type {
 } from './models';
 
 export type getActivityResponse200 = {
-  data: GetActivityResponse
+  data: ApiActivity[]
   status: 200
 }
 
@@ -209,7 +209,7 @@ export const getAttachmentReferences = async (entityType: string,
 
 
 export type getChannelsResponse200 = {
-  data: GetChannelsResponse
+  data: ApiChannelWithLatest[]
   status: 200
 }
 

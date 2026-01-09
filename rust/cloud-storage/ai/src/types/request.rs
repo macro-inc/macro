@@ -1,12 +1,9 @@
 use super::{
-    message::{ChatMessage, SystemPrompt},
+    message::{Base64Image, ChatMessage, SystemPrompt},
     model::Model,
 };
-use crate::tokens::TokenCount;
-use crate::tokens::count_tokens;
-use anyhow::Result;
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct ChatCompletionRequest {
     /// can either be openai or google
     pub(crate) model: Model,
@@ -16,24 +13,35 @@ pub struct ChatCompletionRequest {
     pub(crate) system_prompt: SystemPrompt,
 }
 
-impl TokenCount for Vec<&String> {
-    fn token_count(&self) -> Result<i64> {
-        let mut tokens = 0;
-        for message in self {
-            tokens += count_tokens(message.as_str())?;
+#[derive(PartialEq, Eq, Clone)]
+pub enum ImageData {
+    Bytes(Base64Image),
+    Url(String),
+}
+
+impl ImageData {
+    /// convert image bytes into a downscaled webp
+    pub fn try_from_bytes(bytes: Vec<u8>) -> Result<Self, anyhow::Error> {
+        Base64Image::compress_and_reencode(bytes).map(Self::Bytes)
+    }
+
+    pub(crate) fn dangerously_try_from_string(s: String) -> Result<Self, anyhow::Error> {
+        if s.starts_with("data:") {
+            Ok(Self::Bytes(Base64Image::dangerously_try_from_string(s)?))
+        } else {
+            Ok(Self::Url(s))
         }
-        Ok(tokens)
     }
 }
 
-impl TokenCount for ChatCompletionRequest {
-    fn token_count(&self) -> Result<i64> {
-        let mut tokens = 0;
-        for message in self.messages.iter() {
-            tokens += message.token_count()?;
+impl std::fmt::Debug for ImageData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Bytes(base_64) => {
+                write!(f, "bytes {:?}", base_64)
+            }
+            Self::Url(url) => write!(f, "url {}", url),
         }
-        tokens += self.system_prompt.token_count()?;
-        Ok(tokens)
     }
 }
 

@@ -1,5 +1,6 @@
 use crate::participants::get_participants::get_participants;
 use anyhow::{Context, Result};
+use doppleganger::Mirror;
 use model::comms::{ChannelParticipant, ChannelType};
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
@@ -72,7 +73,11 @@ pub async fn batch_get_channel_preview(
     let mut previews: Vec<RawPreviewRecord> = vec![];
 
     for row in preview_data {
-        let participants = get_participants(db, &row.channel_id).await?;
+        let participants = get_participants(db, &row.channel_id)
+            .await?
+            .into_iter()
+            .map(model::comms::ChannelParticipant::mirror)
+            .collect();
 
         previews.push(RawPreviewRecord {
             channel_id: row.channel_id,
@@ -118,7 +123,7 @@ mod tests {
     async fn test_preview_for_private_channel(pool: Pool<Postgres>) -> anyhow::Result<()> {
         const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS; // Dummy reference for IDE
         let ids = vec!["11111111-1111-1111-1111-111111111111".to_string()];
-        let previews = batch_get_channel_preview(&pool, &ids, "user1", None).await?;
+        let previews = batch_get_channel_preview(&pool, &ids, "macro|user1@test.com", None).await?;
         assert_eq!(previews.exists.len(), 1);
         assert_eq!(
             previews.exists[0].channel_id,
@@ -143,7 +148,7 @@ mod tests {
     )]
     async fn test_access_dm(pool: Pool<Postgres>) -> anyhow::Result<()> {
         let ids = vec!["22222222-2222-2222-2222-222222222222".to_string()];
-        let previews = batch_get_channel_preview(&pool, &ids, "user4", None).await?;
+        let previews = batch_get_channel_preview(&pool, &ids, "macro|user4@test.com", None).await?;
         assert_eq!(previews.exists.len(), 1);
         assert!(
             previews.exists[0].has_access,
@@ -158,7 +163,7 @@ mod tests {
     )]
     async fn test_no_access_dm(pool: Pool<Postgres>) -> anyhow::Result<()> {
         let ids = vec!["22222222-2222-2222-2222-222222222222".to_string()];
-        let previews = batch_get_channel_preview(&pool, &ids, "user1", None).await?;
+        let previews = batch_get_channel_preview(&pool, &ids, "macro|user1@test.com", None).await?;
         assert_eq!(previews.exists.len(), 1);
         assert!(
             !previews.exists[0].has_access,
@@ -173,7 +178,7 @@ mod tests {
     )]
     async fn test_does_not_exist(pool: Pool<Postgres>) -> anyhow::Result<()> {
         let ids = vec!["44444444-4444-4444-4444-444444444444".to_string()];
-        let previews = batch_get_channel_preview(&pool, &ids, "user1", None).await?;
+        let previews = batch_get_channel_preview(&pool, &ids, "macro|user1@test.com", None).await?;
         assert_eq!(previews.exists.len(), 0);
         assert_eq!(previews.remaining.len(), 1);
         Ok(())
@@ -185,7 +190,7 @@ mod tests {
     )]
     async fn test_no_access_private(pool: Pool<Postgres>) -> anyhow::Result<()> {
         let ids = vec!["11111111-1111-1111-1111-111111111111".to_string()];
-        let previews = batch_get_channel_preview(&pool, &ids, "user4", None).await?;
+        let previews = batch_get_channel_preview(&pool, &ids, "macro|user4@test.com", None).await?;
         assert_eq!(previews.exists.len(), 1);
         assert!(
             !previews.exists[0].has_access,

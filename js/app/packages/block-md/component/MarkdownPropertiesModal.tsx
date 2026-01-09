@@ -1,7 +1,7 @@
 import { SplitDrawer } from '@app/component/split-layout/components/SplitDrawer';
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import { useBlockAliasedName } from '@core/block';
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import {
   $getPinnedProperties,
   ADD_PINNED_PROPERTY_COMMAND,
@@ -26,7 +26,7 @@ export function MarkdownPropertiesModal(props: {
 
   return (
     <>
-      <IconButton
+      <DeprecatedIconButton
         icon={TagIcon}
         theme={drawerControl.isOpen() ? 'accent' : 'clear'}
         size={props.buttonSize ?? 'base'}
@@ -99,7 +99,7 @@ function MarkdownPropertiesContent(_props: { documentId: string }) {
   };
 
   return (
-    <div class="flex flex-col h-full">
+    <div class="flex flex-col h-full text-sm">
       {/* Future: Add markdown-specific sections here */}
       {/* e.g., word count, reading time, headings outline, etc. */}
 

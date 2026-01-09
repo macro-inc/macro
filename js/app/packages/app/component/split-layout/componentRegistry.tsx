@@ -126,6 +126,11 @@ if (LOCAL_ONLY) {
       }))
     )
   );
+
+  registerComponent(
+    'properties-debug',
+    lazy(() => import('@core/component/Properties/debug/PropertiesDebug'))
+  );
 }
 
 if (DEV_MODE_ENV) {

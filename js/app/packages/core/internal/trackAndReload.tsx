@@ -1,5 +1,8 @@
+import {
+  optimisticUpdateViewedAt,
+  refetchHistory,
+} from '@queries/history/history';
 import { storageServiceClient } from '@service-storage/client';
-import { refetchHistory } from '@service-storage/history';
 
 /**
  * Track the opening of a document and refetch the history
@@ -8,6 +11,8 @@ import { refetchHistory } from '@service-storage/history';
  * @param refetch - Whether to refetch the history
  */
 export function trackOpenAndRefetchHistory(documentId: string, refetch = true) {
+  optimisticUpdateViewedAt(documentId);
+
   storageServiceClient
     .trackOpenedDocument({
       documentId,

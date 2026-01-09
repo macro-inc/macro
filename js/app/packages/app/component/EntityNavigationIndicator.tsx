@@ -1,5 +1,5 @@
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { TOKENS } from '@core/hotkey/tokens';
 import { getActiveCommandByToken, runCommand } from '@core/hotkey/utils';
 import CaretDown from '@icon/regular/caret-down.svg';
@@ -8,7 +8,7 @@ import { Show } from 'solid-js';
 
 const EntityNavigationIndicator = () => {
   const {
-    unifiedListContext: {
+    soupContext: {
       entitiesSignal: [entities],
       selectedView,
       viewsDataStore,
@@ -23,6 +23,7 @@ const EntityNavigationIndicator = () => {
   return (
     <Show
       when={
+        handle.referredFrom() === 'unified-list' &&
         entities()?.length &&
         selectedEntity() &&
         handle.content().type !== 'component' &&
@@ -36,7 +37,7 @@ const EntityNavigationIndicator = () => {
         </div>
         <div>{selectedViewData().view}</div>
         <div class="flex text-ink">
-          <IconButton
+          <DeprecatedIconButton
             size="sm"
             icon={CaretDown}
             tooltip={{
@@ -46,12 +47,12 @@ const EntityNavigationIndicator = () => {
             disabled={selectedEntityIndex() >= entities()!.length - 1}
             theme="current"
             onDeepClick={() => {
-              const command = getActiveCommandByToken(TOKENS.entity.select.end);
+              const command = getActiveCommandByToken(TOKENS.entity.step.end);
               if (!command) return;
               runCommand(command);
             }}
           />
-          <IconButton
+          <DeprecatedIconButton
             size="sm"
             icon={CaretUp}
             tooltip={{
@@ -61,9 +62,7 @@ const EntityNavigationIndicator = () => {
             disabled={selectedEntityIndex() === 0}
             theme="current"
             onDeepClick={() => {
-              const command = getActiveCommandByToken(
-                TOKENS.entity.select.start
-              );
+              const command = getActiveCommandByToken(TOKENS.entity.step.start);
               if (!command) return;
               runCommand(command);
             }}

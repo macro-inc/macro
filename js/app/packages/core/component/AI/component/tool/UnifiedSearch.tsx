@@ -41,7 +41,7 @@ const UnifiedSearchToolResponse = (props: {
           key = result.channel_id;
           break;
         case 'project':
-          key = result.project_id;
+          key = result.id;
           break;
         default:
           return false;
@@ -57,13 +57,13 @@ const UnifiedSearchToolResponse = (props: {
       case 'document':
         return result.document_name || 'Document';
       case 'chat':
-        return result.title || 'Chat';
+        return result.name || 'Chat';
       case 'email':
         return result.subject || 'Email';
       case 'channel':
         return 'Channel'; // there are no channel names from search results
       case 'project':
-        return result.project_name || 'Project';
+        return result.name || 'Project';
       default:
         return 'Result';
     }
@@ -92,7 +92,7 @@ const UnifiedSearchToolResponse = (props: {
         };
       case 'project':
         return () => {
-          replaceOrInsertSplit({ type: 'project', id: result.project_id });
+          replaceOrInsertSplit({ type: 'project', id: result.id });
         };
       default:
         return undefined;

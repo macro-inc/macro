@@ -18,7 +18,7 @@ import {
   type MessageListContextLookup,
 } from '@block-channel/utils/listContext';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
-import { TextButton } from '@core/component/TextButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { toast } from '@core/component/Toast/Toast';
 import { observedSize } from '@core/directive/observedSize';
 import type { InputAttachment } from '@core/store/cacheChannelInput';
@@ -97,7 +97,7 @@ type MessageListContentContextValues = {
   scrollToMessage: (messageID: string, index: number, focus?: boolean) => void;
   createReply: (id: string, focus?: boolean) => void;
   toggleThread: (threadID: string, value?: boolean) => void;
-  clearThreadFocus: (threadID: string, expanded?: boolean) => void;
+  closeThreadReply: (threadID: string, expanded?: boolean) => void;
   toggleReplyInputFocus: (threadID: string, value?: boolean) => void;
   getThreadsWithActiveReplies: () => string[];
   registerThreadAppendMountTarget: (threadID: string, el: HTMLElement) => void;
@@ -200,7 +200,7 @@ export function MessageList(props: MessageListProps) {
         };
       });
     },
-    clearThreadFocus: function (threadID: string, expanded?: boolean): void {
+    closeThreadReply: function (threadID: string, expanded?: boolean): void {
       setThreadViewStore(threadID, (prev) => {
         return {
           ...prev,
@@ -749,7 +749,7 @@ function MessageListImpl(props: MessageListProps) {
               }}
               style={{
                 'max-height': `${listHeight()}px`,
-                height: 'fit-content',
+                height: '100%',
                 contain: 'none',
                 'overflow-x': 'hidden',
                 'overflow-y': 'scroll',
@@ -757,7 +757,7 @@ function MessageListImpl(props: MessageListProps) {
                 display: 'flex',
                 'flex-direction': 'column-reverse',
               }}
-              class="scrollbar-hidden"
+              class="scrollbar-hidden [&>div]:mb-auto"
               data-channel-message-list
               data={rows() ?? []}
               shift={isPrepend()}
@@ -795,6 +795,9 @@ function MessageListImpl(props: MessageListProps) {
                         isThreadIndexWithinCutoff()) &&
                       virtualHandle()
                     }
+                    // For the last message in the channel, we display this
+                    // empty small div. This is a temporary fix for last thread elements not rendering
+                    fallback={i() === 0 ? <div class="h-[0.05px]" /> : null}
                   >
                     <MessageContainer
                       message={row.message}
@@ -824,7 +827,7 @@ function MessageListImpl(props: MessageListProps) {
         </Switch>
         <Show when={showJumpToUnviewedMessages() && unviewedMessages()}>
           {(messages) => (
-            <TextButton
+            <DeprecatedTextButton
               icon={ArrowDownIcon}
               theme="base"
               onMouseDown={jumpToUnviewedMessages}
@@ -844,7 +847,7 @@ function MessageListImpl(props: MessageListProps) {
             !isNearBottom()
           }
         >
-          <TextButton
+          <DeprecatedTextButton
             icon={ArrowDownIcon}
             theme="base"
             text="Jump to latest"

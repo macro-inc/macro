@@ -31,8 +31,9 @@ import {
   initializeEditorEmpty,
   setEditorStateFromMarkdown,
 } from '../../utils';
+import type { UserMentionRecord } from '../../utils/mentionsUtils';
 import { DecoratorRenderer } from '../core/DecoratorRenderer';
-import { MentionsMenu, type UserMentionRecord } from '../menu/MentionsMenu';
+import { MentionsMenu } from '../menu/MentionsMenu';
 
 // Version of MarkdownTextArea modified for email to/cc/bcc input fields
 
@@ -117,8 +118,8 @@ export function MentionsTextarea(props: MentionsTextareaProps) {
     cleanupEnterListener();
     cleanupEnterListener = editor.registerCommand(
       KEY_ENTER_COMMAND,
-      (e: KeyboardEvent) => {
-        e.preventDefault();
+      (e) => {
+        e?.preventDefault();
         return true;
       },
       // Run at HIGH here so that the mentions menu can run at CRITICAL

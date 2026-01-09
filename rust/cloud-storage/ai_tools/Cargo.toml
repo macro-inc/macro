@@ -37,7 +37,7 @@ tokio.workspace = true
 tracing.workspace = true
 utoipa.workspace = true
 uuid.workspace = true
-
+ai_format= { path = "../ai_format" }
 anthropic = { path = "../anthropic"}
 
 [dev-dependencies]

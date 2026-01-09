@@ -13,6 +13,7 @@ use models_pagination::{
 };
 use models_soup::document::SoupDocument;
 use ordered_float::OrderedFloat;
+use rootcause::Report;
 use sqlx::types::chrono::{DateTime, Utc};
 use uuid::Uuid;
 
@@ -40,6 +41,31 @@ impl EmailService for NoopEmailService {
         _macro_id: MacroUserIdStr<'_>,
     ) -> Result<Option<email::domain::models::Link>, email::domain::models::EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("not implemented")))
+    }
+}
+
+struct NoopCommsService;
+
+impl ChannelsService for NoopCommsService {
+    async fn get_channels(
+        &self,
+        _user: MacroUserIdStr<'_>,
+    ) -> Result<Vec<comms::domain::models::channel::ChannelWithLatest>, Report> {
+        Ok(Vec::new())
+    }
+
+    async fn get_activities(
+        &self,
+        _user: MacroUserIdStr<'_>,
+    ) -> Result<Vec<comms::domain::models::channel::Activity>, Report> {
+        Ok(Vec::new())
+    }
+
+    async fn get_names(
+        &self,
+        _names: std::collections::HashSet<MacroUserIdStr<'_>>,
+    ) -> Result<Vec<comms::domain::models::UserName>, Report> {
+        Ok(Vec::new())
     }
 }
 
@@ -127,6 +153,7 @@ async fn it_should_not_query_frecency() {
         soup_mock,
         FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
         NoopEmailService,
+        NoopCommsService,
     )
     .get_user_soup(SoupRequest {
         email_preview_view: PreviewView::StandardLabel(
@@ -204,6 +231,7 @@ async fn it_should_query_frecency() {
         soup_mock,
         FrecencyQueryServiceImpl::new(frecency_mock),
         NoopEmailService,
+        NoopCommsService,
     )
     .get_user_soup(SoupRequest {
         email_preview_view: PreviewView::StandardLabel(
@@ -281,6 +309,7 @@ async fn it_should_sort_frecency_descending() {
         soup_mock,
         FrecencyQueryServiceImpl::new(frecency_mock),
         NoopEmailService,
+        NoopCommsService,
     )
     .get_user_soup(SoupRequest {
         email_preview_view: PreviewView::StandardLabel(
@@ -368,7 +397,7 @@ async fn frecency_should_fallback() {
             Box::pin(async move { res })
         });
 
-    let res = SoupImpl::new(soup, frecency, NoopEmailService)
+    let res = SoupImpl::new(soup, frecency, NoopEmailService, NoopCommsService)
         .get_user_soup(SoupRequest {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
@@ -438,7 +467,7 @@ async fn frecency_should_paginate() {
             Box::pin(async move { Ok(vec) })
         });
 
-    let res = SoupImpl::new(soup, frecency, NoopEmailService)
+    let res = SoupImpl::new(soup, frecency, NoopEmailService, NoopCommsService)
         .get_user_soup(SoupRequest {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
@@ -510,7 +539,7 @@ async fn frecency_should_resume_cursor() {
             Box::pin(async move { Ok(vec) })
         });
 
-    let res = SoupImpl::new(soup, frecency, NoopEmailService)
+    let res = SoupImpl::new(soup, frecency, NoopEmailService, NoopCommsService)
         .get_user_soup(SoupRequest {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
@@ -598,7 +627,7 @@ async fn frecency_fallback_cursor_should_resume() {
             Box::pin(async move { res })
         });
 
-    let res = SoupImpl::new(soup, frecency, NoopEmailService)
+    let res = SoupImpl::new(soup, frecency, NoopEmailService, NoopCommsService)
         .get_user_soup(SoupRequest {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
@@ -663,6 +692,7 @@ async fn cursor_should_return_simple_sort() {
         soup_mock,
         FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
         NoopEmailService,
+        NoopCommsService,
     )
     .get_user_soup(SoupRequest {
         email_preview_view: PreviewView::StandardLabel(
@@ -721,7 +751,7 @@ async fn cursor_should_return_frecency() {
             Box::pin(async move { Ok(vec) })
         });
 
-    let res = SoupImpl::new(soup, frecency, NoopEmailService)
+    let res = SoupImpl::new(soup, frecency, NoopEmailService, NoopCommsService)
         .get_user_soup(SoupRequest {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,

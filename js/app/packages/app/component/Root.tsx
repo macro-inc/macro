@@ -4,7 +4,7 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { withAnalytics } from '@coparse/analytics';
 import { useIsAuthenticated } from '@core/auth';
 import { ChannelsContextProvider } from '@core/component/ChannelsProvider';
-import { TextButton } from '@core/component/TextButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { toast } from '@core/component/Toast/Toast';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import { WebsocketDebugger } from '@core/component/WebsocketDebugger';
@@ -29,6 +29,7 @@ import {
 } from '@notifications';
 import { maybeHandlePlatformNotification } from '@notifications/notification-platform';
 import { setUser, useObserveRouting } from '@observability';
+import { fetchAndCacheHistory } from '@queries/history/history';
 import { ws as connectionGatewayWebsocket } from '@service-connection/websocket';
 import { gqlServiceClient } from '@service-gql/client';
 import { MetaProvider, Title } from '@solidjs/meta';
@@ -135,6 +136,10 @@ const rootPreload: RoutePreloadFunc = async (args) => {
     if (PROD_MODE_ENV) {
       identify(id, { email, os, hasChromeExt });
     }
+
+    fetchAndCacheHistory().catch(() => {
+      // Non-blocking - command menu will still work without prefetch
+    });
   }
 };
 
@@ -219,7 +224,7 @@ const ROUTES: RouteDefinition[] = [
       return (
         <div class="h-full overflow-y-hidden">
           <div class="relative flex flex-row items-center pt-4 h-full">
-            <TextButton
+            <DeprecatedTextButton
               theme="base"
               text="Close"
               onClick={() => {

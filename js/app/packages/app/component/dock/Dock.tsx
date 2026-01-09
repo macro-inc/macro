@@ -10,11 +10,10 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { ClippedPanel } from '@core/component/ClippedPanel';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { PresentModeGlitch } from './PresentModeGlitch';
-import { IconButton } from '@core/component/IconButton';
 import IconQuestion from '@icon/regular/question.svg';
 import { withAnalytics } from '@coparse/analytics';
 import SplitIcon from '@macro-icons/new-split.svg';
-import IconAtom from '@macro-icons/macro-atom.svg';
+import IconAI from '@macro-icons/wide/star.svg';
 import IconGear from '@macro-icons/macro-gear.svg';
 import IconLogo from '@macro-icons/macro-logo.svg';
 import { BasicTierLimit } from './BasicTierLimit';
@@ -27,6 +26,8 @@ import { isTauri } from '@core/util/platform';
 import { TOKENS } from '@core/hotkey/tokens';
 import { playSound } from '@app/util/sound';
 import { QuickAccess } from './QuickAccess';
+import { Button } from '@ui/components/Button';
+import { LabelAndHotKey } from '@core/component/Tooltip';
 
 export function Dock() {
   const activeSplitId = createMemo(() => globalSplitManager()?.activeSplitId());
@@ -278,84 +279,85 @@ export function Dock() {
               'gap': '4px'
             }}>
               <Show when={isSoupActive()}>
-                <IconButton
+                <Button
+                  class="p-1 *:h-4"
                   onClick={() => {
                     globalSplitManager()?.returnFocus();
                     const showHelp = getActiveCommandByToken(TOKENS.split.showHelpDrawer);
                     if (!showHelp) { return };
                     runCommand(showHelp);
                   }}
-                  tooltip={{
-                    hotkeyToken: TOKENS.split.showHelpDrawer,
-                    label: 'Help',
-                  }}
-                  icon={IconQuestion}
-                  theme="clear"
-                  size="sm"
-                />
+
+                  tooltip={<LabelAndHotKey label='Help' hotkeyToken={TOKENS.split.showHelpDrawer} />}
+                >
+                  <IconQuestion />
+                </Button>
               </Show>
 
-              <IconButton
+              <Button
                 onClick={() => {
                   if (isRightPanelCollapsed()) { track(TrackingEvents.RIGHTBAR.OPEN) }
                   else { track(TrackingEvents.RIGHTBAR.CLOSE) }
                   toggleRightPanel();
                 }}
-                theme={isRightPanelCollapsed() ? 'clear' : 'accent'}
-                tooltip={{
-                  hotkeyToken: TOKENS.split.go.toggleRightPanel,
-                  label: 'Toggle AI Panel',
+                class="p-1 size-6"
+                classList={{
+                  "bg-accent/20 text-accent": !isRightPanelCollapsed(),
                 }}
-                icon={IconAtom}
-                size="sm"
-              />
+                tooltip={
+                  <LabelAndHotKey label='Toggle AI Panel' hotkeyToken={TOKENS.split.go.toggleRightPanel} />
+                }
+              >
+                <IconAI />
+              </Button>
 
-              <div class="ios:hidden">
-                <IconButton
-                  tooltip={{
-                    hotkeyToken: TOKENS.global.createNewSplit,
-                    label: 'Create New Split'
-                  }}
+              <div class="mobile-width:hidden">
+                <Button
+                  tooltip={<LabelAndHotKey label='Create New Split' hotkeyToken={TOKENS.global.createNewSplit} />}
                   onClick={() => {
                     const manager = globalSplitManager();
                     if (manager) {
                       const canFit = manager.resizeContext()?.canFit({ minSize: 400 }) ?? true;
                       if (canFit) {
                         manager.createNewSplit({
-                          id: 'unified-list',
-                          type: 'component',
+                          content: {
+                            id: 'unified-list',
+                            type: 'component',
+                          },
+                          referredFrom: 'dock'
                         });
                     }
                   }
                 }}
-                icon={SplitIcon}
-                theme="clear"
-                size="sm"
-              />
+                class="p-1 *:h-4"
+              >
+                <SplitIcon />
+              </Button>
               </div>
 
               <Show when={ENABLE_JACK_IN && !isTauri()}>
-                <IconButton
-                  tooltip={{
-                    label: isPresentMode() ? 'Exit Present Mode' : 'Enter Present Mode'
-                  }}
-                  theme={isPresentMode() ? 'accent' : 'clear'}
+                <Button
+                  tooltip={isPresentMode() ? 'Exit Present Mode' : 'Enter Present Mode'}
                   onClick={togglePresentMode}
-                  icon={IconPower}
-                  size="sm"
-                />
+                  class="p-1 size-6"
+                  classList={{
+                    "bg-accent/20 text-accent": isPresentMode(),
+                  }}
+                >
+                  <IconPower />
+                </Button>
               </Show>
 
-              <IconButton
-                tooltip={{
-                  label: settingsOpen() ? 'Close Settings' : 'Open Settings',
-                  hotkeyToken: TOKENS.global.toggleSettings,
-                }}
-                theme={settingsOpen() ? 'accent' : 'clear'}
+              <Button
+                tooltip={<LabelAndHotKey label={settingsOpen() ? 'Close Settings' : 'Open Settings'} hotkeyToken={TOKENS.global.toggleSettings} />}
                 onClick={() => { toggleSettings() }}
-                icon={IconGear}
-                size="sm"
-              />
+                class="p-1 size-6"
+                classList={{
+                  "bg-accent/20 text-accent": settingsOpen(),
+                }}
+              >
+                <IconGear />
+              </Button>
             </div>
           </div>
         </ClippedPanel>

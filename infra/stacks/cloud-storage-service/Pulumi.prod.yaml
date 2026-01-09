@@ -10,3 +10,4 @@ config:
   cloud-storage-service:document_storage_permissions_key: document-storage-permissions-key-prod
   cloud-storage-service:internal_api_key: document-storage-service-auth-key-prod
   cloud-storage-service:sync_service_auth_key: sync-service-key-prod
+  cloud-storage-service:authentication_service_secret_key: authentication-service-internal-api-key-prod

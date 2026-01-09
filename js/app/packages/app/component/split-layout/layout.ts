@@ -1,12 +1,15 @@
 import { useContext } from 'solid-js';
 import { globalSplitManager } from '../../signal/splitLayout';
 import { SplitPanelContext } from './context';
-import type { SplitContent } from './layoutManager';
+import type { ReferredFrom, SplitContent } from './layoutManager';
 
 export function useSplitLayout() {
   const splitPanelContext = useContext(SplitPanelContext);
 
-  function replaceOrInsertSplit(content: SplitContent) {
+  function replaceOrInsertSplit(
+    content: SplitContent,
+    referredFrom: ReferredFrom = null
+  ) {
     const splitManager = globalSplitManager();
     if (!splitManager) {
       console.error('No split manager found');
@@ -23,16 +26,32 @@ export function useSplitLayout() {
     }
 
     if (splitPanelContext) {
-      splitPanelContext.handle.replace(content);
+      splitPanelContext.handle.replace({
+        next: content,
+        referredFrom: referredFrom ?? null,
+      });
       return splitPanelContext.handle;
     } else {
-      return splitManager.createNewSplit(content, true);
+      return splitManager.createNewSplit({
+        content,
+        activate: true,
+        referredFrom,
+      });
     }
   }
 
-  function replaceSplit(content: SplitContent, mergeHistory?: boolean) {
+  function replaceSplit(options: {
+    content: SplitContent;
+    mergeHistory?: boolean;
+    referredFrom?: ReferredFrom;
+  }) {
+    const { content, mergeHistory, referredFrom } = options;
     if (splitPanelContext) {
-      splitPanelContext.handle.replace(content, mergeHistory);
+      splitPanelContext.handle.replace({
+        next: content,
+        mergeHistory,
+        referredFrom: referredFrom ?? null,
+      });
       return splitPanelContext.handle;
     }
     const splitManager = globalSplitManager();
@@ -44,18 +63,29 @@ export function useSplitLayout() {
     const activeSplitId = splitManager.activeSplitId();
     const activeSplit = activeSplitId && splitManager.getSplit(activeSplitId);
     if (activeSplit) {
-      activeSplit.replace(content, mergeHistory);
+      activeSplit.replace({
+        next: content,
+        mergeHistory,
+        referredFrom: referredFrom ?? null,
+      });
       return activeSplit;
     }
   }
 
-  function insertSplit(content: SplitContent) {
+  function insertSplit(
+    content: SplitContent,
+    referredFrom: ReferredFrom = null
+  ) {
     const splitManager = globalSplitManager();
     if (!splitManager) {
       console.error('No split manager found');
       return;
     }
-    return splitManager.createNewSplit(content, true);
+    return splitManager.createNewSplit({
+      content,
+      activate: true,
+      referredFrom,
+    });
   }
 
   function popoverSplit(content: SplitContent) {

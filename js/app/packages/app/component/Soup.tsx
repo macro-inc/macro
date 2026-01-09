@@ -7,14 +7,15 @@ import { playSound } from '@app/util/sound';
 import { useIsAuthenticated } from '@core/auth';
 import type { BlockAliasContext } from '@core/block';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
-import { Button } from '@core/component/FormControls/Button';
+import { DeprecatedButton } from '@core/component/FormControls/DeprecatedButton';
 import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { ContextMenuContent, MenuItem } from '@core/component/Menu';
 import { fileTypeToResolvedBlockName } from '@core/constant/allBlocks';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { RegisterHotkeyReturn } from '@core/hotkey/types';
-import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { isMobileWidth } from '@core/mobile/mobileWidth';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import {
   DEFAULT_VIEWS,
@@ -163,8 +164,8 @@ const PreviewPanelContent: Component<{
       class="size-full"
       onFocusIn={(event) => {
         if (interactedWith()) return;
-        const relatedTarget = event.relatedTarget as HTMLElement;
-        const currentTarget = event.currentTarget as HTMLElement;
+        const relatedTarget = event.relatedTarget;
+        const currentTarget = event.currentTarget;
 
         // TODO: use state instead to determine when preview block can recieve focus
         if (event.target.hasAttribute('data-allow-focus-in-preview')) {
@@ -172,8 +173,10 @@ const PreviewPanelContent: Component<{
           return;
         }
 
-        if (!currentTarget.contains(relatedTarget)) {
-          relatedTarget.focus();
+        if (relatedTarget instanceof HTMLElement) {
+          if (!currentTarget.contains(relatedTarget)) {
+            relatedTarget.focus();
+          }
         }
       }}
       onPointerDown={() => {
@@ -230,7 +233,7 @@ export function Soup() {
   const {
     handle,
     splitHotkeyScope,
-    unifiedListContext: {
+    soupContext: {
       viewsDataStore: viewsData,
       selectedView,
       setSelectedView,
@@ -324,6 +327,19 @@ export function Soup() {
       queryKey: queryKeys.all.entity,
     });
   });
+
+  createEffectOnEntityTypeNotification(
+    notificationSource,
+    'document',
+    (notification) => {
+      if (notification.notificationEventType === 'task_assigned') {
+        entityQueryClient.invalidateQueries({
+          queryKey: queryKeys.all.dss,
+        });
+        invalidateEntityNotifications(notification.entity_id);
+      }
+    }
+  );
 
   const saveViewMutation = useUpsertSavedViewMutation();
 
@@ -432,7 +448,7 @@ export function Soup() {
                 )}
                 newButton={
                   <div class="flex items-center px-2 h-full">
-                    <Button
+                    <DeprecatedButton
                       size="Base"
                       classList={{
                         '!border-transparent hover:!border-ink/50 px-1 !text-ink !bg-panel font-medium': true,
@@ -445,7 +461,7 @@ export function Soup() {
                       }}
                     >
                       +
-                    </Button>
+                    </DeprecatedButton>
                   </div>
                 }
               />
@@ -466,7 +482,7 @@ export function Soup() {
       <Show
         when={
           showHelpDrawer().has(selectedView() as DefaultView) &&
-          !isNativeMobilePlatform()
+          !(isTouchDevice() && isMobileWidth())
         }
       >
         <HelpDrawer viewId={view().id} />
@@ -484,7 +500,7 @@ function EmailView() {
     emailViewSignal: [emailView, setEmailView],
     viewsDataStore,
     selectedView,
-  } = useSplitPanelOrThrow().unifiedListContext;
+  } = useSplitPanelOrThrow().soupContext;
   const viewData = createMemo(() => viewsDataStore[selectedView()]);
 
   return (

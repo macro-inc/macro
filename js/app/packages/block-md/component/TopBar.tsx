@@ -22,7 +22,7 @@ import {
 } from '@block-md/comments/commentStore';
 import { useDownloadDocumentAsMarkdownText } from '@block-md/signal/save';
 import { useBlockId, useBlockName } from '@core/block';
-import { IconButton } from '@core/component/IconButton';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import { NotificationsModal } from '@core/component/NotificationsModal';
 import { ReferencesModal } from '@core/component/ReferencesModal';
@@ -30,7 +30,6 @@ import { ShareButton } from '@core/component/TopBar/ShareButton';
 import {
   ENABLE_HISTORY_COMPONENT,
   ENABLE_MARKDOWN_LIVE_COLLABORATION,
-  ENABLE_PROPERTIES_METADATA,
 } from '@core/constant/featureFlags';
 import { useCanEdit, useGetPermissions } from '@core/signal/permissions';
 import type { EntityType } from '@core/types';
@@ -107,7 +106,7 @@ export function TopBar() {
             documentName={name()}
             buttonSize="sm"
           />
-          <IconButton
+          <DeprecatedIconButton
             size="sm"
             icon={showCommentsPreference() ? HideComments : ShowComments}
             theme="clear"
@@ -116,9 +115,7 @@ export function TopBar() {
               label: `${showCommentsPreference() ? 'Hide' : 'Show'} Comments`,
             }}
           />
-          <Show when={ENABLE_PROPERTIES_METADATA}>
-            <MarkdownPropertiesModal documentId={blockId} buttonSize="sm" />
-          </Show>
+          <MarkdownPropertiesModal documentId={blockId} buttonSize="sm" />
           <div class="flex items-center">
             <SplitPermissionsBadge />
             <ShareButton

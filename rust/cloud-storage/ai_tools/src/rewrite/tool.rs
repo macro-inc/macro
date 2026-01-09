@@ -2,7 +2,8 @@ use super::types::AIDiffResponse;
 use super::types::{PROMPT, REWRITE_MODEL};
 use crate::tool_context::{RequestContext, ToolScribe, ToolServiceContext};
 use ai::tool::{AsyncTool, ToolCallError, ToolResult};
-use ai::types::{MessageBuilder, PromptAttachment, RequestBuilder};
+use ai::types::{MessageBuilder, RequestBuilder};
+use ai_format::document::Document;
 use anyhow::Error;
 use async_trait::async_trait;
 use model::document::FileType;
@@ -37,12 +38,17 @@ impl AsyncTool<ToolServiceContext, RequestContext> for MarkdownRewrite {
     ) -> ToolResult<Self::Output> {
         tracing::info!(markdown_file_id=?self.markdown_file_id, "Rewrite params");
 
-        rewrite_markdown(self.clone(), &sc.scribe, &request_context.user_id)
-            .await
-            .map_err(|err| ToolCallError {
-                description: "An internal error occured rewriting generating rewrite".into(),
-                internal_error: err,
-            })
+        rewrite_markdown(
+            self.clone(),
+            &sc.scribe,
+            &request_context.user_id,
+            request_context.jwt_token.clone(),
+        )
+        .await
+        .map_err(|err| ToolCallError {
+            description: "An internal error occured rewriting generating rewrite".into(),
+            internal_error: err,
+        })
     }
 }
 
@@ -50,10 +56,11 @@ pub async fn rewrite_markdown(
     request: MarkdownRewrite,
     scribe: &ToolScribe,
     _user_id: &str,
+    jwt: String,
 ) -> Result<AIDiffResponse, Error> {
     let document = scribe
         .document
-        .fetch(request.markdown_file_id.clone())
+        .fetch_with_auth(request.markdown_file_id.clone(), jwt)
         .document_content()
         .await?;
     if document.file_type() != FileType::Md {
@@ -74,12 +81,15 @@ pub async fn generate_patches(
         .max_tokens(32_000)
         .system_prompt(PROMPT)
         .model(REWRITE_MODEL)
-        .add_text_attachment(PromptAttachment {
-            content: markdown_text,
-            file_type: "md".into(),
-            id: request.markdown_file_id,
-            name: file_name,
-        })
+        .add_text_attachment(
+            Document {
+                content: markdown_text,
+                file_type: "md".into(),
+                id: request.markdown_file_id,
+                name: file_name,
+            }
+            .boxed(),
+        )
         .messages(vec![
             MessageBuilder::new()
                 .content(request.instructions)

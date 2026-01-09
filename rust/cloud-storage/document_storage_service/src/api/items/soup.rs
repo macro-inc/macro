@@ -1,3 +1,4 @@
+use crate::api::MACRO_INTERLNA_USER_ID;
 use crate::api::context::ApiContext;
 use axum::Extension;
 use axum::Json;
@@ -148,7 +149,7 @@ where
         }: Params,
         cursor: Option<CursorWithVal<String, SimpleSortMethod>>,
     ) -> Result<PaginatedOpaqueCursor<FrecencySoupItem>, SoupHandlerErr> {
-        if matches!(user_context.user_id.as_str(), "" | "INTERNAL") {
+        if matches!(user_context.user_id.as_str(), "" | MACRO_INTERNAL_USER_ID) {
             return Err(SoupHandlerErr::Unauthorized);
         }
 

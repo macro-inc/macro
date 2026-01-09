@@ -221,6 +221,7 @@ type CommandItemBase = {
   height?: number;
   // Add an optional timestamp to pass to fresh search/sort
   updatedAt?: number | string;
+  viewedAt?: number | string;
 };
 
 type SimpleText = {
@@ -373,10 +374,16 @@ export function useCommandItemAction(args: {
     if (!item) return;
     const blockName = getCommandItemBlockName(item);
     const id = item.data.id;
-    const split = action === 'new-split' ? insertSplit : replaceSplit;
 
     if (blockName) {
-      split({ type: blockName, id });
+      if (action === 'new-split') {
+        insertSplit({ type: blockName, id }, 'kommand-menu');
+      } else {
+        replaceSplit({
+          content: { type: blockName, id },
+          referredFrom: 'kommand-menu',
+        });
+      }
       if (item.snippet) {
         gotoSnippetLocation(blockOrchestrator, id, item.snippet, cleanQuery());
       }
