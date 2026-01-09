@@ -1,5 +1,5 @@
 import type { Accessor, Component } from 'solid-js';
-import { createMemo, For, Show } from 'solid-js';
+import { createEffect, createMemo, For, on, Show } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { FilterPropertyPill } from './PropertyFilter';
 import type { PropertyFilter } from './PropertyFilterTypes';
@@ -55,6 +55,20 @@ export const PropertyFilterControl: Component<PropertyFilterControlProps> = (
   // Local state for UI (includes incomplete filters)
   const [filters, setFilters] = createStore<FilterEntry[]>(
     createEntriesFromProps()
+  );
+
+  // Sync from props when they change externally (e.g., CLEAR button)
+  createEffect(
+    on(
+      () => props.propertyFilters(),
+      (propFilters) => {
+        // If props are empty but we have filters, it's a CLEAR
+        if (propFilters.length === 0 && filters.length > 0) {
+          setFilters(reconcile([]));
+        }
+      },
+      { defer: true } // Don't run on initial mount
+    )
   );
 
   // Sync only complete filters to props
