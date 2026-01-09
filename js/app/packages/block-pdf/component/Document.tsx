@@ -297,6 +297,10 @@ export function Document() {
       viewer?.isMounted
     );
     if (!size) return;
+    // wait for valid dimensions
+    if (size.width === 0 || size.height === 0) {
+      return;
+    }
     if (!mountRef || !viewer || viewer.isMounted) return;
     console.log('[MOUNT EFFECT] About to mount with size:', size);
     viewer.mount(mountRef, blockEl);
