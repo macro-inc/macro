@@ -250,18 +250,21 @@ const documentCognitionService = new DocumentCognitionService(
       },
       {
         name: 'STATIC_FILE_SERVICE_URL',
-        value: `https://static-file-service${stack === 'prod' ? '' : `-${stack}`
-          }.macro.com`,
+        value: `https://static-file-service${
+          stack === 'prod' ? '' : `-${stack}`
+        }.macro.com`,
       },
       {
         name: 'COMMS_SERVICE_URL',
-        value: `https://comms-service${stack === 'prod' ? '' : `-${stack}`
-          }.macro.com`,
+        value: `https://comms-service${
+          stack === 'prod' ? '' : `-${stack}`
+        }.macro.com`,
       },
       {
         name: 'CONNECTION_GATEWAY_URL',
-        value: `https://connection-gateway${stack === 'prod' ? '' : `-${stack}`
-          }.macro.com`,
+        value: `https://connection-gateway${
+          stack === 'prod' ? '' : `-${stack}`
+        }.macro.com`,
       },
       {
         name: 'SEARCH_EVENT_QUEUE',
@@ -297,8 +300,9 @@ const documentCognitionService = new DocumentCognitionService(
       },
       {
         name: 'EMAIL_SERVICE_URL',
-        value: `https://email-service${stack === 'prod' ? '' : `-${stack}`
-          }.macro.com`,
+        value: `https://email-service${
+          stack === 'prod' ? '' : `-${stack}`
+        }.macro.com`,
       },
       {
         name: 'STATIC_FILE_SERVICE_URL',
