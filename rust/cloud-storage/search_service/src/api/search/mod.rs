@@ -26,4 +26,5 @@ pub fn router() -> Router<ApiContext> {
 pub struct SearchPaginationParams {
     pub page: Option<u32>,
     pub page_size: Option<u32>,
+    pub cursor: Option<String>,
 }

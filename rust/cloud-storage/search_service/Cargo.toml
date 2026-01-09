@@ -30,8 +30,8 @@ macro_user_id = { path = "../macro_user_id" }
 model = { path = "../model" }
 models_email = { path = "../models_email" }
 models_opensearch = { path = "../models_opensearch" }
-models_pagination = { path = "../models_pagination" }
 models_search = { path = "../models_search" }
+models_search_cursor = { path = "../models_search_cursor" }
 name_search = { path = "../name_search" }
 opensearch_client = { path = "../opensearch_client" }
 secretsmanager_client = { path = "../secretsmanager_client" }

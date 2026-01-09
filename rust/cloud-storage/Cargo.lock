@@ -5615,8 +5615,10 @@ dependencies = [
 name = "models_search_cursor"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "chrono",
  "serde",
+ "serde_json",
  "uuid",
 ]
 
@@ -7597,7 +7599,6 @@ dependencies = [
  "model",
  "models_email",
  "models_opensearch",
- "models_pagination",
  "models_search",
  "models_search_cursor",
  "name_search",

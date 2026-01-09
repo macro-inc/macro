@@ -27,8 +27,8 @@ use std::cmp::Ordering;
     path = "/search",
     operation_id = "unified_search",
     params(
-            ("page" = i64, Query, description = "The page. Defaults to 0."),
             ("page_size" = i64, Query, description = "The page size. Defaults to 10."),
+            ("cursor" = Option<String>, Query, description = "Base64 encoded cursor value.")
     ),
     responses(
             (status = 200, body=UnifiedSearchResponse),
@@ -46,7 +46,7 @@ pub async fn handler(
 ) -> Result<Response, SearchError> {
     tracing::info!("unified_search");
 
-    let results = perform_unified_search(&ctx, &user_context, query_params, req).await?;
+    let (results, next_cursor) = perform_unified_search(&ctx, &user_context, query_params, req).await?;
 
     // Split the results by entity type
     let SplitUnifiedSearchResponseValues {
@@ -107,7 +107,14 @@ pub async fn handler(
 
     results = sort_unified_search_results(results);
 
-    Ok((StatusCode::OK, Json(UnifiedSearchResponse { results })).into_response())
+    Ok((
+        StatusCode::OK,
+        Json(UnifiedSearchResponse {
+            results,
+            next_cursor,
+        }),
+    )
+        .into_response())
 }
 
 /// Sorts the unified results
