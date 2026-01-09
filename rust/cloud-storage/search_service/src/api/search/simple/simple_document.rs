@@ -1,63 +1,11 @@
-use std::future::ready;
-
-use crate::api::search::{SearchPaginationParams, simple::SearchError};
-use axum::{
-    Extension,
-    extract::{self, State},
-    response::Json,
-};
-use futures::future::Either;
+use crate::api::search::simple::SearchError;
 use item_filters::DocumentFilters;
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
-use model::{
-    item::{ShareableItem, ShareableItemType},
-    response::ErrorResponse,
-    user::UserContext,
-};
-use models_search::{
-    SearchOn, SimpleSearchResponse,
-    document::{DocumentSearchRequest, SimpleDocumentSearchResponse},
-};
-use opensearch_client::search::{
-    documents::DocumentSearchArgs,
-    model::{Highlight, SearchHit},
-};
+use model::item::{ShareableItem, ShareableItemType};
+use opensearch_client::search::model::{Highlight, SearchHit};
 use sqlx::{Pool, Postgres, types::Uuid};
 
 use crate::api::ApiContext;
-
-/// Perform a search through your documents
-/// This is a simple search where we do not group yor results by document id.
-#[utoipa::path(
-        post,
-        path = "/search/simple/document",
-        operation_id = "simple_document_search",
-        params(
-            ("page" = i64, Query, description = "The page. Defaults to 0."),
-            ("page_size" = i64, Query, description = "The page size. Defaults to 10."),
-        ),
-        responses(
-            (status = 200, body=SimpleDocumentSearchResponse),
-            (status = 400, body=ErrorResponse),
-            (status = 401, body=ErrorResponse),
-            (status = 500, body=ErrorResponse),
-        )
-    )]
-#[tracing::instrument(skip(ctx, user_context), fields(user_id=user_context.user_id), err)]
-pub async fn handler(
-    State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
-    extract::Query(query_params): extract::Query<SearchPaginationParams>,
-    extract::Json(req): extract::Json<DocumentSearchRequest>,
-) -> Result<Json<SimpleSearchResponse>, SearchError> {
-    tracing::info!("simple_document_search");
-
-    let results = search_documents(&ctx, user_context.user_id.as_str(), &query_params, req).await?;
-
-    Ok(Json(SimpleSearchResponse {
-        results: results.into_iter().map(|a| a.into()).collect(),
-    }))
-}
 
 #[derive(Debug)]
 pub(in crate::api::search) struct FilterDocumentResponse {
@@ -175,96 +123,6 @@ pub(in crate::api::search) async fn filter_documents(
         document_ids,
         ids_only,
     })
-}
-
-/// Performs a search through your documents and returns the raw opensearch results
-pub(in crate::api::search) async fn search_documents(
-    ctx: &ApiContext,
-    user_id: &str,
-    query_params: &SearchPaginationParams,
-    req: DocumentSearchRequest,
-) -> Result<Vec<SearchHit>, SearchError> {
-    if user_id.is_empty() {
-        return Err(SearchError::NoUserId);
-    }
-
-    let user_id = MacroUserId::parse_from_str(user_id)
-        .map_err(|_| SearchError::InvalidUserId(user_id.to_string()))?
-        .lowercase();
-
-    let page = query_params.page.unwrap_or(0);
-
-    let page_size = if let Some(page_size) = query_params.page_size {
-        if !(0..=100).contains(&page_size) {
-            return Err(SearchError::InvalidPageSize);
-        }
-        page_size
-    } else {
-        10
-    };
-
-    let terms: Vec<String> = if let Some(terms) = req.terms.as_ref() {
-        terms
-            .iter()
-            .filter_map(|t| if t.len() < 3 { None } else { Some(t.clone()) })
-            .collect()
-    } else if let Some(query) = req.query.as_ref() {
-        if query.len() < 3 {
-            return Err(SearchError::InvalidQuerySize);
-        }
-
-        vec![query.clone()]
-    } else {
-        return Err(SearchError::NoQueryOrTermsProvided);
-    };
-
-    let filter_document_response =
-        filter_documents(ctx, user_id.as_ref(), &req.filters.unwrap_or_default()).await?;
-
-    if filter_document_response.document_ids.is_empty() && filter_document_response.ids_only {
-        return Ok(Vec::new());
-    }
-
-    let name_results = match req.search_on {
-        SearchOn::Name | SearchOn::NameContent => Either::Left(search_names(
-            &ctx.db,
-            &user_id,
-            &filter_document_response,
-            terms[0].clone(),
-            page_size,
-            name_search::SearchCursorOption::default(), // Individual endpoint doesn't support cursor pagination
-        )),
-        SearchOn::Content => Either::Right(ready(Ok((
-            Vec::new(),
-            name_search::SearchCursorOption::Done,
-        )))),
-    };
-
-    let content_results = match req.search_on {
-        SearchOn::Content | SearchOn::NameContent => {
-            Either::Left(ctx.opensearch_client.search_documents(DocumentSearchArgs {
-                terms: terms.clone(),
-                user_id: user_id.as_ref().to_string(),
-                document_ids: filter_document_response.document_ids.clone(),
-                page,
-                page_size,
-                match_type: req.match_type.to_string(),
-                search_on: req.search_on.into(),
-                collapse: req.collapse.unwrap_or(false),
-                ids_only: filter_document_response.ids_only,
-                disable_recency: req.disable_recency,
-            }))
-        }
-        SearchOn::Name => Either::Right(ready(Ok(Vec::new()))),
-    };
-
-    let (name_result, content_result) = tokio::join!(name_results, content_results);
-    let (name_hits, _next_cursor) = name_result?;
-    let content_result = content_result.map_err(SearchError::Search)?;
-
-    let results: Vec<SearchHit> = name_hits.into_iter().chain(content_result).collect();
-
-    Ok(results)
 }
 
 /// Performs the name search over document names
