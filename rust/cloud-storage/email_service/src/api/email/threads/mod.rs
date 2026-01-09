@@ -39,10 +39,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
     // user can still view threads shared with them if they don't have email enabled
     let optional_link_routes = Router::new()
         .route("/:id", get(get::get_thread_handler))
-        .layer(axum::middleware::from_fn_with_state(
-            state.email_service,
-            crate::api::middleware::link::attach_optional_link_context,
-        ));
+        .with_state(state.clone());
 
     Router::new()
         .merge(required_link_routes)

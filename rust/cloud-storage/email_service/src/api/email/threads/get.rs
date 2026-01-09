@@ -4,6 +4,8 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json, extract};
+use email::domain::ports::EmailService;
+use email::inbound::OptionalEmailLinkExtractor;
 use futures::future::join_all;
 use model::response::ErrorResponse;
 use model::user::UserContext;
@@ -106,14 +108,15 @@ const MESSAGE_MAX: i64 = 100;
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user_context), fields(user_id=user_context.user_id, fusionauth_user_id=user_context.fusion_user_id))]
-pub async fn get_thread_handler(
+#[tracing::instrument(skip(ctx, user_context, link), fields(user_id=user_context.user_id, fusionauth_user_id=user_context.fusion_user_id))]
+pub async fn get_thread_handler<U: EmailService>(
     State(ctx): State<ApiContext>,
     user_context: Extension<UserContext>,
-    link: Extension<Option<Link>>,
+    link: OptionalEmailLinkExtractor<U>,
     Path(PathParams { id: thread_id }): Path<PathParams>,
     extract::Query(query_params): extract::Query<GetThreadParams>,
 ) -> Result<Response, GetThreadError> {
+    let link = link.0;
     let p = process_get_thread_params(&query_params);
 
     let mut thread = email_db_client::threads::get::fetch_thread_with_messages_paginated(
