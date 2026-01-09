@@ -21,6 +21,7 @@ use crate::{
         query::Keys,
     },
 };
+use chrono::DateTime;
 
 use crate::SearchOn;
 use models_opensearch::{SearchEntityType, SearchIndex};
@@ -243,6 +244,7 @@ impl From<Hit<UnifiedSearchIndex>> for SearchHit {
                     created_at: a.created_at_seconds,
                     updated_at: a.updated_at_seconds,
                 })),
+                updated_at: DateTime::from_timestamp(a.updated_at_seconds, 0),
             },
             UnifiedSearchIndex::Document(a) => SearchHit {
                 entity_id: a.entity_id,
@@ -264,6 +266,7 @@ impl From<Hit<UnifiedSearchIndex>> for SearchHit {
                     node_id: a.node_id,
                     raw_content: a.raw_content,
                 })),
+                updated_at: None,
             },
             UnifiedSearchIndex::Email(a) => SearchHit {
                 entity_id: a.entity_id,
@@ -290,6 +293,9 @@ impl From<Hit<UnifiedSearchIndex>> for SearchHit {
                     sender: a.sender,
                     recipients: a.recipients,
                 })),
+                updated_at: a
+                    .sent_at_seconds
+                    .and_then(|s| DateTime::from_timestamp(s, 0)),
             },
             UnifiedSearchIndex::Chat(a) => SearchHit {
                 entity_id: a.entity_id,
@@ -311,6 +317,7 @@ impl From<Hit<UnifiedSearchIndex>> for SearchHit {
                     chat_message_id: a.chat_message_id,
                     role: a.role,
                 })),
+                updated_at: None,
             },
         }
     }

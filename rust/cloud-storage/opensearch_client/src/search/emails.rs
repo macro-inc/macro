@@ -289,6 +289,7 @@ pub(crate) async fn search_emails(
                     goto: None,
                     score: hit.score,
                     highlight,
+                    updated_at: None,
                 },
                 EmailNameIndex::Email(a) => SearchHit {
                     entity_id: a.entity_id,
@@ -304,6 +305,9 @@ pub(crate) async fn search_emails(
                         sender: a.sender,
                         recipients: a.recipients,
                     })),
+                    updated_at: a
+                        .sent_at_seconds
+                        .and_then(|s| chrono::DateTime::from_timestamp(s, 0)),
                 },
             }
         })

@@ -1,6 +1,7 @@
 //! Tests for chat module
 
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use models_search_cursor::SearchCursorOption;
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
@@ -224,7 +225,7 @@ async fn test_search_chat_names_pagination_limit(pool: Pool<Postgres>) -> anyhow
     );
 
     // Should have a next_cursor since there are more results
-    assert!(response.next_cursor.is_some());
+    assert!(response.next_cursor.has_more());
 
     Ok(())
 }
@@ -243,7 +244,13 @@ async fn test_search_chat_names_pagination_cursor(pool: Pool<Postgres>) -> anyho
         search_chat_names(&pool, &user_id, &[], "project".to_string(), false, 2, None).await?;
 
     assert_eq!(first_response.results.len(), 2);
-    assert!(first_response.next_cursor.is_some());
+    assert!(first_response.next_cursor.has_more());
+
+    // Extract cursor for second page
+    let cursor = match first_response.next_cursor {
+        SearchCursorOption::NotDone(c) => c,
+        SearchCursorOption::Done => panic!("Expected more results"),
+    };
 
     // Second page using cursor
     let second_response = search_chat_names(
@@ -253,7 +260,7 @@ async fn test_search_chat_names_pagination_cursor(pool: Pool<Postgres>) -> anyho
         "project".to_string(),
         false,
         2,
-        first_response.next_cursor,
+        cursor,
     )
     .await?;
 
@@ -266,7 +273,7 @@ async fn test_search_chat_names_pagination_cursor(pool: Pool<Postgres>) -> anyho
     );
 
     // Should NOT have next_cursor since we've reached the end
-    assert!(second_response.next_cursor.is_none());
+    assert!(second_response.next_cursor.is_done());
 
     // Verify no overlap between pages
     let first_ids: Vec<String> = first_response
@@ -313,7 +320,7 @@ async fn test_search_chat_names_no_results(pool: Pool<Postgres>) -> anyhow::Resu
     .await?;
 
     assert_eq!(response.results.len(), 0);
-    assert!(response.next_cursor.is_none());
+    assert!(response.next_cursor.is_done());
 
     Ok(())
 }

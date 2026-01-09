@@ -46,7 +46,8 @@ pub async fn handler(
 ) -> Result<Response, SearchError> {
     tracing::info!("unified_search");
 
-    let (results, next_cursor) = perform_unified_search(&ctx, &user_context, query_params, req).await?;
+    let (results, next_cursor) =
+        perform_unified_search(&ctx, &user_context, query_params, req).await?;
 
     // Split the results by entity type
     let SplitUnifiedSearchResponseValues {

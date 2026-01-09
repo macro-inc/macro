@@ -18,8 +18,41 @@ use models_search::{
     SearchOn, SimpleSearchResponse,
     unified::{SimpleUnifiedSearchResponse, UnifiedSearchIndex, UnifiedSearchRequest},
 };
-use models_search_cursor::SearchCursor;
+use models_search_cursor::{SearchCursor, SearchCursorOption, SearchMethodCursor};
+use opensearch_client::search::model::SearchHit;
 use opensearch_client::search::unified::UnifiedSearchArgs;
+
+/// Identifies the source of a search result for cursor regeneration
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SearchSource {
+    DocumentName,
+    ChatName,
+    EmailSubject,
+    ProjectName,
+    Content,
+}
+
+/// Wrapper for SearchHit that tracks its source for cursor regeneration
+struct TaggedSearchHit {
+    hit: SearchHit,
+    source: SearchSource,
+}
+
+/// Find the last TaggedSearchHit matching a given source
+fn find_last_of_source(
+    results: &[TaggedSearchHit],
+    source: SearchSource,
+) -> Option<&TaggedSearchHit> {
+    results.iter().rev().find(|h| h.source == source)
+}
+
+/// Generate a cursor from a TaggedSearchHit
+fn cursor_from_tagged(tagged: &TaggedSearchHit) -> Option<SearchMethodCursor> {
+    tagged.hit.updated_at.map(|ts| SearchMethodCursor {
+        entity_id: tagged.hit.entity_id,
+        updated_at: ts,
+    })
+}
 
 /// Creates a unified search request and performs the search
 /// by calling individual simple search endpoints for each entity type
@@ -29,7 +62,13 @@ pub(in crate::api::search) async fn perform_unified_search(
     user_context: &UserContext,
     query_params: SearchPaginationParams,
     req: UnifiedSearchRequest,
-) -> Result<(Vec<opensearch_client::search::model::SearchHit>, Option<String>), SearchError> {
+) -> Result<
+    (
+        Vec<opensearch_client::search::model::SearchHit>,
+        Option<String>,
+    ),
+    SearchError,
+> {
     let user_id = user_context.user_id.clone();
 
     if user_id.is_empty() {
@@ -150,11 +189,30 @@ pub(in crate::api::search) async fn perform_unified_search(
     // Clone terms for use in name searches
     let name_search_term = terms[0].clone();
 
-    // Extract individual cursors from the combined cursor
-    let document_cursor = cursor.as_ref().and_then(|c| c.document_name_cursor.clone());
-    let chat_cursor = cursor.as_ref().and_then(|c| c.chat_name_cursor.clone());
-    let email_cursor = cursor.as_ref().and_then(|c| c.email_subject_cursor.clone());
-    let project_cursor = cursor.as_ref().and_then(|c| c.project_name_cursor.clone());
+    // Extract individual cursors from the combined cursor (SearchCursorOption)
+    // Clone for use in async blocks and for cursor regeneration
+    let document_cursor = cursor
+        .as_ref()
+        .map(|c| c.document_name_cursor.clone())
+        .unwrap_or_default();
+    let chat_cursor = cursor
+        .as_ref()
+        .map(|c| c.chat_name_cursor.clone())
+        .unwrap_or_default();
+    let email_cursor = cursor
+        .as_ref()
+        .map(|c| c.email_subject_cursor.clone())
+        .unwrap_or_default();
+    let project_cursor = cursor
+        .as_ref()
+        .map(|c| c.project_name_cursor.clone())
+        .unwrap_or_default();
+
+    // Clone cursors for passing to search functions (originals needed for cursor regeneration)
+    let document_cursor_for_search = document_cursor.clone();
+    let chat_cursor_for_search = chat_cursor.clone();
+    let email_cursor_for_search = email_cursor.clone();
+    let project_cursor_for_search = project_cursor.clone();
 
     let unified_search_args = UnifiedSearchArgs {
         terms,
@@ -173,6 +231,7 @@ pub(in crate::api::search) async fn perform_unified_search(
     };
 
     // Call search functions in parallel for included entity types
+    // search_names handles Done cursors internally by returning early
     let (doc_name_results, chat_results, email_results, project_results, content_results) = tokio::join!(
         async {
             if should_include_documents {
@@ -187,14 +246,14 @@ pub(in crate::api::search) async fn perform_unified_search(
                             },
                             name_search_term.clone(),
                             page_size,
-                            document_cursor,
+                            document_cursor_for_search,
                         )
                         .await
                     }
-                    SearchOn::Content => Ok((vec![], None)),
+                    SearchOn::Content => Ok((vec![], SearchCursorOption::Done)),
                 }
             } else {
-                Ok((vec![], None))
+                Ok((vec![], SearchCursorOption::default()))
             }
         },
         async {
@@ -210,14 +269,14 @@ pub(in crate::api::search) async fn perform_unified_search(
                             },
                             name_search_term.clone(),
                             page_size,
-                            chat_cursor,
+                            chat_cursor_for_search,
                         )
                         .await
                     }
-                    SearchOn::Content => Ok((vec![], None)),
+                    SearchOn::Content => Ok((vec![], SearchCursorOption::Done)),
                 }
             } else {
-                Ok((vec![], None))
+                Ok((vec![], SearchCursorOption::default()))
             }
         },
         async {
@@ -233,14 +292,14 @@ pub(in crate::api::search) async fn perform_unified_search(
                             },
                             name_search_term.clone(),
                             page_size,
-                            email_cursor,
+                            email_cursor_for_search,
                         )
                         .await
                     }
-                    SearchOn::Content => Ok((vec![], None)),
+                    SearchOn::Content => Ok((vec![], SearchCursorOption::Done)),
                 }
             } else {
-                Ok((vec![], None))
+                Ok((vec![], SearchCursorOption::default()))
             }
         },
         async {
@@ -256,14 +315,14 @@ pub(in crate::api::search) async fn perform_unified_search(
                             },
                             name_search_term.clone(),
                             page_size,
-                            project_cursor,
+                            project_cursor_for_search,
                         )
                         .await
                     }
-                    SearchOn::Content => Ok((vec![], None)),
+                    SearchOn::Content => Ok((vec![], SearchCursorOption::Done)),
                 }
             } else {
-                Ok((vec![], None))
+                Ok((vec![], SearchCursorOption::default()))
             }
         },
         async {
@@ -286,34 +345,157 @@ pub(in crate::api::search) async fn perform_unified_search(
     let (project_hits, project_next_cursor) = project_results?;
     let content_hits = content_results?;
 
-    // Combine all results
-    let mut combined_results = Vec::new();
-    combined_results.extend(doc_hits);
-    combined_results.extend(chat_hits);
-    combined_results.extend(email_hits);
-    combined_results.extend(project_hits);
-    combined_results.extend(content_hits);
+    // Track original counts before combining
+    let doc_name_count = doc_hits.len();
+    let chat_name_count = chat_hits.len();
+    let email_subject_count = email_hits.len();
+    let project_name_count = project_hits.len();
+    let _content_count = content_hits.len();
 
-    // Build next cursor if any search has more results
-    let has_more = doc_next_cursor.is_some()
-        || chat_next_cursor.is_some()
-        || email_next_cursor.is_some()
-        || project_next_cursor.is_some();
+    // Wrap results with source tags
+    let mut combined: Vec<TaggedSearchHit> = Vec::new();
+    combined.extend(doc_hits.into_iter().map(|hit| TaggedSearchHit {
+        hit,
+        source: SearchSource::DocumentName,
+    }));
+    combined.extend(chat_hits.into_iter().map(|hit| TaggedSearchHit {
+        hit,
+        source: SearchSource::ChatName,
+    }));
+    combined.extend(email_hits.into_iter().map(|hit| TaggedSearchHit {
+        hit,
+        source: SearchSource::EmailSubject,
+    }));
+    combined.extend(project_hits.into_iter().map(|hit| TaggedSearchHit {
+        hit,
+        source: SearchSource::ProjectName,
+    }));
+    combined.extend(content_hits.into_iter().map(|hit| TaggedSearchHit {
+        hit,
+        source: SearchSource::Content,
+    }));
+
+    // Sort: updated_at DESC (None to bottom), entity_id DESC as tiebreaker
+    combined.sort_by(|a, b| match (&b.hit.updated_at, &a.hit.updated_at) {
+        (Some(b_ts), Some(a_ts)) => b_ts
+            .cmp(a_ts)
+            .then_with(|| b.hit.entity_id.cmp(&a.hit.entity_id)),
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (None, None) => b.hit.entity_id.cmp(&a.hit.entity_id),
+    });
+
+    // Take only page_size results
+    let page_size_usize = page_size as usize;
+    let final_tagged: Vec<TaggedSearchHit> = combined.into_iter().take(page_size_usize).collect();
+
+    // Count included results by source
+    let included_doc_names = final_tagged
+        .iter()
+        .filter(|h| h.source == SearchSource::DocumentName)
+        .count();
+    let included_chat_names = final_tagged
+        .iter()
+        .filter(|h| h.source == SearchSource::ChatName)
+        .count();
+    let included_email_subjects = final_tagged
+        .iter()
+        .filter(|h| h.source == SearchSource::EmailSubject)
+        .count();
+    let included_project_names = final_tagged
+        .iter()
+        .filter(|h| h.source == SearchSource::ProjectName)
+        .count();
+    // Content cursor deferred - always None for now
+
+    // Generate new cursors
+    // Rule: If search returned Done, mark as Done
+    //       If excluded results exist OR search indicated more results, generate cursor from last included
+    //       If no results included but original cursor existed, carry forward original
+    //       Otherwise, mark as Done
+    let new_doc_cursor = if doc_next_cursor.is_done() {
+        SearchCursorOption::Done
+    } else if included_doc_names < doc_name_count || doc_next_cursor.has_more() {
+        if included_doc_names > 0 {
+            SearchCursorOption::NotDone(
+                find_last_of_source(&final_tagged, SearchSource::DocumentName)
+                    .and_then(cursor_from_tagged),
+            )
+        } else {
+            document_cursor.clone()
+        }
+    } else {
+        SearchCursorOption::Done
+    };
+
+    let new_chat_cursor = if chat_next_cursor.is_done() {
+        SearchCursorOption::Done
+    } else if included_chat_names < chat_name_count || chat_next_cursor.has_more() {
+        if included_chat_names > 0 {
+            SearchCursorOption::NotDone(
+                find_last_of_source(&final_tagged, SearchSource::ChatName)
+                    .and_then(cursor_from_tagged),
+            )
+        } else {
+            chat_cursor.clone()
+        }
+    } else {
+        SearchCursorOption::Done
+    };
+
+    let new_email_cursor = if email_next_cursor.is_done() {
+        SearchCursorOption::Done
+    } else if included_email_subjects < email_subject_count || email_next_cursor.has_more() {
+        if included_email_subjects > 0 {
+            SearchCursorOption::NotDone(
+                find_last_of_source(&final_tagged, SearchSource::EmailSubject)
+                    .and_then(cursor_from_tagged),
+            )
+        } else {
+            email_cursor.clone()
+        }
+    } else {
+        SearchCursorOption::Done
+    };
+
+    let new_project_cursor = if project_next_cursor.is_done() {
+        SearchCursorOption::Done
+    } else if included_project_names < project_name_count || project_next_cursor.has_more() {
+        if included_project_names > 0 {
+            SearchCursorOption::NotDone(
+                find_last_of_source(&final_tagged, SearchSource::ProjectName)
+                    .and_then(cursor_from_tagged),
+            )
+        } else {
+            project_cursor.clone()
+        }
+    } else {
+        SearchCursorOption::Done
+    };
+
+    // Build next cursor if any source has more results
+    let has_more = new_doc_cursor.has_more()
+        || new_chat_cursor.has_more()
+        || new_email_cursor.has_more()
+        || new_project_cursor.has_more();
 
     let next_cursor = if has_more {
         let cursor = SearchCursor {
-            document_name_cursor: doc_next_cursor,
-            chat_name_cursor: chat_next_cursor,
-            content_cursor: None, // Content search cursor not yet implemented
-            email_subject_cursor: email_next_cursor,
-            project_name_cursor: project_next_cursor,
+            document_name_cursor: new_doc_cursor,
+            chat_name_cursor: new_chat_cursor,
+            content_cursor: SearchCursorOption::Done, // Content search cursor not yet implemented
+            email_subject_cursor: new_email_cursor,
+            project_name_cursor: new_project_cursor,
         };
         cursor.encode()
     } else {
         None
     };
 
-    Ok((combined_results, next_cursor))
+    // Extract final SearchHits from tagged results
+    let final_results: Vec<SearchHit> = final_tagged.into_iter().map(|t| t.hit).collect();
+
+    Ok((final_results, next_cursor))
 }
 
 /// Perform a search through all items.
@@ -342,7 +524,8 @@ pub async fn handler(
 ) -> Result<Json<SimpleSearchResponse>, SearchError> {
     tracing::info!("simple_unified_search");
 
-    let (results, _next_cursor) = perform_unified_search(&ctx, &user_context, query_params, req).await?;
+    let (results, _next_cursor) =
+        perform_unified_search(&ctx, &user_context, query_params, req).await?;
 
     let results = results.into_iter().map(|a| a.into()).collect();
 

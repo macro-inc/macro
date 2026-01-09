@@ -2,7 +2,7 @@
 
 use chrono::{DateTime, Utc};
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
-use models_search_cursor::SearchMethodCursor;
+use models_search_cursor::{SearchCursorOption, SearchMethodCursor};
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
@@ -76,12 +76,12 @@ async fn ids_search(
 
     // Cursor is based on the last returned item
     let next_cursor = if has_more {
-        results.last().map(|last| SearchMethodCursor {
+        SearchCursorOption::NotDone(results.last().map(|last| SearchMethodCursor {
             entity_id: last.entity_id,
             updated_at: last.updated_at,
-        })
+        }))
     } else {
-        None
+        SearchCursorOption::Done
     };
 
     Ok(NameSearchResponse {
@@ -156,12 +156,12 @@ async fn owner_search<'a>(
 
     // Cursor is based on the last returned item
     let next_cursor = if has_more {
-        results.last().map(|last| SearchMethodCursor {
+        SearchCursorOption::NotDone(results.last().map(|last| SearchMethodCursor {
             entity_id: last.entity_id,
             updated_at: last.updated_at,
-        })
+        }))
     } else {
-        None
+        SearchCursorOption::Done
     };
 
     Ok(NameSearchResponse {

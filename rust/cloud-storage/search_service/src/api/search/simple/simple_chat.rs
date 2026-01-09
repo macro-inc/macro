@@ -216,7 +216,7 @@ pub(in crate::api::search) async fn search_chats(
         )),
         SearchOn::Content => Either::Right(ready(Ok(name_search::NameSearchResponse {
             results: vec![],
-            next_cursor: None,
+            next_cursor: name_search::SearchCursorOption::Done,
         }))),
     };
 
@@ -255,6 +255,7 @@ pub(in crate::api::search) async fn search_chats(
                 ..Default::default()
             },
             goto: None,
+            updated_at: Some(n.updated_at),
         })
         .chain(content_result)
         .collect();
@@ -270,8 +271,16 @@ pub(in crate::api::search::simple) async fn search_names<'a>(
     filter_chat_response: &FilterChatResponse,
     term: String,
     limit: u32,
-    cursor: Option<name_search::SearchMethodCursor>,
-) -> Result<(Vec<SearchHit>, Option<name_search::SearchMethodCursor>), SearchError> {
+    cursor: name_search::SearchCursorOption,
+) -> Result<(Vec<SearchHit>, name_search::SearchCursorOption), SearchError> {
+    // If cursor is Done, no more results to fetch
+    let inner_cursor = match cursor {
+        name_search::SearchCursorOption::Done => {
+            return Ok((vec![], name_search::SearchCursorOption::Done));
+        }
+        name_search::SearchCursorOption::NotDone(c) => c,
+    };
+
     let chat_uuids = filter_chat_response
         .chat_ids
         .iter()
@@ -285,7 +294,7 @@ pub(in crate::api::search::simple) async fn search_names<'a>(
         term,
         filter_chat_response.ids_only,
         limit,
-        cursor,
+        inner_cursor,
     )
     .await
     .map_err(SearchError::NameSearch)
@@ -302,6 +311,7 @@ pub(in crate::api::search::simple) async fn search_names<'a>(
                     ..Default::default()
                 },
                 goto: None,
+                updated_at: Some(n.updated_at),
             })
             .collect();
         (hits, response.next_cursor)
