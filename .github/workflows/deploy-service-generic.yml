@@ -24,7 +24,6 @@ on:
           - email-service
           - email-suppression
           - experiment-service
-          - insight-service
           - lambda-aggregate-frecency
           - link-sharing
           - metering-service

@@ -148,23 +148,6 @@ export const deleteChatQueueName: pulumi.Output<string> =
 
 const { notificationQueueName, notificationQueueArn } = getMacroNotify();
 
-// import the insight-service-block
-const insightServiceStack = new pulumi.StackReference('insight-service-stack', {
-  name: `macro-inc/insight-service/${stack}`,
-});
-
-const insightContextQueueArn: pulumi.Output<string> = insightServiceStack
-  .getOutput('contextQueueArn')
-  .apply((arn) => arn as string);
-
-const insightContextQueueName: pulumi.Output<string> = insightServiceStack
-  .getOutput('contextQueueName')
-  .apply((name) => name as string)
-  .apply((name) => {
-    pulumi.log.info(`INSIGHT QUEUE NAME, ${name}`);
-    return name;
-  });
-
 const { searchEventQueueName, searchEventQueueArn } = getSearchEventQueue();
 
 const searchServiceStack = new pulumi.StackReference('search-service-stack', {
@@ -199,7 +182,6 @@ const documentCognitionService = new DocumentCognitionService(
       documentTextExtractorQueueArn,
       deleteChatQueueArn,
       searchEventQueueArn,
-      insightContextQueueArn,
       notificationQueueArn,
     ],
     containerEnvVars: [
@@ -273,10 +255,6 @@ const documentCognitionService = new DocumentCognitionService(
         value: `https://static-file-service${
           stack === 'prod' ? '' : `-${stack}`
         }.macro.com`,
-      },
-      {
-        name: 'INSIGHT_CONTEXT_QUEUE',
-        value: pulumi.interpolate`${insightContextQueueName}`,
       },
       {
         name: 'COMMS_SERVICE_URL',

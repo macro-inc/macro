@@ -93,7 +93,6 @@ dependencies = [
  "cool_asserts",
  "email",
  "email_service_client",
- "insight_service_client",
  "lazy_static",
  "macro_db_client",
  "model",
@@ -2674,7 +2673,6 @@ dependencies = [
  "email_service_client",
  "futures",
  "http-body-util",
- "insight_service_client",
  "lazy_static",
  "lexical_client",
  "log",
@@ -3177,7 +3175,6 @@ dependencies = [
  "html-escape",
  "http-body-util",
  "infer 0.19.0",
- "insight_service_client",
  "lol_html",
  "macro_auth",
  "macro_cors",
@@ -4539,74 +4536,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a0c10553d664a4d0bcff9f4215d0aac67a639cc68ef660840afe309b807bc9f5"
 dependencies = [
  "generic-array",
-]
-
-[[package]]
-name = "insight_service"
-version = "0.1.0"
-dependencies = [
- "ai",
- "ai_format",
- "anyhow",
- "async-stream",
- "async-trait",
- "aws-config",
- "aws-sdk-secretsmanager",
- "aws-sdk-sqs",
- "axum",
- "chrono",
- "clap",
- "document_cognition_service_client",
- "document_storage_service_client",
- "email_service_client",
- "futures",
- "lexical_client",
- "macro_auth",
- "macro_cors",
- "macro_db_client",
- "macro_entrypoint",
- "macro_env",
- "macro_middleware",
- "model",
- "models_dcs",
- "models_email",
- "reqwest",
- "schemars",
- "scribe",
- "secretsmanager_client",
- "serde",
- "serde_json",
- "sha2",
- "sqlx",
- "sqs_worker",
- "strum",
- "strum_macros",
- "sync_service_client",
- "tokio",
- "tower-http",
- "tracing",
- "utoipa",
- "utoipa-swagger-ui",
- "uuid",
-]
-
-[[package]]
-name = "insight_service_client"
-version = "0.1.0"
-dependencies = [
- "ai_format",
- "anyhow",
- "async-trait",
- "aws-sdk-sqs",
- "chrono",
- "model",
- "serde",
- "sqlx",
- "sqs_client",
- "strum",
- "strum_macros",
- "tokio",
- "tracing",
 ]
 
 [[package]]

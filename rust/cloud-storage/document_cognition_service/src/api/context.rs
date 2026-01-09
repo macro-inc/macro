@@ -1,7 +1,6 @@
 use crate::config::Config;
 use axum::extract::FromRef;
 use document_storage_service_client::DocumentStorageServiceClient;
-use insight_service_client::InsightContextProvider;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use scribe::{
@@ -23,7 +22,6 @@ pub struct ApiContext {
     pub document_storage_client: Arc<DocumentStorageServiceClient>,
     pub macro_notify_client: Arc<macro_notify::MacroNotify>,
     pub comms_service_client: Arc<comms_service_client::CommsServiceClient>,
-    pub context_provider_client: Arc<InsightContextProvider>,
     pub search_service_client: Arc<SearchServiceClient>,
     pub scribe: Arc<DcsScribe>,
     pub metering_client: Arc<metering_service_client::Client>,
@@ -42,7 +40,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     use document_cognition_service_client::DocumentCognitionServiceClient;
     use document_storage_service_client::DocumentStorageServiceClient;
     use email_service_client::{EmailServiceClient, EmailServiceClientExternal};
-    use insight_service_client::InsightContextProvider;
     use lexical_client::LexicalClient;
     use macro_notify::MacroNotifyClient;
     use metering_service_client::Client as MeteringClient;
@@ -69,7 +66,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         "dummy_auth_key".into(),
         "http://localhost".into(),
     ));
-    let context_provider_client = InsightContextProvider::create(sqs_client.clone(), "dummy");
     let search_service_client =
         SearchServiceClient::new("dummy_auth_key".into(), "http://localhost".into());
     let lexical_client = Arc::new(LexicalClient::new(
@@ -119,7 +115,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         document_storage_client,
         macro_notify_client: Arc::new(macro_notify_client),
         comms_service_client,
-        context_provider_client: Arc::new(context_provider_client),
         search_service_client: Arc::new(search_service_client),
         scribe: Arc::new(content_client),
         metering_client: Arc::new(metering_client),

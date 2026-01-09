@@ -187,18 +187,6 @@ export const sfsUploaderQueueName = pulumi.interpolate`${sfs_uploader_queue.queu
 
 const { searchEventQueueName, searchEventQueueArn } = getSearchEventQueue();
 
-const insightServiceStack = new pulumi.StackReference('insight-service-stack', {
-  name: `macro-inc/insight-service/${stack}`,
-});
-
-const insightContextQueueArn: pulumi.Output<string> = insightServiceStack
-  .getOutput('contextQueueArn')
-  .apply((arn) => arn as string);
-
-const insightContextQueueName: pulumi.Output<string> = insightServiceStack
-  .getOutput('contextQueueName')
-  .apply((name) => name as string);
-
 // Retrieve name of queue used Contacts Service
 const contactsServiceStack: pulumi.StackReference = new pulumi.StackReference(
   'contacts-service-stack',
@@ -244,7 +232,6 @@ const queueArns = [
   linkManagerQueueArn,
   scheduledQueueArn,
   searchEventQueueArn,
-  insightContextQueueArn,
   backfillQueueArn,
   sfsUploaderQueueArn,
   contactsQueueArn,
@@ -337,7 +324,7 @@ emailAttachmentBucket.attachCloudfrontPolicy({
 const containerEnvVars = [
   {
     name: 'RUST_LOG',
-    value: `email=${stack === 'prod' ? 'debug' : 'debug'},email_service=${stack === 'prod' ? 'debug' : 'debug'},pubsub_workers=${stack === 'prod' ? 'debug' : 'debug'},email_db_client=${stack === 'prod' ? 'info' : 'debug'},gmail_client=${stack === 'prod' ? 'info' : 'debug'},tower_http=info,insight_service_client=${stack === 'prod' ? 'info' : 'debug'}`,
+    value: `email=${stack === 'prod' ? 'debug' : 'debug'},email_service=${stack === 'prod' ? 'debug' : 'debug'},pubsub_workers=${stack === 'prod' ? 'debug' : 'debug'},email_db_client=${stack === 'prod' ? 'info' : 'debug'},gmail_client=${stack === 'prod' ? 'info' : 'debug'},tower_http=info`,
   },
   {
     name: 'ENVIRONMENT',
@@ -382,10 +369,6 @@ const containerEnvVars = [
   {
     name: 'NOTIFICATION_QUEUE',
     value: pulumi.interpolate`${notificationQueueName}`,
-  },
-  {
-    name: 'INSIGHT_CONTEXT_QUEUE',
-    value: pulumi.interpolate`${insightContextQueueName}`,
   },
   {
     name: 'JWT_SECRET_KEY',
