@@ -1,7 +1,7 @@
 // Usage:
-// bun run scripts/generate-api-schema-local.ts <service-name> // generate for specific service
-// bun run scripts/generate-api-schema-local.ts               // generate for all services
-// bun run scripts/generate-api-schema-local.ts --check       // verify types are up to date (for CI)
+// bun run scripts/generate-api-schema.ts <service-name> // generate for specific service
+// bun run scripts/generate-api-schema.ts               // generate for all services
+// bun run scripts/generate-api-schema.ts --check       // verify types are up to date (for CI)
 //
 // This script generates OpenAPI schemas by running the local Rust binaries
 // instead of fetching from deployed services.
@@ -183,7 +183,10 @@ async function main() {
       console.error('The following files have changed:');
       if (diff.trim()) console.error(diff);
       if (untrackedFiles.trim()) console.error('Untracked:\n' + untrackedFiles);
-      console.error('\nPlease run: bun run scripts/generate-api-schema-local.ts');
+      const gitStatus = await $`git status`.text();
+      console.error('`git status` output:')
+      console.error(gitStatus.trim());
+      console.error('\nPlease run: bun run scripts/generate-api-schema.ts');
       console.error('Then commit the changes.');
       process.exit(1);
     }
