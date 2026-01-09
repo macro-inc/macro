@@ -339,7 +339,7 @@ pub async fn handle_send_chat_message(
     let StreamChatResponse { new_messages } = stream_chat_response(
         ctx.clone(),
         user_id,
-        request.clone(),
+        request,
         toolset.toolset,
         sender,
         incoming_message.chat_id.as_str(),

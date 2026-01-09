@@ -385,9 +385,12 @@ export function PopupPreview(props: {
     const splitManager = globalSplitManager();
     if (splitManager) {
       splitManager.createNewSplit({
-        type: props.documentInfo.type,
-        id: props.documentInfo.id,
-        params: props.documentInfo.params,
+        content: {
+          type: props.documentInfo.type,
+          id: props.documentInfo.id,
+          params: props.documentInfo.params,
+        },
+        referredFrom: null,
       });
     }
   });

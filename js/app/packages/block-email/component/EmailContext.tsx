@@ -284,7 +284,7 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
   };
 
   const {
-    unifiedListContext: {
+    soupContext: {
       entitiesSignal: [entities],
       actionRegistry,
     },

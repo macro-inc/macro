@@ -45,16 +45,18 @@ dependencies = [
 name = "ai"
 version = "0.1.0"
 dependencies = [
- "ai_format",
  "anthropic",
  "anyhow",
  "async-openai",
  "async-stream",
  "async-trait",
+ "base64 0.22.1",
  "chrono",
  "const_format",
  "futures",
+ "image",
  "lazy_static",
+ "model_file_type",
  "rand 0.9.0",
  "reqwest",
  "schemars",
@@ -67,12 +69,14 @@ dependencies = [
  "tokio",
  "tracing",
  "utoipa",
+ "webp",
 ]
 
 [[package]]
 name = "ai_format"
 version = "0.1.0"
 dependencies = [
+ "ai",
  "chrono",
 ]
 
@@ -81,6 +85,7 @@ name = "ai_tools"
 version = "0.1.0"
 dependencies = [
  "ai",
+ "ai_format",
  "anthropic",
  "anyhow",
  "async-trait",
@@ -727,14 +732,14 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-dynamodb"
-version = "1.66.0"
+version = "1.101.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5296daf754d333f51798bff599876c3849394ec3dabe8d1d61cbacb961fdde37"
+checksum = "b6f98cd9e5f2fc790aff1f393bc3c8680deea31c05d3c6f23b625cdc50b1b6b4"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
  "aws-smithy-async",
- "aws-smithy-http 0.60.12",
+ "aws-smithy-http 0.62.6",
  "aws-smithy-json",
  "aws-smithy-runtime",
  "aws-smithy-runtime-api",
@@ -743,21 +748,20 @@ dependencies = [
  "bytes",
  "fastrand 2.3.0",
  "http 0.2.12",
- "once_cell",
  "regex-lite",
  "tracing",
 ]
 
 [[package]]
 name = "aws-sdk-ecs"
-version = "1.67.1"
+version = "1.104.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c8b664710a4bef80958615bf52be8f1749cee5839d9aa72a007154e964b76a65"
+checksum = "e5ad99359896318941258378c887803da47352d00a9a1b2c74f237c48d9792e4"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
  "aws-smithy-async",
- "aws-smithy-http 0.60.12",
+ "aws-smithy-http 0.62.6",
  "aws-smithy-json",
  "aws-smithy-runtime",
  "aws-smithy-runtime-api",
@@ -766,7 +770,6 @@ dependencies = [
  "bytes",
  "fastrand 2.3.0",
  "http 0.2.12",
- "once_cell",
  "regex-lite",
  "tracing",
 ]
@@ -898,22 +901,22 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-sqs"
-version = "1.60.0"
+version = "1.91.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "79658931b5ceb0b88779f521b891c6e60f28c464775e3482ae56dfc518052159"
+checksum = "e007a58d1e4be0e611a664d6b1cba4523011f67589619048c1902becef3e891f"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
  "aws-smithy-async",
- "aws-smithy-http 0.60.12",
+ "aws-smithy-http 0.62.6",
  "aws-smithy-json",
  "aws-smithy-runtime",
  "aws-smithy-runtime-api",
  "aws-smithy-types",
  "aws-types",
  "bytes",
+ "fastrand 2.3.0",
  "http 0.2.12",
- "once_cell",
  "regex-lite",
  "tracing",
 ]
@@ -2653,6 +2656,7 @@ version = "0.1.0"
 dependencies = [
  "aho-corasick",
  "ai",
+ "ai_format",
  "ai_tools",
  "anyhow",
  "async-openai",
@@ -7677,7 +7681,6 @@ dependencies = [
  "doppleganger",
  "email_service_client",
  "futures",
- "image",
  "lexical_client",
  "macro_client_errors",
  "model",
@@ -7695,7 +7698,6 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
- "webp",
 ]
 
 [[package]]
