@@ -14,19 +14,46 @@ pub struct SearchMethodCursor {
     pub updated_at: chrono::DateTime<chrono::Utc>,
 }
 
-/// The search cursor contains all the individual `SearchMethodCursor` for each search method.
+/// Represents the state of a search cursor
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub enum SearchCursorOption {
+    /// The cursor has either not been started or is not exhausted
+    NotDone(Option<SearchMethodCursor>),
+    /// The cursor is exhausted
+    Done,
+}
+
+impl Default for SearchCursorOption {
+    fn default() -> Self {
+        SearchCursorOption::NotDone(None)
+    }
+}
+
+impl SearchCursorOption {
+    /// Returns true if there are more results to fetch
+    pub fn has_more(&self) -> bool {
+        matches!(self, SearchCursorOption::NotDone(_))
+    }
+
+    /// Returns true if the cursor is exhausted (no more results)
+    pub fn is_done(&self) -> bool {
+        matches!(self, SearchCursorOption::Done)
+    }
+}
+
+/// The search cursor contains all the individual `SearchCursorOption` for each search method.
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct SearchCursor {
     /// The document name cursor
-    pub document_name_cursor: Option<SearchMethodCursor>,
+    pub document_name_cursor: SearchCursorOption,
     /// The chat name cursor
-    pub chat_name_cursor: Option<SearchMethodCursor>,
+    pub chat_name_cursor: SearchCursorOption,
     /// The content cursor
-    pub content_cursor: Option<SearchMethodCursor>,
+    pub content_cursor: SearchCursorOption,
     /// The email subject cursor
-    pub email_subject_cursor: Option<SearchMethodCursor>,
+    pub email_subject_cursor: SearchCursorOption,
     /// The project cursor
-    pub project_name_cursor: Option<SearchMethodCursor>,
+    pub project_name_cursor: SearchCursorOption,
 }
 
 impl SearchCursor {

@@ -232,9 +232,12 @@ pub(in crate::api::search) async fn search_documents(
             &filter_document_response,
             terms[0].clone(),
             page_size,
-            None, // Individual endpoint doesn't support cursor pagination
+            name_search::SearchCursorOption::default(), // Individual endpoint doesn't support cursor pagination
         )),
-        SearchOn::Content => Either::Right(ready(Ok((Vec::new(), None)))),
+        SearchOn::Content => Either::Right(ready(Ok((
+            Vec::new(),
+            name_search::SearchCursorOption::Done,
+        )))),
     };
 
     let content_results = match req.search_on {
@@ -272,8 +275,16 @@ pub(in crate::api::search::simple) async fn search_names<'a>(
     filter_document_response: &FilterDocumentResponse,
     term: String,
     limit: u32,
-    cursor: Option<name_search::SearchMethodCursor>,
-) -> Result<(Vec<SearchHit>, Option<name_search::SearchMethodCursor>), SearchError> {
+    cursor: name_search::SearchCursorOption,
+) -> Result<(Vec<SearchHit>, name_search::SearchCursorOption), SearchError> {
+    // If cursor is Done, no more results to fetch
+    let inner_cursor = match cursor {
+        name_search::SearchCursorOption::Done => {
+            return Ok((vec![], name_search::SearchCursorOption::Done));
+        }
+        name_search::SearchCursorOption::NotDone(c) => c,
+    };
+
     let document_uuids = filter_document_response
         .document_ids
         .iter()
@@ -287,7 +298,7 @@ pub(in crate::api::search::simple) async fn search_names<'a>(
         term,
         filter_document_response.ids_only,
         limit,
-        cursor,
+        inner_cursor,
     )
     .await
     .map_err(SearchError::NameSearch)
@@ -304,6 +315,7 @@ pub(in crate::api::search::simple) async fn search_names<'a>(
                     ..Default::default()
                 },
                 goto: None,
+                updated_at: Some(n.updated_at),
             })
             .collect();
         (hits, response.next_cursor)

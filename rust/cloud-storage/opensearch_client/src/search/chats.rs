@@ -195,6 +195,7 @@ pub(crate) async fn search_chats(
                     score: hit.score,
                     highlight,
                     goto: None,
+                    updated_at: None,
                 },
                 ChatNameIndex::Chat(a) => SearchHit {
                     entity_id: a.entity_id,
@@ -205,6 +206,7 @@ pub(crate) async fn search_chats(
                         chat_message_id: a.chat_message_id,
                         role: a.role,
                     })),
+                    updated_at: None,
                 },
             }
         })
