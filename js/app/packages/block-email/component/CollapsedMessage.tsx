@@ -115,7 +115,7 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
             </div>
 
             {/* Date */}
-            <div class="text-xs text-ink-muted shrink-0 ml-4 pr-4">
+            <div class="text-xs text-ink-muted shrink-0 ml-4 pr-2">
               {props.message.internal_date_ts &&
                 new Date(props.message.internal_date_ts).toLocaleDateString('en-US', {
                   month: 'short',
