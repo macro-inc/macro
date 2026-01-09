@@ -874,7 +874,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
         }
       },
       "search_after": [time.timestamp_millis(), entity_id.to_string()],
-      "size": 20,
+      "size": 21,
       "sort": updated_at_sort().iter().map(|s| s.to_json()).collect::<Vec<_>>(),
     });
 
@@ -1052,7 +1052,7 @@ fn test_build_unified_search_request_single_index() -> anyhow::Result<()> {
           ]
         }
       },
-      "size": 20,
+      "size": 21,
       "sort": updated_at_sort().iter().map(|s| s.to_json()).collect::<Vec<_>>(),
     });
 
