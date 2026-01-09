@@ -2,7 +2,8 @@ use super::types::AIDiffResponse;
 use super::types::{PROMPT, REWRITE_MODEL};
 use crate::tool_context::{RequestContext, ToolScribe, ToolServiceContext};
 use ai::tool::{AsyncTool, ToolCallError, ToolResult};
-use ai::types::{MessageBuilder, PromptAttachment, RequestBuilder};
+use ai::types::{MessageBuilder, RequestBuilder};
+use ai_format::document::Document;
 use anyhow::Error;
 use async_trait::async_trait;
 use model::document::FileType;
@@ -80,12 +81,15 @@ pub async fn generate_patches(
         .max_tokens(32_000)
         .system_prompt(PROMPT)
         .model(REWRITE_MODEL)
-        .add_text_attachment(PromptAttachment {
-            content: markdown_text,
-            file_type: "md".into(),
-            id: request.markdown_file_id,
-            name: file_name,
-        })
+        .add_text_attachment(
+            Document {
+                content: markdown_text,
+                file_type: "md".into(),
+                id: request.markdown_file_id,
+                name: file_name,
+            }
+            .boxed(),
+        )
         .messages(vec![
             MessageBuilder::new()
                 .content(request.instructions)

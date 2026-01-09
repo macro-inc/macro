@@ -25,8 +25,9 @@
     "ddupload:prod": "datadog-ci sourcemaps upload ./dist --service web-app --release-version $WEB_APP_VERSION --minified-path-prefix https://macro.com/app"
   },
   "dependencies": {
-    "@types/three": "^0.178.0",
     "@macro/tauri": "workspace:*",
+    "@tauri-apps/plugin-log": "^2.7.1",
+    "@types/three": "^0.178.0",
     "core": "workspace:*",
     "mermaid": "^11.6.0",
     "overlayscrollbars-solid": "^0.5.5",

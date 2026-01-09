@@ -1,5 +1,3 @@
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
-import DeleteIcon from '@icon/bold/x-bold.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { Component } from 'solid-js';
 import { createSignal, For, Show } from 'solid-js';
@@ -8,7 +6,12 @@ import { PROPERTY_STYLES } from '../../styles/styles';
 import type { Property } from '../../types';
 import { formatPropertyValue, getSelectValues } from '../../utils';
 import { ERROR_MESSAGES, handlePropertyError } from '../../utils/errorHandling';
-import { AddPropertyValueButton, EmptyValue } from './ValueComponents';
+import { PropertyValueIcon } from './PropertyValueIcon';
+import {
+  AddPropertyValueButton,
+  EmptyValue,
+  PropertyValueDeleteButton,
+} from './ValueComponents';
 
 type SelectValueProps = {
   property: Property;
@@ -70,9 +73,7 @@ export const SelectValue: Component<SelectValueProps> = (props) => {
   const displayValues = getSelectValues(props.property);
 
   return (
-    <div
-      class={`flex flex-wrap gap-1 justify-start items-start w-full min-w-0`}
-    >
+    <div class="flex flex-wrap gap-2 justify-start items-start w-full min-w-0">
       <For each={displayValues}>
         {(value) => {
           const formatted = formatPropertyValue(props.property, value);
@@ -83,17 +84,24 @@ export const SelectValue: Component<SelectValueProps> = (props) => {
               onMouseEnter={() => setHoveredValue(value)}
               onMouseLeave={() => setHoveredValue(null)}
             >
-              <div class={PROPERTY_STYLES.value.multiButton} title={formatted}>
+              <div
+                class={PROPERTY_STYLES.value.multiButton}
+                title={formatted}
+                onClick={
+                  !props.property.isMultiSelect ? handleClick : undefined
+                }
+                style={{
+                  cursor: 'default',
+                }}
+              >
+                <PropertyValueIcon optionId={value} />
                 <span class="block truncate">{formatted}</span>
               </div>
               <Show when={!isReadOnly() && isHovered() && !isSaving()}>
                 <div class="absolute right-1 inset-y-0 flex items-center">
-                  <DeprecatedIconButton
-                    icon={DeleteIcon}
-                    theme="clear"
-                    size="xs"
-                    class="!text-failure !bg-[#2a2a2a] hover:!bg-[#444444] !cursor-pointer !w-4 !h-4 !min-w-4 !min-h-4"
+                  <PropertyValueDeleteButton
                     onClick={() => handleRemoveValue(value)}
+                    disabled={isSaving()}
                   />
                 </div>
               </Show>
@@ -105,7 +113,7 @@ export const SelectValue: Component<SelectValueProps> = (props) => {
         when={!isReadOnly()}
         fallback={
           <Show when={displayValues.length === 0}>
-            <div class="text-ink-muted text-xs px-2 py-1 border border-edge bg-transparent inline-block shrink-0">
+            <div class="text-ink-muted px-2 py-0.5 border border-edge-muted bg-transparent inline-block shrink-0">
               <EmptyValue />
             </div>
           </Show>

@@ -99,7 +99,7 @@ function MarkdownPropertiesContent(_props: { documentId: string }) {
   };
 
   return (
-    <div class="flex flex-col h-full">
+    <div class="flex flex-col h-full text-sm">
       {/* Future: Add markdown-specific sections here */}
       {/* e.g., word count, reading time, headings outline, etc. */}
 

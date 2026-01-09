@@ -2,7 +2,8 @@ use crate::api::{
     context::AppState,
     extractors::{ChannelId, ChannelMember},
 };
-use ai_format::{Indent, InsightContextLog};
+use ai_format::insight_context_log::InsightContextLog;
+use ai_format::util::Indent;
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,

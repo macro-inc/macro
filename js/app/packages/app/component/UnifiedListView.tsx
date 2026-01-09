@@ -24,7 +24,8 @@ import {
   fileTypeToBlockName,
 } from '@core/constant/allBlocks';
 import {
-  ENABLE_PROPERTY_DISPLAY_CONTROL,
+  ENABLE_FRECENCY,
+  ENABLE_PROPERTY_DISPLAY,
   ENABLE_SOUP_FROM_FILTER,
   ENABLE_TASKS_TABS,
 } from '@core/constant/featureFlags';
@@ -189,11 +190,15 @@ const sortOptions = [
     label: 'Created',
     sortFn: sortByCreatedAt,
   },
-  {
-    value: 'frecency',
-    label: 'Frecency',
-    sortFn: sortByFrecencyScore,
-  },
+  ...(ENABLE_FRECENCY
+    ? [
+        {
+          value: 'frecency' as const,
+          label: 'Frecency',
+          sortFn: sortByFrecencyScore,
+        },
+      ]
+    : []),
 ] satisfies SortOption<EntityData, SystemSortOption>[];
 
 export type UnifiedListViewProps = {
@@ -1610,7 +1615,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       }}
                     />
                   </section>
-                  <Show when={ENABLE_PROPERTY_DISPLAY_CONTROL}>
+                  <Show when={ENABLE_PROPERTY_DISPLAY}>
                     <section class="p-2">
                       <PropertyDisplayControl
                         selectedPropertyIds={displayProperties}

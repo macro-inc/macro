@@ -45,16 +45,18 @@ dependencies = [
 name = "ai"
 version = "0.1.0"
 dependencies = [
- "ai_format",
  "anthropic",
  "anyhow",
  "async-openai",
  "async-stream",
  "async-trait",
+ "base64 0.22.1",
  "chrono",
  "const_format",
  "futures",
+ "image",
  "lazy_static",
+ "model_file_type",
  "rand 0.9.0",
  "reqwest",
  "schemars",
@@ -67,12 +69,14 @@ dependencies = [
  "tokio",
  "tracing",
  "utoipa",
+ "webp",
 ]
 
 [[package]]
 name = "ai_format"
 version = "0.1.0"
 dependencies = [
+ "ai",
  "chrono",
 ]
 
@@ -81,6 +85,7 @@ name = "ai_tools"
 version = "0.1.0"
 dependencies = [
  "ai",
+ "ai_format",
  "anthropic",
  "anyhow",
  "async-trait",
@@ -2653,6 +2658,7 @@ version = "0.1.0"
 dependencies = [
  "aho-corasick",
  "ai",
+ "ai_format",
  "ai_tools",
  "anyhow",
  "async-openai",
@@ -7676,7 +7682,6 @@ dependencies = [
  "doppleganger",
  "email_service_client",
  "futures",
- "image",
  "lexical_client",
  "macro_client_errors",
  "model",
@@ -7694,7 +7699,6 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
- "webp",
 ]
 
 [[package]]

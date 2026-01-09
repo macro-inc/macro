@@ -47,7 +47,9 @@ pub fn run() {
         .with_line_number(true)
         .pretty();
 
-    let registry = tracing_subscriber::registry().with(filter).with(fmt_layer);
+    let registry = tracing_subscriber::registry()
+        .with(filter)
+        .with(fmt_layer);
 
     #[cfg(target_os = "ios")]
     let registry = registry.with(tracing_oslog::OsLogger::new(
@@ -57,7 +59,7 @@ pub fn run() {
 
     registry.init();
 
-    let mut builder = tauri::Builder::default().plugin(tauri_plugin_haptics::init());
+    let mut builder = tauri::Builder::default();
 
     #[cfg(desktop)]
     {
@@ -68,10 +70,22 @@ pub fn run() {
         }))
     }
 
+    #[cfg(target_os = "ios")]
+    {
+        builder = builder.plugin(tauri_plugin_haptics::init());
+    }
+
     // register the rest of the common plugins
+    // The log plugin with "tracing" feature emits tracing::event! directly,
+    // so logs from the webview will go through our tracing subscriber
     builder = builder
         .plugin(tauri_plugin_deep_link::init())
-        .plugin(tauri_plugin_log::Builder::default().skip_logger().build())
+        .plugin(
+            tauri_plugin_log::Builder::default()
+                .level(log::LevelFilter::Debug)
+                .skip_logger() // Don't set up log crate logger, we only want the tracing events
+                .build(),
+        )
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_http::init())

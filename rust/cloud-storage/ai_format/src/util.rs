@@ -16,11 +16,6 @@ pub fn truncate<T: Display>(v: T, limit: usize) -> String {
 
 pub struct Indent<T: Sized>(pub T, pub usize);
 pub struct Truncate<T: Sized>(pub T, pub usize);
-pub struct InsightContextLog<T: Display> {
-    pub name: String,
-    pub metadata: Vec<(String, String)>,
-    pub content: T,
-}
 
 impl<T> Display for Indent<T>
 where
@@ -49,29 +44,10 @@ where
     }
 }
 
-impl<T> Display for InsightContextLog<T>
-where
-    T: Display + Sized,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let metadata = self
-            .metadata
-            .iter()
-            .map(|(k, v)| format!("{}: {}", k, v))
-            .collect::<Vec<_>>()
-            .join(", ");
-        writeln!(f, "[{}]", self.name)?;
-        if !metadata.is_empty() {
-            writeln!(f, "{}", metadata)?;
-        }
-        writeln!(f, "{}", self.content)?;
-        writeln!(f, "[END {}]", self.name)
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::insight_context_log::InsightContextLog;
 
     #[test]
     fn test_truncate() {
