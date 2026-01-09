@@ -211,7 +211,9 @@ export function ItemPreview(props: ItemPreviewProps) {
               {(accessibleItem) => {
                 const itemData = accessibleItem();
                 const fileType = itemData.fileType;
-                const subType = itemData.subType?.type;
+                const subType = itemData.subType?.type as
+                  | NamedSubType
+                  | undefined;
                 const navHandlers =
                   useSplitNavigationHandler<HTMLButtonElement>((e) =>
                     onPreviewClick(
@@ -239,7 +241,7 @@ export function ItemPreview(props: ItemPreviewProps) {
                         <EntityIcon
                           targetType={
                             itemData.type === 'document'
-                              ? subType || fileType
+                              ? (subType ?? fileType)
                               : itemData.type
                           }
                           size="xs"
@@ -295,7 +297,7 @@ export function InlineItemPreview(props: ItemPreviewProps) {
                         <EntityIcon
                           targetType={
                             itemData.type === 'document'
-                              ? subType || fileType
+                              ? (subType ?? fileType)
                               : itemData.type
                           }
                           size="xs"

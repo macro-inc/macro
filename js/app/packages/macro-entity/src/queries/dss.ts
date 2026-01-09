@@ -47,7 +47,13 @@ const resolveDocumentEntityName = (
     type: 'document',
     name: entity.name,
     fileType: entity.fileType,
-    subType: entity.subType ?? undefined,
+    subType:
+      entity.subType === null || entity.subType === undefined
+        ? null
+        : {
+            type: entity.subType.type as 'task',
+            is_completed: entity.subType.is_completed,
+          },
   });
 };
 
@@ -289,7 +295,13 @@ const selectData: (
             viewedAt: item.data.viewedAt ?? undefined,
             fileType: item.data.fileType ?? undefined,
             projectId: item.data.projectId ?? undefined,
-            subType: item.data.subType ?? undefined,
+            subType:
+              item.data.subType === null || item.data.subType === undefined
+                ? undefined
+                : {
+                    type: item.data.subType.type as 'task',
+                    is_completed: item.data.subType.is_completed,
+                  },
             name: resolveDocumentEntityName(item.data),
           };
         }
