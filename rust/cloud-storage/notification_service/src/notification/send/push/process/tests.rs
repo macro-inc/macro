@@ -101,7 +101,8 @@ fn create_test_notification(
     NotificationWithRecipient {
         inner: UserNotification {
             id,
-            notification_entity: EntityType::Channel.with_entity_string("test_channel_id".to_string()),
+            notification_entity: EntityType::Channel
+                .with_entity_string("test_channel_id".to_string()),
             sent: false,
             done: false,
             sender_id: Some(sender.clone()),
@@ -157,7 +158,10 @@ async fn test_process_push_notifications_inner_with_ios_device() {
     let mut user_device_endpoints = HashMap::new();
     user_device_endpoints.insert(
         user_id.clone(),
-        vec![("arn:aws:sns:us-east-1:123:endpoint/APNS/app/device".to_string(), DeviceType::Ios)],
+        vec![(
+            "arn:aws:sns:us-east-1:123:endpoint/APNS/app/device".to_string(),
+            DeviceType::Ios,
+        )],
     );
 
     let sns_client = Arc::new(MockSnsClient::new());
@@ -224,11 +228,17 @@ async fn test_process_push_notifications_inner_multiple_users() {
     let mut user_device_endpoints = HashMap::new();
     user_device_endpoints.insert(
         user_1.clone(),
-        vec![("arn:aws:sns:us-east-1:123:endpoint/APNS/app/device1".to_string(), DeviceType::Ios)],
+        vec![(
+            "arn:aws:sns:us-east-1:123:endpoint/APNS/app/device1".to_string(),
+            DeviceType::Ios,
+        )],
     );
     user_device_endpoints.insert(
         user_2.clone(),
-        vec![("arn:aws:sns:us-east-1:123:endpoint/APNS/app/device2".to_string(), DeviceType::Ios)],
+        vec![(
+            "arn:aws:sns:us-east-1:123:endpoint/APNS/app/device2".to_string(),
+            DeviceType::Ios,
+        )],
     );
 
     let sns_client = Arc::new(MockSnsClient::new());
@@ -260,8 +270,14 @@ async fn test_process_push_notifications_inner_user_with_multiple_devices() {
     user_device_endpoints.insert(
         user_id.clone(),
         vec![
-            ("arn:aws:sns:us-east-1:123:endpoint/APNS/app/iphone".to_string(), DeviceType::Ios),
-            ("arn:aws:sns:us-east-1:123:endpoint/APNS/app/ipad".to_string(), DeviceType::Ios),
+            (
+                "arn:aws:sns:us-east-1:123:endpoint/APNS/app/iphone".to_string(),
+                DeviceType::Ios,
+            ),
+            (
+                "arn:aws:sns:us-east-1:123:endpoint/APNS/app/ipad".to_string(),
+                DeviceType::Ios,
+            ),
         ],
     );
 
@@ -293,7 +309,10 @@ async fn test_process_push_notifications_inner_sns_failure_skips_user() {
     let mut user_device_endpoints = HashMap::new();
     user_device_endpoints.insert(
         user_id.clone(),
-        vec![("arn:aws:sns:us-east-1:123:endpoint/APNS/app/device".to_string(), DeviceType::Ios)],
+        vec![(
+            "arn:aws:sns:us-east-1:123:endpoint/APNS/app/device".to_string(),
+            DeviceType::Ios,
+        )],
     );
 
     let sns_client = Arc::new(MockSnsClient::failing());
@@ -344,7 +363,10 @@ async fn test_process_push_notifications_inner_notification_without_matching_dev
     let mut user_device_endpoints = HashMap::new();
     user_device_endpoints.insert(
         user_2.clone(),
-        vec![("arn:aws:sns:us-east-1:123:endpoint/APNS/app/device".to_string(), DeviceType::Ios)],
+        vec![(
+            "arn:aws:sns:us-east-1:123:endpoint/APNS/app/device".to_string(),
+            DeviceType::Ios,
+        )],
     );
 
     let result = process_push_notifications_inner(

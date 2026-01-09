@@ -72,7 +72,6 @@ pub fn clear_push_notifications(
 pub async fn clear_push_notification(
     sns_client: &sns_client::SNS,
     device_endpoints: &[String],
-    // notification_id: Option<&str>,
     basic_notification: DbBasicNotification<String>,
 ) -> anyhow::Result<()> {
     // As of right now, we can only do this for APNS notifications since android requires a
@@ -141,7 +140,7 @@ pub async fn clear_push_notifications_basic(
     }
 
     let Some(basic_notification) = notification.transpose() else {
-        tracing::warn!("cannot clear a notification that is missing a collapse key");
+        tracing::trace!("cannot clear a notification that is missing a collapse key");
         return Ok(());
     };
 

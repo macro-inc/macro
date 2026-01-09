@@ -140,7 +140,7 @@ struct NotifyData {
 
 /// Attempts to send push notifications to provided users
 /// Returns a list of users who were sent push notifications.
-// #[tracing::instrument(skip(db, sns_client))]
+#[tracing::instrument(skip(db, sns_client))]
 pub async fn process_push_notifications(
     db: sqlx::Pool<sqlx::Postgres>,
     sns_client: Arc<sns_client::SNS>,
