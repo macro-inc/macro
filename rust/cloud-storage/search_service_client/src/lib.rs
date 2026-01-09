@@ -1,8 +1,5 @@
 use constants::INTERNAL_API_KEY_HEADER;
 pub(crate) mod constants;
-pub mod search_chats;
-pub mod search_documents;
-pub mod search_emails;
 pub mod search_unified;
 
 #[derive(Clone)]
