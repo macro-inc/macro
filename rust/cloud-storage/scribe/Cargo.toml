@@ -53,9 +53,7 @@ sync_service_client = { path = "../sync_service_client", optional = true }
 comms_service_client = { path = "../comms_service_client", optional = true }
 document_cognition_service_client = { path = "../document_cognition_service_client", optional = true }
 email_service_client = { path = "../email_service_client", optional = true }
-image = "0.25.9"
 models_comms = { path = "../models_comms", optional = true }
 models_email = { path = "../models_email", optional = true }
 models_sfs = { path = "../models_sfs", optional = true }
 static_file_service_client = { path = "../static_file_service_client", optional = true }
-webp = "0.3.1"

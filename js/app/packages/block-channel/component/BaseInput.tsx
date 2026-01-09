@@ -5,7 +5,6 @@ import {
 import type { SendMessageArgs } from '@block-channel/signal/channel';
 import { handleFileUpload } from '@block-channel/utils/inputAttachments';
 import { isInBlock } from '@core/block';
-import { BrightJoins } from '@core/component/BrightJoins';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { setEditorStateFromMarkdown } from '@core/component/LexicalMarkdown/utils';
@@ -33,6 +32,7 @@ import type { SimpleMention } from '@service-comms/generated/models/simpleMentio
 import { staticFileClient } from '@service-static-files/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { leading, throttle } from '@solid-primitives/scheduled';
+import { BrightJoins } from '@ui/components/BrightJoins';
 import { activeElement } from 'app/signal/focus';
 import { toast } from 'core/component/Toast/Toast';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';

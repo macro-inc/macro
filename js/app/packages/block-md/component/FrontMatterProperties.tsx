@@ -182,7 +182,7 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
         >
           {/* Collapsible header with horizontal line */}
           <div class="flex items-center gap-2 pt-2">
-            <div class="w-8 border-t-2 border-edge" />
+            <div class="w-6 border-t border-edge-muted" />
             <button
               class="flex items-center gap-1 px-2 cursor-pointer hover:opacity-70 transition-opacity"
               onClick={toggleExpanded}
@@ -192,14 +192,14 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
               ) : (
                 <CaretRight class="w-3 h-3" />
               )}
-              <span class="text-sm font-mono">Properties</span>
+              <span class="text-xs">Properties</span>
             </button>
-            <div class="flex-1 border-t-2 border-edge" />
+            <div class="flex-1 border-t border-edge-muted" />
           </div>
 
           {/* Collapsible content */}
           <Show when={isExpanded()}>
-            <div class="font-mono pt-2 pb-2 px-4">
+            <div class="py-2 text-xs">
               <Show when={isLoading()}>
                 <div class="flex items-center justify-center py-8">
                   <div class="w-5 h-5 animate-spin">
@@ -220,21 +220,19 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
                 emptyMessage="No properties pinned yet"
               />
 
-              <div class="pl-2 pt-4 pb-2">
+              <div class="pt-4 pb-2">
                 <button
                   class="flex items-center gap-1 cursor-pointer opacity-75 hover:opacity-50 transition-opacity"
                   onClick={toggleExpanded}
                 >
                   <EyeSlash class="w-3 h-3 mr-2" />
-                  <span class="text-sm text-ink font-mono">
-                    Hide Properties
-                  </span>
+                  <span class="text-ink-muted">Hide Properties</span>
                 </button>
               </div>
 
               <Modals />
             </div>
-            <div class="border-t-2 border-edge pt-2" />
+            <div class="border-t border-edge-muted pt-2" />
           </Show>
         </PropertiesProvider>
       </div>

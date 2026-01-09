@@ -3,7 +3,7 @@ pub mod document;
 pub mod email_insights;
 pub mod insights_backfill;
 
-use ai_format::format_date;
+use ai_format::util::format_date;
 use chrono::serde::{ts_seconds, ts_seconds_option};
 use chrono::{DateTime, Utc};
 use email_insights::{EmailInfo, GenerateEmailInsightContext};

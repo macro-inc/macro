@@ -20,10 +20,7 @@ import { DocumentPropertiesModal } from '@core/component/DocumentPropertiesModal
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import { ReferencesModal } from '@core/component/ReferencesModal';
 import { ShareButton } from '@core/component/TopBar/ShareButton';
-import {
-  ENABLE_PROPERTIES_METADATA,
-  ENABLE_REFERENCES_MODAL,
-} from '@core/constant/featureFlags';
+import { ENABLE_REFERENCES_MODAL } from '@core/constant/featureFlags';
 import { blockFileSignal, blockMetadataSignal } from '@core/signal/load';
 import { useGetPermissions } from '@core/signal/permissions';
 import {
@@ -132,13 +129,11 @@ export function TopBar() {
               buttonSize="sm"
             />
           </Show>
-          <Show when={ENABLE_PROPERTIES_METADATA}>
-            <DocumentPropertiesModal
-              documentId={documentId}
-              blockType="canvas"
-              buttonSize="sm"
-            />
-          </Show>
+          <DocumentPropertiesModal
+            documentId={documentId}
+            blockType="canvas"
+            buttonSize="sm"
+          />
           <div class="flex items-center">
             <SplitPermissionsBadge />
             <Show when={canvasFile()} keyed>

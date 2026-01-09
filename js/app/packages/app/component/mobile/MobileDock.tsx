@@ -33,7 +33,15 @@ function MobileDockButton(props: MobileDockButtonProps) {
 
 export function MobileDock() {
   const splitContext = useSplitPanelOrThrow();
-  const { selectedView, setSelectedView } = splitContext.unifiedListContext;
+  const { selectedView, setSelectedView } = splitContext.soupContext;
+
+  const ensureUnifiedList = () => {
+    const content = splitContext.handle.content();
+    if (content.type === 'component' && content.id === 'unified-list') return;
+    splitContext.handle.replace({
+      next: { type: 'component', id: 'unified-list' },
+    });
+  };
 
   const focusSearchInput = (viewId: string) => {
     setTimeout(() => {
@@ -55,6 +63,7 @@ export function MobileDock() {
         label="Search"
         active={selectedView() === VIEWCONFIG_DEFAULTS_IDS_ENUM.all}
         onClick={() => {
+          ensureUnifiedList();
           setSelectedView(VIEWCONFIG_DEFAULTS_IDS_ENUM.all);
           focusSearchInput(VIEWCONFIG_DEFAULTS_IDS_ENUM.all);
         }}
@@ -64,6 +73,7 @@ export function MobileDock() {
         label="Inbox"
         active={selectedView() === VIEWCONFIG_DEFAULTS_IDS_ENUM.signal}
         onClick={() => {
+          ensureUnifiedList();
           setSelectedView(VIEWCONFIG_DEFAULTS_IDS_ENUM.signal);
         }}
       />
@@ -72,6 +82,7 @@ export function MobileDock() {
         label="People"
         active={selectedView() === VIEWCONFIG_DEFAULTS_IDS_ENUM.people}
         onClick={() => {
+          ensureUnifiedList();
           setSelectedView(VIEWCONFIG_DEFAULTS_IDS_ENUM.people);
         }}
       />
@@ -80,6 +91,7 @@ export function MobileDock() {
         label="Tasks"
         active={selectedView() === VIEWCONFIG_DEFAULTS_IDS_ENUM.tasks}
         onClick={() => {
+          ensureUnifiedList();
           setSelectedView(VIEWCONFIG_DEFAULTS_IDS_ENUM.tasks);
         }}
       />

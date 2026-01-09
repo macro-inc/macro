@@ -8,7 +8,7 @@ import type { ViewId } from '@core/types/view';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import { globalSplitManager } from '../../signal/splitLayout';
 import { fireMacroJump } from '../MacroJump';
-import type { SplitContent } from './layoutManager';
+import type { ReferredFrom, SplitContent } from './layoutManager';
 import { focusAdjacentSplit } from './layoutUtils';
 import { canSpotlight } from './utils/canSpotlight';
 
@@ -22,7 +22,10 @@ export function registerSplitHotkeys(args: {
   canGoForward: () => boolean;
   goForward: () => void;
   setSelectedView: (view: ViewId) => void;
-  replaceSplit: (content: SplitContent) => void;
+  replaceSplit: (options: {
+    content: SplitContent;
+    referredFrom?: ReferredFrom;
+  }) => void;
   splitName: () => string;
   getSplitCount: () => number;
   isNotUnifiedList: () => boolean;
@@ -76,7 +79,10 @@ export function registerSplitHotkeys(args: {
     description: 'Go home',
     condition: isNotUnifiedList,
     keyDownHandler: () => {
-      replaceSplit({ type: 'component', id: 'unified-list' });
+      replaceSplit({
+        content: { type: 'component', id: 'unified-list' },
+        referredFrom: 'hotkey',
+      });
       return true;
     },
     hotkeyToken: TOKENS.split.goHome,

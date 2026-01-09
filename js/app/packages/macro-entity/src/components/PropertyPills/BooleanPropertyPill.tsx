@@ -1,11 +1,12 @@
 import type { Property } from '@core/component/Properties/types';
 import { PropertyDataTypeIcon } from '@core/component/Properties/utils';
 import { Tooltip } from '@core/component/Tooltip';
-import { cornerClip } from '@core/util/clipPath';
+
 import { PropertyPillTooltip } from './PropertyPillTooltip';
 
 type BooleanPropertyPillProps = {
   property: Property & { valueType: 'BOOLEAN' };
+  compressed?: boolean;
 };
 
 /**
@@ -26,23 +27,25 @@ export const BooleanPropertyPill = (props: BooleanPropertyPillProps) => {
       }}
     >
       <div
-        class="p-px bg-edge box-border h-fit flex items-center"
-        style={{ 'clip-path': cornerClip('0.2rem', 0, 0, 0) }}
+        class="inline-flex items-center gap-1.5 text-xs leading-none text-ink-muted border border-edge-muted h-fit p-1.5"
+        classList={{
+          '@3xl/soup:px-2 @3xl/soup:py-1': !props.compressed,
+        }}
       >
-        <div
-          class="inline-flex items-center gap-1.5 p-1.5 @3xl/soup:px-2 @3xl/soup:py-1 text-xs leading-none text-ink-muted bg-panel box-border"
-          style={{ 'clip-path': cornerClip('calc(0.2rem - 0.5px)', 0, 0, 0) }}
+        <PropertyDataTypeIcon
+          property={{
+            data_type: 'BOOLEAN',
+          }}
+          class="size-3.5 shrink-0"
+        />
+        <span
+          class="truncate max-w-[120px] hidden"
+          classList={{
+            '@3xl/soup:inline': !props.compressed,
+          }}
         >
-          <PropertyDataTypeIcon
-            property={{
-              data_type: 'BOOLEAN',
-            }}
-            class="size-3.5 shrink-0"
-          />
-          <span class="truncate max-w-[120px] hidden @3xl/soup:inline">
-            {props.property.displayName}
-          </span>
-        </div>
+          {props.property.displayName}
+        </span>
       </div>
     </Tooltip>
   );
@@ -54,16 +57,8 @@ const BooleanTooltipContent = (props: {
   return (
     <PropertyPillTooltip property={props.property}>
       <div class="flex items-center gap-1.5 flex-wrap">
-        <div
-          class="p-px bg-edge box-border h-fit w-fit flex items-center"
-          style={{ 'clip-path': cornerClip('0.2rem', 0, 0, 0) }}
-        >
-          <div
-            class="inline-flex items-center px-2 py-1 text-xs leading-none text-ink-muted bg-panel box-border"
-            style={{ 'clip-path': cornerClip('calc(0.2rem - 0.5px)', 0, 0, 0) }}
-          >
-            <span>True</span>
-          </div>
+        <div class="inline-flex items-center px-2 py-1 text-xs leading-none text-ink-muted border border-edge-muted h-fit w-fit">
+          <span>True</span>
         </div>
       </div>
     </PropertyPillTooltip>

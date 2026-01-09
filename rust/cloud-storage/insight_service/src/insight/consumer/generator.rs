@@ -8,7 +8,7 @@ use crate::insight::consumer::{INSIGHT_MODEL, Insights};
 use crate::insight::deduplication::{DeduplicationConfig, InsightDeduplicator};
 use ai::structured_output_v2::structured_completion_v2;
 use ai::types::{MessageBuilder, RequestBuilder};
-use ai_format::InsightContextLog;
+use ai_format::insight_context_log::InsightContextLog;
 use anyhow::{Context, Result};
 use model::insight_context::UserInsightRecord;
 use std::fmt::Display;

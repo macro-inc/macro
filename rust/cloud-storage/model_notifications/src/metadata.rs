@@ -7,11 +7,15 @@ use utoipa::ToSchema;
 
 #[derive(Debug, Clone, Copy, ToSchema, Doppleganger, Serialize, Deserialize)]
 #[dg(backward = models_comms::channel::ChannelType)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "camelCase")]
 pub enum ChannelType {
+    #[serde(alias = "Public", alias = "public")]
     Public,
+    #[serde(alias = "Organization", alias = "organization")]
     Organization,
+    #[serde(alias = "Private", alias = "private")]
     Private,
+    #[serde(alias = "DirectMessage", alias = "direct_message")]
     DirectMessage,
 }
 

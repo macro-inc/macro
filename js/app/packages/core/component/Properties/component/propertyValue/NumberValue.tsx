@@ -52,11 +52,11 @@ export const NumberValue: Component<NumberValueProps> = (props) => {
       fallback={
         <button
           onClick={handleClick}
-          class={`text-left text-xs px-2 py-1 border border-edge ${
-            supportsInline()
-              ? 'hover:bg-hover cursor-pointer bg-transparent text-ink'
-              : 'bg-transparent text-ink-muted cursor-default'
-          } block max-w-full break-words`}
+          class="text-left px-2 py-0.5 border border-edge-muted bg-transparent block max-w-full break-words cursor-default"
+          classList={{
+            'text-ink': supportsInline(),
+            'text-ink-muted': !supportsInline(),
+          }}
         >
           <Show when={hasValue()} fallback={<EmptyValue />}>
             <span class="block truncate max-w-full">{displayValue}</span>
@@ -78,7 +78,7 @@ export const NumberValue: Component<NumberValueProps> = (props) => {
         onKeyDown={handleKeyDown}
         disabled={editor.isSaving()}
         placeholder="Enter number..."
-        class="w-full text-left text-ink text-xs px-2 py-1 border border-edge bg-transparent focus:outline-none focus:border-accent"
+        class="w-full text-left text-ink px-2 py-0.5 border border-edge-muted bg-transparent focus:outline-none focus:border-accent"
       />
     </Show>
   );
