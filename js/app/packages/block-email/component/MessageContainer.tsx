@@ -5,6 +5,7 @@ import { useEmailContext } from '@block-email/component/EmailContext';
 import { EmailInput } from '@block-email/component/EmailInput';
 import { EmailMessageBody } from '@block-email/component/EmailMessageBody';
 import { EmailMessageTopBar } from '@block-email/component/EmailMessageTopBar';
+import { isMessageFromCurrentUser } from '@block-email/util/emailUser';
 import { ImageGalleryPreview } from '@core/component/ImageGalleryPreview';
 import { ImagePreview } from '@core/component/ImagePreview';
 import { Message } from '@core/component/Message';
@@ -78,11 +79,9 @@ export function MessageContainer(props: MessageContainerProps) {
   const currentUserEmail = useEmail();
   const [currentUserName] = useDisplayName(tryMacroId(userId() ?? ''));
 
-  const isFromCurrentUser = createMemo(() => {
-    const fromEmail = props.message.from?.email?.toLowerCase();
-    const userEmail = currentUserEmail()?.toLowerCase();
-    return fromEmail && userEmail && fromEmail === userEmail;
-  });
+  const isFromCurrentUser = createMemo(() =>
+    isMessageFromCurrentUser(props.message, currentUserEmail())
+  );
 
   const isBodyExpanded = createMemo(() => {
     return context.messages.isBodyExpanded(props.message.db_id ?? '');

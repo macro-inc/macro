@@ -13,7 +13,11 @@ import {
   type Setter,
   Show,
 } from 'solid-js';
-import { getFirstName } from '../util/name';
+import {
+  getRecipientDisplayName,
+  getSenderDisplayName,
+  isMessageFromCurrentUser,
+} from '../util/emailUser';
 import { type EmailMessageAction, MessageActions } from './MessageActions';
 
 interface EmailMessageTopBarProps {
@@ -53,11 +57,6 @@ function formatShortDate(timestamp: string): string {
     month: 'short',
     day: 'numeric',
   });
-}
-
-function getRecipientDisplayName(r: Recipient, currentEmail?: string): string {
-  if (r.email === currentEmail) return 'Me';
-  return r.name ? getFirstName(r.name) : (r.email?.split('@')[0] ?? '');
 }
 
 function formatRecipientList(recipients: string[]): string {
@@ -199,20 +198,13 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
   const [isHovering, setIsHovering] = createSignal(false);
   const userEmail = useEmail();
 
-  const isFromCurrentUser = createMemo(() => {
-    const fromEmail = props.message.from?.email?.toLowerCase();
-    const currentEmail = userEmail()?.toLowerCase();
-    return fromEmail && currentEmail && fromEmail === currentEmail;
-  });
+  const isFromCurrentUser = createMemo(() =>
+    isMessageFromCurrentUser(props.message, userEmail())
+  );
 
-  const senderName = createMemo(() => {
-    if (isFromCurrentUser()) return 'Me';
-    const from = props.message.from;
-    if (!from) return 'Unknown';
-    return from.name
-      ? getFirstName(from.name)
-      : (from.email?.split('@')[0] ?? 'Unknown');
-  });
+  const senderName = createMemo(() =>
+    getSenderDisplayName(props.message, userEmail())
+  );
 
   const recipientSummary = createMemo(() => {
     const currentEmail = userEmail();

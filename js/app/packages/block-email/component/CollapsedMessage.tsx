@@ -3,7 +3,10 @@ import { UserIcon } from '@core/component/UserIcon';
 import type { MessageWithBodyReplyless } from '@service-email/generated/schemas';
 import { useEmail, useUserId } from '@service-gql/client';
 import { createMemo, createSignal } from 'solid-js';
-import { getFirstName } from '../util/name';
+import {
+  getSenderDisplayName,
+  isMessageFromCurrentUser,
+} from '../util/emailUser';
 
 interface CollapsedMessageProps {
   message: MessageWithBodyReplyless;
@@ -16,23 +19,13 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
   const currentUserEmail = useEmail();
   const currentUserId = useUserId();
 
-  const isFromCurrentUser = createMemo(() => {
-    const fromEmail = props.message.from?.email?.toLowerCase();
-    const userEmail = currentUserEmail()?.toLowerCase();
-    return fromEmail && userEmail && fromEmail === userEmail;
-  });
+  const isFromCurrentUser = createMemo(() =>
+    isMessageFromCurrentUser(props.message, currentUserEmail())
+  );
 
-  const senderDisplay = createMemo(() => {
-    if (isFromCurrentUser()) {
-      return 'Me';
-    }
-    const from = props.message.from;
-    if (!from) return 'Unknown';
-    if (from.name) {
-      return getFirstName(from.name);
-    }
-    return from.email ?? 'Unknown';
-  });
+  const senderDisplay = createMemo(() =>
+    getSenderDisplayName(props.message, currentUserEmail())
+  );
 
   const snippet = createMemo(() => {
     // Prefer body_text for snippet, fall back to stripping HTML
