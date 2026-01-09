@@ -134,6 +134,10 @@ export const PropertyFilterControl: Component<PropertyFilterControlProps> = (
         </div>
       </Show>
 
+      {/* TODO: Optimization opportunity - fetch properties once here and pass
+          initialProperty to each pill to avoid N API calls on restore.
+          Also add controlled editing state (editingPropertyId) so only one
+          dropdown is open at a time. */}
       <For each={filters}>
         {(filter, index) => (
           <>
