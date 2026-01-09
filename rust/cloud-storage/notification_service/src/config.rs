@@ -6,8 +6,9 @@ use std::sync::LazyLock;
 pub static BASE_URL: LazyLock<String> = LazyLock::new(|| std::env::var("BASE_URL").unwrap());
 
 /// The apple bundle id
-pub static APPLE_BUNDLE_ID: LazyLock<String> =
-    LazyLock::new(|| std::env::var("APPLE_BUNDLE_ID").unwrap());
+pub static APPLE_BUNDLE_ID: LazyLock<String> = LazyLock::new(|| {
+    std::env::var("APPLE_BUNDLE_ID").unwrap_or_else(|_| "com.macro.app.prod".to_string())
+});
 
 #[derive(Debug)]
 pub struct Config {

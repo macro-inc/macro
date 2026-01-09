@@ -17,6 +17,9 @@ pub use raw::*;
 pub use unsubscribe::*;
 use uuid::Uuid;
 
+#[cfg(test)]
+mod tests;
+
 #[derive(Debug, Clone, Serialize, Deserialize, EnumDiscriminants, ToSchema)]
 #[deny(missing_docs)]
 #[strum_discriminants(name(NotificationEventType))]

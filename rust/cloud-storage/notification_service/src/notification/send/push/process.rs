@@ -7,7 +7,9 @@ use crate::{
 };
 use futures::StreamExt;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_notifications::{DeviceEndpoint, HashedCollapseKey, NotificationWithRecipient};
+use model_notifications::{
+    DeviceEndpoint, DeviceType, HashedCollapseKey, NotificationWithRecipient,
+};
 use notification_db_client::notification::get::{BasicNotifRepoImpl, BasicNotificationRepo};
 use sns_client::{MessageAttributes, NotificationSender, SnsTarget};
 use std::{
@@ -16,6 +18,9 @@ use std::{
 };
 use tokio::sync::mpsc::error::SendError;
 use uuid::Uuid;
+
+#[cfg(test)]
+mod tests;
 
 pub type NotificationsForDevices<'a> = HashMap<&'a NotificationWithRecipient, Vec<DeviceEndpoint>>;
 
@@ -143,10 +148,25 @@ pub async fn process_push_notifications(
 ) -> Result<HashSet<MacroUserIdStr<'static>>, anyhow::Error> {
     let user_ids: Vec<_> = notifications.keys().cloned().collect();
 
-    let mut user_device_endpoints =
+    let user_device_endpoints =
         notification_db_client::device::get_users_device_endpoints(&db, user_ids.as_slice())
             .await?;
 
+    process_push_notifications_inner(
+        user_device_endpoints,
+        notifications,
+        sns_client,
+        BasicNotifRepoImpl(db),
+    )
+    .await
+}
+
+async fn process_push_notifications_inner<U: NotificationSender, T: BasicNotificationRepo>(
+    mut user_device_endpoints: HashMap<MacroUserIdStr<'static>, Vec<(String, DeviceType)>>,
+    notifications: &HashMap<MacroUserIdStr<'static>, Vec<NotificationWithRecipient>>,
+    sns_client: Arc<U>,
+    notif_repo: T,
+) -> Result<HashSet<MacroUserIdStr<'static>>, anyhow::Error> {
     let to_send: HashMap<_, _> = notifications
         .iter()
         .flat_map(|(user_id, notifs)| {
@@ -170,7 +190,7 @@ pub async fn process_push_notifications(
         })
         .collect();
 
-    let (worker, handle) = PushNotifWorker::new(sns_client, BasicNotifRepoImpl(db));
+    let (worker, handle) = PushNotifWorker::new(sns_client, notif_repo);
 
     stream_push_notifs_to_user(worker, to_send).await;
 
