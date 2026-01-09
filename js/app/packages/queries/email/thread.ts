@@ -1,11 +1,13 @@
 import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
 import { catchToResult, isErr, ok, throwOnErr } from '@core/util/maybeResult';
+import { queryKeys } from '@macro-entity';
 import { emailClient } from '@service-email/client';
 import type {
   MessageToSend,
   SendMessageResponse,
   APIThread as Thread,
 } from '@service-email/generated/schemas';
+import type { SoupPage } from '@service-storage/generated/schemas';
 import {
   type InfiniteData,
   type SolidInfiniteQueryOptions,
@@ -145,19 +147,30 @@ export function useThreadQuery<Options extends UseThreadQueryOptions>(
 }
 
 type MarkThreadAsSeenParams = { threadId: string };
+type MarkThreadAsSeenContext = {
+  previousThreadData: InfiniteData<Thread, number> | undefined;
+};
 
 /**
  * When marking a thread as seen we optimistically flip the `is_read` field to true
+ * on both the thread query and the soup query.
+ *
+ * Note: We don't await cancelQueries to avoid triggering suspense boundaries
+ * during the synchronous optimistic update phase.
  */
-async function threadSeenOnMutate(params: MarkThreadAsSeenParams) {
-  await queryClient.cancelQueries({
+function threadSeenOnMutate(
+  params: MarkThreadAsSeenParams
+): MarkThreadAsSeenContext {
+  // Cancel without awaiting to avoid suspense triggers
+  queryClient.cancelQueries({
     queryKey: emailKeys.threadMessages(params.threadId).queryKey,
   });
 
-  const previousData = queryClient.getQueryData<InfiniteData<Thread, number>>(
-    emailKeys.threadMessages(params.threadId).queryKey
-  );
+  const previousThreadData = queryClient.getQueryData<
+    InfiniteData<Thread, number>
+  >(emailKeys.threadMessages(params.threadId).queryKey);
 
+  // Optimistically update thread query
   queryClient.setQueryData<InfiniteData<Thread, number>>(
     emailKeys.threadMessages(params.threadId).queryKey,
     (old) =>
@@ -170,14 +183,45 @@ async function threadSeenOnMutate(params: MarkThreadAsSeenParams) {
       }
   );
 
-  return { previousData };
+  // Optimistically update soup queries to mark email as read
+  queryClient.setQueriesData<InfiniteData<SoupPage, unknown>>(
+    { queryKey: queryKeys.all.dss },
+    (old) => {
+      if (!old) return old;
+      return {
+        ...old,
+        pages: old.pages.map((page) => ({
+          ...page,
+          items: page.items.map((item) => {
+            if (item.tag === 'emailThread' && item.data.id === params.threadId) {
+              return {
+                ...item,
+                data: {
+                  ...item.data,
+                  isRead: true,
+                },
+              };
+            }
+            return item;
+          }),
+        })),
+      };
+    }
+  );
+
+  return { previousThreadData };
 }
 
 /**
  * Mutation to mark a thread as seen.
  */
 export function useMarkThreadAsSeenMutation(
-  callbacks?: MutationCallbacks<void, Error, MarkThreadAsSeenParams>
+  callbacks?: MutationCallbacks<
+    void,
+    Error,
+    MarkThreadAsSeenParams,
+    MarkThreadAsSeenContext
+  >
 ) {
   return useMutation(() => ({
     mutationFn: async (params: MarkThreadAsSeenParams) =>
@@ -187,13 +231,21 @@ export function useMarkThreadAsSeenMutation(
             thread_id: params.threadId,
           })
       )),
-    ...withCallbacks<void, Error, MarkThreadAsSeenParams>(
+    ...withCallbacks<
+      void,
+      Error,
+      MarkThreadAsSeenParams,
+      MarkThreadAsSeenContext
+    >(
       {
-        onMutate: async (params: MarkThreadAsSeenParams) =>
-          await threadSeenOnMutate(params),
+        onMutate: (params: MarkThreadAsSeenParams) => threadSeenOnMutate(params),
         onSuccess: (_, params) => {
+          // Invalidate to ensure server state is synced
           queryClient.invalidateQueries({
             queryKey: emailKeys.threadMessages(params.threadId).queryKey,
+          });
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.all.dss,
           });
         },
       },
