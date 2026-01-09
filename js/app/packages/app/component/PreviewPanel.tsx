@@ -9,6 +9,7 @@ import {
   createMemo,
   createRenderEffect,
   createSignal,
+  onCleanup,
   onMount,
   Show,
 } from 'solid-js';
@@ -33,14 +34,18 @@ type PreviewPanel = {
 const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
   props
 ) => {
-  let containerRef!: HTMLDivElement;
+  const [containerRef, setContainerRef] = createSignal<HTMLDivElement | null>(
+    null
+  );
   let scopedSplitPanelContextType: SplitPanelContextType = {} as any;
+  const splitPanelContext = useSplitPanelOrThrow();
 
   if (props.selectedEntity.type === 'project') {
-    const splitPanelContext = useSplitPanelOrThrow();
     const { getSplitCount } = useSplitLayout();
     const unifiedListContext = createSoupContext({
       isRenderedFromPreview: true,
+      parentContext: splitPanelContext.unifiedListContext,
+      domRef: containerRef,
     });
 
     const [attachHotKeys, splitHotkeyScope] = useHotkeyDOMScope(
@@ -67,7 +72,7 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
     scopedSplitPanelContextType.previewState = [previewState, setPreviewState];
 
     onMount(() => {
-      attachHotKeys(containerRef);
+      attachHotKeys(containerRef()!);
     });
   }
 
@@ -96,6 +101,16 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
     return id;
   }, props.selectedEntity.id);
 
+  createRenderEffect(() => {
+    // Temporary fix to prevent toolbarLeft overlapping right content
+    if (!splitPanelContext.layoutRefs.toolbarLeft) return;
+    splitPanelContext.layoutRefs.toolbarLeft.style.maxWidth = `${splitPanelContext.halfSplitState?.()?.percentage ?? 30}%`;
+    onCleanup(() => {
+      if (!splitPanelContext.layoutRefs.toolbarLeft) return;
+      splitPanelContext.layoutRefs.toolbarLeft.style.maxWidth = '';
+    });
+  });
+
   return (
     <div
       class="size-full"
@@ -119,7 +134,8 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
       onPointerDown={() => {
         setInteractedWith(true);
       }}
-      ref={containerRef}
+      tabIndex={-1}
+      ref={setContainerRef}
     >
       <SplitPanelContext.Provider
         value={{

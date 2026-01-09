@@ -250,6 +250,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     entityListRefSignal: [, setEntityListRef],
     entitiesSignal: [entities_, setEntities],
     emailViewSignal: [emailView],
+    activeContextSignal: [activeUnifiedListContext],
   } = unifiedListContext;
 
   // Properties for task entities
@@ -1770,11 +1771,15 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       highlighted={
                         isPanelActive() && focusedSelector(innerProps.entity.id)
                       }
-                      selected={
-                        focusedSelector(innerProps.entity.id) ||
-                        contextAndModalState.selectedEntity?.id ===
-                          innerProps.entity.id
-                      }
+                      selected={{
+                        active:
+                          focusedSelector(innerProps.entity.id) ||
+                          contextAndModalState.selectedEntity?.id ===
+                            innerProps.entity.id,
+                        muted:
+                          focusedSelector(innerProps.entity.id) &&
+                          activeUnifiedListContext() !== unifiedListContext,
+                      }}
                       checked={multiSelectSelector(innerProps.entity.id)}
                       onChecked={(next, shiftKey) =>
                         handleMultiSelectChecked({

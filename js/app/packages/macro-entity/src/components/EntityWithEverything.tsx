@@ -452,7 +452,7 @@ interface EntityProps<T extends WithNotification<EntityData>>
   showUnrollNotifications?: boolean;
   showDoneButton?: boolean;
   highlighted?: boolean;
-  selected?: boolean;
+  selected: { active: boolean; muted?: boolean };
   ref?: Ref<HTMLDivElement>;
   onChecked?: (checked: boolean, shiftKey?: boolean) => void;
   checked?: boolean;
@@ -874,11 +874,13 @@ export function EntityWithEverything(
       }}
       classList={{
         'outline outline-accent/20 outline-offset-[-1px]':
-          !isTouchDevice() && props.selected && !props.checked,
+          !isTouchDevice() && props.selected.active && !props.checked,
         '!bg-accent/5 outline outline-accent/20 outline-offset-[-1px]':
           props.checked,
         'bracket outline outline-accent/20 outline-offset-[-1px]':
-          !isTouchDevice() && props.selected,
+          !isTouchDevice() && props.selected.active,
+        'after:opacity-20 !outline-accent/10':
+          !isTouchDevice() && props.selected.active && props.selected.muted,
         'active:bracket active:outline active:outline-accent/20 active:outline-offset-[-1px]':
           isTouchDevice() && !props.checked,
       }}
@@ -1056,7 +1058,8 @@ export function EntityWithEverything(
             </Show>
             <Show
               when={
-                (props.selected || hoveredEntityId() === props.entity.id) &&
+                (props.selected.active ||
+                  hoveredEntityId() === props.entity.id) &&
                 props.onClickRowAction
               }
             >

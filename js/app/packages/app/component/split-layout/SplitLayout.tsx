@@ -356,7 +356,10 @@ function SplitPanel(props: SplitPanelProps) {
   const panelSize = createElementSize(panelRef);
   const [contentOffsetTop, setContentOffsetTop] = createSignal(0);
 
-  const unifiedListContext = createSoupContext();
+  const unifiedListContext = createSoupContext({
+    splitId: props.split.id,
+    domRef: panelRef,
+  });
 
   const [previewState, setPreviewState] = createSignal(false);
 
