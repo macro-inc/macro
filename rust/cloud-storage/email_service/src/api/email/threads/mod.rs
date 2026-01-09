@@ -37,9 +37,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         ));
 
     // user can still view threads shared with them if they don't have email enabled
-    let optional_link_routes = Router::new()
-        .route("/:id", get(get::get_thread_handler))
-        .with_state(state.clone());
+    let optional_link_routes = Router::new().route("/:id", get(get::get_thread_handler));
 
     Router::new()
         .merge(required_link_routes)
