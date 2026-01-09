@@ -41,8 +41,13 @@ export function MessageActions(props: {
   };
 
   return (
-    <Show when={canShowActions()}>
-      <div class="flex flex-row items-center gap-4">
+    <div
+      class="flex flex-row items-center gap-4 transition-opacity"
+      classList={{
+        'opacity-0 pointer-events-none': !canShowActions(),
+        'opacity-100': canShowActions(),
+      }}
+    >
         <Show
           when={
             shouldShowReplyAll() && !props.hiddenActions?.includes('reply-all')
@@ -112,7 +117,6 @@ export function MessageActions(props: {
             label: 'Mark as unread',
           }}
         /> */}
-      </div>
-    </Show>
+    </div>
   );
 }
