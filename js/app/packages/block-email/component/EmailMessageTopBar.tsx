@@ -5,14 +5,13 @@ import CaretDown from '@icon/regular/caret-down.svg';
 import CaretUp from '@icon/regular/caret-up.svg';
 import type { MessageWithBodyReplyless } from '@service-email/generated/schemas';
 import { type Accessor, For, type Setter, Show } from 'solid-js';
-import type { SetStoreFunction } from 'solid-js/store';
 import { getFirstName } from '../util/name';
 import { type EmailMessageAction, MessageActions } from './MessageActions';
 
 interface EmailMessageTopBarProps {
   message: MessageWithBodyReplyless;
   focused: boolean;
-  setExpandedMessageBodyIds: SetStoreFunction<Record<string, boolean>>;
+  setExpandedBodyId: (id: string, expanded: boolean) => void;
   isBodyExpanded: Accessor<boolean>;
   expandedHeader: Accessor<boolean>;
   setExpandedHeader: Setter<boolean>;
@@ -40,9 +39,9 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
           return;
         }
         if (props.isBodyExpanded() && props.message.db_id) {
-          props.setExpandedMessageBodyIds(props.message.db_id, false);
+          props.setExpandedBodyId(props.message.db_id, false);
         } else if (props.message.db_id) {
-          props.setExpandedMessageBodyIds(props.message.db_id, true);
+          props.setExpandedBodyId(props.message.db_id, true);
         }
       }}
     >
@@ -65,23 +64,25 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
             </div>
           </Show>
         </div>
-        {/* Date and Actions */}
-        <div class="flex flex-row gap-4 items-center">
-          {/* Date */}
-          <div class="text-xs text-ink-muted">
-            {props.message.internal_date_ts &&
-              formatDate(
-                new Date(props.message.internal_date_ts).getTime() / 1000
-              )}
+        {/* Date and Actions - only show when expanded */}
+        <Show when={props.isBodyExpanded()}>
+          <div class="flex flex-row gap-4 items-center">
+            {/* Date */}
+            <div class="text-xs text-ink-muted">
+              {props.message.internal_date_ts &&
+                formatDate(
+                  new Date(props.message.internal_date_ts).getTime() / 1000
+                )}
+            </div>
+            <MessageActions
+              message={props.message}
+              showActions={props.focused}
+              setShowReply={props.setShowReply}
+              isLastMessage={props.isLastMessage}
+              hiddenActions={props.hiddenActions}
+            />
           </div>
-          <MessageActions
-            message={props.message}
-            showActions={props.focused}
-            setShowReply={props.setShowReply}
-            isLastMessage={props.isLastMessage}
-            hiddenActions={props.hiddenActions}
-          />
-        </div>
+        </Show>
       </div>
       {/* Recipient Fields */}
       <Show when={props.isBodyExpanded()}>

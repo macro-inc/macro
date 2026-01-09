@@ -68,6 +68,9 @@ export type EmailContextValues = {
     setTargetMessageID: (id: string | undefined) => void;
     focusedID: Accessor<string | undefined>;
     setFocused: (messageID: string | undefined) => void;
+    expandedBodyIds: Record<string, boolean>;
+    setExpandedBodyId: (id: string, expanded: boolean) => void;
+    isBodyExpanded: (id: string) => boolean;
   };
   thread: Accessor<APIThread | undefined>;
   permissions: Accessor<{
@@ -157,6 +160,9 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
   );
 
   const [focusedMessageId, setFocusedMessageId] = createSignal<string>();
+  const [expandedMessageBodyIds, setExpandedMessageBodyIds] = createStore<
+    Record<string, boolean>
+  >({});
   const [searchParams] = useSearchParams();
   const searchParamsMessageId = () => {
     const messageID = searchParams[URL_PARAMS.messageId];
@@ -419,6 +425,10 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
             setTargetMessageID: setTargetMessageId,
             list: createMemo(() => threadQuery.data?.filtered ?? []),
             unfiltered: createMemo(() => threadQuery.data?.messages ?? []),
+            expandedBodyIds: expandedMessageBodyIds,
+            setExpandedBodyId: (id: string, expanded: boolean) =>
+              setExpandedMessageBodyIds(id, expanded),
+            isBodyExpanded: (id: string) => expandedMessageBodyIds[id] ?? false,
           },
           permissions: createMemo(() => {
             const perms = getPermissions(threadQuery.data?.access_level);

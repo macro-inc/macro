@@ -32,13 +32,10 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import type { SetStoreFunction } from 'solid-js/store';
 import { Portal } from 'solid-js/web';
 
 interface MessageContainerProps {
   message: MessageWithBodyReplyless;
-  expandedMessageBodyIds: Record<string, boolean>;
-  setExpandedMessageBodyIds: SetStoreFunction<Record<string, boolean>>;
   isFirstMessage: boolean;
   isLastMessage: boolean;
   isFocused: boolean;
@@ -64,7 +61,7 @@ export function MessageContainer(props: MessageContainerProps) {
   const [currentUserName] = useDisplayName(tryMacroId(userId() ?? ''));
 
   const isBodyExpanded = createMemo(() => {
-    return props.expandedMessageBodyIds[props.message.db_id ?? ''];
+    return context.messages.isBodyExpanded(props.message.db_id ?? '');
   });
 
   const isNewMessage = createMemo(() => {
@@ -126,10 +123,10 @@ export function MessageContainer(props: MessageContainerProps) {
   createEffect(() => {
     const id = props.message.db_id;
     if (props.isLastMessage && id) {
-      props.setExpandedMessageBodyIds(id, true);
+      context.messages.setExpandedBodyId(id, true);
     }
     if (isNewMessage() && id) {
-      props.setExpandedMessageBodyIds(id, true);
+      context.messages.setExpandedBodyId(id, true);
     }
   });
 
@@ -204,7 +201,7 @@ export function MessageContainer(props: MessageContainerProps) {
             <EmailMessageTopBar
               message={props.message}
               focused={props.isFocused}
-              setExpandedMessageBodyIds={props.setExpandedMessageBodyIds}
+              setExpandedBodyId={context.messages.setExpandedBodyId}
               isBodyExpanded={isBodyExpanded}
               expandedHeader={expandedHeader}
               setExpandedHeader={setExpandedHeader}
@@ -226,7 +223,7 @@ export function MessageContainer(props: MessageContainerProps) {
                   message={props.message}
                   onClick={() => {
                     if (props.message.db_id) {
-                      props.setExpandedMessageBodyIds(props.message.db_id, true);
+                      context.messages.setExpandedBodyId(props.message.db_id, true);
                       context.messages.setFocused(props.message.db_id);
                     }
                   }}
@@ -237,7 +234,7 @@ export function MessageContainer(props: MessageContainerProps) {
                 message={props.message}
                 isBodyExpanded={isBodyExpanded}
                 setExpandedMessageBody={(id) =>
-                  props.setExpandedMessageBodyIds(id, true)
+                  context.messages.setExpandedBodyId(id, true)
                 }
                 setFocusedMessageId={context.messages.setFocused}
                 isFirstMessageInThread={props.isFirstMessage}

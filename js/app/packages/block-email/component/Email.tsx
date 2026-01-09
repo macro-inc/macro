@@ -322,6 +322,13 @@ function EmailContent(props: EmailViewProps) {
     hotkey: 'enter',
     description: 'Focus Email Input',
     keyDownHandler: () => {
+      // If a message is focused and collapsed, expand it instead of focusing input
+      const focusedId = context.messages.focusedID();
+      if (focusedId && !context.messages.isBodyExpanded(focusedId)) {
+        context.messages.setExpandedBodyId(focusedId, true);
+        return true;
+      }
+      // Otherwise, focus the email input
       if (markdownDomRef) {
         markdownDomRef.focus();
         return true;
