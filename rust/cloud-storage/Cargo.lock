@@ -5611,6 +5611,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "models_search_cursor"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "uuid",
+]
+
+[[package]]
 name = "models_sfs"
 version = "0.1.0"
 dependencies = [
@@ -5689,9 +5698,11 @@ name = "name_search"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "macro_db_migrator",
  "macro_user_id",
  "models_opensearch",
+ "models_search_cursor",
  "non_empty",
  "serde",
  "sqlx",
@@ -7587,6 +7598,7 @@ dependencies = [
  "models_opensearch",
  "models_pagination",
  "models_search",
+ "models_search_cursor",
  "name_search",
  "opensearch_client",
  "secretsmanager_client",
