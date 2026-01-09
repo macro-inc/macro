@@ -145,8 +145,8 @@ function ToastContent(props: {
         ${TOAST_STYLES[props.toastType].background}
         ${TOAST_STYLES[props.toastType].border}
         ${TOAST_STYLES[props.toastType].text}
-        ui-opened:animate-slide-in ui-closed:animate-hide transition-transform ui-swipe-move:translate-x-[var(--kb-toast-swipe-move-x)]
-        ui-swipe-cancel:translate-x-0 ui-swipe-cancel:ease-out ui-swipe-cancel:duration-200 ui-swipe-end:animate-swipe-out`}
+        data-opened:animate-slide-in data-closed:animate-hide transition-transform data-[swipe=move]:translate-x-[var(--kb-toast-swipe-move-x)]
+        data-[swipe=cancel]:translate-x-0 data-[swipe=cancel]:ease-out data-[swipe=cancel]:duration-200 data-[swipe=end]:animate-swipe-out`}
       duration={props.duration}
       persistent={props.persistent}
     >
@@ -304,8 +304,8 @@ function embed(
       <Toast
         toastId={props.toastId}
         class="flex flex-col items-center justify-between gap-2 border rounded-md p-3 pointer-events-auto border-edge-muted bg-panel relative
-          ui-opened:animate-slide-in ui-closed:animate-hide transition-transform ui-swipe-move:translate-x-[var(--kb-toast-swipe-move-x)]
-          ui-swipe-cancel:translate-x-0 ui-swipe-cancel:ease-out ui-swipe-cancel:duration-200 ui-swipe-end:animate-swipe-out"
+          data-opened:animate-slide-in data-closed:animate-hide transition-transform data-[swipe=move]:translate-x-[var(--kb-toast-swipe-move-x)]
+          data-[swipe=cancel]:translate-x-0 data-[swipe=cancel]:ease-out data-[swipe=cancel]:duration-200 data-[swipe=end]:animate-swipe-out"
         duration={options?.duration}
         persistent={options?.persistent}
       >
@@ -328,8 +328,8 @@ export function createUploadToast(message: string) {
         toastId={props.toastId}
         persistent={true}
         class={`flex flex-col items-center justify-between gap-2 border rounded-md p-3 shadow-lg bg-menu border-edge-muted pointer-events-auto
-                ui-opened:animate-slide-in ui-closed:animate-hide transition-transform ui-swipe-move:translate-x-[var(--kb-toast-swipe-move-x)]
-                ui-swipe-cancel:translate-x-0 ui-swipe-cancel:ease-out ui-swipe-cancel:duration-200 ui-swipe-end:animate-swipe-out`}
+                data-opened:animate-slide-in data-closed:animate-hide transition-transform data-[swipe=move]:translate-x-[var(--kb-toast-swipe-move-x)]
+                data-[swipe=cancel]:translate-x-0 data-[swipe=cancel]:ease-out data-[swipe=cancel]:duration-200 data-[swipe=end]:animate-swipe-out`}
       >
         <div class="flex items-center w-full">
           <Spinner class="mr-3 h-7 animate-spin shrink-0" />

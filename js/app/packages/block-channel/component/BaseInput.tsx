@@ -5,7 +5,6 @@ import {
 import type { SendMessageArgs } from '@block-channel/signal/channel';
 import { handleFileUpload } from '@block-channel/utils/inputAttachments';
 import { isInBlock } from '@core/block';
-import { BrightJoins } from '@core/component/BrightJoins';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { setEditorStateFromMarkdown } from '@core/component/LexicalMarkdown/utils';
@@ -33,6 +32,7 @@ import type { SimpleMention } from '@service-comms/generated/models/simpleMentio
 import { staticFileClient } from '@service-static-files/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { leading, throttle } from '@solid-primitives/scheduled';
+import { BrightJoins } from '@ui/components/BrightJoins';
 import { activeElement } from 'app/signal/focus';
 import { toast } from 'core/component/Toast/Toast';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
@@ -96,8 +96,8 @@ type BaseInputProps = {
   /** the list of users in the channel  */
   channelUsers?: () => IUser[];
   domRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
-  /** callback to be called to "clear the input" */
-  onEmptyBlur?: () => void;
+  /** method to delete and close the draft */
+  closeDraft?: () => void;
   /** whether this input is for a reply (affects styling) */
   isReplyInput?: boolean;
 };
@@ -293,7 +293,7 @@ export function BaseInput(props: BaseInputProps) {
     stopTyping();
     viewportObserver?.disconnect();
     if (markdownState().trim() === '') {
-      props.onEmptyBlur?.();
+      props.closeDraft?.();
     }
   });
 
@@ -398,14 +398,6 @@ export function BaseInput(props: BaseInputProps) {
   const documentAttachments = () =>
     attachments().filter((a) => !isStaticAttachmentType(a.blockName));
 
-  const handleBlur = () => {
-    blurMarkdownArea();
-    if (markdownState().trim() === '') {
-      props.onEmptyBlur?.();
-    }
-    return true;
-  };
-
   return (
     <div
       class="relative flex flex-col flex-1 items-center justify-between bg-input border-t border-x border-edge-muted rounded-t-[5px] -mb-[7px]"
@@ -477,14 +469,20 @@ export function BaseInput(props: BaseInputProps) {
           onBlur={() => {
             props.onBlur?.();
             stopTyping();
-            handleBlur();
+            blurMarkdownArea();
           }}
           users={props.channelUsers}
           onChange={handleChange}
           onPasteFilesAndDirs={onMarkdownAreaPasteFilesAndDirs}
           initialValue={props.initialValue?.()}
           useBlockBoundary={true}
-          onEscape={handleBlur}
+          onEscape={() => {
+            blurMarkdownArea();
+            if (markdownState().trim() === '') {
+              props.closeDraft?.();
+            }
+            return true;
+          }}
           dontFocusOnMount
           onFocusLeaveStart={props.onFocusLeaveStart}
           onFocusLeaveEnd={onFocusLeaveEnd}
@@ -546,12 +544,12 @@ export function BaseInput(props: BaseInputProps) {
           >
             <FormatIcon width={20} height={20} />
           </ActionButton>
-          <Show when={props.isReplyInput && props.onEmptyBlur}>
+          <Show when={props.isReplyInput && props.closeDraft}>
             <ActionButton
               tooltip="Delete reply"
               onClick={(e) => {
                 e.preventDefault();
-                props.onEmptyBlur?.();
+                props.closeDraft?.();
               }}
             >
               <Trash width={20} height={20} />

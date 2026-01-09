@@ -99,9 +99,7 @@ function SplitCloseButton() {
   return (
     <Button
       class="p-1 *:h-4"
-      tooltip={
-        <LabelAndHotKey label="Close" hotkeyToken={TOKENS.window.close} />
-      }
+      tooltip={<LabelAndHotKey label="Close" />}
       onClick={context.handle.close}
     >
       <CloseIcon />

@@ -1,5 +1,5 @@
-use crate::compress_image::make_compressed_base64_webp;
-use anyhow::Error;
+use ai::types::ImageData;
+use anyhow::{Error, bail};
 use model::document::{ContentType, ContentTypeExt};
 
 use models_sfs::FileMetadata;
@@ -14,6 +14,19 @@ pub struct StaticFileContent {
     pub metadata: FileMetadata,
 }
 
+impl TryFrom<StaticFileContent> for ImageData {
+    type Error = anyhow::Error;
+    fn try_from(value: StaticFileContent) -> Result<Self, Self::Error> {
+        if value.content_type.is_image()
+            && let Data::Binary(bytes) = value.data
+        {
+            ImageData::try_from_bytes(bytes.into())
+        } else {
+            bail!("No conversion to image")
+        }
+    }
+}
+
 impl StaticFileContent {
     pub fn metadata(&self) -> &FileMetadata {
         &self.metadata
@@ -25,18 +38,7 @@ impl StaticFileContent {
         if self.content_type.is_text_content() {
             Ok(self.data.to_string())
         } else {
-            Err(anyhow::anyhow!("Static file is not text"))
-        }
-    }
-
-    #[tracing::instrument(err)]
-    pub fn base64_compressed_webp(self) -> Result<String, Error> {
-        if self.content_type.is_image()
-            && let Some(bytes) = self.data.binary_data()
-        {
-            make_compressed_base64_webp(&bytes)
-        } else {
-            Err(anyhow::anyhow!("Data is not in image format"))
+            bail!("Static file is not text")
         }
     }
 }

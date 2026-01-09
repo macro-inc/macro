@@ -1,4 +1,4 @@
-import type { EntityData } from '@macro-entity';
+import { type EntityData, isTaskEntity } from '@macro-entity';
 import type { APIEmailThreadPreviewMetadata } from '@service-email/generated/schemas';
 import type { SoupEmailThreadPreviewMetadata } from '@service-storage/generated/schemas';
 import { makePersisted } from '@solid-primitives/storage';
@@ -253,6 +253,10 @@ export const signalFilter: ClientFilter = {
         return hasRecentlyViewed(entity);
       }
       case 'document': {
+        if (isTaskEntity(entity)) {
+          // TODO (seamus) : filter on isCompleted
+          return true;
+        }
         return hasRecentlyViewed(entity);
       }
       case 'email': {

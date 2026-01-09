@@ -31,6 +31,12 @@ export const EntityValue: Component<EntityValueProps> = (props) => {
     }
   };
 
+  const handleEditEntity = (anchor?: HTMLElement) => {
+    if (props.canEdit && !props.property.isMetadata) {
+      props.onEdit?.(props.property, anchor);
+    }
+  };
+
   const handleRemoveEntity = async (entityToRemove: EntityReference) => {
     if (isReadOnly() || isSaving()) return;
 
@@ -76,6 +82,9 @@ export const EntityValue: Component<EntityValueProps> = (props) => {
             specificMessageId={entityRef.specific_message_id}
             canEdit={!isReadOnly()}
             onRemove={() => handleRemoveEntity(entityRef)}
+            onEdit={
+              !props.property.isMultiSelect ? handleEditEntity : undefined
+            }
             isSaving={isSaving()}
           />
         )}
@@ -84,7 +93,7 @@ export const EntityValue: Component<EntityValueProps> = (props) => {
         when={!isReadOnly()}
         fallback={
           <Show when={entities.length === 0}>
-            <div class="text-ink-muted text-xs px-2 py-1 border border-edge bg-transparent inline-block shrink-0">
+            <div class="text-ink-muted px-2 py-0.5 border border-edge-muted bg-transparent inline-block shrink-0">
               <EmptyValue />
             </div>
           </Show>

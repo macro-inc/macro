@@ -1,10 +1,12 @@
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { BlockLink } from '@core/component/LexicalMarkdown/component/core/BlockLink';
-import DeleteIcon from '@icon/bold/x-bold.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { type Component, createSignal, type ParentProps, Show } from 'solid-js';
 import { usePropertyEntityDisplay } from '../../hooks';
 import type { Property } from '../../types';
+import {
+  PropertyValueDeleteButton,
+  PropertyValueEditButton,
+} from './ValueComponents';
 
 type EntityValueDisplayProps = ParentProps<{
   property: Property;
@@ -13,11 +15,13 @@ type EntityValueDisplayProps = ParentProps<{
   specificMessageId?: string | null;
   canEdit?: boolean;
   onRemove?: () => void;
+  onEdit?: (anchor?: HTMLElement) => void;
   isSaving?: boolean;
 }>;
 
 export const EntityIcon: Component<EntityValueDisplayProps> = (props) => {
   const [isHovered, setIsHovered] = createSignal(false);
+  let containerRef: HTMLDivElement | undefined;
 
   const { name, icon, blockOrFileType, linkParams } = usePropertyEntityDisplay(
     () => props.entityId,
@@ -30,7 +34,7 @@ export const EntityIcon: Component<EntityValueDisplayProps> = (props) => {
   const content = (
     <div class="flex items-center gap-2">
       <div class="flex-shrink-0">{icon()}</div>
-      <span class="truncate font-mono">{name()}</span>
+      <span class="truncate">{name()}</span>
     </div>
   );
 
@@ -50,27 +54,34 @@ export const EntityIcon: Component<EntityValueDisplayProps> = (props) => {
 
   return (
     <div
+      ref={containerRef}
       class="relative inline-flex max-w-[140px] shrink-0"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <div
-        class={`text-xs px-2 py-1 border border-edge hover:bg-hover cursor-pointer bg-transparent text-ink inline-flex items-center w-full min-h-[24px]`}
-      >
+      <div class="px-2 py-0.5 border border-edge-muted hover:bg-hover bg-transparent text-ink inline-flex items-center w-full">
         <span class="truncate flex-1">{innerContent}</span>
         <Show
           when={
-            props.canEdit && isHovered() && !props.isSaving && props.onRemove
+            props.canEdit &&
+            isHovered() &&
+            !props.isSaving &&
+            (props.onRemove || props.onEdit)
           }
         >
-          <div class="absolute right-1 inset-y-0 flex items-center">
-            <DeprecatedIconButton
-              icon={DeleteIcon}
-              theme="clear"
-              size="xs"
-              class="!text-failure !bg-[#2a2a2a] hover:!bg-[#444444] !cursor-pointer !w-4 !h-4 !min-w-4 !min-h-4"
-              onClick={props.onRemove}
-            />
+          <div class="absolute right-1 inset-y-0 flex items-center gap-1">
+            <Show when={props.onEdit}>
+              <PropertyValueEditButton
+                onClick={() => props.onEdit!(containerRef)}
+                disabled={props.isSaving}
+              />
+            </Show>
+            <Show when={props.onRemove}>
+              <PropertyValueDeleteButton
+                onClick={props.onRemove!}
+                disabled={props.isSaving}
+              />
+            </Show>
           </div>
         </Show>
       </div>

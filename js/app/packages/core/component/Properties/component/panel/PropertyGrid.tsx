@@ -1,4 +1,4 @@
-import { useBlockAliasedName } from '@core/block';
+import { useMaybeBlockAliasedName } from '@core/block';
 import { type Component, createMemo, For, Show } from 'solid-js';
 import { getBuiltinPropertyIds } from '../../constants';
 import { usePropertiesContext } from '../../context/PropertiesContext';
@@ -7,12 +7,14 @@ import { PropertyRow } from './PropertyRow';
 
 interface PropertiesListProps {
   properties: Property[];
+  columns?: number;
 }
 
 export const PropertyGrid: Component<PropertiesListProps> = (props) => {
   const { openPropertyEditor, openDatePicker } = usePropertiesContext();
-  const blockName = useBlockAliasedName();
-  const builtinPropertyIds = getBuiltinPropertyIds(blockName);
+
+  const blockName = useMaybeBlockAliasedName();
+  const builtinPropertyIds = blockName ? getBuiltinPropertyIds(blockName) : [];
 
   // Single pass through properties array to split into metadata, builtin, and user properties
   const propertyGroups = createMemo(() => {
@@ -78,7 +80,12 @@ export const PropertyGrid: Component<PropertiesListProps> = (props) => {
         </div>
       }
     >
-      <div class="grid grid-cols-[minmax(120px,50%)_minmax(150px,1fr)] gap-x-4 gap-y-3 pt-2 min-w-fit">
+      <div
+        class="grid gap-x-4 gap-y-2 pt-2 min-w-fit"
+        style={{
+          'grid-template-columns': `repeat(${props.columns ?? 1}, minmax(4rem, 12rem) minmax(8rem, 1fr))`,
+        }}
+      >
         {/* Metadata properties */}
         <Show when={propertyGroups().metadata.length > 0}>
           <For each={propertyGroups().metadata}>
@@ -97,7 +104,7 @@ export const PropertyGrid: Component<PropertiesListProps> = (props) => {
         <Show when={propertyGroups().builtinProperties.length > 0}>
           {/* Separator above builtin */}
           <Show when={showSeparatorAboveBuiltin()}>
-            <div class="col-span-2 border-t border-edge my-4" />
+            <div class="col-span-2 border-t border-edge-muted my-4" />
           </Show>
 
           <For each={propertyGroups().builtinProperties}>
@@ -116,7 +123,7 @@ export const PropertyGrid: Component<PropertiesListProps> = (props) => {
         <Show when={propertyGroups().userProperties.length > 0}>
           {/* Separator between above user */}
           <Show when={showSeparatorAboveUser()}>
-            <div class="col-span-2 border-t border-edge my-4" />
+            <div class="col-span-2 border-t border-edge-muted my-4" />
           </Show>
 
           <For each={propertyGroups().userProperties}>

@@ -536,9 +536,9 @@ export class InternalPDFViewer {
 
     if (_target == null && this._popupTargetID == null) return;
     const target = (_target ??
-      document.getElementById(this._popupTargetID) ??
+      document.getElementById(this._popupTargetID!) ??
       document.querySelector(
-        `.annotationLayer .linkAnnotation[data-annotation-id="${this._popupTargetID}"]`
+        `.annotationLayer .linkAnnotation[data-annotation-id="${this._popupTargetID!}"]`
       ))!;
 
     const pageNode = PageModel.getPageNode(target);

@@ -52,10 +52,20 @@ function parseArgs(): Args {
   return result as Args;
 }
 
+export function buildPreviewUrl(previewId: string): string {
+  return `https://${previewId}.preview.macro.com/app`;
+}
+
+export function buildCommentBody(previewId: string, sha: string): string {
+  const previewUrl = buildPreviewUrl(previewId);
+  const shortSha = sha.slice(0, 7);
+  return `**Preview:** [${previewUrl}](${previewUrl}) (${shortSha})`;
+}
+
 async function main() {
   const args = parseArgs();
   const [owner, repo] = args.repo.split('/');
-  const previewUrl = `https://${args.previewId}.preview.macro.com`;
+  const previewUrl = buildPreviewUrl(args.previewId);
   const shortSha = args.sha.slice(0, 7);
 
   // Check for existing preview comment
@@ -133,4 +143,6 @@ async function main() {
   console.log(`Preview URL: ${previewUrl}`);
 }
 
-main();
+if (import.meta.main) {
+  main();
+}

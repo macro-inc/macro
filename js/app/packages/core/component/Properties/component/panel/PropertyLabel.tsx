@@ -80,7 +80,7 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
   return (
     <>
       <div
-        class="flex items-center gap-1.5 min-w-0"
+        class="flex items-center gap-1.5 min-w-0 py-0.5"
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
@@ -89,9 +89,9 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
             data_type: props.property.valueType,
             specific_entity_type: props.property.specificEntityType,
           }}
-          class="size-4 text-ink-muted shrink-0"
+          class="size-4 shrink-0 opacity-40"
         />
-        <span class="text-sm text-ink-muted truncate flex-shrink min-w-0">
+        <span class="truncate flex-shrink min-w-0">
           {props.property.displayName}
         </span>
         {/* Always reserve space for delete button to prevent layout shift */}
@@ -150,7 +150,7 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
         <Dialog.Portal>
           <Dialog.Overlay class="fixed inset-0 z-modal-overlay bg-overlay" />
           <div class="fixed inset-0 z-modal-content flex items-center justify-center p-4">
-            <Dialog.Content class="bg-dialog border-3 border-edge shadow-xl max-w-md w-full font-mono">
+            <Dialog.Content class="bg-dialog border-3 border-edge shadow-xl max-w-md w-full">
               <div class="flex items-center justify-between p-4">
                 <Dialog.Title class="text-lg font-semibold text-ink">
                   Delete Property

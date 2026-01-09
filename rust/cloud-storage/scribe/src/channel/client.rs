@@ -1,4 +1,5 @@
-use ai_format::{Indent, InsightContextLog};
+use ai_format::insight_context_log::InsightContextLog;
+use ai_format::util::Indent;
 use anyhow::Error;
 use comms_service_client::CommsServiceClient;
 use models_comms::channel::ChannelMetadata;

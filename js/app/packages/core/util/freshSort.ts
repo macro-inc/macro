@@ -18,13 +18,20 @@ export interface FreshSortConfig {
   maxAgeMs?: number;
   /** Minimum fuzzy score threshold (0-1). Items below this are heavily penalized. Default: 0.1 */
   minFuzzyThreshold?: number;
+  /** Use viewedAt instead of updatedAt for time scoring. Default: false */
+  useViewedAt?: boolean;
+  /** Boost multiplier for channel items when query is present. Default: 1.0 (no boost) */
+  channelBoost?: number;
 }
 
 export interface TimestampedItem {
   updatedAt?: number | string;
   updated_at?: number | string;
+  viewedAt?: number | string;
+  viewed_at?: number | string;
   lastInteraction?: number | string;
   last_interaction?: number | string;
+  type?: string;
   [key: string]: any;
 }
 
@@ -44,14 +51,32 @@ const DEFAULT_CONFIG: Required<FreshSortConfig> = {
   timeDecayFactor: 0.5,
   maxAgeMs: 30 * 24 * 60 * 60 * 1000, // 30 days
   minFuzzyThreshold: 0.1,
+  useViewedAt: false,
+  channelBoost: 1.0,
 };
 
-function extractTimestamp(item: TimestampedItem): number {
-  const timestamp =
-    item.updatedAt ??
-    item.updated_at ??
-    item.lastInteraction ??
-    item.last_interaction;
+function extractTimestamp(
+  item: TimestampedItem,
+  useViewedAt: boolean = false
+): number {
+  let timestamp: number | string | undefined;
+
+  if (useViewedAt) {
+    timestamp =
+      item.viewedAt ??
+      item.viewed_at ??
+      item.updatedAt ??
+      item.updated_at ??
+      item.lastInteraction ??
+      item.last_interaction;
+  } else {
+    timestamp =
+      item.updatedAt ??
+      item.updated_at ??
+      item.lastInteraction ??
+      item.last_interaction;
+  }
+
   if (timestamp === undefined || timestamp === null) return 0;
 
   if (typeof timestamp === 'number') {
@@ -71,6 +96,10 @@ function extractTimestamp(item: TimestampedItem): number {
   }
 
   return 0;
+}
+
+function isChannelItem(item: TimestampedItem): boolean {
+  return item.type === 'channel';
 }
 
 function calculateTimeScore(
@@ -124,7 +153,7 @@ export function freshSort<T extends TimestampedItem>(
         ? 0
         : normalizeFuzzyScore(result.score, maxFuzzyScore);
     const timeScore = calculateTimeScore(
-      extractTimestamp(result.original),
+      extractTimestamp(result.original, finalConfig.useViewedAt),
       finalConfig
     );
 
@@ -134,11 +163,16 @@ export function freshSort<T extends TimestampedItem>(
     // Apply fuzzy threshold penalty
     const fuzzyPenalty = fuzzyScore < finalConfig.minFuzzyThreshold ? 0.1 : 1;
 
+    const channelMultiplier = isChannelItem(result.original)
+      ? finalConfig.channelBoost
+      : 1.0;
+
     const combinedScore =
       (normalizedFuzzyWeight * fuzzyScore +
         normalizedTimeWeight * timeScore +
         normalizedBrevityWeight * brevityScore) *
-      fuzzyPenalty;
+      fuzzyPenalty *
+      channelMultiplier;
 
     return {
       item: result.original,
