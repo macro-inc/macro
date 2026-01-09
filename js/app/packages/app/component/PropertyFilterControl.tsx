@@ -1,29 +1,84 @@
-import type { Component } from 'solid-js';
+import type { Accessor, Component } from 'solid-js';
 import { createMemo, For, Show } from 'solid-js';
-import { createStore } from 'solid-js/store';
+import { createStore, reconcile } from 'solid-js/store';
 import { FilterPropertyPill } from './PropertyFilter';
 import type { PropertyFilter } from './PropertyFilterTypes';
 import { checkFilterConflict } from './PropertyFilterTypes';
 
 type FilterEntry = {
   id: string;
-  data: PropertyFilter | null; // null = pending/editing, non-null = complete
+  data: PropertyFilter | null; // null = incomplete, non-null = complete
 };
 
-export const PropertyFilterControl: Component = () => {
-  // All filters (both pending and complete)
-  const [filters, setFilters] = createStore<FilterEntry[]>([]);
+type PropertyFilterControlProps = {
+  propertyFilters: Accessor<PropertyFilter[]>;
+  setPropertyFilters: (filters: PropertyFilter[]) => void;
+};
+
+export const PropertyFilterControl: Component<PropertyFilterControlProps> = (
+  props
+) => {
+  // Simple incrementing ID generator (unique within component lifetime)
+  let nextFilterId = 0;
+  const getNextFilterId = () => `property-filter-${nextFilterId++}`;
+
+  // Check if a filter has all required fields: propertyId, action, and value(s)
+  const isFilterComplete = (
+    filter: PropertyFilter | null
+  ): filter is PropertyFilter => {
+    if (!filter) return false;
+    if (!filter.propertyId || !filter.action) return false;
+
+    // Check value based on filter variant
+    if ('value' in filter) {
+      // BOOLEAN value can be false, so check for undefined/null only
+      return filter.value !== undefined && filter.value !== null;
+    }
+    if ('values' in filter) {
+      return Array.isArray(filter.values) && filter.values.length > 0;
+    }
+
+    return false;
+  };
+
+  // Extract only complete filters
+  const getCompleteFilters = (entries: FilterEntry[]): PropertyFilter[] =>
+    entries.filter((f) => isFilterComplete(f.data)).map((f) => f.data!);
+
+  // Convert saved filters to entries with stable IDs
+  const createEntriesFromProps = (): FilterEntry[] =>
+    props.propertyFilters().map((f) => ({
+      id: getNextFilterId(),
+      data: f,
+    }));
+
+  // Local state for UI (includes incomplete filters)
+  const [filters, setFilters] = createStore<FilterEntry[]>(
+    createEntriesFromProps()
+  );
+
+  // Sync only complete filters to props
+  const syncCompleteFiltersToProps = (entries: FilterEntry[]) => {
+    props.setPropertyFilters(getCompleteFilters(entries));
+  };
 
   const addFilter = () => {
-    setFilters((prev) => [...prev, { id: crypto.randomUUID(), data: null }]);
+    const newId = getNextFilterId();
+    setFilters([...filters, { id: newId, data: null }]);
   };
 
   const removeFilter = (id: string) => {
-    setFilters((prev) => prev.filter((f) => f.id !== id));
+    const newFilters = filters.filter((f) => f.id !== id);
+    setFilters(reconcile(newFilters));
+    // Sync complete filters to props
+    syncCompleteFiltersToProps(newFilters);
   };
 
   const updateFilter = (id: string, data: PropertyFilter) => {
-    setFilters((f) => f.id === id, 'data', data);
+    const newFilters = filters.map((f) => (f.id === id ? { ...f, data } : f));
+    setFilters(reconcile(newFilters));
+    // Sync complete filters to props
+    syncCompleteFiltersToProps(newFilters);
   };
 
   // Check for conflicts among all saved filters
