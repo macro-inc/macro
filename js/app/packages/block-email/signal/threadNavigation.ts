@@ -5,7 +5,7 @@ import { useSplitLayout } from '../../app/component/split-layout/layout';
 
 export function useThreadNavigation() {
   const {
-    unifiedListContext: {
+    soupContext: {
       entitiesSignal: [entities],
       selectedView,
       setViewDataStore,

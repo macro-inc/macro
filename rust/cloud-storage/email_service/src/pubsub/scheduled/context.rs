@@ -10,4 +10,6 @@ pub struct ScheduledContext {
     pub gmail_client: GmailClient,
     pub auth_service_client: AuthServiceClient,
     pub redis_client: RedisClient,
+    pub s3_client: s3_client::S3,
+    pub attachment_bucket: String,
 }

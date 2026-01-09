@@ -7,4 +7,6 @@ version = "0.1.0"
 [dependencies]
 anyhow = { workspace = true }
 aws-sdk-s3 = { workspace = true }
+base64 = { workspace = true }
+hex = { workspace = true }
 tracing = { workspace = true }

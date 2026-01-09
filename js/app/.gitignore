@@ -73,7 +73,6 @@ packages/pdfium-worker/**/*
 
 .lefthook-local.yml
 
-CLAUDE.md
 .cursorignore
 .zed
 

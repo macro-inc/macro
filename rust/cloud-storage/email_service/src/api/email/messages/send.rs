@@ -36,32 +36,45 @@ pub enum SendMessageError {
     #[error("Failed to send message via Gmail")]
     GmailSendError(#[from] anyhow::Error),
 
-    #[error("A database transaction error occurred")]
-    TransactionError(#[from] sqlx::Error),
+    #[error("Failed to fetch attachments for message: {0}")]
+    AttachmentError(anyhow::Error),
+
+    #[error("Internal error")]
+    InternalError(#[from] sqlx::Error),
 }
 
 impl IntoResponse for SendMessageError {
     fn into_response(self) -> Response {
         let status_code = match &self {
             SendMessageError::Validation(e) => e.status_code(),
-            SendMessageError::SenderContactNotFound => StatusCode::INTERNAL_SERVER_ERROR,
             SendMessageError::Base64DecodeError(_) | SendMessageError::Utf8Error(_) => {
                 StatusCode::BAD_REQUEST
             }
-            SendMessageError::GmailSendError(_) | SendMessageError::TransactionError(_) => {
-                StatusCode::INTERNAL_SERVER_ERROR
-            }
+            SendMessageError::SenderContactNotFound
+            | SendMessageError::GmailSendError(_)
+            | SendMessageError::AttachmentError(_)
+            | SendMessageError::InternalError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
-        if status_code.is_server_error() {
-            tracing::error!(
-                nested_error = ?self,
-                error_type = "SendMessageError",
-                variant = self.as_ref(),
-                "Internal server error");
-        }
+        let error_message = match &self {
+            SendMessageError::AttachmentError(_) => {
+                "Failed to fetch attachments for message".to_string()
+            }
+            SendMessageError::Validation(_)
+            | SendMessageError::SenderContactNotFound
+            | SendMessageError::Base64DecodeError(_)
+            | SendMessageError::Utf8Error(_)
+            | SendMessageError::GmailSendError(_)
+            | SendMessageError::InternalError(_) => self.to_string(),
+        };
 
-        (status_code, self.to_string()).into_response()
+        (
+            status_code,
+            Json(ErrorResponse {
+                message: error_message.as_str(),
+            }),
+        )
+            .into_response()
     }
 }
 
@@ -91,7 +104,7 @@ pub struct SendMessageResponse {
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user_context, gmail_token, request_body), fields(user_id=user_context.user_id, fusionauth_user_id=user_context.fusion_user_id))]
+#[tracing::instrument(skip(ctx, user_context, gmail_token, request_body), fields(user_id=user_context.user_id, fusionauth_user_id=user_context.fusion_user_id), err)]
 pub async fn send_handler(
     State(ctx): State<ApiContext>,
     user_context: Extension<UserContext>,
@@ -141,6 +154,17 @@ pub async fn send_handler(
     // processed message post-send
     let before_send_ts = Utc::now();
 
+    // Include attachments for message
+    let db_attachments = send::fetch_and_attach_draft_attachments(
+        &ctx.db,
+        &ctx.s3_client,
+        ctx.config.attachment_bucket.as_str(),
+        &link,
+        &mut message_to_send,
+    )
+    .await
+    .map_err(SendMessageError::AttachmentError)?;
+
     ctx.gmail_client
         .send_message(
             gmail_token.as_str(),
@@ -159,6 +183,25 @@ pub async fn send_handler(
     match result {
         Ok(_) => {
             tx.commit().await?;
+
+            // Cleanup attachments in the background
+            if let (Some(draft_id), Some(attachments)) = (message_to_send.db_id, db_attachments) {
+                let db = ctx.db.clone();
+                let bucket = ctx.config.attachment_bucket.clone();
+                let link_id = link.id;
+                tokio::spawn(async move {
+                    send::cleanup_draft_attachments(
+                        db,
+                        &ctx.s3_client,
+                        bucket,
+                        link_id,
+                        draft_id,
+                        attachments,
+                    )
+                    .await;
+                });
+            }
+
             Ok((
                 StatusCode::CREATED,
                 Json(SendMessageResponse {

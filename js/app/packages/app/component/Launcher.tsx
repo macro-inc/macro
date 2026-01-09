@@ -50,11 +50,16 @@ const createBlock = async (spec: {
 
     const block = { type: blockName, id };
 
-    spec.shouldInsert ? insertSplit(block) : replaceSplit(block);
+    spec.shouldInsert
+      ? insertSplit(block, 'launcher')
+      : replaceSplit({ content: block, referredFrom: 'launcher' });
   } else {
     const split = spec.shouldInsert
-      ? insertSplit({ type: 'component', id: 'loading' })
-      : replaceSplit({ type: 'component', id: 'loading' });
+      ? insertSplit({ type: 'component', id: 'loading' }, 'launcher')
+      : replaceSplit({
+          content: { type: 'component', id: 'loading' },
+          referredFrom: 'launcher',
+        });
 
     const id = await createFn();
     if (!id) {
@@ -62,7 +67,12 @@ const createBlock = async (spec: {
       return;
     }
 
-    if (split) split.replace({ type: blockName, id }, true);
+    if (split)
+      split.replace({
+        next: { type: blockName, id },
+        mergeHistory: true,
+        referredFrom: 'launcher',
+      });
   }
 };
 
@@ -78,9 +88,12 @@ const createComponent = async (spec: {
     return;
   }
   if (spec.shouldInsert) {
-    insertSplit({ type: 'component', id: spec.componentId });
+    insertSplit({ type: 'component', id: spec.componentId }, 'launcher');
   } else {
-    replaceSplit({ type: 'component', id: spec.componentId });
+    replaceSplit({
+      content: { type: 'component', id: spec.componentId },
+      referredFrom: 'launcher',
+    });
   }
 };
 

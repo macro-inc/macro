@@ -82,12 +82,8 @@ pub async fn handler(
     let bucket = &ctx.config.attachment_bucket;
 
     // Create an object key that combines link_id and attachment_id
-    let object_key = format!(
-        "{}/{}-{}",
-        link.id,
-        attachment_id,
-        db_attachment.filename.clone().unwrap_or_default()
-    );
+    let object_key =
+        crate::generate_temp_attachment_s3_key!(link.id, attachment_id, db_attachment.filename);
 
     // check if it exists in s3 already
     let exists = ctx
@@ -192,23 +188,15 @@ pub async fn upload_single_attachment(
         .db_id
         .ok_or_else(|| anyhow::anyhow!("Attachment must have a db_id to generate an object key"))?;
 
-    // Create an object key that combines link_id and attachment_id
-    let object_key = format!(
-        "{}/{}-{}",
-        link_id,
-        attachment_id,
-        attachment.filename.clone().unwrap_or_default()
-    );
-
     // Upload the attachment data to S3
     match state
         .s3_client
-        .put(bucket, &object_key, attachment_data.as_slice())
+        .put(bucket, object_key, attachment_data.as_slice())
         .await
     {
         Ok(_) => {
             // Generate a presigned URL for the uploaded attachment
-            let presigned_url = get_presigned_url(state, &object_key)
+            let presigned_url = get_presigned_url(state, object_key)
                 .await
                 .with_context(|| {
                     format!(
@@ -265,4 +253,16 @@ async fn get_presigned_url(state: &ApiContext, key: &str) -> anyhow::Result<Stri
 
     let signed_url = get_signed_url(&constructed_url, &signed_options)?;
     Ok(signed_url)
+}
+
+#[macro_export]
+macro_rules! generate_temp_attachment_s3_key {
+    ($link_id:expr, $attachment_id:expr, $filename:expr) => {
+        format!(
+            "temp/{}/{}-{}",
+            $link_id,
+            $attachment_id,
+            $filename.clone().unwrap_or_default()
+        )
+    };
 }

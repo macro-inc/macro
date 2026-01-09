@@ -64,6 +64,7 @@ export const fileTypeColors: Record<
   pdf: 'bg-pdf/20 group/item',
   md: 'bg-note/20 group/item',
   code: 'bg-code/20 group/item',
+  csv: 'bg-code/20 group/item',
   image: 'bg-image/20 group/item',
   canvas: 'bg-canvas/20 group/item',
   video: 'bg-video/20 group/item',

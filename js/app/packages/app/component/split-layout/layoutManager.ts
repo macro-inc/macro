@@ -94,11 +94,32 @@ export type PopoverSplitHandle = {
   id: string;
 };
 
+export type ReferredFrom =
+  | 'unified-list'
+  | 'kommand-menu'
+  | 'mention'
+  | 'attachment'
+  | 'launcher'
+  | 'dock'
+  | 'entity-actions-menu'
+  | 'hotkey'
+  | 'quick-access'
+  | 'file-upload'
+  | 'search'
+  | null;
+
 export type SplitState = {
   id: SplitId;
   history: History<SplitContent>;
   content: SplitContent; // mirror of current history entry
   mount: SplitMount; // contains pinned element
+  referredFrom: ReferredFrom;
+};
+
+export type CreateNewSplitOptions = {
+  content?: SplitContent;
+  activate?: boolean;
+  referredFrom: ReferredFrom;
 };
 
 function keyOfSplitState(s: SplitState): SplitKey {
@@ -180,7 +201,7 @@ export type SplitManager = {
   removeSplit: (id: SplitId) => void;
 
   /** Create a new split with the provided initial content and activate it */
-  createNewSplit: (initial?: SplitContent, activate?: boolean) => SplitHandle;
+  createNewSplit: (options: CreateNewSplitOptions) => SplitHandle;
 
   /** Set a split as active by its split id  */
   activateSplit: (id: SplitId) => void;
@@ -254,7 +275,11 @@ export type SplitHandle<TMeta extends ComponentMeta = ComponentMeta> = {
   registerContentChangeListener: (
     cb: (payload: SplitEventPayload[SplitEvent.ContentChange]) => void
   ) => void;
-  replace: (next: SplitContent, mergeHistory?: boolean) => void;
+  replace: (options: {
+    next: SplitContent;
+    mergeHistory?: boolean;
+    referredFrom?: ReferredFrom;
+  }) => void;
   removeFromHistory: (predicate: (content: SplitContent) => boolean) => void;
   toggleSpotlight: (force?: boolean) => void;
   setDisplayName: (name: string) => void;
@@ -277,6 +302,7 @@ export type SplitHandle<TMeta extends ComponentMeta = ComponentMeta> = {
   meta: () => Store<TMeta> | undefined;
   /** Update component metadata (only available for component splits) */
   updateMeta: ((data: Omit<TMeta, 'kind'>) => void) | undefined;
+  referredFrom: () => ReferredFrom;
 } & UrlCapabilities;
 
 function newSplitId(): SplitId {
@@ -399,10 +425,12 @@ export function createSplitLayout(
     ]);
   }
 
-  function buildSplit(
-    initialContent: SplitContent,
-    isDefault?: boolean
-  ): SplitState {
+  function buildSplit(options: {
+    initialContent: SplitContent;
+    isDefault?: boolean;
+    referredFrom?: ReferredFrom;
+  }): SplitState {
+    const { initialContent, isDefault, referredFrom } = options;
     const id = newSplitId();
     const history = createHistory<SplitContent>();
     const content = attachAliasContext(initialContent);
@@ -420,10 +448,15 @@ export function createSplitLayout(
       history,
       content,
       mount,
+      referredFrom: referredFrom ?? null,
     };
   }
 
-  function reattach(split: SplitState, next: SplitContent) {
+  function reattach(
+    split: SplitState,
+    next: SplitContent,
+    referredFrom?: ReferredFrom
+  ) {
     const otherSplits = state.splits.filter((s) => s.id !== split.id);
     const content = attachAliasContext(next);
     if (isDuplicateSplit(otherSplits, next)) return;
@@ -445,20 +478,35 @@ export function createSplitLayout(
       }
     }
 
-    if (sameIdentity(split.content, content))
+    if (sameIdentity(split.content, content)) {
+      // Update referredFrom if provided, even if content is the same
+      if (referredFrom !== undefined) {
+        return setState('splits', (s) => {
+          const i = s.findIndex((x) => x.id === split.id);
+          if (i < 0) return s;
+          const target = { ...s[i], content: content, referredFrom };
+          return s.with(i, target);
+        });
+      }
       return setState('splits', (s) => {
         const i = s.findIndex((x) => x.id === split.id);
         if (i < 0) return s;
         const target = { ...s[i], content: content };
         return s.with(i, target);
       });
+    }
 
     const newMount = createPinnedMount(orchestrator, content);
 
     setState('splits', (s) => {
       const i = s.findIndex((x) => x.id === split.id);
       if (i < 0) return s;
-      const target = { ...s[i], content, mount: newMount };
+      const target = {
+        ...s[i],
+        content,
+        mount: newMount,
+        ...(referredFrom !== undefined && { referredFrom }),
+      };
       return s.with(i, target);
     });
   }
@@ -506,7 +554,15 @@ export function createSplitLayout(
   /**
    * Replace the content of a split with the provided content. If mergeHistory is true, the current history index will be replaced with the new content.
    */
-  function replace(id: SplitId, next: SplitContent, mergeHistory?: boolean) {
+  function replace(
+    id: SplitId,
+    options: {
+      next: SplitContent;
+      mergeHistory?: boolean;
+      referredFrom?: ReferredFrom;
+    }
+  ) {
+    const { next, mergeHistory, referredFrom } = options;
     const i = state.splits.findIndex((s) => s.id === id);
     if (i < 0) return console.error(`Split with id ${id} not found`);
 
@@ -526,7 +582,7 @@ export function createSplitLayout(
       split.history.push(content);
     }
 
-    reattach(split, content);
+    reattach(split, content, referredFrom);
   }
 
   function reset(id: SplitId) {
@@ -614,8 +670,8 @@ export function createSplitLayout(
       goBack: () => back(currentSplit.id),
       reset: () => reset(currentSplit.id),
       goForward: () => forward(currentSplit.id),
-      replace: (next, mergeHistory = false) =>
-        replace(currentSplit.id, next, mergeHistory),
+      replace: ({ next, mergeHistory = false, referredFrom }) =>
+        replace(currentSplit.id, { next, mergeHistory, referredFrom }),
       removeFromHistory: (predicate: (content: SplitContent) => boolean) => {
         removeFromHistory(currentSplit.id, predicate);
       },
@@ -624,7 +680,10 @@ export function createSplitLayout(
         if (state.splits.length <= 1) {
           // If it's not the default split, replace it with the default
           if (!sameContent(content(), DEFAULT_SPLIT_CONTENT))
-            replace(currentSplit.id, DEFAULT_SPLIT_CONTENT);
+            replace(currentSplit.id, {
+              next: DEFAULT_SPLIT_CONTENT,
+              referredFrom: null,
+            });
 
           return;
         }
@@ -672,13 +731,12 @@ export function createSplitLayout(
         currentSplit.mount.kind === 'component'
           ? currentSplit.mount.updateMeta
           : undefined,
+      referredFrom: () => s()?.referredFrom ?? null,
     };
   };
 
-  function createNewSplit(
-    content?: SplitContent,
-    activate?: boolean
-  ): SplitHandle {
+  function createNewSplit(options: CreateNewSplitOptions): SplitHandle {
+    const { content, activate, referredFrom } = options;
     const initialContent = content ?? DEFAULT_SPLIT_CONTENT;
     const isDefault = sameContent(initialContent, DEFAULT_SPLIT_CONTENT);
 
@@ -692,7 +750,7 @@ export function createSplitLayout(
       return getSplit(existingSplit!.id)!;
     }
 
-    const split = buildSplit(initialContent, isDefault);
+    const split = buildSplit({ initialContent, isDefault, referredFrom });
 
     setState('splits', (previousSplits) => [...previousSplits, split]);
 
@@ -729,7 +787,7 @@ export function createSplitLayout(
     dispatchEvent(SplitEvent.Remove, { splitId: id, splitIndex: idx });
 
     if (nextSplits.length === 0 && createNewOnEmpty) {
-      createNewSplit(DEFAULT_SPLIT_CONTENT);
+      createNewSplit({ content: DEFAULT_SPLIT_CONTENT, referredFrom: null });
     }
   }
 
@@ -783,9 +841,22 @@ export function createSplitLayout(
 
     for (const split of newSplits) {
       if (split.type === 'component') {
-        newState.push(buildSplit(split));
+        newState.push(
+          buildSplit({
+            initialContent: split,
+            isDefault: false,
+            referredFrom: null,
+          })
+        );
       } else {
-        newState.push(lookup(split.type, split.id) ?? buildSplit(split));
+        newState.push(
+          lookup(split.type, split.id) ??
+            buildSplit({
+              initialContent: split,
+              isDefault: false,
+              referredFrom: null,
+            })
+        );
       }
     }
 
@@ -795,7 +866,7 @@ export function createSplitLayout(
   const lastEvent = createMemo(() => state.events[state.events.length - 1]);
 
   for (const split of initial) {
-    createNewSplit(split, true);
+    createNewSplit({ content: split, activate: true, referredFrom: null });
   }
 
   const tabTitle = () => {

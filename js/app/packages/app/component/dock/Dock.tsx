@@ -320,8 +320,11 @@ export function Dock() {
                       const canFit = manager.resizeContext()?.canFit({ minSize: 400 }) ?? true;
                       if (canFit) {
                         manager.createNewSplit({
-                          id: 'unified-list',
-                          type: 'component',
+                          content: {
+                            id: 'unified-list',
+                            type: 'component',
+                          },
+                          referredFrom: 'dock'
                         });
                     }
                   }

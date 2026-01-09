@@ -356,7 +356,7 @@ function SplitPanel(props: SplitPanelProps) {
   const panelSize = createElementSize(panelRef);
   const [contentOffsetTop, setContentOffsetTop] = createSignal(0);
 
-  const unifiedListContext = createSoupContext();
+  const soupContext = createSoupContext();
 
   const [previewState, setPreviewState] = createSignal(false);
 
@@ -370,7 +370,7 @@ function SplitPanel(props: SplitPanelProps) {
     goBack: () => props.handle.goBack(),
     canGoForward: () => props.handle.canGoForward(),
     goForward: () => props.handle.goForward(),
-    setSelectedView: (view) => unifiedListContext.setSelectedView(view),
+    setSelectedView: (view) => soupContext.setSelectedView(view),
     replaceSplit: splitLayoutHelpers.replaceSplit,
     splitName: () => props.handle.displayName(),
     getSplitCount: () => splitLayoutHelpers.getSplitCount(),
@@ -379,20 +379,20 @@ function SplitPanel(props: SplitPanelProps) {
       return !(content.type === 'component' && content.id === 'unified-list');
     },
   });
+
   createNavigationEntityListShortcut({
     splitHandle: props.handle,
     splitHotkeyScope,
-    unifiedListContext,
+    soupContext,
     previewState: [previewState, setPreviewState],
     getSplitCount: () => splitLayoutHelpers.getSplitCount(),
   });
-
   return (
     <SplitPanelContext.Provider
       value={{
         handle: props.handle,
         splitHotkeyScope,
-        unifiedListContext,
+        soupContext,
         isPanelActive: () => props.active,
         panelRef,
         panelSize,

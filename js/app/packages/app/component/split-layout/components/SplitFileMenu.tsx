@@ -146,10 +146,13 @@ export function SplitFileMenu(props: {
                     name: props.name,
                   });
                   if (res) {
-                    replaceOrInsertSplit({
-                      id: res,
-                      type: blockName,
-                    });
+                    replaceOrInsertSplit(
+                      {
+                        id: res,
+                        type: blockName,
+                      },
+                      'entity-actions-menu'
+                    );
                   }
                 },
                 icon: Copy,

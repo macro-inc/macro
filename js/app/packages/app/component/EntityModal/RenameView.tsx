@@ -49,7 +49,7 @@ export const RenameView = (props: {
   let inputRef: HTMLInputElement | undefined;
   const saveViewMutation = useUpsertSavedViewMutation();
   const {
-    unifiedListContext: { viewsDataStore: viewsData },
+    soupContext: { viewsDataStore: viewsData },
   } = useSplitPanelOrThrow();
 
   const view = createMemo(() => {
