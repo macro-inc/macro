@@ -24,8 +24,7 @@ use ai::types::{ChatMessage, ChatMessageContent};
 use ai_request::build_chat_completion_request;
 use ai_tools::{AiToolSet, RequestContext, ToolServiceContext};
 use anyhow::{Context, Result};
-use futures::{future::join_all, stream::StreamExt};
-use metering_service_client::{CreateUsageRecordRequest, OperationType, ServiceName};
+use futures::stream::StreamExt;
 use model::chat::{NewAttachment, NewChatMessage};
 use models_opensearch::SearchEntityType;
 use sqs_client::search::SearchQueueMessage;
@@ -129,7 +128,6 @@ pub async fn stream_chat_response(
         .await?;
 
     // Process the stream completely
-    let mut usage_reqs = vec![];
     let mut is_first_token = false;
     while let Some(response) = stream.next().await {
         tracing::trace!("{:#?}", response);
@@ -181,16 +179,6 @@ pub async fn stream_chat_response(
             }
             StreamPart::Usage(usage) => {
                 tracing::debug!(record=?usage, "usage");
-                usage_reqs.push(context.metering_client.record_usage(
-                    CreateUsageRecordRequest::new(
-                        usage.clone(),
-                        true,
-                        model,
-                        user_id.to_string(),
-                        ServiceName::DocumentCognitionService,
-                        OperationType::Chat,
-                    ),
-                ));
             }
             StreamPart::ToolResponse(ai::tool::types::ToolResponse::Json { id, json, name }) => {
                 let message_part = AssistantMessagePart::ToolCallResponseJson { name, json, id };
@@ -228,7 +216,6 @@ pub async fn stream_chat_response(
             }
         }
     }
-    let _ = join_all(usage_reqs).await;
 
     // Explicitly drop the stream to release the mutable borrow
     drop(stream);

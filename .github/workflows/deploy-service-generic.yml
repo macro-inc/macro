@@ -26,7 +26,6 @@ on:
           - experiment-service
           - lambda-aggregate-frecency
           - link-sharing
-          - metering-service
           - notification-service
           - organization-service
           - organization-retention

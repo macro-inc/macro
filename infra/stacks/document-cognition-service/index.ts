@@ -105,8 +105,6 @@ export const documentStorageServiceUrl: pulumi.Output<string> =
     .getOutput('cloudStorageServiceUrl')
     .apply((cloudStorageServiceUrl) => cloudStorageServiceUrl as string);
 
-export const meteringServiceUrl = `https://metering${stack === 'prod' ? '' : `-${stack}`}.macro.com`;
-
 const documentTextExtractorStack = new pulumi.StackReference(
   'document-text-extractor',
   {
@@ -252,21 +250,18 @@ const documentCognitionService = new DocumentCognitionService(
       },
       {
         name: 'STATIC_FILE_SERVICE_URL',
-        value: `https://static-file-service${
-          stack === 'prod' ? '' : `-${stack}`
-        }.macro.com`,
+        value: `https://static-file-service${stack === 'prod' ? '' : `-${stack}`
+          }.macro.com`,
       },
       {
         name: 'COMMS_SERVICE_URL',
-        value: `https://comms-service${
-          stack === 'prod' ? '' : `-${stack}`
-        }.macro.com`,
+        value: `https://comms-service${stack === 'prod' ? '' : `-${stack}`
+          }.macro.com`,
       },
       {
         name: 'CONNECTION_GATEWAY_URL',
-        value: `https://connection-gateway${
-          stack === 'prod' ? '' : `-${stack}`
-        }.macro.com`,
+        value: `https://connection-gateway${stack === 'prod' ? '' : `-${stack}`
+          }.macro.com`,
       },
       {
         name: 'SEARCH_EVENT_QUEUE',
@@ -275,10 +270,6 @@ const documentCognitionService = new DocumentCognitionService(
       {
         name: 'SYNC_SERVICE_AUTH_KEY',
         value: pulumi.interpolate`${SYNC_SERVICE_AUTH_KEY}`,
-      },
-      {
-        name: 'METERING_SERVICE_URL',
-        value: pulumi.interpolate`${meteringServiceUrl}`,
       },
       {
         name: 'SYNC_SERVICE_URL',
@@ -306,9 +297,8 @@ const documentCognitionService = new DocumentCognitionService(
       },
       {
         name: 'EMAIL_SERVICE_URL',
-        value: `https://email-service${
-          stack === 'prod' ? '' : `-${stack}`
-        }.macro.com`,
+        value: `https://email-service${stack === 'prod' ? '' : `-${stack}`
+          }.macro.com`,
       },
       {
         name: 'STATIC_FILE_SERVICE_URL',

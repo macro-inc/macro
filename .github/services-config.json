@@ -85,12 +85,6 @@
       ],
       "stack_path": "infra/stacks/experiment-service/**"
     },
-    "metering-service": {
-      "source_paths": [
-        "rust/cloud-storage/metering_service/**"
-      ],
-      "stack_path": "infra/stacks/metering-service/**"
-    },
     "notification-service": {
       "source_paths": [
         "rust/cloud-storage/notification_service/**"
