@@ -10,15 +10,12 @@ import { URL_PARAMS as EMAIL_PARAMS } from '@block-email/constants';
 import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/signal/location';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
-import { DeprecatedButton } from '@core/component/FormControls/DeprecatedButton';
-import DropdownMenu from '@core/component/FormControls/DropdownMenu';
 import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { ToggleButton } from '@core/component/FormControls/ToggleButton';
 import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
 import { ContextMenuContent, MenuSeparator } from '@core/component/Menu';
 import { useTaskProperties } from '@core/component/Properties/hooks';
 import { getSuggestedProperties } from '@core/component/Properties/utils';
-import { RecipientSelector } from '@core/component/RecipientSelector';
 import {
   blockAcceptsFileExtension,
   fileTypeToBlockName,
@@ -39,9 +36,6 @@ import { arrayEquals } from '@core/util/compareUtils';
 import { debouncedDependent } from '@core/util/debounce';
 import { fuzzyMatch } from '@core/util/fuzzy';
 import CheckIcon from '@icon/bold/check-bold.svg';
-import SearchIcon from '@icon/regular/magnifying-glass.svg?component-solid';
-import LoadingSpinner from '@icon/regular/spinner.svg?component-solid';
-import XIcon from '@icon/regular/x.svg?component-solid';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import {
   createChannelsQuery,
@@ -136,12 +130,7 @@ import { EntityActionsMenuItems } from './EntityActionsMenuItems';
 import { EntityModal } from './EntityModal/EntityModal';
 import { EntitySelectionToolbarModal } from './EntitySelectionToolbarModal';
 import { EntityRow, EntityRowProvider } from './mobile/EntityRow';
-import { PropertyDisplayControl } from './PropertyDisplayControl';
 import { useUpsertSavedViewMutation } from './Soup';
-import {
-  SplitToolbarLeft,
-  SplitToolbarRight,
-} from './split-layout/components/SplitToolbar';
 import { useSplitLayout } from './split-layout/layout';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 import {
@@ -475,22 +464,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       'display',
       'unrollNotifications',
       showUnrollNotifications
-    );
-  };
-
-  const showUnreadIndicator = createMemo(
-    () =>
-      view()?.display?.showUnreadIndicator ??
-      defaultDisplayOptions.showUnreadIndicator
-  );
-  const setShowUnreadIndicator = (
-    showUnreadIndicator: DisplayOptions['showUnreadIndicator']
-  ) => {
-    setViewDataStore(
-      selectedView(),
-      'display',
-      'showUnreadIndicator',
-      showUnreadIndicator
     );
   };
 
@@ -1193,10 +1166,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     }
   };
 
-  const StyledTriggerLabel = (props: ParentProps) => {
-    return <span class="text-[0.625rem]">{props.children}</span>;
-  };
-
   const focusedSelector = createSelector(() => selectedEntity()?.id);
   const multiSelectSelector = createSelector(
     () => view()?.multiSelectEntities,
@@ -1245,6 +1214,22 @@ export function UnifiedListView(props: UnifiedListViewProps) {
         setViewDataStore(selectedView(), 'initialConfig', currentConfig);
       }
     }
+  };
+
+  const onClickSaveAsNewView = () => {
+    const view_ = view();
+    const config = currentViewConfigBase();
+    if (!view_ || !config) return;
+
+    // Generate a new name based on the current view name
+    const baseName = view_.view || 'View';
+    const newName = `${baseName} Copy`;
+
+    // Create new view (no id means create new)
+    saveViewMutation.mutate({
+      name: newName,
+      config,
+    });
   };
 
   const onClickResetViewConfigChanges = () => {
@@ -1405,231 +1390,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
   return (
     <>
-      <Show when={!props.hideToolbar}>
-        <SearchBar
-          isLoading={isSearchLoading}
-          setIsLoading={setIsSearchLoading}
-        />
-        <SplitToolbarRight order={5}>
-          <div class="flex flex-row items-center gap-1 p-1 h-full select-none">
-            <Show when={isViewConfigChanged()}>
-              <Show when={preview()}>
-                <DropdownMenu
-                  size="SM"
-                  theme="secondary"
-                  triggerLabel={<span class="font-extrabold">⋮</span>}
-                >
-                  <div class="flex flex-col gap-2 p-2">
-                    <DeprecatedButton
-                      size="SM"
-                      classList={{
-                        '!border-ink/25 !text-ink !bg-panel hover:!text-ink font-normal': true,
-                      }}
-                      onClick={onClickResetViewConfigChanges}
-                    >
-                      CLEAR
-                    </DeprecatedButton>
-                    <DeprecatedButton
-                      size="SM"
-                      classList={{
-                        '!border-ink/25 !text-ink !bg-panel hover:!text-ink font-normal': true,
-                      }}
-                      onClick={onClickSaveViewConfigChanges}
-                    >
-                      SAVE CHANGES
-                    </DeprecatedButton>
-                  </div>
-                </DropdownMenu>
-              </Show>
-              <Show when={!preview()}>
-                <DeprecatedButton
-                  size="SM"
-                  classList={{
-                    '!border-ink/25 !text-ink !bg-panel hover:!text-ink ml-1.5 font-normal': true,
-                  }}
-                  onClick={onClickResetViewConfigChanges}
-                >
-                  CLEAR
-                </DeprecatedButton>
-                <DeprecatedButton
-                  size="SM"
-                  classList={{
-                    '!border-ink/25 !text-ink !bg-panel hover:!text-ink mx-1.5 font-normal': true,
-                  }}
-                  onClick={onClickSaveViewConfigChanges}
-                >
-                  SAVE CHANGES
-                </DeprecatedButton>
-              </Show>
-            </Show>
-            <DropdownMenu
-              size="SM"
-              theme="primary"
-              triggerLabel={<StyledTriggerLabel>Filter</StyledTriggerLabel>}
-            >
-              <div class="min-w-[10vw] max-w-md">
-                <div class="grid divide-y divide-edge">
-                  <section class="gap-1 grid p-2">
-                    <ToggleSwitch
-                      onChange={setImportantFilter}
-                      checked={importantFilter()}
-                      label="Important"
-                      size="SM"
-                    />
-                    <SegmentedControl
-                      size="SM"
-                      label="Show"
-                      list={[
-                        { value: 'all', label: 'All' },
-                        { value: 'unread', label: 'Unread' },
-                        { value: 'notDone', label: 'Not Done' },
-                      ]}
-                      value={notificationFilter()}
-                      onChange={setNotificationFilter}
-                    />
-
-                    <div class="flex items-center justify-between">
-                      <span class="font-medium text-xs">Focus</span>
-                      <div class="flex items-center gap-1">
-                        <ToggleButton
-                          size="SM"
-                          pressed={focusFilters()?.includes('signal')}
-                          onChange={() => toggleFocusFilter('signal')}
-                        >
-                          <span class="uppercase">Signal</span>
-                        </ToggleButton>
-                        <ToggleButton
-                          size="SM"
-                          pressed={focusFilters()?.includes('noise')}
-                          onChange={() => toggleFocusFilter('noise')}
-                        >
-                          <span class="uppercase">Noise</span>
-                        </ToggleButton>
-                      </div>
-                    </div>
-                  </section>
-                  <section class="gap-1 p-2">
-                    <span class="font-medium text-xs">Type</span>
-                    <div class="flex flex-row flex-wrap items-center gap-1">
-                      <EntityTypeToggle
-                        filter={entityTypeFilter}
-                        setFilter={setEntityTypeFilter}
-                        setFileTypeFilter={setFileTypeFilter}
-                        type="document"
-                      />
-                      <EntityTypeToggle
-                        filter={entityTypeFilter}
-                        setFilter={setEntityTypeFilter}
-                        type="chat"
-                      />
-                      <EntityTypeToggle
-                        filter={entityTypeFilter}
-                        setFilter={setEntityTypeFilter}
-                        type="channel"
-                      />
-                      <Show when={ENABLE_TASKS_TABS}>
-                        <EntityTypeToggle
-                          filter={entityTypeFilter}
-                          setFilter={setEntityTypeFilter}
-                          type="task"
-                        />
-                      </Show>
-                      <EntityTypeToggle
-                        filter={entityTypeFilter}
-                        setFilter={setEntityTypeFilter}
-                        type="email"
-                      />
-                      <EntityTypeToggle
-                        filter={entityTypeFilter}
-                        setFilter={setEntityTypeFilter}
-                        type="project"
-                      />
-                    </div>
-                  </section>
-                  <section class="gap-1 p-2">
-                    <span class="font-medium text-xs">Filetype</span>
-                    <div class="flex flex-row flex-wrap items-center gap-1">
-                      <For each={[...VIEWCONFIG_FILTER_DOCUMENT_TYPE_FILTER]}>
-                        {(fileType) => (
-                          <ToggleButton
-                            size="SM"
-                            pressed={fileTypeFilter().includes(fileType)}
-                            onChange={() => toggleFileTypeFilter(fileType)}
-                          >
-                            {FILE_TYPE_DISPLAY_LABELS[fileType]}
-                          </ToggleButton>
-                        )}
-                      </For>
-                    </div>
-                  </section>
-                  <Show when={ENABLE_SOUP_FROM_FILTER && showFromFilter()}>
-                    <section class="gap-1 p-2">
-                      <span class="font-medium text-xs">From</span>
-                      <RecipientSelector<'user' | 'contact'>
-                        options={emailRecipientOptions}
-                        selectedOptions={fromFilterUsers}
-                        setSelectedOptions={setFromFilterUsers}
-                        placeholder="Filter by user..."
-                        includeSelf
-                      />
-                    </section>
-                  </Show>
-                </div>
-              </div>
-            </DropdownMenu>
-            <DropdownMenu
-              size="SM"
-              triggerLabel={<StyledTriggerLabel>Display</StyledTriggerLabel>}
-            >
-              <div class="min-w-[10vw] max-w-md">
-                <div class="grid divide-y divide-edge">
-                  <section class="p-2">
-                    <SegmentedControl
-                      size="SM"
-                      label="Layout"
-                      // value={selectItemFromList()}
-                      list={['Compact', 'Relaxed', 'Visual']}
-                      // onChange={(newValue) => setSelectItemFromList(newValue)}
-                      disabled
-                    />
-                  </section>
-                  <section class="gap-1 grid p-2">
-                    <ToggleSwitch
-                      size="SM"
-                      label="Unroll Notifications"
-                      checked={showUnrollNotifications()}
-                      onChange={setShowUnrollNotifications}
-                    />
-                    <ToggleSwitch
-                      size="SM"
-                      label="Indicate Unread"
-                      checked={showUnreadIndicator()}
-                      onChange={setShowUnreadIndicator}
-                    />
-                  </section>
-                  <section class="p-2">
-                    <SortComponent
-                      size="SM"
-                      onSelectSystemSort={() => {
-                        entityListResetScroll();
-                      }}
-                    />
-                  </section>
-                  <Show when={ENABLE_PROPERTY_DISPLAY}>
-                    <section class="p-2">
-                      <PropertyDisplayControl
-                        selectedPropertyIds={displayProperties}
-                        setSelectedPropertyIds={setDisplayProperties}
-                        suggestedProperties={suggestedProperties()}
-                      />
-                    </section>
-                  </Show>
-                </div>
-              </div>
-            </DropdownMenu>
-          </div>
-        </SplitToolbarRight>
-      </Show>
       <ContextMenu
         forceMount={contextAndModalState.contextMenuOpen}
         onOpenChange={(open) => {
@@ -1757,10 +1517,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                         if (preview()) return;
                         setSelectedEntity(innerProps.entity);
                       }}
-                      showLeftColumnIndicator={
-                        showUnreadIndicator() || importantFilter()
-                      }
-                      fadeIfRead={showUnreadIndicator()}
+                      showLeftColumnIndicator={true}
                       showUnrollNotifications={showUnrollNotifications()}
                       importantIndicatorActive={importantFilterFn(
                         innerProps.entity
@@ -1881,215 +1638,5 @@ export function UnifiedListView(props: UnifiedListViewProps) {
         </Show>{' '}
       </ContextMenu>
     </>
-  );
-}
-
-const EntityTypeToggle = (props: {
-  type: ExpandedEntityType;
-  filter: Accessor<typeof VIEWCONFIG_BASE.filters.typeFilter>;
-  setFilter: Setter<typeof VIEWCONFIG_BASE.filters.typeFilter>;
-  setFileTypeFilter?: Setter<typeof VIEWCONFIG_BASE.filters.documentTypeFilter>;
-}) => {
-  const toggleEntityTypeFilter = (type: ExpandedEntityType) => {
-    props.setFilter((prev) =>
-      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]
-    );
-  };
-  return (
-    <ToggleButton
-      size="SM"
-      pressed={props.filter().includes(props.type)}
-      onChange={(pressed) =>
-        batch(() => {
-          if (props.setFileTypeFilter && !pressed) props.setFileTypeFilter([]);
-
-          toggleEntityTypeFilter(props.type);
-        })
-      }
-    >
-      <span class="uppercase">
-        {props.type === 'project' ? 'folder' : props.type}
-      </span>
-    </ToggleButton>
-  );
-};
-
-function SearchBar(props: {
-  isLoading: Accessor<boolean>;
-  setIsLoading: Setter<boolean>;
-}) {
-  const splitContext = useSplitPanelOrThrow();
-  const {
-    viewsDataStore,
-    selectedView,
-    setSelectedView,
-    setViewDataStore,
-    virtualizerHandleSignal: [virtualizerHandle],
-    entityListRefSignal: [entityListRef],
-    navigateThroughList,
-  } = splitContext.unifiedListContext;
-  const viewData = createMemo(() => viewsDataStore[selectedView()]);
-  const viewName = createMemo(() => viewData().view);
-
-  let inputRef: HTMLInputElement | undefined;
-
-  const searchText = createMemo<string>(() => viewData().searchText ?? '');
-  const setSearchText = (text: string) => {
-    setViewDataStore(selectedView(), 'searchText', text);
-  };
-
-  const selectionClick = () => {
-    const id = viewsDataStore[selectedView()].selectedEntity?.id;
-    if (!id) return;
-    const el = entityListRef()?.querySelector(`[data-entity-id="${id}"]`);
-    if (!(el instanceof HTMLElement)) return;
-    el.click();
-  };
-
-  const focusNextEntity = () => {
-    navigateThroughList({
-      axis: 'end',
-      mode: 'step',
-    });
-  };
-
-  const [waitForLoadingEnd, setWaitForLoadingEnd] = createSignal(false);
-
-  // When search text changes, mark that we're waiting for loading to end
-  createRenderEffect((prevText: string) => {
-    const text = searchText().trim();
-    if (text !== prevText) {
-      setViewDataStore(selectedView(), 'selectedEntity', undefined);
-      setViewDataStore(selectedView(), 'hasUserInteractedEntity', false);
-      virtualizerHandle()?.scrollToIndex(0);
-      setWaitForLoadingEnd(true);
-    }
-    return text;
-  }, searchText());
-
-  // When we're no longer loading but still waiting, reset the list
-  createRenderEffect((prevLoading: boolean) => {
-    const loading = props.isLoading();
-
-    if (prevLoading && !loading && waitForLoadingEnd()) {
-      // Loading just ended and we were waiting for it
-      setWaitForLoadingEnd(false);
-      virtualizerHandle()?.scrollToIndex(0);
-    }
-
-    return loading;
-  }, props.isLoading());
-
-  const focusSearch = () => {
-    setTimeout(() => {
-      const searchInput = document.getElementById(
-        `search-input-${splitContext.handle.id}-${selectedView()}`
-      ) as HTMLInputElement;
-      searchInput?.focus();
-    }, 0);
-  };
-
-  onMount(() => {
-    const { dispose: disposeSlash } = registerHotkey({
-      hotkey: ['/'],
-      scopeId: splitContext.splitHotkeyScope,
-      description: 'Search all',
-      hotkeyToken: TOKENS.soup.openSearch,
-      keyDownHandler: () => {
-        setSelectedView(VIEWCONFIG_DEFAULTS_IDS_ENUM.all);
-        focusSearch();
-        return true;
-      },
-      displayPriority: 5,
-    });
-
-    const { dispose: disposeCmd } = registerHotkey({
-      hotkey: ['cmd+f'],
-      scopeId: splitContext.splitHotkeyScope,
-      description: 'Search in current view',
-      keyDownHandler: () => {
-        focusSearch();
-        return true;
-      },
-      displayPriority: 5,
-    });
-
-    onCleanup(() => {
-      disposeSlash();
-      disposeCmd();
-    });
-  });
-
-  return (
-    <SplitToolbarLeft>
-      <div class="flex ml-2 h-full items-center gap-1">
-        <Show
-          when={props.isLoading() && searchText()}
-          fallback={
-            <Show
-              when={searchText()}
-              fallback={
-                <DeprecatedIconButton
-                  size="sm"
-                  icon={SearchIcon}
-                  theme="clear"
-                  tooltip={{ label: 'Search' }}
-                  onClick={() => {
-                    inputRef?.focus();
-                  }}
-                />
-              }
-            >
-              <DeprecatedIconButton
-                size="sm"
-                icon={XIcon}
-                theme="clear"
-                tooltip={{ label: 'Clear search' }}
-                onClick={() => {
-                  setSearchText('');
-                  inputRef?.focus();
-                }}
-              />
-            </Show>
-          }
-        >
-          <DeprecatedIconButton
-            size="sm"
-            icon={LoadingSpinner}
-            theme="clear"
-            tooltip={{ label: 'Cancel search' }}
-            class="[&_svg]:animate-spin"
-            onClick={() => {
-              setSearchText('');
-              inputRef?.focus();
-            }}
-          />
-        </Show>
-        <input
-          ref={inputRef}
-          id={`search-input-${splitContext.handle.id}-${selectedView()}`}
-          placeholder={`Search in ${viewName()}`}
-          value={searchText()}
-          onInput={(e) => {
-            setSearchText(e.target.value);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') {
-              e.preventDefault();
-              e.currentTarget.blur();
-            } else if (e.key === 'Enter') {
-              e.preventDefault();
-              e.currentTarget.blur();
-              selectionClick();
-            } else if (e.key === 'ArrowDown') {
-              e.preventDefault();
-              e.currentTarget.blur();
-              focusNextEntity();
-            }
-          }}
-          class="p-1 pr-0 border-0 outline-none! focus:outline-none ring-0! focus:ring-0 flex-1 text-ink text-sm truncate"
-        />
-      </div>
-    </SplitToolbarLeft>
   );
 }

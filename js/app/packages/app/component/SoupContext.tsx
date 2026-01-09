@@ -129,7 +129,7 @@ export function createStubSoupContext(): UnifiedListContext {
   };
 }
 
-const DEFAULT_VIEW_ID: DefaultView = 'signal';
+const DEFAULT_VIEW_ID: DefaultView = 'all';
 
 const DEFAULT_VIEW_IDS_SET = new Set(VIEWCONFIG_DEFAULTS_IDS);
 

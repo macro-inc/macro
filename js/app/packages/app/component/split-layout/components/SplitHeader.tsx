@@ -1,6 +1,5 @@
 import EntityNavigationIndicator from '@app/component/EntityNavigationIndicator';
 import { LabelAndHotKey } from '@core/component/Tooltip';
-import { ENABLE_PREVIEW } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
@@ -8,7 +7,6 @@ import CollapseIcon from '@icon/regular/arrows-in.svg';
 import ExpandIcon from '@icon/regular/arrows-out.svg';
 import CaretLeft from '@icon/regular/caret-left.svg';
 import CaretRight from '@icon/regular/caret-right.svg';
-import SplitIcon from '@icon/regular/square-split-horizontal.svg';
 import CloseIcon from '@icon/regular/x.svg';
 import IconGear from '@macro-icons/macro-gear.svg';
 import { Button } from '@ui/components/Button';
@@ -107,40 +105,6 @@ function SplitCloseButton() {
   );
 }
 
-function SplitPreviewToggle() {
-  const context = useContext(SplitPanelContext);
-  if (!ENABLE_PREVIEW || !context || !context.previewState) return null;
-
-  // Only show toggle for unified-list component, not for blocks
-  const isUnifiedList = createMemo(() => {
-    const content = context.handle.content();
-    return content.type === 'component' && content.id === 'unified-list';
-  });
-
-  const [preview, setPreview] = context.previewState;
-
-  return (
-    <Show when={isUnifiedList()}>
-      <div class="max-sm:rotate-90">
-        <Button
-          class="p-1 *:h-4"
-          classList={{
-            'bg-accent/20 text-accent': preview(),
-          }}
-          tooltip={
-            <LabelAndHotKey
-              label={!preview() ? 'Split View (Preview)' : 'Full View (List)'}
-              hotkeyToken={TOKENS.unifiedList.togglePreview}
-            />
-          }
-          onClick={() => setPreview((prev) => !prev)}
-        >
-          <SplitIcon />
-        </Button>
-      </div>
-    </Show>
-  );
-}
 
 function SplitControlButtons() {
   return (
@@ -220,7 +184,6 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
           />
           <div class="z-2 relative flex items-center bg-panel pr-2 h-full">
             <EntityNavigationIndicator />
-            <SplitPreviewToggle />
             <SplitSpotlightButton />
           </div>
         </Show>

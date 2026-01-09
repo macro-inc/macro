@@ -57,19 +57,12 @@ export const ENTITY_HEIGHT = 40;
 function UnreadIndicator(props: { active?: boolean }) {
   return (
     <div class="flex size-4 items-center justify-center">
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
+      <div
         classList={{
-          'fill-accent': true,
+          'bg-accent rounded-full size-2': true,
           'opacity-0': !props.active,
         }}
-        viewBox="0 0 8 8"
-        width="75%"
-        height="75%"
-        fill="none"
-      >
-        <path d="M3.39622 8C3.29136 8 3.23894 7.94953 3.23894 7.84858L3.33068 5.13565L0.932129 6.58675C0.836012 6.63722 0.76174 6.6204 0.709312 6.53628L0.0801831 5.56467C0.0190178 5.47213 0.0364936 5.40063 0.132611 5.35016L2.58359 4.07571L0.09329 2.88959C-0.00282696 2.83912 -0.0246717 2.77182 0.0277557 2.6877L0.59135 1.58991C0.643778 1.49737 0.71805 1.47634 0.814167 1.52681L3.31758 2.95268L3.21272 0.151421C3.21272 0.0504735 3.26515 0 3.37 0H4.57583C4.68069 0 4.73312 0.0504735 4.73312 0.151421L4.64137 2.94006L7.14478 1.40063C7.2409 1.34175 7.3108 1.35857 7.35449 1.4511L7.97051 2.46057C8.02294 2.5531 8.00546 2.6204 7.91808 2.66246L5.40157 4L7.82633 5.18612C7.91371 5.23659 7.93556 5.30389 7.89187 5.38801L7.36759 6.4858C7.32391 6.58675 7.25837 6.60778 7.17099 6.54889L4.6938 5.13565L4.78554 7.84858C4.79428 7.94953 4.74185 8 4.62826 8H3.39622Z" />
-      </svg>
+      />
     </div>
   );
 }
@@ -965,7 +958,6 @@ export function EntityWithEverything(
           class="min-h-10 min-w-[50px] flex flex-row items-center gap-2 col-2 @max-md/split:col-auto @max-md/split:w-full @max-md/split:min-h-0 @max-md/split:items-start"
           classList={{
             grow: props.contentPlacement === 'bottom-row',
-            'opacity-70': props.fadeIfRead && !props.unreadIndicatorActive,
           }}
         >
           {/* Icon/Checkbox container - in narrow mode, shows icon by default, checkbox on hover */}
@@ -1021,12 +1013,7 @@ export function EntityWithEverything(
           <EntityTitle />
         </div>
         {/* Date and user - top right on mobile, end on desktop  */}
-        <div
-          class="row-1 ml-2 @md:ml-4 self-center min-w-0 col-3 @max-md/split:col-auto @max-md/split:row-auto @max-md/split:ml-0 @max-md/split:mt-1 @max-md/split:self-start @max-md/split:w-full"
-          classList={{
-            'opacity-50': props.fadeIfRead && !props.unreadIndicatorActive,
-          }}
-        >
+        <div class="row-1 ml-2 @md:ml-4 self-center min-w-0 col-3 @max-md/split:col-auto @max-md/split:row-auto @max-md/split:ml-0 @max-md/split:mt-1 @max-md/split:self-start @max-md/split:w-full">
           <div class="flex flex-row items-center justify-end gap-2 min-w-0 @max-md/split:justify-start @max-md/split:flex-wrap">
             <Show when={properties().length > 0}>
               <div class="pr-2 overflow-hidden shrink min-w-0">
