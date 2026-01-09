@@ -9,12 +9,13 @@
   "files": {
     "includes": [
       "**/*.{ts,tsx,js,jsx}",
-      "**/openapi.json",
+      "!**/openapi.json",
       "!**/*.d.ts",
       "!**/generated",
       "!chrome-extension-vite",
       "!infra/web-app/output",
       "!scripts",
+      "!packages/service-clients",
       "!packages/filesystem",
       "!packages/_app-mobile",
       "!packages/loro-mirror/packages",

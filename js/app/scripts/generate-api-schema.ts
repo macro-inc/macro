@@ -28,33 +28,6 @@ const serviceToCrate: Record<string, string> = {
   'organization-service': 'organization_service',
 };
 
-// Get biome executable path (prefer system install over node_modules)
-const findBiomeScript = `
-IFS=':'
-for dir in $PATH; do
-  if [ -f "$dir/biome" ] && [ -x "$dir/biome" ]; then
-    realpath "$dir/biome"
-  fi
-done
-`;
-
-const getBiomePath = async () => {
-  const allBiomePaths = (await $`bash -c ${findBiomeScript}`.text()).trim().split('\n').filter(p => p);
-  let biomePath = allBiomePaths.find(p => !p.includes('node_modules'));
-
-  // Fallback to node_modules/.bin/biome if system biome not found
-  if (!biomePath) {
-    const nodeModulesBiome = path.resolve(import.meta.dirname, '../node_modules/.bin/biome');
-    try {
-      await $`test -x ${nodeModulesBiome}`;
-      biomePath = nodeModulesBiome;
-    } catch {
-      console.error('Error: biome executable not found in PATH or node_modules');
-      process.exit(1);
-    }
-  }
-  return biomePath;
-}
 const getRustCloudStorageDir = () => path.resolve(import.meta.dirname, '../../../rust/cloud-storage');
 const getServiceClientsDir = () => path.resolve(import.meta.dirname, '../packages/service-clients');
 // Parse arguments
@@ -93,7 +66,7 @@ const getServicesToProcess = (targetServices: string[]) => {
 
 
 // Process all services in parallel
-const processService = async (service: Service, { biomePath, serviceClientsDir }: {biomePath: string, serviceClientDir: string }) => {
+const processService = async (service: Service, { serviceClientsDir }: { serviceClientDir: string }) => {
   const crateName = serviceToCrate[service.name];
   if (!crateName) {
     console.error(`[${service.name}] No crate mapping found, skipping`);
@@ -118,9 +91,6 @@ const processService = async (service: Service, { biomePath, serviceClientsDir }
     await write(openApiPath, openApiJson);
     console.log(`[${service.name}] Saved OpenAPI spec to ${openApiPath}`);
 
-    // Format with biome
-    await $`${biomePath} format --fix ${openApiPath}`;
-
     // Run orval to generate types
     await $`cd ${serviceClientsDir} && bun run orval --config orval.config.ts --project ${service.orvalKey}`;
 
@@ -143,7 +113,6 @@ async function main() {
   const serviceClientsDir = getServiceClientsDir();
   const checkMode = process.argv.includes('--check');
   const targetServices = getTargetServices();
-  const biomePath = await getBiomePath();
   const servicesToProcess = getServicesToProcess(targetServices);
   console.log(
     `\nProcessing ${servicesToProcess.length} service(s)...\n`
@@ -151,7 +120,7 @@ async function main() {
 
   const results = [];
   for (const service of servicesToProcess) {
-    const result = await processService(service, { biomePath, serviceClientsDir } );
+    const result = await processService(service, { serviceClientsDir } );
     results.push(result);
   }
 
