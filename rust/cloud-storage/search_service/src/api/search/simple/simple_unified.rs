@@ -53,6 +53,34 @@ fn cursor_from_tagged(tagged: &TaggedSearchHit) -> Option<SearchMethodCursor> {
     })
 }
 
+/// Computes the next cursor for a search source based on pagination state
+///
+/// # Arguments
+/// * `next_cursor_from_search` - The cursor returned by the search operation
+/// * `included_count` - Number of results from this source included in final page
+/// * `original_count` - Total number of results returned by search for this source
+/// * `last_included_hit` - The last result of this source type included in final page
+/// * `original_cursor` - The cursor passed into the search (to carry forward if no results included)
+fn compute_next_cursor(
+    next_cursor_from_search: &SearchCursorOption,
+    included_count: usize,
+    original_count: usize,
+    last_included_hit: Option<&TaggedSearchHit>,
+    original_cursor: &SearchCursorOption,
+) -> SearchCursorOption {
+    if next_cursor_from_search.is_done() {
+        SearchCursorOption::Done
+    } else if included_count < original_count || next_cursor_from_search.has_more() {
+        if included_count > 0 {
+            SearchCursorOption::NotDone(last_included_hit.and_then(cursor_from_tagged))
+        } else {
+            original_cursor.clone()
+        }
+    } else {
+        SearchCursorOption::Done
+    }
+}
+
 /// Creates a unified search request and performs the search
 /// by calling individual simple search endpoints for each entity type
 #[tracing::instrument(skip(ctx, user_context, query_params, req), err)]
@@ -401,85 +429,46 @@ pub(in crate::api::search) async fn perform_unified_search(
         .count();
     // Content cursor deferred - always None for now
 
-    // Generate new cursors
-    // Rule: If search returned Done, mark as Done
-    //       If excluded results exist OR search indicated more results, generate cursor from last included
-    //       If no results included but original cursor existed, carry forward original
-    //       Otherwise, mark as Done
-    let new_doc_cursor = if doc_next_cursor.is_done() {
-        SearchCursorOption::Done
-    } else if included_doc_names < doc_name_count || doc_next_cursor.has_more() {
-        if included_doc_names > 0 {
-            SearchCursorOption::NotDone(
-                find_last_of_source(&final_tagged, SearchSource::DocumentName)
-                    .and_then(cursor_from_tagged),
-            )
-        } else {
-            document_cursor.clone()
-        }
-    } else {
-        SearchCursorOption::Done
-    };
+    // Generate new cursors using helper function
+    let new_doc_cursor = compute_next_cursor(
+        &doc_next_cursor,
+        included_doc_names,
+        doc_name_count,
+        find_last_of_source(&final_tagged, SearchSource::DocumentName),
+        &document_cursor,
+    );
 
-    let new_chat_cursor = if chat_next_cursor.is_done() {
-        SearchCursorOption::Done
-    } else if included_chat_names < chat_name_count || chat_next_cursor.has_more() {
-        if included_chat_names > 0 {
-            SearchCursorOption::NotDone(
-                find_last_of_source(&final_tagged, SearchSource::ChatName)
-                    .and_then(cursor_from_tagged),
-            )
-        } else {
-            chat_cursor.clone()
-        }
-    } else {
-        SearchCursorOption::Done
-    };
+    let new_chat_cursor = compute_next_cursor(
+        &chat_next_cursor,
+        included_chat_names,
+        chat_name_count,
+        find_last_of_source(&final_tagged, SearchSource::ChatName),
+        &chat_cursor,
+    );
 
-    let new_email_cursor = if email_next_cursor.is_done() {
-        SearchCursorOption::Done
-    } else if included_email_subjects < email_subject_count || email_next_cursor.has_more() {
-        if included_email_subjects > 0 {
-            SearchCursorOption::NotDone(
-                find_last_of_source(&final_tagged, SearchSource::EmailSubject)
-                    .and_then(cursor_from_tagged),
-            )
-        } else {
-            email_cursor.clone()
-        }
-    } else {
-        SearchCursorOption::Done
-    };
+    let new_email_cursor = compute_next_cursor(
+        &email_next_cursor,
+        included_email_subjects,
+        email_subject_count,
+        find_last_of_source(&final_tagged, SearchSource::EmailSubject),
+        &email_cursor,
+    );
 
-    let new_project_cursor = if project_next_cursor.is_done() {
-        SearchCursorOption::Done
-    } else if included_project_names < project_name_count || project_next_cursor.has_more() {
-        if included_project_names > 0 {
-            SearchCursorOption::NotDone(
-                find_last_of_source(&final_tagged, SearchSource::ProjectName)
-                    .and_then(cursor_from_tagged),
-            )
-        } else {
-            project_cursor.clone()
-        }
-    } else {
-        SearchCursorOption::Done
-    };
+    let new_project_cursor = compute_next_cursor(
+        &project_next_cursor,
+        included_project_names,
+        project_name_count,
+        find_last_of_source(&final_tagged, SearchSource::ProjectName),
+        &project_cursor,
+    );
 
-    let new_content_cursor = if content_next_cursor.is_done() {
-        SearchCursorOption::Done
-    } else if included_content < content_count || content_next_cursor.has_more() {
-        if included_content > 0 {
-            SearchCursorOption::NotDone(
-                find_last_of_source(&final_tagged, SearchSource::Content)
-                    .and_then(cursor_from_tagged),
-            )
-        } else {
-            content_cursor.clone()
-        }
-    } else {
-        SearchCursorOption::Done
-    };
+    let new_content_cursor = compute_next_cursor(
+        &content_next_cursor,
+        included_content,
+        content_count,
+        find_last_of_source(&final_tagged, SearchSource::Content),
+        &content_cursor,
+    );
 
     // Build next cursor if any source has more results
     let has_more = new_doc_cursor.has_more()
@@ -542,3 +531,6 @@ pub async fn handler(
     // The cursor is returned by the unified search endpoint (/search)
     Ok(Json(SimpleSearchResponse { results }))
 }
+
+#[cfg(test)]
+mod test;
