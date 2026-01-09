@@ -27,6 +27,10 @@ import { EmailInput } from './EmailInput';
 import { MessageList } from './MessageList';
 import { TopBar } from './TopBar';
 
+const TARGET_MESSAGE_HIGHLIGHT_MS = 800;
+const SCROLL_ANIMATION_MS = 1000;
+const SCROLL_AFTER_SEND_DELAY_MS = 100;
+
 type EmailViewProps = {
   title: Accessor<string>;
   threadId: Accessor<string>;
@@ -132,11 +136,11 @@ function EmailContent(props: EmailViewProps) {
     if (context.messages.targetMessageID() === messageId) {
       setTimeout(() => {
         context.messages.setTargetMessageID(undefined);
-      }, 800);
+      }, TARGET_MESSAGE_HIGHLIGHT_MS);
     }
 
     // Clear scrolling flag after animation
-    setTimeout(() => setIsScrollingToMessage(false), 1000);
+    setTimeout(() => setIsScrollingToMessage(false), SCROLL_ANIMATION_MS);
 
     return true;
   };
@@ -261,7 +265,7 @@ function EmailContent(props: EmailViewProps) {
     if (prev === false) {
       setTimeout(() => {
         scrollToLastMessage('smooth');
-      }, 100);
+      }, SCROLL_AFTER_SEND_DELAY_MS);
     }
     return true;
   });
@@ -397,7 +401,10 @@ function EmailContent(props: EmailViewProps) {
           class="w-full flex-1 flex flex-col items-center overflow-hidden"
           ref={context.registerMessagesContainer}
         >
-          <MessageList initialLoadComplete={context.initialLoadComplete()} title={props.title()} />
+          <MessageList
+            initialLoadComplete={context.initialLoadComplete()}
+            title={props.title()}
+          />
         </div>
         <Show
           when={

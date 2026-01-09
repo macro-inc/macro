@@ -88,7 +88,9 @@ export function MessageList(props: MessageListProps) {
       <Show when={props.title}>
         <div class="shrink-0 w-full flex justify-center pb-4">
           <div class="macro-message-width w-full">
-            <h1 class="text-4xl font-semibold text-ink pt-8 pb-4">{props.title}</h1>
+            <h1 class="text-4xl font-semibold text-ink pt-8 pb-4">
+              {props.title}
+            </h1>
           </div>
         </div>
       </Show>

@@ -43,7 +43,7 @@ function formatFullDate(timestamp: string): string {
     minute: '2-digit',
     timeZoneName: 'short',
   };
-  return date.toLocaleString('en-US', options).replace(',', '').replace(' at', ' at');
+  return date.toLocaleString('en-US', options).replace(',', '');
 }
 
 export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
@@ -64,7 +64,9 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
     }
     const from = props.message.from;
     if (!from) return 'Unknown';
-    return from.name ? getFirstName(from.name) : from.email?.split('@')[0] ?? 'Unknown';
+    return from.name
+      ? getFirstName(from.name)
+      : (from.email?.split('@')[0] ?? 'Unknown');
   });
 
   // Build recipient summary: "Me, Jackson & Will" style
@@ -77,7 +79,9 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
       if (r.email === currentEmail) {
         recipients.push('Me');
       } else {
-        recipients.push(r.name ? getFirstName(r.name) : r.email?.split('@')[0] ?? '');
+        recipients.push(
+          r.name ? getFirstName(r.name) : (r.email?.split('@')[0] ?? '')
+        );
       }
     }
 
@@ -86,7 +90,9 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
       if (r.email === currentEmail) {
         recipients.push('Me');
       } else {
-        recipients.push(r.name ? getFirstName(r.name) : r.email?.split('@')[0] ?? '');
+        recipients.push(
+          r.name ? getFirstName(r.name) : (r.email?.split('@')[0] ?? '')
+        );
       }
     }
 
@@ -138,9 +144,12 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
                   <span class="font-semibold text-ink">
                     {props.message.from?.name ?? props.message.from?.email}
                   </span>
-                  <Show when={props.message.from?.name && props.message.from?.email}>
+                  <Show
+                    when={props.message.from?.name && props.message.from?.email}
+                  >
                     <span class="text-ink-muted">
-                      {' '}&lt;{props.message.from?.email}&gt;
+                      {' '}
+                      &lt;{props.message.from?.email}&gt;
                     </span>
                   </Show>
                 </span>
@@ -156,7 +165,10 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
                         <>
                           <span class="text-ink">{r.name ?? r.email}</span>
                           <Show when={r.name && r.email}>
-                            <span class="text-ink-muted"> &lt;{r.email}&gt;</span>
+                            <span class="text-ink-muted">
+                              {' '}
+                              &lt;{r.email}&gt;
+                            </span>
                           </Show>
                           <Show when={index() < props.message.to.length - 1}>
                             <span class="text-ink-muted">, </span>
@@ -176,9 +188,14 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
                     <For each={props.message.cc}>
                       {(r, index) => (
                         <>
-                          <span class="font-semibold text-ink">{r.name ?? r.email}</span>
+                          <span class="font-semibold text-ink">
+                            {r.name ?? r.email}
+                          </span>
                           <Show when={r.name && r.email}>
-                            <span class="text-ink-muted"> &lt;{r.email}&gt;</span>
+                            <span class="text-ink-muted">
+                              {' '}
+                              &lt;{r.email}&gt;
+                            </span>
                           </Show>
                           <Show when={index() < props.message.cc.length - 1}>
                             <span class="text-ink-muted">, </span>
@@ -198,9 +215,14 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
                     <For each={props.message.bcc}>
                       {(r, index) => (
                         <>
-                          <span class="font-semibold text-ink">{r.name ?? r.email}</span>
+                          <span class="font-semibold text-ink">
+                            {r.name ?? r.email}
+                          </span>
                           <Show when={r.name && r.email}>
-                            <span class="text-ink-muted"> &lt;{r.email}&gt;</span>
+                            <span class="text-ink-muted">
+                              {' '}
+                              &lt;{r.email}&gt;
+                            </span>
                           </Show>
                           <Show when={index() < props.message.bcc.length - 1}>
                             <span class="text-ink-muted">, </span>
@@ -273,10 +295,13 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
               {/* Date */}
               <div class="text-xs text-ink-muted">
                 {props.message.internal_date_ts &&
-                  new Date(props.message.internal_date_ts).toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                  })}
+                  new Date(props.message.internal_date_ts).toLocaleDateString(
+                    'en-US',
+                    {
+                      month: 'short',
+                      day: 'numeric',
+                    }
+                  )}
               </div>
             </div>
           </div>

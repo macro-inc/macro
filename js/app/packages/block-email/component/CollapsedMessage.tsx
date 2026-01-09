@@ -11,11 +11,6 @@ interface CollapsedMessageProps {
   onClick: () => void;
 }
 
-/**
- * Standalone collapsed message component.
- * Renders a single-row view with avatar, sender, and snippet.
- * Uses BozzyBracket for hover/focus brackets.
- */
 export function CollapsedMessage(props: CollapsedMessageProps) {
   const [hover, setHover] = createSignal(false);
   const currentUserEmail = useEmail();
@@ -94,14 +89,14 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
               style={{
                 width: 'var(--user-icon-width)',
                 height: 'var(--user-icon-width)',
-                'margin-left': 'calc(var(--left-of-connector) - var(--user-icon-width) / 2)',
+                'margin-left':
+                  'calc(var(--left-of-connector) - var(--user-icon-width) / 2)',
               }}
             >
               <UserIcon
                 {...(isFromCurrentUser()
                   ? { id: currentUserId() ?? '' }
-                  : { email: props.message.from?.email ?? '' }
-                )}
+                  : { email: props.message.from?.email ?? '' })}
                 isDeleted={false}
                 size="fill"
                 suppressClick={true}
@@ -109,18 +104,29 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
             </div>
 
             {/* Sender + Snippet - aligned with expanded message content */}
-            <div class="flex-1 flex items-center min-w-0 text-sm" style={{ 'padding-left': 'calc(var(--left-of-connector) - var(--user-icon-width) / 2)' }}>
-              <span class="text-ink-muted w-16 shrink-0 truncate">{senderDisplay()}</span>
+            <div
+              class="flex-1 flex items-center min-w-0 text-sm"
+              style={{
+                'padding-left':
+                  'calc(var(--left-of-connector) - var(--user-icon-width) / 2)',
+              }}
+            >
+              <span class="text-ink-muted w-16 shrink-0 truncate">
+                {senderDisplay()}
+              </span>
               <span class="text-ink-extra-muted truncate">{snippet()}</span>
             </div>
 
             {/* Date */}
             <div class="text-xs text-ink-muted shrink-0 ml-4 pr-2">
               {props.message.internal_date_ts &&
-                new Date(props.message.internal_date_ts).toLocaleDateString('en-US', {
-                  month: 'short',
-                  day: 'numeric',
-                })}
+                new Date(props.message.internal_date_ts).toLocaleDateString(
+                  'en-US',
+                  {
+                    month: 'short',
+                    day: 'numeric',
+                  }
+                )}
             </div>
           </div>
         </BozzyBracket>

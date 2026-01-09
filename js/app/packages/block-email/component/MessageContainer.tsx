@@ -55,16 +55,23 @@ export function MessageContainer(props: MessageContainerProps) {
   const [threadAppendMountTarget, setThreadAppendMountTarget] = createSignal<
     HTMLElement | undefined
   >();
-  const [showReplyInternal, setShowReplyInternal] = createSignal<boolean>(false);
+  const [showReplyInternal, setShowReplyInternal] =
+    createSignal<boolean>(false);
 
   // Combined showReply that checks both local state and context
-  const showReply = () => showReplyInternal() || context.messages.replyingToMessageId() === props.message.db_id;
+  const showReply = () =>
+    showReplyInternal() ||
+    context.messages.replyingToMessageId() === props.message.db_id;
 
   // Wrapper to also clear context replyingToMessageId when hiding reply
   const setShowReply = (value: boolean | ((prev: boolean) => boolean)) => {
-    const newValue = typeof value === 'function' ? value(showReplyInternal()) : value;
+    const newValue =
+      typeof value === 'function' ? value(showReplyInternal()) : value;
     setShowReplyInternal(newValue);
-    if (!newValue && context.messages.replyingToMessageId() === props.message.db_id) {
+    if (
+      !newValue &&
+      context.messages.replyingToMessageId() === props.message.db_id
+    ) {
       context.messages.setReplyingToMessageId(undefined);
     }
   };
@@ -225,7 +232,9 @@ export function MessageContainer(props: MessageContainerProps) {
             focused={props.isFocused}
             isFirstMessage={props.isFirstMessage}
             isLastMessage={props.isLastMessage}
-            senderId={isFromCurrentUser() ? userId() : props.message.from?.email}
+            senderId={
+              isFromCurrentUser() ? userId() : props.message.from?.email
+            }
             isNewMessage={isNewMessage()}
             isTarget={props.isTarget}
           >
@@ -321,7 +330,9 @@ export function MessageContainer(props: MessageContainerProps) {
               isFirstInThread
               isLastInThread
               shouldShowThreadAppendInput
-              setThreadAppendMountTarget={(el) => setThreadAppendMountTarget(el)}
+              setThreadAppendMountTarget={(el) =>
+                setThreadAppendMountTarget(el)
+              }
             >
               <Message.TopBar name={currentUserName()} />
               <div class="h-4" />

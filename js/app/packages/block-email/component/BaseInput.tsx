@@ -596,7 +596,6 @@ export function BaseInput(props: {
         scopeId: composeHotkeyScope,
         description: 'Close reply',
         keyDownHandler: () => {
-          // Check if draft body is empty
           const draft = collectDraft();
           const isEmpty = draft === null;
 

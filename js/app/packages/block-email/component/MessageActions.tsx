@@ -3,7 +3,6 @@ import ArrowBendDoubleUpLeft from '@icon/regular/arrow-bend-double-up-left.svg';
 import ArrowBendUpLeft from '@icon/regular/arrow-bend-up-left.svg';
 import ArrowBendUpRight from '@icon/regular/arrow-bend-up-right.svg';
 import type { MessageWithBodyReplyless } from '@service-email/generated/schemas';
-// import EnvelopSimple from '@icon/regular/envelope-simple.svg';
 import { useEmail } from '@service-gql/client';
 import { type Setter, Show } from 'solid-js';
 import { getEmailFormRegistry } from './EmailFormContext';
@@ -48,75 +47,63 @@ export function MessageActions(props: {
         'opacity-100': canShowActions(),
       }}
     >
-        <Show
-          when={
-            shouldShowReplyAll() && !props.hiddenActions?.includes('reply-all')
-          }
-          fallback={
-            <Show when={!props.hiddenActions?.includes('reply')}>
-              <DeprecatedIconButton
-                icon={ArrowBendUpLeft}
-                theme="clear"
-                onClick={() => {
-                  if (!props.isLastMessage) {
-                    props.setShowReply(true);
-                  }
-                  const form = formRegistry.getOrInit(
-                    props.message.db_id ?? ''
-                  );
-                  form.setReplyType('reply');
-                  form.setShouldFocusInput(true);
-                }}
-                tooltip={{
-                  label: 'Reply',
-                }}
-              />
-            </Show>
-          }
-        >
-          <DeprecatedIconButton
-            icon={ArrowBendDoubleUpLeft}
-            theme="clear"
-            onClick={() => {
-              if (!props.isLastMessage) {
-                props.setShowReply(true);
-              }
-              const form = formRegistry.getOrInit(props.message.db_id ?? '');
-              form.setReplyType('reply-all');
-              form.setShouldFocusInput(true);
-            }}
-            tooltip={{
-              label: 'Reply all',
-            }}
-          />
-        </Show>
-        <Show when={!props.hiddenActions?.includes('forward')}>
-          <DeprecatedIconButton
-            icon={ArrowBendUpRight}
-            theme="clear"
-            onClick={() => {
-              if (!props.isLastMessage) {
-                props.setShowReply(true);
-              }
-              const form = formRegistry.getOrInit(props.message.db_id ?? '');
-              form.setReplyType('forward');
-              form.setShouldFocusInput(true);
-            }}
-            tooltip={{
-              label: 'Forward',
-            }}
-          />
-        </Show>
-        {/* <IconButton
-          icon={EnvelopSimple}
+      <Show
+        when={
+          shouldShowReplyAll() && !props.hiddenActions?.includes('reply-all')
+        }
+        fallback={
+          <Show when={!props.hiddenActions?.includes('reply')}>
+            <DeprecatedIconButton
+              icon={ArrowBendUpLeft}
+              theme="clear"
+              onClick={() => {
+                if (!props.isLastMessage) {
+                  props.setShowReply(true);
+                }
+                const form = formRegistry.getOrInit(props.message.db_id ?? '');
+                form.setReplyType('reply');
+                form.setShouldFocusInput(true);
+              }}
+              tooltip={{
+                label: 'Reply',
+              }}
+            />
+          </Show>
+        }
+      >
+        <DeprecatedIconButton
+          icon={ArrowBendDoubleUpLeft}
           theme="clear"
-          onClick={async () => {
-            // TODO: Implement mark as unread
+          onClick={() => {
+            if (!props.isLastMessage) {
+              props.setShowReply(true);
+            }
+            const form = formRegistry.getOrInit(props.message.db_id ?? '');
+            form.setReplyType('reply-all');
+            form.setShouldFocusInput(true);
           }}
           tooltip={{
-            label: 'Mark as unread',
+            label: 'Reply all',
           }}
-        /> */}
+        />
+      </Show>
+      <Show when={!props.hiddenActions?.includes('forward')}>
+        <DeprecatedIconButton
+          icon={ArrowBendUpRight}
+          theme="clear"
+          onClick={() => {
+            if (!props.isLastMessage) {
+              props.setShowReply(true);
+            }
+            const form = formRegistry.getOrInit(props.message.db_id ?? '');
+            form.setReplyType('forward');
+            form.setShouldFocusInput(true);
+          }}
+          tooltip={{
+            label: 'Forward',
+          }}
+        />
+      </Show>
     </div>
   );
 }
