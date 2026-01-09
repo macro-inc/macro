@@ -1,7 +1,7 @@
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { EntityIcon } from '@core/component/EntityIcon';
-import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
+import { MiniToggleSwitch } from '@core/component/FormControls/MiniToggleSwitch';
 import { BlockLink } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
@@ -565,18 +565,16 @@ export function ComposeTask(props: ComposeTaskProps) {
       <Show when={errorMessage()}>
         <div class="w-full border-b border-edge-muted/50" />
         <div class="px-2 py-2">
-          <div class="text-sm text-red-500 bg-red-50 border border-red-200 rounded px-3 py-2">
-            {errorMessage()}
-          </div>
+          <div class="text-sm text-failure-ink px-3 py-2">{errorMessage()}</div>
         </div>
       </Show>
 
       <div class="w-full border-b border-edge-muted/50" />
-      <div class="flex-shrink-0 flex justify-between items-center p-2">
-        <ToggleSwitch
+      <div class="flex-shrink-0 flex justify-between items-center p-2 gap-2">
+        <MiniToggleSwitch
           size="SM"
-          switchRootClass="text-xs text-ink-muted"
           label="Create More"
+          labelClass="text-ink-muted font-normal"
           checked={createMore()}
           onChange={setCreateMore}
         />
