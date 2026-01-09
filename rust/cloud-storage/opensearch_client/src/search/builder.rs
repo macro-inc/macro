@@ -8,6 +8,7 @@ use crate::search::query::Keys;
 use crate::search::query::QueryKey;
 use crate::search::query::generate_terms_must_query;
 use models_opensearch::SearchEntityType;
+use models_search_cursor::SearchMethodCursor;
 use opensearch_query_builder::*;
 
 /// A macro for generating delegation methods that forward calls to an inner field
@@ -57,7 +58,8 @@ pub(crate) fn create_highlight_field<'a>(
         .number_of_fragments(number_of_fragments)
 }
 
-/// Creates sort vec to sort by the updated_at with a fallback to score sort
+/// Creates sort vec to sort by the updated_at with entity_id as a tiebreaker.
+/// Items without a timestamp are pushed to the end by returning 0L (DESC order).
 pub(crate) fn updated_at_sort<'a>() -> Vec<SortType<'a>> {
     vec![
         SortType::ScriptSort(ScriptSort::new(
@@ -67,15 +69,23 @@ pub(crate) fn updated_at_sort<'a>() -> Vec<SortType<'a>> {
                 } else if (doc.containsKey('updated_at_seconds') && doc['updated_at_seconds'].size() > 0) {
                     return doc['updated_at_seconds'].value.toInstant().toEpochMilli();
                 } else {
-                    return 0L;  // Or Long.MAX_VALUE to push to end
+                    return 0L;
                 }"#,
             ),
             ScriptSortType::Number,
             SortOrder::Desc,
         )),
-        SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
+        SortType::Field(FieldSort::new("entity_id", SortOrder::Asc)),
     ]
 }
+
+pub(crate) fn search_after(cursor: SearchMethodCursor) -> Vec<serde_json::Value> {
+    vec![
+        serde_json::json!(cursor.updated_at.timestamp_millis()),
+        serde_json::json!(cursor.entity_id.to_string()),
+    ]
+}
+
 pub trait SearchQueryConfig {
     /// Key for item id
     const ID_KEY: &'static str = "entity_id";

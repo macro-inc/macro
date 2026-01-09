@@ -4,7 +4,7 @@ use crate::{
     Result,
     error::{OpensearchClientError, ResponseExt},
     search::{
-        builder::{SearchQueryConfig, create_highlight_field, updated_at_sort},
+        builder::{SearchQueryConfig, create_highlight_field, search_after, updated_at_sort},
         channels::{
             ChannelMessageIndex, ChannelMessageQueryBuilder, ChannelMessageSearchArgs,
             ChannelMessageSearchConfig,
@@ -22,6 +22,7 @@ use crate::{
     },
 };
 use chrono::DateTime;
+use models_search_cursor::SearchCursorOption;
 
 use crate::SearchOn;
 use models_opensearch::{SearchEntityType, SearchIndex};
@@ -37,6 +38,8 @@ pub struct UnifiedSearchArgs {
     pub search_on: SearchOn,
     pub collapse: bool,
     pub disable_recency: bool,
+    /// The cursor to use
+    pub cursor: SearchCursorOption,
     /// The indices to search over
     pub search_indices: HashSet<SearchEntityType>,
     /// The document search args
@@ -325,6 +328,12 @@ impl From<Hit<UnifiedSearchIndex>> for SearchHit {
 
 #[tracing::instrument(skip(args), err)]
 fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchRequest<'static>> {
+    // We don't support searching over an exhausted (done) cursor
+    let cursor = match args.cursor.clone() {
+        SearchCursorOption::NotDone(search_method_cursor) => search_method_cursor.clone(),
+        SearchCursorOption::Done => return Err(OpensearchClientError::SearchWithExhaustedCursor),
+    };
+
     // We don't support name search in opensearch
     if let SearchOn::Name = args.search_on {
         return Err(OpensearchClientError::InvalidSearchOn);
@@ -377,7 +386,10 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
     // create the search request
     let mut search_request_builder = SearchRequestBuilder::new();
 
-    search_request_builder.from(args.page * args.page_size);
+    if let Some(cursor) = cursor {
+        search_request_builder.set_search_after(search_after(cursor));
+    }
+
     search_request_builder.size(args.page_size);
 
     if args.collapse {
@@ -405,10 +417,6 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
     // fields
     match args.search_on {
         SearchOn::Content | SearchOn::NameContent => {
-            // Commenting out for now as it's causing highlights on the user_id of filter matches
-            // Need to think of a different way to surface the owner matches
-            // highlight = highlight.field("user_id", create_highlight_field("plain", 1));
-            // highlight = highlight.field("owner_id", create_highlight_field("plain", 1));
             highlight = highlight.field("sender", create_highlight_field("plain", 1));
             highlight = highlight.field("recipients", create_highlight_field("plain", 1));
             highlight = highlight.field("cc", create_highlight_field("plain", 1));

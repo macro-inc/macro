@@ -1,5 +1,7 @@
 use super::*;
 
+use chrono::Utc;
+use models_search_cursor::SearchMethodCursor;
 use opensearch_query_builder::ToOpenSearchJson;
 
 #[test]
@@ -412,6 +414,9 @@ fn test_fail_on_name_search() {
 
 #[test]
 fn test_build_unified_search_request_content() -> anyhow::Result<()> {
+    let entity_id = uuid::Uuid::new_v4();
+    let time = Utc::now();
+
     let unified_search_args = UnifiedSearchArgs {
         search_indices: vec![
             SearchEntityType::Documents,
@@ -453,6 +458,10 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
             role: vec!["id1".to_string(), "id2".to_string()],
             ids_only: false,
         },
+        cursor: SearchCursorOption::NotDone(Some(SearchMethodCursor {
+            entity_id,
+            updated_at: time,
+        })),
     };
 
     let result = build_unified_search_request(&unified_search_args)?;
@@ -461,7 +470,6 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
       "collapse": {
         "field": "entity_id"
       },
-      "from": 20,
       "highlight": {
         "fields": {
           "bcc": {
@@ -865,6 +873,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
           ]
         }
       },
+      "search_after": [time.timestamp_millis(), entity_id.to_string()],
       "size": 20,
       "sort": updated_at_sort().iter().map(|s| s.to_json()).collect::<Vec<_>>(),
     });
@@ -912,6 +921,10 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
             role: vec!["id1".to_string(), "id2".to_string()],
             ids_only: false,
         },
+        cursor: SearchCursorOption::NotDone(Some(SearchMethodCursor {
+            entity_id,
+            updated_at: time,
+        })),
     };
 
     let result = build_unified_search_request(&unified_search_args)?;
@@ -946,7 +959,6 @@ fn test_build_unified_search_request_single_index() -> anyhow::Result<()> {
       "collapse": {
         "field": "entity_id"
       },
-      "from": 20,
       "highlight": {
         "fields": {
           "bcc": {

@@ -15,6 +15,7 @@ uuid = { workspace = true }
 anyhow = { workspace = true }
 chrono = { workspace = true }
 models_opensearch = { path = "../models_opensearch" }
+models_search_cursor = { path = "../models_search_cursor" }
 opensearch = { version = "2.3.0" }
 opensearch_query_builder = { version = "0.2.8", default-features = false }
 serde = { workspace = true }
