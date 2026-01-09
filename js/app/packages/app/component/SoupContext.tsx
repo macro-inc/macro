@@ -1,7 +1,6 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useChannelsContext } from '@core/component/ChannelsProvider';
 import { toast } from '@core/component/Toast/Toast';
-import { ENABLE_PROPERTIES_METADATA } from '@core/constant/featureFlags';
 import { HotkeyTags } from '@core/hotkey/constants';
 import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -448,7 +447,7 @@ export function createNavigationEntityListShortcut({
             });
           }
           const entityType = getPropertiesEntityType(entity);
-          if (entityType && ENABLE_PROPERTIES_METADATA) {
+          if (entityType) {
             propertiesServiceClient
               .setPropertyStatusComplete({
                 entity_type: entityType,

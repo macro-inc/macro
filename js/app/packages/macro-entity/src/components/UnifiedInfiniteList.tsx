@@ -1,6 +1,7 @@
 import { useSuspenseContext } from '@app/component/SuspenseContext';
 import { EmptyState } from '@app/component/UnifiedListEmptyState';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
+import { toast } from '@core/component/Toast/Toast';
 import type { ViewId } from '@core/types/view';
 import { onElementConnect } from '@solid-primitives/lifecycle';
 import { debounce } from '@solid-primitives/scheduled';
@@ -272,8 +273,8 @@ export function createUnifiedInfiniteList<T extends EntityData>({
 
     const infiniteEntities = entityInfiniteQueries.map((query) => {
       const operations = getOperations(query.operations);
-      const data =
-        query.query.isSuccess && query.query.isEnabled ? query.query.data : [];
+      // NOTE: we don't use the isSuccess check because fetch next page can fail
+      const data = query.query.isEnabled ? (query.query.data ?? []) : [];
       return {
         data,
         operations,
@@ -415,6 +416,20 @@ export function createUnifiedInfiniteList<T extends EntityData>({
     await Promise.allSettled(results);
     isFetchingMore = false;
   };
+
+  createEffect(() => {
+    entityInfiniteQueries.map((query) => {
+      if (!query.query.isEnabled || !query.query.isError) return;
+
+      if (query.query.isFetchNextPageError) {
+        console.error('failed to fetch next page', query.query.failureReason);
+        toast.failure('Failed to fetch more data');
+      } else {
+        console.error('failed to fetch', query.query.failureReason);
+        toast.failure('Failed to fetch data');
+      }
+    });
+  });
 
   const debouncedFetchMore = debounce(fetchMoreData, DEBOUNCE_FETCH_MORE_MS);
 

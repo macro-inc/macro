@@ -95,6 +95,7 @@ jobs:
         uses: ./.github/actions/setup-reqs-web
         with:
           npm-rc-token: ${{ secrets.NPMRC_GH_TOKEN }}
+          playwright: 'true'
       - name: Test
         working-directory: js/app
         run: bunx vitest

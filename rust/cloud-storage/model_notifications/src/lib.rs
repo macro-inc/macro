@@ -79,6 +79,7 @@ impl NotificationEvent {
         }
     }
 
+    #[tracing::instrument(err)]
     pub fn try_from_type_and_meta(
         event_type: NotificationEventType,
         metadata: Option<serde_json::Value>,

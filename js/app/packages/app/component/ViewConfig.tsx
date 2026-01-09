@@ -1,4 +1,7 @@
-import { ENABLE_TASKS_TABS } from '@core/constant/featureFlags';
+import {
+  ENABLE_FRECENCY,
+  ENABLE_TASKS_TABS,
+} from '@core/constant/featureFlags';
 import {
   DEFAULT_VIEWS,
   type DefaultView,
@@ -331,7 +334,7 @@ export const VIEWCONFIG_SORT_BY: readonly SystemSortOption[] = [
   'updated_at',
   'created_at',
   'viewed_at',
-  'frecency',
+  ...(ENABLE_FRECENCY ? (['frecency'] as const) : []),
 ] as const;
 export const VIEWCONFIG_SORT_ORDER: readonly SortOptions['sortOrder'][] = [
   'ascending',

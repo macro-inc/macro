@@ -41,7 +41,7 @@ cargo tauri ios build
 cargo tauri android build
 ```
 
-The `beforeBuildCommand` is `bun run build:tauri`, which uses the same
+The `beforeBuildCommand` is `just build-tauri`, which uses the same
 `TAURI_ENV_PLATFORM` switch to pick the right Vite entrypoint and emit the
 frontend into `packages/app/dist`. Tauri then packages that output according to
 `tauri.conf.json`.

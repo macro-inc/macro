@@ -12,12 +12,14 @@ import {
   propertyValueToApi,
 } from '@core/component/Properties/api/converters';
 import { Modals } from '@core/component/Properties/component/modal';
-import { PropertyRow } from '@core/component/Properties/component/panel';
-import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
+import { PropertyGrid } from '@core/component/Properties/component/panel';
+import {
+  PROPERTY_OPTION_IDS,
+  SYSTEM_PROPERTY_IDS,
+} from '@core/component/Properties/constants';
 import {
   PropertiesProvider,
   type PropertySaveHandler,
-  usePropertiesContext,
 } from '@core/component/Properties/context/PropertiesContext';
 import type {
   Property,
@@ -29,14 +31,28 @@ import { itemToSafeName } from '@core/constant/allBlocks';
 import { createTask } from '@core/util/create';
 import { filterMap } from '@core/util/list';
 import { isErr } from '@core/util/maybeResult';
+import TrashIcon from '@icon/regular/trash.svg';
 import XIcon from '@icon/regular/x.svg';
+import {
+  queryKeys,
+  useQueryClient as useEntityQueryClient,
+} from '@macro-entity';
+import { useUserId } from '@service-gql/client';
 import { propertiesServiceClient } from '@service-properties/client';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
+import { refetchHistory } from '@service-storage/history';
+import { debounce } from '@solid-primitives/scheduled';
 import { useQuery } from '@tanstack/solid-query';
 import type { LexicalEditor } from 'lexical';
-import { createSignal, For, Show, Suspense } from 'solid-js';
+import { createEffect, createSignal, Show, Suspense } from 'solid-js';
 import { createStore, reconcile, type Store, unwrap } from 'solid-js/store';
 import { tabbable } from 'tabbable';
+import {
+  clearTaskComposerDraft,
+  loadTaskComposerDraft,
+  saveTaskComposerDraft,
+  updateDraftTimestamp,
+} from '../util/taskComposerStorage';
 
 // Show these props in the composer.
 const COMPOSER_PROPERTIES = [
@@ -88,6 +104,13 @@ async function createTaskWithProperties(
     }
   );
 
+  // Invalidate queries to refresh DSS and history
+  const entityQueryClient = useEntityQueryClient();
+  entityQueryClient.invalidateQueries({
+    queryKey: queryKeys.all.dss,
+  });
+  refetchHistory();
+
   return documentId;
 }
 
@@ -116,7 +139,7 @@ function extractPropertyValue(
     if (Array.isArray(value)) {
       return filterMap(value as string[], (id) => {
         const opt = opts.find((opt) => opt.id === id);
-        return opt ? opt.value.value : undefined;
+        return opt ? opt.id : undefined;
       });
     }
   } else {
@@ -132,7 +155,7 @@ function extractPropertyValue(
 function TaskToastPreview(props: { title: string; body: string; id: string }) {
   return (
     <BlockLink blockOrFileName="task" id={props.id}>
-      <div class="text-ink size-full">
+      <div class="text-ink size-full w-44">
         <div class="flex row items-center gap-2 mb-4">
           <EntityIcon targetType="task" />
           <span class="text-base font-medium">
@@ -162,14 +185,76 @@ export interface ComposeTaskProps {
 
 export function ComposeTask(props: ComposeTaskProps) {
   const splitPanel = useSplitPanelOrThrow();
-  const [title, setTitle] = createSignal(props.initialTitle ?? '');
-  const [content, setContent] = createSignal(props.initialContent ?? '');
+  const currentUserId = useUserId();
+
+  const getDefaultPropertyValues = (): Record<string, PropertyApiValues> => {
+    const id = currentUserId();
+    return {
+      [SYSTEM_PROPERTY_IDS.ASSIGNEES]: {
+        valueType: 'ENTITY' as const,
+        refs: id ? [{ entity_id: id, entity_type: 'USER' as const }] : [],
+      },
+      [SYSTEM_PROPERTY_IDS.STATUS]: {
+        valueType: 'SELECT_STRING' as const,
+        values: [PROPERTY_OPTION_IDS.STATUS.NOT_STARTED],
+      },
+    };
+  };
+
+  // draft init logic
+  const initializeFromDraft = () => {
+    if (!props.initialTitle && !props.initialContent) {
+      const draft = loadTaskComposerDraft();
+      if (draft) {
+        return {
+          title: draft.title,
+          content: draft.content,
+          propertyValues: draft.propertyValues,
+          isDraftLoaded: true,
+        };
+      }
+    }
+    return {
+      title: props.initialTitle ?? '',
+      content: props.initialContent ?? '',
+      propertyValues: getDefaultPropertyValues(),
+      isDraftLoaded: false,
+    };
+  };
+
+  const initialState = initializeFromDraft();
+  const [title, setTitle] = createSignal(initialState.title);
+  const [content, setContent] = createSignal(initialState.content);
   const [bodyEditor, setBodyEditor] = createSignal<LexicalEditor>();
   const [containerRef, setContainerRef] = createSignal<HTMLDivElement>();
+  const [isDraftLoaded, setIsDraftLoaded] = createSignal(
+    initialState.isDraftLoaded
+  );
 
   const [propertyValues, setPropertyValues] = createStore<
     Record<string, PropertyApiValues>
-  >({});
+  >(initialState.propertyValues);
+
+  // draft saving logic
+  let hasInitializedFromDraft = isDraftLoaded();
+  const debouncedSave = debounce(saveTaskComposerDraft, 300);
+
+  createEffect(() => {
+    const currentTitle = title();
+    const currentContent = content();
+    const currentProperties = { ...unwrap(propertyValues) };
+
+    if (hasInitializedFromDraft) {
+      hasInitializedFromDraft = false;
+      return;
+    }
+
+    debouncedSave({
+      title: currentTitle,
+      content: currentContent,
+      propertyValues: currentProperties,
+    });
+  });
 
   const systemPropertiesQuery = useQuery(() => ({
     queryKey: ['compose-task', 'system-properties'],
@@ -230,6 +315,7 @@ export function ComposeTask(props: ComposeTaskProps) {
         createdAt: '',
         valueType: definition.data_type,
         value: extractPropertyValue(definition, propertyValues, options()),
+        options: options().get(definition.id),
       } as Property;
     });
   };
@@ -255,8 +341,12 @@ export function ComposeTask(props: ComposeTaskProps) {
 
     createTaskWithProperties(taskTitle, taskContent, properties, definitions());
 
+    // Clear draft and reset form
+    clearTaskComposerDraft();
     setTitle('');
-    setPropertyValues(reconcile({}));
+    setContent('');
+    setPropertyValues(reconcile(getDefaultPropertyValues()));
+    setIsDraftLoaded(false);
 
     const ed = bodyEditor();
     ed && initializeEditorEmpty(ed);
@@ -267,6 +357,28 @@ export function ComposeTask(props: ComposeTaskProps) {
 
     props.onCreateTask?.(taskTitle, taskContent);
     props.onClose?.();
+  };
+
+  const handleClose = () => {
+    // Update timestamp when closing to extend draft life
+    const currentTitle = title();
+    const currentContent = content();
+
+    if (currentTitle || currentContent) {
+      updateDraftTimestamp();
+    }
+
+    props.onClose?.();
+  };
+
+  const handleClearDraft = () => {
+    clearTaskComposerDraft();
+    setTitle('');
+    setContent('');
+    setPropertyValues(reconcile(getDefaultPropertyValues()));
+    setIsDraftLoaded(false);
+    const ed = bodyEditor();
+    ed && initializeEditorEmpty(ed);
   };
 
   const editorFocusChange = (e: KeyboardEvent, dir: 1 | -1) => {
@@ -294,17 +406,27 @@ export function ComposeTask(props: ComposeTaskProps) {
         <Show when={splitPanel?.handle.isPopover()}>
           <DeprecatedIconButton
             icon={XIcon}
-            onClick={splitPanel?.handle.close}
+            onClick={handleClose}
             size="sm"
             tabIndex={-1}
             theme="current"
           />
         </Show>
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 flex-1">
           <span class="text-sm font-medium text-ink-disabled/50">
             Create Task
           </span>
         </div>
+        <Show when={title() || content()}>
+          <DeprecatedIconButton
+            icon={TrashIcon}
+            onClick={handleClearDraft}
+            size="sm"
+            tabIndex={-1}
+            theme="current"
+            title="Clear draft"
+          />
+        </Show>
       </div>
       <div class="w-full border-b border-edge-muted/50" />
       <div class="p-2">
@@ -341,7 +463,7 @@ export function ComposeTask(props: ComposeTaskProps) {
           <MarkdownTextarea
             editable={() => true}
             onChange={(value) => setContent(value)}
-            initialValue={props.initialContent}
+            initialValue={content()}
             placeholder={props.placeholder ?? 'Add description...'}
             captureEditor={setBodyEditor}
             onEscape={() => {
@@ -364,39 +486,13 @@ export function ComposeTask(props: ComposeTaskProps) {
             onPropertyDeleted={() => {}}
             saveHandler={saveHandler}
           >
-            <div class="w-full grid grid-cols-2 gap-1 flex-wrap text-xs font-mono text-ink-muted mt-8">
-              <For each={properties()}>
-                {(prop) => {
-                  const { openPropertyEditor, openDatePicker } =
-                    usePropertiesContext();
-                  const handleValueClick = (
-                    property: Property,
-                    anchor?: HTMLElement
-                  ) => {
-                    if (property.valueType === 'DATE') {
-                      openDatePicker(property, anchor);
-                    } else if (
-                      property.valueType === 'SELECT_STRING' ||
-                      property.valueType === 'SELECT_NUMBER' ||
-                      property.valueType === 'ENTITY'
-                    ) {
-                      openPropertyEditor(property, anchor);
-                    }
-                  };
-                  return (
-                    <div class="grid grid-cols-[8rem_auto] rounded-xs items-center p-1">
-                      <PropertyRow
-                        property={prop}
-                        onValueClick={handleValueClick}
-                        withDelete={false}
-                        withPin={false}
-                      />
-                    </div>
-                  );
-                }}
-              </For>
+            <div class="text-sm">
+              <PropertyGrid
+                properties={properties()}
+                columns={2}
+              ></PropertyGrid>
+              <Modals />
             </div>
-            <Modals />
           </PropertiesProvider>
         </Suspense>
       </div>

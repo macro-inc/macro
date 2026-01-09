@@ -17,7 +17,8 @@ import { getSuggestedProperties } from '@core/component/Properties/utils';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { blockAcceptsFileExtension } from '@core/constant/allBlocks';
 import {
-  ENABLE_PROPERTY_DISPLAY_CONTROL,
+  ENABLE_FRECENCY,
+  ENABLE_PROPERTY_DISPLAY,
   ENABLE_SOUP_FROM_FILTER,
   ENABLE_TASKS_TABS,
 } from '@core/constant/featureFlags';
@@ -181,11 +182,15 @@ const sortOptions = [
     label: 'Created',
     sortFn: sortByCreatedAt,
   },
-  {
-    value: 'frecency',
-    label: 'Frecency',
-    sortFn: sortByFrecencyScore,
-  },
+  ...(ENABLE_FRECENCY
+    ? [
+        {
+          value: 'frecency' as const,
+          label: 'Frecency',
+          sortFn: sortByFrecencyScore,
+        },
+      ]
+    : []),
 ] satisfies SortOption<EntityData, SystemSortOption>[];
 
 export type UnifiedListViewProps = {
@@ -240,7 +245,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   } = soupContext;
 
   // Properties for task entities
-  const [taskPropertiesStore] = useTaskProperties(entities_);
+  const taskPropertiesStore = useTaskProperties(entities_);
 
   const view = createMemo(() => viewsData[selectedView()]);
   const selectedEntity = createMemo(() => view()?.selectedEntity);
@@ -1532,7 +1537,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       }}
                     />
                   </section>
-                  <Show when={ENABLE_PROPERTY_DISPLAY_CONTROL}>
+                  <Show when={ENABLE_PROPERTY_DISPLAY}>
                     <section class="p-2">
                       <PropertyDisplayControl
                         selectedPropertyIds={displayProperties}
@@ -1611,6 +1616,14 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       return innerProps.entity.updatedAt;
                   }
                 };
+
+                const properties = () => {
+                  if (isTaskEntity(innerProps.entity)) {
+                    return taskPropertiesStore()[innerProps.entity.id] ?? [];
+                  }
+                  return undefined;
+                };
+
                 return (
                   <EntityRow
                     entityId={innerProps.entity.id}
@@ -1633,11 +1646,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                         });
                       }}
                       entity={innerProps.entity}
-                      properties={
-                        isTaskEntity(innerProps.entity)
-                          ? taskPropertiesStore[innerProps.entity.id]
-                          : undefined
-                      }
+                      properties={properties()}
                       timestamp={timestamp()}
                       onClick={entityClickHandler}
                       onClickRowAction={

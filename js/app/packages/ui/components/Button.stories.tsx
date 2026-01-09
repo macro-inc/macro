@@ -1,63 +1,109 @@
-import { EntityIcon } from 'core/component/EntityIcon';
-import { Hotkey } from 'core/component/Hotkey';
-import { LabelAndHotKey } from 'core/component/Tooltip';
+import { Button } from '@ui/components/Button';
+import type { PlayContext } from '@ui/types/storybook';
+import { expect, fn } from 'storybook/test';
 import type { Meta, StoryObj } from 'storybook-solidjs-vite';
-import { Button } from './Button';
 
 const meta = {
-  title: 'Buttons',
+  component: Button,
   argTypes: {
-    disabled: {
-      control: { type: 'boolean', defaultValue: false },
+    variant: {
+      control: { type: 'radio' },
+      options: {
+        // @ts-ignore
+        None: undefined,
+        Primary: 'primary',
+        Secondary: 'secondary',
+        Tertiary: 'tertiary',
+        Destructive: 'destructive',
+      },
+      defaultValue: undefined,
+      description:
+        'Variants provide shortcuts to common stylings, ommision is equivalent to "tertiary"',
     },
-    class: {
-      control: { type: 'text', defaultValue: '' },
+    children: {
+      control: { type: 'text' },
+      defaultValue: 'Click Here',
+      description:
+        'Anything can go inside buttons, eg icons, hotkey hints, etc.',
+    },
+    tooltip: {
+      control: { type: 'text' },
+      defaultValue: 'Tooltip',
+      description:
+        'Tooltips are so common, we made a slot. This supports any JSX, such as `<LabelAndHotkey />`',
+    },
+    showChevron: {
+      control: { type: 'boolean' },
+      defaultValue: false,
+    },
+    disabled: {
+      control: { type: 'boolean' },
+      defaultValue: false,
+      description: 'Button supports anything a regular HTML button tag would.',
     },
   },
+  args: {
+    onClick: fn(),
+    children: 'Click Here',
+  },
+  render: (args) => <Button {...args}>{args.children}</Button>,
 } satisfies Meta<typeof Button>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Buttons: Story = {
-  name: 'Button Variations',
-  render: () => (
-    <div class="space-y-4">
-      <div class="flex gap-4">
-        <Button variant="primary">Primary</Button>
-        <Button variant="secondary">Secondary</Button>
-        <Button variant="tertiary">Tertiary / default</Button>
-        <Button variant="destructive">Destructive</Button>
-      </div>
-      <div class="flex gap-4">
-        <Button variant="primary" disabled>
-          Disabled Primary
-        </Button>
-        <Button variant="secondary" disabled>
-          Disabled Secondary
-        </Button>
-        <Button variant="destructive" disabled>
-          Disabled Destructive
-        </Button>
-      </div>
-      <div class="flex gap-4 text-xl items-center">
-        <Button variant="primary">
-          With shortcut <Hotkey shortcut="cmd+s" />
-        </Button>
+export const Default: Story = {
+  args: {
+    variant: undefined,
+    disabled: false,
+    class: undefined,
+    showChevron: false,
+    type: 'button',
+    tooltip: 'Tooltip',
+    children: 'Click Here',
+  },
+  play: async ({ canvas, userEvent, args }: PlayContext<Story>) => {
+    const button = canvas.getByText('Click Here');
+    await userEvent.click(button);
+    await expect(args.onClick).toHaveBeenCalled();
+  },
+};
 
-        <Button variant="primary">
-          <EntityIcon theme="monochrome" /> With Icon
-        </Button>
+export const Primary: Story = {
+  args: {
+    variant: 'primary',
+  },
+};
 
-        <Button
-          class="aspect-square"
-          tooltip={
-            <LabelAndHotKey label="With custom styling" shortcut="cmd+s" />
-          }
-        >
-          <EntityIcon targetType="pdf" theme="monochrome" size="md" />
-        </Button>
-      </div>
-    </div>
-  ),
+export const PrimaryWithChevron: Story = {
+  args: {
+    variant: 'primary',
+    showChevron: true,
+  },
+};
+
+export const PrimaryDisabled: Story = {
+  args: {
+    variant: 'primary',
+    disabled: true,
+    children: 'I am Disabled',
+  },
+  play: async ({ canvas, userEvent, args }: PlayContext<Story>) => {
+    const button = canvas.getByText('I am Disabled');
+    await userEvent.click(button);
+    await expect(button).toBeDisabled();
+    await expect(args.onClick).not.toHaveBeenCalled();
+  },
+};
+
+export const Secondary: Story = {
+  args: {
+    variant: 'secondary',
+  },
+};
+
+export const Tertiary: Story = {
+  args: {
+    variant: 'tertiary',
+  },
 };

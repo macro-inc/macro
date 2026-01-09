@@ -1,0 +1,43 @@
+<style>
+  @font-face {
+    font-family: "Forma Macro";
+    src: url("/fonts/FormaMacroVariable.woff2") format("woff2");
+    font-weight: 200 700;
+    font-style: oblique 0deg 13deg;
+    font-feature-settings: "ss17" on, "calt", "liga", "rlig", "rvrn", "kern", "rclt";
+
+    font-display: swap;
+    /* ascent-override: 100%; No longer needed but keeping just in case */
+  }
+
+  @font-face {
+    font-family: "Forma Macro Mono";
+    src: url("/fonts/FormaMacroMonoVariable.woff2") format("woff2");
+    font-weight: 200 700;
+    font-style: normal italic;
+    font-display: swap;
+    font-feature-settings: "ss11" on, "ss19" on, "calt", "liga", "rlig", "rvrn", "kern", "rclt";
+  }
+
+  .sidebar-header img {
+    height: 2rem;
+  }
+
+  .sidebar-item[data-selected="true"] {
+    &,
+    & svg {
+      color: #1b1b1b !important;
+    }
+  }
+
+  /* Controls panel - mono font for inputs */
+  .docblock-argstable textarea,
+  .docblock-argstable input:not([type="range"]):not([type="checkbox"]) {
+    font-family: "Forma Macro Mono", monospace !important;
+  }
+
+  /* Controls panel - toggle text accessibility */
+  .docblock-argstable label:has(input[role="switch"]) span {
+    color: #888 !important;
+  }
+</style>
