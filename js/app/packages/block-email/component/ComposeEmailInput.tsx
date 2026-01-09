@@ -43,7 +43,7 @@ import {
   prepareEmailBody,
 } from '../util/prepareEmailBody';
 import { AttachMenu } from './AttachMenu';
-import { TextButton } from '@core/component/TextButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 
 false && fileFolderDrop;
 
@@ -269,7 +269,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
           />
         </div>
         <div class="flex flex-wrap items-center gap-2">
-          <TextButton
+          <DeprecatedTextButton
             class="w-fit"
             icon={PaperclipIcon}
             secondaryIcon={XIcon}
@@ -278,7 +278,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
             theme="base"
           >
             Test attachment.pdf
-          </TextButton>
+          </DeprecatedTextButton>
         </div>
       </div>
       <div class="flex flex-row w-full h-8 justify-between items-center space-x-2 allow-css-brackets mt-2">
