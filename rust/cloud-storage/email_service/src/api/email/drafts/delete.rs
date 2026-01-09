@@ -90,8 +90,7 @@ pub async fn handler(
         email_db_client::attachments::draft::fetch_draft_attachments_by_draft_id(
             &ctx.db, link.id, draft_id,
         )
-        .await
-        .map_err(anyhow::Error::from)?;
+        .await?;
 
     let mut tx = ctx.db.begin().await?;
 

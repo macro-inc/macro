@@ -191,12 +191,12 @@ pub async fn upload_single_attachment(
     // Upload the attachment data to S3
     match state
         .s3_client
-        .put(bucket, &object_key, attachment_data.as_slice())
+        .put(bucket, object_key, attachment_data.as_slice())
         .await
     {
         Ok(_) => {
             // Generate a presigned URL for the uploaded attachment
-            let presigned_url = get_presigned_url(state, &object_key)
+            let presigned_url = get_presigned_url(state, object_key)
                 .await
                 .with_context(|| {
                     format!(
