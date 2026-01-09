@@ -1,20 +1,11 @@
-use crate::api::search::simple::{SearchError, simple_channel::search_channels};
+use crate::api::search::simple::SearchError;
 use indexmap::IndexMap;
 use std::collections::HashMap;
 
-use super::SearchPaginationParams;
 use crate::api::ApiContext;
-use axum::{
-    Extension,
-    extract::{self, State},
-    http::StatusCode,
-    response::{IntoResponse, Json, Response},
-};
 use model::comms::{ChannelHistoryInfo, GetChannelsHistoryRequest};
-use model::{response::ErrorResponse, user::UserContext};
 use models_search::channel::{
-    ChannelSearchRequest, ChannelSearchResponse, ChannelSearchResponseItem,
-    ChannelSearchResponseItemWithMetadata, ChannelSearchResult,
+    ChannelSearchResponseItem, ChannelSearchResponseItemWithMetadata, ChannelSearchResult,
 };
 use opensearch_client::search::model::SearchGotoContent;
 use sqlx::types::Uuid;
@@ -53,61 +44,6 @@ pub(in crate::api::search) async fn enrich_channels(
         .map_err(SearchError::InternalError)?;
 
     Ok(enriched_results)
-}
-
-/// Performs a search through channels and enriches the results with metadata
-#[tracing::instrument(skip(ctx, req, query_params, user_organization_id), err)]
-pub async fn search_channels_enriched(
-    ctx: &ApiContext,
-    user_id: &str,
-    user_organization_id: Option<i32>,
-    query_params: &SearchPaginationParams,
-    req: ChannelSearchRequest,
-) -> Result<Vec<ChannelSearchResponseItemWithMetadata>, SearchError> {
-    // Use the simple search to get raw OpenSearch results
-    let opensearch_results =
-        search_channels(ctx, user_id, user_organization_id, query_params, req).await?;
-
-    enrich_channels(ctx, user_id, opensearch_results).await
-}
-
-/// Perform a search through your emails
-#[utoipa::path(
-        post,
-        path = "/search/channel",
-        operation_id = "channel_search",
-        params(
-            ("page" = i64, Query, description = "The page. Defaults to 0."),
-            ("page_size" = i64, Query, description = "The page size. Defaults to 10."),
-        ),
-        responses(
-            (status = 200, body=ChannelSearchResponse),
-            (status = 400, body=ErrorResponse),
-            (status = 401, body=ErrorResponse),
-            (status = 500, body=ErrorResponse),
-        )
-    )]
-#[tracing::instrument(skip(ctx, user_context, query_params), fields(user_id=user_context.user_id), err)]
-pub async fn handler(
-    State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
-    extract::Query(query_params): extract::Query<SearchPaginationParams>,
-    extract::Json(req): extract::Json<ChannelSearchRequest>,
-) -> Result<Response, SearchError> {
-    tracing::info!("channel_search");
-
-    let results = search_channels_enriched(
-        &ctx,
-        user_context.user_id.as_str(),
-        user_context.organization_id,
-        &query_params,
-        req,
-    )
-    .await?;
-
-    let result = ChannelSearchResponse { results };
-
-    Ok((StatusCode::OK, Json(result)).into_response())
 }
 
 pub fn construct_search_result(
