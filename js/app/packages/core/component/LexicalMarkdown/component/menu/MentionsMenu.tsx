@@ -26,9 +26,9 @@ import {
   type EmailEntity,
   useEmails,
 } from '@macro-entity';
+import { useHistoryQuery } from '@queries/history/history';
 import type { PaginatedSearchArgs } from '@service-search/client';
 import type { Item } from '@service-storage/generated/schemas/item';
-import { useHistory } from '@service-storage/history';
 import { debounce } from '@solid-primitives/scheduled';
 import { globalSplitManager } from 'app/signal/splitLayout';
 import type { LexicalEditor } from 'lexical';
@@ -409,7 +409,8 @@ export function MentionsMenu(props: {
   const [searchTerm, setSearchTerm] = createSignal<string>(
     props.menu.searchTerm()
   );
-  const historyAccessor = props.history ?? useHistory();
+  const historyQuery = useHistoryQuery();
+  const historyAccessor = props.history ?? (() => historyQuery.data ?? []);
   const history = createMemo(() => {
     return historyAccessor().map(entityMapper('item'));
   });
