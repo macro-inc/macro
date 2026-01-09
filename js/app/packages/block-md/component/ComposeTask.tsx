@@ -410,9 +410,7 @@ export function ComposeTask(props: ComposeTaskProps) {
     ed && initializeEditorEmpty(ed);
 
     if (!createMore()) {
-      if (splitPanel?.handle.isPopover()) {
-        splitPanel.handle.close();
-      }
+      splitPanel.handle.close();
       props.onCreateTask?.(taskTitle, taskContent);
       props.onClose?.();
     } else {
@@ -421,14 +419,13 @@ export function ComposeTask(props: ComposeTaskProps) {
   };
 
   const handleClose = () => {
-    // Update timestamp when closing to extend draft life
     const currentTitle = title();
     const currentContent = content();
 
     if (currentTitle || currentContent) {
       updateDraftTimestamp();
     }
-
+    splitPanel.handle.close();
     props.onClose?.();
   };
 
