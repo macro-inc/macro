@@ -145,7 +145,10 @@ export function Channel(props: {
 
         // Avoid clobbering state if the URL didn't meaningfully change.
         const current = untrack(targetMessage);
-        if (current?.messageId === messageId && current?.threadId === threadId) {
+        if (
+          current?.messageId === messageId &&
+          current?.threadId === threadId
+        ) {
           return;
         }
 
