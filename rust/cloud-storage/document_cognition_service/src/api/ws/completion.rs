@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use ai::{
     chat_stream::get_chat_stream,
-    types::{ChatCompletionRequest, ChatMessage, ChatStreamCompletionResponse, PromptAttachment},
+    types::{ChatCompletionRequest, ChatMessage, ChatStreamCompletionResponse},
 };
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -27,6 +27,8 @@ use crate::{
 use macro_db_client::dcs::{
     get_document::get_document, get_document_text::get_pdf_docx_document_text,
 };
+
+use ai_format::document::Document;
 
 use super::connection::ws_send;
 
@@ -70,7 +72,7 @@ async fn build_completion_request(
     ctx: Arc<ApiContext>,
     payload: &SendCompletionPayload,
 ) -> Result<ChatCompletionRequest> {
-    let mut prompt_attachments: Vec<PromptAttachment> = vec![];
+    let mut prompt_attachments = vec![];
 
     if let (Some(attachment_id), Some(selected_text)) = (
         payload.attachment_id.as_ref(),
@@ -94,12 +96,15 @@ async fn build_completion_request(
                         if let Some(context) =
                             find_text_context(&document_text.content, selected_text)?
                         {
-                            prompt_attachments.push(PromptAttachment {
-                                id: attachment_id.to_string(),
-                                file_type: f.as_str().to_string(),
-                                name: document.name,
-                                content: context,
-                            });
+                            prompt_attachments.push(
+                                Document {
+                                    id: attachment_id.to_string(),
+                                    file_type: f.as_str().to_string(),
+                                    name: document.name,
+                                    content: context,
+                                }
+                                .boxed(),
+                            );
                         } else {
                             tracing::warn!(
                                 document_id=%attachment_id,
@@ -118,12 +123,15 @@ async fn build_completion_request(
                                 "document content is empty"
                             );
                         } else {
-                            prompt_attachments.push(PromptAttachment {
-                                id: attachment_id.to_string(),
-                                file_type: file_type.as_str().to_string(),
-                                name: document.name,
-                                content,
-                            });
+                            prompt_attachments.push(
+                                Document {
+                                    id: attachment_id.to_string(),
+                                    file_type: file_type.as_str().to_string(),
+                                    name: document.name,
+                                    content,
+                                }
+                                .boxed(),
+                            );
                         }
                     }
                 }

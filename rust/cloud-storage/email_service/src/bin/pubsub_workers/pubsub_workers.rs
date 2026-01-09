@@ -22,6 +22,8 @@ async fn main() -> anyhow::Result<()> {
         .load()
         .await;
 
+    let s3_client = s3_client::S3::new(aws_sdk_s3::Client::new(&aws_config));
+
     let secretsmanager_client = secretsmanager_client::SecretsManager::new(
         aws_sdk_secretsmanager::Client::new(&aws_config),
     );
@@ -334,6 +336,8 @@ async fn main() -> anyhow::Result<()> {
     let gmail_client_scheduled = gmail_client.clone();
     let auth_service_client_scheduled = auth_service_client.clone();
     let redis_client_scheduled = redis_client.clone();
+    let s3_client_scheduled = s3_client.clone();
+    let attachment_bucket_scheduled = config.attachment_bucket.clone();
     // send scheduled emails
     tokio::spawn(async move {
         email_service::pubsub::scheduled::worker::run_worker(
@@ -342,6 +346,8 @@ async fn main() -> anyhow::Result<()> {
             gmail_client_scheduled,
             auth_service_client_scheduled,
             redis_client_scheduled,
+            s3_client_scheduled,
+            attachment_bucket_scheduled,
         )
         .await;
     });

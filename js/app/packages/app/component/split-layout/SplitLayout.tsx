@@ -356,7 +356,7 @@ function SplitPanel(props: SplitPanelProps) {
   const panelSize = createElementSize(panelRef);
   const [contentOffsetTop, setContentOffsetTop] = createSignal(0);
 
-  const unifiedListContext = createSoupContext({
+  const soupContext = createSoupContext({
     splitId: props.split.id,
     domRef: panelRef,
   });
@@ -373,7 +373,7 @@ function SplitPanel(props: SplitPanelProps) {
     goBack: () => props.handle.goBack(),
     canGoForward: () => props.handle.canGoForward(),
     goForward: () => props.handle.goForward(),
-    setSelectedView: (view) => unifiedListContext.setSelectedView(view),
+    setSelectedView: (view) => soupContext.setSelectedView(view),
     replaceSplit: splitLayoutHelpers.replaceSplit,
     splitName: () => props.handle.displayName(),
     getSplitCount: () => splitLayoutHelpers.getSplitCount(),
@@ -394,7 +394,7 @@ function SplitPanel(props: SplitPanelProps) {
     splitName,
     splitHandle: props.handle,
     splitHotkeyScope,
-    unifiedListContext,
+    soupContext,
     previewState: [previewState, setPreviewState],
     getSplitCount: () => splitLayoutHelpers.getSplitCount(),
   });
@@ -404,7 +404,7 @@ function SplitPanel(props: SplitPanelProps) {
       value={{
         handle: props.handle,
         splitHotkeyScope,
-        unifiedListContext,
+        soupContext,
         isPanelActive: () => props.active,
         panelRef,
         panelSize,

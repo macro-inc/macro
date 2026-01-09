@@ -15,10 +15,9 @@ import { StaticMarkdown } from 'core/component/LexicalMarkdown/component/core/St
 import { unifiedListMarkdownTheme } from 'core/component/LexicalMarkdown/theme';
 import { UserIcon } from 'core/component/UserIcon';
 import { emailToMacroId, tryMacroId, useDisplayName } from 'core/user';
-import type { ParentProps, Ref } from 'solid-js';
+import type { JSX, ParentProps, Ref } from 'solid-js';
 import {
   createDeferred,
-  createEffect,
   createMemo,
   createSignal,
   For,
@@ -49,8 +48,27 @@ import type {
   SearchLocation,
   WithSearch,
 } from '../types/search';
-import type { EntityClickEvent, EntityClickHandler } from './Entity';
-import { PropertyPills } from './PropertyPills';
+import { KeyPropertiesGrid, PropertyPills } from './PropertyPills';
+
+export type EntityClickEvent = Parameters<
+  JSX.EventHandler<HTMLDivElement, MouseEvent>
+>[0];
+type EntityPointerDownEvent = Parameters<
+  JSX.EventHandler<HTMLDivElement, PointerEvent>
+>[0];
+type EntityClickProps<T extends EntityData, E> = {
+  type: 'entity' | 'entity-project-path';
+  entity: T;
+  projectEntity?: T;
+  event: E;
+  location?: SearchLocation;
+};
+export type EntityClickHandler<T extends EntityData> = (
+  args: EntityClickProps<T, EntityClickEvent>
+) => void;
+export type EntityPointerDownHandler<T extends EntityData> = (
+  args: EntityClickProps<T, EntityPointerDownEvent>
+) => void;
 
 export const ENTITY_HEIGHT = 40;
 
@@ -331,13 +349,14 @@ function NotificationRow(props: {
       onClick={
         props.onClick
           ? (e) => {
-              props.onClick?.(
-                {
+              props.onClick?.({
+                type: 'entity',
+                entity: {
                   ...props.entity,
                   notification: props.notification,
                 },
-                e
-              );
+                event: e,
+              });
             }
           : undefined
       }
@@ -437,6 +456,8 @@ interface EntityProps<T extends WithNotification<EntityData>>
   focused?: boolean;
   timestamp?: number;
   onClick?: EntityClickHandler<T>;
+  onDblClick?: EntityClickHandler<T>;
+  onPointerDown?: EntityClickHandler<T>;
   onClickRowAction?: (entity: T, type: 'done') => void;
   onClickNotification?: NotificationClickHandler<T>;
   onMouseOver?: () => void;
@@ -902,11 +923,27 @@ export function EntityWithEverything(
         class="w-full min-w-0 grid flex-1 items-center suppress-css-bracket grid-cols-[2rem_1fr_auto] @max-md/split:flex @max-md/split:flex-col pr-2 @max-md/split:px-2 @max-md/split:py-2"
         onClick={(e) => {
           if (blocksNavigation(e)) return;
-          props.onClick?.(props.entity, e);
+          props.onClick?.({ type: 'entity', entity: props.entity, event: e });
+        }}
+        onDblClick={(e) => {
+          if (blocksNavigation(e)) return;
+          props.onDblClick?.({
+            type: 'entity',
+            entity: props.entity,
+            event: e,
+          });
         }}
         onMouseDown={(e) => {
           if (blocksNavigation(e)) return;
           e.preventDefault();
+        }}
+        onPointerDown={(e) => {
+          if (blocksNavigation(e)) return;
+          props.onPointerDown?.({
+            type: 'entity',
+            entity: props.entity,
+            event: e,
+          });
         }}
         // Action List is also rendered based on focus, but when focused via Shift+Tab, parent is focused due to Action List dom not present. Here we check if current browser task has captured Shift+Tab focus on Action List
         onFocusIn={(e) => {
@@ -1021,6 +1058,9 @@ export function EntityWithEverything(
             </div>
           </div>
           <EntityTitle />
+          <Show when={isTaskEntity(props.entity) && properties().length > 0}>
+            <KeyPropertiesGrid properties={properties()} />
+          </Show>
         </div>
         {/* Date and user - top right on mobile, end on desktop  */}
         <div
@@ -1032,7 +1072,10 @@ export function EntityWithEverything(
           <div class="flex flex-row items-center justify-end gap-2 min-w-0 @max-md/split:justify-start @max-md/split:flex-wrap">
             <Show when={properties().length > 0}>
               <div class="pr-2 overflow-hidden shrink min-w-0">
-                <PropertyPills properties={properties()} />
+                <PropertyPills
+                  properties={properties()}
+                  excludeKeyProperties={isTaskEntity(props.entity)}
+                />
               </div>
             </Show>
             <Show when={sharedData()}>
@@ -1046,7 +1089,11 @@ export function EntityWithEverything(
             </Show>
             <Show when={matches(props.entity, isProjectContainedEntity)}>
               {(entity) => (
-                <EntityProject entity={entity()} onClick={props.onClick} />
+                <EntityProject
+                  entity={entity()}
+                  onClick={props.onClick}
+                  onPointerdown={props.onPointerDown}
+                />
               )}
             </Show>
             <Show when={props.timestamp ?? props.entity.updatedAt}>
@@ -1101,7 +1148,12 @@ export function EntityWithEverything(
                   allData={contentHitData()}
                   data={data}
                   onClick={(e, location) => {
-                    props.onClick?.(props.entity, e, location);
+                    props.onClick?.({
+                      type: 'entity',
+                      entity: props.entity,
+                      event: e,
+                      location,
+                    });
                   }}
                   index={index}
                   count={count}
@@ -1212,39 +1264,44 @@ function EntityProjectPathDisplay(props: { name: string; path: string[] }) {
 function EntityProject(props: {
   entity: ProjectContainedEntity;
   onClick?: EntityClickHandler<ProjectEntity>;
+  onPointerdown?: EntityPointerDownHandler<ProjectEntity>;
 }) {
   const projectQuery = createProjectQuery(props.entity.projectId);
-  let projectIconRef!: HTMLDivElement;
-
-  createEffect(() => {
-    const click = props.onClick;
-    if (!click) return;
+  const openProjectEntity: (args: {
+    event: Parameters<JSX.EventHandler<HTMLDivElement, MouseEvent>>[number];
+    eventHandler?: EntityClickHandler<ProjectEntity>;
+  }) => void = ({ event, eventHandler }) => {
     if (!projectQuery.isSuccess) return;
 
     const data = projectQuery.data;
-    const handleClick = (e: EntityClickEvent) => {
-      const projectEntity: ProjectEntity = {
-        type: 'project',
-        id: data.id,
-        name: data.name,
-        ownerId: data.owner,
-        updatedAt: data.updatedAt,
-      };
-      click(projectEntity, e, undefined, { ignorePreview: true });
+    const projectEntity: ProjectEntity = {
+      type: 'project',
+      id: data.id,
+      name: data.name,
+      ownerId: data.owner,
+      updatedAt: data.updatedAt,
     };
-
-    projectIconRef.classList.add('hover:text-accent');
-    projectIconRef.dataset.blocksNavigation = 'true';
-    projectIconRef.addEventListener('click', handleClick);
-    onCleanup(() => {
-      projectIconRef.removeEventListener('click', handleClick);
+    eventHandler?.({
+      type: 'entity-project-path',
+      entity: props.entity as unknown as ProjectEntity,
+      projectEntity,
+      event,
     });
-  });
+  };
 
   return (
     <div
-      ref={projectIconRef}
+      data-blocks-navigation={projectQuery.isSuccess ? 'true' : undefined}
+      onClick={(e) =>
+        openProjectEntity({ event: e, eventHandler: props.onClick })
+      }
+      onPointerDown={(e) =>
+        openProjectEntity({ event: e, eventHandler: props.onPointerdown })
+      }
       class="flex gap-1 items-center text-xs text-ink-extra-muted min-w-0"
+      classList={{
+        'hover:text-accent': projectQuery.isSuccess,
+      }}
     >
       <svg
         class="shrink-0"

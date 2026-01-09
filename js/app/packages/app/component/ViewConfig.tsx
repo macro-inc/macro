@@ -23,7 +23,7 @@ import {
 import { emailClient } from '@service-email/client';
 import stringify from 'json-stable-stringify';
 import { queryClient } from '../../macro-entity/src/queries/client';
-import type { UnifiedListContext } from './SoupContext';
+import type { SoupContext } from './SoupContext';
 import { noiseFilter, signalFilter } from './soupFilters';
 
 // for custom views that extend the unified list view
@@ -96,7 +96,7 @@ export type HotkeyOptions = {
     entity: WithNotification<EntityData>,
     extra?: {
       notificationSource?: NotificationSource;
-      soupContext?: UnifiedListContext;
+      soupContext?: SoupContext;
     }
   ) => boolean;
 };
@@ -118,7 +118,7 @@ export type ViewConfigEnhanced = {
 } & ViewConfigBase;
 
 export type ClientFilterContext = {
-  soupContext?: UnifiedListContext;
+  soupContext?: SoupContext;
 };
 
 export type ClientFilter = {

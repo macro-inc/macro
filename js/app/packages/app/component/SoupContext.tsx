@@ -1,7 +1,6 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useChannelsContext } from '@core/component/ChannelsProvider';
 import { toast } from '@core/component/Toast/Toast';
-import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { HotkeyTags } from '@core/hotkey/constants';
 import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -65,6 +64,7 @@ import {
   toggleKonsoleVisibility,
 } from './command/state';
 import { useGlobalNotificationSource } from './GlobalAppState';
+import { openEntityInSplitFromUnifiedList } from './soupContextHelpers';
 import type { SplitHandle } from './split-layout/layoutManager';
 import { globalRemoveFromSplitHistory } from './split-layout/layoutUtils';
 import {
@@ -85,7 +85,7 @@ type NavigateListFn = (input: NavigationInput) => Promise<NavigationResult>;
 
 type CollapseEntityFn = (entityId: string) => Promise<void>;
 
-export type UnifiedListContext = {
+export type SoupContext = {
   viewsDataStore: Store<ViewDataMap>;
   setViewDataStore: SetStoreFunction<Partial<ViewDataMap>>;
   selectedView: Accessor<ViewId>;
@@ -105,13 +105,13 @@ export type UnifiedListContext = {
    * Optional hook to animate an entity row collapsing before the entity disappears from the list. This gets set by the EntityRowProvider.
    */
   collapseEntitySignal: Signal<CollapseEntityFn | undefined>;
-  parentContextSignal: Signal<UnifiedListContext | undefined>;
-  childContextSignal: Signal<UnifiedListContext | undefined>;
-  activeContextSignal: Signal<UnifiedListContext | undefined>;
+  parentContextSignal: Signal<SoupContext | undefined>;
+  childContextSignal: Signal<SoupContext | undefined>;
+  activeContextSignal: Signal<SoupContext | undefined>;
   domRef: Accessor<HTMLDivElement | null>;
 };
 
-export function createStubSoupContext(): UnifiedListContext {
+export function createStubSoupContext(): SoupContext {
   return {
     viewsDataStore: createStore({})[0],
     setViewDataStore: () => {},
@@ -130,35 +130,30 @@ export function createStubSoupContext(): UnifiedListContext {
       entity: undefined,
     }),
     _setNavigateThroughList: () => {},
-    isRenderedFromPreview: false,
     collapseEntitySignal: createSignal<CollapseEntityFn | undefined>(undefined),
-    parentContextSignal: createSignal<UnifiedListContext | undefined>(
-      undefined
-    ),
-    childContextSignal: createSignal<UnifiedListContext | undefined>(undefined),
-    activeContextSignal: createSignal<UnifiedListContext | undefined>(
-      undefined
-    ),
+
+    isRenderedFromPreview: false,
+    parentContextSignal: createSignal<SoupContext | undefined>(undefined),
+    childContextSignal: createSignal<SoupContext | undefined>(undefined),
+    activeContextSignal: createSignal<SoupContext | undefined>(undefined),
     domRef: () => null,
   };
 }
-
-type CreateSoupContextProps = {
-  splitId?: string;
-  domRef: Accessor<HTMLDivElement | null>;
-  isRenderedFromPreview?: boolean;
-  parentContext?: UnifiedListContext;
-};
 
 const DEFAULT_VIEW_ID: DefaultView = 'signal';
 
 const DEFAULT_VIEW_IDS_SET = new Set(VIEWCONFIG_DEFAULTS_IDS);
 
-const unifiedListSplitIdMapper = new Map<string, UnifiedListContext>();
+type CreateSoupContextProps = {
+  splitId?: string;
+  domRef: Accessor<HTMLDivElement | null>;
+  isRenderedFromPreview?: boolean;
+  parentContext?: SoupContext;
+};
 
-export function createSoupContext(
-  props: CreateSoupContextProps
-): UnifiedListContext {
+const splitIdSoupContextMapper = new Map<string, SoupContext>();
+
+export function createSoupContext(props: CreateSoupContextProps): SoupContext {
   const [selectedView, setSelectedView] = createSignal<ViewId>(DEFAULT_VIEW_ID);
   const [viewsDataStore, setViewDataStore] = useAllViews({
     selectedViewSignal: [selectedView, setSelectedView],
@@ -176,17 +171,15 @@ export function createSoupContext(
   );
   let navigateThroughListFn: NavigateListFn | undefined;
 
-  const parentContextSignal = createSignal<UnifiedListContext | undefined>(
+  const parentContextSignal = createSignal<SoupContext | undefined>(
     props?.parentContext
   );
-  const childContextSignal = createSignal<UnifiedListContext | undefined>(
-    undefined
-  );
+  const childContextSignal = createSignal<SoupContext | undefined>(undefined);
   const activeContextSignal =
     props?.parentContext?.activeContextSignal ??
-    createSignal<UnifiedListContext | undefined>(undefined);
+    createSignal<SoupContext | undefined>(undefined);
 
-  const context: UnifiedListContext = {
+  const context: SoupContext = {
     viewsDataStore,
     setViewDataStore,
     selectedView,
@@ -217,8 +210,9 @@ export function createSoupContext(
     },
     domRef: props?.domRef!,
   };
+
   if (props.splitId) {
-    unifiedListSplitIdMapper.set(props.splitId, context);
+    splitIdSoupContextMapper.set(props.splitId, context);
   }
 
   onCleanup(() => {
@@ -228,7 +222,7 @@ export function createSoupContext(
       activeContextSignal[1](parentContext);
     }
     if (props.splitId) {
-      unifiedListSplitIdMapper.delete(props.splitId);
+      splitIdSoupContextMapper.delete(props.splitId);
     }
   });
 
@@ -309,17 +303,16 @@ export type NavigationResult = {
 };
 
 export function createNavigationEntityListShortcut({
-  splitName,
   splitHandle,
   splitHotkeyScope,
-  unifiedListContext,
+  soupContext,
   previewState,
   getSplitCount,
 }: {
   splitName: Accessor<string>;
   splitHandle: SplitHandle;
   splitHotkeyScope: string;
-  unifiedListContext: UnifiedListContext;
+  soupContext: SoupContext;
   previewState: Signal<boolean>;
   getSplitCount: () => number;
 }) {
@@ -335,7 +328,7 @@ export function createNavigationEntityListShortcut({
     parentContextSignal: [getParentContext],
     childContextSignal: [getChildContext],
     activeContextSignal: [, setActiveContext],
-  } = unifiedListContext;
+  } = soupContext;
   const viewData = createMemo(() => viewsData[selectedView()]);
   const viewIds = createMemo<ViewId[]>(() => Object.keys(viewsData));
 
@@ -361,41 +354,14 @@ export function createNavigationEntityListShortcut({
       splitHandle.content().type === 'project'
     );
   });
+  const canAccessEntityList = () => {
+    if (isViewingList()) return true;
+    const result =
+      !isViewingList() && splitHandle.referredFrom() === 'unified-list';
+    return result;
+  };
+
   let lastMultiNavigationInput: NavigationInput;
-
-  // `gg` to jump to top of list (legacy behavior) via command-scope hotkeys.
-  const goScope = registerHotkey({
-    scopeId: splitHotkeyScope,
-    hotkey: 'g',
-    description: 'Go',
-    keyDownHandler: () => true,
-    activateCommandScope: true,
-    hide: true,
-  });
-
-  registerHotkey({
-    hotkey: ['g'],
-    scopeId: goScope.commandScopeId,
-    description: 'Go to top of list',
-    condition: isViewingList,
-    keyDownHandler: () => {
-      navigateThroughList({ axis: 'start', mode: 'jump' });
-      return true;
-    },
-    hide: true,
-  });
-
-  registerHotkey({
-    hotkey: ['shift+g', 'end'],
-    scopeId: goScope.commandScopeId,
-    description: 'Go to bottom of list',
-    condition: isViewingList,
-    keyDownHandler: () => {
-      navigateThroughList({ axis: 'end', mode: 'jump' });
-      return true;
-    },
-    hide: true,
-  });
 
   /**
    * From the current selection, get the entity to try to select after a modal
@@ -521,9 +487,8 @@ export function createNavigationEntityListShortcut({
 
         // Check if current view filters out completed items in order to know whether to run collapse animation. More robustly we would have the list of entitites itself trigger entity removal animation when the list changes, but this is complicated by our usage of queries and virtualized lists.
         // NOTE: collapse animation is currently only enabled for touch modality, i.e. phone.
-        const currentViewConfig =
-          unifiedListContext.viewsDataStore[selectedView()];
-        const [collapseEntity] = unifiedListContext.collapseEntitySignal;
+        const currentViewConfig = soupContext.viewsDataStore[selectedView()];
+        const [collapseEntity] = soupContext.collapseEntitySignal;
         const shouldCollapse =
           currentViewConfig?.filters?.notificationFilter === 'notDone' &&
           collapseEntity() !== undefined &&
@@ -542,7 +507,7 @@ export function createNavigationEntityListShortcut({
         for (const entity of multiSelectEntities) {
           if (handler) {
             handler(entity, {
-              soupContext: unifiedListContext,
+              soupContext,
               notificationSource,
             });
           }
@@ -886,19 +851,6 @@ export function createNavigationEntityListShortcut({
     displayPriority: 10,
   });
 
-  const openEntity = (entity: EntityData) => {
-    const { type, id } = entity;
-    if (type === 'document') {
-      const { fileType, subType } = entity;
-      splitHandle.replace({
-        type: fileTypeToBlockName(subType ?? fileType),
-        id,
-      });
-    } else {
-      splitHandle.replace({ type, id });
-    }
-  };
-
   const getEntityElAtIndex = (index: number) => {
     const entity = entities()?.at(index);
     if (!entity) return;
@@ -1079,16 +1031,9 @@ export function createNavigationEntityListShortcut({
           splitHandle.content().type !== 'component' &&
           splitHandle.content().type !== 'project'
         ) {
-          const { type, id } = selectedEntity;
-          if (type === 'document') {
-            const { fileType, subType } = selectedEntity;
-            splitHandle.replace(
-              { type: fileTypeToBlockName(subType ?? fileType), id },
-              true
-            );
-          } else {
-            splitHandle.replace({ type, id }, true);
-          }
+          openEntityInSplitFromUnifiedList(selectedEntity, {
+            splitHandle,
+          });
         }
         batch(() => {
           setSelectedEntity(selectedEntity);
@@ -1133,7 +1078,7 @@ export function createNavigationEntityListShortcut({
     };
   };
 
-  unifiedListContext._setNavigateThroughList(navigateThroughList);
+  soupContext._setNavigateThroughList(navigateThroughList);
 
   const isEntitySelected = (entityID: string) => {
     return (
@@ -1250,6 +1195,7 @@ export function createNavigationEntityListShortcut({
       navigateThroughList({ axis: 'end', mode: 'step' });
       return true;
     },
+    canExecuteKeyDownHandler: () => canAccessEntityList(),
     hide: true,
   });
 
@@ -1263,7 +1209,7 @@ export function createNavigationEntityListShortcut({
       lastMultiNavigationInput = navigationInput;
       return handleNavigationSelection(navigationInput);
     },
-    canExecuteKeyDownHandler: () => isViewingList(),
+    canExecuteKeyDownHandler: () => canAccessEntityList(),
     hide: true,
   });
 
@@ -1277,6 +1223,7 @@ export function createNavigationEntityListShortcut({
       navigateThroughList({ axis: 'start', mode: 'step' });
       return true;
     },
+    canExecuteKeyDownHandler: () => canAccessEntityList(),
     hide: true,
   });
 
@@ -1290,19 +1237,43 @@ export function createNavigationEntityListShortcut({
       lastMultiNavigationInput = navigationInput;
       return handleNavigationSelection(navigationInput);
     },
-    canExecuteKeyDownHandler: () => isViewingList(),
+    canExecuteKeyDownHandler: () => canAccessEntityList(),
     hide: true,
   });
   registerEntityHotkey({
     hotkey: ['home'],
     scopeId: splitHotkeyScope,
     hotkeyToken: TOKENS.entity.jump.home,
-    description: 'Top',
+    description: 'Go to top of list',
     keyDownHandler: () => {
       navigateThroughList({ axis: 'start', mode: 'jump' });
       return true;
     },
+    canExecuteKeyDownHandler: () => canAccessEntityList(),
     hide: true,
+  });
+  const {
+    registerHotkeyReturn: topGScope,
+    globalRegisterHotkeyReturn: topGScopeGlobal,
+  } = registerEntityHotkey({
+    hotkey: ['g'],
+    scopeId: splitHotkeyScope,
+    description: 'Go to top of list',
+    keyDownHandler: () => true,
+    activateCommandScope: true,
+    canExecuteKeyDownHandler: () => canAccessEntityList(),
+    hide: true,
+  });
+  registerEntityHotkey({
+    hotkey: ['g'],
+    scopeId: topGScope.commandScopeId,
+    globalCommandScope: topGScopeGlobal.commandScopeId,
+    description: 'Go to top of list',
+    keyDownHandler: () => {
+      navigateThroughList({ axis: 'start', mode: 'jump' });
+      return true;
+    },
+    canExecuteKeyDownHandler: () => canAccessEntityList(),
   });
   registerEntityHotkey({
     hotkey: ['shift+g', 'end'],
@@ -1313,6 +1284,7 @@ export function createNavigationEntityListShortcut({
       navigateThroughList({ axis: 'end', mode: 'jump' });
       return true;
     },
+    canExecuteKeyDownHandler: () => canAccessEntityList(),
     hide: true,
   });
 
@@ -1388,7 +1360,9 @@ export function createNavigationEntityListShortcut({
     setSelectedView(newViewId);
   };
 
-  const splitIsUnifiedList = createMemo(() => splitName() === 'unified-list');
+  const splitIsUnifiedList = createMemo(
+    () => splitHandle.content().id === 'unified-list'
+  );
 
   for (let i = 0; i < viewIds().length && i < 9; i++) {
     const viewId = viewIds()[i];
@@ -1445,7 +1419,9 @@ export function createNavigationEntityListShortcut({
       const entity = getSelectedEntity()?.entity;
       if (!entity) return false;
 
-      openEntity(entity);
+      openEntityInSplitFromUnifiedList(entity, {
+        splitHandle,
+      });
       return true;
     },
     canExecuteKeyDownHandler: ({ keyboardEvent }) => {
@@ -1511,7 +1487,9 @@ export function createNavigationEntityListShortcut({
         return true;
       }
 
-      openEntity(entity);
+      openEntityInSplitFromUnifiedList(entity, {
+        splitHandle,
+      });
       return true;
     },
     canExecuteKeyDownHandler: () => isViewingList(),
@@ -1575,7 +1553,10 @@ export function createNavigationEntityListShortcut({
         return true;
       }
       if (goHomeCondition()) {
-        splitHandle.replace({ type: 'component', id: 'unified-list' });
+        splitHandle.replace({
+          next: { type: 'component', id: 'unified-list' },
+          referredFrom: 'unified-list',
+        });
         return true;
       }
       return false;
@@ -1609,7 +1590,6 @@ const useAllViews = ({
     },
   }));
 
-  // signal version
   createEffect(
     on(
       () => savedViews.data,
@@ -1742,12 +1722,9 @@ function registerEntityHotkey(
       const currentActiveSplitId = globalSplitManager()?.activeSplitId();
 
       const getCommand = () => {
-        const unifiedListContext = unifiedListSplitIdMapper.get(
-          currentActiveSplitId!
-        );
-        const activeUnifiedListContext =
-          unifiedListContext?.activeContextSignal[0]?.();
-        const splitScope = activeUnifiedListContext?.domRef();
+        const soupContext = splitIdSoupContextMapper.get(currentActiveSplitId!);
+        const activeSoupContext = soupContext?.activeContextSignal[0]?.();
+        const splitScope = activeSoupContext?.domRef();
         if (!splitScope || !(splitScope instanceof HTMLElement)) return;
         const scopeId = splitScope.dataset.hotkeyScope;
         if (!scopeId) return undefined;

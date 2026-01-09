@@ -130,7 +130,7 @@ export function Soup() {
   const {
     handle,
     splitHotkeyScope,
-    unifiedListContext: {
+    soupContext: {
       viewsDataStore: viewsData,
       selectedView,
       setSelectedView,
@@ -397,7 +397,7 @@ function EmailView() {
     emailViewSignal: [emailView, setEmailView],
     viewsDataStore,
     selectedView,
-  } = useSplitPanelOrThrow().unifiedListContext;
+  } = useSplitPanelOrThrow().soupContext;
   const viewData = createMemo(() => viewsDataStore[selectedView()]);
 
   return (

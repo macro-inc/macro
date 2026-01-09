@@ -42,9 +42,9 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
 
   if (props.selectedEntity.type === 'project') {
     const { getSplitCount } = useSplitLayout();
-    const unifiedListContext = createSoupContext({
+    const soupContext = createSoupContext({
       isRenderedFromPreview: true,
-      parentContext: splitPanelContext.unifiedListContext,
+      parentContext: splitPanelContext.soupContext,
       domRef: containerRef,
     });
 
@@ -64,11 +64,11 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
       splitName,
       splitHandle: splitPanelContext.handle,
       splitHotkeyScope,
-      unifiedListContext,
+      soupContext,
       previewState: [previewState, setPreviewState],
       getSplitCount: getSplitCount,
     });
-    scopedSplitPanelContextType.unifiedListContext = unifiedListContext;
+    scopedSplitPanelContextType.soupContext = soupContext;
     scopedSplitPanelContextType.previewState = [previewState, setPreviewState];
 
     onMount(() => {

@@ -184,7 +184,7 @@ function SplitSettingsButton() {
           activeSplit()?.goBack();
           return;
         }
-        replaceSplit({ type: 'component', id: 'settings' });
+        replaceSplit({ content: { type: 'component', id: 'settings' } });
       }}
     >
       <IconGear />

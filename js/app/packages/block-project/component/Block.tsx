@@ -92,7 +92,6 @@ const Block: Component = () => {
   };
 
   const orchestrator = useGlobalBlockOrchestrator();
-
   const splitPanelContext = useSplitPanelOrThrow();
   const {
     selectedView,
@@ -100,7 +99,7 @@ const Block: Component = () => {
     setViewDataStore,
     isRenderedFromPreview,
     viewsDataStore: viewsData,
-  } = splitPanelContext.unifiedListContext;
+  } = splitPanelContext.soupContext;
   const [preview, setPreview] = splitPanelContext.previewState;
   const view = createMemo(() => viewsData[selectedView()]);
   const selectedEntity = () => view().selectedEntity;

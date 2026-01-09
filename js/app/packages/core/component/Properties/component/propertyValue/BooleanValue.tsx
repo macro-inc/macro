@@ -37,13 +37,21 @@ export const BooleanValue: Component<BooleanValueProps> = (props) => {
     <button
       onClick={handleClick}
       disabled={isSaving() || isReadOnly()}
-      class={`flex items-center justify-end ${
-        isReadOnly() ? 'cursor-default' : 'hover:bg-hover cursor-pointer'
-      } ${isSaving() ? 'opacity-50 cursor-not-allowed' : ''}`}
+      class="flex items-center justify-end p-1"
+      classList={{
+        'cursor-default': isReadOnly() || isSaving(),
+        'hover:bg-hover': !isReadOnly() && !isSaving(),
+      }}
     >
-      <div class="w-6 h-6 border border-edge bg-transparent flex items-center justify-center">
+      <div
+        class="size-4 flex items-center justify-center"
+        classList={{
+          'bg-accent border-accent border': isChecked(),
+          'bg-transparent border-edge-muted border': !isChecked(),
+        }}
+      >
         <Show when={isChecked()}>
-          <CheckIcon class="w-4.5 h-4.5 text-accent" />
+          <CheckIcon class="size-3 text-panel" />
         </Show>
       </div>
     </button>
