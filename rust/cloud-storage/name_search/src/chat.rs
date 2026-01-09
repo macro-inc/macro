@@ -6,7 +6,7 @@ use models_search_cursor::{SearchCursorOption, SearchMethodCursor};
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
-use crate::{NameSearchError, NameSearchResponse, NameSearchResult, SearchEntityType};
+use crate::{NameSearchError, NameSearchResult, PaginatedResult, SearchEntityType};
 
 /// Searches chats by IDs only
 async fn ids_search(
@@ -15,7 +15,7 @@ async fn ids_search(
     search_pattern: String,
     limit: u32,
     cursor: Option<SearchMethodCursor>,
-) -> Result<NameSearchResponse, NameSearchError> {
+) -> Result<PaginatedResult<NameSearchResult>, NameSearchError> {
     if chat_ids.is_empty() {
         return Err(NameSearchError::EmptyIdsWithIdsOnly);
     }
@@ -58,7 +58,7 @@ async fn ids_search(
     .await
     .map_err(NameSearchError::DatabaseError)?;
 
-    let mut results: Vec<NameSearchResult> = rows
+    let results: Vec<NameSearchResult> = rows
         .into_iter()
         .map(|row| NameSearchResult {
             entity_id: row.entity_id.parse().unwrap(),
@@ -68,26 +68,7 @@ async fn ids_search(
         })
         .collect();
 
-    // If we got more than limit, there are more results
-    let has_more = results.len() > limit as usize;
-    if has_more {
-        results.pop(); // Remove the extra item
-    }
-
-    // Cursor is based on the last returned item
-    let next_cursor = if has_more {
-        SearchCursorOption::NotDone(results.last().map(|last| SearchMethodCursor {
-            entity_id: last.entity_id,
-            updated_at: last.updated_at,
-        }))
-    } else {
-        SearchCursorOption::Done
-    };
-
-    Ok(NameSearchResponse {
-        results,
-        next_cursor,
-    })
+    Ok(SearchCursorOption::paginate(results, limit as usize))
 }
 
 /// Searches chats by owner or IDs
@@ -98,7 +79,7 @@ async fn owner_search<'a>(
     search_pattern: String,
     limit: u32,
     cursor: Option<SearchMethodCursor>,
-) -> Result<NameSearchResponse, NameSearchError> {
+) -> Result<PaginatedResult<NameSearchResult>, NameSearchError> {
     let (cursor_updated_at, cursor_entity_id) = cursor
         .as_ref()
         .map(|c| (Some(c.updated_at), Some(c.entity_id.to_string())))
@@ -138,7 +119,7 @@ async fn owner_search<'a>(
     .await
     .map_err(NameSearchError::DatabaseError)?;
 
-    let mut results: Vec<NameSearchResult> = rows
+    let results: Vec<NameSearchResult> = rows
         .into_iter()
         .map(|row| NameSearchResult {
             entity_id: row.entity_id.parse().unwrap(),
@@ -148,26 +129,7 @@ async fn owner_search<'a>(
         })
         .collect();
 
-    // If we got more than limit, there are more results
-    let has_more = results.len() > limit as usize;
-    if has_more {
-        results.pop(); // Remove the extra item
-    }
-
-    // Cursor is based on the last returned item
-    let next_cursor = if has_more {
-        SearchCursorOption::NotDone(results.last().map(|last| SearchMethodCursor {
-            entity_id: last.entity_id,
-            updated_at: last.updated_at,
-        }))
-    } else {
-        SearchCursorOption::Done
-    };
-
-    Ok(NameSearchResponse {
-        results,
-        next_cursor,
-    })
+    Ok(SearchCursorOption::paginate(results, limit as usize))
 }
 
 /// Searches over the user's chats by name
@@ -180,7 +142,7 @@ pub async fn search_chat_names<'a>(
     ids_only: bool,
     limit: u32,
     cursor: Option<SearchMethodCursor>,
-) -> Result<NameSearchResponse, NameSearchError> {
+) -> Result<PaginatedResult<NameSearchResult>, NameSearchError> {
     if term.is_empty() {
         return Err(NameSearchError::EmptySearchTerm);
     }

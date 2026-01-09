@@ -20,15 +20,6 @@ pub struct UnifiedProjectSearchArgs {
     pub ids_only: bool,
 }
 
-#[derive(Debug)]
-pub(super) enum UnifiedSearchArgsVariant {
-    Document(UnifiedDocumentSearchArgs),
-    Channel(UnifiedChannelMessageSearchArgs),
-    Chat(UnifiedChatSearchArgs),
-    Project(UnifiedProjectSearchArgs),
-    Email(UnifiedEmailSearchArgs),
-}
-
 /// Trait to convert item_filters into search args
 pub(super) trait FilterVariantToSearchArgs {
     type Output;

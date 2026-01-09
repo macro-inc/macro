@@ -78,21 +78,21 @@ async fn test_search_email_subjects_ids_only_mode(pool: Pool<Postgres>) -> anyho
     .await?;
 
     // Should only return the 2 threads that match "invoice" from the provided IDs
-    assert_eq!(response.results.len(), 2);
+    assert_eq!(response.items.len(), 2);
 
     // Verify results contain expected threads (ordered by latest_non_spam_message_ts DESC)
     assert_eq!(
-        response.results[0].entity_id.to_string(),
+        response.items[0].entity_id.to_string(),
         "22222222-2222-2222-2222-222222222222"
     );
-    assert_eq!(response.results[0].entity_type, SearchEntityType::Emails);
-    assert_eq!(response.results[0].name, "Re: Monthly Invoice - December");
+    assert_eq!(response.items[0].entity_type, SearchEntityType::Emails);
+    assert_eq!(response.items[0].name, "Re: Monthly Invoice - December");
 
     assert_eq!(
-        response.results[1].entity_id.to_string(),
+        response.items[1].entity_id.to_string(),
         "11111111-1111-1111-1111-111111111111"
     );
-    assert_eq!(response.results[1].name, "Invoice from Q1 2024");
+    assert_eq!(response.items[1].name, "Invoice from Q1 2024");
 
     Ok(())
 }
@@ -113,20 +113,20 @@ async fn test_search_email_subjects_normal_mode_owned_threads(
         search_email_subjects(&pool, &user_id, &[], "invoice".to_string(), false, 10, None).await?;
 
     // Should return 3 threads matching "invoice" (2 with "invoice" + 1 with "INVOICE")
-    assert_eq!(response.results.len(), 3);
+    assert_eq!(response.items.len(), 3);
 
     // Verify ordering by latest_non_spam_message_ts DESC
     assert_eq!(
-        response.results[0].entity_id.to_string(),
+        response.items[0].entity_id.to_string(),
         "66666666-6666-6666-6666-666666666666"
     );
-    assert_eq!(response.results[0].name, "IMPORTANT: INVOICE DUE");
+    assert_eq!(response.items[0].name, "IMPORTANT: INVOICE DUE");
 
     assert_eq!(
-        response.results[1].entity_id.to_string(),
+        response.items[1].entity_id.to_string(),
         "22222222-2222-2222-2222-222222222222"
     );
-    assert_eq!(response.results[1].name, "Re: Monthly Invoice - December");
+    assert_eq!(response.items[1].name, "Re: Monthly Invoice - December");
 
     Ok(())
 }
@@ -144,19 +144,19 @@ async fn test_search_email_subjects_case_insensitive(pool: Pool<Postgres>) -> an
     let response =
         search_email_subjects(&pool, &user_id, &[], "INVOICE".to_string(), false, 10, None).await?;
 
-    assert_eq!(response.results.len(), 3);
+    assert_eq!(response.items.len(), 3);
 
     // Search with lowercase term should also match both
     let response =
         search_email_subjects(&pool, &user_id, &[], "invoice".to_string(), false, 10, None).await?;
 
-    assert_eq!(response.results.len(), 3);
+    assert_eq!(response.items.len(), 3);
 
     // Search with mixed case
     let response =
         search_email_subjects(&pool, &user_id, &[], "InVoIcE".to_string(), false, 10, None).await?;
 
-    assert_eq!(response.results.len(), 3);
+    assert_eq!(response.items.len(), 3);
 
     Ok(())
 }
@@ -191,7 +191,7 @@ async fn test_search_email_subjects_with_shared_threads(
 
     // Should return 0 results because user3's thread doesn't belong to user1's link_id
     // Email isolation is enforced via link_id, not just thread ownership
-    assert_eq!(response.results.len(), 0);
+    assert_eq!(response.items.len(), 0);
 
     Ok(())
 }
@@ -209,20 +209,20 @@ async fn test_search_email_subjects_pagination_limit(pool: Pool<Postgres>) -> an
     let response =
         search_email_subjects(&pool, &user_id, &[], "invoice".to_string(), false, 2, None).await?;
 
-    assert_eq!(response.results.len(), 2);
+    assert_eq!(response.items.len(), 2);
 
     // Should get the 2 most recently updated threads with "invoice"
     assert_eq!(
-        response.results[0].entity_id.to_string(),
+        response.items[0].entity_id.to_string(),
         "66666666-6666-6666-6666-666666666666"
     );
     assert_eq!(
-        response.results[1].entity_id.to_string(),
+        response.items[1].entity_id.to_string(),
         "22222222-2222-2222-2222-222222222222"
     );
 
     // Should have a next_cursor since there are more results
-    assert!(response.next_cursor.has_more());
+    assert!(response.cursor.has_more());
 
     Ok(())
 }
@@ -240,11 +240,11 @@ async fn test_search_email_subjects_pagination_cursor(pool: Pool<Postgres>) -> a
     let first_response =
         search_email_subjects(&pool, &user_id, &[], "invoice".to_string(), false, 2, None).await?;
 
-    assert_eq!(first_response.results.len(), 2);
-    assert!(first_response.next_cursor.has_more());
+    assert_eq!(first_response.items.len(), 2);
+    assert!(first_response.cursor.has_more());
 
     // Extract cursor for second page
-    let cursor = match first_response.next_cursor {
+    let cursor = match first_response.cursor {
         SearchCursorOption::NotDone(c) => c,
         SearchCursorOption::Done => panic!("Expected more results"),
     };
@@ -261,25 +261,25 @@ async fn test_search_email_subjects_pagination_cursor(pool: Pool<Postgres>) -> a
     )
     .await?;
 
-    assert_eq!(second_response.results.len(), 1);
+    assert_eq!(second_response.items.len(), 1);
 
     // Should get the next thread (skipping the first 2)
     assert_eq!(
-        second_response.results[0].entity_id.to_string(),
+        second_response.items[0].entity_id.to_string(),
         "11111111-1111-1111-1111-111111111111"
     );
 
     // Should NOT have next_cursor since we've reached the end
-    assert!(second_response.next_cursor.is_done());
+    assert!(second_response.cursor.is_done());
 
     // Verify no overlap between pages
     let first_ids: Vec<String> = first_response
-        .results
+        .items
         .iter()
         .map(|r| r.entity_id.to_string())
         .collect();
     let second_ids: Vec<String> = second_response
-        .results
+        .items
         .iter()
         .map(|r| r.entity_id.to_string())
         .collect();
@@ -316,8 +316,8 @@ async fn test_search_email_subjects_no_results(pool: Pool<Postgres>) -> anyhow::
     )
     .await?;
 
-    assert_eq!(response.results.len(), 0);
-    assert!(response.next_cursor.is_done());
+    assert_eq!(response.items.len(), 0);
+    assert!(response.cursor.is_done());
 
     Ok(())
 }
@@ -335,18 +335,18 @@ async fn test_search_email_subjects_partial_match(pool: Pool<Postgres>) -> anyho
     let response =
         search_email_subjects(&pool, &user_id, &[], "meet".to_string(), false, 10, None).await?;
 
-    assert_eq!(response.results.len(), 2);
+    assert_eq!(response.items.len(), 2);
     assert_eq!(
-        response.results[0].entity_id.to_string(),
+        response.items[0].entity_id.to_string(),
         "44444444-4444-4444-4444-444444444444"
     );
-    assert_eq!(response.results[0].name, "Fwd: Client Meeting Tomorrow");
+    assert_eq!(response.items[0].name, "Fwd: Client Meeting Tomorrow");
 
     assert_eq!(
-        response.results[1].entity_id.to_string(),
+        response.items[1].entity_id.to_string(),
         "33333333-3333-3333-3333-333333333333"
     );
-    assert_eq!(response.results[1].name, "Team Meeting Notes");
+    assert_eq!(response.items[1].name, "Team Meeting Notes");
 
     Ok(())
 }
@@ -365,7 +365,7 @@ async fn test_search_email_subjects_user_isolation(pool: Pool<Postgres>) -> anyh
         search_email_subjects(&pool, &user_id, &[], "User2".to_string(), false, 10, None).await?;
 
     // Should return 0 results (user2's emails are not linked to user1)
-    assert_eq!(response.results.len(), 0);
+    assert_eq!(response.items.len(), 0);
 
     Ok(())
 }
@@ -398,7 +398,7 @@ async fn test_search_email_subjects_searches_oldest_message(
     )
     .await?;
 
-    assert!(response.results.iter().any(|r| {
+    assert!(response.items.iter().any(|r| {
         r.entity_id
             .to_string()
             .eq("22222222-2222-2222-2222-222222222222")
@@ -416,7 +416,7 @@ async fn test_search_email_subjects_searches_oldest_message(
     )
     .await?;
 
-    assert!(!response.results.iter().any(|r| {
+    assert!(!response.items.iter().any(|r| {
         r.entity_id
             .to_string()
             .eq("22222222-2222-2222-2222-222222222222")
@@ -442,7 +442,7 @@ async fn test_search_email_subjects_multiple_messages_per_thread(
 
     // Count how many times thread 11111111 appears (should be exactly once)
     let count = response
-        .results
+        .items
         .iter()
         .filter(|r| {
             r.entity_id
@@ -454,7 +454,7 @@ async fn test_search_email_subjects_multiple_messages_per_thread(
 
     // Verify it returns the oldest message's subject
     let thread_result = response
-        .results
+        .items
         .iter()
         .find(|r| {
             r.entity_id

@@ -133,7 +133,7 @@ pub(in crate::api::search::simple) async fn search_names<'a>(
     .map_err(SearchError::NameSearch)
     .map(|response| {
         let hits = response
-            .results
+            .items
             .into_iter()
             .map(|n| SearchHit {
                 entity_id: n.entity_id,
@@ -147,6 +147,6 @@ pub(in crate::api::search::simple) async fn search_names<'a>(
                 updated_at: Some(n.updated_at),
             })
             .collect();
-        (hits, response.next_cursor)
+        (hits, response.cursor)
     })
 }
