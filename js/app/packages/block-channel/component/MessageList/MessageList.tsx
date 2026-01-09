@@ -413,10 +413,16 @@ function MessageListImpl(props: MessageListProps) {
 
   const [isPrepend, setIsPrepend] = createSignal(false);
 
-  createEffect(() => {
-    props.messages;
-    setIsPrepend(true);
-  });
+  createEffect(
+    on(
+      () => props.messages,
+      () => {
+        props.messages;
+        setIsPrepend(true);
+      },
+      { defer: true }
+    )
+  );
 
   createEffect(
     on(flattenedThreaded, (flat, prev) => {
