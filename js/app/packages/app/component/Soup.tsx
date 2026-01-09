@@ -2,6 +2,7 @@ import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
 } from '@app/component/GlobalAppState';
+import { createElementSize } from '@solid-primitives/resize-observer';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
 import { playSound } from '@app/util/sound';
 import { useIsAuthenticated } from '@core/auth';
@@ -12,6 +13,7 @@ import NoiseIcon from '@macro-icons/wide/noise.svg';
 import PreviewIcon from '@macro-icons/wide/preview.svg';
 import SortIcon from '@macro-icons/wide/sort.svg';
 import { Popover } from '@kobalte/core/popover';
+import { cornerClip } from '@core/util/clipPath';
 import type { SystemSortOption } from './ViewConfig';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
@@ -57,17 +59,18 @@ import {
   For,
   Match,
   onCleanup,
+  onMount,
   type ParentComponent,
   Show,
   Switch,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { HelpDrawer } from './HelpDrawer';
 import { SuspenseContextComp } from './SuspenseContext';
 import { SplitHeaderLeft, SplitHeaderRight } from './split-layout/components/SplitHeader';
 import { SplitToolbarRight } from './split-layout/components/SplitToolbar';
 import type { SplitPanelContextType } from './split-layout/context';
 import { SplitPanelContext } from './split-layout/context';
+import { useSplitLayout } from './split-layout/layout';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 import { UnifiedListView } from './UnifiedListView';
 import {
@@ -241,22 +244,6 @@ function EntityTypeIconFilter() {
     });
   };
 
-  const onClickResetViewConfigChanges = () => {
-    const v = view();
-    if (!v) return;
-
-    const initialConfigStr = v.initialConfig;
-    if (initialConfigStr == null || initialConfigStr === '') return;
-
-    const initialConfigObj = JSON.parse(initialConfigStr) as ViewConfigBase;
-
-    batch(() => {
-      setViewDataStore(selectedView(), 'filters', initialConfigObj.filters);
-      setViewDataStore(selectedView(), 'sort', initialConfigObj.sort);
-      setViewDataStore(selectedView(), 'display', initialConfigObj.display);
-    });
-  };
-
   const entityTypeFilter = createMemo(
     () => view()?.filters?.typeFilter ?? VIEWCONFIG_BASE.filters.typeFilter
   );
@@ -343,16 +330,28 @@ function EntityTypeIconFilter() {
     return focusFilters()?.includes(filter) === true;
   };
 
-  const clearAllFilters = () => {
-    batch(() => {
-      setViewDataStore(selectedView(), 'filters', 'typeFilter', []);
-      setViewDataStore(selectedView(), 'filters', 'documentTypeFilter', []);
-      setViewDataStore(selectedView(), 'filters', 'focusFilters', []);
-    });
+  const isUnreadFilterActive = () => {
+    return view()?.filters?.notificationFilter === 'unread';
   };
 
-  const hasActiveFilters = () =>
-    entityTypeFilter().length > 0 || (focusFilters()?.length ?? 0) > 0;
+  const toggleUnreadFilter = () => {
+    const current = view()?.filters?.notificationFilter ?? 'all';
+    if (current === 'unread') {
+      setViewDataStore(selectedView(), 'filters', 'notificationFilter', 'all');
+    } else {
+      setViewDataStore(selectedView(), 'filters', 'notificationFilter', 'unread');
+    }
+  };
+
+  const clearAllFilters = () => {
+    batch(() => {
+      setSelectedView('all');
+      setViewDataStore('all', 'filters', 'typeFilter', []);
+      setViewDataStore('all', 'filters', 'documentTypeFilter', []);
+      setViewDataStore('all', 'filters', 'focusFilters', []);
+      setViewDataStore('all', 'filters', 'notificationFilter', 'all');
+    });
+  };
 
   // Sort functionality
   const SORT_OPTIONS: { value: SystemSortOption; label: string }[] = [
@@ -379,101 +378,28 @@ function EntityTypeIconFilter() {
   const [sortDropdownOpen, setSortDropdownOpen] = createSignal(false);
   const [sortFocusedIndex, setSortFocusedIndex] = createSignal(0);
 
-  // Register hotkeys for filters
-  const hotkeyDisposers: RegisterHotkeyReturn[] = [];
+  // Register all hotkeys
+  const hotkeyConfigs: { hotkey: ValidHotkey; description: string; handler: () => void }[] = [
+    { hotkey: '1', description: 'Filter by Signal', handler: () => toggleFocusFilter('signal') },
+    { hotkey: '2', description: 'Filter by Noise', handler: () => toggleFocusFilter('noise') },
+    ...ENTITY_TYPE_FILTERS.filter((f) => f.enabled).map((f) => ({
+      hotkey: f.shortcut as ValidHotkey,
+      description: `Filter by ${f.label}`,
+      handler: () => toggleEntityTypeFilter(f.type),
+    })),
+    { hotkey: 'u', description: 'Filter by Unread', handler: () => toggleUnreadFilter() },
+    { hotkey: 's', description: 'Open sort menu', handler: () => setSortDropdownOpen((prev) => !prev) },
+    { hotkey: '0', description: 'Open views menu', handler: () => setViewsDropdownOpen((prev) => !prev) },
+    { hotkey: '/', description: 'Clear filters', handler: () => { clearAllFilters(); setViewDataStore('all', 'searchText', ''); } },
+    { hotkey: 'cmd+f', description: 'Search', handler: () => { searchInputRef?.focus(); if (searchInputRef?.value) searchInputRef.select(); } },
+  ];
 
-  // Signal hotkey (1)
-  hotkeyDisposers.push(
+  const hotkeyDisposers = hotkeyConfigs.map((config) =>
     registerHotkey({
-      hotkey: ['1'],
+      hotkey: [config.hotkey],
       scopeId: splitHotkeyScope,
-      description: 'Filter by Signal',
-      keyDownHandler: () => {
-        toggleFocusFilter('signal');
-        return true;
-      },
-    })
-  );
-
-  // Noise hotkey (2)
-  hotkeyDisposers.push(
-    registerHotkey({
-      hotkey: ['2'],
-      scopeId: splitHotkeyScope,
-      description: 'Filter by Noise',
-      keyDownHandler: () => {
-        toggleFocusFilter('noise');
-        return true;
-      },
-    })
-  );
-
-  // Entity type filter hotkeys
-  ENTITY_TYPE_FILTERS.filter((f) => f.enabled).forEach((filter) => {
-    hotkeyDisposers.push(
-      registerHotkey({
-        hotkey: [filter.shortcut as ValidHotkey],
-        scopeId: splitHotkeyScope,
-        description: `Filter by ${filter.label}`,
-        keyDownHandler: () => {
-          toggleEntityTypeFilter(filter.type);
-          return true;
-        },
-      })
-    );
-  });
-
-  // Sort hotkey (s) - toggle dropdown
-  hotkeyDisposers.push(
-    registerHotkey({
-      hotkey: ['s'],
-      scopeId: splitHotkeyScope,
-      description: 'Open sort menu',
-      keyDownHandler: () => {
-        setSortDropdownOpen((prev) => !prev);
-        return true;
-      },
-    })
-  );
-
-  // Views hotkey (0) - toggle dropdown
-  hotkeyDisposers.push(
-    registerHotkey({
-      hotkey: ['0'],
-      scopeId: splitHotkeyScope,
-      description: 'Open views menu',
-      keyDownHandler: () => {
-        setViewsDropdownOpen((prev) => !prev);
-        return true;
-      },
-    })
-  );
-
-  // Clear filters hotkey (/)
-  hotkeyDisposers.push(
-    registerHotkey({
-      hotkey: ['/'],
-      scopeId: splitHotkeyScope,
-      description: 'Clear filters',
-      keyDownHandler: () => {
-        clearAllFilters();
-        setSearchText('');
-        return true;
-      },
-    })
-  );
-
-  // Search hotkey (cmd+f)
-  hotkeyDisposers.push(
-    registerHotkey({
-      hotkey: ['cmd+f'],
-      scopeId: splitHotkeyScope,
-      description: 'Search',
-      keyDownHandler: () => {
-        searchInputRef?.focus();
-        searchInputRef?.select();
-        return true;
-      },
+      description: config.description,
+      keyDownHandler: () => { config.handler(); return true; },
     })
   );
 
@@ -481,19 +407,70 @@ function EntityTypeIconFilter() {
     hotkeyDisposers.forEach((d) => d.dispose());
   });
 
+  // Scroll shadow indicators
+  const [scrollRef, setScrollRef] = createSignal<HTMLDivElement | null>(null);
+  const [leftOpacity, setLeftOpacity] = createSignal(0);
+  const [rightOpacity, setRightOpacity] = createSignal(0);
+  const SCROLL_THRESHOLD = 10;
+
+  // Track size changes to update indicators
+  const size = createElementSize(scrollRef);
+  const containerWidth = () => size.width ?? 0;
+
+  const updateClipIndicators = () => {
+    const ref = scrollRef();
+    if (!ref) return;
+    const { scrollLeft, scrollWidth, clientWidth } = ref;
+
+    const leftAmount = Math.min(scrollLeft, SCROLL_THRESHOLD);
+    setLeftOpacity(leftAmount / SCROLL_THRESHOLD);
+
+    const maxScroll = scrollWidth - clientWidth;
+    const remainingScroll = maxScroll - scrollLeft;
+    const rightAmount = Math.min(remainingScroll, SCROLL_THRESHOLD);
+    setRightOpacity(rightAmount / SCROLL_THRESHOLD);
+  };
+
+  // Update indicators when size changes
+  createEffect(() => {
+    containerWidth(); // Track size changes
+    updateClipIndicators();
+  });
+
+  onMount(() => {
+    const ref = scrollRef();
+    if (!ref) return;
+    ref.addEventListener('scroll', updateClipIndicators);
+    onCleanup(() => ref?.removeEventListener('scroll', updateClipIndicators));
+  });
+
   return (
-    <div class="flex items-center h-full gap-0.5 px-1">
+    <div class="relative h-full">
+      {/* Left clip boundary indicator */}
+      <div
+        class="absolute pointer-events-none left-0 top-px bottom-px w-3 z-2 pattern-diagonal-4 pattern-edge mask-r-from-0% border-l border-edge-muted"
+        style={{ opacity: leftOpacity() }}
+      />
+      {/* Right clip boundary indicator */}
+      <div
+        class="absolute pointer-events-none right-0 top-px bottom-px w-3 z-2 pattern-diagonal-4 pattern-edge mask-l-from-0% border-r border-edge-muted"
+        style={{ opacity: rightOpacity() }}
+      />
+      <div
+        class="flex items-center h-full gap-0.5 px-1 overflow-x-auto scrollbar-hidden overscroll-none"
+        ref={setScrollRef}
+      >
       {/* Signal/Noise buttons */}
-      <div class="flex items-center gap-0.5 mr-1">
+      <div class="flex items-center gap-0.5 mr-1 shrink-0">
         <Tooltip tooltip={<LabelAndHotKey label="Signal - Important items" shortcut="1" />}>
           <button
             type="button"
-            class="relative flex items-center justify-center size-7 border border-transparent"
+            class="relative flex items-center justify-center size-7 border border-transparent active:border-accent active:bg-accent active:text-panel"
             classList={{
-              'bg-accent/15 text-accent': isFocusFilterActive('signal'),
-              'text-ink-muted hover:text-ink hover:bg-surface-4': !isFocusFilterActive('signal'),
-              'active:border-accent active:bg-accent active:text-panel': true,
+              'bg-accent text-panel border-accent': isFocusFilterActive('signal'),
+              'text-ink-muted hover:text-accent hover:bg-accent/20': !isFocusFilterActive('signal'),
             }}
+            style={{ 'clip-path': cornerClip('3px') }}
             onClick={() => toggleFocusFilter('signal')}
           >
             <SignalIcon />
@@ -503,12 +480,12 @@ function EntityTypeIconFilter() {
         <Tooltip tooltip={<LabelAndHotKey label="Noise - Less important items" shortcut="2" />}>
           <button
             type="button"
-            class="relative flex items-center justify-center size-7 border border-transparent"
+            class="relative flex items-center justify-center size-7 border border-transparent active:border-accent active:bg-accent active:text-panel"
             classList={{
-              'bg-accent/15 text-accent': isFocusFilterActive('noise'),
-              'text-ink-muted hover:text-ink hover:bg-surface-4': !isFocusFilterActive('noise'),
-              'active:border-accent active:bg-accent active:text-panel': true,
+              'bg-accent text-panel border-accent': isFocusFilterActive('noise'),
+              'text-ink-muted hover:text-accent hover:bg-accent/20': !isFocusFilterActive('noise'),
             }}
+            style={{ 'clip-path': cornerClip('3px') }}
             onClick={() => toggleFocusFilter('noise')}
           >
             <NoiseIcon />
@@ -517,7 +494,7 @@ function EntityTypeIconFilter() {
         </Tooltip>
       </div>
       {/* Separator */}
-      <div class="h-4 w-px bg-edge-muted mx-1" />
+      <div class="h-4 w-px bg-edge-muted mx-1 shrink-0" />
       {/* Entity type icons */}
       <For each={ENTITY_TYPE_FILTERS.filter((f) => f.enabled)}>
         {(filter) => {
@@ -528,12 +505,12 @@ function EntityTypeIconFilter() {
             <Tooltip tooltip={<LabelAndHotKey label={filter.label} shortcut={filter.shortcut} />}>
               <button
                 type="button"
-                class="relative flex items-center justify-center size-7 border border-transparent"
+                class="relative flex items-center justify-center size-7 border border-transparent active:border-accent active:bg-accent active:text-panel"
                 classList={{
-                  'bg-accent/15 text-accent': isActive(),
-                  'text-ink-muted hover:text-ink hover:bg-surface-4': !isActive(),
-                  'active:border-accent active:bg-accent active:text-panel': true,
+                  'bg-accent text-panel border-accent': isActive(),
+                  'text-ink-muted hover:text-accent hover:bg-accent/20': !isActive(),
                 }}
+                style={{ 'clip-path': cornerClip('3px') }}
                 onClick={() => toggleEntityTypeFilter(filter.type)}
               >
                 <Dynamic
@@ -546,18 +523,36 @@ function EntityTypeIconFilter() {
           );
         }}
       </For>
-      {/* Separator before preview */}
-      <div class="h-4 w-px bg-edge-muted mx-1" />
+      {/* Separator before unread/preview */}
+      <div class="h-4 w-px bg-edge-muted mx-1 shrink-0" />
+      {/* Unread filter */}
+      <Tooltip tooltip={<LabelAndHotKey label="Unread Only" shortcut="u" />}>
+        <button
+          type="button"
+          class="relative flex items-center justify-center size-7 border border-transparent active:border-accent active:bg-accent active:text-panel"
+          classList={{
+            'bg-accent text-panel border-accent': isUnreadFilterActive(),
+            'text-ink-muted hover:text-accent hover:bg-accent/20': !isUnreadFilterActive(),
+          }}
+          style={{ 'clip-path': cornerClip('3px') }}
+          onClick={() => toggleUnreadFilter()}
+        >
+          <svg width="100%" height="100%" viewBox="0 0 24 24" fill="currentColor" stroke="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="12" cy="12" r="4" />
+          </svg>
+          <span class="absolute bottom-0 right-0.5 text-[9px] font-mono font-bold leading-none opacity-60">u</span>
+        </button>
+      </Tooltip>
       {/* Preview toggle */}
       <Tooltip tooltip={<LabelAndHotKey label="Toggle Preview" shortcut="p" />}>
         <button
           type="button"
-          class="relative flex items-center justify-center size-7 border border-transparent"
+          class="relative flex items-center justify-center size-7 border border-transparent active:border-accent active:bg-accent active:text-panel"
           classList={{
-            'bg-accent/15 text-accent': preview(),
-            'text-ink-muted hover:text-ink hover:bg-surface-4': !preview(),
-            'active:border-accent active:bg-accent active:text-panel': true,
+            'bg-accent text-panel border-accent': preview(),
+            'text-ink-muted hover:text-accent hover:bg-accent/20': !preview(),
           }}
+          style={{ 'clip-path': cornerClip('3px') }}
           onClick={() => {
             playSound('open');
             setPreview((prev) => !prev);
@@ -580,7 +575,8 @@ function EntityTypeIconFilter() {
         <Popover.Trigger
           as="button"
           type="button"
-          class="relative flex items-center justify-center size-7 text-ink-muted hover:text-ink hover:bg-surface-4 active:border-accent active:bg-accent active:text-panel border border-transparent"
+          class="relative flex items-center justify-center size-7 shrink-0 text-ink-muted hover:text-accent hover:bg-accent/20 active:border-accent active:bg-accent active:text-panel border border-transparent"
+          style={{ 'clip-path': cornerClip('3px') }}
         >
           <SortIcon />
           <span class="absolute bottom-0 right-0.5 text-[9px] font-mono font-bold leading-none opacity-60">s</span>
@@ -639,7 +635,7 @@ function EntityTypeIconFilter() {
       {/* Views dropdown - show if there are custom views or unsaved changes */}
       <Show when={customViews().length > 0 || isViewConfigChanged()}>
         {/* Separator before views */}
-        <div class="h-4 w-px bg-edge-muted mx-1" />
+        <div class="h-4 w-px bg-edge-muted mx-1 shrink-0" />
         {/* Views dropdown */}
         <Popover
           open={viewsDropdownOpen()}
@@ -661,10 +657,8 @@ function EntityTypeIconFilter() {
               <Tooltip tooltip={<LabelAndHotKey label="Saved Views" shortcut="0" />}>
                 <button
                   type="button"
-                  class="relative flex items-center justify-center size-7 text-ink-muted hover:text-ink hover:bg-surface-4 border border-transparent active:border-accent active:bg-accent active:text-panel"
-                  classList={{
-                    'bg-accent/15 text-accent': viewsDropdownOpen() || !VIEWCONFIG_DEFAULTS_IDS.includes(selectedView() as any) || isViewConfigChanged(),
-                  }}
+                  class="relative flex items-center justify-center size-7 text-ink-muted hover:text-accent hover:bg-accent/20 border border-transparent active:border-accent active:bg-accent active:text-panel"
+                  style={{ 'clip-path': cornerClip('3px') }}
                   {...props}
                 >
                   <svg width="100%" height="100%" viewBox="0 0 24 24" fill="currentColor" stroke="none" xmlns="http://www.w3.org/2000/svg">
@@ -837,23 +831,10 @@ function EntityTypeIconFilter() {
           </Popover.Portal>
         </Popover>
       </Show>
-      <Tooltip tooltip={<LabelAndHotKey label="Clear filters" shortcut="/" />}>
-        <button
-          type="button"
-          class="relative flex items-center justify-center size-7 text-ink-muted hover:text-ink hover:bg-surface-4 border border-transparent active:border-accent active:bg-accent active:text-panel ml-1"
-          onClick={() => {
-            clearAllFilters();
-            setSearchText('');
-          }}
-        >
-          ✕
-          <span class="absolute bottom-0 right-0.5 text-[9px] font-mono font-bold leading-none opacity-60">/</span>
-        </button>
-      </Tooltip>
       {/* Separator before search */}
-      <div class="h-4 w-px bg-edge-muted mx-1" />
+      <div class="h-4 w-px bg-edge-muted mx-1 shrink-0" />
       {/* Compact search bar */}
-      <div class="flex items-center gap-1">
+      <div class="flex items-center gap-1 shrink-0">
         <Tooltip tooltip={<LabelAndHotKey label="Search" shortcut="⌘F" />}>
           <div class="relative flex items-center">
             <input
@@ -865,38 +846,77 @@ function EntityTypeIconFilter() {
               value={searchText()}
               onInput={(e) => setSearchText(e.currentTarget.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Escape' || e.key === 'Enter') {
+                if (e.key === 'Escape' || e.key === 'Enter' || e.key === 'ArrowDown') {
                   e.preventDefault();
                   e.currentTarget.blur();
                 }
               }}
-              class="w-24 px-1 py-1 text-xs bg-transparent border-none outline-none ring-0 focus:outline-none focus:ring-0 placeholder:text-ink-muted"
+              class="w-24 px-1 py-1 text-xs bg-transparent border-none outline-none ring-0 focus:outline-none focus:ring-0 placeholder:text-ink-muted placeholder:select-none"
             />
           </div>
         </Tooltip>
+      </div>
       </div>
     </div>
   );
 }
 
-function SettingsButton() {
-  const { settingsOpen, toggleSettings } = useSettingsState();
-  
+function ClearFiltersButton() {
+  const splitContext = useSplitPanelOrThrow();
+  const {
+    unifiedListContext: { setViewDataStore, setSelectedView },
+  } = splitContext;
+
+  const clearAllFilters = () => {
+    batch(() => {
+      setSelectedView('all');
+      setViewDataStore('all', 'filters', 'typeFilter', []);
+      setViewDataStore('all', 'filters', 'documentTypeFilter', []);
+      setViewDataStore('all', 'filters', 'focusFilters', []);
+      setViewDataStore('all', 'filters', 'notificationFilter', 'all');
+      setViewDataStore('all', 'searchText', '');
+    });
+  };
+
   return (
-    <Tooltip tooltip={<LabelAndHotKey label={settingsOpen() ? 'Close Settings' : 'Open Settings'} hotkeyToken={TOKENS.global.toggleSettings} />}>
+    <Tooltip tooltip={<LabelAndHotKey label="Clear filters" shortcut="/" />}>
       <button
         type="button"
-        class="relative flex items-center justify-center size-7 border border-transparent"
-        classList={{
-          'bg-hover text-ink': settingsOpen(),
-          'text-ink-muted hover:text-ink hover:bg-surface-4': !settingsOpen(),
-          'active:border-accent active:bg-accent active:text-panel': true,
-        }}
-        onClick={() => toggleSettings()}
+        class="relative flex items-center justify-center size-7 text-ink-muted hover:text-accent hover:bg-accent/20 border border-transparent active:border-accent active:bg-accent active:text-panel"
+        style={{ 'clip-path': cornerClip('3px') }}
+        onClick={clearAllFilters}
       >
-        <IconGear class="size-4" />
+        ✕
+        <span class="absolute bottom-0 right-0.5 text-[9px] font-mono font-bold leading-none opacity-60">/</span>
       </button>
     </Tooltip>
+  );
+}
+
+function SettingsButton() {
+  const { settingsOpen, toggleSettings } = useSettingsState();
+  const { getSplitCount } = useSplitLayout();
+  
+  // Hide settings button when there are multiple splits
+  const isSingleSplit = () => getSplitCount() <= 1;
+  
+  return (
+    <Show when={isSingleSplit()}>
+      <Tooltip tooltip={<LabelAndHotKey label={settingsOpen() ? 'Close Settings' : 'Open Settings'} hotkeyToken={TOKENS.global.toggleSettings} />}>
+        <button
+          type="button"
+          class="relative flex items-center justify-center size-7 border border-transparent active:border-accent active:bg-accent active:text-panel"
+          classList={{
+            'bg-hover text-ink': settingsOpen(),
+            'text-ink-muted hover:text-accent hover:bg-accent/20': !settingsOpen(),
+          }}
+          style={{ 'clip-path': cornerClip('3px') }}
+          onClick={() => toggleSettings()}
+        >
+          <IconGear class="size-4" />
+        </button>
+      </Tooltip>
+    </Show>
   );
 }
 
@@ -1067,8 +1087,6 @@ export function Soup() {
       selectedView,
       setSelectedView,
       entityListRefSignal: [, setEntityListRef],
-      showHelpDrawer,
-      setShowHelpDrawer,
     },
   } = splitPanelContext;
   const view = createMemo(() => viewsData[selectedView()]);
@@ -1086,24 +1104,6 @@ export function Soup() {
   const entityQueryClient = useEntityQueryClient();
 
   const hotkeyDisposers: RegisterHotkeyReturn[] = [];
-
-  hotkeyDisposers.push(
-    registerHotkey({
-      hotkey: ['shift+/'],
-      scopeId: splitHotkeyScope,
-      description: () =>
-        `${showHelpDrawer().has(selectedView() as DefaultView) ? 'Hide' : 'Show'} help drawer`,
-      hotkeyToken: TOKENS.split.showHelpDrawer,
-      keyDownHandler: () => {
-        if (showHelpDrawer().has(selectedView() as DefaultView)) {
-          setShowHelpDrawer(new Set<DefaultView>());
-        } else {
-          setShowHelpDrawer(new Set(DEFAULT_VIEWS));
-        }
-        return true;
-      },
-    })
-  );
 
   hotkeyDisposers.push(
     registerHotkey({
@@ -1224,7 +1224,8 @@ export function Soup() {
               <EntityTypeIconFilter />
             </SplitHeaderLeft>
             <SplitHeaderRight>
-              <div class="flex items-center h-full">
+              <div class="flex items-center h-full gap-0.5">
+                <ClearFiltersButton />
                 <SettingsButton />
               </div>
             </SplitHeaderRight>
@@ -1241,14 +1242,6 @@ export function Soup() {
           />
         </Show>
       </div>
-      <Show
-        when={
-          showHelpDrawer().has(selectedView() as DefaultView) &&
-          !(isTouchDevice() && isMobileWidth())
-        }
-      >
-        <HelpDrawer viewId={view().id} />
-      </Show>
     </div>
   );
 }

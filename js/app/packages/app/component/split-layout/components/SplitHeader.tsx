@@ -93,18 +93,24 @@ function SplitSpotlightButton() {
 
 function SplitCloseButton() {
   const context = useContext(SplitPanelContext);
+  const { getSplitCount } = useSplitLayout();
   if (!context) return null;
+  
+  // Only show close button when there are multiple splits
+  const hasMultipleSplits = () => getSplitCount() > 1;
+  
   return (
-    <Button
-      class="p-1 *:h-4"
-      tooltip={<LabelAndHotKey label="Close" />}
-      onClick={context.handle.close}
-    >
-      <CloseIcon />
-    </Button>
+    <Show when={hasMultipleSplits()}>
+      <Button
+        class="p-1 *:h-4"
+        tooltip={<LabelAndHotKey label="Close" />}
+        onClick={context.handle.close}
+      >
+        <CloseIcon />
+      </Button>
+    </Show>
   );
 }
-
 
 function SplitControlButtons() {
   return (

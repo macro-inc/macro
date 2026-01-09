@@ -19,7 +19,6 @@ import { waitForFrames } from '@core/util/sleep';
 import { type EntityData, isTaskEntity } from '@macro-entity';
 import { entityHasUnreadNotifications } from '@notifications';
 import type { PreviewViewStandardLabel } from '@service-email/generated/schemas';
-import { useTutorialCompleted } from '@service-gql/client';
 import {
   type PropertiesEntityType,
   propertiesServiceClient,
@@ -94,8 +93,6 @@ export type UnifiedListContext = {
   entityListRefSignal: Signal<HTMLDivElement | undefined>;
   entitiesSignal: Signal<EntityData[] | undefined>;
   emailViewSignal: Signal<PreviewViewStandardLabel>;
-  showHelpDrawer: Accessor<Set<DefaultView>>;
-  setShowHelpDrawer: Setter<Set<DefaultView>>;
   actionRegistry: EntityActionRegistry;
   navigateThroughList: NavigateListFn;
   // this is a private method that should be registered once by createNavigationEntityListShortcut
@@ -116,8 +113,6 @@ export function createStubSoupContext(): UnifiedListContext {
     entityListRefSignal: createSignal(),
     entitiesSignal: createSignal(),
     emailViewSignal: createSignal<PreviewViewStandardLabel>('all'),
-    showHelpDrawer: () => new Set(),
-    setShowHelpDrawer: () => {},
     actionRegistry: createEntityActionRegistry(),
     navigateThroughList: async () => ({
       success: false,
@@ -145,10 +140,6 @@ export function createSoupContext(): UnifiedListContext {
   const collapseEntitySignal = createSignal<CollapseEntityFn | undefined>(
     undefined
   );
-  const tutorialCompleted = useTutorialCompleted();
-  const [showHelpDrawer, setShowHelpDrawer] = createSignal<Set<DefaultView>>(
-    !tutorialCompleted() ? new Set(DEFAULT_VIEWS) : new Set()
-  );
   let navigateThroughListFn: NavigateListFn | undefined;
 
   return {
@@ -161,8 +152,6 @@ export function createSoupContext(): UnifiedListContext {
     entitiesSignal,
     emailViewSignal,
     collapseEntitySignal,
-    showHelpDrawer,
-    setShowHelpDrawer,
     actionRegistry: createEntityActionRegistry(),
     navigateThroughList: (input) => {
       if (!navigateThroughListFn) {

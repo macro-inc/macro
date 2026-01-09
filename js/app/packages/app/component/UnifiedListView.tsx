@@ -1216,38 +1216,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     }
   };
 
-  const onClickSaveAsNewView = () => {
-    const view_ = view();
-    const config = currentViewConfigBase();
-    if (!view_ || !config) return;
-
-    // Generate a new name based on the current view name
-    const baseName = view_.view || 'View';
-    const newName = `${baseName} Copy`;
-
-    // Create new view (no id means create new)
-    saveViewMutation.mutate({
-      name: newName,
-      config,
-    });
-  };
-
-  const onClickResetViewConfigChanges = () => {
-    const view_ = view();
-    if (!view_) return;
-
-    const initialConfigStr = view_.initialConfig;
-    if (initialConfigStr == null || initialConfigStr === '') return;
-
-    const initialConfigObj = JSON.parse(initialConfigStr) as ViewConfigBase;
-
-    batch(() => {
-      setViewDataStore(selectedView(), 'filters', initialConfigObj.filters);
-      setViewDataStore(selectedView(), 'sort', initialConfigObj.sort);
-      setViewDataStore(selectedView(), 'display', initialConfigObj.display);
-    });
-  };
-
   // Set initialConfig when it's not present (on load or after save/refetch)
   createEffect(() => {
     const view_ = view();
