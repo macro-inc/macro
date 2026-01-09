@@ -44,8 +44,10 @@ import {
   onMount,
   type ParentProps,
   Show,
+  Suspense,
   untrack,
 } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { floatWithElement } from '../../directive/floatWithElement';
 import { floatWithSelection } from '../../directive/floatWithSelection';
 import {
@@ -385,7 +387,15 @@ export function MentionsMenuItem(props: {
   );
 }
 
-export function MentionsMenu(props: {
+export function MentionsMenu(props: Parameters<typeof MentionsMenuInner>[0]) {
+  return (
+    <Suspense>
+      <MentionsMenuInner {...props} />
+    </Suspense>
+  );
+}
+
+function MentionsMenuInner(props: {
   editor: LexicalEditor;
   menu: MenuOperations;
   /** pass in custom history list if necessary */
@@ -1033,7 +1043,7 @@ export function MentionsMenu(props: {
       dates.length +
       emailList.length;
 
-    const renderOptions = createMemo(() => {
+    const RenderOptions = () => {
       const options = [];
       if (users.length > 0) {
         options.push(
@@ -1155,14 +1165,16 @@ export function MentionsMenu(props: {
           </>
         )
       );
-    });
+    };
 
     return (
       <Show
         when={totalLength() > 0}
         fallback={<div class="px-2 text-ink-extra-muted">No results</div>}
       >
-        <div>{renderOptions()}</div>
+        <div>
+          <Dynamic component={RenderOptions} />
+        </div>
       </Show>
     );
   });

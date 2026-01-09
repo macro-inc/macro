@@ -1,3 +1,4 @@
+import { TitlePlaceholderSignal } from '@block-md/component/TitleEditor';
 import { throwOnErr } from '@core/util/maybeResult';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { storageServiceClient } from '@service-storage/client';
@@ -52,6 +53,7 @@ export function useHistoryQuery(options?: {
 
   return useQuery(() => ({
     ...historyQueryOptions(),
+    placeholderData: (prev) => prev,
     select: (data: HistoryQueryResponse): HistoryItem[] => {
       const instructionsId = instructionsIdQuery.isSuccess
         ? instructionsIdQuery.data
