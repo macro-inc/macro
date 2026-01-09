@@ -68,6 +68,7 @@ export type FilterOptions = {
   projectFilter?: string;
   fromFilter?: WithCustomUserInput<'user' | 'contact'>[];
   focusFilters?: ('signal' | 'noise')[];
+  unreadOnly?: boolean;
 };
 
 export type SystemSortOption =
@@ -142,6 +143,7 @@ export const VIEWCONFIG_BASE: ViewConfigBase = {
     documentTypeFilter: [],
     projectFilter: undefined,
     fromFilter: [],
+    unreadOnly: false,
   },
   display: {
     layout: 'compact',

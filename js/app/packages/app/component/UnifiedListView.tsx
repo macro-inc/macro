@@ -262,6 +262,10 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       view()?.filters?.importantFilter ?? defaultFilterOptions.importantFilter
   );
 
+  const unreadOnly = createMemo(
+    () => view()?.filters?.unreadOnly ?? false
+  );
+
   const entityTypeFilter = createMemo(
     () => view()?.filters?.typeFilter ?? defaultFilterOptions.typeFilter
   );
@@ -482,7 +486,8 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
     if (importantFilter()) filterFns.push(importantFilterFn);
 
-    if (notificationFilter() === 'unread') filterFns.push(unreadFilterFn);
+    // Apply unread filter independently (can be combined with other filters)
+    if (unreadOnly()) filterFns.push(unreadFilterFn);
 
     if (notificationFilter() === 'notDone') filterFns.push(notDoneFilterFn);
 

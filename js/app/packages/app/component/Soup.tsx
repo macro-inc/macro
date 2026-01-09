@@ -329,16 +329,12 @@ function EntityTypeIconFilter() {
   };
 
   const isUnreadFilterActive = () => {
-    return view()?.filters?.notificationFilter === 'unread';
+    return view()?.filters?.unreadOnly === true;
   };
 
   const toggleUnreadFilter = () => {
-    const current = view()?.filters?.notificationFilter ?? 'all';
-    if (current === 'unread') {
-      setViewDataStore(selectedView(), 'filters', 'notificationFilter', 'all');
-    } else {
-      setViewDataStore(selectedView(), 'filters', 'notificationFilter', 'unread');
-    }
+    const current = view()?.filters?.unreadOnly ?? false;
+    setViewDataStore(selectedView(), 'filters', 'unreadOnly', !current);
   };
 
   const clearAllFilters = () => {
@@ -348,6 +344,7 @@ function EntityTypeIconFilter() {
       setViewDataStore('all', 'filters', 'documentTypeFilter', []);
       setViewDataStore('all', 'filters', 'focusFilters', []);
       setViewDataStore('all', 'filters', 'notificationFilter', 'all');
+      setViewDataStore('all', 'filters', 'unreadOnly', false);
     });
   };
 
@@ -872,6 +869,7 @@ function ClearFiltersButton() {
       setViewDataStore('all', 'filters', 'documentTypeFilter', []);
       setViewDataStore('all', 'filters', 'focusFilters', []);
       setViewDataStore('all', 'filters', 'notificationFilter', 'all');
+      setViewDataStore('all', 'filters', 'unreadOnly', false);
       setViewDataStore('all', 'searchText', '');
     });
   };
