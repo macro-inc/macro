@@ -616,23 +616,19 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
 
   const stopGenerating = () => {
     const stream_ = stream();
-    if (!stream_) return;
+    if (!stream_) return false;
     cognitionWebsocketServiceClient.stopChatMessage({
       stream_id: stream_.request.stream_id,
     });
     stream_.close();
+    return true;
   };
 
   registerHotkey({
     scopeId,
     hotkey: 'ctrl+c',
-    condition: () =>
-      Boolean(bigChatOpen() || isRightPanelOpen()) && Boolean(stream()),
     description: 'Stop stream',
-    keyDownHandler: () => {
-      stopGenerating();
-      return true;
-    },
+    keyDownHandler: stopGenerating,
     runWithInputFocused: true,
   });
   return (

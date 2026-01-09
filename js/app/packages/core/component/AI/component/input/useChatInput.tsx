@@ -1,3 +1,4 @@
+import { pressedKeys } from '@core/hotkey/state';
 import { withAnalytics } from '@coparse/analytics';
 import { useBuildChatSendRequest } from '@core/component/AI/component/input/buildRequest';
 import { DEFAULT_MODEL, SMART_MODE_MODEL } from '@core/component/AI/constant';
@@ -160,33 +161,6 @@ function ChatInput(props: ChatInputInternalProps) {
   const [showAttachMenu, setShowAttachMenu] = createSignal(false);
   const [attachMenuAnchorRef, setAttachMenuAnchorRef] =
     createSignal<HTMLDivElement>();
-  const [isMetaHeld, setIsMetaHeld] = createSignal(false);
-  const [isCtrlHeld, setIsCtrlHeld] = createSignal(false);
-
-  createEffect(() => {
-    console.log('activescope', activeScope());
-  });
-
-  const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.metaKey) setIsMetaHeld(true);
-    if (e.key === 'Control') setIsCtrlHeld(true);
-    // if (e.key === "c" && e.ctrlKey) props.onStop?.();
-  };
-
-  const handleKeyUp = (e: KeyboardEvent) => {
-    if (e.key === 'Meta') setIsMetaHeld(false);
-    if (e.key === 'Control') setIsCtrlHeld(false);
-  };
-
-  onMount(() => {
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
-  });
-
-  onCleanup(() => {
-    window.removeEventListener('keydown', handleKeyDown);
-    window.removeEventListener('keyup', handleKeyUp);
-  });
 
   createEffect(() => {
     const uploaded = props.uploadQueue.popComplete();
@@ -309,7 +283,7 @@ function ChatInput(props: ChatInputInternalProps) {
                   <div
                     class="flex items-center gap-1.5"
                     classList={{
-                      'text-accent': isCtrlHeld(),
+                      'text-accent': pressedKeys().has("ctrl"),
                     }}
                   >
                     <span class="">Stop</span>
@@ -334,7 +308,7 @@ function ChatInput(props: ChatInputInternalProps) {
                 <div
                   class="flex items-center gap-1.5"
                   classList={{
-                    'text-accent': isMetaHeld(),
+                    'text-accent': pressedKeys().has("ctrl"),
                   }}
                 >
                   <span>Opus</span>
