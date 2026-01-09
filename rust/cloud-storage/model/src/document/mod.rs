@@ -54,15 +54,10 @@ impl BasicDocumentSubType {
     /// Converts from DB representation (separate sub_type and is_completed columns)
     /// to the domain enum.
     pub fn from_db(sub_type: Option<DocumentSubType>, is_completed: Option<bool>) -> Option<Self> {
-        match (sub_type, is_completed) {
-            (Some(DocumentSubType::Task), Some(is_completed)) => Some(Self::Task { is_completed }),
-            (Some(DocumentSubType::Task), None) => {
-                // Default to false if sub_type is Task but is_completed is None
-                Some(Self::Task {
-                    is_completed: false,
-                })
-            }
-            _ => None,
+        match sub_type? {
+            DocumentSubType::Task => Some(Self::Task {
+                is_completed: is_completed.unwrap_or_default(),
+            }),
         }
     }
 }
@@ -363,15 +358,10 @@ impl DocumentPreviewDataSubType {
     /// Converts from DB representation (separate sub_type and is_completed columns)
     /// to the domain enum.
     pub fn from_db(sub_type: Option<DocumentSubType>, is_completed: Option<bool>) -> Option<Self> {
-        match (sub_type, is_completed) {
-            (Some(DocumentSubType::Task), Some(is_completed)) => Some(Self::Task { is_completed }),
-            (Some(DocumentSubType::Task), None) => {
-                // Default to false if sub_type is Task but is_completed is None
-                Some(Self::Task {
-                    is_completed: false,
-                })
-            }
-            _ => None,
+        match sub_type? {
+            DocumentSubType::Task => Some(Self::Task {
+                is_completed: is_completed.unwrap_or_default(),
+            }),
         }
     }
 }

@@ -74,7 +74,8 @@ pub async fn batch_get_document_preview_v2(
     .fetch_all(db)
     .await?;
 
-    let found_documents: Vec<DocumentPreviewData> = rows.into_iter().map(Into::into).collect();
+    let found_documents: Vec<DocumentPreviewData> =
+        rows.into_iter().map(DocumentPreviewData::from).collect();
 
     let found_docs: HashSet<String> = found_documents
         .iter()

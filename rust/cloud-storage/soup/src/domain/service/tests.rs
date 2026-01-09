@@ -786,7 +786,7 @@ async fn cursor_should_return_frecency() {
 /// Helper to extract is_completed from a FrecencySoupItem
 fn get_is_completed(item: &FrecencySoupItem) -> Option<bool> {
     match &item.item {
-        SoupItem::Document(doc) => doc.sub_type.as_ref().and_then(|st| st.is_completed()),
+        SoupItem::Document(doc) => doc.sub_type.as_ref().and_then(|st| st.is_task_completed()),
         _ => None,
     }
 }

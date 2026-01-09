@@ -724,7 +724,7 @@ async fn test_is_completed_field(pool: Pool<Postgres>) -> anyhow::Result<()> {
         if let SoupItem::Document(doc) = item {
             is_completed_map.insert(
                 doc.id,
-                doc.sub_type.as_ref().and_then(|st| st.is_completed()),
+                doc.sub_type.as_ref().and_then(|st| st.is_task_completed()),
             );
         }
     }
