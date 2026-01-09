@@ -51,6 +51,7 @@ import {
   onCleanup,
   onMount,
   Suspense,
+  untrack,
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { type FocusableElement, tabbable } from 'tabbable';
@@ -127,6 +128,35 @@ export function Channel(props: {
   const [targetMessage, setTargetMessage] = createSignal<
     TargetMessageInfo | undefined
   >(initialTargetMessage());
+
+  // We want to be reactive to query params changing so that if a push notification comes in while this channel is open, we can navigate to the correct message
+  createEffect(
+    on(
+      () => [searchParams[URL_PARAMS.message], searchParams[URL_PARAMS.thread]],
+      ([messageIdRaw, threadIdRaw]) => {
+        const messageId = Array.isArray(messageIdRaw)
+          ? messageIdRaw[0]
+          : messageIdRaw;
+        const threadId = Array.isArray(threadIdRaw)
+          ? threadIdRaw[0]
+          : threadIdRaw;
+
+        if (!messageId) return;
+
+        // Avoid clobbering state if the URL didn't meaningfully change.
+        const current = untrack(targetMessage);
+        if (current?.messageId === messageId && current?.threadId === threadId) {
+          return;
+        }
+
+        if (threadId) {
+          setActiveThreadId(threadId);
+        }
+        setTargetMessage({ messageId, threadId });
+      },
+      { defer: true }
+    )
+  );
 
   createMethodRegistration(blockHandle, {
     goToLocationFromParams: async (params: Record<string, any>) => {

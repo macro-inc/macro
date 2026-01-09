@@ -13,6 +13,7 @@ import {
 } from '@notifications';
 import { notificationServiceClient } from '@service-notification/client';
 import { makePersisted } from '@solid-primitives/storage';
+import { emit } from '@tauri-apps/api/event';
 import {
   type Accessor,
   createContext,
@@ -24,6 +25,12 @@ import {
 } from 'solid-js';
 import { createTauriNotificationInterface } from './notification';
 import { useExpectTauri } from './TauriProvider';
+
+function splitPathAndQuery(route: string): { path: string; query: string } {
+  const qIndex = route.indexOf('?');
+  if (qIndex === -1) return { path: route, query: '' };
+  return { path: route.slice(0, qIndex), query: route.slice(qIndex + 1) };
+}
 
 function usePushNotifications(
   deviceType: 'android' | 'ios',
@@ -127,7 +134,19 @@ export function MaybePushNotificationRegistration(props: {
     );
   }
 
-  const push = usePushNotifications(os);
+  const push = usePushNotifications(os, (event) => {
+    const openRoute = event.payload.openRoute;
+    if (!openRoute) {
+      return;
+    }
+
+    const { path, query } = splitPathAndQuery(openRoute);
+    const tapped =
+      event.type === 'BACKGROUND_TAP' || event.type === 'FOREGROUND_TAP';
+    // Only navigate on explicit user interaction.
+    if (!tapped) return;
+    emit('navigate', { path, query });
+  });
 
   // now we compose the standard tauri notif plugin with the push notification plugin
   function curriedTauriPushNotification(
@@ -137,11 +156,19 @@ export function MaybePushNotificationRegistration(props: {
       requestPermission,
       unregisterNotifications,
       getCurrentPermission,
-      showNotification,
+      showNotification: baseShowNotification,
     } = createTauriNotificationInterface(setDisabled);
 
     return {
-      showNotification,
+      showNotification: async (data) => {
+        // If remote push is enabled, the OS will display notifications for us.
+        // Avoid also generating a local notification from websocket events,
+        // which would cause duplicates.
+        if (push.permission() === 'granted') {
+          return 'not-granted';
+        }
+        return baseShowNotification(data);
+      },
       getCurrentPermission: async () => {
         const appNotification = await getCurrentPermission();
         if (appNotification === 'granted' && push.permission() === 'granted') {
