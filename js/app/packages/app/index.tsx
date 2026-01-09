@@ -5,7 +5,7 @@ import './index.css';
 import * as analytics from '@coparse/analytics';
 import { initializeLexical } from '@core/component/LexicalMarkdown/init';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { getPlatform } from '@core/util/platform';
+import { getPlatform, isTauri } from '@core/util/platform';
 import { platformFetch } from '@core/util/platformFetch';
 import * as Observability from '@observability';
 import { ErrorBoundary, render } from 'solid-js/web';
@@ -14,18 +14,20 @@ import { ReactiveFavicon } from './component/ReactiveFavicon';
 import { Root } from './component/Root';
 
 // Override global fetch with platformFetch for Tauri compatibility
-// Skip localhost:3000 requests (dev server) to avoid breaking HMR
-const originalFetch = window.fetch;
-window.fetch = new Proxy(originalFetch, {
-  apply: (target, thisArg, args) => {
-    const url = args[0];
-    const urlString = url instanceof Request ? url.url : String(url);
-    if (urlString.includes('localhost')) {
-      return target.apply(thisArg, args as Parameters<typeof fetch>);
-    }
-    return platformFetch.apply(thisArg, args as Parameters<typeof fetch>);
-  },
-});
+// Skip localhost requests (dev server) to avoid breaking HMR
+if (isTauri()) {
+  const originalFetch = window.fetch;
+  window.fetch = new Proxy(originalFetch, {
+    apply: (target, thisArg, args) => {
+      const url = args[0];
+      const urlString = url instanceof Request ? url.url : String(url);
+      if (urlString.includes('localhost')) {
+        return target.apply(thisArg, args as Parameters<typeof fetch>);
+      }
+      return platformFetch.apply(thisArg, args as Parameters<typeof fetch>);
+    },
+  });
+}
 
 import './component/custom-cursor/custom-cursor';
 
