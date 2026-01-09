@@ -340,7 +340,7 @@ pub(in crate::api::search) async fn perform_unified_search(
                         .search_unified(unified_search_args)
                         .await
                 }
-                SearchOn::Name => Ok(vec![]),
+                SearchOn::Name => Ok((vec![], SearchCursorOption::Done)),
             }
         },
     );
@@ -350,14 +350,16 @@ pub(in crate::api::search) async fn perform_unified_search(
     let (chat_hits, chat_next_cursor) = chat_results?;
     let (email_hits, email_next_cursor) = email_results?;
     let (project_hits, project_next_cursor) = project_results?;
-    let content_hits = content_results?;
+    let (content_hits, content_next_cursor) = content_results?;
+
+    println!("{:?} {:?}", content_next_cursor, content_hits.len());
 
     // Track original counts before combining
     let doc_name_count = doc_hits.len();
     let chat_name_count = chat_hits.len();
     let email_subject_count = email_hits.len();
     let project_name_count = project_hits.len();
-    let _content_count = content_hits.len();
+    let content_count = content_hits.len();
 
     // Wrap results with source tags
     let mut combined: Vec<TaggedSearchHit> = Vec::new();
@@ -412,6 +414,10 @@ pub(in crate::api::search) async fn perform_unified_search(
     let included_project_names = final_tagged
         .iter()
         .filter(|h| h.source == SearchSource::ProjectName)
+        .count();
+    let included_content = final_tagged
+        .iter()
+        .filter(|h| h.source == SearchSource::Content)
         .count();
     // Content cursor deferred - always None for now
 
@@ -480,17 +486,33 @@ pub(in crate::api::search) async fn perform_unified_search(
         SearchCursorOption::Done
     };
 
+    let new_content_cursor = if content_next_cursor.is_done() {
+        SearchCursorOption::Done
+    } else if included_content < content_count || content_next_cursor.has_more() {
+        if included_content > 0 {
+            SearchCursorOption::NotDone(
+                find_last_of_source(&final_tagged, SearchSource::Content)
+                    .and_then(cursor_from_tagged),
+            )
+        } else {
+            content_cursor.clone()
+        }
+    } else {
+        SearchCursorOption::Done
+    };
+
     // Build next cursor if any source has more results
     let has_more = new_doc_cursor.has_more()
         || new_chat_cursor.has_more()
         || new_email_cursor.has_more()
-        || new_project_cursor.has_more();
+        || new_project_cursor.has_more()
+        || new_content_cursor.has_more();
 
     let next_cursor = if has_more {
         let cursor = SearchCursor {
             document_name_cursor: new_doc_cursor,
             chat_name_cursor: new_chat_cursor,
-            content_cursor: SearchCursorOption::Done, // Content search cursor not yet implemented
+            content_cursor: new_content_cursor,
             email_subject_cursor: new_email_cursor,
             project_name_cursor: new_project_cursor,
         };

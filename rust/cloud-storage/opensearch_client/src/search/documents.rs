@@ -80,6 +80,7 @@ pub(crate) struct DocumentIndex {
     pub content: String,
     pub owner_id: String,
     pub file_type: String,
+    pub updated_at_seconds: Option<i64>,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]

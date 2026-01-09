@@ -33,6 +33,7 @@ fn test_construct_search_result_single_channel() {
             content: vec!["Test message content".to_string()],
             ..Default::default()
         },
+        updated_at: None,
     }];
 
     let mut channel_histories = HashMap::new();
@@ -91,6 +92,7 @@ fn test_construct_search_result_multiple_messages_same_channel() {
                 content: vec!["First message".to_string()],
                 ..Default::default()
             },
+            updated_at: None,
         },
         opensearch_client::search::model::SearchHit {
             entity_id: channel_uuid,
@@ -112,6 +114,7 @@ fn test_construct_search_result_multiple_messages_same_channel() {
                 content: vec!["Second message".to_string()],
                 ..Default::default()
             },
+            updated_at: None,
         },
     ];
 
@@ -171,6 +174,7 @@ fn test_construct_search_result_filters_messages_without_content() {
                 content: vec!["Message with content".to_string()],
                 ..Default::default()
             },
+            updated_at: None,
         },
         opensearch_client::search::model::SearchHit {
             entity_id: channel_uuid,
@@ -192,6 +196,7 @@ fn test_construct_search_result_filters_messages_without_content() {
                 content: vec![],
                 ..Default::default()
             },
+            updated_at: None,
         },
     ];
 
@@ -241,6 +246,7 @@ fn create_test_channel_response(
             content: content.unwrap_or_default(),
             ..Default::default()
         },
+        updated_at: None,
     }
 }
 
@@ -407,6 +413,7 @@ fn test_sort_stability() {
                 content: vec!["third".to_string()],
                 ..Default::default()
             },
+            updated_at: None,
         },
         opensearch_client::search::model::SearchHit {
             entity_id: channel_ids[1],
@@ -428,6 +435,7 @@ fn test_sort_stability() {
                 content: vec!["first".to_string()],
                 ..Default::default()
             },
+            updated_at: None,
         },
         opensearch_client::search::model::SearchHit {
             entity_id: channel_ids[2],
@@ -449,6 +457,7 @@ fn test_sort_stability() {
                 content: vec!["fifth".to_string()],
                 ..Default::default()
             },
+            updated_at: None,
         },
         opensearch_client::search::model::SearchHit {
             entity_id: channel_ids[3],
@@ -470,6 +479,7 @@ fn test_sort_stability() {
                 content: vec!["second".to_string()],
                 ..Default::default()
             },
+            updated_at: None,
         },
         opensearch_client::search::model::SearchHit {
             entity_id: channel_ids[4],
@@ -491,6 +501,7 @@ fn test_sort_stability() {
                 content: vec!["fourth".to_string()],
                 ..Default::default()
             },
+            updated_at: None,
         },
     ];
 

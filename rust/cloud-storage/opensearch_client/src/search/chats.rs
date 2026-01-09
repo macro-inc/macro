@@ -25,6 +25,7 @@ pub(crate) struct ChatIndex {
     pub role: String,
     pub title: String,
     pub content: String,
+    pub updated_at_seconds: Option<i64>,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
