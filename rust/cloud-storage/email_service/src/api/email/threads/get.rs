@@ -256,12 +256,12 @@ pub async fn get_thread_messages_handler(
 fn process_get_thread_params(
     params: &GetThreadParams,
 ) -> Result<GetThreadPaginationParams, GetThreadError> {
-    if let Some(offset) = params.offset {
-        if offset < 0 {
-            return Err(GetThreadError::ValidationError(
-                "offset must be non-negative".to_string(),
-            ));
-        }
+    if let Some(offset) = params.offset
+        && offset < 0
+    {
+        return Err(GetThreadError::ValidationError(
+            "offset must be non-negative".to_string(),
+        ));
     }
 
     if let Some(limit) = params.limit {
