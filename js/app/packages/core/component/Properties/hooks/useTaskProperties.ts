@@ -29,7 +29,6 @@ export function useTaskProperties(
   const taskEntityRefs = createMemo(() => {
     const allEntities = entities() ?? [];
     const taskEntities = allEntities.filter(isTaskEntity);
-    console.log('[useTaskProperties] allEntities:', allEntities.length, 'taskEntities:', taskEntities.length);
     return taskEntities.map((e) => ({ entity_id: e.id, entity_type: 'TASK' as const }));
   });
 
@@ -37,8 +36,6 @@ export function useTaskProperties(
     taskEntityRefs,
     TASK_PROPERTY_DEFINITION_IDS
   );
-
-  console.log('[useTaskProperties] query status:', query.status, 'data keys:', Object.keys(query.data ?? {}));
 
   return () => query.data ?? {};
 }
