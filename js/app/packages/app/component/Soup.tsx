@@ -25,8 +25,6 @@ import IconGear from '@macro-icons/macro-gear.svg';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { RegisterHotkeyReturn, ValidHotkey } from '@core/hotkey/types';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { isMobileWidth } from '@core/mobile/mobileWidth';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import {
   DEFAULT_VIEWS,
