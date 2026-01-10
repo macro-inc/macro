@@ -1120,17 +1120,29 @@ export function createNavigationEntityListShortcut({
     runWithInputFocused: true,
   });
 
+  function stepDown() {
+    playSound('down');
+    navigateThroughList({ axis: 'end', mode: 'step' });
+    return true;
+  }
+
   registerEntityHotkey({
-    hotkey: ['j', 'arrowdown'],
+    hotkey: ['j'],
     scopeId: splitHotkeyScope,
     description: 'Down',
     hotkeyToken: TOKENS.entity.step.end,
-    keyDownHandler: () => {
-      playSound('down');
-      navigateThroughList({ axis: 'end', mode: 'step' });
-      return true;
-    },
+    keyDownHandler: stepDown,
     canExecuteKeyDownHandler: () => canAccessEntityList(),
+    hide: true,
+  });
+
+  registerEntityHotkey({
+    hotkey: ['arrowdown'],
+    scopeId: splitHotkeyScope,
+    description: 'Down',
+    hotkeyToken: TOKENS.entity.step.end,
+    keyDownHandler: stepDown,
+    canExecuteKeyDownHandler: () => isViewingList(),
     hide: true,
   });
 
@@ -1148,17 +1160,29 @@ export function createNavigationEntityListShortcut({
     hide: true,
   });
 
+  function stepUp() {
+    playSound('up');
+    navigateThroughList({ axis: 'start', mode: 'step' });
+    return true;
+  }
+
   registerEntityHotkey({
-    hotkey: ['k', 'arrowup'],
+    hotkey: ['k'],
     scopeId: splitHotkeyScope,
     hotkeyToken: TOKENS.entity.step.start,
     description: 'Up',
-    keyDownHandler: () => {
-      playSound('up');
-      navigateThroughList({ axis: 'start', mode: 'step' });
-      return true;
-    },
+    keyDownHandler: stepUp,
     canExecuteKeyDownHandler: () => canAccessEntityList(),
+    hide: true,
+  });
+
+  registerEntityHotkey({
+    hotkey: ['arrowup'],
+    scopeId: splitHotkeyScope,
+    hotkeyToken: TOKENS.entity.step.start,
+    description: 'Up',
+    keyDownHandler: stepUp,
+    canExecuteKeyDownHandler: () => isViewingList(),
     hide: true,
   });
 
