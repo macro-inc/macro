@@ -73,6 +73,9 @@ impl ModelWithMetadataAndProvider for Model {
             Model::Claude45Haiku => ModelMetadata {
                 context_window: 200_000,
             },
+            Model::Claude45Opus => ModelMetadata {
+                context_window: 200_000,
+            },
             Model::Claude4Sonnet => ModelMetadata {
                 context_window: 200_000,
             },
@@ -80,9 +83,6 @@ impl ModelWithMetadataAndProvider for Model {
                 context_window: 128_000,
             },
             Model::OpenAIGPT4oSearchPreview => ModelMetadata {
-                context_window: 128_000,
-            },
-            Model::OpenAIGgpt4oMiniSearchPreview => ModelMetadata {
                 context_window: 128_000,
             },
         }
@@ -97,7 +97,6 @@ impl ModelWithMetadataAndProvider for Model {
             Model::OpenAIo1 => Provider::OpenAI,
             Model::OpenAIGPT4oMini => Provider::OpenAI,
             Model::OpenAIGPT4oSearchPreview => Provider::OpenAI,
-            Model::OpenAIGgpt4oMiniSearchPreview => Provider::OpenAI,
             Model::OpenAIo3 => Provider::OpenAI,
             // Google models /
             Model::Gemini25Pro => Provider::Google,
@@ -110,6 +109,7 @@ impl ModelWithMetadataAndProvider for Model {
             Model::Claude35Sonnet => Provider::Anthropic,
             Model::Claude45Sonnet => Provider::Anthropic,
             Model::Claude45Haiku => Provider::Anthropic,
+            Model::Claude45Opus => Provider::Anthropic,
             // XAI models //
         }
     }

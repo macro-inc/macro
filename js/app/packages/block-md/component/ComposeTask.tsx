@@ -40,10 +40,11 @@ import {
   queryKeys,
   useQueryClient as useEntityQueryClient,
 } from '@macro-entity';
+import { useUpsertToHistoryMutation } from '@queries/history/history';
 import { useUserId } from '@service-gql/client';
 import { propertiesServiceClient } from '@service-properties/client';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
-import { refetchHistory } from '@service-storage/history';
+
 import { debounce } from '@solid-primitives/scheduled';
 import { useQuery } from '@tanstack/solid-query';
 import { Button } from '@ui/components/Button';
@@ -78,7 +79,8 @@ async function createTaskWithProperties(
   taskTitle: string,
   taskContent: string,
   properties: Array<[string, PropertyApiValues]>,
-  definitions: Map<string, PropertyDefinition>
+  definitions: Map<string, PropertyDefinition>,
+  upsertToHistory: (params: { itemId: string; itemType: 'document' }) => void
 ) {
   // Convert properties to API format (filter out null values)
   const propertyValues = properties.flatMap(([id, value]) => {
@@ -108,12 +110,17 @@ async function createTaskWithProperties(
     }
   );
 
-  // Invalidate queries to refresh DSS and history
+  // Invalidate queries to refresh DSS and add to history
   const entityQueryClient = useEntityQueryClient();
   entityQueryClient.invalidateQueries({
     queryKey: queryKeys.all.dss,
   });
-  refetchHistory();
+
+  // Upsert the new task to history
+  upsertToHistory({
+    itemId: documentId,
+    itemType: 'document',
+  });
 
   return documentId;
 }
@@ -180,7 +187,10 @@ function TaskToastPreview(props: { title: string; body: string; id: string }) {
           <EntityIcon targetType="task" />
           <span class="text-base font-medium">
             {props.title ||
-              itemToSafeName({ type: 'document', subType: 'task' })}
+              itemToSafeName({
+                type: 'document',
+                subType: { type: 'task' },
+              })}
           </span>
         </div>
         <div class="text-ink-muted text-sm h-fit max-h-18 w-full truncate">
@@ -266,6 +276,9 @@ export function ComposeTask(props: ComposeTaskProps) {
   const [propertyValues, setPropertyValues] = createStore<
     Record<string, PropertyApiValues>
   >(initialState.propertyValues);
+
+  // History upsert mutation
+  const upsertToHistoryMutation = useUpsertToHistoryMutation();
 
   // draft saving logic
   let hasInitializedFromDraft = isDraftLoaded();
@@ -378,7 +391,13 @@ export function ComposeTask(props: ComposeTaskProps) {
 
     const properties = structuredClone(Object.entries(unwrap(propertyValues)));
 
-    createTaskWithProperties(taskTitle, taskContent, properties, definitions());
+    createTaskWithProperties(
+      taskTitle,
+      taskContent,
+      properties,
+      definitions(),
+      (params) => upsertToHistoryMutation.mutate(params)
+    );
 
     // Clear draft and reset form
     clearTaskComposerDraft();

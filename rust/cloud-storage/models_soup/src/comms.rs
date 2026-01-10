@@ -52,15 +52,15 @@ pub struct ChannelMessage {
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[dg(backward = comms::domain::models::channel::Channel)]
 pub struct Channel {
-    #[schema(value_type = Uuid)]
+    #[cfg_attr(feature = "schema", schema(value_type = Uuid))]
     pub id: ChannelId,
     pub name: Option<String>,
     pub channel_type: ChannelType,
-    #[schema(value_type = Option<u32>)]
+    #[cfg_attr(feature = "schema", schema(value_type = Option<u32>))]
     pub org_id: Option<OrganizationId>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
-    #[schema(value_type = String)]
+    #[cfg_attr(feature = "schema", schema(value_type = String))]
     pub owner_id: MacroUserIdStr<'static>,
 }
 
@@ -79,9 +79,9 @@ pub enum ChannelType {
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[dg(backward = comms::domain::models::channel::ChannelParticipant)]
 pub struct ChannelParticipant {
-    #[schema(value_type = Uuid)]
+    #[cfg_attr(feature = "schema", schema(value_type = Uuid))]
     pub channel_id: ChannelId,
-    #[schema(value_type = String)]
+    #[cfg_attr(feature = "schema", schema(value_type = String))]
     pub user_id: MacroUserIdStr<'static>,
     pub role: ParticipantRole,
     pub joined_at: DateTime<Utc>,

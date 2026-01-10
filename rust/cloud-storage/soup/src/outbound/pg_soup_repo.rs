@@ -167,7 +167,10 @@ macro_rules! map_soup_type {
                     created_at: r.created_at,
                     updated_at: r.updated_at,
                     viewed_at: r.viewed_at,
-                    sub_type: r.sub_type,
+                    sub_type: ::models_soup::document::SoupDocumentSubType::from_db(
+                        r.sub_type,
+                        r.is_completed,
+                    ),
                 },
             )),
             "chat" => Ok(::models_soup::item::SoupItem::Chat(

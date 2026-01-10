@@ -38,9 +38,6 @@ create-queues:
     AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs create-queue \
         --queue-name search-queue
     AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs create-queue \
-        --queue-name insight-service-queue-dev.fifo \
-        --attributes FifoQueue=true,ContentBasedDeduplication=true
-    AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs create-queue \
         	--queue-name sfs-uploader-queue --attributes VisibilityTimeout=60
     AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs create-queue \
         	--queue-name contacts-queue
@@ -58,8 +55,6 @@ purge-queues:
             --queue-url http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/my-test-scheduled-queue.fifo
     AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs purge-queue \
         --queue-url http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/search-queue
-    AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs purge-queue \
-        --queue-url http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/insight-service-queue-dev.fifo
     AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs purge-queue \
         --queue-url http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/sfs-uploader-queue
     AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs purge-queue \

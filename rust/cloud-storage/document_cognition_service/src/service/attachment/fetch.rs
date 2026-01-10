@@ -39,6 +39,7 @@ pub async fn fetchium(
                         file_type: "Project".into(),
                         name: attachment.name().unwrap_or_default().into(),
                         content: project_items,
+                        properties: None,
                     }
                     .boxed(),
                 ))
@@ -70,6 +71,7 @@ pub async fn fetchium(
                         file_type: "channel".into(),
                         id: attachment.attachment_id.clone(),
                         name: "unknown channel name".into(),
+                        properties: None,
                     }
                     .boxed(),
                 ))
@@ -83,15 +85,10 @@ pub async fn fetchium(
                 if document.file_type().is_image() {
                     Ok(Attachment::Image(ImageData::try_from(document.content)?))
                 } else {
-                    Ok(Attachment::Text(
-                        Document {
-                            id: attachment.attachment_id,
-                            name: document.metadata().document_name.clone(),
-                            file_type: document.file_type().to_string(),
-                            content: document.content.text_content()?,
-                        }
-                        .boxed(),
-                    ))
+                    document
+                        .text_attachment()
+                        .ok_or(anyhow::anyhow!("Expected text content found image"))
+                        .map(Attachment::Text)
                 }
             }
             AttachmentType::Email => {
@@ -130,6 +127,7 @@ pub async fn fetchium(
                         name: subject.clone(),
                         file_type: "email".to_string(),
                         content,
+                        properties: None,
                     }
                     .boxed(),
                 ))

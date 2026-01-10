@@ -582,7 +582,7 @@ export function PopupPreview(props: {
                             <EntityIcon
                               targetType={
                                 type === 'document'
-                                  ? (subType ?? fileType)
+                                  ? (subType?.type ?? fileType)
                                   : type
                               }
                               size="md"

@@ -22,11 +22,6 @@ path = "src/bin/backfill_entity_names.rs"
 required-features = ["backfill_names"]
 
 [[bin]]
-name = "backfill_project"
-path = "src/bin/backfill_project.rs"
-required-features = ["service"]
-
-[[bin]]
 name = "search_processing_service"
 path = "src/main.rs"
 required-features = ["processing", "service"]

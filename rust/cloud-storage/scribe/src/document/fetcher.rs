@@ -1,9 +1,14 @@
 use crate::document::types::{Data, DocumentContent};
+use ai_format::document::Document;
+use ai_format::properties::Properties;
+use ai_format::traits::TextAttachment;
 use anyhow::{Context, Error};
 use document_storage_service_client::DocumentStorageServiceClient;
 use lexical_client::LexicalClient;
 use model::document::FileTypeExt;
 use model::document::{DocumentBasic, FileType, response::LocationResponseV3};
+use models_properties::EntityType;
+use sqlx::{Pool, Postgres};
 use std::fmt::Debug;
 use std::sync::Arc;
 use sync_service_client::SyncServiceClient;
@@ -21,6 +26,7 @@ pub struct DocumentFetcher<Location, Content> {
     inner_lexical: Arc<LexicalClient>,
     document_id: String,
     jwt_token: Option<String>,
+    macro_db: Arc<Pool<Postgres>>,
 }
 
 // A client is a wrapper around methods that may be applied to a single document
@@ -30,6 +36,7 @@ impl DocumentFetcher<NoData, NoData> {
         dss_client: Arc<DocumentStorageServiceClient>,
         sync_service_client: Arc<SyncServiceClient>,
         lexical_client: Arc<LexicalClient>,
+        macro_db: Arc<Pool<Postgres>>,
         document_id: String,
     ) -> Self {
         Self {
@@ -40,6 +47,7 @@ impl DocumentFetcher<NoData, NoData> {
             content: (),
             location: (),
             jwt_token: None,
+            macro_db,
         }
     }
 
@@ -75,6 +83,7 @@ impl DocumentFetcher<NoData, NoData> {
             inner_lexical: self.inner_lexical,
             inner_sync_service: self.inner_sync_service,
             jwt_token: self.jwt_token,
+            macro_db: self.macro_db,
         })
     }
 
@@ -101,6 +110,7 @@ impl DocumentFetcher<Fetched<LocationResponseV3>, NoData> {
             inner_lexical: self.inner_lexical,
             inner_sync_service: self.inner_sync_service,
             jwt_token: self.jwt_token,
+            macro_db: self.macro_db,
         })
     }
 }
@@ -115,9 +125,35 @@ impl<T> DocumentFetcher<Fetched<LocationResponseV3>, T> {
     }
 }
 
-impl<T> DocumentFetcher<T, Fetched<DocumentContent>> {
+impl DocumentFetcher<LocationResponseV3, Fetched<DocumentContent>> {
     pub fn file_type(&self) -> FileType {
         self.content.file_type
+    }
+
+    pub fn text_attachment(self) -> Option<Box<dyn TextAttachment>> {
+        if self.content.file_type.is_image() {
+            None
+        } else {
+            let name = self.location.metadata().document_name.clone();
+            let file_type = self.file_type().to_string();
+            let properties = self
+                .content
+                .properties
+                .clone()
+                .map(|p| Properties::from_properties(EntityType::Task, p));
+            let text = self.content.text_content().ok()?;
+
+            Some(
+                Document {
+                    content: text,
+                    file_type,
+                    id: self.document_id,
+                    name,
+                    properties,
+                }
+                .boxed(),
+            )
+        }
     }
 }
 
@@ -149,6 +185,7 @@ impl<L: Debug, D: Debug> DocumentFetcher<L, D> {
                     document_id: location.metadata().document_id.clone(),
                     file_type,
                     location: location.clone(),
+                    properties: None,
                 })
             }
             // md content is usually in sync service but may be in s3
@@ -164,6 +201,7 @@ impl<L: Debug, D: Debug> DocumentFetcher<L, D> {
                             .await
                             .context("HTTP (body) error when fetching from S3 [other]")
                             .map(|text| DocumentContent {
+                                properties: None,
                                 data: Data::Text(text),
                                 document_id: self.document_id.clone(),
                                 file_type,
@@ -177,6 +215,7 @@ impl<L: Debug, D: Debug> DocumentFetcher<L, D> {
                             .await
                             .context("HTTP (body) error when fetching from S3 [other]")
                             .map(|bytes| DocumentContent {
+                                properties: None,
                                 data: Data::Binary(bytes),
                                 document_id: self.document_id.clone(),
                                 file_type,
@@ -199,10 +238,19 @@ impl<L: Debug, D: Debug> DocumentFetcher<L, D> {
         &self,
         location: &LocationResponseV3,
     ) -> Result<DocumentContent, Error> {
+        let properties =
+            properties_db_client::entity_properties::get::get_entity_properties_values(
+                &self.macro_db,
+                &self.document_id,
+                models_properties::EntityType::Task,
+            )
+            .await?;
+
         self.inner_lexical
             .parse_markdown_for_ai(&self.document_id)
             .await
             .map(|content| DocumentContent {
+                properties: Some(properties),
                 data: Data::Markdown(content),
                 document_id: self.document_id.clone(),
                 location: location.clone(),

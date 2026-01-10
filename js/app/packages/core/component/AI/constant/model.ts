@@ -16,13 +16,15 @@ type ExhaustiveMap = {
 // } as const;
 
 export const MODEL_PRETTYNAME: ExhaustiveMap = {
-  'claude-sonnet-4-5': 'Claude Sonnet 4.5',
+  'claude-opus-4-5': 'Claude Opus 4.5',
   'claude-haiku-4-5': 'Claude Haiku 4.5',
 } as const;
 
 export const MODEL_PROVIDER_ICON: ExhaustiveMap = {
   'claude-haiku-4-5': AnthropicIcon,
-  'claude-sonnet-4-5': AnthropicIcon,
+  'claude-opus-4-5': AnthropicIcon,
 };
+
+export const SMART_MODE_MODEL: Model = 'claude-opus-4-5';
 
 export const DEFAULT_MODEL: Model = 'claude-haiku-4-5';

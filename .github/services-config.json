@@ -85,12 +85,6 @@
       ],
       "stack_path": "infra/stacks/experiment-service/**"
     },
-    "insight-service": {
-      "source_paths": [
-        "rust/cloud-storage/insight_service/**"
-      ],
-      "stack_path": "infra/stacks/insight-service/**"
-    },
     "metering-service": {
       "source_paths": [
         "rust/cloud-storage/metering_service/**"

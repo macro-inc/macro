@@ -5,16 +5,10 @@ use crate::pubsub::inbox_sync::process::check_gmail_rate_limit_inbox_sync;
 use crate::pubsub::util::cg_refresh_email;
 use crate::util::process_pre_insert::{process_message_pre_insert, process_threads_pre_insert};
 use crate::util::upload_attachment::{UploadAttachmentContext, upload_attachment};
-use anyhow::Context;
 use email_db_client::threads;
 use email_utils::dedupe_emails;
-use insight_service_client::InsightContextProvider;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::contacts::ConnectionsMessage;
-use model::insight_context::email_insights::{
-    EMAIL_INSIGHT_PROVIDER_SOURCE_NAME, EmailInfo, GenerateEmailInsightContext, NewMessagePayload,
-    NewMessagesPayload,
-};
 use model_entity::EntityType;
 use model_notifications::{NewEmailMetadata, NotificationEvent, NotificationQueueMessage};
 use models_email::db::address::EmailRecipientType;
@@ -365,52 +359,6 @@ async fn handle_contacts_sync(
     Ok(())
 }
 
-/// Sends new message context to the insight service
-async fn generate_email_insights_for_new_message(
-    ctx: &PubSubContext,
-    link: &service::link::Link,
-    message_id: Uuid,
-    thread_id: Uuid,
-) -> anyhow::Result<()> {
-    // Fetch the thread and ensure it's an outbound thread (has latest_outbound)
-    let thread =
-        email_db_client::threads::get::get_thread_by_id_and_link_id(&ctx.db, thread_id, link.id)
-            .await
-            .context("Failed to fetch thread for new message")?;
-
-    let Some(thread) = thread else {
-        tracing::warn!(%thread_id, link_id = %link.id, "Thread not found; skipping insight generation");
-        return Ok(());
-    };
-
-    if thread.latest_outbound_message_ts.is_none() {
-        return Ok(());
-    }
-
-    let macro_user_id = link.macro_id.to_string();
-
-    let context = GenerateEmailInsightContext {
-        macro_user_id: macro_user_id.clone(),
-        info: EmailInfo::NewMessages(NewMessagesPayload {
-            messages: vec![NewMessagePayload {
-                thread_id,
-                message_id,
-                user_email: link.email_address.0.as_ref().to_string(),
-            }],
-            batch_id: Uuid::new_v4().to_string(),
-        }),
-    };
-
-    let provider =
-        InsightContextProvider::create(ctx.sqs_client.clone(), EMAIL_INSIGHT_PROVIDER_SOURCE_NAME);
-
-    if let Err(err) = provider.provide_email_context(context.clone()).await {
-        tracing::error!(?context, error = %err, "Failed to provide email context to insight service");
-    }
-
-    Ok(())
-}
-
 /// Process and insert email threads by handling attachments and images
 #[tracing::instrument(skip(ctx, gmail_access_token))]
 async fn fetch_and_insert_thread(
@@ -516,10 +464,6 @@ async fn notify_for_new_message(
 ) -> result::Result<(), ProcessingError> {
     // notify user of new messages
     send_notifications(ctx, link, new_message_provider_id).await?;
-
-    generate_email_insights_for_new_message(ctx, link, message_db_id, thread_id)
-        .await
-        .ok();
 
     Ok(())
 }

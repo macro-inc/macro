@@ -131,7 +131,7 @@ function InlinePreview(props: {
                   fallback={
                     <EntityIcon
                       targetType={
-                        type === 'document' ? (subType ?? fileType) : type
+                        type === 'document' ? (subType?.type ?? fileType) : type
                       }
                       size="fill"
                       theme={

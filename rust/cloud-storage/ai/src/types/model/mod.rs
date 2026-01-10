@@ -62,11 +62,6 @@ pub enum Model {
     #[serde(rename = "gpt-4o-search-preview")]
     OpenAIGPT4oSearchPreview,
 
-    #[strum(serialize = "gpt-4o-mini-search-preview")]
-    #[serde(rename = "gpt-4o-mini-search-preview")]
-    // NB typo OpenAI**G**gpt
-    OpenAIGgpt4oMiniSearchPreview,
-
     #[strum(serialize = "o3")]
     #[serde(rename = "o3")]
     OpenAIo3,
@@ -91,6 +86,10 @@ pub enum Model {
     #[strum(serialize = "claude-haiku-4-5")]
     #[default]
     Claude45Haiku,
+
+    #[serde(rename = "claude-opus-4-5")]
+    #[strum(serialize = "claude-opus-4-5")]
+    Claude45Opus,
 }
 
 pub mod constants {
@@ -107,13 +106,13 @@ pub mod constants {
         pub const OPEN_AI_GPT_4O_MINI: &str = "gpt-4o-mini";
         pub const OPEN_AI_O1: &str = "o1";
         pub const OPEN_AI_GPT_4O_SEARCH_PREVIEW: &str = "gpt-4o-search-preview";
-        pub const OPEN_AI_GPT_4O_MINI_SEARCH_PREVIEW: &str = "gpt-4o-mini-search-preview";
         pub const OPEN_AI_O3: &str = "o3";
         pub const CLAUDE_35_SONNET: &str = "claude-3.5-sonnet";
         pub const CLAUDE_37_SONNET: &str = "claude-3.7-sonnet";
         pub const CLAUDE_4_SONNET: &str = "claude-sonnet-4";
         pub const CLAUDE_45_SONNET: &str = "claude-4.5-sonnet";
         pub const CLAUDE_45_HAIKU: &str = "claude-4.5-haiku";
+        pub const CLAUDE_45_OPUS: &str = "claude-4.5-opus";
     }
 
     /// String versions of providers
@@ -139,13 +138,13 @@ impl Model {
             Model::OpenAIGPT4oMini => (OPEN_AI, OPEN_AI_GPT_4O_MINI),
             Model::OpenAIo1 => (OPEN_AI, OPEN_AI_O1),
             Model::OpenAIGPT4oSearchPreview => (OPEN_AI, OPEN_AI_GPT_4O_SEARCH_PREVIEW),
-            Model::OpenAIGgpt4oMiniSearchPreview => (OPEN_AI, OPEN_AI_GPT_4O_MINI_SEARCH_PREVIEW),
             Model::OpenAIo3 => (OPEN_AI, OPEN_AI_O3),
             Model::Claude35Sonnet => (ANTHROPIC, CLAUDE_35_SONNET),
             Model::Claude37Sonnet => (ANTHROPIC, CLAUDE_37_SONNET),
             Model::Claude4Sonnet => (ANTHROPIC, CLAUDE_4_SONNET),
             Model::Claude45Sonnet => (ANTHROPIC, CLAUDE_45_SONNET),
             Model::Claude45Haiku => (ANTHROPIC, CLAUDE_45_HAIKU),
+            Model::Claude45Opus => (ANTHROPIC, CLAUDE_45_OPUS),
         }
     }
     pub fn from_model_str(model: &str) -> Option<Self> {
@@ -160,7 +159,6 @@ impl Model {
             OPEN_AI_GPT_4O_MINI => Model::OpenAIGPT4oMini,
             OPEN_AI_O1 => Model::OpenAIo1,
             OPEN_AI_GPT_4O_SEARCH_PREVIEW => Model::OpenAIGPT4oSearchPreview,
-            OPEN_AI_GPT_4O_MINI_SEARCH_PREVIEW => Model::OpenAIGgpt4oMiniSearchPreview,
             OPEN_AI_O3 => Model::OpenAIo3,
             CLAUDE_35_SONNET => Model::Claude35Sonnet,
             CLAUDE_37_SONNET => Model::Claude37Sonnet,
