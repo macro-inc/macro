@@ -1689,7 +1689,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
           });
         }}
       >
-        <ContextMenu.Trigger class="size-full unified-list-root">
+        <ContextMenu.Trigger class="@container/uList size-full unified-list-root">
           <EntityRowProvider
             container={localEntityListRef}
             canSwipeLeft={(entityId) => {
