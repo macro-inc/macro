@@ -14,10 +14,12 @@ axum = { workspace = true, optional = true }
 chrono = { workspace = true }
 doppleganger = { workspace = true, features = ["chrono", "uuid"] }
 frecency = { path = "../frecency", features = ["ports"] }
+item_filters = { path = "../item_filters" }
 macro_user_id = { path = "../macro_user_id" }
 model-entity = { path = "../model-entity" }
 model_user = { path = "../model_user", optional = true, features = ["axum"] }
 models_comms = { path = "../models_comms" }
+models_pagination = { path = "../models_pagination" }
 reqwest = { workspace = true, optional = true }
 rootcause = "0.11"
 serde = { workspace = true }
