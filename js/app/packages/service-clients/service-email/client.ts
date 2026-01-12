@@ -11,6 +11,7 @@ import {
 } from '@core/util/maybeResult';
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import type {
+  AddDraftAttachmentRequest,
   ApiPaginatedThreadCursor,
   CreateDraftRequest,
   CreateDraftResponse,
@@ -26,6 +27,7 @@ import type {
   UpdateLabelBatchResponse,
 } from './generated/schemas';
 import type { EmptyResponse } from './generated/schemas/emptyResponse';
+import { addDraftAttachmentResponse } from '@service-email/generated/client';
 
 const emailHost: string = SERVER_HOSTS['email-service'];
 
@@ -201,6 +203,21 @@ export const emailClient = {
       await emailFetch<EmptyResponse>(`/email/drafts/${id}`, {
         method: 'DELETE',
       }),
+      (result) => result
+    );
+  },
+  async addDraftAttachment(args: {
+    draftID: string;
+    attachment: AddDraftAttachmentRequest;
+  }) {
+    return mapOk(
+      await emailFetch<addDraftAttachmentResponse>(
+        `/email/drafts/${args.draftID}/attachments`,
+        {
+          method: 'POST',
+          body: JSON.stringify(args.attachment),
+        }
+      ),
       (result) => result
     );
   },
