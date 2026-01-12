@@ -79,24 +79,28 @@ export const useUploadDraftAttachmentsMutation = (
 
       return { attachments: uploadedAttachments };
     },
-    async onError(error, variables) {
-      if (error instanceof UploadDraftAttachmentError) {
-        try {
-          await emailClient.removeDraftAttachment({
-            draftID: variables.draftID,
-            attachmentID: error.context.attachmentID,
-          });
-        } catch {
-          console.error('Unable to remove draft attachment after failure');
-        }
-      }
-      toast.failure('Failed to save attachments');
-    },
     ...withCallbacks<
       UploadDraftAttachmentsReturn,
       Error,
       UploadDraftAttachmentsParams
-    >({}, callbacks),
+    >(
+      {
+        async onError(error, variables) {
+          if (error instanceof UploadDraftAttachmentError) {
+            try {
+              await emailClient.removeDraftAttachment({
+                draftID: variables.draftID,
+                attachmentID: error.context.attachmentID,
+              });
+            } catch {
+              console.error('Unable to remove draft attachment after failure');
+            }
+          }
+          toast.failure('Failed to save attachments');
+        },
+      },
+      callbacks
+    ),
   }));
 };
 
