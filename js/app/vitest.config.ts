@@ -58,6 +58,13 @@ export default defineConfig({
           name: 'block-channel',
         },
       },
+      {
+        extends: './packages/notifications/vitest.config.ts',
+        test: {
+          include: ['packages/notifications/**/*.{test,spec}.{ts,tsx}'],
+          name: 'notifications',
+        },
+      },
     ],
   },
 });
