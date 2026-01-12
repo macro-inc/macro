@@ -211,9 +211,9 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
   };
 
   const getThumbScale = () => {
-    if (isDragging()) return 'scaleX(2)';
-    if (isHovering()) return 'scaleX(1)';
-    if (isScrolling()) return 'scaleX(1)';
+    if (isDragging()) return 'scaleX(3)';
+    if (isHovering()) return 'scaleX(2)';
+    if (isScrolling()) return 'scaleX(2)';
     return 'scaleX(1)';
   };
 
