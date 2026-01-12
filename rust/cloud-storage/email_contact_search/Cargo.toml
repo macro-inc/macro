@@ -1,6 +1,6 @@
 [package]
 edition = "2024"
-name = "name_search"
+name = "email_contact_search"
 publish = false
 version = "0.1.0"
 
@@ -9,9 +9,7 @@ anyhow = { workspace = true }
 cached = { workspace = true }
 chrono = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
-models_opensearch = { path = "../models_opensearch" }
 models_search_cursor = { path = "../models_search_cursor" }
-non_empty = { path = "../non_empty" }
 serde = { workspace = true }
 sqlx = { workspace = true }
 thiserror = { workspace = true }

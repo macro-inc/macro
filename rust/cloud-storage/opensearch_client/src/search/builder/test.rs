@@ -308,15 +308,6 @@ fn test_build_bool_query() -> anyhow::Result<()> {
                     "minimum_should_match": 1,
                     "should": [
                         {
-                            "wildcard": {
-                                "test_user_id": {
-                                    "value": "macro|test*",
-                                    "case_insensitive": true,
-                                    "boost": 5000.0
-                                }
-                            }
-                        },
-                        {
                             "match_phrase": {
                                 "content": "test"
                             }
@@ -361,15 +352,6 @@ fn test_build_bool_query() -> anyhow::Result<()> {
                     "minimum_should_match": 1,
                     "should": [
                         {
-                            "wildcard": {
-                                "test_user_id": {
-                                    "value": "macro|test*",
-                                    "case_insensitive": true,
-                                    "boost": 5000.0
-                                }
-                            }
-                        },
-                        {
                             "match_phrase_prefix": {
                                 "content": {
                                     "query": "test",
@@ -407,15 +389,6 @@ fn test_build_bool_query() -> anyhow::Result<()> {
               "bool": {
                 "minimum_should_match": 1,
                 "should": [
-                  {
-                    "wildcard": {
-                      "test_user_id": {
-                        "case_insensitive": true,
-                        "value": "macro|test*",
-                        "boost": 5000.0
-                      }
-                    }
-                  },
                   {
                     "match_phrase_prefix": {
                       "content": {

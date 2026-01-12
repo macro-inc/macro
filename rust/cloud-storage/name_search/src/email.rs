@@ -1,9 +1,12 @@
 //! This module contains logic for searching email threads by oldest message subject
-use crate::{NameSearchError, NameSearchResult, PaginatedResult, SearchEntityType};
+#[cfg(not(test))]
+use cached::proc_macro::cached;
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use models_search_cursor::{SearchCursorOption, SearchMethodCursor};
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
+
+use crate::{NameSearchError, NameSearchResult, PaginatedResult, SearchEntityType};
 
 /// Searches email threads by IDs only
 async fn ids_search(
@@ -150,6 +153,15 @@ async fn owner_search<'a>(
 
 /// Searches over email threads by the subject of the oldest message in each thread
 #[tracing::instrument(skip(db), err)]
+#[cfg_attr(
+    not(test),
+    cached(
+        time = 30,
+        result = true,
+        key = "String",
+        convert = r#"{ format!("{}-{:?}-{}-{}-{}-{}", macro_user_id.as_ref(), thread_ids, term, ids_only, limit, cursor.as_ref().map(|c| format!("{}-{}", c.entity_id, c.updated_at)).unwrap_or_default()) }"#
+    )
+)]
 pub async fn search_email_subjects<'a>(
     db: &Pool<Postgres>,
     macro_user_id: &MacroUserId<Lowercase<'a>>,

@@ -133,14 +133,14 @@ pub(in crate::api::search::simple) async fn search_names<'a>(
     filter_document_response: &FilterDocumentResponse,
     term: String,
     limit: u32,
-    cursor: name_search::SearchCursorOption,
-) -> Result<(Vec<SearchHit>, name_search::SearchCursorOption), SearchError> {
+    cursor: models_search_cursor::SearchCursorOption,
+) -> Result<(Vec<SearchHit>, models_search_cursor::SearchCursorOption), SearchError> {
     // If cursor is Done, no more results to fetch
     let inner_cursor = match cursor {
-        name_search::SearchCursorOption::Done => {
-            return Ok((vec![], name_search::SearchCursorOption::Done));
+        models_search_cursor::SearchCursorOption::Done => {
+            return Ok((vec![], models_search_cursor::SearchCursorOption::Done));
         }
-        name_search::SearchCursorOption::NotDone(c) => c,
+        models_search_cursor::SearchCursorOption::NotDone(c) => c,
     };
 
     let document_uuids = filter_document_response

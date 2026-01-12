@@ -3050,6 +3050,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "email_contact_search"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "cached",
+ "chrono",
+ "macro_db_migrator",
+ "macro_user_id",
+ "models_search_cursor",
+ "serde",
+ "sqlx",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "email_db_client"
 version = "0.1.0"
 dependencies = [
@@ -5701,6 +5719,7 @@ name = "name_search"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "cached",
  "chrono",
  "macro_db_migrator",
  "macro_user_id",
@@ -7585,6 +7604,7 @@ dependencies = [
  "comms_service_client",
  "document_storage_service_client",
  "document_sub_type",
+ "email_contact_search",
  "email_service_client",
  "futures",
  "http-body-util",

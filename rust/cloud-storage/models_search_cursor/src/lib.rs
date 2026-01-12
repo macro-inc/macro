@@ -13,7 +13,7 @@ pub trait SearchCursorAttributes {
 }
 
 /// Result of processing sorted results for pagination
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PaginatedResult<T> {
     /// The items to return (with extra item removed if present)
     pub items: Vec<T>,
@@ -87,7 +87,7 @@ impl SearchCursorOption {
 }
 
 /// The search cursor contains all the individual `SearchCursorOption` for each search method.
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Default)]
 pub struct SearchCursor {
     /// The document name cursor
     pub document_name_cursor: SearchCursorOption,
@@ -97,6 +97,8 @@ pub struct SearchCursor {
     pub content_cursor: SearchCursorOption,
     /// The email subject cursor
     pub email_subject_cursor: SearchCursorOption,
+    /// The email contact cursor
+    pub email_contact_cursor: SearchCursorOption,
     /// The project cursor
     pub project_name_cursor: SearchCursorOption,
 }
@@ -115,5 +117,15 @@ impl SearchCursor {
         serde_json::to_vec(self)
             .ok()
             .map(|bytes| BASE64.encode(bytes))
+    }
+
+    /// Returns if the cursor is fully exhausted
+    pub fn is_exhausted(&self) -> bool {
+        self.document_name_cursor.is_done()
+            && self.chat_name_cursor.is_done()
+            && self.content_cursor.is_done()
+            && self.email_subject_cursor.is_done()
+            && self.email_contact_cursor.is_done()
+            && self.project_name_cursor.is_done()
     }
 }
