@@ -9,7 +9,26 @@ import type {
   FilterAction,
   PropertyFilter,
 } from '../PropertyFilterTypes';
-import { ComparisonAction } from '../PropertyFilterTypes';
+import {
+  ComparisonAction,
+  ContainsAction,
+  EqualityAction,
+} from '../PropertyFilterTypes';
+
+// Type guards for action types
+const isEqualityAction = (a: FilterAction): a is EqualityAction =>
+  a === EqualityAction.EQUAL || a === EqualityAction.NOT_EQUAL;
+
+const isComparisonActionType = (a: FilterAction): a is ComparisonAction =>
+  a === ComparisonAction.GREATER_THAN ||
+  a === ComparisonAction.GREATER_THAN_OR_EQUAL ||
+  a === ComparisonAction.LESS_THAN ||
+  a === ComparisonAction.LESS_THAN_OR_EQUAL;
+
+const isContainsAction = (a: FilterAction): a is ContainsAction =>
+  a === ContainsAction.HAS_ANY ||
+  a === ContainsAction.HAS_ALL ||
+  a === ContainsAction.DOES_NOT_HAVE;
 import { FilterActionSelect } from './FilterAction';
 import { FilterPropertySelect } from './FilterProperty';
 import { FilterValueBoolean } from './FilterValueBoolean';
@@ -332,79 +351,98 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
     _filterValues: string[] = []
   ): PropertyFilter | null => {
     const dataType = property.data_type;
-    const baseFilter = {
-      propertyId: property.id,
-      action: filterAction,
-    };
+    const propertyId = property.id;
 
-    const isComparisonAction =
-      filterAction === ComparisonAction.GREATER_THAN ||
-      filterAction === ComparisonAction.GREATER_THAN_OR_EQUAL ||
-      filterAction === ComparisonAction.LESS_THAN ||
-      filterAction === ComparisonAction.LESS_THAN_OR_EQUAL;
-
-    // Build filter based on data type
     switch (dataType) {
       case 'BOOLEAN':
+        if (!isEqualityAction(filterAction)) return null;
         return {
-          ...baseFilter,
+          propertyId,
           dataType: 'BOOLEAN',
-          action: filterAction as any,
+          action: filterAction,
           value: booleanValue() ?? false,
-        } as PropertyFilter;
+        };
       case 'DATE':
-        if (isComparisonAction) {
+        if (isComparisonActionType(filterAction)) {
           return {
-            ...baseFilter,
+            propertyId,
             dataType: 'DATE',
-            action: filterAction as any,
+            action: filterAction,
             value: dateValue() ?? '',
-          } as PropertyFilter;
+          };
         }
-        return {
-          ...baseFilter,
-          dataType: 'DATE',
-          action: filterAction as any,
-          values: dateValues(), // Use dateValues signal for equality actions
-        } as PropertyFilter;
-      case 'NUMBER':
-        if (isComparisonAction) {
+        if (isEqualityAction(filterAction)) {
           return {
-            ...baseFilter,
-            dataType: 'NUMBER',
-            action: filterAction as any,
-            value: numberValue() ?? 0,
-          } as PropertyFilter;
+            propertyId,
+            dataType: 'DATE',
+            action: filterAction,
+            values: dateValues(),
+          };
         }
-        return {
-          ...baseFilter,
-          dataType: 'NUMBER',
-          action: filterAction as any,
-          values: numberValues(), // Use numberValues signal for equality actions
-        } as PropertyFilter;
+        return null;
+      case 'NUMBER':
+        if (isComparisonActionType(filterAction)) {
+          return {
+            propertyId,
+            dataType: 'NUMBER',
+            action: filterAction,
+            value: numberValue() ?? 0,
+          };
+        }
+        if (isEqualityAction(filterAction)) {
+          return {
+            propertyId,
+            dataType: 'NUMBER',
+            action: filterAction,
+            values: numberValues(),
+          };
+        }
+        return null;
       case 'SELECT_NUMBER':
       case 'SELECT_STRING':
-        if (isComparisonAction) {
+        if (isComparisonActionType(filterAction)) {
           return {
-            ...baseFilter,
+            propertyId,
             dataType,
-            action: filterAction as any,
+            action: filterAction,
             value: selectValue() ?? '',
-          } as PropertyFilter;
+          };
         }
-        return {
-          ...baseFilter,
-          dataType,
-          action: filterAction as any,
-          values: selectValues(), // Use selectValues signal for equality actions
-        } as PropertyFilter;
+        if (isEqualityAction(filterAction)) {
+          return {
+            propertyId,
+            dataType,
+            action: filterAction,
+            values: selectValues(),
+          };
+        }
+        if (isContainsAction(filterAction)) {
+          return {
+            propertyId,
+            dataType,
+            action: filterAction,
+            values: selectValues(),
+          };
+        }
+        return null;
       case 'ENTITY':
-        return {
-          ...baseFilter,
-          dataType: 'ENTITY',
-          action: filterAction as any,
-          values: entityValues(),
-        } as PropertyFilter;
+        if (isEqualityAction(filterAction)) {
+          return {
+            propertyId,
+            dataType: 'ENTITY',
+            action: filterAction,
+            values: entityValues(),
+          };
+        }
+        if (isContainsAction(filterAction)) {
+          return {
+            propertyId,
+            dataType: 'ENTITY',
+            action: filterAction,
+            values: entityValues(),
+          };
+        }
+        return null;
       default:
         return null;
     }
