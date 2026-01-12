@@ -341,7 +341,7 @@ export function FloatingLinkMenu(props: { closePopup?: () => void }) {
       : undefined;
 
   const floatWithSelectionProps = () =>
-    linkInfo()?.selection
+    !linkInfo()?.linkRef && linkInfo()?.selection
       ? {
           selection: linkInfo()?.selection,
           reactiveOnContainer: editor.getRootElement(),
