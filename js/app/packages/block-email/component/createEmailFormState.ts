@@ -23,6 +23,7 @@ export type DraftFormAttachment =
   | {
       type: 'local';
       file: File;
+      attachmentID?: string;
     }
   | {
       type: 'remote';
@@ -240,6 +241,13 @@ export function createEmailFormState(key: string) {
       list: attachments,
       add: (attachment: DraftFormAttachment) => {
         setAttachments((p) => [...p, attachment]);
+      },
+      assignAttachmentID: (file: File, attachmentID: string) => {
+        setAttachments((p) =>
+          p.map((a) =>
+            a.type === 'local' && a.file === file ? { ...a, attachmentID } : a
+          )
+        );
       },
       removeByFile: (file: File) => {
         setAttachments((p) =>

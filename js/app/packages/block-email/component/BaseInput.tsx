@@ -344,10 +344,17 @@ export function BaseInput(props: {
         .attachments.list()
         .filter((a) => a.type === 'local');
 
-      await uploadAttachmentMutation.mutateAsync({
+      const uploaded = await uploadAttachmentMutation.mutateAsync({
         draftID: draftResponse,
         attachments: attachments.map((a) => a.file),
       });
+
+      for (const attachment of uploaded.attachments) {
+        form().attachments.assignAttachmentID(
+          attachment.file,
+          attachment.attachmentID
+        );
+      }
 
       setSavedDraftId(draftResponse);
       refetchThreadMessages();

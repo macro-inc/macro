@@ -23,7 +23,7 @@ export const useUploadDraftAttachmentsMutation = (
 ) => {
   return useMutation(() => ({
     mutationFn: async (params: UploadDraftAttachmentsParams) => {
-      const uploadedAttachmentIDs = [];
+      const uploadedAttachments = [];
 
       for (const attachment of params.attachments) {
         const arrayBuffer = await attachment.arrayBuffer();
@@ -41,7 +41,7 @@ export const useUploadDraftAttachmentsMutation = (
             })
         );
 
-        uploadedAttachmentIDs.push({
+        uploadedAttachments.push({
           file: attachment,
           attachmentID: result.attachment_id,
         });
@@ -59,7 +59,7 @@ export const useUploadDraftAttachmentsMutation = (
         }
       }
 
-      return { attachments: uploadedAttachmentIDs };
+      return { attachments: uploadedAttachments };
     },
     ...withCallbacks<
       UploadDraftAttachmentsReturn,
