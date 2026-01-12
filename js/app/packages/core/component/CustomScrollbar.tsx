@@ -26,7 +26,7 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
   const [clientHeight, setClientHeight] = createSignal(0);
   const [isDragging, setIsDragging] = createSignal(false);
   const [scrollStartTop, setScrollStartTop] = createSignal(0);
-  const [scrollVelocity, setScrollVelocity] = createSignal(0);
+  const [isScrolling, setIsScrolling] = createSignal(false);
   const [isHovering, setIsHovering] = createSignal(false);
 
   const [scrollLabelVisible, setScrollLabelVisible] = createSignal(
@@ -38,9 +38,7 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
     props.labelVisibilityDebounceMs ?? 300
   );
 
-  let lastScrollTop = 0;
-  let lastScrollTime = Date.now();
-  let velocityTimeoutId: ReturnType<typeof setTimeout> | undefined;
+  const debouncedHideScrollbar = debounce(() => setIsScrolling(false), 800);
 
   const updateScrollMetrics = () => {
     const container = props.scrollContainer();
@@ -96,32 +94,14 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
         updateScrollMetrics();
       }
 
-      // Calculate scroll velocity
-      const now = Date.now();
-      const timeDelta = now - lastScrollTime;
-      const scrollDelta = Math.abs(container.scrollTop - lastScrollTop);
-      const velocity = timeDelta > 0 ? scrollDelta / timeDelta : 0;
-
-      lastScrollTop = container.scrollTop;
-      lastScrollTime = now;
-
-      setScrollVelocity(velocity);
+      // Show scrollbar while scrolling, hide after delay
+      setIsScrolling(true);
+      debouncedHideScrollbar();
 
       if (props.labelVisibilityDebounceMs !== Infinity) {
         setScrollLabelVisible(true);
         debouncedHideScrollLabel();
       }
-
-      // Gradually reduce velocity - slower fade out
-      if (velocityTimeoutId) clearTimeout(velocityTimeoutId);
-      velocityTimeoutId = setTimeout(() => {
-        setScrollVelocity((prev) => {
-          const newVel = prev * 0.85;
-          if (newVel < 0.05) return 0;
-          setTimeout(() => setScrollVelocity(0), 100);
-          return newVel;
-        });
-      }, 200);
     };
 
     const handleResize = () => {
@@ -135,7 +115,6 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
     onCleanup(() => {
       container.removeEventListener('scroll', handleScroll);
       resizeObserver.disconnect();
-      if (velocityTimeoutId) clearTimeout(velocityTimeoutId);
     });
   });
 
@@ -227,20 +206,8 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
   const getThumbOpacity = () => {
     if (isDragging()) return 1;
     if (isHovering()) return 0.8;
-    const vel = scrollVelocity();
-    if (vel === 0) return 0;
-    // Normalize velocity (0-5px/ms is typical fast scroll)
-    const normalizedVel = Math.min(vel / 5, 1);
-    return normalizedVel;
-  };
-
-  const getThumbTransform = () => {
-    if (isDragging()) return 'scaleX(1.6)';
-    const vel = scrollVelocity();
-    if (vel === 0) return 'scaleX(1)';
-    // Scale more aggressively with velocity - up to 2x width at high speeds
-    const normalizedVel = Math.min(vel / 5, 1);
-    return `scaleX(${1 + normalizedVel * 1.0})`;
+    if (isScrolling()) return 0.6;
+    return 0;
   };
 
   return (
@@ -257,16 +224,13 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
         />
         {/* Thumb */}
         <div
-          class="absolute right-0 cursor-grab active:cursor-grabbing transition-all duration-200 ease-out"
+          class="absolute right-0 cursor-grab active:cursor-grabbing transition-opacity duration-200 ease-out"
           style={{
             top: `${thumbTop()}px`,
             height: `${thumbHeight()}px`,
             width: '1px',
             'background-color': 'var(--color-accent)',
-            'transform-origin': 'right center',
             opacity: getThumbOpacity(),
-            transform: getThumbTransform(),
-            'transition-property': 'opacity, transform',
           }}
           onMouseDown={handleMouseDown}
         />
