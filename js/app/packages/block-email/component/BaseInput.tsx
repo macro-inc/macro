@@ -830,7 +830,7 @@ export function BaseInput(props: {
           />
         </Show>
         <div
-          class="max-h-80 overflow-y-scroll w-full flex flex-col cursor-text placeholder:text-ink-placeholder placeholder:opacity-50 px-3"
+          class="max-h-80 overflow-y-scroll w-full flex flex-col placeholder:text-ink-placeholder placeholder:opacity-50 px-3"
           onclick={() => {
             editor()?.focus();
           }}
@@ -871,7 +871,7 @@ export function BaseInput(props: {
               setEditor(editor);
               form().setCapturedEditor(editor);
             }}
-            class={`text-sm break-words text-ink ${isDragging() && 'blur'}`}
+            class={`cursor-text text-sm break-words text-ink ${isDragging() && 'blur'}`}
             editable={() => !sendMutation.isPending}
             initialValue={props.preloadedBody}
             initialHtml={props.preloadedHtml}
