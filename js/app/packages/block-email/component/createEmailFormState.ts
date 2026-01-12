@@ -74,6 +74,16 @@ export function createEmailFormState(key: string) {
 
   const [shouldFocusInput, setShouldFocusInput] = createSignal(false);
 
+  const [attachments, setAttachments] = createSignal<FormDraft[]>(
+    draft?.attachments_draft.map((a) => ({
+      type: 'remote',
+      attachmentID: a.id,
+      contentType: a.content_type,
+      fileName: a.file_name,
+      url: a.s3_key,
+    })) ?? []
+  );
+
   const initialReplyType: ReplyType | undefined = replyingTo
     ? (replyingTo.to.length ?? 0) + (replyingTo.cc.length ?? 0) > 1
       ? 'reply-all'
@@ -196,19 +206,11 @@ export function createEmailFormState(key: string) {
     setSubjectInner(initialSubject);
     setShouldFocusInput(false);
 
+    setAttachments([]);
+
     // Mark as dirty to propagate change
     callDirty();
   };
-
-  const [attachments, setAttachments] = createSignal<FormDraft[]>(
-    draft?.attachments_draft.map((a) => ({
-      type: 'remote',
-      attachmentID: a.id,
-      contentType: a.content_type,
-      fileName: a.file_name,
-      url: a.s3_key,
-    })) ?? []
-  );
 
   const value = {
     draft,
