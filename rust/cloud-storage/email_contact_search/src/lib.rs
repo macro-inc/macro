@@ -6,7 +6,9 @@
 use cached::proc_macro::cached;
 use chrono::{DateTime, Utc};
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
-use models_search_cursor::{PaginatedResult, SearchCursorAttributes, SearchCursorOption, SearchMethodCursor};
+use models_search_cursor::{
+    PaginatedResult, SearchCursorAttributes, SearchCursorOption, SearchMethodCursor,
+};
 use sqlx::{Pool, Postgres};
 
 /// Errors for email contact search crate
