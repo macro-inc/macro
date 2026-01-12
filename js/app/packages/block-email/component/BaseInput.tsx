@@ -1100,12 +1100,10 @@ export function BaseInput(props: {
               uploadAttachmentMutation.isPending || sendMutation.isPending
             }
             onClick={() => sendEmail()}
-            class="text-ink-muted hover:scale-115 transition ease-in-out flex-col items-center rounded-full p-[0.25lh] hover:bg-transparent"
+            class="text-ink-muted hover:scale-115 transition ease-in-out flex-col items-center rounded-full p-[0.25lh] hover:bg-transparent disabled:opacity-30"
           >
             <Show
-              when={
-                !uploadAttachmentMutation.isPending && !sendMutation.isPending
-              }
+              when={!sendMutation.isPending}
               fallback={<Spinner class="size-6 animate-spin cursor-disabled" />}
             >
               <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center p-0">
