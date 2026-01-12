@@ -1,5 +1,6 @@
 use axum::{
     Extension, Json,
+    extract::rejection::PathRejection,
     extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
@@ -7,13 +8,13 @@ use axum::{
 use model::response::ErrorResponse;
 use model::user::UserContext;
 use model_notifications::UserNotification;
-use sqlx::types::Uuid;
+use uuid::Uuid;
 
 use crate::api::context::ApiContext;
 
-#[derive(serde::Deserialize)]
+#[derive(Debug, serde::Deserialize)]
 pub struct Params {
-    pub notification_id: String,
+    pub notification_id: Uuid,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -83,16 +84,16 @@ impl IntoResponse for GetNotificationErr {
 pub async fn handler(
     State(ctx): State<ApiContext>,
     user_context: Extension<UserContext>,
-    Path(Params { notification_id }): Path<Params>,
+    path: Result<Path<Params>, PathRejection>,
 ) -> Result<Json<UserNotification>, GetNotificationErr> {
-    let notification_uuid =
-        Uuid::parse_str(&notification_id).map_err(|_| GetNotificationErr::InvalidNotificationId)?;
+    let Path(Params { notification_id }) =
+        path.map_err(|_| GetNotificationErr::InvalidNotificationId)?;
 
     let raw =
         notification_db_client::user_notification::get::get_by_id::get_user_notification_by_id(
             &ctx.db,
             &user_context.user_id,
-            notification_uuid,
+            notification_id,
         )
         .await
         .map_err(|e| {

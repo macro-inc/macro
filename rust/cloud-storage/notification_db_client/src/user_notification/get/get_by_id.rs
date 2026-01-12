@@ -98,7 +98,9 @@ mod tests {
     }
 
     #[sqlx::test(fixtures(path = "../../../fixtures", scripts("user_notifications")))]
-    async fn test_get_user_notification_by_id_wrong_user(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    async fn test_get_user_notification_by_id_wrong_user(
+        pool: Pool<Postgres>,
+    ) -> anyhow::Result<()> {
         let notification_id = "0193b1ea-a542-7589-893b-2b4a509c1e76".parse::<Uuid>()?;
 
         let notification =
