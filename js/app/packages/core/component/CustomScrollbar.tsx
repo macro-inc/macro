@@ -205,15 +205,15 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
 
   const getThumbOpacity = () => {
     if (isDragging()) return 1;
-    if (isHovering()) return 0.8;
-    if (isScrolling()) return 0.6;
+    if (isHovering()) return 1;
+    if (isScrolling()) return 1;
     return 0;
   };
 
   const getThumbScale = () => {
-    if (isDragging()) return 'scaleX(2.5)';
-    if (isHovering()) return 'scaleX(2)';
-    if (isScrolling()) return 'scaleX(2)';
+    if (isDragging()) return 'scaleX(4)';
+    if (isHovering()) return 'scaleX(3)';
+    if (isScrolling()) return 'scaleX(3)';
     return 'scaleX(1)';
   };
 
