@@ -449,7 +449,13 @@ pub(crate) async fn search_unified(
 
     tracing::trace!("search request {:?}", search_request);
 
-    let mut search_indices: Vec<&str> = args.search_indices.iter().map(|i| i.as_ref()).collect();
+    // We cannot search over the projects index in opensearch as it doesn't exist
+    let mut search_indices: Vec<&str> = args
+        .search_indices
+        .iter()
+        .filter(|i| **i != SearchEntityType::Projects)
+        .map(|i| i.as_ref())
+        .collect();
 
     match args.search_on {
         SearchOn::NameContent | SearchOn::Name => {
