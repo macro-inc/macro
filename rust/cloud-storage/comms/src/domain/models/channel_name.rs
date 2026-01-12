@@ -27,7 +27,9 @@ pub fn resolve_channel_name(
                 }
             }),
             ChannelType::Private => resolve_private_channel_name(channel_name, participants, name_lookup),
-            ChannelType::DirectMessage => resolve_direct_message_channel_name(channel_name, participants, &channel_id.0, user_id, name_lookup),
+            ChannelType::DirectMessage => match resolve_direct_message_channel_name(channel_name, participants, &channel_id.0, user_id, name_lookup) {
+                Ok(c) | Err(c) => c,
+            }
         }
 }
 
@@ -47,29 +49,33 @@ pub fn resolve_private_channel_name(
         .join(", ")
 }
 
+#[tracing::instrument(err)]
 pub fn resolve_direct_message_channel_name(
     channel_name: Option<&str>,
     participants: &[ChannelParticipant],
     channel_id: &Uuid,
     user_id: MacroUserIdStr<'_>,
     name_lookup: &NameLookup,
-) -> ChannelName {
+) -> Result<ChannelName, ChannelName> {
     // Direct Message Channels should not have a name
     if channel_name.is_some() {
         tracing::warn!(channel_id=?channel_id, "direct message channel should not have a name");
     }
 
     if !participants.iter().any(|p| p.user_id == user_id) {
-        return resolve_private_channel_name(channel_name, participants, name_lookup);
+        return Ok(resolve_private_channel_name(
+            channel_name,
+            participants,
+            name_lookup,
+        ));
     }
 
     let other_participant = participants.iter().find(|p| p.user_id != user_id);
 
     if let Some(other) = other_participant {
-        id_to_display_name(other.user_id.copied(), name_lookup)
+        Ok(id_to_display_name(other.user_id.copied(), name_lookup))
     } else {
-        tracing::error!(channel_id=?channel_id, "no other participant found, in a direct message channel");
-        "Unknown".to_string()
+        Err("Unknown".to_string())
     }
 }
 
