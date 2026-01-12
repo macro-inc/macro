@@ -3053,6 +3053,7 @@ name = "email_contact_search"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "cached",
  "chrono",
  "macro_db_migrator",
  "macro_user_id",
@@ -5717,6 +5718,7 @@ name = "name_search"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "cached",
  "chrono",
  "macro_db_migrator",
  "macro_user_id",

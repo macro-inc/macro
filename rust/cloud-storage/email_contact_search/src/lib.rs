@@ -2,6 +2,8 @@
 
 //! This crate contains the queries to search over macrodb for your email contacts
 
+#[cfg(not(test))]
+use cached::proc_macro::cached;
 use chrono::{DateTime, Utc};
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use models_search_cursor::{
@@ -62,6 +64,15 @@ impl SearchCursorAttributes for EmailContactMatchThreadResult {
 
 /// Search over your email contacts to find potential contact name matches
 #[tracing::instrument(skip(db), err)]
+#[cfg_attr(
+    not(test),
+    cached(
+        time = 30,
+        result = true,
+        key = "String",
+        convert = r#"{ format!("{}-{}-{}-{}", macro_user_id.as_ref(), term, limit, cursor.as_ref().map(|c| format!("{}-{}", c.entity_id, c.updated_at)).unwrap_or_default()) }"#
+    )
+)]
 pub async fn search_email_contacts<'a>(
     db: &Pool<Postgres>,
     macro_user_id: MacroUserId<Lowercase<'a>>,

@@ -1,5 +1,7 @@
 //! This module contains logic for searching documents by name
 
+#[cfg(not(test))]
+use cached::proc_macro::cached;
 use chrono::{DateTime, Utc};
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use models_search_cursor::{SearchCursorOption, SearchMethodCursor};
@@ -134,6 +136,15 @@ async fn owner_search<'a>(
 
 /// Searches over the users documents by name
 #[tracing::instrument(skip(db), err)]
+#[cfg_attr(
+    not(test),
+    cached(
+        time = 30,
+        result = true,
+        key = "String",
+        convert = r#"{ format!("{}-{:?}-{}-{}-{}-{}", macro_user_id.as_ref(), document_ids, term, ids_only, limit, cursor.as_ref().map(|c| format!("{}-{}", c.entity_id, c.updated_at)).unwrap_or_default()) }"#
+    )
+)]
 pub async fn search_document_names<'a>(
     db: &Pool<Postgres>,
     macro_user_id: &MacroUserId<Lowercase<'a>>,

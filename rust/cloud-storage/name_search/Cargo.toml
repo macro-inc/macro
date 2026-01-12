@@ -6,6 +6,7 @@ version = "0.1.0"
 
 [dependencies]
 anyhow = { workspace = true }
+cached = { workspace = true }
 chrono = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
 models_opensearch = { path = "../models_opensearch" }
