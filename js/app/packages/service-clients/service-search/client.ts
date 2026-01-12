@@ -14,13 +14,6 @@ import type { SafeFetchInit } from '@core/util/safeFetch';
 
 const searchServiceHost = `${SERVER_HOSTS['search-service']}`;
 
-import type { ChatSearchRequest } from './generated/models/chatSearchRequest';
-import type { ChatSearchResponse } from './generated/models/chatSearchResponse';
-import type { DocumentSearchRequest } from './generated/models/documentSearchRequest';
-import type { DocumentSearchResponse } from './generated/models/documentSearchResponse';
-import type { EmailSearchParams } from './generated/models/emailSearchParams';
-import type { EmailSearchRequest } from './generated/models/emailSearchRequest';
-import type { EmailSearchResponse } from './generated/models/emailSearchResponse';
 import type { UnifiedSearchRequest } from './generated/models/unifiedSearchRequest';
 import type { UnifiedSearchResponse } from './generated/models/unifiedSearchResponse';
 
@@ -52,45 +45,6 @@ export type SearchArgs = {
 };
 
 export const searchClient = {
-  async searchDocuments(args: DocumentSearchRequest, init?: SafeFetchInit) {
-    return mapOk(
-      await searchServiceFetch<DocumentSearchResponse>(`/search/document`, {
-        method: 'POST',
-        body: JSON.stringify(args),
-        ...init,
-      }),
-      (result) => result
-    );
-  },
-  async searchEmails(
-    args: {
-      request: EmailSearchRequest;
-      params: EmailSearchParams;
-    },
-    init?: SafeFetchInit
-  ) {
-    return mapOk(
-      await searchServiceFetch<EmailSearchResponse>(
-        `/search/email?page=${args.params.page ?? 0}&page_size=${args.params.page_size ?? 10}`,
-        {
-          method: 'POST',
-          body: JSON.stringify(args.request),
-          ...init,
-        }
-      ),
-      (result) => result
-    );
-  },
-  async searchChats(args: ChatSearchRequest, init?: SafeFetchInit) {
-    return mapOk(
-      await searchServiceFetch<ChatSearchResponse>(`/search/chat`, {
-        method: 'POST',
-        body: JSON.stringify(args),
-        ...init,
-      }),
-      (result) => result
-    );
-  },
   async search(args: SearchArgs, init?: SafeFetchInit) {
     const params = new URLSearchParams();
 
