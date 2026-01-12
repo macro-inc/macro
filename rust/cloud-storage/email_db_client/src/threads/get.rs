@@ -46,9 +46,7 @@ pub async fn fetch_thread_with_messages_paginated(
     limit: i64,
 ) -> anyhow::Result<Option<thread::Thread>> {
     if offset < 0 || limit <= 0 {
-        return Err(anyhow!(
-            "Offset must be non-negative and limit must be positive"
-        ));
+        anyhow::bail!("Offset must be non-negative and limit must be positive");
     }
 
     let db_thread = sqlx::query_as!(
