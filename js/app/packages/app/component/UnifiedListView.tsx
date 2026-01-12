@@ -864,17 +864,19 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
   const emailActive = useEmailLinksStatus();
 
-  const validSearchTerms = createMemo(() => {
-    return debouncedSearchForService().length >= 3;
-  });
-  const isSearchActive = createMemo(() => {
+  const validSearchTerms = createMemo(
+    () => debouncedSearchForService().length >= 3
+  );
+  const hasSignalOrNoiseFilter = createMemo(() => {
     const focusFilters_ = focusFilters();
-    const hasSignalOrNoiseFilter =
+    return (
       focusFilters_?.includes('signal') === true ||
-      focusFilters_?.includes('noise') === true;
-
-    return validSearchTerms() && !hasSignalOrNoiseFilter;
+      focusFilters_?.includes('noise') === true
+    );
   });
+  const isSearchActive = createMemo(
+    () => validSearchTerms() && !hasSignalOrNoiseFilter()
+  );
 
   const dssQueryParams = createMemo(
     (): GetItemsSoupParams => ({
