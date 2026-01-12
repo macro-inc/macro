@@ -103,6 +103,8 @@ import { plural } from '@core/util/string';
 false && fileFolderDrop;
 false && fileSelector;
 
+const MAX_ATTACHMENTS_BYTES_SIZE = 18_000_000;
+
 const getRecipientDisplayName = (item: EmailRecipient): string => {
   switch (item.kind) {
     case 'user':
@@ -620,7 +622,7 @@ export function BaseInput(props: {
 
     const attachmentsToAddByteSize = files.reduce((sum, f) => sum + f.size, 0);
 
-    if (attachmentsToAddByteSize >= 18_000_000) {
+    if (attachmentsToAddByteSize >= MAX_ATTACHMENTS_BYTES_SIZE) {
       toast.failure(`${plural('Attachment', files.length)} exceed 18MB`);
       return;
     }
@@ -630,7 +632,10 @@ export function BaseInput(props: {
       0
     );
 
-    if (currentAttachmentsByteSize + attachmentsToAddByteSize >= 18_000_000) {
+    if (
+      currentAttachmentsByteSize + attachmentsToAddByteSize >=
+      MAX_ATTACHMENTS_BYTES_SIZE
+    ) {
       toast.failure(
         "Can't add more attachments",
         'Total attachments exceed 18MB limit'
