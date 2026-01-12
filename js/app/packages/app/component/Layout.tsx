@@ -22,6 +22,7 @@ import { Paywall } from './paywall/Paywall';
 import { QuickCreateMenu } from './QuickCreateMenu';
 import { RightbarWrapper } from './rightbar/Rightbar';
 import { SettingsWrapper } from './settings/SettingsWrapper';
+import { ShortcutsHelper } from './settings/ShortcutsHelper';
 
 const AUTH_URLS = [
   '/app/login',
@@ -131,6 +132,7 @@ export function Layout(props: RouteSectionProps) {
           </Suspense>
           <QuickCreateMenu />
           <GlobalBulkEditEntityModal />
+          <ShortcutsHelper />
         </Show>
         <Show
           when={!isAuthenticated() && !AUTH_URLS.includes(location.pathname)}

@@ -12,7 +12,8 @@ export type SettingsTab =
   | 'Appearance'
   | 'Mobile'
   | 'AI Memory'
-  | 'Inbox';
+  | 'Inbox'
+  | 'Shortcuts';
 
 export const settingsOpen = isSettingsPanelOpen;
 export const setSettingsOpen = setIsSettingsPanelOpen;
