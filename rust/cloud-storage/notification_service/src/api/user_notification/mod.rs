@@ -13,6 +13,7 @@ pub(in crate::api) mod bulk_mark_user_notification_seen_by_event;
 pub(in crate::api) mod bulk_mark_user_notification_undone;
 pub(in crate::api) mod delete_user_notification;
 pub(in crate::api) mod get_user_notification;
+pub(in crate::api) mod get_user_notification_by_id;
 pub(in crate::api) mod get_user_notifications_by_event_item_id;
 
 pub fn router() -> Router<ApiContext> {
@@ -28,7 +29,7 @@ pub fn router() -> Router<ApiContext> {
         )
         .route(
             "/:notification_id",
-            delete(delete_user_notification::handler),
+            get(get_user_notification_by_id::handler).delete(delete_user_notification::handler),
         )
         .route("/bulk", delete(bulk_delete_user_notification::handler))
         .route(
