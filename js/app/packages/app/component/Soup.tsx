@@ -644,60 +644,60 @@ function EntityTypeIconFilter() {
         {/* Separator */}
         <div class="h-4 w-px bg-edge-muted mx-1 shrink-0" />
         {/* Entity type icons */}
-        <For each={ENTITY_TYPE_FILTERS.filter((f) => f.enabled)}>
-          {(filter) => {
-            const iconConfig = () => getIconConfig(filter.iconType);
-            const isActive = () => isFilterActive(filter.type);
+        <div class="flex items-center rounded-full border border-edge-muted overflow-hidden shrink-0">
+          <For each={ENTITY_TYPE_FILTERS.filter((f) => f.enabled)}>
+            {(filter) => {
+              const iconConfig = () => getIconConfig(filter.iconType);
+              const isActive = () => isFilterActive(filter.type);
 
-            return (
-              <Tooltip
-                tooltip={
-                  <LabelAndHotKey
-                    label={filter.label}
-                    shortcut={filter.shortcut}
-                  />
-                }
-              >
-                <button
-                  type="button"
-                  class="flex items-center gap-1.5 h-7 px-2.5 border border-transparent active:border-accent active:bg-accent active:text-panel rounded-full"
-                  classList={{
-                    'bg-accent text-panel border-accent': isActive(),
-                    'text-ink-muted hover:text-accent hover:bg-accent/20':
-                      !isActive(),
-                  }}
-                  onClick={() => toggleEntityTypeFilter(filter.type)}
+              return (
+                <Tooltip
+                  tooltip={
+                    <LabelAndHotKey
+                      label={filter.label}
+                      shortcut={filter.shortcut}
+                    />
+                  }
                 >
-                  <Dynamic component={iconConfig().icon} class="size-3.5" />
-                  <span class="text-xs leading-none">
-                    {renderShortcutUnderlinedInLabel(
-                      filter.label,
-                      filter.shortcut
-                    )}
-                  </span>
-                </button>
-              </Tooltip>
-            );
-          }}
-        </For>
+                  <button
+                    type="button"
+                    class="flex items-center gap-1.5 h-7 px-2.5 border-r border-edge-muted/50 last:border-r-0 active:bg-accent active:text-panel rounded-none"
+                    classList={{
+                      'bg-accent text-panel': isActive(),
+                      'text-ink-muted hover:text-accent hover:bg-accent/20':
+                        !isActive(),
+                    }}
+                    onClick={() => toggleEntityTypeFilter(filter.type)}
+                  >
+                    <Dynamic component={iconConfig().icon} class="size-3.5" />
+                    <span class="text-xs leading-none">
+                      {renderShortcutUnderlinedInLabel(
+                        filter.label,
+                        filter.shortcut
+                      )}
+                    </span>
+                  </button>
+                </Tooltip>
+              );
+            }}
+          </For>
+        </div>
         {/* Separator before unread/preview */}
         <div class="h-4 w-px bg-edge-muted mx-1 shrink-0" />
         {/* Unread filter */}
         <Tooltip tooltip={<LabelAndHotKey label="Unread Only" shortcut="u" />}>
           <button
             type="button"
-            class="relative flex items-center justify-center size-7 border border-transparent active:border-accent active:bg-accent active:text-panel"
+            class="flex items-center gap-1.5 h-7 px-2.5 border border-edge-muted active:border-accent active:bg-accent active:text-panel rounded-full"
             classList={{
               'bg-accent text-panel border-accent': isUnreadFilterActive(),
               'text-ink-muted hover:text-accent hover:bg-accent/20':
                 !isUnreadFilterActive(),
             }}
-            style={{ 'clip-path': cornerClip('3px') }}
             onClick={() => toggleUnreadFilter()}
           >
             <svg
-              width="100%"
-              height="100%"
+              class="size-3.5"
               viewBox="0 0 24 24"
               fill="currentColor"
               stroke="none"
@@ -705,8 +705,8 @@ function EntityTypeIconFilter() {
             >
               <circle cx="12" cy="12" r="4" />
             </svg>
-            <span class="absolute bottom-0 right-0.5 text-[9px] font-mono font-bold leading-none opacity-60">
-              u
+            <span class="text-xs leading-none">
+              {renderShortcutUnderlinedInLabel('Unread', 'u')}
             </span>
           </button>
         </Tooltip>
@@ -716,20 +716,19 @@ function EntityTypeIconFilter() {
         >
           <button
             type="button"
-            class="relative flex items-center justify-center size-7 border border-transparent active:border-accent active:bg-accent active:text-panel"
+            class="flex items-center gap-1.5 h-7 px-2.5 border border-edge-muted active:border-accent active:bg-accent active:text-panel rounded-full"
             classList={{
               'bg-accent text-panel border-accent': preview(),
               'text-ink-muted hover:text-accent hover:bg-accent/20': !preview(),
             }}
-            style={{ 'clip-path': cornerClip('3px') }}
             onClick={() => {
               playSound('open');
               setPreview((prev) => !prev);
             }}
           >
-            <PreviewIcon class="size-5.5" />
-            <span class="absolute bottom-0 right-0.5 text-[9px] font-mono font-bold leading-none opacity-60">
-              p
+            <PreviewIcon class="size-3.5" />
+            <span class="text-xs leading-none">
+              {renderShortcutUnderlinedInLabel('Preview', 'p')}
             </span>
           </button>
         </Tooltip>
@@ -746,12 +745,16 @@ function EntityTypeIconFilter() {
           <Popover.Trigger
             as="button"
             type="button"
-            class="relative flex items-center justify-center size-7 shrink-0 text-ink-muted hover:text-accent hover:bg-accent/20 active:border-accent active:bg-accent active:text-panel border border-transparent"
-            style={{ 'clip-path': cornerClip('3px') }}
+            class="flex items-center gap-1.5 h-7 px-2.5 shrink-0 border border-edge-muted rounded-full active:border-accent active:bg-accent active:text-panel"
+            classList={{
+              'bg-accent text-panel border-accent': sortDropdownOpen(),
+              'text-ink-muted hover:text-accent hover:bg-accent/20':
+                !sortDropdownOpen(),
+            }}
           >
-            <SortIcon />
-            <span class="absolute bottom-0 right-0.5 text-[9px] font-mono font-bold leading-none opacity-60">
-              s
+            <SortIcon class="size-3.5" />
+            <span class="text-xs leading-none">
+              {renderShortcutUnderlinedInLabel('Sort', 's')}
             </span>
           </Popover.Trigger>
           <Popover.Portal>
