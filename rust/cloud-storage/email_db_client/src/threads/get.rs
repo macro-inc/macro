@@ -64,9 +64,9 @@ pub async fn fetch_thread_with_messages_paginated(
     .await
     .with_context(|| format!("Failed to fetch thread with DB ID {}", thread_db_id))?;
 
-let Some(db_thread) = db_thread else {
-    return Ok(None);
-};
+    let Some(db_thread) = db_thread else {
+        return Ok(None);
+    };
 
     let db_messages = sqlx::query_as!(
         db::message::Message,
