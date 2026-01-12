@@ -1,8 +1,8 @@
 use cool_asserts::assert_matches;
 
 use crate::parse::{
-    ParsedContactMention, ParsedDateMention, ParsedDocumentMention, ParsedGroupMention,
-    ParsedLink, ParsedUserMention, ParsedXmlText, TextSegment, XmlTag,
+    ParsedContactMention, ParsedDateMention, ParsedDocumentMention, ParsedGroupMention, ParsedLink,
+    ParsedUserMention, ParsedXmlText, TextSegment, XmlTag,
 };
 
 // =============================================================================
