@@ -156,14 +156,14 @@ export function DatePicker(props: DatePickerProps) {
           </button>
 
           <button
-            class="font-semibold text-sm hover:bg-active px-2 py-1 transition-colors cursor-pointer"
+            class="font-semibold text-sm hover:bg-active px-2 py-1 transition-colors"
             onClick={() => setPickerMode('month')}
           >
             {MONTHS[displayMonth()]} {displayYear()}
           </button>
 
           <button
-            class="p-1 hover:bg-active transition-colors cursor-pointer"
+            class="p-1 hover:bg-active transition-colors"
             onClick={handleNextMonth}
           >
             <CaretRight class="w-4 h-4" />
@@ -187,7 +187,7 @@ export function DatePicker(props: DatePickerProps) {
             {(day) => (
               <Show when={day !== null} fallback={<div class="h-8" />}>
                 <button
-                  class="h-8 w-8 text-sm hover:bg-active transition-colors cursor-pointer"
+                  class="h-8 w-8 text-sm hover:bg-active transition-colors"
                   classList={{
                     'bg-accent text-dialog hover:bg-accent-ink': isSelected(
                       day!
@@ -208,7 +208,7 @@ export function DatePicker(props: DatePickerProps) {
         {/* Month picker */}
         <div class="mb-3">
           <button
-            class="w-full font-semibold text-sm hover:bg-active px-2 py-1 transition-colors text-center cursor-pointer"
+            class="w-full font-semibold text-sm hover:bg-active px-2 py-1 transition-colors text-center"
             onClick={() => setPickerMode('year')}
           >
             {displayYear()}
@@ -219,7 +219,7 @@ export function DatePicker(props: DatePickerProps) {
           <For each={MONTHS}>
             {(month, index) => (
               <button
-                class="px-3 py-2 text-sm hover:bg-active transition-colors cursor-pointer"
+                class="px-3 py-2 text-sm hover:bg-active transition-colors"
                 classList={{
                   'bg-accent text-dialog hover:bg-accent-ink':
                     displayMonth() === index(),
@@ -244,7 +244,7 @@ export function DatePicker(props: DatePickerProps) {
             <For each={yearOptions()}>
               {(year) => (
                 <button
-                  class="px-3 py-2 text-sm hover:bg-active transition-colors cursor-pointer"
+                  class="px-3 py-2 text-sm hover:bg-active transition-colors"
                   classList={{
                     'bg-accent text-dialog hover:bg-accent-ink':
                       displayYear() === year,
