@@ -160,7 +160,6 @@ export function BaseInput(props: {
     createSignal<HTMLDivElement>();
   const [editor, setEditor] = createSignal<LexicalEditor>();
   const [showSubject, _] = createSignal(props.newMessage ?? false);
-  const [attachMenuOpen, setAttachMenuOpen] = createSignal(false);
   const [showExpandedRecipients, setShowExpandedRecipients] =
     createSignal<boolean>(false);
   const [isDragging, setIsDragging] = createSignal<boolean>();
@@ -897,19 +896,12 @@ export function BaseInput(props: {
         <div class="flex flex-row w-full h-8 justify-between items-center py-2 px-2 mb-2 space-x-2 allow-css-brackets">
           <div class="flex flex-row items-center gap-2">
             <div class="relative" ref={attachButtonRef}>
-              <Button
-                onclick={() => setAttachMenuOpen(true)}
-                tooltip="Attach"
-                class="aspect-square *:h-5 p-1"
-              >
-                <Plus />
-              </Button>
-
               <AttachMenu
-                open={attachMenuOpen()}
-                close={() => setAttachMenuOpen(false)}
-                anchorRef={attachButtonRef}
-                containerRef={bodyDiv}
+                trigger={
+                  <Button tooltip="Attach" class="aspect-square *:h-5 p-1">
+                    <Plus />
+                  </Button>
+                }
                 onAttach={onAttach}
                 onAttachDocuments={onAttachDocuments}
                 setIsPending={setIsPendingUpload}

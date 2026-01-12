@@ -71,7 +71,6 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
   const [isPendingUpload, setIsPendingUpload] = createSignal<boolean>(false);
 
   const [showFormatRibbon, setShowFormatRibbon] = createSignal<boolean>(false);
-  const [attachMenuOpen, setAttachMenuOpen] = createSignal(false);
 
   const [content, setContent] = createSignal('');
 
@@ -274,18 +273,15 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
       <div class="flex flex-row w-full h-8 justify-between items-center space-x-2 allow-css-brackets mt-2">
         <div class="flex flex-row items-center gap-2">
           <div class="relative" ref={attachButtonRef}>
-            <DeprecatedIconButton
-              theme="base"
-              icon={PaperclipIcon}
-              tooltip={{ label: 'Attach' }}
-              disabled={props.disabled}
-              onClick={() => setAttachMenuOpen(true)}
-            />
             <AttachMenu
-              open={attachMenuOpen()}
-              close={() => setAttachMenuOpen(false)}
-              anchorRef={attachButtonRef}
-              containerRef={bodyDiv}
+              trigger={
+                <DeprecatedIconButton
+                  theme="base"
+                  icon={PaperclipIcon}
+                  tooltip={{ label: 'Attach' }}
+                  disabled={props.disabled}
+                />
+              }
               onAttach={onAttach}
               onAttachDocuments={onAttachDocuments}
               setIsPending={setIsPendingUpload}
