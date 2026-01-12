@@ -935,7 +935,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     (): SearchArgs => ({
       params: {
         cursor: null,
-        page_size: 100,
+        page_size: undefined, // defaults to 100
       },
       request: {
         search_on: 'name_content',
