@@ -1196,7 +1196,7 @@ const ViewWithSearch: Component<{
         </Match>
         <Match when={true}>
           <SuspenseContextComp fallback={<SuspenseUnifiedListFallback />}>
-            <UnifiedListView />
+            <UnifiedListView hideToolbar />
           </SuspenseContextComp>
         </Match>
       </Switch>
@@ -1473,7 +1473,7 @@ export function Soup() {
 }
 
 function AllView() {
-  return <UnifiedListView />;
+  return <UnifiedListView hideToolbar />;
 }
 
 function EmailView() {
@@ -1486,7 +1486,7 @@ function EmailView() {
 
   return (
     <>
-      <UnifiedListView />
+      <UnifiedListView hideToolbar />
       <SplitToolbarRight>
         <div class="flex flex-row items-center pr-2">
           <SegmentedControl
