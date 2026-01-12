@@ -86,13 +86,19 @@ async fn test_search_project_names_ids_only_mode(pool: Pool<Postgres>) -> anyhow
         "22222222-2222-2222-2222-222222222222"
     );
     assert_eq!(response.items[0].entity_type, SearchEntityType::Projects);
-    assert_eq!(response.items[0].name, "<macro_em>Mobile</macro_em> App Redesign");
+    assert_eq!(
+        response.items[0].name,
+        "<macro_em>Mobile</macro_em> App Redesign"
+    );
 
     assert_eq!(
         response.items[1].entity_id.to_string(),
         "11111111-1111-1111-1111-111111111111"
     );
-    assert_eq!(response.items[1].name, "<macro_em>Mobile</macro_em> Development");
+    assert_eq!(
+        response.items[1].name,
+        "<macro_em>Mobile</macro_em> Development"
+    );
 
     Ok(())
 }
@@ -120,13 +126,19 @@ async fn test_search_project_names_normal_mode_owned_projects(
         response.items[0].entity_id.to_string(),
         "66666666-6666-6666-6666-666666666666"
     );
-    assert_eq!(response.items[0].name, "<macro_em>MOBILE</macro_em> PLATFORM");
+    assert_eq!(
+        response.items[0].name,
+        "<macro_em>MOBILE</macro_em> PLATFORM"
+    );
 
     assert_eq!(
         response.items[1].entity_id.to_string(),
         "22222222-2222-2222-2222-222222222222"
     );
-    assert_eq!(response.items[1].name, "<macro_em>Mobile</macro_em> App Redesign");
+    assert_eq!(
+        response.items[1].name,
+        "<macro_em>Mobile</macro_em> App Redesign"
+    );
 
     Ok(())
 }
@@ -196,7 +208,10 @@ async fn test_search_project_names_with_shared_projects(
             .eq("99999999-9999-9999-9999-999999999999")
     });
     assert!(user3_project.is_some());
-    assert_eq!(user3_project.unwrap().name, "User3 Shared <macro_em>Mobile</macro_em>");
+    assert_eq!(
+        user3_project.unwrap().name,
+        "User3 Shared <macro_em>Mobile</macro_em>"
+    );
 
     Ok(())
 }
@@ -337,13 +352,19 @@ async fn test_search_project_names_partial_match(pool: Pool<Postgres>) -> anyhow
         response.items[0].entity_id.to_string(),
         "44444444-4444-4444-4444-444444444444"
     );
-    assert_eq!(response.items[0].name, "<macro_em>Web</macro_em>site Optimization");
+    assert_eq!(
+        response.items[0].name,
+        "<macro_em>Web</macro_em>site Optimization"
+    );
 
     assert_eq!(
         response.items[1].entity_id.to_string(),
         "33333333-3333-3333-3333-333333333333"
     );
-    assert_eq!(response.items[1].name, "<macro_em>Web</macro_em> Platform Upgrade");
+    assert_eq!(
+        response.items[1].name,
+        "<macro_em>Web</macro_em> Platform Upgrade"
+    );
 
     Ok(())
 }

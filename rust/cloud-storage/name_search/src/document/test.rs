@@ -86,13 +86,19 @@ async fn test_search_document_names_ids_only_mode(pool: Pool<Postgres>) -> anyho
         "22222222-2222-2222-2222-222222222222"
     );
     assert_eq!(response.items[0].entity_type, SearchEntityType::Documents);
-    assert_eq!(response.items[0].name, "Sales <macro_em>Report</macro_em> December");
+    assert_eq!(
+        response.items[0].name,
+        "Sales <macro_em>Report</macro_em> December"
+    );
 
     assert_eq!(
         response.items[1].entity_id.to_string(),
         "11111111-1111-1111-1111-111111111111"
     );
-    assert_eq!(response.items[1].name, "Quarterly <macro_em>Report</macro_em> 2024");
+    assert_eq!(
+        response.items[1].name,
+        "Quarterly <macro_em>Report</macro_em> 2024"
+    );
 
     Ok(())
 }
@@ -120,13 +126,19 @@ async fn test_search_document_names_normal_mode_owned_documents(
         response.items[0].entity_id.to_string(),
         "88888888-8888-8888-8888-888888888888"
     );
-    assert_eq!(response.items[0].name, "ANNUAL <macro_em>REPORT</macro_em> 2024");
+    assert_eq!(
+        response.items[0].name,
+        "ANNUAL <macro_em>REPORT</macro_em> 2024"
+    );
 
     assert_eq!(
         response.items[1].entity_id.to_string(),
         "33333333-3333-3333-3333-333333333333"
     );
-    assert_eq!(response.items[1].name, "Financial <macro_em>Report</macro_em> Q3");
+    assert_eq!(
+        response.items[1].name,
+        "Financial <macro_em>Report</macro_em> Q3"
+    );
 
     Ok(())
 }
@@ -196,7 +208,10 @@ async fn test_search_document_names_with_shared_documents(
             .eq("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
     });
     assert!(user3_doc.is_some());
-    assert_eq!(user3_doc.unwrap().name, "User3 <macro_em>Report</macro_em> Shared");
+    assert_eq!(
+        user3_doc.unwrap().name,
+        "User3 <macro_em>Report</macro_em> Shared"
+    );
 
     Ok(())
 }
@@ -341,13 +356,19 @@ async fn test_search_document_names_partial_match(pool: Pool<Postgres>) -> anyho
         response.items[0].entity_id.to_string(),
         "55555555-5555-5555-5555-555555555555"
     );
-    assert_eq!(response.items[0].name, "Client <macro_em>Meet</macro_em>ing Agenda");
+    assert_eq!(
+        response.items[0].name,
+        "Client <macro_em>Meet</macro_em>ing Agenda"
+    );
 
     assert_eq!(
         response.items[1].entity_id.to_string(),
         "44444444-4444-4444-4444-444444444444"
     );
-    assert_eq!(response.items[1].name, "Team <macro_em>Meet</macro_em>ing Notes");
+    assert_eq!(
+        response.items[1].name,
+        "Team <macro_em>Meet</macro_em>ing Notes"
+    );
 
     Ok(())
 }

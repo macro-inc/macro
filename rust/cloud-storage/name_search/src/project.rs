@@ -8,7 +8,7 @@ use models_search_cursor::{SearchCursorOption, SearchMethodCursor};
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
-use crate::{escape_regex, NameSearchError, NameSearchResult, PaginatedResult, SearchEntityType};
+use crate::{NameSearchError, NameSearchResult, PaginatedResult, SearchEntityType, escape_regex};
 
 /// Searches projects by IDs only
 async fn ids_search(
