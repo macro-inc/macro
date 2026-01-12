@@ -1,4 +1,3 @@
-import { zSidePanelSearchAndFilter } from '@core/constant/stackingContext';
 import { isErr } from '@core/util/maybeResult';
 import { propertiesServiceClient } from '@service-properties/client';
 import type { PropertyOption } from '@service-properties/generated/schemas/propertyOption';
@@ -143,8 +142,7 @@ export const FilterValueSelect: Component<FilterValueSelectProps> = (props) => {
         />
         <div
           ref={dropdownRef}
-          class="absolute left-0 top-full mt-1 border border-edge bg-menu shadow-lg font-mono min-w-[160px] max-h-48 overflow-y-auto"
-          style={{ 'z-index': zSidePanelSearchAndFilter }}
+          class="absolute left-0 top-full mt-1 border border-edge bg-menu shadow-lg font-mono min-w-[160px] max-h-48 overflow-y-auto z-1"
         >
           <Show
             when={filteredOptions().length > 0}

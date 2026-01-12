@@ -1,4 +1,3 @@
-import { zSidePanelSearchAndFilter } from '@core/constant/stackingContext';
 import { isErr } from '@core/util/maybeResult';
 import XIcon from '@phosphor-icons/core/assets/regular/x.svg';
 import { propertiesServiceClient } from '@service-properties/client';
@@ -184,8 +183,7 @@ export const FilterValueSelectMulti: Component<FilterValueSelectMultiProps> = (
           />
           <div
             ref={dropdownRef}
-            class="absolute left-0 top-full mt-1 border border-edge bg-menu shadow-lg font-mono min-w-[160px] max-h-48 overflow-y-auto"
-            style={{ 'z-index': zSidePanelSearchAndFilter }}
+            class="absolute left-0 top-full mt-1 border border-edge bg-menu shadow-lg font-mono min-w-[160px] max-h-48 overflow-y-auto z-1"
           >
             <Show
               when={availableOptions().length > 0}

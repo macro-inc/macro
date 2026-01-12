@@ -9,7 +9,6 @@ import {
   threadMapper,
 } from '@core/component/Properties/component/modal/shared/entityUtils';
 import { usePropertyEntityDisplay } from '@core/component/Properties/hooks/usePropertyEntityDisplay';
-import { zSidePanelSearchAndFilter } from '@core/constant/stackingContext';
 import { useContacts } from '@core/user';
 import { createFreshSearch } from '@core/util/freshSort';
 import {
@@ -298,8 +297,7 @@ export const FilterValueEntity: Component<FilterValueEntityProps> = (props) => {
           />
           <div
             ref={dropdownRef}
-            class="absolute left-0 top-full mt-1 border border-edge bg-menu shadow-lg font-mono min-w-[200px] max-h-48 overflow-y-auto"
-            style={{ 'z-index': zSidePanelSearchAndFilter }}
+            class="absolute left-0 top-full mt-1 border border-edge bg-menu shadow-lg font-mono min-w-[200px] max-h-48 overflow-y-auto z-1"
           >
             <Show
               when={availableEntities().length > 0}

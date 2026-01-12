@@ -1,4 +1,3 @@
-import { zSidePanelSearchAndFilter } from '@core/constant/stackingContext';
 import type { Component } from 'solid-js';
 import { createSignal, onCleanup, onMount, Show } from 'solid-js';
 
@@ -62,8 +61,7 @@ export const FilterValueBoolean: Component<FilterValueBooleanProps> = (
       <Show when={isOpen()}>
         <div
           ref={dropdownRef}
-          class="absolute left-0 top-full mt-1 border border-edge bg-menu shadow-lg font-mono min-w-[80px]"
-          style={{ 'z-index': zSidePanelSearchAndFilter }}
+          class="absolute left-0 top-full mt-1 border border-edge bg-menu shadow-lg font-mono min-w-[80px] z-1"
         >
           <button
             type="button"

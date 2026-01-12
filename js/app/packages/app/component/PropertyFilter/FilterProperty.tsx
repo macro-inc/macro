@@ -1,6 +1,5 @@
 import { listPropertiesFlat } from '@core/component/Properties/utils';
 import { PropertyDataTypeIcon } from '@core/component/Properties/utils/PropertyDataTypeIcon';
-import { zSidePanelSearchAndFilter } from '@core/constant/stackingContext';
 import MagnifyingGlassIcon from '@phosphor-icons/core/assets/regular/magnifying-glass.svg';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import type { Component } from 'solid-js';
@@ -107,8 +106,7 @@ export const FilterPropertySelect: Component<FilterPropertySelectProps> = (
       <Show when={isDropdownOpen()}>
         <div
           ref={dropdownRef}
-          class="absolute left-0 right-0 top-full mt-1 border border-edge bg-menu shadow-lg max-h-48 overflow-y-auto font-mono"
-          style={{ 'z-index': zSidePanelSearchAndFilter }}
+          class="absolute left-0 right-0 top-full mt-1 border border-edge bg-menu shadow-lg max-h-48 overflow-y-auto font-mono z-1"
         >
           <Show
             when={filteredProperties().length > 0}

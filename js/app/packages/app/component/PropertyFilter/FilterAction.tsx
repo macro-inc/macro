@@ -1,4 +1,3 @@
-import { zSidePanelSearchAndFilter } from '@core/constant/stackingContext';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import type { Component } from 'solid-js';
 import {
@@ -81,8 +80,7 @@ export const FilterActionSelect: Component<FilterActionSelectProps> = (
       <Show when={isOpen()}>
         <div
           ref={dropdownRef}
-          class="absolute left-0 top-full mt-1 border border-edge bg-menu shadow-lg max-h-48 overflow-y-auto font-mono min-w-[120px]"
-          style={{ 'z-index': zSidePanelSearchAndFilter }}
+          class="absolute left-0 top-full mt-1 border border-edge bg-menu shadow-lg max-h-48 overflow-y-auto font-mono min-w-[120px] z-1"
         >
           <Show
             when={validActions().length > 0}
