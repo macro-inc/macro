@@ -122,6 +122,13 @@ export const useRemoveDraftAttachmentMutation = (
           })
       );
     },
-    ...withCallbacks<void, Error, RemoveDraftAttachmentParams>({}, callbacks),
+    ...withCallbacks<void, Error, RemoveDraftAttachmentParams>(
+      {
+        onError() {
+          toast.failure('Failed to remove draft attachment');
+        },
+      },
+      callbacks
+    ),
   }));
 };
