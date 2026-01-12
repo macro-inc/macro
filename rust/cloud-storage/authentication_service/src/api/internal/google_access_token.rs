@@ -1,4 +1,5 @@
 use crate::service::fusionauth_client::FusionAuthClient;
+use crate::service::fusionauth_client::error::FusionAuthClientError;
 use axum::{
     Json,
     extract::{self, State},
@@ -93,14 +94,12 @@ async fn get_access_token(
         .await
         .map_err(|e| {
             tracing::error!(error=?e, "error fetching access token for userid {}", fusionauth_user_id);
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    message: format!("unable to fetch {} access token", identity_provider_name)
-                        .as_str(),
-                }),
-            )
-                .into_response()
+            let status_code = match &e {
+                FusionAuthClientError::InvalidGrant => StatusCode::UNAUTHORIZED,
+                _ => StatusCode::INTERNAL_SERVER_ERROR,
+            };
+            let message = format!("unable to fetch {} access token", identity_provider_name);
+            (status_code, Json(ErrorResponse { message: &message })).into_response()
         })?;
 
     Ok((

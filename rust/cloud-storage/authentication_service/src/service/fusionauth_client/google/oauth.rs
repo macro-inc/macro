@@ -83,6 +83,10 @@ pub(in crate::service::fusionauth_client) async fn refresh_google_token(
                 "failed to refresh Google access token"
             );
 
+            if error_text.contains("invalid_grant") {
+                return Err(FusionAuthClientError::InvalidGrant);
+            }
+
             Err(FusionAuthClientError::Generic(GenericErrorResponse {
                 message: format!(
                     "Google token refresh failed with status {}: {}",
