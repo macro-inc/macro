@@ -95,6 +95,7 @@ export const FilterValueSelect: Component<FilterValueSelectProps> = (props) => {
 
   // Close when clicking outside
   const handleClickOutside = (event: MouseEvent) => {
+    if (!isEditing()) return;
     const target = event.target;
     if (!(target instanceof Node)) return;
 

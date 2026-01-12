@@ -5,7 +5,6 @@ import MagnifyingGlassIcon from '@phosphor-icons/core/assets/regular/magnifying-
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import type { Component } from 'solid-js';
 import {
-  createEffect,
   createMemo,
   createSignal,
   For,
@@ -65,33 +64,29 @@ export const FilterPropertySelect: Component<FilterPropertySelectProps> = (
     setIsDropdownOpen(false);
   };
 
+  // Close dropdown and cancel when clicking outside
+  const handleClickOutside = (event: MouseEvent) => {
+    if (!isDropdownOpen()) return;
+    const target = event.target;
+    if (!(target instanceof Node)) return;
+
+    const isInsideContainer = containerRef?.contains(target);
+    const isInsideDropdown = dropdownRef?.contains(target);
+
+    if (!isInsideContainer && !isInsideDropdown) {
+      setIsDropdownOpen(false);
+      props.onCancel?.();
+    }
+  };
+
   onMount(() => {
     fetchAvailableProperties();
     // Autofocus the search input
     searchInputRef?.focus();
-  });
-
-  // Close dropdown and cancel when clicking outside
-  createEffect(() => {
-    if (!isDropdownOpen()) return;
-
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target;
-      if (!(target instanceof Node)) return;
-
-      const isInsideContainer = containerRef?.contains(target);
-      const isInsideDropdown = dropdownRef?.contains(target);
-
-      if (!isInsideContainer && !isInsideDropdown) {
-        setIsDropdownOpen(false);
-        props.onCancel?.();
-      }
-    };
-
     document.addEventListener('mousedown', handleClickOutside);
-    onCleanup(() => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    });
+    onCleanup(() =>
+      document.removeEventListener('mousedown', handleClickOutside)
+    );
   });
 
   return (

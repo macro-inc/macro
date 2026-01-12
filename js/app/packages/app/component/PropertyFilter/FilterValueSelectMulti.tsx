@@ -102,6 +102,7 @@ export const FilterValueSelectMulti: Component<FilterValueSelectMultiProps> = (
 
   // Close when clicking outside
   const handleClickOutside = (event: MouseEvent) => {
+    if (!isAdding()) return;
     const target = event.target;
     if (!(target instanceof Node)) return;
 

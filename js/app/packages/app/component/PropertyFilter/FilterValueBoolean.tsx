@@ -1,6 +1,6 @@
 import { zSidePanelSearchAndFilter } from '@core/constant/stackingContext';
 import type { Component } from 'solid-js';
-import { createEffect, createSignal, onCleanup, Show } from 'solid-js';
+import { createSignal, onCleanup, onMount, Show } from 'solid-js';
 
 export type FilterValueBooleanProps = {
   value: boolean | null;
@@ -21,25 +21,24 @@ export const FilterValueBoolean: Component<FilterValueBooleanProps> = (
   };
 
   // Close dropdown when clicking outside
-  createEffect(() => {
+  const handleClickOutside = (event: MouseEvent) => {
     if (!isOpen()) return;
+    const target = event.target;
+    if (!(target instanceof Node)) return;
 
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target;
-      if (!(target instanceof Node)) return;
+    const isInsideContainer = containerRef?.contains(target);
+    const isInsideDropdown = dropdownRef?.contains(target);
 
-      const isInsideContainer = containerRef?.contains(target);
-      const isInsideDropdown = dropdownRef?.contains(target);
+    if (!isInsideContainer && !isInsideDropdown) {
+      setIsOpen(false);
+    }
+  };
 
-      if (!isInsideContainer && !isInsideDropdown) {
-        setIsOpen(false);
-      }
-    };
-
+  onMount(() => {
     document.addEventListener('mousedown', handleClickOutside);
-    onCleanup(() => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    });
+    onCleanup(() =>
+      document.removeEventListener('mousedown', handleClickOutside)
+    );
   });
 
   const displayValue = () => {
