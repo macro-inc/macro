@@ -1,9 +1,8 @@
 import type { SimpleMention } from '@service-comms/generated/models/simpleMention';
 
-export type MentionWithParticipants = {
+export type MentionItem = {
   itemType: string;
   itemId: string;
-  groupParticipants?: string[];
 };
 
 /**
@@ -28,7 +27,7 @@ export function expandGroupParticipants(
  * Returns null if the mention is a duplicate user.
  */
 export function toSimpleMention(
-  mention: MentionWithParticipants,
+  mention: MentionItem,
   seenUserIds: Set<string>
 ): SimpleMention | null {
   if (mention.itemType === 'user') {

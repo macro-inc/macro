@@ -19,11 +19,7 @@ export function GroupMention(props: GroupMentionDecoratorProps) {
         'bracket-offset-2': isSelectedAsNode(),
       }}
     >
-      <span
-        data-group-alias={props.groupAlias}
-        data-group-participants={JSON.stringify(props.groupParticipants)}
-        data-group-mention="true"
-      >
+      <span data-group-alias={props.groupAlias} data-group-mention="true">
         @{props.groupAlias}
       </span>
     </span>

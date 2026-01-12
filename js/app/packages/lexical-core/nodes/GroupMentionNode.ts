@@ -15,7 +15,6 @@ import { $applyIdFromSerialized } from '../plugins/nodeIdPlugin';
 
 export type GroupMentionInfo = {
   groupAlias: string;
-  groupParticipants: string[];
 };
 
 export type SerializedGroupMentionNode = Spread<
@@ -25,7 +24,6 @@ export type SerializedGroupMentionNode = Spread<
 
 export type GroupMentionDecoratorProps = {
   groupAlias: string;
-  groupParticipants: string[];
   key: NodeKey;
   theme: EditorThemeClasses;
 };
@@ -34,7 +32,6 @@ export class GroupMentionNode extends DecoratorNode<
   DecoratorComponent<GroupMentionDecoratorProps> | undefined
 > {
   __groupAlias: string;
-  __groupParticipants: string[];
 
   static getType() {
     return 'group-mention';
@@ -49,23 +46,17 @@ export class GroupMentionNode extends DecoratorNode<
   }
 
   static clone(node: GroupMentionNode) {
-    return new GroupMentionNode(
-      node.__groupAlias,
-      node.__groupParticipants,
-      node.__key
-    );
+    return new GroupMentionNode(node.__groupAlias, node.__key);
   }
 
-  constructor(groupAlias: string, groupParticipants: string[], key?: NodeKey) {
+  constructor(groupAlias: string, key?: NodeKey) {
     super(key);
     this.__groupAlias = groupAlias;
-    this.__groupParticipants = groupParticipants;
   }
 
   static importJSON(serializedNode: SerializedGroupMentionNode) {
     const node = $createGroupMentionNode({
       groupAlias: serializedNode.groupAlias,
-      groupParticipants: serializedNode.groupParticipants,
     });
     $applyIdFromSerialized(node, serializedNode);
     return node;
@@ -75,7 +66,6 @@ export class GroupMentionNode extends DecoratorNode<
     return {
       ...super.exportJSON(),
       groupAlias: this.__groupAlias,
-      groupParticipants: this.__groupParticipants,
       type: GroupMentionNode.getType(),
       version: 1,
     };
@@ -84,7 +74,6 @@ export class GroupMentionNode extends DecoratorNode<
   exportComponentProps(): GroupMentionInfo {
     return {
       groupAlias: this.__groupAlias,
-      groupParticipants: this.__groupParticipants,
     };
   }
 
@@ -101,7 +90,6 @@ export class GroupMentionNode extends DecoratorNode<
     return {
       'data-group-mention': true,
       'data-group-alias': this.__groupAlias,
-      'data-group-participants': JSON.stringify(this.__groupParticipants),
     };
   }
 
@@ -114,21 +102,10 @@ export class GroupMentionNode extends DecoratorNode<
         return {
           conversion: (domNode: HTMLElement) => {
             const groupAlias = domNode.getAttribute('data-group-alias');
-            const participantsJson = domNode.getAttribute(
-              'data-group-participants'
-            );
 
-            if (groupAlias && participantsJson) {
-              try {
-                const groupParticipants = JSON.parse(participantsJson);
-                const node = $createGroupMentionNode({
-                  groupAlias,
-                  groupParticipants,
-                });
-                return { node };
-              } catch {
-                return null;
-              }
+            if (groupAlias) {
+              const node = $createGroupMentionNode({ groupAlias });
+              return { node };
             }
             return null;
           },
@@ -164,15 +141,6 @@ export class GroupMentionNode extends DecoratorNode<
     writable.__groupAlias = groupAlias;
   }
 
-  getGroupParticipants(): string[] {
-    return this.__groupParticipants;
-  }
-
-  setGroupParticipants(groupParticipants: string[]) {
-    const writable = this.getWritable();
-    writable.__groupParticipants = groupParticipants;
-  }
-
   decorate(_: LexicalEditor, config: EditorConfig) {
     const decorator = getDecorator<GroupMentionNode>(GroupMentionNode);
     if (decorator) {
@@ -186,14 +154,8 @@ export class GroupMentionNode extends DecoratorNode<
   }
 }
 
-export function $createGroupMentionNode(params: {
-  groupAlias: string;
-  groupParticipants: string[];
-}) {
-  const node = new GroupMentionNode(
-    params.groupAlias,
-    params.groupParticipants
-  );
+export function $createGroupMentionNode(params: { groupAlias: string }) {
+  const node = new GroupMentionNode(params.groupAlias);
   return $applyNodeReplacement(node);
 }
 

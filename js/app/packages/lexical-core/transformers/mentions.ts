@@ -274,20 +274,14 @@ export const I_GROUP_MENTION: TextMatchTransformer = {
     if (!(node instanceof GroupMentionNode)) return null;
     const data = JSON.stringify({
       groupAlias: node.getGroupAlias(),
-      groupParticipants: node.getGroupParticipants(),
     });
     return `<m-group-mention>${data}</m-group-mention>`;
   },
   replace: (node: TextNode, match: RegExpMatchArray) => {
     try {
       const data = JSON.parse(match[1]);
-      for (const field of ['groupAlias', 'groupParticipants']) {
-        if (!(field in data)) throw new Error(`Missing field ${field}`);
-      }
-      const groupMentionNode = new GroupMentionNode(
-        data.groupAlias,
-        data.groupParticipants
-      );
+      if (!('groupAlias' in data)) throw new Error('Missing field groupAlias');
+      const groupMentionNode = new GroupMentionNode(data.groupAlias);
       node.replace(groupMentionNode);
     } catch (e) {
       console.error('Error in I_GROUP_MENTION replace:', e);

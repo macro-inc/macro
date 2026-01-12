@@ -654,7 +654,6 @@ function MentionsMenuInner(props: {
     if (!useMaybeBlockId()) return [];
 
     const term = searchTerm().toLowerCase();
-    const participantIds = users().map((u) => u.data.id);
 
     const availableGroups = [
       { alias: 'here', match: (t: string) => t === '' || 'here'.startsWith(t) },
@@ -662,7 +661,7 @@ function MentionsMenuInner(props: {
 
     return availableGroups
       .filter((g) => g.match(term))
-      .map((g) => createGroupAlias(g.alias, participantIds));
+      .map((g) => createGroupAlias(g.alias));
   });
 
   const filteredUsers = createMemo(() => {

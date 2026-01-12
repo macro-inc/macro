@@ -206,12 +206,11 @@ export function BaseInput(props: BaseInputProps) {
   const allMentions: Accessor<SimpleMention[]> = () => {
     const result: SimpleMention[] = [];
     const seenUserIds = new Set<string>();
+    const channelUserIds = props.channelUsers?.().map((u) => u.id) ?? [];
 
     for (const m of mentions()) {
-      if (m.itemType === 'group' && m.groupParticipants) {
-        result.push(
-          ...expandGroupParticipants(m.groupParticipants, seenUserIds)
-        );
+      if (m.itemType === 'group') {
+        result.push(...expandGroupParticipants(channelUserIds, seenUserIds));
       } else {
         const mention = toSimpleMention(m, seenUserIds);
         if (mention) result.push(mention);

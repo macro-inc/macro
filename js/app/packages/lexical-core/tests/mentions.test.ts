@@ -130,14 +130,12 @@ describe('parseLinks', () => {
 
 describe('parseGroupMentions', () => {
   it('extracts @alias from group mention', () => {
-    const input =
-      '<m-group-mention>{"groupAlias":"here","groupParticipants":["u1","u2"]}</m-group-mention>';
+    const input = '<m-group-mention>{"groupAlias":"here"}</m-group-mention>';
     expect(parseGroupMentions(input)).toBe('@here');
   });
 
   it('handles missing groupAlias', () => {
-    const input =
-      '<m-group-mention>{"groupParticipants":["u1"]}</m-group-mention>';
+    const input = '<m-group-mention>{}</m-group-mention>';
     expect(parseGroupMentions(input)).toBe('@');
   });
 

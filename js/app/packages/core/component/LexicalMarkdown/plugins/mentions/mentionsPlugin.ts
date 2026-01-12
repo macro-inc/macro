@@ -116,7 +116,6 @@ export type ItemMention = {
   documentName?: string;
   channelType?: string;
   groupAlias?: string;
-  groupParticipants?: string[];
 };
 
 export function $isMentionNode(
@@ -186,7 +185,6 @@ export function $mentionItemFromNode(node: MentionNode): ItemMention {
       itemType: 'group',
       itemId: node.getGroupAlias(),
       groupAlias: node.getGroupAlias(),
-      groupParticipants: node.getGroupParticipants(),
     };
   } else {
     return {
@@ -733,7 +731,6 @@ function registerMentionsPlugin(
                 itemType: 'group',
                 itemId: node.getGroupAlias(),
                 groupAlias: node.getGroupAlias(),
-                groupParticipants: node.getGroupParticipants(),
               });
             }
           }
@@ -743,7 +740,6 @@ function registerMentionsPlugin(
                 itemType: 'group',
                 itemId: node.getGroupAlias(),
                 groupAlias: node.getGroupAlias(),
-                groupParticipants: node.getGroupParticipants(),
               });
             }
           }

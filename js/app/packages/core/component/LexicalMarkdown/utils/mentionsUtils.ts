@@ -23,24 +23,19 @@ import {
 export type GroupItem = {
   id: string;
   groupAlias: string;
-  groupParticipants: string[];
 };
 
 /**
- * Creates a group mention entity from an alias and participant IDs.
+ * Creates a group mention entity from an alias.
  * Use this to define new group aliases (e.g., @here, @team, @online).
  */
-export function createGroupAlias(
-  alias: string,
-  participantIds: string[]
-): Entity<'group'> {
+export function createGroupAlias(alias: string): Entity<'group'> {
   return {
     kind: 'group',
     id: alias,
     data: {
       id: alias,
       groupAlias: alias,
-      groupParticipants: participantIds,
     },
   };
 }
@@ -210,7 +205,6 @@ export async function handleGroupMention(
   const { editor } = dependencies;
   editor.dispatchCommand(INSERT_GROUP_MENTION_COMMAND, {
     groupAlias: group.groupAlias,
-    groupParticipants: group.groupParticipants,
   });
 }
 
