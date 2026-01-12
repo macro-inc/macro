@@ -1,7 +1,6 @@
 import { EntityIcon } from '@core/component/EntityIcon';
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { blockAcceptedFileExtensions } from '@core/constant/allBlocks';
-import clickOutside from '@core/directive/clickOutside';
 import { fileSelector } from '@core/directive/fileSelector';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getItemBlockName } from '@core/util/getItemBlockName';
@@ -25,7 +24,6 @@ import { handleFileUpload } from '../util/handleFileUpload';
 
 // NOTE: solid directives
 false && fileSelector;
-false && clickOutside;
 
 type AttachMenuProps = {
   open?: boolean;
