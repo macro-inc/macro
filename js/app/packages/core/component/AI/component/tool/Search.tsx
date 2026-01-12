@@ -13,9 +13,9 @@ import { BaseTool } from './BaseTool';
 import { createToolRenderer } from './ToolRenderer';
 
 type UnifiedSearchResult = NamedTool<
-  'UnifiedSearch',
+  'NameSearch',
   'response'
->['data']['response']['results'][number];
+>['data']['results'][number];
 
 const UnifiedSearchToolResponse = (props: {
   results: UnifiedSearchResult[];
@@ -169,26 +169,28 @@ const UnifiedSearchToolResponse = (props: {
   );
 };
 
-const handler = createToolRenderer({
-  name: 'UnifiedSearch',
-  renderCall: (ctx) => (
-    <BaseTool
-      icon={MagnifyingGlass}
-      text="Searching..."
-      renderContext={ctx.renderContext}
-      type="call"
-    />
-  ),
-  renderResponse: (ctx) => (
-    <BaseTool
-      icon={MagnifyingGlass}
-      text="Found"
-      renderContext={ctx.renderContext}
-      type="response"
-    >
-      <UnifiedSearchToolResponse results={ctx.tool.data.response.results} />
-    </BaseTool>
-  ),
-});
+const createHandler = (name: 'NameSearch' | 'ContentSearch') =>
+  createToolRenderer({
+    name,
+    renderCall: (ctx) => (
+      <BaseTool
+        icon={MagnifyingGlass}
+        text="Searching..."
+        renderContext={ctx.renderContext}
+        type="call"
+      />
+    ),
+    renderResponse: (ctx) => (
+      <BaseTool
+        icon={MagnifyingGlass}
+        text="Found"
+        renderContext={ctx.renderContext}
+        type="response"
+      >
+        <UnifiedSearchToolResponse results={ctx.tool.data.results} />
+      </BaseTool>
+    ),
+  });
 
-export const unifiedSearchHandler = handler;
+export const nameSearchHandler = createHandler('NameSearch');
+export const contentSearchHandler = createHandler('ContentSearch');
