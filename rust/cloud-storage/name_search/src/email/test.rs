@@ -86,13 +86,19 @@ async fn test_search_email_subjects_ids_only_mode(pool: Pool<Postgres>) -> anyho
         "22222222-2222-2222-2222-222222222222"
     );
     assert_eq!(response.items[0].entity_type, SearchEntityType::Emails);
-    assert_eq!(response.items[0].name, "Re: Monthly Invoice - December");
+    assert_eq!(
+        response.items[0].name,
+        "Re: Monthly <macro_em>Invoice</macro_em> - December"
+    );
 
     assert_eq!(
         response.items[1].entity_id.to_string(),
         "11111111-1111-1111-1111-111111111111"
     );
-    assert_eq!(response.items[1].name, "Invoice from Q1 2024");
+    assert_eq!(
+        response.items[1].name,
+        "<macro_em>Invoice</macro_em> from Q1 2024"
+    );
 
     Ok(())
 }
@@ -120,13 +126,19 @@ async fn test_search_email_subjects_normal_mode_owned_threads(
         response.items[0].entity_id.to_string(),
         "66666666-6666-6666-6666-666666666666"
     );
-    assert_eq!(response.items[0].name, "IMPORTANT: INVOICE DUE");
+    assert_eq!(
+        response.items[0].name,
+        "IMPORTANT: <macro_em>INVOICE</macro_em> DUE"
+    );
 
     assert_eq!(
         response.items[1].entity_id.to_string(),
         "22222222-2222-2222-2222-222222222222"
     );
-    assert_eq!(response.items[1].name, "Re: Monthly Invoice - December");
+    assert_eq!(
+        response.items[1].name,
+        "Re: Monthly <macro_em>Invoice</macro_em> - December"
+    );
 
     Ok(())
 }
@@ -340,13 +352,19 @@ async fn test_search_email_subjects_partial_match(pool: Pool<Postgres>) -> anyho
         response.items[0].entity_id.to_string(),
         "44444444-4444-4444-4444-444444444444"
     );
-    assert_eq!(response.items[0].name, "Fwd: Client Meeting Tomorrow");
+    assert_eq!(
+        response.items[0].name,
+        "Fwd: Client <macro_em>Meet</macro_em>ing Tomorrow"
+    );
 
     assert_eq!(
         response.items[1].entity_id.to_string(),
         "33333333-3333-3333-3333-333333333333"
     );
-    assert_eq!(response.items[1].name, "Team Meeting Notes");
+    assert_eq!(
+        response.items[1].name,
+        "Team <macro_em>Meet</macro_em>ing Notes"
+    );
 
     Ok(())
 }
@@ -462,7 +480,10 @@ async fn test_search_email_subjects_multiple_messages_per_thread(
                 .eq("11111111-1111-1111-1111-111111111111")
         })
         .unwrap();
-    assert_eq!(thread_result.name, "Invoice from Q1 2024");
+    assert_eq!(
+        thread_result.name,
+        "<macro_em>Invoice</macro_em> from Q1 2024"
+    );
 
     Ok(())
 }

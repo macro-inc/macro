@@ -13,6 +13,21 @@ pub use models_opensearch::SearchEntityType;
 use models_search_cursor::{PaginatedResult, SearchCursorAttributes};
 pub use project::*;
 
+/// Escapes special regex characters in a search term
+pub(crate) fn escape_regex(term: &str) -> String {
+    let special_chars = [
+        '\\', '.', '+', '*', '?', '(', ')', '[', ']', '{', '}', '^', '$', '|',
+    ];
+    let mut escaped = String::with_capacity(term.len() * 2);
+    for c in term.chars() {
+        if special_chars.contains(&c) {
+            escaped.push('\\');
+        }
+        escaped.push(c);
+    }
+    escaped
+}
+
 /// Errors for name search crate
 #[derive(Debug, thiserror::Error)]
 pub enum NameSearchError {
