@@ -12,6 +12,7 @@ macro_entrypoint = { path = "../macro_entrypoint" }
 openssl = { workspace = true }
 sqlx = { workspace = true }
 tokio = { workspace = true }
+tracing = { workspace = true }
 
 [package.metadata.cargo-machete]
 ignored = ["openssl"]

@@ -1,7 +1,4 @@
-import {
-  channelStore,
-  isChannelAdminOrOwnerMemo,
-} from '@block-channel/signal/channel';
+import { channelStore } from '@block-channel/signal/channel';
 import {
   useAddParticipantsToChannel,
   useRemoveParticipantsFromChannel,
@@ -51,13 +48,10 @@ export function ParticipantManager(props: { participantCount: number }) {
     setUsersToInvite([]);
   }
 
-  const editable = () =>
-    (canManageParticipants() && isChannelAdminOrOwnerMemo()) ?? false;
+  const editable = () => canManageParticipants();
 
   const title = () =>
-    canManageParticipants() && isChannelAdminOrOwnerMemo()
-      ? 'Manage Participants'
-      : 'View Participants';
+    canManageParticipants() ? 'Manage Participants' : 'View Participants';
 
   const options = () =>
     users()
@@ -106,7 +100,7 @@ export function ParticipantManager(props: { participantCount: number }) {
                 when={
                   channelType() &&
                   ['private'].includes(channelType()!) &&
-                  isChannelAdminOrOwnerMemo()
+                  canManageParticipants()
                 }
               >
                 <div class="flex flex-row justify-between gap-2 min-h-[40px] text-ink-muted border-b border-edge-muted/50 p-2 items-center">

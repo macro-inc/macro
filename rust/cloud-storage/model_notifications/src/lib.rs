@@ -4,6 +4,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use models_pagination::{CreatedAt, Identify, SortOn};
 use serde::{Deserialize, Serialize};
+use std::hash::{DefaultHasher, Hash, Hasher};
 use strum::{Display, EnumDiscriminants, EnumString};
 use utoipa::ToSchema;
 mod device;
@@ -16,7 +17,11 @@ pub use raw::*;
 pub use unsubscribe::*;
 use uuid::Uuid;
 
+#[cfg(test)]
+mod tests;
+
 #[derive(Debug, Clone, Serialize, Deserialize, EnumDiscriminants, ToSchema)]
+#[deny(missing_docs)]
 #[strum_discriminants(name(NotificationEventType))]
 #[strum_discriminants(derive(Serialize, Deserialize, ToSchema, EnumString, Display))]
 #[strum_discriminants(serde(rename_all = "snake_case"))]
@@ -26,6 +31,7 @@ use uuid::Uuid;
     content = "notificationMetadata",
     rename_all = "snake_case"
 )]
+/// The types of events that the notification system is aware of
 pub enum NotificationEvent {
     /// An Item was shared with a specific user
     ItemSharedUser(ItemSharedMetadata),
@@ -162,6 +168,76 @@ pub struct UserNotification {
     pub temporal: NotificationTemporalData,
     #[serde(flatten)]
     pub notification_event: NotificationEvent,
+}
+
+impl UserNotification {
+    pub fn build_key(&self) -> NotifCollapseKey {
+        match &self.notification_event {
+            NotificationEvent::ChannelMention(channel_mention_metadata) => {
+                NotifCollapseKey::new(&channel_mention_metadata.message_id)
+            }
+            NotificationEvent::ChannelMessageSend(channel_message_send_metadata) => {
+                NotifCollapseKey::new(&channel_message_send_metadata.message_id)
+            }
+            NotificationEvent::ChannelMessageReply(channel_reply_metadata) => {
+                NotifCollapseKey::new(&channel_reply_metadata.message_id)
+            }
+            NotificationEvent::ItemSharedOrganization(_)
+            | NotificationEvent::DocumentMention(_)
+            | NotificationEvent::ChannelInvite(_)
+            | NotificationEvent::ChannelMessageDocument(_)
+            | NotificationEvent::ItemSharedUser(_)
+            | NotificationEvent::RejectTeamInvite
+            | NotificationEvent::NewEmail(_)
+            | NotificationEvent::InviteToTeam(_)
+            | NotificationEvent::TaskAssigned(_) => {
+                let entity_type: &'static str = self.notification_entity.entity_type.into();
+                NotifCollapseKey::new(entity_type).append(&self.notification_entity.entity_id)
+            }
+        }
+    }
+}
+
+/// used to build up the data to construct a [HashedCollapseKey]
+pub struct NotifCollapseKey(DefaultHasher);
+
+/// contains the string representation of a notification collapse key
+/// this is used to uniquely identify notifications delivered to an ios device
+#[derive(Debug, Clone)]
+pub struct HashedCollapseKey(String);
+
+impl AsRef<str> for HashedCollapseKey {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl HashedCollapseKey {
+    pub fn from_hashed(s: String) -> Self {
+        Self(s)
+    }
+
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+}
+
+impl NotifCollapseKey {
+    pub fn new(s: &str) -> Self {
+        let mut hasher = DefaultHasher::new();
+        hasher.write(s.as_bytes());
+        NotifCollapseKey(hasher)
+    }
+
+    pub fn append(mut self, s: &str) -> Self {
+        self.0.write(s.as_bytes());
+        self
+    }
+
+    pub fn into_hashed(self) -> HashedCollapseKey {
+        let bytes = self.0.finish();
+        HashedCollapseKey::from_hashed(format!("{bytes:x}"))
+    }
 }
 
 // CAUTION: for hash map purposes we need Hash+Eq impl on UserNotification

@@ -1,6 +1,6 @@
 use crate::util::redis::RedisClient;
 use anyhow::Context;
-use authentication_service_client::AuthServiceClient;
+use authentication_service_client::{AuthServiceClient, error::AuthServiceClientError};
 use axum::Json;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
@@ -10,9 +10,75 @@ use model::user::UserContext;
 use models_email::email::service::cache::TokenCacheKey;
 use models_email::email::service::link::Link;
 use models_email::email::service::link::UserProvider;
+use models_email::email::service::pubsub::{LinkManagerMessage, LinkManagerOperation};
 use models_email::gmail::inbox_sync::KeyMap;
+use sqs_client::SQS;
 use std::sync::Arc;
 
+/// Fetches Gmail access token from link and triggers link deletion if access was revoked.
+/// This should be used by pubsub handlers where we want to automatically clean up revoked links.
+/// API handlers should use `fetch_gmail_access_token_from_link` directly instead.
+#[tracing::instrument(skip(redis_client, auth_service_client, sqs_client))]
+pub async fn fetch_token_or_delete_on_revocation(
+    link: &Link,
+    redis_client: &RedisClient,
+    auth_service_client: &AuthServiceClient,
+    sqs_client: &SQS,
+) -> anyhow::Result<String> {
+    match fetch_gmail_access_token_from_link(link, redis_client, auth_service_client).await {
+        Ok(token) => Ok(token),
+        Err(e) if is_forbidden_error(&e) => {
+            tracing::warn!(
+                link_id = %link.id,
+                fusionauth_user_id = %link.fusionauth_user_id,
+                "User revoked access to Gmail - enqueueing link deletion"
+            );
+
+            sqs_client
+                .enqueue_link_manager_notification(LinkManagerMessage {
+                    link_id: link.id,
+                    operation: LinkManagerOperation::Delete,
+                })
+                .await
+                .inspect_err(|e| {
+                    tracing::error!(error=?e, link_id=%link.id, "Failed to enqueue link deletion after detecting revoked access");
+                })
+                .ok();
+
+            Err(e)
+        }
+        Err(e) => Err(e),
+    }
+}
+
+/// Checks if an error chain contains a Forbidden error from the auth service
+fn is_forbidden_error(e: &anyhow::Error) -> bool {
+    e.chain().any(|cause| {
+        cause
+            .downcast_ref::<AuthServiceClientError>()
+            .map(|e| matches!(e, AuthServiceClientError::Forbidden))
+            .unwrap_or(false)
+    })
+}
+
+/// Creates a cache key using a link, then fetches access token. Returns error if access token can't
+/// be fetched.
+pub async fn fetch_gmail_access_token_from_link(
+    link: &Link,
+    redis_client: &RedisClient,
+    auth_service_client: &AuthServiceClient,
+) -> anyhow::Result<String> {
+    // Create the cache key using the extracted email
+    let key = TokenCacheKey::new(
+        &link.fusionauth_user_id,
+        link.macro_id.0.as_ref(),
+        link.provider,
+    );
+
+    fetch_gmail_access_token(&key, redis_client, auth_service_client).await
+}
+
+/// fetches a user's gmail token using the user_context from the API request
 pub async fn fetch_gmail_token_usercontext_response(
     user_context: &UserContext,
     redis_client: &RedisClient,
@@ -39,22 +105,6 @@ pub async fn fetch_gmail_token_usercontext_response(
         })
 }
 
-/// Creates a cache key using a link, then fetches access token
-pub async fn fetch_gmail_access_token_from_link(
-    link: &Link,
-    redis_client: &RedisClient,
-    auth_service_client: &AuthServiceClient,
-) -> anyhow::Result<String> {
-    // Create the cache key using the extracted email
-    let key = TokenCacheKey::new(
-        &link.fusionauth_user_id,
-        link.macro_id.0.as_ref(),
-        link.provider,
-    );
-
-    fetch_gmail_access_token(&key, redis_client, auth_service_client).await
-}
-
 /// Fetches the gmail access token, first looking in the redis cache then hitting the auth service
 pub async fn fetch_gmail_access_token(
     key: &TokenCacheKey,
@@ -74,10 +124,9 @@ pub async fn fetch_gmail_access_token(
         let fetched_token = auth_service_client
             .get_google_access_token(&key.fusion_user_id, &key.macro_id)
             .await
-            .map_err(|e| {
-                anyhow::anyhow!(
-                    "Failed to get Google access token from auth service: {}. TokenCacheKey: {:?}",
-                    e,
+            .with_context(|| {
+                format!(
+                    "Failed to get Google access token from auth service. TokenCacheKey: {:?}",
                     key
                 )
             })?;

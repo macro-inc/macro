@@ -184,8 +184,7 @@ impl MessageQueue {
         sqs_message: &aws_sdk_sqs::types::Message,
     ) -> anyhow::Result<()> {
         let message = message_from_sqs(sqs_message).await;
-        if message.is_some() {
-            let message = message.unwrap();
+        if let Some(message) = message {
             let _ = process(&message, self).await;
         } else {
             tracing::info!("Message could not be processed properly");
@@ -556,7 +555,6 @@ mod tests {
             "macro|Ringo@macro.com",
             "macro|george@macro.com",
         ];
-        let n = group.len();
 
         let body = CreateGroupMessageBody {
             group: group.into_iter().map(String::from).collect(),

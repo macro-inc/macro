@@ -19,6 +19,8 @@ pub enum FusionAuthClientError {
     InvalidRefreshToken,
     #[error("an unknown error occurred")]
     Generic(GenericErrorResponse),
+    #[error("Invalid grant - user may have revoked access")]
+    InvalidGrant,
 }
 
 #[derive(serde::Serialize, Debug)]

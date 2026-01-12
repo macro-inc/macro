@@ -17,6 +17,7 @@ sqs_client = { path = "../sqs_client", default-features = false, features = [
   "search",
 ] }
 tokio = { workspace = true }
+tracing = { workspace = true }
 urlencoding = { workspace = true }
 
 [package.metadata.cargo-machete]

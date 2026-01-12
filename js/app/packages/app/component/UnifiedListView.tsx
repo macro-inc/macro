@@ -5,14 +5,31 @@ import {
 import { noiseFilter, signalFilter } from '@app/component/soupFilters';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { codeFileExtensions } from '@block-code/util/languageSupport';
+import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
+import { DeprecatedButton } from '@core/component/FormControls/DeprecatedButton';
+import DropdownMenu from '@core/component/FormControls/DropdownMenu';
+import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
+import { ToggleButton } from '@core/component/FormControls/ToggleButton';
+import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
 import { ContextMenuContent, MenuSeparator } from '@core/component/Menu';
 import { useTaskProperties } from '@core/component/Properties/hooks';
+import { getSuggestedProperties } from '@core/component/Properties/utils';
+import { RecipientSelector } from '@core/component/RecipientSelector';
+import { toast } from '@core/component/Toast/Toast';
 import {
   blockAcceptsFileExtension,
   fileTypeToBlockName,
 } from '@core/constant/allBlocks';
-import { ENABLE_FRECENCY } from '@core/constant/featureFlags';
+import {
+  ENABLE_FRECENCY,
+  ENABLE_PROPERTY_DISPLAY,
+  ENABLE_PROPERTY_FILTER,
+  ENABLE_SOUP_FROM_FILTER,
+  ENABLE_TASKS_TABS,
+} from '@core/constant/featureFlags';
 import { useEmailLinksStatus } from '@core/email-link';
+import { registerHotkey } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
@@ -20,6 +37,9 @@ import { arrayEquals } from '@core/util/compareUtils';
 import { debouncedDependent } from '@core/util/debounce';
 import { fuzzyMatch } from '@core/util/fuzzy';
 import CheckIcon from '@icon/bold/check-bold.svg';
+import SearchIcon from '@icon/regular/magnifying-glass.svg?component-solid';
+import LoadingSpinner from '@icon/regular/spinner.svg?component-solid';
+import XIcon from '@icon/regular/x.svg?component-solid';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import {
   createChannelsQuery,
@@ -33,6 +53,7 @@ import {
   type EntityClickHandler,
   type EntityData,
   type EntityFilter,
+  type ExpandedEntityType,
   importantFilterFn,
   isTaskEntity,
   notDoneFilterFn,
@@ -70,19 +91,30 @@ import type {
 } from '@service-storage/generated/schemas';
 import stringify from 'json-stable-stringify';
 import {
+  type Accessor,
   batch,
   createEffect,
   createMemo,
+  createRenderEffect,
   createRoot,
   createSelector,
   createSignal,
+  For,
   mergeProps,
   on,
   onCleanup,
+  onMount,
+  type ParentProps,
+  type Setter,
   Show,
   type Signal,
 } from 'solid-js';
-import { createStore, produce, unwrap } from 'solid-js/store';
+import {
+  createStore,
+  produce,
+  type SetStoreFunction,
+  unwrap,
+} from 'solid-js/store';
 import type { EntityPointerDownHandler } from '../../macro-entity/src/components/Entity';
 import {
   ENTITY_HEIGHT,
@@ -103,10 +135,19 @@ import { EntityActionsMenuItems } from './EntityActionsMenuItems';
 import { EntityModal } from './EntityModal/EntityModal';
 import { EntitySelectionToolbarModal } from './EntitySelectionToolbarModal';
 import { EntityRow, EntityRowProvider } from './mobile/EntityRow';
+import { PropertyDisplayControl } from './PropertyDisplayControl';
+import { PropertyFilterControl } from './PropertyFilterControl';
+import type { PropertyFilter } from './PropertyFilterTypes';
+import { useUpsertSavedViewMutation } from './Soup';
 import { openEntityInSplitFromUnifiedList } from './soupContextHelpers';
+import {
+  SplitToolbarLeft,
+  SplitToolbarRight,
+} from './split-layout/components/SplitToolbar';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 import {
   type DisplayOptions,
+  type DocumentTypeFilter,
   type FilterOptions,
   isConfigEqual,
   KNOWN_FILE_TYPES,
@@ -115,12 +156,23 @@ import {
   VIEWCONFIG_BASE,
   VIEWCONFIG_DEFAULTS_IDS_ENUM,
   VIEWCONFIG_FILTER_DOCUMENT_TYPE_FILTER,
+  type ViewConfigBase,
+  type ViewData,
 } from './ViewConfig';
 
 const SEARCH_SERVICE_DEBOUNCE_MS = 200;
 const LOCAL_FUZZY_SEARCH_DEBOUNCE_MS = 20;
 
 const NIL_UUID = '00000000-0000-0000-0000-000000000000';
+
+const FILE_TYPE_DISPLAY_LABELS: Record<DocumentTypeFilter, string> = {
+  md: 'NOTE',
+  pdf: 'PDF',
+  canvas: 'CANVAS',
+  code: 'CODE',
+  image: 'IMAGE',
+  unknown: 'OTHER',
+};
 
 const sortOptions = [
   {
@@ -194,7 +246,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     viewsDataStore: viewsData,
     setViewDataStore,
     selectedView,
-    virtualizerHandleSignal: [, setVirtualizerHandle],
+    virtualizerHandleSignal: [virtualizerHandle, setVirtualizerHandle],
     entityListRefSignal: [, setEntityListRef],
     entitiesSignal: [entities_, setEntities],
     emailViewSignal: [emailView],
@@ -225,6 +277,11 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     );
   };
 
+  const entityListResetScroll = () => {
+    setSelectedEntity(entities_()?.at(0));
+    virtualizerHandle()?.scrollToOffset(0);
+  };
+
   const rawSearchText = createMemo<string>(() => view()?.searchText ?? '');
   const searchText = createMemo(() => rawSearchText()?.trim() ?? '');
 
@@ -252,33 +309,81 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       view()?.filters?.notificationFilter ??
       defaultFilterOptions.notificationFilter
   );
+  const setNotificationFilter = (
+    notificationFilter: FilterOptions['notificationFilter']
+  ) => {
+    setViewDataStore(
+      selectedView(),
+      'filters',
+      'notificationFilter',
+      notificationFilter
+    );
+  };
 
   const focusFilters = createMemo(
     () => view()?.filters?.focusFilters ?? defaultFilterOptions.focusFilters
   );
 
+  const toggleFocusFilter = (
+    filter: NonNullable<FilterOptions['focusFilters']>[number]
+  ) => {
+    setViewDataStore(selectedView(), 'filters', 'focusFilters', (prev) => {
+      if (!prev) return [filter];
+
+      if (prev.includes(filter)) {
+        return prev.filter((value) => value !== filter);
+      }
+
+      return [...prev, filter];
+    });
+  };
+
   const importantFilter = createMemo(
     () =>
       view()?.filters?.importantFilter ?? defaultFilterOptions.importantFilter
   );
-
-  const unreadOnly = createMemo(() => view()?.filters?.unreadOnly ?? false);
+  const setImportantFilter = (importantFilter: boolean) => {
+    setViewDataStore(
+      selectedView(),
+      'filters',
+      'importantFilter',
+      importantFilter
+    );
+  };
 
   const entityTypeFilter = createMemo(
     () => view()?.filters?.typeFilter ?? defaultFilterOptions.typeFilter
   );
+  const setEntityTypeFilter: SetStoreFunction<
+    ViewData['filters']['typeFilter']
+  > = (...args: any[]) => {
+    // @ts-ignore narrowing set store function is annoying due to function overloading
+    setViewDataStore(selectedView(), 'filters', 'typeFilter', ...args);
+    entityListResetScroll();
+  };
 
   const fileTypeFilter = createMemo(
     () =>
       view()?.filters?.documentTypeFilter ??
       defaultFilterOptions.documentTypeFilter
   );
+  const setFileTypeFilter: SetStoreFunction<
+    ViewData['filters']['documentTypeFilter']
+  > = (...args: any[]) => {
+    setViewDataStore(
+      selectedView(),
+      'filters',
+      'documentTypeFilter',
+      // @ts-ignore narrowing set store function is annoying due to function overloading
+      ...args
+    );
+  };
 
   const projectFilter = createMemo(
     () => view()?.filters?.projectFilter ?? defaultFilterOptions.projectFilter
   );
 
-  useCombinedRecipients(['user']);
+  const { all: emailRecipientOptions } = useCombinedRecipients(['user']);
   const fromFilter = createMemo(() => view()?.filters.fromFilter);
   const hasFromFilter = createMemo(() => fromFilter() !== undefined);
   const shouldFilterEmails = createMemo(() => {
@@ -291,7 +396,29 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     const types = entityTypeFilter();
     return types.length === 0 || types.some((t) => t !== 'email');
   });
+  const showFromFilter = createMemo(
+    () => shouldFilterEmails() || shouldFilterOwnedEntities()
+  );
   const fromFilterUsers = createMemo(() => fromFilter() ?? []);
+  const setFromFilterUsers: SetStoreFunction<
+    ViewData['filters']['fromFilter']
+  > = (...args: any[]) => {
+    // @ts-ignore narrowing set store function is annoying due to function overloading
+    setViewDataStore(selectedView(), 'filters', 'fromFilter', ...args);
+  };
+
+  // Property filters
+  const propertyFilters = createMemo(
+    () => view()?.filters.propertyFilters ?? []
+  );
+  const setPropertyFilters = (filters: PropertyFilter[]) => {
+    setViewDataStore(selectedView(), 'filters', 'propertyFilters', filters);
+  };
+  // Track incomplete property filters for toast warning on save
+  const [hasIncompletePropertyFilters, setHasIncompletePropertyFilters] =
+    createSignal(false);
+  // Store clear handler from PropertyFilterControl
+  let clearPropertyFilters: (() => void) | undefined;
 
   const getSystemSortOption = (
     sort: SortOptions | undefined
@@ -353,6 +480,54 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       view()?.display?.unrollNotifications ??
       defaultDisplayOptions.unrollNotifications
   );
+  const setShowUnrollNotifications = (
+    showUnrollNotifications: DisplayOptions['unrollNotifications']
+  ) => {
+    setViewDataStore(
+      selectedView(),
+      'display',
+      'unrollNotifications',
+      showUnrollNotifications
+    );
+  };
+
+  const showUnreadIndicator = createMemo(
+    () =>
+      view()?.display?.showUnreadIndicator ??
+      defaultDisplayOptions.showUnreadIndicator
+  );
+  const setShowUnreadIndicator = (
+    showUnreadIndicator: DisplayOptions['showUnreadIndicator']
+  ) => {
+    setViewDataStore(
+      selectedView(),
+      'display',
+      'showUnreadIndicator',
+      showUnreadIndicator
+    );
+  };
+
+  const displayProperties = createMemo(
+    () =>
+      view()?.display?.displayProperties ??
+      defaultDisplayOptions.displayProperties
+  );
+  const setDisplayProperties = (
+    properties: DisplayOptions['displayProperties']
+  ) => {
+    setViewDataStore(
+      selectedView(),
+      'display',
+      'displayProperties',
+      properties
+    );
+  };
+
+  // Suggested properties reactive to filter type
+  const suggestedProperties = createMemo(() => {
+    const types = entityTypeFilter();
+    return getSuggestedProperties(types);
+  });
 
   const debouncedSearchForLocal = debouncedDependent(
     searchText,
@@ -363,7 +538,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     SEARCH_SERVICE_DEBOUNCE_MS
   );
 
-  const [, setIsSearchLoading] = createSignal(false);
+  const [isSearchLoading, setIsSearchLoading] = createSignal(false);
 
   const currentViewConfigBase = createMemo(() => {
     const viewKey = selectedView();
@@ -377,9 +552,12 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     const propertyId = sort?.propertyId ?? null;
     const sortOrder = sort?.sortOrder ?? null;
 
+    // Spread filters with propertyFilters explicitly accessed to ensure reactivity tracking
+    const filters = viewsData[viewKey]?.filters;
+
     return {
       display: viewsData[viewKey]?.display,
-      filters: viewsData[viewKey]?.filters,
+      filters: { ...filters, propertyFilters: filters.propertyFilters },
       sort: {
         type: sortType,
         sortBy,
@@ -397,6 +575,20 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     createFilterComposer();
   const { setFilters: setRequiredFilters, filterFn: requiredFilter } =
     createFilterComposer();
+
+  const toggleFileTypeFilter = (fileType: DocumentTypeFilter) => {
+    batch(() => {
+      if (!entityTypeFilter().includes('document'))
+        setEntityTypeFilter((prev) => [...prev, 'document']);
+
+      setFileTypeFilter((prev) =>
+        prev.includes(fileType)
+          ? prev.filter((t) => t !== fileType)
+          : [...prev, fileType]
+      );
+    });
+    entityListResetScroll();
+  };
 
   const nameFuzzySearchFilter = createMemo(() =>
     rawSearchText()
@@ -484,8 +676,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
     if (importantFilter()) filterFns.push(importantFilterFn);
 
-    // Apply unread filter independently (can be combined with other filters)
-    if (unreadOnly()) filterFns.push(unreadFilterFn);
+    if (notificationFilter() === 'unread') filterFns.push(unreadFilterFn);
 
     if (notificationFilter() === 'notDone') filterFns.push(notDoneFilterFn);
 
@@ -673,12 +864,19 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
   const emailActive = useEmailLinksStatus();
 
-  const validSearchTerms = createMemo(() => {
-    return debouncedSearchForService().length >= 3;
+  const validSearchTerms = createMemo(
+    () => debouncedSearchForService().length >= 3
+  );
+  const hasSignalOrNoiseFilter = createMemo(() => {
+    const focusFilters_ = focusFilters();
+    return (
+      focusFilters_?.includes('signal') === true ||
+      focusFilters_?.includes('noise') === true
+    );
   });
-  const isSearchActive = createMemo(() => {
-    return validSearchTerms();
-  });
+  const isSearchActive = createMemo(
+    () => validSearchTerms() && !hasSignalOrNoiseFilter()
+  );
 
   const dssQueryParams = createMemo(
     (): GetItemsSoupParams => ({
@@ -825,7 +1023,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     });
   };
 
-  const { sortFn: entitySort } = createSort({
+  const { SortComponent, sortFn: entitySort } = createSort({
     sortOptions,
     defaultSortOption: getSystemSortOption(defaultSortOptions as SortOptions),
     sortTypeSignal: [sortType, setSortType] as Signal<SystemSortOption>,
@@ -1046,11 +1244,17 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     }
   };
 
+  const StyledTriggerLabel = (props: ParentProps) => {
+    return <span class="text-[0.625rem]">{props.children}</span>;
+  };
+
   const focusedSelector = createSelector(() => selectedEntity()?.id);
   const multiSelectSelector = createSelector(
     () => view()?.multiSelectEntities,
     (a: string, b: EntityData[]) => b.find((e) => e.id === a) !== undefined
   );
+
+  const saveViewMutation = useUpsertSavedViewMutation();
 
   const isViewConfigChanged = createMemo(() => {
     const view_ = view();
@@ -1073,6 +1277,48 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       return false;
     }
   });
+
+  const onClickSaveViewConfigChanges = async () => {
+    const view_ = view();
+    const config = currentViewConfigBase();
+    if (!view_ || !config) return;
+
+    // Warn if there are incomplete property filters (they won't be saved)
+    if (hasIncompletePropertyFilters()) {
+      toast.alert('Incomplete property filters were not saved');
+    }
+
+    // Wait for mutation to complete (including query refetch) before updating initialConfig
+    await saveViewMutation.mutateAsync({
+      id: view_.id,
+      name: view_.view,
+      config,
+    });
+
+    // Reset initialConfig after save + refetch so isViewConfigChanged returns false
+    const currentConfig = stringifiedCurrentViewConfigBase();
+    if (currentConfig !== null && currentConfig !== undefined) {
+      setViewDataStore(selectedView(), 'initialConfig', currentConfig);
+    }
+  };
+
+  const onClickResetViewConfigChanges = () => {
+    const view_ = view();
+    if (!view_) return;
+
+    const initialConfigStr = view_.initialConfig;
+    if (initialConfigStr == null || initialConfigStr === '') return;
+
+    const initialConfigObj = JSON.parse(initialConfigStr) as ViewConfigBase;
+
+    batch(() => {
+      setViewDataStore(selectedView(), 'filters', initialConfigObj.filters);
+      setViewDataStore(selectedView(), 'sort', initialConfigObj.sort);
+      setViewDataStore(selectedView(), 'display', initialConfigObj.display);
+    });
+    // Clear property filter UI state
+    clearPropertyFilters?.();
+  };
 
   // Set initialConfig when it's not present (on load or after save/refetch)
   createEffect(() => {
@@ -1214,257 +1460,713 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   });
 
   return (
-    <ContextMenu
-      forceMount={contextAndModalState.contextMenuOpen}
-      onOpenChange={(open) => {
-        setContextAndModalState((prev) => {
-          if (open) {
+    <>
+      <Show when={!props.hideToolbar}>
+        <SearchBar
+          isLoading={isSearchLoading}
+          setIsLoading={setIsSearchLoading}
+        />
+        <SplitToolbarRight order={5}>
+          <div class="flex flex-row items-center gap-1 p-1 h-full select-none">
+            <Show when={isViewConfigChanged()}>
+              <Show when={preview()}>
+                <DropdownMenu
+                  size="SM"
+                  theme="secondary"
+                  triggerLabel={<span class="font-extrabold">⋮</span>}
+                >
+                  <div class="flex flex-col gap-2 p-2">
+                    <DeprecatedButton
+                      size="SM"
+                      classList={{
+                        '!border-ink/25 !text-ink !bg-panel hover:!text-ink font-normal': true,
+                      }}
+                      onClick={onClickResetViewConfigChanges}
+                    >
+                      CLEAR
+                    </DeprecatedButton>
+                    <DeprecatedButton
+                      size="SM"
+                      classList={{
+                        '!border-ink/25 !text-ink !bg-panel hover:!text-ink font-normal': true,
+                      }}
+                      onClick={onClickSaveViewConfigChanges}
+                    >
+                      SAVE CHANGES
+                    </DeprecatedButton>
+                  </div>
+                </DropdownMenu>
+              </Show>
+              <Show when={!preview()}>
+                <DeprecatedButton
+                  size="SM"
+                  classList={{
+                    '!border-ink/25 !text-ink !bg-panel hover:!text-ink ml-1.5 font-normal': true,
+                  }}
+                  onClick={onClickResetViewConfigChanges}
+                >
+                  CLEAR
+                </DeprecatedButton>
+                <DeprecatedButton
+                  size="SM"
+                  classList={{
+                    '!border-ink/25 !text-ink !bg-panel hover:!text-ink mx-1.5 font-normal': true,
+                  }}
+                  onClick={onClickSaveViewConfigChanges}
+                >
+                  SAVE CHANGES
+                </DeprecatedButton>
+              </Show>
+            </Show>
+            <DropdownMenu
+              size="SM"
+              theme="primary"
+              triggerLabel={<StyledTriggerLabel>Filter</StyledTriggerLabel>}
+            >
+              <div class="min-w-[10vw] max-w-md">
+                <div class="grid divide-y divide-edge">
+                  <section class="gap-1 grid p-2">
+                    <ToggleSwitch
+                      onChange={setImportantFilter}
+                      checked={importantFilter()}
+                      label="Important"
+                      size="SM"
+                    />
+                    <SegmentedControl
+                      size="SM"
+                      label="Show"
+                      list={[
+                        { value: 'all', label: 'All' },
+                        { value: 'unread', label: 'Unread' },
+                        { value: 'notDone', label: 'Not Done' },
+                      ]}
+                      value={notificationFilter()}
+                      onChange={setNotificationFilter}
+                    />
+
+                    <div class="flex items-center justify-between">
+                      <span class="font-medium text-xs">Focus</span>
+                      <div class="flex items-center gap-1">
+                        <ToggleButton
+                          size="SM"
+                          pressed={focusFilters()?.includes('signal')}
+                          onChange={() => toggleFocusFilter('signal')}
+                        >
+                          <span class="uppercase">Signal</span>
+                        </ToggleButton>
+                        <ToggleButton
+                          size="SM"
+                          pressed={focusFilters()?.includes('noise')}
+                          onChange={() => toggleFocusFilter('noise')}
+                        >
+                          <span class="uppercase">Noise</span>
+                        </ToggleButton>
+                      </div>
+                    </div>
+                  </section>
+                  <section class="gap-1 p-2">
+                    <span class="font-medium text-xs">Type</span>
+                    <div class="flex flex-row flex-wrap items-center gap-1">
+                      <EntityTypeToggle
+                        filter={entityTypeFilter}
+                        setFilter={setEntityTypeFilter}
+                        setFileTypeFilter={setFileTypeFilter}
+                        type="document"
+                      />
+                      <EntityTypeToggle
+                        filter={entityTypeFilter}
+                        setFilter={setEntityTypeFilter}
+                        type="chat"
+                      />
+                      <EntityTypeToggle
+                        filter={entityTypeFilter}
+                        setFilter={setEntityTypeFilter}
+                        type="channel"
+                      />
+                      <Show when={ENABLE_TASKS_TABS}>
+                        <EntityTypeToggle
+                          filter={entityTypeFilter}
+                          setFilter={setEntityTypeFilter}
+                          type="task"
+                        />
+                      </Show>
+                      <EntityTypeToggle
+                        filter={entityTypeFilter}
+                        setFilter={setEntityTypeFilter}
+                        type="email"
+                      />
+                      <EntityTypeToggle
+                        filter={entityTypeFilter}
+                        setFilter={setEntityTypeFilter}
+                        type="project"
+                      />
+                    </div>
+                  </section>
+                  <section class="gap-1 p-2">
+                    <span class="font-medium text-xs">Filetype</span>
+                    <div class="flex flex-row flex-wrap items-center gap-1">
+                      <For each={[...VIEWCONFIG_FILTER_DOCUMENT_TYPE_FILTER]}>
+                        {(fileType) => (
+                          <ToggleButton
+                            size="SM"
+                            pressed={fileTypeFilter().includes(fileType)}
+                            onChange={() => toggleFileTypeFilter(fileType)}
+                          >
+                            {FILE_TYPE_DISPLAY_LABELS[fileType]}
+                          </ToggleButton>
+                        )}
+                      </For>
+                    </div>
+                  </section>
+                  <Show when={ENABLE_SOUP_FROM_FILTER && showFromFilter()}>
+                    <section class="gap-1 p-2">
+                      <span class="font-medium text-xs">From</span>
+                      <RecipientSelector<'user' | 'contact'>
+                        options={emailRecipientOptions}
+                        selectedOptions={fromFilterUsers}
+                        setSelectedOptions={setFromFilterUsers}
+                        placeholder="Filter by user..."
+                        includeSelf
+                      />
+                    </section>
+                  </Show>
+                  <Show when={ENABLE_PROPERTY_FILTER}>
+                    <section class="gap-1 grid p-2">
+                      <span class="font-medium text-xs">Property</span>
+                      <PropertyFilterControl
+                        propertyFilters={propertyFilters}
+                        setPropertyFilters={setPropertyFilters}
+                        onIncompleteFiltersChange={
+                          setHasIncompletePropertyFilters
+                        }
+                        registerClearHandler={(fn) => {
+                          clearPropertyFilters = fn;
+                        }}
+                      />
+                    </section>
+                  </Show>
+                </div>
+              </div>
+            </DropdownMenu>
+            <DropdownMenu
+              size="SM"
+              triggerLabel={<StyledTriggerLabel>Display</StyledTriggerLabel>}
+            >
+              <div class="min-w-[10vw] max-w-md">
+                <div class="grid divide-y divide-edge">
+                  <section class="p-2">
+                    <SegmentedControl
+                      size="SM"
+                      label="Layout"
+                      // value={selectItemFromList()}
+                      list={['Compact', 'Relaxed', 'Visual']}
+                      // onChange={(newValue) => setSelectItemFromList(newValue)}
+                      disabled
+                    />
+                  </section>
+                  <section class="gap-1 grid p-2">
+                    <ToggleSwitch
+                      size="SM"
+                      label="Unroll Notifications"
+                      checked={showUnrollNotifications()}
+                      onChange={setShowUnrollNotifications}
+                    />
+                    <ToggleSwitch
+                      size="SM"
+                      label="Indicate Unread"
+                      checked={showUnreadIndicator()}
+                      onChange={setShowUnreadIndicator}
+                    />
+                  </section>
+                  <section class="p-2">
+                    <SortComponent
+                      size="SM"
+                      onSelectSystemSort={() => {
+                        entityListResetScroll();
+                      }}
+                    />
+                  </section>
+                  <Show when={ENABLE_PROPERTY_DISPLAY}>
+                    <section class="p-2">
+                      <PropertyDisplayControl
+                        selectedPropertyIds={displayProperties}
+                        setSelectedPropertyIds={setDisplayProperties}
+                        suggestedProperties={suggestedProperties()}
+                      />
+                    </section>
+                  </Show>
+                </div>
+              </div>
+            </DropdownMenu>
+          </div>
+        </SplitToolbarRight>
+      </Show>
+      <ContextMenu
+        forceMount={contextAndModalState.contextMenuOpen}
+        onOpenChange={(open) => {
+          setContextAndModalState((prev) => {
+            if (open) {
+              return {
+                ...prev,
+                contextMenuOpen: open,
+                prevSelectedEntity: prev.selectedEntity,
+              };
+            }
             return {
               ...prev,
               contextMenuOpen: open,
-              prevSelectedEntity: prev.selectedEntity,
+              selectedEntity: undefined,
             };
-          }
-          return {
-            ...prev,
-            contextMenuOpen: open,
-            selectedEntity: undefined,
-          };
-        });
-      }}
-    >
-      <ContextMenu.Trigger class="size-full unified-list-root">
-        <EntityRowProvider
-          container={localEntityListRef}
-          canSwipeLeft={(entityId) => {
-            const entity = entityById().get(entityId);
-            if (!entity) return false;
-            return soupContext.actionRegistry.isActionEnabled(
-              'mark_as_done',
-              entity
-            );
-          }}
-          onSwipeLeft={(entityId) => {
-            const entity = entityById().get(entityId);
-            if (!entity) return false;
-
-            soupContext.actionRegistry.execute('mark_as_done', entity);
-          }}
-          setCollapseEntity={soupContext.collapseEntitySignal[1]}
-        >
-          <UnifiedListComponent
-            entityListRef={setLocalEntityListRef}
-            virtualizerHandle={setVirtualizerHandle}
-            viewId={view()?.id}
-            searchText={searchText()}
-            hasRefinementsFromBase={isViewConfigChanged()}
-            entityMinHeight={ENTITY_HEIGHT}
-          >
-            {(innerProps) => {
-              const displayDoneButton = () => {
-                if (innerProps.entity.type === 'email') {
-                  return !innerProps.entity.done;
-                }
-
-                return (innerProps.entity.notifications?.().length ?? 0) > 0;
-              };
-              const timestamp = () => {
-                switch (sortType()) {
-                  case 'viewed_at':
-                    return innerProps.entity.viewedAt;
-                  case 'created_at':
-                    return innerProps.entity.createdAt;
-                  case 'updated_at':
-                    return innerProps.entity.updatedAt;
-                }
-              };
-
-              const properties = () => {
-                if (isTaskEntity(innerProps.entity)) {
-                  return taskPropertiesStore()[innerProps.entity.id] ?? [];
-                }
-                return undefined;
-              };
-
-              return (
-                <EntityRow
-                  entityId={innerProps.entity.id}
-                  swipeLeftColor="bg-success"
-                  swipeLeftRevealedComponent={
-                    <CheckIcon class="size-8 text-panel" />
-                  }
-                >
-                  <EntityWithEverything
-                    onContextMenu={() => {
-                      if (isPanelActive() && !preview()) {
-                        setSelectedEntity(innerProps.entity);
-                      }
-                      setContextAndModalState((prev) => {
-                        return {
-                          ...prev,
-                          contextMenuOpen: true,
-                          selectedEntity: innerProps.entity,
-                        };
-                      });
-                    }}
-                    entity={innerProps.entity}
-                    properties={properties()}
-                    timestamp={timestamp()}
-                    onClick={entityClickHandler}
-                    onPointerDown={entityPointerDownHandler}
-                    onClickRowAction={
-                      soupContext.actionRegistry.isActionEnabled(
-                        'mark_as_done',
-                        innerProps.entity
-                      )
-                        ? (entity, type) => {
-                            if (type === 'done') {
-                              markEntityAsDone?.(entity);
-                            }
-                          }
-                        : undefined
-                    }
-                    onClickNotification={(notifiedEntity) => {
-                      const notification = tryToTypedNotification(
-                        notifiedEntity.notification
-                      );
-                      if (!notification) return;
-                      if (notifiedEntity.type === 'channel')
-                        gotoChannelNotification(notification);
-                    }}
-                    onMouseOver={() => {
-                      if (preview()) return;
-                      setViewDataStore(
-                        selectedView(),
-                        'hasUserInteractedEntity',
-                        true
-                      );
-                      setSelectedEntity(innerProps.entity);
-                    }}
-                    onMouseLeave={() => {}}
-                    onFocusIn={() => {
-                      if (preview()) return;
-                      setSelectedEntity(innerProps.entity);
-                    }}
-                    showLeftColumnIndicator={true}
-                    showUnrollNotifications={showUnrollNotifications()}
-                    importantIndicatorActive={importantFilterFn(
-                      innerProps.entity
-                    )}
-                    unreadIndicatorActive={unreadFilterFn(innerProps.entity)}
-                    showDoneButton={displayDoneButton()}
-                    highlighted={
-                      isPanelActive() && focusedSelector(innerProps.entity.id)
-                    }
-                    selected={
-                      focusedSelector(innerProps.entity.id) ||
-                      contextAndModalState.selectedEntity?.id ===
-                        innerProps.entity.id
-                    }
-                    checked={multiSelectSelector(innerProps.entity.id)}
-                    onChecked={(next, shiftKey) =>
-                      handleMultiSelectChecked({
-                        entity: innerProps.entity,
-                        entityIndex: innerProps.index,
-                        next,
-                        shiftKey: shiftKey ?? false,
-                      })
-                    }
-                  />
-                </EntityRow>
+          });
+        }}
+      >
+        <ContextMenu.Trigger class="size-full unified-list-root">
+          <EntityRowProvider
+            container={localEntityListRef}
+            canSwipeLeft={(entityId) => {
+              const entity = entityById().get(entityId);
+              if (!entity) return false;
+              return soupContext.actionRegistry.isActionEnabled(
+                'mark_as_done',
+                entity
               );
             }}
-          </UnifiedListComponent>
-        </EntityRowProvider>
+            onSwipeLeft={(entityId) => {
+              const entity = entityById().get(entityId);
+              if (!entity) return false;
 
-        <EntityModal
-          isOpen={() =>
-            !!(
-              contextAndModalState.modalOpen &&
-              contextAndModalState.selectedEntity?.id
-            )
-          }
-          setIsOpen={() =>
-            setContextAndModalState((prev) => ({
-              ...prev,
-              modalOpen: !prev.modalOpen,
-            }))
-          }
-          view={() => contextAndModalState.modalView}
-          entity={contextAndModalState.selectedEntity}
-        />
-        <ContextMenu.Portal>
-          <Show when={contextAndModalState.selectedEntity}>
-            {(selectedEntity) => (
-              <ContextMenuContent mobileFullScreen>
-                <Show when={isTouchDevice() && isMobileWidth()}>
-                  <Entity
-                    entity={selectedEntity()}
-                    timestamp={
-                      sortType() === 'viewed_at'
-                        ? selectedEntity().viewedAt
-                        : sortType() === 'created_at'
-                          ? selectedEntity().createdAt
-                          : undefined
+              soupContext.actionRegistry.execute('mark_as_done', entity);
+            }}
+            setCollapseEntity={soupContext.collapseEntitySignal[1]}
+          >
+            <UnifiedListComponent
+              entityListRef={setLocalEntityListRef}
+              virtualizerHandle={setVirtualizerHandle}
+              viewId={view()?.id}
+              searchText={searchText()}
+              hasRefinementsFromBase={isViewConfigChanged()}
+              entityMinHeight={ENTITY_HEIGHT}
+            >
+              {(innerProps) => {
+                const displayDoneButton = () => {
+                  if (innerProps.entity.type === 'email') {
+                    return !innerProps.entity.done;
+                  }
+
+                  return (innerProps.entity.notifications?.().length ?? 0) > 0;
+                };
+                const timestamp = () => {
+                  switch (sortType()) {
+                    case 'viewed_at':
+                      return innerProps.entity.viewedAt;
+                    case 'created_at':
+                      return innerProps.entity.createdAt;
+                    case 'updated_at':
+                      return innerProps.entity.updatedAt;
+                  }
+                };
+
+                const properties = () => {
+                  if (isTaskEntity(innerProps.entity)) {
+                    return taskPropertiesStore()[innerProps.entity.id] ?? [];
+                  }
+                  return undefined;
+                };
+
+                return (
+                  <EntityRow
+                    entityId={innerProps.entity.id}
+                    swipeLeftColor="bg-success"
+                    swipeLeftRevealedComponent={
+                      <CheckIcon class="size-8 text-panel" />
                     }
-                  />
-                  <MenuSeparator />
-                </Show>
-                <EntityActionsMenuItems
-                  entity={selectedEntity()}
-                  onSelectAction={() => {}}
-                />
-              </ContextMenuContent>
-            )}
-          </Show>
-        </ContextMenu.Portal>
-      </ContextMenu.Trigger>
-      <Show when={view()?.multiSelectEntities.length}>
-        <EntitySelectionToolbarModal
-          multiSelectEntities={view()?.multiSelectEntities ?? []}
-          onClose={() =>
-            soupContext.setViewDataStore(
-              selectedView(),
-              'multiSelectEntities',
-              []
-            )
-          }
-          onAction={() => {
-            const multiSelectEntities =
-              viewsData[selectedView()].multiSelectEntities;
-            const hasSelection = multiSelectEntities.length > 0;
-            if (hasSelection) {
-              setKonsoleMode('SELECTION_MODIFICATION');
-              const selectionIndex =
-                searchCategories.getCategoryIndex('Selection');
+                  >
+                    <EntityWithEverything
+                      onContextMenu={() => {
+                        if (isPanelActive() && !preview()) {
+                          setSelectedEntity(innerProps.entity);
+                        }
+                        setContextAndModalState((prev) => {
+                          return {
+                            ...prev,
+                            contextMenuOpen: true,
+                            selectedEntity: innerProps.entity,
+                          };
+                        });
+                      }}
+                      entity={innerProps.entity}
+                      properties={properties()}
+                      timestamp={timestamp()}
+                      onClick={entityClickHandler}
+                      onPointerDown={entityPointerDownHandler}
+                      onClickRowAction={
+                        soupContext.actionRegistry.isActionEnabled(
+                          'mark_as_done',
+                          innerProps.entity
+                        )
+                          ? (entity, type) => {
+                              if (type === 'done') {
+                                markEntityAsDone?.(entity);
+                              }
+                            }
+                          : undefined
+                      }
+                      onClickNotification={(notifiedEntity) => {
+                        const notification = tryToTypedNotification(
+                          notifiedEntity.notification
+                        );
+                        if (!notification) return;
+                        if (notifiedEntity.type === 'channel')
+                          gotoChannelNotification(notification);
+                      }}
+                      onMouseOver={() => {
+                        if (preview()) return;
+                        setViewDataStore(
+                          selectedView(),
+                          'hasUserInteractedEntity',
+                          true
+                        );
+                        setSelectedEntity(innerProps.entity);
+                      }}
+                      onMouseLeave={() => {}}
+                      onFocusIn={() => {
+                        if (preview()) return;
+                        setSelectedEntity(innerProps.entity);
+                      }}
+                      showLeftColumnIndicator={
+                        showUnreadIndicator() || importantFilter()
+                      }
+                      fadeIfRead={showUnreadIndicator()}
+                      showUnrollNotifications={showUnrollNotifications()}
+                      importantIndicatorActive={importantFilterFn(
+                        innerProps.entity
+                      )}
+                      unreadIndicatorActive={unreadFilterFn(innerProps.entity)}
+                      showDoneButton={displayDoneButton()}
+                      highlighted={
+                        isPanelActive() && focusedSelector(innerProps.entity.id)
+                      }
+                      selected={
+                        focusedSelector(innerProps.entity.id) ||
+                        contextAndModalState.selectedEntity?.id ===
+                          innerProps.entity.id
+                      }
+                      checked={multiSelectSelector(innerProps.entity.id)}
+                      onChecked={(next, shiftKey) =>
+                        handleMultiSelectChecked({
+                          entity: innerProps.entity,
+                          entityIndex: innerProps.index,
+                          next,
+                          shiftKey: shiftKey ?? false,
+                        })
+                      }
+                      searchActive={!!searchText()}
+                    />
+                  </EntityRow>
+                );
+              }}
+            </UnifiedListComponent>
+          </EntityRowProvider>
 
-              if (selectionIndex === undefined) return false;
-
-              setCommandCategoryIndex(selectionIndex);
-
-              searchCategories.showCategory('Selection');
-
-              setKonsoleContextInformation({
-                selectedEntities: multiSelectEntities.slice(),
-                clearSelection: () => {
-                  soupContext.setViewDataStore(
-                    selectedView(),
-                    'multiSelectEntities',
-                    []
-                  );
-                },
-              });
-
-              toggleKonsoleVisibility();
-              return true;
+          <EntityModal
+            isOpen={() =>
+              !!(
+                contextAndModalState.modalOpen &&
+                contextAndModalState.selectedEntity?.id
+              )
             }
-            searchCategories.hideCategory('Selection');
-            resetCommandCategoryIndex();
-            resetKonsoleMode();
-            return false;
+            setIsOpen={() =>
+              setContextAndModalState((prev) => ({
+                ...prev,
+                modalOpen: !prev.modalOpen,
+              }))
+            }
+            view={() => contextAndModalState.modalView}
+            entity={contextAndModalState.selectedEntity}
+          />
+          <ContextMenu.Portal>
+            <Show when={contextAndModalState.selectedEntity}>
+              {(selectedEntity) => (
+                <ContextMenuContent mobileFullScreen>
+                  <Show when={isTouchDevice() && isMobileWidth()}>
+                    <Entity
+                      entity={selectedEntity()}
+                      timestamp={
+                        sortType() === 'viewed_at'
+                          ? selectedEntity().viewedAt
+                          : sortType() === 'created_at'
+                            ? selectedEntity().createdAt
+                            : undefined
+                      }
+                    />
+                    <MenuSeparator />
+                  </Show>
+                  <EntityActionsMenuItems
+                    entity={selectedEntity()}
+                    onSelectAction={() => {}}
+                  />
+                </ContextMenuContent>
+              )}
+            </Show>
+          </ContextMenu.Portal>
+        </ContextMenu.Trigger>
+        <Show when={view()?.multiSelectEntities.length}>
+          <EntitySelectionToolbarModal
+            multiSelectEntities={view()?.multiSelectEntities ?? []}
+            onClose={() =>
+              soupContext.setViewDataStore(
+                selectedView(),
+                'multiSelectEntities',
+                []
+              )
+            }
+            onAction={() => {
+              const multiSelectEntities =
+                viewsData[selectedView()].multiSelectEntities;
+              const hasSelection = multiSelectEntities.length > 0;
+              if (hasSelection) {
+                setKonsoleMode('SELECTION_MODIFICATION');
+                const selectionIndex =
+                  searchCategories.getCategoryIndex('Selection');
+
+                if (selectionIndex === undefined) return false;
+
+                setCommandCategoryIndex(selectionIndex);
+
+                searchCategories.showCategory('Selection');
+
+                setKonsoleContextInformation({
+                  selectedEntities: multiSelectEntities.slice(),
+                  clearSelection: () => {
+                    soupContext.setViewDataStore(
+                      selectedView(),
+                      'multiSelectEntities',
+                      []
+                    );
+                  },
+                });
+
+                toggleKonsoleVisibility();
+                return true;
+              }
+              searchCategories.hideCategory('Selection');
+              resetCommandCategoryIndex();
+              resetKonsoleMode();
+              return false;
+            }}
+          />
+        </Show>{' '}
+      </ContextMenu>
+    </>
+  );
+}
+
+const EntityTypeToggle = (props: {
+  type: ExpandedEntityType;
+  filter: Accessor<typeof VIEWCONFIG_BASE.filters.typeFilter>;
+  setFilter: Setter<typeof VIEWCONFIG_BASE.filters.typeFilter>;
+  setFileTypeFilter?: Setter<typeof VIEWCONFIG_BASE.filters.documentTypeFilter>;
+}) => {
+  const toggleEntityTypeFilter = (type: ExpandedEntityType) => {
+    props.setFilter((prev) =>
+      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]
+    );
+  };
+  return (
+    <ToggleButton
+      size="SM"
+      pressed={props.filter().includes(props.type)}
+      onChange={(pressed) =>
+        batch(() => {
+          if (props.setFileTypeFilter && !pressed) props.setFileTypeFilter([]);
+
+          toggleEntityTypeFilter(props.type);
+        })
+      }
+    >
+      <span class="uppercase">
+        {props.type === 'project' ? 'folder' : props.type}
+      </span>
+    </ToggleButton>
+  );
+};
+
+function SearchBar(props: {
+  isLoading: Accessor<boolean>;
+  setIsLoading: Setter<boolean>;
+}) {
+  const splitContext = useSplitPanelOrThrow();
+  const {
+    viewsDataStore,
+    selectedView,
+    setSelectedView,
+    setViewDataStore,
+    virtualizerHandleSignal: [virtualizerHandle],
+    entityListRefSignal: [entityListRef],
+    navigateThroughList,
+  } = splitContext.soupContext;
+  const viewData = createMemo(() => viewsDataStore[selectedView()]);
+  const viewName = createMemo(() => viewData().view);
+
+  let inputRef: HTMLInputElement | undefined;
+
+  const searchText = createMemo<string>(() => viewData().searchText ?? '');
+  const setSearchText = (text: string) => {
+    setViewDataStore(selectedView(), 'searchText', text);
+  };
+
+  const selectionClick = () => {
+    const id = viewsDataStore[selectedView()].selectedEntity?.id;
+    if (!id) return;
+    const el = entityListRef()?.querySelector(`[data-entity-id="${id}"]`);
+    if (!(el instanceof HTMLElement)) return;
+    el.click();
+  };
+
+  const focusNextEntity = () => {
+    navigateThroughList({
+      axis: 'end',
+      mode: 'step',
+    });
+  };
+
+  const [waitForLoadingEnd, setWaitForLoadingEnd] = createSignal(false);
+
+  // When search text changes, mark that we're waiting for loading to end
+  createRenderEffect((prevText: string) => {
+    const text = searchText().trim();
+    if (text !== prevText) {
+      setViewDataStore(selectedView(), 'selectedEntity', undefined);
+      setViewDataStore(selectedView(), 'hasUserInteractedEntity', false);
+      virtualizerHandle()?.scrollToIndex(0);
+      setWaitForLoadingEnd(true);
+    }
+    return text;
+  }, searchText());
+
+  // When we're no longer loading but still waiting, reset the list
+  createRenderEffect((prevLoading: boolean) => {
+    const loading = props.isLoading();
+
+    if (prevLoading && !loading && waitForLoadingEnd()) {
+      // Loading just ended and we were waiting for it
+      setWaitForLoadingEnd(false);
+      virtualizerHandle()?.scrollToIndex(0);
+    }
+
+    return loading;
+  }, props.isLoading());
+
+  const focusSearch = () => {
+    setTimeout(() => {
+      const searchInput = document.getElementById(
+        `search-input-${splitContext.handle.id}-${selectedView()}`
+      ) as HTMLInputElement;
+      searchInput?.focus();
+    }, 0);
+  };
+
+  onMount(() => {
+    const { dispose: disposeSlash } = registerHotkey({
+      hotkey: ['/'],
+      scopeId: splitContext.splitHotkeyScope,
+      description: 'Search all',
+      hotkeyToken: TOKENS.soup.openSearch,
+      keyDownHandler: () => {
+        setSelectedView(VIEWCONFIG_DEFAULTS_IDS_ENUM.all);
+        focusSearch();
+        return true;
+      },
+      displayPriority: 5,
+    });
+
+    const { dispose: disposeCmd } = registerHotkey({
+      hotkey: ['cmd+f'],
+      scopeId: splitContext.splitHotkeyScope,
+      description: 'Search in current view',
+      keyDownHandler: () => {
+        focusSearch();
+        return true;
+      },
+      displayPriority: 5,
+    });
+
+    onCleanup(() => {
+      disposeSlash();
+      disposeCmd();
+    });
+  });
+
+  return (
+    <SplitToolbarLeft>
+      <div class="flex ml-2 h-full items-center gap-1">
+        <Show
+          when={props.isLoading() && searchText()}
+          fallback={
+            <Show
+              when={searchText()}
+              fallback={
+                <DeprecatedIconButton
+                  size="sm"
+                  icon={SearchIcon}
+                  theme="clear"
+                  tooltip={{ label: 'Search' }}
+                  onClick={() => {
+                    inputRef?.focus();
+                  }}
+                />
+              }
+            >
+              <DeprecatedIconButton
+                size="sm"
+                icon={XIcon}
+                theme="clear"
+                tooltip={{ label: 'Clear search' }}
+                onClick={() => {
+                  setSearchText('');
+                  inputRef?.focus();
+                }}
+              />
+            </Show>
+          }
+        >
+          <DeprecatedIconButton
+            size="sm"
+            icon={LoadingSpinner}
+            theme="clear"
+            tooltip={{ label: 'Cancel search' }}
+            class="[&_svg]:animate-spin"
+            onClick={() => {
+              setSearchText('');
+              inputRef?.focus();
+            }}
+          />
+        </Show>
+        <input
+          ref={inputRef}
+          id={`search-input-${splitContext.handle.id}-${selectedView()}`}
+          placeholder={`Search in ${viewName()}`}
+          value={searchText()}
+          onInput={(e) => {
+            setSearchText(e.target.value);
           }}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              e.currentTarget.blur();
+            } else if (e.key === 'Enter') {
+              e.preventDefault();
+              e.currentTarget.blur();
+              selectionClick();
+            } else if (e.key === 'ArrowDown') {
+              e.preventDefault();
+              e.currentTarget.blur();
+              focusNextEntity();
+            }
+          }}
+          class="p-1 pr-0 border-0 outline-none! focus:outline-none ring-0! focus:ring-0 flex-1 text-ink text-sm truncate"
         />
-      </Show>{' '}
-    </ContextMenu>
+      </div>
+    </SplitToolbarLeft>
   );
 }

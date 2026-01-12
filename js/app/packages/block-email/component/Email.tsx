@@ -27,6 +27,10 @@ import { EmailInput } from './EmailInput';
 import { MessageList } from './MessageList';
 import { TopBar } from './TopBar';
 
+const TARGET_MESSAGE_HIGHLIGHT_MS = 800;
+const SCROLL_ANIMATION_MS = 1000;
+const SCROLL_AFTER_SEND_DELAY_MS = 100;
+
 type EmailViewProps = {
   title: Accessor<string>;
   threadId: Accessor<string>;
@@ -132,11 +136,11 @@ function EmailContent(props: EmailViewProps) {
     if (context.messages.targetMessageID() === messageId) {
       setTimeout(() => {
         context.messages.setTargetMessageID(undefined);
-      }, 800);
+      }, TARGET_MESSAGE_HIGHLIGHT_MS);
     }
 
     // Clear scrolling flag after animation
-    setTimeout(() => setIsScrollingToMessage(false), 1000);
+    setTimeout(() => setIsScrollingToMessage(false), SCROLL_ANIMATION_MS);
 
     return true;
   };
@@ -261,7 +265,7 @@ function EmailContent(props: EmailViewProps) {
     if (prev === false) {
       setTimeout(() => {
         scrollToLastMessage('smooth');
-      }, 100);
+      }, SCROLL_AFTER_SEND_DELAY_MS);
     }
     return true;
   });
@@ -322,6 +326,25 @@ function EmailContent(props: EmailViewProps) {
     hotkey: 'enter',
     description: 'Focus Email Input',
     keyDownHandler: () => {
+      const focusedId = context.messages.focusedID();
+
+      // If a message is focused and collapsed, expand it
+      if (focusedId && !context.messages.isBodyExpanded(focusedId)) {
+        context.messages.setExpandedBodyId(focusedId, true);
+        return true;
+      }
+
+      // If message is expanded and not the last message, trigger reply to that message
+      if (focusedId && context.messages.isBodyExpanded(focusedId)) {
+        const messages = context.messages.list();
+        const lastMessage = messages[messages.length - 1];
+        if (lastMessage?.db_id !== focusedId) {
+          context.messages.setReplyingToMessageId(focusedId);
+          return true;
+        }
+      }
+
+      // Otherwise, focus the main email input
       if (markdownDomRef) {
         markdownDomRef.focus();
         return true;
@@ -329,6 +352,44 @@ function EmailContent(props: EmailViewProps) {
       return false;
     },
     hotkeyToken: TOKENS.block.focus,
+    hide: true,
+  });
+
+  registerScopeSignalHotkey(scopeId, {
+    hotkey: 'escape',
+    description: 'Collapse message',
+    keyDownHandler: () => {
+      // Skip if focus is in an editable area (compose input handles its own Escape)
+      const activeEl = document.activeElement;
+      if (
+        activeEl?.tagName === 'INPUT' ||
+        activeEl?.tagName === 'TEXTAREA' ||
+        activeEl?.getAttribute('contenteditable') === 'true'
+      ) {
+        return false;
+      }
+
+      const focusedId = context.messages.focusedID();
+      if (!focusedId) return false;
+
+      // If there's an active reply, just clear it (don't collapse the message)
+      if (context.messages.replyingToMessageId() === focusedId) {
+        context.messages.setReplyingToMessageId(undefined);
+        return true;
+      }
+
+      // If message is expanded and not the last message, collapse it
+      if (context.messages.isBodyExpanded(focusedId)) {
+        const messages = context.messages.list();
+        const lastMessage = messages[messages.length - 1];
+        if (lastMessage?.db_id !== focusedId) {
+          context.messages.setExpandedBodyId(focusedId, false);
+          return true;
+        }
+      }
+      return false;
+    },
+    hotkeyToken: TOKENS.email.cancelReply,
     hide: true,
   });
 
@@ -340,7 +401,10 @@ function EmailContent(props: EmailViewProps) {
           class="w-full flex-1 flex flex-col items-center overflow-hidden"
           ref={context.registerMessagesContainer}
         >
-          <MessageList initialLoadComplete={context.initialLoadComplete()} />
+          <MessageList
+            initialLoadComplete={context.initialLoadComplete()}
+            title={props.title()}
+          />
         </div>
         <Show
           when={

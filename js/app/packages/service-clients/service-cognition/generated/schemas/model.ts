@@ -8,12 +8,12 @@ export type Model = typeof Model[keyof typeof Model];
 
 export const Model = {
   "claude-haiku-4-5": "claude-haiku-4-5",
-  "claude-sonnet-4-5": "claude-sonnet-4-5",
+  "claude-opus-4-5": "claude-opus-4-5",
 } as const;
 
 export const AllModels: Model[] = [
   "claude-haiku-4-5",
-  "claude-sonnet-4-5"
+  "claude-opus-4-5"
 ] as const;
 const values: [Model, ...Model[]] = [
 Object.values(Model)[0],

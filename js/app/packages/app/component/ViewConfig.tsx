@@ -23,6 +23,7 @@ import {
 import { emailClient } from '@service-email/client';
 import stringify from 'json-stable-stringify';
 import { queryClient } from '../../macro-entity/src/queries/client';
+import type { PropertyFilter } from './PropertyFilterTypes';
 import type { SoupContext } from './SoupContext';
 import { noiseFilter, signalFilter } from './soupFilters';
 
@@ -69,6 +70,7 @@ export type FilterOptions = {
   fromFilter?: WithCustomUserInput<'user' | 'contact'>[];
   focusFilters?: ('signal' | 'noise')[];
   unreadOnly?: boolean;
+  propertyFilters?: PropertyFilter[];
 };
 
 export type SystemSortOption =
@@ -144,6 +146,7 @@ export const VIEWCONFIG_BASE: ViewConfigBase = {
     projectFilter: undefined,
     fromFilter: [],
     unreadOnly: false,
+    propertyFilters: [],
   },
   display: {
     layout: 'compact',

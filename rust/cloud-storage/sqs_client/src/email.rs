@@ -19,6 +19,7 @@ impl SQS {
         self
     }
 
+    #[cfg(feature = "sfs_uploader")]
     pub fn sfs_uploader_queue(mut self, email_sfs_uploader_queue: &str) -> Self {
         self.email_sfs_uploader_queue = Some(email_sfs_uploader_queue.to_string());
         self
@@ -26,12 +27,13 @@ impl SQS {
 
     /// Sends a notification message to the email refresh queue
     #[tracing::instrument(skip(self))]
-    pub async fn enqueue_email_refresh_notification(
+    pub async fn enqueue_link_manager_notification(
         &self,
         message: LinkManagerMessage,
     ) -> anyhow::Result<()> {
         if let Some(link_manager_queue) = &self.link_manager_queue {
-            return enqueue_refresh_notification(&self.inner, link_manager_queue, message).await;
+            return enqueue_link_manager_notification(&self.inner, link_manager_queue, message)
+                .await;
         }
         Err(anyhow::anyhow!("link_manager_queue is not configured"))
     }
@@ -61,6 +63,7 @@ impl SQS {
     }
 
     /// Sends a notification message to the email sfs uploader queue
+    #[cfg(feature = "sfs_uploader")]
     #[tracing::instrument(skip(self))]
     pub async fn enqueue_email_sfs_uploader_message(
         &self,
@@ -76,7 +79,7 @@ impl SQS {
 }
 
 #[tracing::instrument(skip(sqs_client))]
-pub async fn enqueue_refresh_notification(
+pub async fn enqueue_link_manager_notification(
     sqs_client: &aws_sdk_sqs::Client,
     queue_url: &str,
     message: LinkManagerMessage,
@@ -133,6 +136,7 @@ pub async fn enqueue_scheduled_message(
     Ok(())
 }
 
+#[cfg(feature = "sfs_uploader")]
 #[tracing::instrument(skip(sqs_client))]
 pub async fn enqueue_sfs_uploader_message(
     sqs_client: &aws_sdk_sqs::Client,

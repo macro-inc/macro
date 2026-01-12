@@ -23,13 +23,12 @@ pub struct GetUnfurlResponse {
     pub favicon_url: Option<String>,
 }
 
-#[cfg_attr(feature = "mock", expect(dead_code))]
-fn no_tag(tag: &str) -> Error {
-    anyhow::anyhow!(format!("Missing expected tag: [{}]", tag))
-}
-
 #[tracing::instrument]
 fn parse_document(html_content: &str, url: &Url) -> Result<HashMap<String, String>, Error> {
+    fn no_tag(tag: &str) -> Error {
+        anyhow::anyhow!(format!("Missing expected tag: [{}]", tag))
+    }
+
     // Parse the HTML document
     let document = Html::parse_document(html_content);
 
@@ -67,7 +66,6 @@ fn parse_document(html_content: &str, url: &Url) -> Result<HashMap<String, Strin
     Ok(meta_tags)
 }
 
-#[cfg_attr(feature = "mock", expect(dead_code))]
 fn find_favicon(document: &Html, base_url: &Url) -> Option<String> {
     let links_selector = Selector::parse("link").ok()?;
 
@@ -90,9 +88,8 @@ fn find_favicon(document: &Html, base_url: &Url) -> Option<String> {
 
     None
 }
-#[cfg(not(feature = "mock"))]
 #[tracing::instrument]
-pub async fn extract_meta_tags(
+pub async fn extract_meta_tags_prod(
     url: &str,
 ) -> Result<HashMap<String, String>, Box<dyn std::error::Error + Send + Sync>> {
     // Fetch the HTML content
@@ -138,10 +135,19 @@ pub fn append_optimistic_favico(
     meta_tags
 }
 
-#[cfg(feature = "mock")]
 pub async fn extract_meta_tags(
     url: &str,
-) -> Result<HashMap<String, String>, Box<dyn std::error::Error>> {
+) -> Result<HashMap<String, String>, Box<dyn std::error::Error + Send + Sync>> {
+    if cfg!(feature = "mock") {
+        extract_meta_tags_mock(url).await
+    } else {
+        extract_meta_tags_prod(url).await
+    }
+}
+
+pub async fn extract_meta_tags_mock(
+    url: &str,
+) -> Result<HashMap<String, String>, Box<dyn std::error::Error + Send + Sync>> {
     if url == "https://hello.com" {
         let mut m = HashMap::new();
         m.insert("property:og:title".to_string(), "Hello".to_string());

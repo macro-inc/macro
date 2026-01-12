@@ -67,12 +67,21 @@ impl XmlFormatter for PlainTextFormatter {
     ) -> std::fmt::Result {
         write!(f, "{}", date.display_format)
     }
+
+    fn format_group(
+        group: &mention_utils::parse::ParsedGroupMention<'_>,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
+        write!(f, "@{}", group.group_alias)
+    }
 }
 
+#[tracing::instrument(err)]
 pub fn generate_apns_notification<T: XmlFormatter>(
     notif: &NotificationWithRecipient,
 ) -> Result<Option<APNSPushNotification<PushNotificationData>>, NotificationErr> {
     let create_push_data = |route: Route| PushNotificationData {
+        notification_id: notif.inner.id,
         notification_entity: notif.inner.notification_entity.clone(),
         sender_id: notif.inner.sender_id.as_ref().map(|x| x.to_string()),
         open_route: route.0,
@@ -94,13 +103,13 @@ pub fn generate_apns_notification<T: XmlFormatter>(
                 .build_apns_notification::<T>(parse_user()?)?
                 .map(|()| {
                     create_push_data(Route(format!(
-                        "/channel/{}?message_id={}{}",
+                        "/channel/{}?channel_message_id={}{}",
                         notif.inner.notification_entity.entity_id,
                         channel_mention_metadata.message_id,
                         format_args!(
                             "{}{}",
                             if channel_mention_metadata.thread_id.is_some() {
-                                "&thread_id="
+                                "&channel_thread_id="
                             } else {
                                 ""
                             },
@@ -152,7 +161,7 @@ pub fn generate_apns_notification<T: XmlFormatter>(
                 .build_apns_notification::<T>(())?
                 .map(|()| {
                     create_push_data(Route(format!(
-                        "/channel/{}?message_id={}",
+                        "/channel/{}?channel_message_id={}",
                         notif.inner.notification_entity.entity_id,
                         channel_message_send_metadata.message_id
                     )))
@@ -164,7 +173,7 @@ pub fn generate_apns_notification<T: XmlFormatter>(
                     .build_apns_notification::<T>(parse_user()?)?
                     .map(|()| {
                         create_push_data(Route(format!(
-                            "/channel/{}?message_id={}&thread_id={}",
+                            "/channel/{}?channel_message_id={}&channel_thread_id={}",
                             notif.inner.notification_entity.entity_id,
                             channel_reply_metadata.message_id,
                             channel_reply_metadata.thread_id

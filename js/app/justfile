@@ -53,6 +53,9 @@ gen-api:
 gen-dcs-types:
     bun scripts/generate-dcs-types.ts
 
+gen-dcs-types-local:
+    MODE=local bun scripts/generate-dcs-types.ts
+
 gen-dcs-tools:
     bun scripts/generate-dcs-tools.ts
 

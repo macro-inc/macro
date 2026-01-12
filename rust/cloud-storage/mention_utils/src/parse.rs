@@ -116,6 +116,18 @@ impl<'de> XmlTaggedParsed<'de> for ParsedLink<'de> {
     const TAG_NAME: &'static str = "m-link";
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[non_exhaustive]
+pub struct ParsedGroupMention<'a> {
+    #[serde(borrow)]
+    pub group_alias: Cow<'a, str>,
+}
+
+impl<'de> XmlTaggedParsed<'de> for ParsedGroupMention<'de> {
+    const TAG_NAME: &'static str = "m-group-mention";
+}
+
 #[derive(Debug)]
 pub enum XmlTag<'de> {
     Link(ParsedLink<'de>),
@@ -123,6 +135,7 @@ pub enum XmlTag<'de> {
     User(ParsedUserMention<'de>),
     Contact(ParsedContactMention<'de>),
     Date(ParsedDateMention<'de>),
+    Group(ParsedGroupMention<'de>),
 }
 
 fn parse_xml_tag(s: &str) -> IResult<&str, XmlTag<'_>> {
@@ -132,6 +145,7 @@ fn parse_xml_tag(s: &str) -> IResult<&str, XmlTag<'_>> {
         ParsedUserMention::parse.map(XmlTag::User),
         ParsedContactMention::parse.map(XmlTag::Contact),
         ParsedDateMention::parse.map(XmlTag::Date),
+        ParsedGroupMention::parse.map(XmlTag::Group),
     ))
     .parse(s)
 }
@@ -175,6 +189,7 @@ pub trait XmlFormatter: Sized {
         f: &mut Formatter<'_>,
     ) -> std::fmt::Result;
     fn format_date(date: &ParsedDateMention<'_>, f: &mut Formatter<'_>) -> std::fmt::Result;
+    fn format_group(group: &ParsedGroupMention<'_>, f: &mut Formatter<'_>) -> std::fmt::Result;
 
     fn format_xml_text(text: ParsedXmlText<'_>) -> ReformattedXmlText<Self> {
         use std::fmt::Display;
@@ -223,6 +238,13 @@ pub trait XmlFormatter: Sized {
                         Adapter(|f: &mut Formatter<'_>| Self::format_date(&d, f))
                     )
                 }
+                TextSegment::Xml(XmlTag::Group(g)) => {
+                    write!(
+                        acc,
+                        "{}",
+                        Adapter(|f: &mut Formatter<'_>| Self::format_group(&g, f))
+                    )
+                }
                 TextSegment::Plain(s) => {
                     write!(
                         acc,
@@ -265,6 +287,10 @@ impl XmlFormatter for NullXmlFormatter {
     }
 
     fn format_date(_date: &ParsedDateMention<'_>, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "")
+    }
+
+    fn format_group(_group: &ParsedGroupMention<'_>, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "")
     }
 }

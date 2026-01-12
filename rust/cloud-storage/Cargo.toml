@@ -38,8 +38,6 @@ members = [
   "experiment_service",
   "frecency",
   "gmail_client",
-  "insight_service",
-  "insight_service_client",
   "integration_tests/*",
   "lambda_client",
   "lexical_client",
@@ -59,15 +57,11 @@ members = [
   "macro_share_permissions",
   "macro_uuid",
   "mention_utils",
-  "metering_db_client",
-  "metering_service",
-  "metering_service_client",
   "model",
   "model_notifications",
   "model_user",
   "models_dcs",
   "models_email",
-  "models_metering",
   "models_opensearch",
   "models_pagination",
   "models_permissions",
@@ -132,9 +126,9 @@ aws-sdk-dynamodb = "1.98.0"
 aws-sdk-lambda = "1.104.0"
 aws-sdk-s3 = "1.119.0"
 aws-sdk-secretsmanager = "1.93.0"
-aws-sdk-sesv2 = "1.68.0"
+aws-sdk-sesv2 = "1.103.0"
 aws-sdk-sns = "1.61.0"
-aws-sdk-sqs = "1.89.0"
+aws-sdk-sqs = "1.91.0"
 aws-smithy-types = "1.2.13"
 aws_lambda_events = { version = "0.16.0", default-features = false }
 axum = { version = "0.7.9", features = [
@@ -197,8 +191,8 @@ tower-http = { version = "0.6.1", features = [
   "cors",
   "trace",
 ] }
-tracing = "0.1.41"
-tracing-subscriber = { version = "0.3.20", features = ["env-filter", "json"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.22", features = ["env-filter", "json"] }
 tracing-tree = "0.4.0"
 unsynn = "0.3"
 urlencoding = "2.1.3"

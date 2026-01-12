@@ -2,6 +2,7 @@ name: cloud storage code check
 on:
   pull_request:
     branches: [ 'main' ]
+    types: [opened, synchronize, reopened, ready_for_review]
 
 concurrency:
   group: code-check-cloud-storage-${{ github.ref }}

@@ -144,6 +144,7 @@ mod tests {
             body_text: None,
             attachments: vec![],
             attachments_macro: vec![],
+            attachments_draft: vec![],
             headers_json: None,
             created_at: Default::default(),
             labels: vec![],

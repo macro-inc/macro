@@ -24,6 +24,10 @@ import type {
   EquationNode,
 } from './nodes/EquationNode';
 import type {
+  GroupMentionDecoratorProps,
+  GroupMentionNode,
+} from './nodes/GroupMentionNode';
+import type {
   HorizontalRuleDecoratorProps,
   HorizontalRuleNode,
 } from './nodes/HorizontalRuleNode';
@@ -58,6 +62,10 @@ export interface NodeDecoratorMap {
   UserMentionNode: {
     klass: typeof UserMentionNode;
     props: UserMentionDecoratorProps;
+  };
+  GroupMentionNode: {
+    klass: typeof GroupMentionNode;
+    props: GroupMentionDecoratorProps;
   };
   DocumentMentionNode: {
     klass: typeof DocumentMentionNode;

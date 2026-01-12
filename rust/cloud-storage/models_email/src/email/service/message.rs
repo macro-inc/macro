@@ -2,7 +2,7 @@ use crate::db;
 use crate::email::service::address::ContactInfo;
 use crate::email::service::attachment::Attachment;
 use crate::email::service::label::{LabelInfo, system_labels};
-use crate::service::attachment::{AttachmentMacro, AttachmentToSend};
+use crate::service::attachment::{AttachmentDraft, AttachmentMacro, AttachmentToSend};
 use crate::service::body_parsing::body_parsed::{
     get_body_parsed_for_message, get_body_parsed_linkless_for_message,
 };
@@ -87,6 +87,8 @@ pub struct Message {
     pub body_macro: Option<String>,
     pub attachments: Vec<Attachment>,
     pub attachments_macro: Vec<AttachmentMacro>,
+    /// Uploaded file attachments for the message, if it is a draft
+    pub attachments_draft: Vec<AttachmentDraft>,
     pub headers_json: Option<JsonValue>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,

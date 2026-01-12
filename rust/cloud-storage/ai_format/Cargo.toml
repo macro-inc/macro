@@ -6,4 +6,4 @@ version = "0.1.0"
 
 [dependencies]
 chrono = { workspace = true }
-ai = { path = "../ai" }
+models_properties = { path = "../models_properties"}

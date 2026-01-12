@@ -14,8 +14,6 @@ use model::response::{GenericErrorResponse, SuccessResponse};
 use model::{project::BasicProject, response::GenericSuccessResponse};
 use model::{project::request::PatchProjectRequestV2, response::ErrorResponse, user::UserContext};
 use models_permissions::share_permission::access_level::{AccessLevel, EditAccessLevel};
-use sqs_client::search::{SearchQueueMessage, project};
-use tracing::Instrument;
 
 #[derive(serde::Deserialize)]
 pub struct Params {
@@ -190,30 +188,6 @@ async fn edit_project_v2(
         },
     )
     .await;
-
-    // Update search index if name changes
-    if req.name.is_some() {
-        tokio::spawn({
-            let sqs_client = ctx.sqs_client.clone();
-            let project_id = id.clone();
-            let macro_user_id = user_context.user_id.clone();
-            async move {
-                tracing::trace!("sending message to search extractor queue");
-                let _ = sqs_client
-                    .send_message_to_search_event_queue(SearchQueueMessage::ProjectMessage(
-                        project::ProjectMessage {
-                            project_id,
-                            macro_user_id,
-                        },
-                    ))
-                    .await
-                    .inspect_err(|e| {
-                        tracing::error!(error=?e, "SEARCH_QUEUE unable to enqueue message");
-                    });
-            }
-            .in_current_span()
-        });
-    }
 
     Ok(())
 }

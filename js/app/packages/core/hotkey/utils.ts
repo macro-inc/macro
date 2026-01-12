@@ -510,3 +510,20 @@ export const useIsInCommandScope = () => {
     return scopeNode?.type === 'command';
   });
 };
+
+/**
+ * Look up a hotkey token and return true if a usable hotkey is mapped to that
+ * token right now.
+ * @param shortcut
+ * @returns
+ */
+export const hasValidHotkey = (shortcut?: HotkeyToken) => {
+  if (!shortcut) return false;
+  const tokenShortcut = getPrettyHotkeyStringByToken(shortcut);
+  if (!tokenShortcut) return false;
+  const parts = tokenShortcut
+    .split('+')
+    .map((part) => part.trim())
+    .filter(Boolean);
+  return parts.length > 0 && parts.some((part) => part.length > 0);
+};

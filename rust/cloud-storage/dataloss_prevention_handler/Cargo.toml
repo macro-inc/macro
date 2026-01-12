@@ -16,3 +16,4 @@ macro_entrypoint = { path = "../macro_entrypoint" }
 s3_client = { path = "../s3_client" }
 sns_client = { path = "../sns_client" }
 tokio = { workspace = true }
+tracing = { workspace = true }

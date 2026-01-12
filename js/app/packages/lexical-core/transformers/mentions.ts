@@ -6,6 +6,7 @@ import type { ElementNode, LexicalNode, TextNode } from 'lexical';
 import { ContactMentionNode } from '../nodes/ContactMentionNode';
 import { DateMentionNode } from '../nodes/DateMentionNode';
 import { DocumentMentionNode } from '../nodes/DocumentMentionNode';
+import { GroupMentionNode } from '../nodes/GroupMentionNode';
 import { UserMentionNode } from '../nodes/UserMentionNode';
 
 // NOTE: If you are changing this file, you may need to update the `mention_utils` crate in `macro-api` as well. Please notify @hutch should you update this file.
@@ -252,6 +253,56 @@ export const E_DOCUMENT_MENTION: ElementTransformer = {
     const hostname = cleanHostname(window.location.hostname);
     const documentUrl = `https://${hostname}/app/${blockType}/${documentId}`;
     return `[${documentName}](${documentUrl})`;
+  },
+  replace: (
+    _parentNode: ElementNode,
+    _children: Array<LexicalNode>,
+    _match: Array<string>,
+    _isImport: boolean
+  ) => {
+    return false;
+  },
+};
+
+// Internal Group Mentions (e.g., @here)
+export const I_GROUP_MENTION: TextMatchTransformer = {
+  dependencies: [GroupMentionNode],
+  type: 'text-match',
+  regExp: /<m-group-mention>(.*?)<\/m-group-mention>/,
+  importRegExp: /<m-group-mention>(.*?)<\/m-group-mention>/,
+  export: (node) => {
+    if (!(node instanceof GroupMentionNode)) return null;
+    const data = JSON.stringify({
+      groupAlias: node.getGroupAlias(),
+    });
+    return `<m-group-mention>${data}</m-group-mention>`;
+  },
+  replace: (node: TextNode, match: RegExpMatchArray) => {
+    try {
+      const data = JSON.parse(match[1]);
+      if (!('groupAlias' in data)) throw new Error('Missing field groupAlias');
+      const groupMentionNode = new GroupMentionNode(data.groupAlias);
+      node.replace(groupMentionNode);
+    } catch (e) {
+      console.error('Error in I_GROUP_MENTION replace:', e);
+    }
+  },
+};
+
+// External Group Mentions
+export const E_GROUP_MENTION: ElementTransformer = {
+  dependencies: [GroupMentionNode],
+  type: 'element',
+  regExp: /$^/,
+  export: (node) => {
+    if (!(node instanceof GroupMentionNode)) return null;
+
+    const groupAlias = node.getGroupAlias();
+    if (!groupAlias) {
+      return null;
+    }
+
+    return `@${groupAlias}`;
   },
   replace: (
     _parentNode: ElementNode,

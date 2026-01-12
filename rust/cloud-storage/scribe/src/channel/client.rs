@@ -125,7 +125,7 @@ impl ChannelClient {
         let formatted_text = InsightContextLog {
             name: "conversation".to_string(),
             metadata: vec![],
-            content: Indent(formatted_messages, 4),
+            content: Indent(4, formatted_messages),
         }
         .to_string();
 

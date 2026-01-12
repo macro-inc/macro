@@ -32,6 +32,28 @@ pub enum GetThreadError {
 
     #[error("Unauthorized")]
     Unauthorized,
+
+    #[error("Validation error: {0}")]
+    ValidationError(String),
+}
+
+impl GetThreadError {
+    /// Returns true if this error should be logged
+    fn should_log(&self) -> bool {
+        !matches!(
+            self,
+            GetThreadError::ThreadNotFound
+                | GetThreadError::Unauthorized
+                | GetThreadError::ValidationError(_)
+        )
+    }
+
+    /// Log the error if appropriate
+    fn log_if_needed(&self) {
+        if self.should_log() {
+            tracing::error!(error = ?self, variant = self.as_ref(), "GetThreadError");
+        }
+    }
 }
 
 impl IntoResponse for GetThreadError {
@@ -39,20 +61,19 @@ impl IntoResponse for GetThreadError {
         let status_code = match &self {
             GetThreadError::ThreadNotFound => StatusCode::NOT_FOUND,
             GetThreadError::Unauthorized => StatusCode::UNAUTHORIZED,
+            GetThreadError::ValidationError(_) => StatusCode::BAD_REQUEST,
             GetThreadError::DatabaseError(_) | GetThreadError::QueryError(_) => {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
         };
 
-        if status_code.is_server_error() {
-            tracing::error!(
-                nested_error = ?self,
-                error_type = "GetThreadError",
-                variant = self.as_ref(),
-                "Internal server error");
-        }
-
-        (status_code, self.to_string()).into_response()
+        (
+            status_code,
+            Json(ErrorResponse {
+                message: self.to_string().as_str(),
+            }),
+        )
+            .into_response()
     }
 }
 
@@ -116,19 +137,27 @@ pub async fn get_thread_handler<U: EmailService>(
     Path(PathParams { id: thread_id }): Path<PathParams>,
     extract::Query(query_params): extract::Query<GetThreadParams>,
 ) -> Result<Response, GetThreadError> {
+    get_thread_handler_inner(ctx, user_context, link, thread_id, query_params)
+        .await
+        .inspect_err(|e| e.log_if_needed())
+}
+
+async fn get_thread_handler_inner<U: EmailService>(
+    ctx: ApiContext,
+    user_context: Extension<UserContext>,
+    link: OptionalEmailLinkExtractor<U>,
+    thread_id: Uuid,
+    query_params: GetThreadParams,
+) -> Result<Response, GetThreadError> {
     let link = link.0;
-    let p = process_get_thread_params(&query_params);
+    let p = process_get_thread_params(&query_params)?;
 
     let mut thread = email_db_client::threads::get::fetch_thread_with_messages_paginated(
         &ctx.db, thread_id, p.offset, p.limit,
     )
     .await
-    .context("Failed to fetch thread with messages")?;
-
-    // Check if thread was found
-    if thread.db_id.is_none() {
-        return Err(GetThreadError::ThreadNotFound);
-    }
+    .context("Failed to fetch thread with messages")?
+    .ok_or(GetThreadError::ThreadNotFound)?;
 
     // Check if user owns the thread via their link
     let is_owner = link
@@ -202,7 +231,7 @@ pub async fn get_thread_messages_handler(
     Path(PathParams { id }): Path<PathParams>,
     extract::Query(query_params): extract::Query<GetThreadParams>,
 ) -> Result<Response, GetThreadError> {
-    let p = process_get_thread_params(&query_params);
+    let p = process_get_thread_params(&query_params)?;
 
     let messages =
         email_db_client::messages::get_parsed::get_paginated_parsed_messages_by_thread_id(
@@ -224,13 +253,33 @@ pub async fn get_thread_messages_handler(
 }
 
 /// Extracts pagination parameters from query params, using defaults when not specified
-fn process_get_thread_params(params: &GetThreadParams) -> GetThreadPaginationParams {
-    GetThreadPaginationParams {
-        offset: params.offset.filter(|&offset| offset >= 0).unwrap_or(0),
-
-        limit: params
-            .limit
-            .filter(|&limit| 0 < limit && limit <= MESSAGE_MAX)
-            .unwrap_or(DEFAULT_MESSAGE_LIMIT),
+fn process_get_thread_params(
+    params: &GetThreadParams,
+) -> Result<GetThreadPaginationParams, GetThreadError> {
+    if let Some(offset) = params.offset
+        && offset < 0
+    {
+        return Err(GetThreadError::ValidationError(
+            "offset must be non-negative".to_string(),
+        ));
     }
+
+    if let Some(limit) = params.limit {
+        if limit <= 0 {
+            return Err(GetThreadError::ValidationError(
+                "limit must be positive".to_string(),
+            ));
+        }
+        if limit > MESSAGE_MAX {
+            return Err(GetThreadError::ValidationError(format!(
+                "limit must not exceed {}",
+                MESSAGE_MAX
+            )));
+        }
+    }
+
+    Ok(GetThreadPaginationParams {
+        offset: params.offset.unwrap_or(0),
+        limit: params.limit.unwrap_or(DEFAULT_MESSAGE_LIMIT),
+    })
 }

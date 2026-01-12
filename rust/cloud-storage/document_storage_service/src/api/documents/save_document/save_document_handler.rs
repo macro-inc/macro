@@ -75,7 +75,11 @@ pub async fn save_document_handler(
         .as_deref()
         .and_then(|f| FileType::from_str(f).ok())
     {
-        Some(file_type) => file_type,
+        Some(file_type) => match file_type {
+            // NOTE: docx files are now all converted to pdf
+            FileType::Docx => FileType::Pdf,
+            _ => file_type,
+        },
         None => {
             tracing::error!("invalid file type");
             return GenericResponse::builder()
@@ -95,13 +99,7 @@ pub async fn save_document_handler(
 
     // Prevalidation for saving documents
     match file_type {
-        FileType::Docx => {
-            // Since docx are now converted to pdf, there is never a need to save the docx file
-            return GenericResponse::builder()
-                .message("no bom parts to save")
-                .is_error(false)
-                .send(StatusCode::NOT_MODIFIED);
-        }
+        FileType::Docx => unreachable!("docx files are now converted to pdf"),
         FileType::Pdf => {
             tracing::trace!("pre-validation for static file");
             if req.modification_data.is_none() {

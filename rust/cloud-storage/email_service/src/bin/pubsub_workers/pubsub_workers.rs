@@ -90,11 +90,11 @@ async fn main() -> anyhow::Result<()> {
         .gmail_inbox_sync_queue(&config.gmail_inbox_sync_queue)
         .gmail_inbox_sync_retry_queue(&config.gmail_inbox_sync_retry_queue)
         .search_event_queue(&config.search_event_queue)
-        .insight_context_queue(&config.insight_context_queue)
         .email_backfill_queue(&config.backfill_queue)
         .email_scheduled_queue(&config.email_scheduled_queue)
         .sfs_uploader_queue(&config.sfs_uploader_queue)
-        .contacts_queue(&config.contacts_queue);
+        .contacts_queue(&config.contacts_queue)
+        .email_link_manager_queue(&config.link_manager_queue);
 
     let macro_notify_client = macro_notify::MacroNotify::new(
         config.notification_queue.clone(),

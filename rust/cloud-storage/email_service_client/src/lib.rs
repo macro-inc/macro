@@ -1,6 +1,5 @@
 use constants::INTERNAL_AUTH_HEADER_KEY;
 
-pub mod backfill;
 pub(crate) mod constants;
 
 mod external;

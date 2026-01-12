@@ -5,60 +5,8 @@ import {
   CHAT_INDEX,
   DOCUMENT_INDEX,
   EMAIL_INDEX,
-  NAMES_INDEX,
-  PROJECT_INDEX,
   SHARD_SETTINGS,
 } from '../constants';
-
-async function createNamesIndex(opensearchClient: Client) {
-  const namesIndexExists = (
-    await opensearchClient.indices.exists({
-      index: NAMES_INDEX,
-    })
-  ).body;
-  if (!namesIndexExists) {
-    console.log(`${NAMES_INDEX} index does not exist, creating...`);
-
-    opensearchClient.indices.create({
-      index: NAMES_INDEX,
-      body: {
-        settings: {
-          ...SHARD_SETTINGS,
-        },
-        mappings: {
-          properties: {
-            // The id of the entity
-            entity_id: {
-              type: 'keyword',
-            },
-            // The name of the entity
-            name: {
-              type: 'text',
-              fields: {
-                keyword: {
-                  type: 'keyword',
-                  ignore_above: 128,
-                },
-              },
-            },
-            // The type of the entity
-            entity_type: {
-              type: 'keyword',
-            },
-            // The user id of who created the entity
-            user_id: {
-              type: 'keyword',
-              index: true,
-              doc_values: true,
-            },
-          },
-        },
-      },
-    });
-  } else {
-    console.log(`${NAMES_INDEX} index already exists`);
-  }
-}
 
 async function createChannelIndex(opensearchClient: Client) {
   const channelIndexExists = (
@@ -367,68 +315,6 @@ async function createEmailIndex(opensearchClient: Client) {
   }
 }
 
-async function createProjectIndex(opensearchClient: Client) {
-  const projectIndexExists = (
-    await opensearchClient.indices.exists({
-      index: PROJECT_INDEX,
-    })
-  ).body;
-  if (!projectIndexExists) {
-    console.log(`${PROJECT_INDEX} index does not exist, creating...`);
-
-    opensearchClient.indices.create({
-      index: PROJECT_INDEX,
-      body: {
-        settings: {
-          ...SHARD_SETTINGS,
-          refresh_interval: '1s', // Default is 1s
-        },
-        mappings: {
-          properties: {
-            // The project id
-            entity_id: {
-              type: 'keyword',
-            },
-            user_id: {
-              type: 'keyword',
-              index: true,
-              doc_values: true,
-            },
-            parent_project_id: {
-              type: 'keyword',
-              index: true,
-              doc_values: true,
-            },
-            project_name: {
-              type: 'text',
-              fields: {
-                keyword: {
-                  type: 'keyword',
-                  ignore_above: 128,
-                },
-              },
-            },
-            updated_at_seconds: {
-              type: 'date',
-              format: 'epoch_second',
-              index: false,
-              doc_values: true,
-            },
-            created_at_seconds: {
-              type: 'date',
-              format: 'epoch_second',
-              index: false,
-              doc_values: true,
-            },
-          },
-        },
-      },
-    });
-  } else {
-    console.log(`${PROJECT_INDEX} index already exists`);
-  }
-}
-
 async function createIndices() {
   const opensearchClient = client();
   console.log('Creating indices...');
@@ -438,8 +324,6 @@ async function createIndices() {
     await createChatIndex(opensearchClient);
     await createEmailIndex(opensearchClient);
     await createChannelIndex(opensearchClient);
-    await createProjectIndex(opensearchClient);
-    await createNamesIndex(opensearchClient);
     console.log('done');
   } catch (error) {
     console.error('Error', error);

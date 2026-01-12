@@ -9,20 +9,22 @@ import * as schemas from './schemas';
 import type * as types from './types';
 
 type ToolParserMap = {
+ContentSearch: { call: types.ContentSearch, response: types.SearchToolResponse }
 ListDocuments: { call: types.ListDocuments, response: types.ListDocumentsResponse }
 ListEmails: { call: types.ListEmails, response: types.ApiPaginatedThreadCursor }
 MarkdownRewrite: { call: types.MarkdownRewrite, response: types.AIDiffResponse }
+NameSearch: { call: types.NameSearch, response: types.SearchToolResponse }
 Read: { call: types.Read, response: types.ReadResponse }
-UnifiedSearch: { call: types.UnifiedSearch, response: types.UnifiedSearchResponseOutput }
 web_search: { call: types.WebSearchToolCall, response: types.WebSearchResponse }
 };
 
 const toolParserMap = {
+ContentSearch: { call: schemas.ContentSearch, response: schemas.SearchToolResponse },
 ListDocuments: { call: schemas.ListDocuments, response: schemas.ListDocumentsResponse },
 ListEmails: { call: schemas.ListEmails, response: schemas.ApiPaginatedThreadCursor },
 MarkdownRewrite: { call: schemas.MarkdownRewrite, response: schemas.AIDiffResponse },
+NameSearch: { call: schemas.NameSearch, response: schemas.SearchToolResponse },
 Read: { call: schemas.Read, response: schemas.ReadResponse },
-UnifiedSearch: { call: schemas.UnifiedSearch, response: schemas.UnifiedSearchResponseOutput },
 web_search: { call: schemas.WebSearchToolCall, response: schemas.WebSearchResponse }
 };
 
@@ -35,11 +37,12 @@ type NamedRawTool = {
 };
 
 type ToolDataMap = {
+ContentSearch: { call: types.ContentSearch, response: types.SearchToolResponse };
 ListDocuments: { call: types.ListDocuments, response: types.ListDocumentsResponse };
 ListEmails: { call: types.ListEmails, response: types.ApiPaginatedThreadCursor };
 MarkdownRewrite: { call: types.MarkdownRewrite, response: types.AIDiffResponse };
+NameSearch: { call: types.NameSearch, response: types.SearchToolResponse };
 Read: { call: types.Read, response: types.ReadResponse };
-UnifiedSearch: { call: types.UnifiedSearch, response: types.UnifiedSearchResponseOutput };
 web_search: { call: types.WebSearchToolCall, response: types.WebSearchResponse };
 };
 

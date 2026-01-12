@@ -3,7 +3,7 @@ use crate::pubsub::backfill::{
     update_metadata,
 };
 use crate::pubsub::context::PubSubContext;
-use crate::util::gmail::auth::fetch_gmail_access_token_from_link;
+use crate::util::gmail::auth::fetch_token_or_delete_on_revocation;
 use anyhow::Context;
 use models_email::email::service::backfill::{
     BackfillJobStatus, BackfillOperation, BackfillPubsubMessage,
@@ -92,15 +92,19 @@ async fn inner_process_message(
         }
     };
 
-    let access_token =
-        fetch_gmail_access_token_from_link(&link, &ctx.redis_client, &ctx.auth_service_client)
-            .await
-            .map_err(|e| {
-                ProcessingError::NonRetryable(DetailedError {
-                    reason: FailureReason::AccessTokenFetchFailed,
-                    source: e.context("Failed to fetch access token from link"),
-                })
-            })?;
+    let access_token = fetch_token_or_delete_on_revocation(
+        &link,
+        &ctx.redis_client,
+        &ctx.auth_service_client,
+        &ctx.sqs_client,
+    )
+    .await
+    .map_err(|e| {
+        ProcessingError::NonRetryable(DetailedError {
+            reason: FailureReason::AccessTokenFetchFailed,
+            source: e.context("Failed to fetch access token from link"),
+        })
+    })?;
 
     match &data.backfill_operation {
         BackfillOperation::Init => {
