@@ -57,48 +57,12 @@
                   "documents": {
                     "items": {
                       "properties": {
-                        "content": {
+                        "formattedDocument": {
                           "type": "string"
-                        },
-                        "documentId": {
-                          "type": "string"
-                        },
-                        "metadata": {
-                          "properties": {
-                            "deleted": {
-                              "type": "boolean"
-                            },
-                            "documentName": {
-                              "type": "string"
-                            },
-                            "fileType": {
-                              "type": [
-                                "string",
-                                "null"
-                              ]
-                            },
-                            "owner": {
-                              "type": "string"
-                            },
-                            "projectId": {
-                              "type": [
-                                "string",
-                                "null"
-                              ]
-                            }
-                          },
-                          "required": [
-                            "documentName",
-                            "owner",
-                            "deleted"
-                          ],
-                          "type": "object"
                         }
                       },
                       "required": [
-                        "documentId",
-                        "content",
-                        "metadata"
+                        "formattedDocument"
                       ],
                       "type": "object"
                     },
@@ -1260,165 +1224,6 @@
           "results"
         ],
         "title": "SearchToolResponse",
-        "type": "object"
-      }
-    },
-    {
-      "name": "ListDocuments",
-      "inputSchema": {
-        "additionalProperties": false,
-        "description": "List documents the user has access to with optional filtering and pagination. Only applies to documents, not emails, AI conversations, chat/slack threads, projects aka folders. This tool returns document metadata including access levels and supports filtering by file type, minimum access level, and pagination. Use this tool to discover and browse documents before using the Read tool to access their content. Prefer using the search tool to search on a specific matching string within the content or the name of the entity.",
-        "properties": {
-          "exhaustiveSearch": {
-            "additionalProperties": false,
-            "default": false,
-            "description": "Exhaustive search to get all results. Defaults to false. Set to true when you need all matching documents, ignoring pagination limits.",
-            "type": "boolean"
-          },
-          "fileTypes": {
-            "additionalProperties": false,
-            "description": "Document file types to include. Examples: ['pdf'], ['md', 'txt']. Leave empty to include all document types.",
-            "items": {
-              "additionalProperties": false,
-              "type": "string"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "minAccessLevel": {
-            "additionalProperties": false,
-            "description": "Minimum access level required. Defaults to 'view' if not specified.",
-            "enum": [
-              "view",
-              "comment",
-              "edit",
-              "owner",
-              null
-            ],
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "pageOffset": {
-            "additionalProperties": false,
-            "default": 0,
-            "description": "Page offset for pagination. Default is 0. Use higher values to get subsequent pages of results.",
-            "format": "int64",
-            "type": "integer"
-          },
-          "pageSize": {
-            "additionalProperties": false,
-            "default": 50,
-            "description": "Number of results per page. Max is 100, default is 50. Use smaller values for focused results.",
-            "format": "int64",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "exhaustiveSearch",
-          "fileTypes",
-          "minAccessLevel",
-          "pageOffset",
-          "pageSize"
-        ],
-        "title": "ListDocuments",
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "results": {
-            "description": "The list results (truncated to `results_returned` limit if applicable)",
-            "items": {
-              "properties": {
-                "access_level": {
-                  "description": "The user's access level to this document",
-                  "enum": [
-                    "view",
-                    "comment",
-                    "edit",
-                    "owner"
-                  ],
-                  "type": "string"
-                },
-                "created_at": {
-                  "description": "When the document was created",
-                  "format": "date-time",
-                  "type": "string"
-                },
-                "deleted_at": {
-                  "description": "When the document was deleted (null if not deleted)",
-                  "format": "date-time",
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "document_id": {
-                  "description": "The document id",
-                  "type": "string"
-                },
-                "document_name": {
-                  "description": "The document name",
-                  "type": "string"
-                },
-                "file_type": {
-                  "description": "The file type of the document",
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "owner": {
-                  "description": "The owner of the document",
-                  "type": "string"
-                },
-                "project_id": {
-                  "description": "The project id containing the document",
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "updated_at": {
-                  "description": "When the document was last updated",
-                  "format": "date-time",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "document_id",
-                "document_name",
-                "owner",
-                "created_at",
-                "updated_at",
-                "access_level"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "resultsReturned": {
-            "description": "The number of results returned",
-            "format": "uint",
-            "minimum": 0,
-            "type": "integer"
-          },
-          "totalResults": {
-            "description": "Total number of results found",
-            "format": "uint",
-            "minimum": 0,
-            "type": "integer"
-          }
-        },
-        "required": [
-          "results",
-          "totalResults",
-          "resultsReturned"
-        ],
-        "title": "ListDocumentsResponse",
         "type": "object"
       }
     },
@@ -2856,6 +2661,165 @@
           "items"
         ],
         "title": "ApiPaginatedThreadCursor",
+        "type": "object"
+      }
+    },
+    {
+      "name": "ListDocuments",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "List documents the user has access to with optional filtering and pagination. Only applies to documents, not emails, AI conversations, chat/slack threads, projects aka folders. This tool returns document metadata including access levels and supports filtering by file type, minimum access level, and pagination. Use this tool to discover and browse documents before using the Read tool to access their content. Prefer using the search tool to search on a specific matching string within the content or the name of the entity.",
+        "properties": {
+          "exhaustiveSearch": {
+            "additionalProperties": false,
+            "default": false,
+            "description": "Exhaustive search to get all results. Defaults to false. Set to true when you need all matching documents, ignoring pagination limits.",
+            "type": "boolean"
+          },
+          "fileTypes": {
+            "additionalProperties": false,
+            "description": "Document file types to include. Examples: ['pdf'], ['md', 'txt']. Leave empty to include all document types.",
+            "items": {
+              "additionalProperties": false,
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "minAccessLevel": {
+            "additionalProperties": false,
+            "description": "Minimum access level required. Defaults to 'view' if not specified.",
+            "enum": [
+              "view",
+              "comment",
+              "edit",
+              "owner",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pageOffset": {
+            "additionalProperties": false,
+            "default": 0,
+            "description": "Page offset for pagination. Default is 0. Use higher values to get subsequent pages of results.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "pageSize": {
+            "additionalProperties": false,
+            "default": 50,
+            "description": "Number of results per page. Max is 100, default is 50. Use smaller values for focused results.",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "exhaustiveSearch",
+          "fileTypes",
+          "minAccessLevel",
+          "pageOffset",
+          "pageSize"
+        ],
+        "title": "ListDocuments",
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "results": {
+            "description": "The list results (truncated to `results_returned` limit if applicable)",
+            "items": {
+              "properties": {
+                "access_level": {
+                  "description": "The user's access level to this document",
+                  "enum": [
+                    "view",
+                    "comment",
+                    "edit",
+                    "owner"
+                  ],
+                  "type": "string"
+                },
+                "created_at": {
+                  "description": "When the document was created",
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "deleted_at": {
+                  "description": "When the document was deleted (null if not deleted)",
+                  "format": "date-time",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "document_id": {
+                  "description": "The document id",
+                  "type": "string"
+                },
+                "document_name": {
+                  "description": "The document name",
+                  "type": "string"
+                },
+                "file_type": {
+                  "description": "The file type of the document",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "owner": {
+                  "description": "The owner of the document",
+                  "type": "string"
+                },
+                "project_id": {
+                  "description": "The project id containing the document",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "updated_at": {
+                  "description": "When the document was last updated",
+                  "format": "date-time",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "document_id",
+                "document_name",
+                "owner",
+                "created_at",
+                "updated_at",
+                "access_level"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "resultsReturned": {
+            "description": "The number of results returned",
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "totalResults": {
+            "description": "Total number of results found",
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "results",
+          "totalResults",
+          "resultsReturned"
+        ],
+        "title": "ListDocumentsResponse",
         "type": "object"
       }
     },
