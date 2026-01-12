@@ -9,6 +9,7 @@ import CaretLeft from '@icon/regular/caret-left.svg';
 import CaretRight from '@icon/regular/caret-right.svg';
 import CloseIcon from '@icon/regular/x.svg';
 import IconGear from '@macro-icons/macro-gear.svg';
+import MacroCreateIcon from '@macro-icons/macro-create-b.svg';
 import { Button } from '@ui/components/Button';
 import {
   createEffect,
@@ -19,6 +20,7 @@ import {
   useContext,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
+import { setCreateMenuOpen } from '../../Launcher';
 import { SplitLayoutContext, SplitPanelContext } from '../context';
 import { useSplitLayout } from '../layout';
 import {
@@ -112,13 +114,46 @@ function SplitCloseButton() {
 }
 
 function SplitControlButtons() {
+  const { getSplitCount } = useSplitLayout();
+  const hasMultipleSplits = () => getSplitCount() > 1;
+
   return (
-    <div class="flex flex-row items-center px-2 h-full shrink-0">
+    <div class="flex flex-row items-center pl-2 h-full shrink-0">
       <div class="touch:mobile-width:hidden">
         <SplitCloseButton />
       </div>
-      <SplitBackButton />
-      <SplitForwardButton />
+      <Show
+        when={hasMultipleSplits()}
+        fallback={
+          <Button
+            class="rounded-full text-accent hover:text-ink hover:bg-accent"
+            tooltip={
+              <LabelAndHotKey
+                label="Create"
+                hotkeyToken={TOKENS.global.createCommand}
+              />
+            }
+            onClick={() => {
+              setCreateMenuOpen(true);
+            }}
+          >
+            <svg width="20px" height="20px" viewBox="0 0 360 239" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <g clip-path="url(#clip0_2382_18)">
+                <path d="M93.4109 0.00012207L59.8478 13.1631V100.265L79.7959 119.107V138.001L59.8478 119.142V100.265L33.5626 75.4445L-0.000518799 88.6016V188.556C-0.000518799 190.457 0.387539 192.339 1.13843 194.086C1.89127 195.832 2.99141 197.407 4.3729 198.715L46.2017 238.268L79.794 225.111V138.009L185.839 238.27L219.431 225.113V138.011L325.51 238.272L359.074 225.115V125.161C359.074 123.259 358.686 121.377 357.935 119.631C357.182 117.884 356.082 116.309 354.7 115.003L233.081 0.00012207L199.483 13.1631V100.265L219.431 119.118L219.237 137.819L199.483 119.148V100.265L93.4109 0.00012207Z" fill="currentColor" />
+              </g>
+              <defs>
+                <clipPath id="clip0_2382_18">
+                  <rect width="359.074" height="238.268" fill="white" />
+                </clipPath>
+              </defs>
+            </svg>
+
+          </Button>
+        }
+      >
+        <SplitBackButton />
+        <SplitForwardButton />
+      </Show>
     </div>
   );
 }
