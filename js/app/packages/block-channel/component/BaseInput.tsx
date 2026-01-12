@@ -4,6 +4,10 @@ import {
 } from '@block-channel/signal/attachment';
 import type { SendMessageArgs } from '@block-channel/signal/channel';
 import { handleFileUpload } from '@block-channel/utils/inputAttachments';
+import {
+  expandGroupParticipants,
+  toSimpleMention,
+} from '@block-channel/utils/mentionExpansion';
 import { isInBlock } from '@core/block';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
@@ -56,37 +60,6 @@ import { FormatRibbon } from './FormatRibbon';
 import { useChannelMarkdownArea } from './MarkdownArea';
 
 false && fileFolderDrop;
-
-type MentionWithParticipants = {
-  itemType: string;
-  itemId: string;
-  groupParticipants?: string[];
-};
-
-function expandGroupParticipants(
-  participants: string[],
-  seenUserIds: Set<string>
-): SimpleMention[] {
-  const result: SimpleMention[] = [];
-  for (const userId of participants) {
-    if (!seenUserIds.has(userId)) {
-      seenUserIds.add(userId);
-      result.push({ entity_type: 'user', entity_id: userId });
-    }
-  }
-  return result;
-}
-
-function toSimpleMention(
-  mention: MentionWithParticipants,
-  seenUserIds: Set<string>
-): SimpleMention | null {
-  if (mention.itemType === 'user') {
-    if (seenUserIds.has(mention.itemId)) return null;
-    seenUserIds.add(mention.itemId);
-  }
-  return { entity_type: mention.itemType, entity_id: mention.itemId };
-}
 
 type InputAttachmentsStore = {
   store: Record<string, InputAttachment[]>;
