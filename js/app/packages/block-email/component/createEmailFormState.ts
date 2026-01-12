@@ -187,6 +187,10 @@ export function createEmailFormState(key: string) {
     callDirty();
   };
 
+  const [attachments, setAttachments] = createSignal<
+    { file: File; attachmentID?: string }[]
+  >([]);
+
   const value = {
     draft,
     replyAppended,
@@ -210,6 +214,23 @@ export function createEmailFormState(key: string) {
     },
     setCapturedEditor: (editor: LexicalEditor) => {
       setCapturedEditor(editor);
+    },
+    attachments: {
+      list: attachments,
+      add: (attachment: { file: File; attachmentID?: string }) => {
+        setAttachments((p) => [...p, attachment]);
+      },
+      assignAttachmentID: (file: File, attachmentID: string) => {
+        setAttachments((p) =>
+          p.map((a) => (a.file === file ? { file, attachmentID } : a))
+        );
+      },
+      removeByFile: (file: File) => {
+        setAttachments((p) => p.filter((a) => a.file !== file));
+      },
+      removeByID: (attachmentID: string) => {
+        setAttachments((p) => p.filter((a) => a.attachmentID !== attachmentID));
+      },
     },
   };
 
