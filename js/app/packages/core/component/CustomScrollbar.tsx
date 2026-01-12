@@ -194,10 +194,7 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
     if (max <= 0) return;
 
     const scrollRatio = clickY / trackH;
-    let newScrollTop = Math.max(
-      0,
-      Math.min(max, scrollRatio * max)
-    );
+    let newScrollTop = Math.max(0, Math.min(max, scrollRatio * max));
 
     if (props.reverse) {
       newScrollTop = newScrollTop - max;
