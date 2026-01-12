@@ -98,7 +98,7 @@ pub async fn handler(
         .await
         .map_err(|e| {
             tracing::error!(error=?e, "failed to get user notification by id");
-            GetNotificationErr::Db(e.into())
+            GetNotificationErr::Db(e)
         })?;
 
     let raw = raw.ok_or(GetNotificationErr::NotFound)?;
