@@ -62,7 +62,7 @@ pub async fn disable_handler(
     };
 
     ctx.sqs_client
-        .enqueue_email_refresh_notification(message)
+        .enqueue_link_manager_notification(message)
         .await
         .inspect_err(|e| {
             tracing::error!(error=?e, link_id=?link.id, "Failed to enqueue delete notification");

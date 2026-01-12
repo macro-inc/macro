@@ -62,7 +62,7 @@ pub async fn handler(
             };
             if let Err(e) = ctx
                 .sqs_client
-                .enqueue_email_refresh_notification(notif)
+                .enqueue_link_manager_notification(notif)
                 .await
             {
                 tracing::error!(
