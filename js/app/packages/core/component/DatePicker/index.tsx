@@ -149,7 +149,7 @@ export function DatePicker(props: DatePickerProps) {
         {/* Month/Year header */}
         <div class="flex items-center justify-between mb-3">
           <button
-            class="p-1 hover:bg-active transition-colors cursor-pointer"
+            class="p-1 hover:bg-active transition-colors"
             onClick={handlePrevMonth}
           >
             <CaretLeft class="w-4 h-4" />
