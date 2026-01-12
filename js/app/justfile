@@ -25,6 +25,12 @@ build-tauri:
 test-watch:
     bunx --bun vitest
 
+test-email-rendering:
+    cd packages/core/email/tests && bunx playwright test && bunx playwright show-report
+
+test-email-rendering-update:
+    cd packages/core/email/tests && bunx playwright test --update-snapshots
+
 preview-prod:
     cd packages/app && MODE=production NODE_ENV=production bun run preview:prod
 
