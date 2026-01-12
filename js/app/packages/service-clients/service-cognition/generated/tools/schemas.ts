@@ -4,6 +4,30 @@
 */
 import { z } from 'zod';
 
+export const ContentSearch = z.object({ "entityTypes": z.array(z.enum(["documents","chats","emails","channels","projects"])).default([]), "query": z.string() }).strict()
+
+
+export const SearchToolResponse = z.object({ "results": z.array(z.any().superRefine((x, ctx) => {
+    const schemas = [z.object({ "document_id": z.string().uuid(), "document_name": z.string(), "document_search_results": z.array(z.object({ "highlight": z.object({ "bcc": z.array(z.string()).optional(), "cc": z.array(z.string()).optional(), "content": z.array(z.string()).optional(), "name": z.union([z.string(), z.null()]).optional(), "recipients": z.array(z.string()).optional(), "sender": z.union([z.string(), z.null()]).optional(), "user_id": z.union([z.string(), z.null()]).optional() }), "node_id": z.union([z.string(), z.null()]).optional(), "raw_content": z.union([z.string(), z.null()]).optional(), "score": z.union([z.number(), z.null()]).optional() })), "file_type": z.union([z.string(), z.null()]).optional(), "id": z.string().uuid(), "metadata": z.union([z.object({ "created_at": z.number().int(), "deleted_at": z.union([z.number().int(), z.null()]).optional(), "project_id": z.union([z.string(), z.null()]).optional(), "updated_at": z.number().int(), "viewed_at": z.union([z.number().int(), z.null()]).optional() }), z.null()]).optional(), "name": z.string(), "owner_id": z.string(), "sub_type": z.union([z.literal("task"), z.null()]).optional(), "type": z.literal("document") }), z.object({ "chat_id": z.string().uuid(), "chat_search_results": z.array(z.object({ "chat_message_id": z.union([z.string().uuid(), z.null()]).optional(), "highlight": z.object({ "bcc": z.array(z.string()).optional(), "cc": z.array(z.string()).optional(), "content": z.array(z.string()).optional(), "name": z.union([z.string(), z.null()]).optional(), "recipients": z.array(z.string()).optional(), "sender": z.union([z.string(), z.null()]).optional(), "user_id": z.union([z.string(), z.null()]).optional() }), "role": z.union([z.string(), z.null()]).optional(), "score": z.union([z.number(), z.null()]).optional() })), "id": z.string().uuid(), "metadata": z.union([z.object({ "created_at": z.number().int(), "deleted_at": z.union([z.number().int(), z.null()]).optional(), "project_id": z.union([z.string(), z.null()]).optional(), "updated_at": z.number().int(), "viewed_at": z.union([z.number().int(), z.null()]).optional() }), z.null()]).optional(), "name": z.string(), "owner_id": z.string(), "type": z.literal("chat"), "user_id": z.string() }), z.object({ "created_at": z.number().int(), "email_message_search_results": z.array(z.object({ "bcc": z.array(z.string()), "cc": z.array(z.string()), "highlight": z.object({ "bcc": z.array(z.string()).optional(), "cc": z.array(z.string()).optional(), "content": z.array(z.string()).optional(), "name": z.union([z.string(), z.null()]).optional(), "recipients": z.array(z.string()).optional(), "sender": z.union([z.string(), z.null()]).optional(), "user_id": z.union([z.string(), z.null()]).optional() }), "labels": z.array(z.string()), "message_id": z.union([z.string().uuid(), z.null()]).optional(), "pretty_sender": z.string(), "recipients": z.array(z.string()), "score": z.union([z.number(), z.null()]).optional(), "sender": z.string(), "sent_at": z.union([z.number().int(), z.null()]).optional() })), "id": z.string().uuid(), "name": z.union([z.string(), z.null()]).optional(), "owner_id": z.string(), "snippet": z.union([z.string(), z.null()]).optional(), "subject": z.union([z.string(), z.null()]).optional(), "thread_id": z.string().uuid(), "type": z.literal("email"), "updated_at": z.number().int(), "user_id": z.string(), "viewed_at": z.union([z.number().int(), z.null()]).optional() }), z.object({ "channel_id": z.string().uuid(), "channel_message_search_results": z.array(z.object({ "created_at": z.union([z.number().int(), z.null()]).optional(), "highlight": z.object({ "bcc": z.array(z.string()).optional(), "cc": z.array(z.string()).optional(), "content": z.array(z.string()).optional(), "name": z.union([z.string(), z.null()]).optional(), "recipients": z.array(z.string()).optional(), "sender": z.union([z.string(), z.null()]).optional(), "user_id": z.union([z.string(), z.null()]).optional() }), "message_id": z.union([z.string().uuid(), z.null()]).optional(), "score": z.union([z.number(), z.null()]).optional(), "sender_id": z.union([z.string(), z.null()]).optional(), "thread_id": z.union([z.string().uuid(), z.null()]).optional(), "updated_at": z.union([z.number().int(), z.null()]).optional() })), "channel_type": z.string(), "id": z.string().uuid(), "metadata": z.union([z.object({ "created_at": z.number().int(), "interacted_at": z.union([z.number().int(), z.null()]).optional(), "updated_at": z.number().int(), "viewed_at": z.union([z.number().int(), z.null()]).optional() }), z.null()]).optional(), "owner_id": z.union([z.string(), z.null()]).optional(), "type": z.literal("channel") }), z.object({ "created_at": z.number().int(), "id": z.string().uuid(), "metadata": z.union([z.object({ "created_at": z.number().int(), "deleted_at": z.union([z.number().int(), z.null()]).optional(), "parent_project_id": z.union([z.string(), z.null()]).optional(), "updated_at": z.number().int(), "viewed_at": z.union([z.number().int(), z.null()]).optional() }), z.null()]).optional(), "name": z.string(), "owner_id": z.string(), "project_search_results": z.array(z.object({ "highlight": z.object({ "bcc": z.array(z.string()).optional(), "cc": z.array(z.string()).optional(), "content": z.array(z.string()).optional(), "name": z.union([z.string(), z.null()]).optional(), "recipients": z.array(z.string()).optional(), "sender": z.union([z.string(), z.null()]).optional(), "user_id": z.union([z.string(), z.null()]).optional() }), "score": z.union([z.number(), z.null()]).optional() })), "type": z.literal("project"), "updated_at": z.number().int() })];
+    const errors = schemas.reduce<z.ZodError[]>(
+      (errors, schema) =>
+        ((result) =>
+          result.error ? [...errors, result.error] : errors)(
+          schema.safeParse(x),
+        ),
+      [],
+    );
+    if (schemas.length - errors.length !== 1) {
+      ctx.addIssue({
+        path: ctx.path,
+        code: "invalid_union",
+        unionErrors: errors,
+        message: "Invalid input: Should pass single schema",
+      });
+    }
+  })) })
+
+
 export const ListDocuments = z.object({ "exhaustiveSearch": z.boolean().default(false), "fileTypes": z.union([z.array(z.string()), z.null()]), "minAccessLevel": z.union([z.literal("view"), z.literal("comment"), z.literal("edit"), z.literal("owner"), z.literal(null)]), "pageOffset": z.number().int().default(0), "pageSize": z.number().int().default(50) }).strict()
 
 
@@ -22,29 +46,14 @@ export const MarkdownRewrite = z.object({ "instructions": z.string(), "markdown_
 export const AIDiffResponse = z.object({ "diffs": z.array(z.object({ "markdown_text": z.string(), "node_key": z.string(), "operation": z.string() }).strict()) }).strict()
 
 
+export const NameSearch = z.object({ "entityTypes": z.array(z.enum(["documents","chats","emails","channels","projects"])).default([]), "name": z.string() }).strict()
+
+
 export const Read = z.object({ "contentType": z.enum(["document","channel","channel-message","chat-thread","chat-message","email-thread","email-message","project"]), "ids": z.array(z.string()), "messagesSince": z.union([z.string().datetime({ offset: true }), z.null()]) }).strict()
 
 
 export const ReadResponse = z.object({ "content": z.any().superRefine((x, ctx) => {
-    const schemas = [z.object({ "documents": z.array(z.object({ "formattedDocument": z.string() })), "type": z.literal("documents") }), z.object({ "channel_id": z.string(), "channel_name": z.union([z.string(), z.null()]).optional(), "transcript": z.string(), "type": z.literal("channel") }), z.object({ "conversation": z.array(z.object({ "chat_id": z.string(), "messages": z.array(z.object({ "attachment_summaries": z.array(z.any().superRefine((x, ctx) => {
-    const schemas = [z.object({ "Summary": z.object({ "created_at": z.union([z.string().datetime({ offset: true }), z.null()]).optional(), "document_id": z.string(), "id": z.union([z.string(), z.null()]).optional(), "summary": z.string(), "version_id": z.string() }) }).strict(), z.object({ "NoSummary": z.object({ "document_id": z.string() }) }).strict()];
-    const errors = schemas.reduce<z.ZodError[]>(
-      (errors, schema) =>
-        ((result) =>
-          result.error ? [...errors, result.error] : errors)(
-          schema.safeParse(x),
-        ),
-      [],
-    );
-    if (schemas.length - errors.length !== 1) {
-      ctx.addIssue({
-        path: ctx.path,
-        code: "invalid_union",
-        unionErrors: errors,
-        message: "Invalid input: Should pass single schema",
-      });
-    }
-  })), "content": z.string(), "date": z.string().datetime({ offset: true }) })), "title": z.string() })), "type": z.literal("chat") }), z.object({ "messages": z.array(z.object({ "bcc": z.array(z.string()), "cc": z.array(z.string()), "content": z.string(), "messageId": z.string(), "recipients": z.array(z.string()), "sender": z.string(), "sentAt": z.union([z.string().datetime({ offset: true }), z.null()]).optional() })), "subject": z.union([z.string(), z.null()]).optional(), "thread_id": z.string(), "type": z.literal("email") }), z.object({ "formatted_preview": z.string(), "type": z.literal("itemPreviews") })];
+    const schemas = [z.object({ "documents": z.array(z.object({ "formattedDocument": z.string() })), "type": z.literal("documents") }), z.object({ "channel_id": z.string(), "channel_name": z.union([z.string(), z.null()]).optional(), "transcript": z.string(), "type": z.literal("channel") }), z.object({ "conversation": z.array(z.object({ "chat_id": z.string(), "messages": z.array(z.object({ "attachmentIds": z.array(z.string()), "content": z.string(), "date": z.string().datetime({ offset: true }) })), "title": z.string() })), "type": z.literal("chat") }), z.object({ "messages": z.array(z.object({ "bcc": z.array(z.string()), "cc": z.array(z.string()), "content": z.string(), "messageId": z.string(), "recipients": z.array(z.string()), "sender": z.string(), "sentAt": z.union([z.string().datetime({ offset: true }), z.null()]).optional() })), "subject": z.union([z.string(), z.null()]).optional(), "thread_id": z.string(), "type": z.literal("email") }), z.object({ "formatted_preview": z.string(), "type": z.literal("itemPreviews") })];
     const errors = schemas.reduce<z.ZodError[]>(
       (errors, schema) =>
         ((result) =>
@@ -62,30 +71,6 @@ export const ReadResponse = z.object({ "content": z.any().superRefine((x, ctx) =
       });
     }
   }) })
-
-
-export const UnifiedSearch = z.object({ "exhaustiveSearch": z.boolean().default(true), "pageOffset": z.number().int().default(0), "pageSize": z.number().int().default(10), "request": z.object({ "filters": z.union([z.object({ "channel": z.union([z.object({ "channel_ids": z.array(z.string()), "mentions": z.array(z.string()), "org_id": z.union([z.number().int(), z.null()]), "sender_ids": z.array(z.string()), "thread_ids": z.array(z.string()) }).strict(), z.null()]), "chat": z.union([z.object({ "chat_ids": z.array(z.string()), "owners": z.array(z.string()), "project_ids": z.array(z.string()), "role": z.array(z.string()) }).strict(), z.null()]), "document": z.union([z.object({ "document_ids": z.array(z.string()), "file_types": z.array(z.string()), "owners": z.array(z.string()), "project_ids": z.array(z.string()) }).strict(), z.null()]), "email": z.union([z.object({ "bcc": z.array(z.string()), "cc": z.array(z.string()), "recipients": z.array(z.string()), "senders": z.array(z.string()) }).strict(), z.null()]), "project": z.union([z.object({ "owners": z.array(z.string()), "project_ids": z.array(z.string()) }).strict(), z.null()]) }).strict(), z.null()]), "include": z.array(z.enum(["documents","chats","emails","channels","projects"])).default([]), "match_type": z.enum(["exact","partial","regexp"]), "search_on": z.enum(["name","content","name_content"]).default("content"), "terms": z.union([z.array(z.string()), z.null()]) }).strict() }).strict()
-
-
-export const UnifiedSearchResponseOutput = z.object({ "response": z.object({ "results": z.array(z.any().superRefine((x, ctx) => {
-    const schemas = [z.object({ "document_id": z.string().uuid(), "document_name": z.string(), "document_search_results": z.array(z.object({ "highlight": z.object({ "bcc": z.array(z.string()).optional(), "cc": z.array(z.string()).optional(), "content": z.array(z.string()).optional(), "name": z.union([z.string(), z.null()]).optional(), "recipients": z.array(z.string()).optional(), "sender": z.union([z.string(), z.null()]).optional(), "user_id": z.union([z.string(), z.null()]).optional() }), "node_id": z.union([z.string(), z.null()]).optional(), "raw_content": z.union([z.string(), z.null()]).optional(), "score": z.union([z.number(), z.null()]).optional() })), "file_type": z.union([z.string(), z.null()]).optional(), "id": z.string().uuid(), "metadata": z.union([z.object({ "created_at": z.number().int(), "deleted_at": z.union([z.number().int(), z.null()]).optional(), "project_id": z.union([z.string(), z.null()]).optional(), "updated_at": z.number().int(), "viewed_at": z.union([z.number().int(), z.null()]).optional() }), z.null()]).optional(), "name": z.string(), "owner_id": z.string(), "sub_type": z.union([z.literal("task"), z.null()]).optional(), "type": z.literal("document") }), z.object({ "chat_id": z.string().uuid(), "chat_search_results": z.array(z.object({ "chat_message_id": z.union([z.string().uuid(), z.null()]).optional(), "highlight": z.object({ "bcc": z.array(z.string()).optional(), "cc": z.array(z.string()).optional(), "content": z.array(z.string()).optional(), "name": z.union([z.string(), z.null()]).optional(), "recipients": z.array(z.string()).optional(), "sender": z.union([z.string(), z.null()]).optional(), "user_id": z.union([z.string(), z.null()]).optional() }), "role": z.union([z.string(), z.null()]).optional(), "score": z.union([z.number(), z.null()]).optional() })), "id": z.string().uuid(), "metadata": z.union([z.object({ "created_at": z.number().int(), "deleted_at": z.union([z.number().int(), z.null()]).optional(), "project_id": z.union([z.string(), z.null()]).optional(), "updated_at": z.number().int(), "viewed_at": z.union([z.number().int(), z.null()]).optional() }), z.null()]).optional(), "name": z.string(), "owner_id": z.string(), "type": z.literal("chat"), "user_id": z.string() }), z.object({ "created_at": z.number().int(), "email_message_search_results": z.array(z.object({ "bcc": z.array(z.string()), "cc": z.array(z.string()), "highlight": z.object({ "bcc": z.array(z.string()).optional(), "cc": z.array(z.string()).optional(), "content": z.array(z.string()).optional(), "name": z.union([z.string(), z.null()]).optional(), "recipients": z.array(z.string()).optional(), "sender": z.union([z.string(), z.null()]).optional(), "user_id": z.union([z.string(), z.null()]).optional() }), "labels": z.array(z.string()), "message_id": z.union([z.string().uuid(), z.null()]).optional(), "pretty_sender": z.string(), "recipients": z.array(z.string()), "score": z.union([z.number(), z.null()]).optional(), "sender": z.string(), "sent_at": z.union([z.number().int(), z.null()]).optional() })), "id": z.string().uuid(), "name": z.union([z.string(), z.null()]).optional(), "owner_id": z.string(), "snippet": z.union([z.string(), z.null()]).optional(), "subject": z.union([z.string(), z.null()]).optional(), "thread_id": z.string().uuid(), "type": z.literal("email"), "updated_at": z.number().int(), "user_id": z.string(), "viewed_at": z.union([z.number().int(), z.null()]).optional() }), z.object({ "channel_id": z.string().uuid(), "channel_message_search_results": z.array(z.object({ "created_at": z.union([z.number().int(), z.null()]).optional(), "highlight": z.object({ "bcc": z.array(z.string()).optional(), "cc": z.array(z.string()).optional(), "content": z.array(z.string()).optional(), "name": z.union([z.string(), z.null()]).optional(), "recipients": z.array(z.string()).optional(), "sender": z.union([z.string(), z.null()]).optional(), "user_id": z.union([z.string(), z.null()]).optional() }), "message_id": z.union([z.string().uuid(), z.null()]).optional(), "score": z.union([z.number(), z.null()]).optional(), "sender_id": z.union([z.string(), z.null()]).optional(), "thread_id": z.union([z.string().uuid(), z.null()]).optional(), "updated_at": z.union([z.number().int(), z.null()]).optional() })), "channel_type": z.string(), "id": z.string().uuid(), "metadata": z.union([z.object({ "created_at": z.number().int(), "interacted_at": z.union([z.number().int(), z.null()]).optional(), "updated_at": z.number().int(), "viewed_at": z.union([z.number().int(), z.null()]).optional() }), z.null()]).optional(), "owner_id": z.union([z.string(), z.null()]).optional(), "type": z.literal("channel") }), z.object({ "created_at": z.number().int(), "id": z.string().uuid(), "metadata": z.union([z.object({ "created_at": z.number().int(), "deleted_at": z.union([z.number().int(), z.null()]).optional(), "parent_project_id": z.union([z.string(), z.null()]).optional(), "updated_at": z.number().int(), "viewed_at": z.union([z.number().int(), z.null()]).optional() }), z.null()]).optional(), "name": z.string(), "owner_id": z.string(), "project_search_results": z.array(z.object({ "highlight": z.object({ "bcc": z.array(z.string()).optional(), "cc": z.array(z.string()).optional(), "content": z.array(z.string()).optional(), "name": z.union([z.string(), z.null()]).optional(), "recipients": z.array(z.string()).optional(), "sender": z.union([z.string(), z.null()]).optional(), "user_id": z.union([z.string(), z.null()]).optional() }), "score": z.union([z.number(), z.null()]).optional() })), "type": z.literal("project"), "updated_at": z.number().int() })];
-    const errors = schemas.reduce<z.ZodError[]>(
-      (errors, schema) =>
-        ((result) =>
-          result.error ? [...errors, result.error] : errors)(
-          schema.safeParse(x),
-        ),
-      [],
-    );
-    if (schemas.length - errors.length !== 1) {
-      ctx.addIssue({
-        path: ctx.path,
-        code: "invalid_union",
-        unionErrors: errors,
-        message: "Invalid input: Should pass single schema",
-      });
-    }
-  })), "resultsReturned": z.number().int().gte(0), "totalResults": z.number().int().gte(0) }), "responseSchema": z.any() })
 
 
 export const WebSearchToolCall = z.object({ "query": z.string() })

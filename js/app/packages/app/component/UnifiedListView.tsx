@@ -15,6 +15,7 @@ import { ContextMenuContent, MenuSeparator } from '@core/component/Menu';
 import { useTaskProperties } from '@core/component/Properties/hooks';
 import { getSuggestedProperties } from '@core/component/Properties/utils';
 import { RecipientSelector } from '@core/component/RecipientSelector';
+import { toast } from '@core/component/Toast/Toast';
 import {
   blockAcceptsFileExtension,
   fileTypeToBlockName,
@@ -22,6 +23,7 @@ import {
 import {
   ENABLE_FRECENCY,
   ENABLE_PROPERTY_DISPLAY,
+  ENABLE_PROPERTY_FILTER,
   ENABLE_SOUP_FROM_FILTER,
   ENABLE_TASKS_TABS,
 } from '@core/constant/featureFlags';
@@ -134,6 +136,8 @@ import { EntityModal } from './EntityModal/EntityModal';
 import { EntitySelectionToolbarModal } from './EntitySelectionToolbarModal';
 import { EntityRow, EntityRowProvider } from './mobile/EntityRow';
 import { PropertyDisplayControl } from './PropertyDisplayControl';
+import { PropertyFilterControl } from './PropertyFilterControl';
+import type { PropertyFilter } from './PropertyFilterTypes';
 import { useUpsertSavedViewMutation } from './Soup';
 import { openEntityInSplitFromUnifiedList } from './soupContextHelpers';
 import {
@@ -150,7 +154,6 @@ import {
   type SortOptions,
   type SystemSortOption,
   VIEWCONFIG_BASE,
-  VIEWCONFIG_DEFAULTS_IDS,
   VIEWCONFIG_DEFAULTS_IDS_ENUM,
   VIEWCONFIG_FILTER_DOCUMENT_TYPE_FILTER,
   type ViewConfigBase,
@@ -404,6 +407,19 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     setViewDataStore(selectedView(), 'filters', 'fromFilter', ...args);
   };
 
+  // Property filters
+  const propertyFilters = createMemo(
+    () => view()?.filters.propertyFilters ?? []
+  );
+  const setPropertyFilters = (filters: PropertyFilter[]) => {
+    setViewDataStore(selectedView(), 'filters', 'propertyFilters', filters);
+  };
+  // Track incomplete property filters for toast warning on save
+  const [hasIncompletePropertyFilters, setHasIncompletePropertyFilters] =
+    createSignal(false);
+  // Store clear handler from PropertyFilterControl
+  let clearPropertyFilters: (() => void) | undefined;
+
   const getSystemSortOption = (
     sort: SortOptions | undefined
   ): SystemSortOption => {
@@ -536,9 +552,12 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     const propertyId = sort?.propertyId ?? null;
     const sortOrder = sort?.sortOrder ?? null;
 
+    // Spread filters with propertyFilters explicitly accessed to ensure reactivity tracking
+    const filters = viewsData[viewKey]?.filters;
+
     return {
       display: viewsData[viewKey]?.display,
-      filters: viewsData[viewKey]?.filters,
+      filters: { ...filters, propertyFilters: filters.propertyFilters },
       sort: {
         type: sortType,
         sortBy,
@@ -1252,23 +1271,27 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     }
   });
 
-  const onClickSaveViewConfigChanges = () => {
+  const onClickSaveViewConfigChanges = async () => {
     const view_ = view();
     const config = currentViewConfigBase();
     if (!view_ || !config) return;
 
-    saveViewMutation.mutate({
+    // Warn if there are incomplete property filters (they won't be saved)
+    if (hasIncompletePropertyFilters()) {
+      toast.alert('Incomplete property filters were not saved');
+    }
+
+    // Wait for mutation to complete (including query refetch) before updating initialConfig
+    await saveViewMutation.mutateAsync({
       id: view_.id,
       name: view_.view,
       config,
     });
-    // only for default views
-    if (VIEWCONFIG_DEFAULTS_IDS.includes(view_.id as any)) {
-      // Reset initialConfigSignal to current config after save
-      const currentConfig = stringifiedCurrentViewConfigBase();
-      if (currentConfig !== null && currentConfig !== undefined) {
-        setViewDataStore(selectedView(), 'initialConfig', currentConfig);
-      }
+
+    // Reset initialConfig after save + refetch so isViewConfigChanged returns false
+    const currentConfig = stringifiedCurrentViewConfigBase();
+    if (currentConfig !== null && currentConfig !== undefined) {
+      setViewDataStore(selectedView(), 'initialConfig', currentConfig);
     }
   };
 
@@ -1286,6 +1309,8 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       setViewDataStore(selectedView(), 'sort', initialConfigObj.sort);
       setViewDataStore(selectedView(), 'display', initialConfigObj.display);
     });
+    // Clear property filter UI state
+    clearPropertyFilters?.();
   };
 
   // Set initialConfig when it's not present (on load or after save/refetch)
@@ -1595,6 +1620,21 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                         setSelectedOptions={setFromFilterUsers}
                         placeholder="Filter by user..."
                         includeSelf
+                      />
+                    </section>
+                  </Show>
+                  <Show when={ENABLE_PROPERTY_FILTER}>
+                    <section class="gap-1 grid p-2">
+                      <span class="font-medium text-xs">Property</span>
+                      <PropertyFilterControl
+                        propertyFilters={propertyFilters}
+                        setPropertyFilters={setPropertyFilters}
+                        onIncompleteFiltersChange={
+                          setHasIncompletePropertyFilters
+                        }
+                        registerClearHandler={(fn) => {
+                          clearPropertyFilters = fn;
+                        }}
                       />
                     </section>
                   </Show>

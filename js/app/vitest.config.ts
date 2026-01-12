@@ -44,6 +44,20 @@ export default defineConfig({
           name: 'scripts',
         },
       },
+      {
+        extends: './packages/lexical-core/vitest.config.ts',
+        test: {
+          include: ['packages/lexical-core/**/*.{test,spec}.{ts,tsx}'],
+          name: 'lexical-core',
+        },
+      },
+      {
+        extends: './packages/core/vitest.config.ts',
+        test: {
+          include: ['packages/block-channel/**/*.{test,spec}.{ts,tsx}'],
+          name: 'block-channel',
+        },
+      },
     ],
   },
 });

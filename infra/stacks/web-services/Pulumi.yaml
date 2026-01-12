@@ -1,5 +1,0 @@
-name: macro-app-infra
-runtime: nodejs
-description: Core infrastructure for macro web app
-config:
-  aws:region: us-east-1

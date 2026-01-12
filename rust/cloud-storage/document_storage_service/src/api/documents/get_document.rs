@@ -13,7 +13,7 @@ use model::{
         DocumentBasic,
         response::{GetDocumentResponse, GetDocumentResponseData},
     },
-    response::{GenericErrorResponse, GenericResponse},
+    response::GenericErrorResponse,
     user::UserContext,
 };
 use models_permissions::share_permission::access_level::ViewAccessLevel;
@@ -43,17 +43,24 @@ pub struct Params {
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(db, user_context, access_level), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(db, user_context, access), fields(user_id=?user_context.user_id))]
 pub async fn handler(
     State(db): State<PgPool>,
-    DocumentAccessExtractor { access_level, .. }: DocumentAccessExtractor<ViewAccessLevel>,
-    maybe_internal: Option<Extension<InternalUser>>,
+    access: axum_extra::either::Either<
+        DocumentAccessExtractor<ViewAccessLevel>,
+        Option<Extension<InternalUser>>,
+    >,
     user_context: Extension<UserContext>,
     Path(Params { document_id }): Path<Params>,
-) -> impl IntoResponse {
-    let access_level = match maybe_internal {
-        Some(Extension(InternalUser { access_level })) => access_level,
-        None => access_level,
+) -> Result<Json<GetDocumentResponse>, StatusCode> {
+    let access_level = match access {
+        axum_extra::either::Either::E1(DocumentAccessExtractor { access_level, .. }) => {
+            access_level
+        }
+        axum_extra::either::Either::E2(Some(Extension(InternalUser { access_level }))) => {
+            access_level
+        }
+        axum_extra::either::Either::E2(None) => return Err(StatusCode::UNAUTHORIZED),
     };
 
     let document_metadata = match get_document(&db, &document_id).await {
@@ -66,10 +73,7 @@ pub async fn handler(
             {
                 status_code = StatusCode::NOT_FOUND;
             }
-            return GenericResponse::builder()
-                .message("unable to get document")
-                .is_error(true)
-                .send(status_code);
+            return Err(status_code);
         }
     };
 
@@ -78,22 +82,18 @@ pub async fn handler(
             Ok(view_location) => view_location,
             Err(e) => {
                 tracing::error!(error=?e, "error getting view location");
-                return GenericResponse::builder()
-                    .message("error getting view location")
-                    .is_error(true)
-                    .send(StatusCode::INTERNAL_SERVER_ERROR);
+                return Err(StatusCode::INTERNAL_SERVER_ERROR);
             }
         };
 
-    let response_data = GetDocumentResponseData {
-        document_metadata,
-        user_access_level: access_level,
-        view_location: view_location.map(|v| v.location),
-    };
-
-    GenericResponse::builder()
-        .data(&response_data)
-        .send(StatusCode::OK)
+    Ok(Json(GetDocumentResponse {
+        error: false,
+        data: GetDocumentResponseData {
+            document_metadata,
+            user_access_level: access_level,
+            view_location: view_location.map(|v| v.location),
+        },
+    }))
 }
 
 /// Gets the basic document info for a document id.

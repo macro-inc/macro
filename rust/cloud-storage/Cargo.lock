@@ -2704,6 +2704,7 @@ dependencies = [
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
  "axum",
+ "axum-extra",
  "base64 0.22.1",
  "bytes",
  "bzip2",

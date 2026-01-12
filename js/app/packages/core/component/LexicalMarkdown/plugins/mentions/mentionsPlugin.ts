@@ -7,6 +7,7 @@ import {
   $createContactMentionNode,
   $createDateMentionNode,
   $createDocumentMentionNode,
+  $createGroupMentionNode,
   $createInlineSearchNode,
   $createUserMentionNode,
   $handleInlineSearchNodeMutation,
@@ -14,6 +15,7 @@ import {
   $isContactMentionNode,
   $isDateMentionNode,
   $isDocumentMentionNode,
+  $isGroupMentionNode,
   $isUserMentionNode,
   $removeInlineSearch,
   type ContactMentionInfo,
@@ -22,6 +24,8 @@ import {
   DateMentionNode,
   type DocumentMentionInfo,
   DocumentMentionNode,
+  type GroupMentionInfo,
+  GroupMentionNode,
   InlineSearchNode,
   InlineSearchNodesType,
   type UserMentionInfo,
@@ -90,6 +94,9 @@ export const UPDATE_DOCUMENT_NAME_COMMAND: LexicalCommand<
 export const INSERT_USER_MENTION_COMMAND: LexicalCommand<UserMentionInfo> =
   createCommand('INSERT_USER_MENTION_COMMAND');
 
+export const INSERT_GROUP_MENTION_COMMAND: LexicalCommand<GroupMentionInfo> =
+  createCommand('INSERT_GROUP_MENTION_COMMAND');
+
 export type ItemMention = {
   itemType:
     | 'document'
@@ -102,11 +109,13 @@ export type ItemMention = {
     | 'date'
     | 'email'
     | 'unknown'
-    | 'color';
+    | 'color'
+    | 'group';
   itemId: string;
   fileType?: string;
   documentName?: string;
   channelType?: string;
+  groupAlias?: string;
 };
 
 export function $isMentionNode(
@@ -115,12 +124,14 @@ export function $isMentionNode(
   | UserMentionNode
   | DocumentMentionNode
   | ContactMentionNode
-  | DateMentionNode {
+  | DateMentionNode
+  | GroupMentionNode {
   return (
     $isUserMentionNode(node) ||
     $isDocumentMentionNode(node) ||
     $isContactMentionNode(node) ||
-    $isDateMentionNode(node)
+    $isDateMentionNode(node) ||
+    $isGroupMentionNode(node)
   );
 }
 export function $mentionItemFromNode(node: MentionNode): ItemMention {
@@ -169,6 +180,12 @@ export function $mentionItemFromNode(node: MentionNode): ItemMention {
       itemType: 'contact',
       itemId: node.getContactId(),
     };
+  } else if ($isGroupMentionNode(node)) {
+    return {
+      itemType: 'group',
+      itemId: node.getGroupAlias(),
+      groupAlias: node.getGroupAlias(),
+    };
   } else {
     return {
       itemType: 'date',
@@ -193,9 +210,11 @@ function $deleteSelectedMentions(sourceDocumentId?: string) {
   const nodes = sel.getNodes();
   for (const node of nodes) {
     if ($isMentionNode(node) && node.isKeyboardSelectable()) {
-      const mentionUuid = node.getMentionUuid();
-      if (mentionUuid && sourceDocumentId) {
-        untrackMention(sourceDocumentId, mentionUuid);
+      if (!$isGroupMentionNode(node)) {
+        const mentionUuid = node.getMentionUuid();
+        if (mentionUuid && sourceDocumentId) {
+          untrackMention(sourceDocumentId, mentionUuid);
+        }
       }
       node.remove();
       foundNodesToBeDeleted = true;
@@ -246,6 +265,7 @@ function registerMentionsPlugin(
     !editor.hasNodes([
       DocumentMentionNode,
       UserMentionNode,
+      GroupMentionNode,
       ContactMentionNode,
       DateMentionNode,
       InlineSearchNode,
@@ -378,6 +398,23 @@ function registerMentionsPlugin(
           if (payload.mentionUuid) {
             mentionNode.setMentionUuid(payload.mentionUuid);
           }
+
+          $insertNodes([mentionNode]);
+          if ($isRootOrShadowRoot(mentionNode.getParentOrThrow())) {
+            $wrapNodeInElement(mentionNode, $createParagraphNode);
+          }
+          mentionNode.selectEnd();
+        });
+        return true;
+      },
+      COMMAND_PRIORITY_NORMAL
+    ),
+
+    editor.registerCommand(
+      INSERT_GROUP_MENTION_COMMAND,
+      (payload) => {
+        editor.update(() => {
+          const mentionNode = $createGroupMentionNode(payload);
 
           $insertNodes([mentionNode]);
           if ($isRootOrShadowRoot(mentionNode.getParentOrThrow())) {
@@ -675,6 +712,34 @@ function registerMentionsPlugin(
               onCreateMention({
                 itemType: 'date',
                 itemId: node.getDate(),
+              });
+            }
+          }
+        }
+        updateMentionsSignal();
+      }
+    ),
+
+    editor.registerMutationListener(
+      GroupMentionNode,
+      (mutatedNodes, { prevEditorState }) => {
+        for (const [nodeKey, mutation] of mutatedNodes) {
+          const node = nodeByKey(prevEditorState, nodeKey) as GroupMentionNode;
+          if (node && mutation === 'destroyed') {
+            if (onRemoveMention) {
+              onRemoveMention({
+                itemType: 'group',
+                itemId: node.getGroupAlias(),
+                groupAlias: node.getGroupAlias(),
+              });
+            }
+          }
+          if (node && mutation === 'created') {
+            if (onCreateMention) {
+              onCreateMention({
+                itemType: 'group',
+                itemId: node.getGroupAlias(),
+                groupAlias: node.getGroupAlias(),
               });
             }
           }

@@ -32,6 +32,7 @@ aws-sdk-s3 = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true, features = ["macros", "multipart", "tower-log"] }
+axum-extra = { workspace = true }
 base64 = { workspace = true }
 bytes = { workspace = true }
 bzip2 = { workspace = true, default-features = false, features = [
