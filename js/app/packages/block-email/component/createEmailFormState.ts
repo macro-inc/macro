@@ -31,6 +31,7 @@ export type DraftFormAttachment =
       fileName: string;
       contentType: string;
       attachmentID: string;
+      fileSize: number;
     };
 
 /**
@@ -82,6 +83,7 @@ export function createEmailFormState(key: string) {
       contentType: a.content_type,
       fileName: a.file_name,
       url: a.s3_key,
+      fileSize: a.size,
     })) ?? []
   );
 
