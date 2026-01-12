@@ -2,6 +2,7 @@ use axum::{
     Extension, Json,
     extract::{Path, State},
     http::StatusCode,
+    response::{IntoResponse, Response},
 };
 use model::response::ErrorResponse;
 use model::user::UserContext;
@@ -13,6 +14,53 @@ use crate::api::context::ApiContext;
 #[derive(serde::Deserialize)]
 pub struct Params {
     pub notification_id: String,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum GetNotificationErr {
+    #[error("invalid notification_id")]
+    InvalidNotificationId,
+    #[error("notification not found")]
+    NotFound,
+    #[error("failed to get user notification by id")]
+    Db(#[source] anyhow::Error),
+    #[error("failed to convert notification")]
+    Convert(#[source] anyhow::Error),
+}
+
+impl IntoResponse for GetNotificationErr {
+    fn into_response(self) -> Response {
+        match self {
+            GetNotificationErr::InvalidNotificationId => (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    message: "invalid notification_id",
+                }),
+            )
+                .into_response(),
+            GetNotificationErr::NotFound => (
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse {
+                    message: "notification not found",
+                }),
+            )
+                .into_response(),
+            GetNotificationErr::Db(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: "failed to get user notification by id",
+                }),
+            )
+                .into_response(),
+            GetNotificationErr::Convert(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: "failed to convert notification",
+                }),
+            )
+                .into_response(),
+        }
+    }
 }
 
 /// Gets a single user notification by id.
@@ -31,20 +79,14 @@ pub struct Params {
             (status = 500, body=ErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, user_context), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(ctx, user_context), fields(user_id=?user_context.user_id), err)]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     user_context: Extension<UserContext>,
     Path(Params { notification_id }): Path<Params>,
-) -> Result<Json<UserNotification>, (StatusCode, Json<ErrorResponse<'static>>)> {
-    let notification_uuid = Uuid::parse_str(&notification_id).map_err(|_| {
-        (
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                message: "invalid notification_id",
-            }),
-        )
-    })?;
+) -> Result<Json<UserNotification>, GetNotificationErr> {
+    let notification_uuid =
+        Uuid::parse_str(&notification_id).map_err(|_| GetNotificationErr::InvalidNotificationId)?;
 
     let raw =
         notification_db_client::user_notification::get::get_by_id::get_user_notification_by_id(
@@ -55,31 +97,14 @@ pub async fn handler(
         .await
         .map_err(|e| {
             tracing::error!(error=?e, "failed to get user notification by id");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    message: "failed to get user notification by id",
-                }),
-            )
+            GetNotificationErr::Db(e.into())
         })?;
 
-    let Some(raw) = raw else {
-        return Err((
-            StatusCode::NOT_FOUND,
-            Json(ErrorResponse {
-                message: "notification not found",
-            }),
-        ));
-    };
+    let raw = raw.ok_or(GetNotificationErr::NotFound)?;
 
     let notification = UserNotification::try_from(raw).map_err(|e| {
         tracing::error!(error=?e, "failed to convert notification");
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                message: "failed to convert notification",
-            }),
-        )
+        GetNotificationErr::Convert(e)
     })?;
 
     Ok(Json(notification))
