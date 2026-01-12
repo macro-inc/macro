@@ -517,11 +517,11 @@ export const useIsInCommandScope = () => {
  * @param shortcut
  * @returns
  */
-export const hasValidHotkey = (shortcut: string) => {
-  const tokenShortcut = getPrettyHotkeyStringByToken(shortcut as any);
-  const hotkeyString = tokenShortcut || shortcut;
-  if (!hotkeyString) return false;
-  const parts = hotkeyString
+export const hasValidHotkey = (shortcut?: HotkeyToken) => {
+  if (!shortcut) return false;
+  const tokenShortcut = getPrettyHotkeyStringByToken(shortcut);
+  if (!tokenShortcut) return false;
+  const parts = tokenShortcut
     .split('+')
     .map((part) => part.trim())
     .filter(Boolean);
