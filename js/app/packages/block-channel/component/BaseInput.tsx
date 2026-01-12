@@ -57,6 +57,37 @@ import { useChannelMarkdownArea } from './MarkdownArea';
 
 false && fileFolderDrop;
 
+type MentionWithParticipants = {
+  itemType: string;
+  itemId: string;
+  groupParticipants?: string[];
+};
+
+function expandGroupParticipants(
+  participants: string[],
+  seenUserIds: Set<string>
+): SimpleMention[] {
+  const result: SimpleMention[] = [];
+  for (const userId of participants) {
+    if (!seenUserIds.has(userId)) {
+      seenUserIds.add(userId);
+      result.push({ entity_type: 'user', entity_id: userId });
+    }
+  }
+  return result;
+}
+
+function toSimpleMention(
+  mention: MentionWithParticipants,
+  seenUserIds: Set<string>
+): SimpleMention | null {
+  if (mention.itemType === 'user') {
+    if (seenUserIds.has(mention.itemId)) return null;
+    seenUserIds.add(mention.itemId);
+  }
+  return { entity_type: mention.itemType, entity_id: mention.itemId };
+}
+
 type InputAttachmentsStore = {
   store: Record<string, InputAttachment[]>;
   setStore: SetStoreFunction<Record<string, InputAttachment[]>>;
@@ -199,11 +230,21 @@ export function BaseInput(props: BaseInputProps) {
     if (currentRef) props.domRef?.(currentRef);
   });
 
-  const allMentions: Accessor<SimpleMention[]> = () =>
-    mentions().map((m) => ({
-      entity_type: m.itemType,
-      entity_id: m.itemId,
-    }));
+  const allMentions: Accessor<SimpleMention[]> = () => {
+    const result: SimpleMention[] = [];
+    const seenUserIds = new Set<string>();
+
+    for (const m of mentions()) {
+      if (m.itemType === 'group' && m.groupParticipants) {
+        result.push(...expandGroupParticipants(m.groupParticipants, seenUserIds));
+      } else {
+        const mention = toSimpleMention(m, seenUserIds);
+        if (mention) result.push(mention);
+      }
+    }
+
+    return result;
+  };
 
   const [attachFn, scopeId] = useHotkeyDOMScope('channel.baseInput');
 

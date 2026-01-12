@@ -15,6 +15,10 @@ import {
   type DocumentMentionNode,
 } from '@lexical-core/nodes/DocumentMentionNode';
 import {
+  $isGroupMentionNode,
+  type GroupMentionNode,
+} from '@lexical-core/nodes/GroupMentionNode';
+import {
   $isUserMentionNode,
   type UserMentionInfo,
   type UserMentionNode,
@@ -34,14 +38,16 @@ export type MentionNode =
   | UserMentionNode
   | DocumentMentionNode
   | ContactMentionNode
-  | DateMentionNode;
+  | DateMentionNode
+  | GroupMentionNode;
 
 export function $isMentionNode(node: LexicalNode): node is MentionNode {
   return (
     $isUserMentionNode(node) ||
     $isDocumentMentionNode(node) ||
     $isContactMentionNode(node) ||
-    $isDateMentionNode(node)
+    $isDateMentionNode(node) ||
+    $isGroupMentionNode(node)
   );
 }
 
@@ -80,6 +86,7 @@ export {
   parseContactMentions,
   parseDateMentions,
   parseDocumentMentions,
+  parseGroupMentions,
   parseLinks,
   parseUserMentions,
 } from './parsers';
