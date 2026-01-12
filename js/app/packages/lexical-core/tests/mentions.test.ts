@@ -4,6 +4,7 @@ import {
   parseContactMentions,
   parseDateMentions,
   parseDocumentMentions,
+  parseGroupMentions,
   parseLinks,
   parseUserMentions,
 } from '../utils/parsers';
@@ -127,6 +128,34 @@ describe('parseLinks', () => {
   });
 });
 
+describe('parseGroupMentions', () => {
+  it('extracts @alias from group mention', () => {
+    const input = '<m-group-mention>{"groupAlias":"here"}</m-group-mention>';
+    expect(parseGroupMentions(input)).toBe('@here');
+  });
+
+  it('handles missing groupAlias', () => {
+    const input = '<m-group-mention>{}</m-group-mention>';
+    expect(parseGroupMentions(input)).toBe('@');
+  });
+
+  it('handles invalid JSON', () => {
+    const input = '<m-group-mention>invalid</m-group-mention>';
+    expect(parseGroupMentions(input)).toBe('');
+  });
+
+  it('handles multiple group mentions', () => {
+    const input =
+      '<m-group-mention>{"groupAlias":"here"}</m-group-mention> and <m-group-mention>{"groupAlias":"team"}</m-group-mention>';
+    expect(parseGroupMentions(input)).toBe('@here and @team');
+  });
+
+  it('passes through text without mentions', () => {
+    const input = 'Hello world';
+    expect(parseGroupMentions(input)).toBe('Hello world');
+  });
+});
+
 describe('markdownToPlainText', () => {
   it('converts mixed content to plain text', () => {
     const input =
@@ -144,6 +173,12 @@ describe('markdownToPlainText', () => {
     expect(markdownToPlainText(input)).toBe(
       'Check out this link for more info.'
     );
+  });
+
+  it('handles text with group mentions', () => {
+    const input =
+      'Hey <m-group-mention>{"groupAlias":"here"}</m-group-mention>, check this out!';
+    expect(markdownToPlainText(input)).toBe('Hey @here, check this out!');
   });
 
   it('returns original text when no mentions present', () => {

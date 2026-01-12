@@ -2,7 +2,7 @@ use anyhow::Context;
 use sqlx::types::Uuid;
 
 #[tracing::instrument(skip(tx), level = "info")]
-pub async fn update_message_read_status<'t>(
+pub async fn update_message_read_status(
     tx: &mut sqlx::PgConnection,
     message_id: Uuid,
     fusionauth_user_id: &str,

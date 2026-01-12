@@ -1,0 +1,120 @@
+name = "sync_service2"
+main = "build/worker/shim.mjs"
+compatibility_date = "2025-03-05"
+
+[build]
+command = "cargo install -q worker-build && worker-build --release"
+
+[observability.logs]
+enabled = true
+
+[observability.traces]
+enabled = true
+head_sampling_rate = 1
+persist = true
+
+# DEFAULT ENV -- Used in Local Development & Debugging Remote
+[[d1_databases]]
+binding = "USER_PEER_MAPPING"
+migrations_dir = "./database/user-peer-mapping/migrations/"
+database_name = "user-peer-mapping"
+database_id = "85b0ffef-e625-4b67-8b3b-77f33fd38fd3"
+
+[durable_objects]
+bindings = [
+  { name = "DOCUMENT_SYNC_SESSION", class_name = "DocumentSyncSession" },
+]
+
+[[r2_buckets]]
+binding = "DOCUMENT_SNAPSHOT_BUCKET"
+bucket_name = "document-snapshot-bucket-dev"
+
+[vars]
+INTERNAL_API_SECRET_KEY = "LOCAL_API_KEY"
+SPS_URL = "https://search-processing-dev.macro.com"
+
+[[kv_namespaces]]
+binding = "DOCUMENT_VERSIONING_KV"
+id = "3548ca6265c745e38cd504194aa6e887"
+
+[[kv_namespaces]]
+binding = "SNAPSHOT_STORE_KV"
+id = "9beead2b7891492f82153d2354e64e92"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["DocumentSyncSession"]
+
+# DEVELOPMENT ENV - Used in development environment
+[env.dev]
+name = "sync-service-dev3"
+
+[env.dev.vars]
+INTERNAL_API_SECRET_KEY = "SYNC_SERVICE_KEY_DEV"
+ENVIRONMENT = "development"
+SPS_URL = "https://search-processing-dev.macro.com"
+
+[env.dev.durable_objects]
+bindings = [
+  { name = "DOCUMENT_SYNC_SESSION", class_name = "DocumentSyncSession" },
+]
+
+[[env.dev.r2_buckets]]
+binding = "DOCUMENT_SNAPSHOT_BUCKET"
+bucket_name = "document-snapshot-bucket-dev"
+
+[[env.dev.d1_databases]]
+binding = "USER_PEER_MAPPING"
+migrations_dir = "./database/user-peer-mapping/migrations/"
+database_name = "user-peer-mapping-dev"
+database_id = "687d123e-611e-4921-be72-a20913a068ff"
+
+[[env.dev.kv_namespaces]]
+binding = "DOCUMENT_VERSIONING_KV"
+id = "3548ca6265c745e38cd504194aa6e887"
+
+[[env.dev.kv_namespaces]]
+binding = "SNAPSHOT_STORE_KV"
+id = "9beead2b7891492f82153d2354e64e92"
+
+[[env.dev.migrations]]
+tag = "v1"
+new_sqlite_classes = ["DocumentSyncSession"]
+
+
+# PRODUDCTION ENV - Used in production environment
+[env.prod]
+name = "sync-service-prod2"
+
+[env.prod.vars]
+INTERNAL_API_SECRET_KEY = "SYNC_SERVICE_KEY_PROD"
+ENVIRONMENT = "production"
+SPS_URL = "https://search-processing.macro.com"
+
+[env.prod.durable_objects]
+bindings = [
+  { name = "DOCUMENT_SYNC_SESSION", class_name = "DocumentSyncSession" },
+]
+
+[[env.prod.r2_buckets]]
+binding = "DOCUMENT_SNAPSHOT_BUCKET"
+bucket_name = "document-snapshot-bucket-prod"
+
+[[env.prod.d1_databases]]
+binding = "USER_PEER_MAPPING"
+migrations_dir = "./database/user-peer-mapping/migrations/"
+database_name = "user-peer-mapping-prod"
+database_id = "cbe1e7d9-90bc-450a-a1fb-ade93f0b1074"
+
+[[env.prod.migrations]]
+tag = "v1"
+new_sqlite_classes = ["DocumentSyncSession"]
+
+[[env.prod.kv_namespaces]]
+binding = "DOCUMENT_VERSIONING_KV"
+id = "1e4c79d4265e40f08f9bfcb4c985c6d0"
+
+[[env.prod.kv_namespaces]]
+binding = "SNAPSHOT_STORE_KV"
+id = "50a128e2f8aa4357938fdb0ed0d629c5"
+

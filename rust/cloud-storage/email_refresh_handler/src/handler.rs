@@ -6,6 +6,7 @@ use lambda_runtime::{
     tracing::{self},
 };
 use models_email::email::service::pubsub::LinkManagerMessage;
+use models_email::service::pubsub::LinkManagerOperation;
 use sqlx::Type;
 
 #[derive(Type, Debug, Clone, Copy)]
@@ -23,8 +24,7 @@ pub async fn handler(
     let provider_filter = DbUserProvider::Gmail;
 
     // uses the index idx_links_active_provider_hash_bucket
-    let notifications = sqlx::query_as!(
-        LinkManagerMessage,
+    let link_ids = sqlx::query_scalar!(
         r#"
         SELECT
             id as "link_id"
@@ -44,31 +44,30 @@ pub async fn handler(
         Vec::new()
     });
 
-    if !notifications.is_empty() {
+    if !link_ids.is_empty() {
         tracing::info!(
             "Hour {}. Sending refresh notifications for users with link_ids: {}",
             current_hour,
-            notifications
+            link_ids
                 .iter()
-                .map(|n| n.link_id.to_string())
+                .map(|id| id.to_string())
                 .collect::<Vec<String>>()
                 .join(", ")
         );
-    }
 
-    for notif in notifications {
-        let link_id = notif.link_id;
-        if let Err(e) = ctx
-            .sqs_client
-            .enqueue_email_refresh_notification(notif)
-            .await
-        {
-            tracing::error!(
-                "Error enqueueing refresh notification for link_id {}: {}",
+        for link_id in link_ids {
+            let notif = LinkManagerMessage {
                 link_id,
-                e
-            );
-        };
+                operation: LinkManagerOperation::Refresh,
+            };
+            ctx.sqs_client
+                .enqueue_link_manager_notification(notif)
+                .await
+                .inspect_err(|e| {
+                    tracing::error!(error=?e, link_id=%link_id, "Error enqueueing refresh notification for link");
+                })
+                .ok();
+        }
     }
 
     Ok(())

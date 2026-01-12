@@ -17,17 +17,6 @@ import {
 } from '@service-cognition/client';
 import type { Source } from './ToolsetSelector';
 
-function sourceToPrompt(source?: Source): string {
-  if (!source) return '';
-  let prompt = (s: string) =>
-    `\nThe user has requested that you only consider ${s}. If you choose to use tools only use tools to search, list or read ${s}`;
-  if (source === 'everything') return '';
-  else if (source === 'channel') return prompt('channels');
-  else if (source === 'chat') return prompt('chats');
-  else if (source === 'document') return prompt('documents');
-  else return prompt('email');
-}
-
 export function useBuildChatSendRequest() {
   const additionalInstructions = useAdditionalInstructions();
   return async function buildChatSendRequest({
@@ -37,7 +26,6 @@ export function useBuildChatSendRequest() {
     model,
     attachments,
     toolset,
-    source,
   }: {
     userRequest: string;
     chatId: string | undefined;
@@ -48,8 +36,8 @@ export function useBuildChatSendRequest() {
     source?: Source;
   }): Promise<CreateAndSend | Send> {
     const token = await getMacroApiToken();
-
-    const additional = `${additionalInstructions()}${sourceToPrompt(source)}`;
+    const modelInstructions = model ? `\nYou are ${model}` : '';
+    const additional = `${additionalInstructions()}${modelInstructions}`;
 
     const request = (id: string): Send['request'] => ({
       chat_id: id,

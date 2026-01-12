@@ -154,6 +154,8 @@ export const inboxSyncRetryQueueName = pulumi.interpolate`${inbox_sync_retry_que
 
 const link_manager_queue = new Queue('email-service-refresh', {
   tags,
+  // deleting a link from the database can sometimes take a long time
+  visibilityTimeoutSeconds: 300,
 });
 
 export const linkManagerQueueArn = pulumi.interpolate`${link_manager_queue.queue.arn}`;

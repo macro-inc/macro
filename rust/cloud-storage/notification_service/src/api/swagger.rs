@@ -41,6 +41,7 @@ use crate::{
 
                 /// /user_notifications
                 user_notification::get_user_notification::handler,
+                user_notification::get_user_notification_by_id::handler,
                 user_notification::delete_user_notification::handler,
                 user_notification::bulk_mark_user_notification_seen_by_event::handler,
                 user_notification::bulk_mark_user_notification_done_by_event::handler,

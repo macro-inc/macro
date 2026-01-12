@@ -1,0 +1,39 @@
+export ENV := "local"
+
+worker-build: setup worker_build_setup
+  worker-build --features create-default-state,bebop-owned-all
+
+# rust both unit and e2e tests
+test: worker-build
+  npx vitest run
+  cargo test
+
+# Run tests without the alarm-keep-alive feature
+test-no-alarm: setup worker_build_setup
+    worker-build --release --no-default-features --features create-default-state,bebop-owned-all
+    npx vitest
+
+# run qa-env pointing to local worker
+debug: setup
+  npx wrangler dev &
+  cd ./qa-env && npm install && npm run dev
+
+setup:
+    npm install && cd bebop/ && npx bebopc build
+
+worker_build_setup:
+    cargo install worker-build
+
+# run worker using wrangler / miniflare
+dev:
+  npx wrangler dev
+
+# clean testing artifacts
+clean:
+  rm -rf node_modules .wrangler data
+
+deploy-dev:
+  npx wrangler deploy --env dev
+
+deploy-prod:
+  npx wrangler deploy --env prod

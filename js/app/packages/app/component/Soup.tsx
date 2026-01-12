@@ -209,7 +209,7 @@ const PreviewPanel: Component<{
   splitPanelContext: SplitPanelContextType;
 }> = (props) => {
   return (
-    <div class="flex flex-row size-full sm:w-[70%] max-sm:h-[50%] max-sm:border-t border-edge-muted shrink-0 sm:shadow-inner">
+    <div class="flex flex-row size-full sm:w-[70%] max-sm:h-[50%] max-sm:border-t border-edge-muted shrink-0">
       <Show
         when={props.selectedEntity?.type !== 'project' && props.selectedEntity}
       >

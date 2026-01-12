@@ -110,6 +110,7 @@ sqs_client = { path = "../sqs_client", default-features = false, features = [
   "email",
   "gmail",
   "search",
+  "sfs_uploader",
 ] }
 sqs_worker = { path = "../sqs_worker" }
 static_file_service_client = { path = "../static_file_service_client" }

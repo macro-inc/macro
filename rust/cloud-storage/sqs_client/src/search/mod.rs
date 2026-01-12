@@ -5,7 +5,6 @@ use crate::{
         chat::{ChatMessage, RemoveChatMessage},
         document::{DocumentId, SearchExtractorMessage},
         email::{EmailLinkMessage, EmailMessage, EmailThreadMessage},
-        name::EntityName,
     },
 };
 use anyhow::Context;
@@ -17,7 +16,6 @@ pub mod channel;
 pub mod chat;
 pub mod document;
 pub mod email;
-pub mod name;
 
 use crate::{MAX_BATCH_SIZE, PrimaryId};
 
@@ -84,10 +82,6 @@ pub enum SearchQueueMessage {
 
     // User
     RemoveUserProfile(String),
-
-    // Entity Name
-    UpdateEntityName(EntityName),
-    RemoveEntityName(EntityName),
 }
 
 impl PrimaryId for SearchQueueMessage {
@@ -113,9 +107,6 @@ impl PrimaryId for SearchQueueMessage {
             }
 
             SearchQueueMessage::RemoveUserProfile(message) => message.clone(),
-
-            SearchQueueMessage::UpdateEntityName(message)
-            | SearchQueueMessage::RemoveEntityName(message) => message.entity_id.to_string(),
         }
     }
 }
@@ -140,9 +131,6 @@ impl SearchQueueMessage {
             SearchQueueMessage::RemoveChannelMessage(_) => Operation::Remove,
             // Users
             SearchQueueMessage::RemoveUserProfile(_) => Operation::Remove,
-            // Entity Name
-            SearchQueueMessage::UpdateEntityName(_) => Operation::UpdateMetadata,
-            SearchQueueMessage::RemoveEntityName(_) => Operation::Remove,
         }
     }
 }

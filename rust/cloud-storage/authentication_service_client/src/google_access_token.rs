@@ -32,16 +32,10 @@ impl AuthServiceClient {
 
                 Ok(result)
             }
-            reqwest::StatusCode::UNAUTHORIZED => {
-                tracing::error!("unauthorized");
-                Err(AuthServiceClientError::Unauthorized)
-            }
-            reqwest::StatusCode::NOT_FOUND => {
-                tracing::error!("not found");
-                Err(AuthServiceClientError::NotFound)
-            }
+            reqwest::StatusCode::UNAUTHORIZED => Err(AuthServiceClientError::Unauthorized),
+            reqwest::StatusCode::FORBIDDEN => Err(AuthServiceClientError::Forbidden),
+            reqwest::StatusCode::NOT_FOUND => Err(AuthServiceClientError::NotFound),
             reqwest::StatusCode::INTERNAL_SERVER_ERROR => {
-                tracing::error!("internal server error");
                 let error_message = res.text().await.map_err(|e| {
                     AuthServiceClientError::Generic(GenericErrorResponse {
                         message: e.to_string(),

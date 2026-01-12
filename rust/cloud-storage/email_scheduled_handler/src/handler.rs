@@ -42,7 +42,7 @@ pub async fn handler(
                 error = ?e,
                 link_id = link_id.to_string(),
                 message_id = message_id.to_string(),
-                "Error enqueueing refresh notification",
+                "Error enqueueing scheduled notification",
             );
         };
     }

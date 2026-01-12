@@ -244,18 +244,37 @@ impl<L: Debug, D: Debug> DocumentFetcher<L, D> {
                 &self.document_id,
                 models_properties::EntityType::Task,
             )
-            .await?;
+            .await;
+        if let Err(e) = &properties {
+            tracing::warn!(error=?e, location=?location, "no properties found for md");
+        }
 
-        self.inner_lexical
-            .parse_markdown_for_ai(&self.document_id)
-            .await
-            .map(|content| DocumentContent {
-                properties: Some(properties),
-                data: Data::Markdown(content),
-                document_id: self.document_id.clone(),
-                location: location.clone(),
-                file_type: FileType::Md,
-            })
+        // Choose endpoint based on document location
+        let content = match location {
+            LocationResponseV3::PresignedUrl { presigned_url, .. } => {
+                // Document is in S3, use presigned URL endpoint
+                self.inner_lexical
+                    .parse_markdown_for_ai_from_url(presigned_url)
+                    .await?
+            }
+            LocationResponseV3::SyncServiceContent { .. } => {
+                // Document is in sync-service, use standard endpoint
+                self.inner_lexical
+                    .parse_markdown_for_ai(&self.document_id)
+                    .await?
+            }
+            LocationResponseV3::PresignedUrls { .. } => {
+                anyhow::bail!("Multi-part presigned URLs not supported for markdown documents")
+            }
+        };
+
+        Ok(DocumentContent {
+            properties: properties.ok(),
+            data: Data::Markdown(content),
+            document_id: self.document_id.clone(),
+            location: location.clone(),
+            file_type: FileType::Md,
+        })
     }
 }
 

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, str::FromStr};
+use std::str::FromStr;
 
 use crate::api::context::ApiContext;
 
@@ -12,7 +12,7 @@ use macro_db_client::document::build_pdf_modification_data::{
     get_complete_pdf_modification_data, get_pdf_modification_data_for_document,
 };
 use model::{
-    document::{DocumentBasic, FileType, modification_data::PdfModificationData},
+    document::{DocumentBasic, FileType},
     response::{GenericErrorResponse, GenericResponse},
     user::UserContext,
 };
@@ -75,13 +75,9 @@ pub async fn handler(
     }
 
     let initial_modification_data = match file_type {
-        FileType::Pdf => get_pdf_modification_data_for_document(&ctx.db, &document_id).await,
-        FileType::Docx => Ok(PdfModificationData {
-            highlights: Some(HashMap::new()),
-            bookmarks: Vec::new(),
-            placeables: Vec::new(),
-            pinned_terms_names: Vec::new(),
-        }),
+        FileType::Docx | FileType::Pdf => {
+            get_pdf_modification_data_for_document(&ctx.db, &document_id).await
+        }
         _ => unreachable!(),
     };
 

@@ -118,7 +118,6 @@
       "name": "fusion-auth",
       "version": "0.0.0",
     },
-
     "stacks/link-sharing": {
       "name": "link-sharing-stack",
       "version": "0.0.0",
@@ -192,14 +191,6 @@
         "@pulumi/datadog": "^4.51.0",
         "@pulumi/pulumi": "^3.181.0",
         "@pulumi/synced-folder": "^0.11.1",
-      },
-    },
-    "stacks/web-services": {
-      "name": "@macro-inc/infra-web-services",
-      "dependencies": {
-        "@pulumi/aws": "^6.0.0",
-        "@pulumi/awsx": "^2.0.2",
-        "@pulumi/pulumi": "^3.0.0",
       },
     },
   },
@@ -298,8 +289,6 @@
     "@logdna/tail-file": ["@logdna/tail-file@2.2.0", "", {}, "sha512-XGSsWDweP80Fks16lwkAUIr54ICyBs6PsI4mpfTLQaWgEJRtY9xEV+PeyDpJ+sJEGZxqINlpmAwe/6tS1pP8Ng=="],
 
     "@macro-inc/infra-web-app": ["@macro-inc/infra-web-app@workspace:stacks/web-app"],
-
-    "@macro-inc/infra-web-services": ["@macro-inc/infra-web-services@workspace:stacks/web-services"],
 
     "@npmcli/agent": ["@npmcli/agent@2.2.2", "", { "dependencies": { "agent-base": "^7.1.0", "http-proxy-agent": "^7.0.0", "https-proxy-agent": "^7.0.1", "lru-cache": "^10.0.1", "socks-proxy-agent": "^8.0.3" } }, "sha512-OrcNPXdpSl9UX7qPVRWbmWMCSXrcDa2M9DvrbOTj7ao1S4PlqVFYv9/yLKMkrJKZ/V5A/kDBC690or307i26Og=="],
 
@@ -709,7 +698,6 @@
 
     "ini": ["ini@2.0.0", "", {}, "sha512-7PnF4oN3CvZF23ADhA5wRaYEQpJ8qygSkbtTXWBeXWXmEVRXK+1ITciHWwHhsjv1TmW0MgacIv6hEi5pX5NQdA=="],
 
-
     "ip-address": ["ip-address@9.0.5", "", { "dependencies": { "jsbn": "1.1.0", "sprintf-js": "^1.1.3" } }, "sha512-zHtQzGojZXTwZTHQqra+ETKd4Sn3vgi7uBmlPoXVWZqYvuKmtI0l/VZTjqGmJY9x88GGOaZ9+G9ES8hC4T4X8g=="],
 
     "is-core-module": ["is-core-module@2.16.1", "", { "dependencies": { "hasown": "^2.0.2" } }, "sha512-UfoeMA6fIJ8wTYFEUjelnaGI67v6+N7qXJEvQuIGa99l4xsCruSYOVSQ0uPANn4dAzm8lkYPaKLrrijLq7x23w=="],
@@ -1062,10 +1050,6 @@
 
     "@macro-inc/infra-web-app/@pulumi/aws-native": ["@pulumi/aws-native@1.38.0", "", { "dependencies": { "@pulumi/pulumi": "^3.142.0" } }, "sha512-XvxGif8qkZethAaVivsD+TmCsal22Ws8f9zkj+sz03KdsCX7gnjs4WcqYCCdh6e1vmD0kn9v751BD2eFRWUVJQ=="],
 
-    "@macro-inc/infra-web-services/@pulumi/aws": ["@pulumi/aws@6.83.1", "", { "dependencies": { "@pulumi/pulumi": "^3.142.0", "mime": "^2.0.0" } }, "sha512-c9HJiBKwgGWJg8h/mWWyfM7IguDsqzupf/WPD1fsosB1oMCuSoDHr27MxW9DQl6DXnkZRWnWYUIh31Gearwp3Q=="],
-
-    "@macro-inc/infra-web-services/@pulumi/awsx": ["@pulumi/awsx@2.21.0", "", { "dependencies": { "@aws-sdk/client-ecs": "^3.405.0", "@pulumi/aws": "^6.66.2", "@pulumi/docker": "^4.6.0", "@pulumi/docker-build": "^0.0.8", "@pulumi/pulumi": "^3.142.0", "@types/aws-lambda": "^8.10.23", "docker-classic": "npm:@pulumi/docker@3.6.1", "mime": "^2.0.0" } }, "sha512-3kUE1J5r+BS25QqL2tQq7mfuCP1CAzGRHUKl+IIl4fQ1K5crI2W7r/FIHfmWResFlBWu5ekS5IfM9fvUHg5ATA=="],
-
     "@npmcli/git/ini": ["ini@4.1.3", "", {}, "sha512-X7rqawQBvfdjS10YU1y1YVreA3SsLrW9dX2CewP2EbBJM4ypVNLDkO5y04gejPwKIY9lR+7r9gn3rFPt/kmWFg=="],
 
     "@opentelemetry/instrumentation-grpc/@opentelemetry/semantic-conventions": ["@opentelemetry/semantic-conventions@1.27.0", "", {}, "sha512-sAay1RrB+ONOem0OZanAR1ZI/k7yDpnOQSQmTMuGImUQb2y8EbSaCJ94FQluM74xoU03vlb2d2U90hZluL6nQg=="],
@@ -1134,14 +1118,6 @@
 
     "@macro-inc/infra-web-app/@pulumi/aws-native/@pulumi/pulumi": ["@pulumi/pulumi@3.206.0", "", { "dependencies": { "@grpc/grpc-js": "^1.10.1", "@logdna/tail-file": "^2.0.6", "@npmcli/arborist": "^7.3.1", "@opentelemetry/api": "^1.9", "@opentelemetry/exporter-zipkin": "^1.28", "@opentelemetry/instrumentation": "^0.55", "@opentelemetry/instrumentation-grpc": "^0.55", "@opentelemetry/resources": "^1.28", "@opentelemetry/sdk-trace-base": "^1.28", "@opentelemetry/sdk-trace-node": "^1.28", "@types/google-protobuf": "^3.15.5", "@types/semver": "^7.5.6", "@types/tmp": "^0.2.6", "execa": "^5.1.0", "fdir": "^6.1.1", "google-protobuf": "^3.21.4", "got": "^11.8.6", "ini": "^2.0.0", "js-yaml": "^3.14.0", "minimist": "^1.2.6", "normalize-package-data": "^6.0.0", "picomatch": "^3.0.1", "pkg-dir": "^7.0.0", "require-from-string": "^2.0.1", "semver": "^7.5.2", "source-map-support": "^0.5.6", "tmp": "^0.2.4", "upath": "^1.1.0" }, "peerDependencies": { "ts-node": ">= 7.0.1 < 12", "typescript": ">= 3.8.3 < 6" }, "optionalPeers": ["ts-node", "typescript"] }, "sha512-xTiAcs7LhVOK2mUvTCUOlS7tTtzSh0T+C9pOAOkbpJuAX0GKw+wg7PZZ3qQbqW63fGfCBHs7h27e9d9iyHEC/w=="],
 
-    "@macro-inc/infra-web-services/@pulumi/aws/@pulumi/pulumi": ["@pulumi/pulumi@3.206.0", "", { "dependencies": { "@grpc/grpc-js": "^1.10.1", "@logdna/tail-file": "^2.0.6", "@npmcli/arborist": "^7.3.1", "@opentelemetry/api": "^1.9", "@opentelemetry/exporter-zipkin": "^1.28", "@opentelemetry/instrumentation": "^0.55", "@opentelemetry/instrumentation-grpc": "^0.55", "@opentelemetry/resources": "^1.28", "@opentelemetry/sdk-trace-base": "^1.28", "@opentelemetry/sdk-trace-node": "^1.28", "@types/google-protobuf": "^3.15.5", "@types/semver": "^7.5.6", "@types/tmp": "^0.2.6", "execa": "^5.1.0", "fdir": "^6.1.1", "google-protobuf": "^3.21.4", "got": "^11.8.6", "ini": "^2.0.0", "js-yaml": "^3.14.0", "minimist": "^1.2.6", "normalize-package-data": "^6.0.0", "picomatch": "^3.0.1", "pkg-dir": "^7.0.0", "require-from-string": "^2.0.1", "semver": "^7.5.2", "source-map-support": "^0.5.6", "tmp": "^0.2.4", "upath": "^1.1.0" }, "peerDependencies": { "ts-node": ">= 7.0.1 < 12", "typescript": ">= 3.8.3 < 6" }, "optionalPeers": ["ts-node", "typescript"] }, "sha512-xTiAcs7LhVOK2mUvTCUOlS7tTtzSh0T+C9pOAOkbpJuAX0GKw+wg7PZZ3qQbqW63fGfCBHs7h27e9d9iyHEC/w=="],
-
-    "@macro-inc/infra-web-services/@pulumi/awsx/@pulumi/aws": ["@pulumi/aws@6.67.0", "", { "dependencies": { "@pulumi/pulumi": "^3.142.0", "mime": "^2.0.0" } }, "sha512-5RjRSAhgKycoNIm8ButuFr7m5m6i/0kYxb9ew61ra3JtJdx6KmwQGPrZ/sY/ktR42Hw/F5P8qBudSq3NkqVo2g=="],
-
-    "@macro-inc/infra-web-services/@pulumi/awsx/@pulumi/docker-build": ["@pulumi/docker-build@0.0.8", "", { "dependencies": { "@pulumi/pulumi": "^3.136.0" } }, "sha512-tS6UUgmDjQ+LVekMXGC/6ND7riY75h3oO9fLiVOrvNafCBumxK+Cjm6ZZ9tUChLYvw6H+rZRExZEhfC8F/SQgQ=="],
-
-    "@macro-inc/infra-web-services/@pulumi/awsx/@pulumi/pulumi": ["@pulumi/pulumi@3.147.0", "", { "dependencies": { "@grpc/grpc-js": "^1.10.1", "@logdna/tail-file": "^2.0.6", "@npmcli/arborist": "^7.3.1", "@opentelemetry/api": "^1.9", "@opentelemetry/exporter-zipkin": "^1.28", "@opentelemetry/instrumentation": "^0.55", "@opentelemetry/instrumentation-grpc": "^0.55", "@opentelemetry/resources": "^1.28", "@opentelemetry/sdk-trace-base": "^1.28", "@opentelemetry/sdk-trace-node": "^1.28", "@opentelemetry/semantic-conventions": "^1.28", "@pulumi/query": "^0.3.0", "@types/google-protobuf": "^3.15.5", "@types/semver": "^7.5.6", "@types/tmp": "^0.2.6", "execa": "^5.1.0", "fdir": "^6.1.1", "google-protobuf": "^3.5.0", "got": "^11.8.6", "ini": "^2.0.0", "js-yaml": "^3.14.0", "minimist": "^1.2.6", "normalize-package-data": "^6.0.0", "picomatch": "^3.0.1", "pkg-dir": "^7.0.0", "require-from-string": "^2.0.1", "semver": "^7.5.2", "source-map-support": "^0.5.6", "tmp": "^0.2.1", "upath": "^1.1.0" }, "peerDependencies": { "ts-node": ">= 7.0.1 < 12", "typescript": ">= 3.8.3 < 6" }, "optionalPeers": ["ts-node", "typescript"] }, "sha512-5tBGauFC6rAiB5I8Ug6kHBNB1YNmLANT1yy2pXwyMMWXmFc1++sYrZ2QDyVf0cJVtXdFhqw1kw/CxdV4YCHi0Q=="],
-
     "@pulumi/aws-native/@pulumi/pulumi/js-yaml": ["js-yaml@3.14.1", "", { "dependencies": { "argparse": "^1.0.7", "esprima": "^4.0.0" }, "bin": { "js-yaml": "bin/js-yaml.js" } }, "sha512-okMH7OXXJ7YrN9Ok3/SXrnu4iX9yOk+25nqX4imS2npuvTYDmo/QEZoqwZkYaIDk3jVvBOTOIEgEhaLOynBS9g=="],
 
     "@pulumi/aws-native/@pulumi/pulumi/tmp": ["tmp@0.2.3", "", {}, "sha512-nZD7m9iCPC5g0pYmcaxogYKggSfLsdxl8of3Q/oIbqCqLLIO9IAF0GWjX1z9NZRHPiXv8Wex4yDCaZsgEw0Y8w=="],
@@ -1187,11 +1163,5 @@
     "@macro-inc/infra-web-app/@pulumi/aws-native/@pulumi/pulumi/js-yaml": ["js-yaml@3.14.1", "", { "dependencies": { "argparse": "^1.0.7", "esprima": "^4.0.0" }, "bin": { "js-yaml": "bin/js-yaml.js" } }, "sha512-okMH7OXXJ7YrN9Ok3/SXrnu4iX9yOk+25nqX4imS2npuvTYDmo/QEZoqwZkYaIDk3jVvBOTOIEgEhaLOynBS9g=="],
 
     "@macro-inc/infra-web-app/@pulumi/aws/@pulumi/pulumi/js-yaml": ["js-yaml@3.14.1", "", { "dependencies": { "argparse": "^1.0.7", "esprima": "^4.0.0" }, "bin": { "js-yaml": "bin/js-yaml.js" } }, "sha512-okMH7OXXJ7YrN9Ok3/SXrnu4iX9yOk+25nqX4imS2npuvTYDmo/QEZoqwZkYaIDk3jVvBOTOIEgEhaLOynBS9g=="],
-
-    "@macro-inc/infra-web-services/@pulumi/aws/@pulumi/pulumi/js-yaml": ["js-yaml@3.14.1", "", { "dependencies": { "argparse": "^1.0.7", "esprima": "^4.0.0" }, "bin": { "js-yaml": "bin/js-yaml.js" } }, "sha512-okMH7OXXJ7YrN9Ok3/SXrnu4iX9yOk+25nqX4imS2npuvTYDmo/QEZoqwZkYaIDk3jVvBOTOIEgEhaLOynBS9g=="],
-
-    "@macro-inc/infra-web-services/@pulumi/awsx/@pulumi/pulumi/js-yaml": ["js-yaml@3.14.1", "", { "dependencies": { "argparse": "^1.0.7", "esprima": "^4.0.0" }, "bin": { "js-yaml": "bin/js-yaml.js" } }, "sha512-okMH7OXXJ7YrN9Ok3/SXrnu4iX9yOk+25nqX4imS2npuvTYDmo/QEZoqwZkYaIDk3jVvBOTOIEgEhaLOynBS9g=="],
-
-    "@macro-inc/infra-web-services/@pulumi/awsx/@pulumi/pulumi/tmp": ["tmp@0.2.3", "", {}, "sha512-nZD7m9iCPC5g0pYmcaxogYKggSfLsdxl8of3Q/oIbqCqLLIO9IAF0GWjX1z9NZRHPiXv8Wex4yDCaZsgEw0Y8w=="],
   }
 }

@@ -15,22 +15,23 @@ build:
     SQLX_OFFLINE=true cargo build
 
 # Build all lambda functions
+# CARGO_LAMBDA_COMPILER=cargo is needed for NixOS compatibility with aws-lc-sys
 build_lambdas:
     #!/usr/bin/env -S parallel --shebang --ungroup --jobs {{ num_cpus() }}
-    just docx_unzip_handler/build
-    just delete_chat_handler/build
-    just organization_retention_handler/build
-    just organization_retention_trigger/build
-    just upload_extractor_lambda_trigger/build
-    just upload_extractor_lambda_handler/build
-    just worker_trigger/build
-    just dataloss_prevention_handler/build
-    just search_upload_handler/build
-    just document_text_extractor/build
-    just email_suppression_handler/build
-    just deleted_item_poller/build
-    just email_refresh_handler/build
-    just user_link_cleanup_handler/build
+    CARGO_LAMBDA_COMPILER=cargo just docx_unzip_handler/build
+    CARGO_LAMBDA_COMPILER=cargo just delete_chat_handler/build
+    CARGO_LAMBDA_COMPILER=cargo just organization_retention_handler/build
+    CARGO_LAMBDA_COMPILER=cargo just organization_retention_trigger/build
+    CARGO_LAMBDA_COMPILER=cargo just upload_extractor_lambda_trigger/build
+    CARGO_LAMBDA_COMPILER=cargo just upload_extractor_lambda_handler/build
+    CARGO_LAMBDA_COMPILER=cargo just worker_trigger/build
+    CARGO_LAMBDA_COMPILER=cargo just dataloss_prevention_handler/build
+    CARGO_LAMBDA_COMPILER=cargo just search_upload_handler/build
+    CARGO_LAMBDA_COMPILER=cargo just document_text_extractor/build
+    CARGO_LAMBDA_COMPILER=cargo just email_suppression_handler/build
+    CARGO_LAMBDA_COMPILER=cargo just deleted_item_poller/build
+    CARGO_LAMBDA_COMPILER=cargo just email_refresh_handler/build
+    CARGO_LAMBDA_COMPILER=cargo just user_link_cleanup_handler/build
 
 # TESTING
 

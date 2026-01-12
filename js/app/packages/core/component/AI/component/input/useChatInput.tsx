@@ -1,3 +1,4 @@
+import ArrowUp from '@icon/bold/arrow-up-bold.svg';
 import { withAnalytics } from '@coparse/analytics';
 import { useBuildChatSendRequest } from '@core/component/AI/component/input/buildRequest';
 import { DEFAULT_MODEL, SMART_MODE_MODEL } from '@core/component/AI/constant';
@@ -19,14 +20,15 @@ import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { Hotkey, modifierMap } from '@core/component/Hotkey';
 import { Tooltip } from '@core/component/Tooltip';
 import { pressedKeys } from '@core/hotkey/state';
-import { isMobileWidth } from '@core/mobile/mobileWidth';
 import PlusIcon from '@icon/regular/plus.svg';
 import XIcon from '@icon/regular/x.svg';
+import Stop from '@phosphor-icons/core/regular/stop.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { BrightJoins } from '@ui/components/BrightJoins';
+import { Button } from '@ui/components/Button';
 import type { LexicalEditor } from 'lexical';
 import type { Accessor, Component, Setter } from 'solid-js';
-import { createEffect, createSignal, on, Show } from 'solid-js';
+import { createEffect, createSignal, Match, on, Show, Switch } from 'solid-js';
 import { useTabAttachments } from '../../signal/tabAttachments';
 import { AttachmentList } from './Attachment';
 import { ChatAttachMenu } from './ChatAttachMenu';
@@ -35,6 +37,7 @@ import {
   type UseChatMarkdown,
   useChatMarkdownArea,
 } from './useChatMarkdownArea';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 const { track, TrackingEvents } = withAnalytics();
 
@@ -171,6 +174,7 @@ function ChatInput(props: ChatInputInternalProps) {
     !isEmptyInput() && !generating() && !hasUploadingAttachments();
 
   const buildChatSendRequest = useBuildChatSendRequest();
+
   const sendMessage = createCallback(async (modelOverride?: Model) => {
     if (!canSendMessage()) return;
 
@@ -223,7 +227,7 @@ function ChatInput(props: ChatInputInternalProps) {
             placeholder="Ask AI -  @mention anything"
             history={availableAttachments}
             dontFocusOnMount={
-              isMobileWidth() || props.autoFocusOnMount === false
+              isTouchDevice() || props.autoFocusOnMount === false
             }
             onPasteFile={props.uploadQueue.upload}
             captureEditor={props.captureEditor}
@@ -269,47 +273,75 @@ function ChatInput(props: ChatInputInternalProps) {
           </div>
 
           <div class="flex flex-col items-end text-xs leading-tight text-ink-disabled">
-            <div class="text-xs flex flex-col gap-1 opacity-70 items-end absolute bottom-1">
-              <Show when={generating()}>
-                <Tooltip tooltip="ctrl+c to stop" placement="top">
-                  <div
-                    class="flex items-center gap-1.5"
-                    classList={{
-                      'text-accent': pressedKeys().has('ctrl'),
-                    }}
-                  >
-                    <span class="">Stop</span>
-                    <div class="flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1.5 py-0.25 font-normal">
-                      <Hotkey shortcut="ctrl+c" />
+            <Switch>
+              <Match when={!isTouchDevice()}>
+                <div class="text-xs flex flex-col gap-1 opacity-70 items-end absolute bottom-1">
+                  <Show when={generating()}>
+                    <Tooltip tooltip="ctrl+c to stop" placement="top">
+                      <div
+                        class="flex items-center gap-1.5"
+                        classList={{
+                          'text-accent': pressedKeys().has('ctrl'),
+                        }}
+                      >
+                        <span class="">Stop</span>
+                        <div class="flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1.5 py-0.25 font-normal">
+                          <Hotkey shortcut="ctrl+c" />
+                        </div>
+                      </div>
+                    </Tooltip>
+                  </Show>
+                  <Tooltip tooltip="Enter to send with Haiku" placement="top">
+                    <div class="flex items-center gap-1.5">
+                      <span class="">Haiku</span>
+                      <div class="flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1.5 py-0.25 font-normal">
+                        <Hotkey shortcut="Enter" />
+                      </div>
                     </div>
-                  </div>
-                </Tooltip>
-              </Show>
-              <Tooltip tooltip="Enter to send with Haiku" placement="top">
-                <div class="flex items-center gap-1.5">
-                  <span class="">Haiku</span>
-                  <div class="flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1.5 py-0.25 font-normal">
-                    <Hotkey shortcut="Enter" />
-                  </div>
+                  </Tooltip>
+                  <Tooltip
+                    tooltip={`${modifierMap.cmd} + Enter to send with Opus`}
+                    placement="top"
+                  >
+                    <div
+                      class="flex items-center gap-1.5"
+                      classList={{
+                        'text-accent': pressedKeys().has('cmd'),
+                      }}
+                    >
+                      <span>Opus</span>
+                      <div class="flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1.5 py-0.25 font-normal">
+                        <Hotkey shortcut={'meta+Enter'} />
+                      </div>
+                    </div>
+                  </Tooltip>
                 </div>
-              </Tooltip>
-              <Tooltip
-                tooltip={`${modifierMap.cmd} + Enter to send with Opus`}
-                placement="top"
-              >
-                <div
-                  class="flex items-center gap-1.5"
-                  classList={{
-                    'text-accent': pressedKeys().has('cmd'),
-                  }}
-                >
-                  <span>Opus</span>
-                  <div class="flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1.5 py-0.25 font-normal">
-                    <Hotkey shortcut={'meta+Enter'} />
-                  </div>
+              </Match>
+              <Match when={isTouchDevice()}>
+                <div class="flex flex-row gap-1 items-center">
+                  <Show when={!generating()}>
+                    <Button
+                      onClick={() => sendMessage('claude-opus-4-5')}
+                      class=""
+                    >
+                      <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center">
+                        <ArrowUp class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
+                      </div>
+                    </Button>
+                  </Show>
+                  <Show when={generating()}>
+                    <Button
+                      onClick={() => (props.onStop ? props.onStop() : [])}
+                      class="text-ink-muted hover:scale-115 transition ease-in-out flex-col items-center rounded-full p-[0.25lh] hover:bg-transparent"
+                    >
+                      <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center p-0">
+                        <Stop class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
+                      </div>
+                    </Button>
+                  </Show>
                 </div>
-              </Tooltip>
-            </div>
+              </Match>
+            </Switch>
           </div>
         </div>
       </div>
