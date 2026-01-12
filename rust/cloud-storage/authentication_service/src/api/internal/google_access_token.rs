@@ -1,4 +1,4 @@
-use crate::service::fusionauth_client::FusionAuthClient;
+use authentication_service::service::fusionauth_client::FusionAuthClient;
 use axum::{
     Json,
     extract::{self, State},
