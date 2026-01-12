@@ -140,6 +140,16 @@
           }
         }
       }
+    },
+    {
+      "includes": ["packages/service-clients/**"],
+      "assist": {
+        "actions": {
+          "source": {
+            "organizeImports": "on"
+          }
+        }
+      }
     }
   ]
 }
