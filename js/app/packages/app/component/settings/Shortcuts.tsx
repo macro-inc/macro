@@ -6,7 +6,7 @@ import { createSignal, For } from 'solid-js';
 const cmdOrCtrl = IS_MAC ? 'cmd' : 'ctrl';
 
 type ShortcutItem = {
-  keys: string;
+  keys: string[];
   description: string;
 };
 
@@ -19,47 +19,49 @@ const shortcutSections: ShortcutSection[] = [
   {
     title: 'Core Shortcuts',
     items: [
-      { keys: 'c', description: 'Open the create menu (new email, new doc, etc.)' },
-      { keys: `${cmdOrCtrl}+k`, description: 'Open the command menu' },
+      { keys: ['c'], description: 'Open the create menu (new email, new doc, etc.)' },
+      { keys: [`${cmdOrCtrl}+k`], description: 'Open the command menu' },
     ],
   },
   {
     title: 'Unified List Navigation',
     items: [
-      { keys: 'j', description: 'Move down' },
-      { keys: 'k', description: 'Move up' },
-      { keys: 'e', description: 'Mark done' },
-      { keys: 'x', description: `Select items (then ${IS_MAC ? '⌘' : 'Ctrl'}+K to bring up actions)` },
-      { keys: 'p', description: 'Preview an item in the side panel' },
-      { keys: 'enter', description: 'Open an item fullscreen' },
-      { keys: `${cmdOrCtrl}+f`, description: 'Search (uses current filters)' },
+      { keys: ['j', 'arrowdown'], description: 'Move down' },
+      { keys: ['k', 'arrowup'], description: 'Move up' },
+      { keys: ['e'], description: 'Mark done' },
+      { keys: ['x'], description: `Select items (then ${IS_MAC ? '⌘' : 'Ctrl'}+K to bring up actions)` },
+      { keys: ['shift+j', 'shift+arrowdown'], description: `Select down` },
+      { keys: ['shift+k', 'shift+arrowup'], description: `Select up` },
+      { keys: ['p'], description: 'Preview an item in the side panel' },
+      { keys: ['enter'], description: 'Open an item fullscreen' },
+      { keys: [`${cmdOrCtrl}+f`], description: 'Search (uses current filters)' },
     ],
   },
   {
     title: 'Filtering the List',
     items: [
-      { keys: 'd', description: 'Filter to docs' },
-      { keys: 'l', description: 'Filter to email' },
+      { keys: ['d'], description: 'Filter to docs' },
+      { keys: ['l'], description: 'Filter to email' },
     ],
   },
   {
     title: 'Splits & Navigation',
     items: [
-      { keys: '\\', description: 'Create a split' },
-      { keys: 'escape', description: 'Return to the list, or close the split if viewing the list' },
-      { keys: 'cmd+escape', description: 'Close the split' },
-      { keys: 'arrowleft', description: 'Focus split to the left' },
-      { keys: 'arrowright', description: 'Focus split to the right' },
+      { keys: ['\\'], description: 'Create a split' },
+      { keys: ['escape'], description: 'Return to the list, or close split if already on list' },
+      { keys: ['cmd+escape'], description: 'Close the split' },
+      { keys: ['arrowleft'], description: 'Focus split to the left' },
+      { keys: ['arrowright'], description: 'Focus split to the right' },
     ],
   },
   {
     title: 'Miscellaneous',
     items: [
-      { keys: `${cmdOrCtrl}+j`, description: 'Open popover AI chat' },
-      { keys: `${cmdOrCtrl}+/`, description: 'Open sidebar AI chat' },
-      { keys: `${cmdOrCtrl}+;`, description: 'Open settings panel' },
-      { keys: `${cmdOrCtrl}+opt+[`, description: 'Go back in current split' },
-      { keys: `${cmdOrCtrl}+opt+]`, description: 'Go forward in current split' },
+      { keys: [`${cmdOrCtrl}+j`], description: 'Open popover AI chat' },
+      { keys: [`${cmdOrCtrl}+/`], description: 'Open sidebar AI chat' },
+      { keys: [`${cmdOrCtrl}+;`], description: 'Open settings panel' },
+      { keys: [`opt+[`], description: 'Go back in current split' },
+      { keys: [`opt+]`], description: 'Go forward in current split' },
     ],
   },
 ];
@@ -77,8 +79,10 @@ function Kbd(props: { shortcut: string; class?: string }) {
 function ShortcutRow(props: { item: ShortcutItem }) {
   return (
     <div class="flex items-center gap-2 py-1.5 px-3 rounded-md hover:bg-panel-secondary/50 transition-colors">
-      <div class="shrink-0">
-        <Kbd shortcut={props.item.keys} />
+      <div class="shrink-0 flex items-center gap-1">
+        <For each={props.item.keys}>
+          {(key) => <Kbd shortcut={key} />}
+        </For>
       </div>
       <span class="text-ink-muted text-sm">{props.item.description}</span>
     </div>
@@ -114,7 +118,7 @@ export function Shortcuts() {
           <div class="mb-8">
             <h2 class="text-lg font-semibold text-ink mb-2">Keyboard Shortcuts</h2>
             <p class="text-ink-muted text-sm">
-              Shortcuts without a modifier key require the text inputs to be unfocused. For example, pressing <kbd>j</kbd> in a document will insert a j character if the text input is focused, and will move down the list if the text input is unfocused.
+              Shortcuts without a {IS_MAC ? 'cmd' : 'ctrl'}/option modifier key require text inputs to be unfocused. For example, pressing <kbd>j</kbd> in a document will insert a j, but will move down the list if the document text is unfocused.
             </p>
           </div>
 
