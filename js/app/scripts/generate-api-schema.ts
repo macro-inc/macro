@@ -97,15 +97,13 @@ const processService = async (service: Service, { serviceClientsDir }: { service
     // Generate OpenAPI JSON from Rust binary
     let openApiJson = await generateOpenApiFromCrate(crateName);
 
-    // Sort JSON keys to ensure deterministic output across environments
-    openApiJson = sortJsonKeys(JSON.parse(openApiJson));
 
     // Remove existing generated dir
     console.log(`[${service.name}] Removing existing generated dir`, generatedDir);
     await $`rm -rf ${generatedDir}`;
 
     // Write the OpenAPI JSON
-    await write(openApiPath, JSON.stringify(openApiJson, null, 2));
+    await write(openApiPath, openApiJson);
     console.log(`[${service.name}] Saved OpenAPI spec to ${openApiPath}`);
 
     // Run orval to generate types
