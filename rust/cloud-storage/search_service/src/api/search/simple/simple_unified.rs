@@ -116,6 +116,12 @@ pub(in crate::api::search) async fn perform_unified_search(
         .as_ref()
         .and_then(|c| SearchCursor::decode(c));
 
+    if let Some(cursor) = cursor.as_ref()
+        && cursor.is_exhausted()
+    {
+        return Err(SearchError::InvalidCursor);
+    }
+
     let page_size = query_params.page_size.unwrap_or(10);
     if !(0..=100).contains(&page_size) {
         return Err(SearchError::InvalidPageSize);

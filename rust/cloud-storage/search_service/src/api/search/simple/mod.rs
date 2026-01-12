@@ -39,6 +39,9 @@ pub enum SearchError {
     /// No query or terms provided
     #[error("query or terms must be provided and at least 3 characters")]
     NoQueryOrTermsProvided,
+    #[error("searching with an invalid cursor")]
+    /// Searching with an invalid cursor
+    InvalidCursor,
     /// Opensearch error occurred
     #[error("unable to search")]
     Search(#[from] OpensearchClientError),
@@ -59,6 +62,7 @@ impl IntoResponse for SearchError {
             SearchError::NoUserId | SearchError::InvalidUserId(_) => StatusCode::UNAUTHORIZED,
             SearchError::InvalidPageSize
             | SearchError::InvalidQuerySize
+            | SearchError::InvalidCursor
             | SearchError::NoQueryOrTermsProvided => StatusCode::BAD_REQUEST,
             SearchError::Search(_)
             | SearchError::NameSearch(_)

@@ -118,4 +118,14 @@ impl SearchCursor {
             .ok()
             .map(|bytes| BASE64.encode(bytes))
     }
+
+    /// Returns if the cursor is fully exhausted
+    pub fn is_exhausted(&self) -> bool {
+        self.document_name_cursor.is_done()
+            && self.chat_name_cursor.is_done()
+            && self.content_cursor.is_done()
+            && self.email_subject_cursor.is_done()
+            && self.email_contact_cursor.is_done()
+            && self.project_name_cursor.is_done()
+    }
 }
