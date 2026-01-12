@@ -59,7 +59,9 @@ pub async fn get_user_notification_by_id(
             deleted_at: row.try_get("deleted_at")?,
             notification_metadata: row.try_get("notification_metadata")?,
             sender_id: sender_id
-                .map(|s| Result::<_, ParseErr>::Ok(MacroUserIdStr::parse_from_str(&s)?.into_owned()))
+                .map(|s| {
+                    Result::<_, ParseErr>::Ok(MacroUserIdStr::parse_from_str(&s)?.into_owned())
+                })
                 .transpose()
                 .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
             updated_at: row.try_get("updated_at")?,
@@ -70,4 +72,3 @@ pub async fn get_user_notification_by_id(
 
     Ok(row)
 }
-

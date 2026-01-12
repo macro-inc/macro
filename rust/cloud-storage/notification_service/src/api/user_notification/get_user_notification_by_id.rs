@@ -46,21 +46,22 @@ pub async fn handler(
         )
     })?;
 
-    let raw = notification_db_client::user_notification::get::get_by_id::get_user_notification_by_id(
-        &ctx.db,
-        &user_context.user_id,
-        notification_uuid,
-    )
-    .await
-    .map_err(|e| {
-        tracing::error!(error=?e, "failed to get user notification by id");
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                message: "failed to get user notification by id",
-            }),
+    let raw =
+        notification_db_client::user_notification::get::get_by_id::get_user_notification_by_id(
+            &ctx.db,
+            &user_context.user_id,
+            notification_uuid,
         )
-    })?;
+        .await
+        .map_err(|e| {
+            tracing::error!(error=?e, "failed to get user notification by id");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: "failed to get user notification by id",
+                }),
+            )
+        })?;
 
     let Some(raw) = raw else {
         return Err((
@@ -83,4 +84,3 @@ pub async fn handler(
 
     Ok(Json(notification))
 }
-
