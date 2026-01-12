@@ -43,7 +43,7 @@ export function searchServiceFetch<T extends ObjectLike = never>(
 
 export type SearchParams = {
   cursor?: string | null;
-  page_size: number;
+  page_size?: number;
 };
 
 export type SearchArgs = {
@@ -94,20 +94,22 @@ export const searchClient = {
   async search(args: SearchArgs, init?: SafeFetchInit) {
     const params = new URLSearchParams();
 
-    params.append('page_size', args.params.page_size.toString());
+    if (args.params.page_size !== undefined) {
+      params.append('page_size', args.params.page_size.toString());
+    }
     if (args.params.cursor) {
       params.append('cursor', args.params.cursor);
     }
 
+    const queryString = params.toString();
+    const url = queryString ? `/search?${queryString}` : '/search';
+
     return mapOk(
-      await searchServiceFetch<UnifiedSearchResponse>(
-        `/search?${params.toString()}`,
-        {
-          method: 'POST',
-          body: JSON.stringify(args.request),
-          ...init,
-        }
-      ),
+      await searchServiceFetch<UnifiedSearchResponse>(url, {
+        method: 'POST',
+        body: JSON.stringify(args.request),
+        ...init,
+      }),
       (result) => result
     );
   },
