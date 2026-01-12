@@ -607,6 +607,8 @@ export function BaseInput(props: {
     for (const file of files) {
       form().attachments.add({ file });
     }
+
+    scheduleDraftSave();
   };
 
   return (
