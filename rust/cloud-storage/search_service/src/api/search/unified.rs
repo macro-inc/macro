@@ -9,8 +9,7 @@ use crate::api::{
 use axum::{
     Extension,
     extract::{self, State},
-    http::StatusCode,
-    response::{IntoResponse, Json, Response},
+    response::Json,
 };
 use model::{response::ErrorResponse, user::UserContext};
 use models_search::unified::{
@@ -43,7 +42,7 @@ pub async fn handler(
     user_context: Extension<UserContext>,
     extract::Query(query_params): extract::Query<SearchPaginationParams>,
     extract::Json(req): extract::Json<UnifiedSearchRequest>,
-) -> Result<Response, SearchError> {
+) -> Result<Json<UnifiedSearchResponse>, SearchError> {
     tracing::info!("unified_search");
 
     let (results, next_cursor) =
@@ -108,14 +107,10 @@ pub async fn handler(
 
     results = sort_unified_search_results(results);
 
-    Ok((
-        StatusCode::OK,
-        Json(UnifiedSearchResponse {
-            results,
-            next_cursor,
-        }),
-    )
-        .into_response())
+    Ok(Json(UnifiedSearchResponse {
+        results,
+        next_cursor,
+    }))
 }
 
 /// Sorts the unified results
