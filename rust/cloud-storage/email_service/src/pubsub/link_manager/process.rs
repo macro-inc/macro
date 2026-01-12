@@ -90,12 +90,14 @@ async fn handle_delete(
     link: &Link,
     gmail_access_token: Option<&str>,
 ) -> anyhow::Result<()> {
+    tracing::info!(link=?link, "Deleting link");
+    
     // set sync status to false so any future inbox updates get ignored
     email_db_client::links::update::update_link_sync_status(&ctx.db, link.id, false)
         .await
         .context("Failed to update link sync status")?;
 
-    // should cancel any running backfill jobs
+    // cancel any running backfill jobs
     if let Err(e) =
         email_db_client::backfill::job::update::cancel_active_jobs_by_link_id(&ctx.db, link.id)
             .await
