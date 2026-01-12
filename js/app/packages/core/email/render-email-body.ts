@@ -1,5 +1,8 @@
 import { parseEmailContent, type ParsedEmailContent } from './parse-email-html';
-import { processEmailColors, type ThemeColorParams } from './transform-email-colors';
+import {
+  processEmailColors,
+  type ThemeColorParams,
+} from './transform-email-colors';
 
 export interface EmailRenderOptions {
   theme: ThemeColorParams;
@@ -40,7 +43,11 @@ export function renderEmailBody(
   } = options;
 
   // Parse the email content
-  const parsedContent = parseEmailContent(html, removeSignature, removeTrailingBrs);
+  const parsedContent = parseEmailContent(
+    html,
+    removeSignature,
+    removeTrailingBrs
+  );
 
   // Create Shadow DOM container
   const hostContainer = document.createElement('div');

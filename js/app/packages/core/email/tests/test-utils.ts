@@ -22,7 +22,9 @@ function themeToClassName(themeName: string): string {
 /**
  * Generates CSS variable declarations from theme tokens.
  */
-function generateTokenVars(tokens: Record<string, { l: number; c: number; h: number }>): string {
+function generateTokenVars(
+  tokens: Record<string, { l: number; c: number; h: number }>
+): string {
   return Object.entries(tokens)
     .map(([key, value]) => {
       const { l, c, h } = value;
@@ -97,7 +99,9 @@ export function createTestContainer(themeName: string): HTMLElement {
  * Note: In browser tests, fixtures are loaded via fetch.
  */
 export async function loadFixture(name: string): Promise<EmailFixture> {
-  const response = await fetch(`/packages/core/email/test/fixtures/${name}.json`);
+  const response = await fetch(
+    `/packages/core/email/test/fixtures/${name}.json`
+  );
   if (!response.ok) {
     throw new Error(`Fixture "${name}" not found`);
   }
@@ -108,6 +112,8 @@ export async function loadFixture(name: string): Promise<EmailFixture> {
  * Loads all fixtures from the fixtures directory.
  * Note: This requires a manifest of fixture names.
  */
-export async function loadAllFixtures(fixtureNames: string[]): Promise<EmailFixture[]> {
+export async function loadAllFixtures(
+  fixtureNames: string[]
+): Promise<EmailFixture[]> {
   return Promise.all(fixtureNames.map(loadFixture));
 }

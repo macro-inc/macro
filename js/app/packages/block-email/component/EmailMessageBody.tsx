@@ -3,7 +3,11 @@ import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/S
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
-import { parseEmailContent, processEmailColors, type ThemeColorParams } from '@core/email';
+import {
+  parseEmailContent,
+  processEmailColors,
+  type ThemeColorParams,
+} from '@core/email';
 import DotsThree from '@icon/regular/dots-three.svg';
 import type { MessageWithBodyReplyless } from '@service-email/generated/schemas';
 import { useEmail } from '@service-gql/client';

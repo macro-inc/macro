@@ -67,7 +67,10 @@ function generateThemeCSS(themeName: string): string {
   if (!theme) return '';
 
   const vars = Object.entries(theme.tokens)
-    .map(([key, value]) => `--${key}l: ${value.l}; --${key}c: ${value.c}; --${key}h: ${value.h}deg;`)
+    .map(
+      ([key, value]) =>
+        `--${key}l: ${value.l}; --${key}c: ${value.c}; --${key}h: ${value.h}deg;`
+    )
     .join('\n    ');
 
   return `:root {\n    ${vars}\n  }`;
@@ -174,7 +177,9 @@ test.describe('Email Rendering', () => {
           contentType: 'image/png',
         });
 
-        await expect(page).toHaveScreenshot(snapshotName(fixture.name, themeName));
+        await expect(page).toHaveScreenshot(
+          snapshotName(fixture.name, themeName)
+        );
       }
     });
   }

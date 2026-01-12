@@ -96,14 +96,18 @@ describe('findClosestContrastingColor', () => {
     const fg = { l: 0.6, c: 0.1, h: 180 };
     const bgL = 0.5;
     const result = findClosestContrastingColor(fg, bgL);
-    expect(Math.abs(result.l - bgL)).toBeGreaterThanOrEqual(CONTRAST_THRESHOLD - 0.01);
+    expect(Math.abs(result.l - bgL)).toBeGreaterThanOrEqual(
+      CONTRAST_THRESHOLD - 0.01
+    );
   });
 
   it('decreases lightness when fg is darker than bg but contrast is low', () => {
     const fg = { l: 0.4, c: 0.1, h: 180 };
     const bgL = 0.5;
     const result = findClosestContrastingColor(fg, bgL);
-    expect(Math.abs(result.l - bgL)).toBeGreaterThanOrEqual(CONTRAST_THRESHOLD - 0.01);
+    expect(Math.abs(result.l - bgL)).toBeGreaterThanOrEqual(
+      CONTRAST_THRESHOLD - 0.01
+    );
   });
 
   it('preserves chroma and hue', () => {
