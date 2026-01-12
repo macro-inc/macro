@@ -98,6 +98,7 @@ import {
 } from '@queries/email/attachment';
 import { EmailAttachmentPill } from '@block-email/component/AttachmentPill';
 import type { DraftFormAttachment } from '@block-email/component/createEmailFormState';
+import { plural } from '@core/util/string';
 
 false && fileFolderDrop;
 false && fileSelector;
@@ -614,6 +615,13 @@ export function BaseInput(props: {
   const handleAddAttachments = (files: File[]) => {
     const currentAttachments = form().attachments.list();
 
+    const attachmentsToAddByteSize = files.reduce((sum, f) => sum + f.size, 0);
+
+    if (attachmentsToAddByteSize >= 18_000_000) {
+      toast.failure(`${plural('Attachment', files.length)} exceed 18MB`);
+      return;
+    }
+
     const currentAttachmentsByteSize = currentAttachments.reduce(
       (sum, a) => sum + (a.type === 'local' ? a.file.size : a.fileSize),
       0
@@ -622,7 +630,10 @@ export function BaseInput(props: {
     const attachmentsToAddByteSize = files.reduce((sum, f) => sum + f.size, 0);
 
     if (currentAttachmentsByteSize + attachmentsToAddByteSize >= 18_000_000) {
-      toast.failure("Can't add more attachments");
+      toast.failure(
+        "Can't add more attachments",
+        'Total attachments exceed 18MB limit'
+      );
       return;
     }
 
