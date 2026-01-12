@@ -42,6 +42,8 @@ jobs:
           npm-rc-token: ${{ secrets.NPMRC_GH_TOKEN }}
       - name: Setup Biome
         uses: biomejs/setup-biome@v2
+        with:
+          version: 2.2.6
       - name: Generate API Types
         working-directory: js/app
         run: bun run gen-api -- --check
@@ -114,7 +116,7 @@ jobs:
       - name: Setup Biome
         uses: biomejs/setup-biome@v2
         with:
-          version: latest
+          version: 2.2.6
       - name: Cycles Import Check
         working-directory: js/app
         run: biome lint --changed --no-errors-on-unmatched --only=nursery/noImportCycles
