@@ -1,3 +1,4 @@
+import { fileSelector } from '@core/directive/fileSelector';
 import { FormatRibbon } from '@block-channel/component/FormatRibbon';
 import { MacroSignatureButton } from '@block-email/component/MacroSignatureButton';
 import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
@@ -94,6 +95,7 @@ import { getOrInitEmailFormContext } from './EmailFormContext';
 import { useUploadDraftAttachmentsMutation } from '@queries/email/attachment';
 
 false && fileFolderDrop;
+false && fileSelector;
 
 const getRecipientDisplayName = (item: EmailRecipient): string => {
   switch (item.kind) {
@@ -894,12 +896,14 @@ export function BaseInput(props: {
           <div class="flex flex-row items-center gap-2">
             <div class="relative">
               <Button
+                ref={(el) =>
+                  fileSelector(el, () => ({
+                    multiple: true,
+                    onSelect: handleAddAttachments,
+                  }))
+                }
                 tooltip="Attach"
                 class="aspect-square p-1"
-                use:fileSelector={{
-                  multiple: true,
-                  onSelect: handleAddAttachments,
-                }}
               >
                 <Plus class="h-5" />
               </Button>
