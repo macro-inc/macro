@@ -1,6 +1,6 @@
 import { InlineItemPreview } from '@core/component/ItemPreview';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { tryMacroId, useDisplayName } from '@core/user';
+import { macroIdToEmail, tryMacroId, useDisplayName } from '@core/user';
 import { formatDate } from '@core/util/date';
 import {
   extractNotificationData,
@@ -32,9 +32,11 @@ export function NotificationRenderer(props: NotificationRendererProps) {
     <Show when={data()}>
       {(d) => {
         const actorId = d().actor?.id ?? '';
-        const [actorName] = useDisplayName(tryMacroId(actorId));
-
-        const displayName = () => actorName() || 'Someone';
+        const macroId = tryMacroId(actorId);
+        const [actorName] = useDisplayName(macroId);
+        // Fall back to email if display name is empty, then "Someone" as last resort
+        const emailFallback = macroId ? macroIdToEmail(macroId) : undefined;
+        const displayName = () => actorName() || emailFallback || 'Someone';
 
         if (props.mode === 'preview') {
           return (

@@ -185,9 +185,11 @@ const extractors: {
   new_email: (n) => {
     const m = n.notificationMetadata;
     if (!m) return null;
+    // Use top-level senderId (macro ID) for actor, with metadata sender as fallback
+    const actorId = n.senderId ?? m.sender;
     return {
       type: n.notificationEventType,
-      actor: m.sender ? { id: m.sender! } : undefined,
+      actor: actorId ? { id: actorId } : undefined,
       action: 'sent a new email',
       target: { type: 'email', id: n.entity_id, show: false },
       content: m.subject,
