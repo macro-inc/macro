@@ -54,13 +54,12 @@ async fn handle_refresh(
 ) -> anyhow::Result<()> {
     // Renew the Gmail watch subscription to ensure we keep getting updates.
     // We can proceed with contact sync even if this fails, so we'll just log the error.
-    if let Err(e) = renew_gmail_watch(ctx, gmail_access_token, link).await {
-        tracing::error!(
-            error = ?e,
-            link_id = %link.id,
-            "Failed to renew Gmail watch"
-        );
-    }
+    renew_gmail_watch(ctx, gmail_access_token, link)
+        .await
+        .inspect_err(|e| {
+            tracing::error!(error=?e, link_id=%link.id, "Failed to renew Gmail watch");
+        })
+        .ok();
 
     // Sync contacts and update sync tokens in the database
     if let Err(e) = sync_contacts(
@@ -97,25 +96,25 @@ async fn handle_delete(
         .context("Failed to update link sync status")?;
 
     // cancel any running backfill jobs
-    if let Err(e) =
-        email_db_client::backfill::job::update::cancel_active_jobs_by_link_id(&ctx.db, link.id)
-            .await
-    {
-        tracing::error!(error=?e, link_id=?link.id, "Failed to update backfill job statuses");
-    };
+    email_db_client::backfill::job::update::cancel_active_jobs_by_link_id(&ctx.db, link.id)
+        .await
+        .inspect_err(|e| {
+            tracing::error!(error=?e, link_id=?link.id, "Failed to update backfill job statuses");
+        })
+        .ok();
 
     // delete cached access token, in case user re-enables within cache window
-    if let Err(e) = ctx
-        .redis_client
+    ctx.redis_client
         .delete_gmail_access_token(&TokenCacheKey {
             fusion_user_id: link.fusionauth_user_id.clone(),
             macro_id: link.macro_id.to_string(),
             provider: UserProvider::Gmail,
         })
         .await
-    {
-        tracing::warn!(error=?e, "Failed to delete Gmail access token");
-    };
+        .inspect_err(|e| {
+            tracing::warn!(error=?e, "Failed to delete Gmail access token");
+        })
+        .ok();
 
     // make call to gmail to unregister. may fail if the user revoked our access (which is a reason
     // that we may be deleting their link in the first place)

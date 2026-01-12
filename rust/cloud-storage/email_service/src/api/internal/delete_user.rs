@@ -36,13 +36,13 @@ pub async fn handler(
             operation: LinkManagerOperation::Delete,
         };
 
-        if let Err(e) = ctx
-            .sqs_client
+        ctx.sqs_client
             .enqueue_link_manager_notification(message)
             .await
-        {
-            tracing::error!(error=?e, link_id=?link.id, "Failed to enqueue delete notification");
-        }
+            .inspect_err(|e| {
+                tracing::error!(error=?e, link_id=?link.id, "Failed to enqueue delete notification");
+            })
+            .ok();
     }
 
     Ok(StatusCode::NO_CONTENT.into_response())

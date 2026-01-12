@@ -46,6 +46,7 @@ pub struct LinkManagerMessage {
     pub operation: LinkManagerOperation,
 }
 
+/// The operations that can be performed by the LinkManager.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum LinkManagerOperation {
     /// Triggers a contact sync and refreshes the Gmail watch subscription to continue receiving

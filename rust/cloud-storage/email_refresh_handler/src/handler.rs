@@ -60,17 +60,13 @@ pub async fn handler(
                 link_id,
                 operation: LinkManagerOperation::Refresh,
             };
-            if let Err(e) = ctx
-                .sqs_client
+            ctx.sqs_client
                 .enqueue_link_manager_notification(notif)
                 .await
-            {
-                tracing::error!(
-                    "Error enqueueing refresh notification for link_id {}: {}",
-                    link_id,
-                    e
-                );
-            };
+                .inspect_err(|e| {
+                    tracing::error!(error=?e, link_id=%link_id, "Error enqueueing refresh notification for link");
+                })
+                .ok();
         }
     }
 
