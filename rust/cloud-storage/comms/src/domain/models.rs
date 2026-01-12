@@ -38,8 +38,41 @@ impl UserName {
     }
 }
 
+#[derive(Debug)]
 pub struct GetChannelsRequest {
     pub macro_id: MacroUserIdStr<'static>,
     pub limit: Option<u32>,
     pub query: Query<Uuid, SimpleSortMethod, LiteralTree<ChannelLiteral>>,
+}
+
+impl GetChannelsRequest {
+    pub fn into_params(self) -> GetChannelsParams {
+        let GetChannelsRequest {
+            macro_id,
+            limit,
+            query,
+        } = self;
+
+        // make sure the limit for page size exists within a reasonable range
+        let limit = limit.unwrap_or(20).clamp(20, 100);
+
+        GetChannelsParams {
+            macro_id,
+            limit,
+            query,
+        }
+    }
+}
+
+#[expect(dead_code, reason = "This is used in a later PR")]
+pub struct GetChannelsParams {
+    macro_id: MacroUserIdStr<'static>,
+    limit: u32,
+    query: Query<Uuid, SimpleSortMethod, LiteralTree<ChannelLiteral>>,
+}
+
+impl GetChannelsParams {
+    pub fn user(&self) -> &MacroUserIdStr<'static> {
+        &self.macro_id
+    }
 }

@@ -1,3 +1,4 @@
+use crate::domain::models::GetChannelsParams;
 use crate::domain::ports::CommsRepo;
 use chrono::DateTime;
 use chrono::Utc;
@@ -318,9 +319,9 @@ pub struct PgCommsRepo {
 impl CommsRepo for PgCommsRepo {
     async fn get_user_channels_with_participants(
         &self,
-        user_id: MacroUserIdStr<'_>,
+        req: GetChannelsParams,
     ) -> Result<Vec<ChannelWithParticipants>, rootcause::Report> {
-        Ok(get_user_channels_with_participants(&self.pool, user_id.as_ref()).await?)
+        Ok(get_user_channels_with_participants(&self.pool, req.user().as_ref()).await?)
     }
 
     async fn get_latest_channel_messages_batch(

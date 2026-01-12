@@ -5,7 +5,7 @@ use crate::domain::{
     },
     ports::{SoupOutput, SoupRepo, SoupService},
 };
-use comms::domain::ports::ChannelsService;
+use comms::domain::{models::GetChannelsRequest, ports::ChannelsService};
 use doppleganger::Mirror;
 use either::Either;
 use email::domain::{models::GetEmailsRequest, ports::EmailService};
@@ -272,22 +272,28 @@ where
 
     async fn handle_comms_request(
         &self,
-        req: MacroUserIdStr<'_>,
+        req: Option<GetChannelsRequest>,
     ) -> Result<impl Iterator<Item = FrecencySoupItem>, SoupErr> {
-        self.comms_service
-            .get_channels(req)
-            .await
-            .map_err(|_| SoupErr::CommsErr)
-            .map(|r| {
-                r.into_iter().map(|mut c| {
-                    let frecency_score = c.frecency_score.take();
-                    let soup_channel = SoupChannel::mirror(c);
-                    FrecencySoupItem {
-                        item: SoupItem::Channel(soup_channel),
-                        frecency_score,
-                    }
-                })
-            })
+        let Some(req) = req else {
+            return Ok(Either::Left(None.into_iter()));
+        };
+
+        Ok(Either::Right(
+            self.comms_service
+                .get_channels(req)
+                .await
+                .map_err(|_| SoupErr::CommsErr)
+                .map(|r| {
+                    r.into_iter().map(|mut c| {
+                        let frecency_score = c.frecency_score.take();
+                        let soup_channel = SoupChannel::mirror(c);
+                        FrecencySoupItem {
+                            item: SoupItem::Channel(soup_channel),
+                            frecency_score,
+                        }
+                    })
+                })?,
+        ))
     }
 }
 
@@ -305,6 +311,7 @@ where
         let paginate_filter = req.cursor.filter().cloned();
 
         let email_request = req.build_email_request();
+        let comms_request = req.build_comms_request();
 
         match req.cursor {
             SoupQuery::Simple(cursor) => {
@@ -321,7 +328,7 @@ where
 
                 let email_soup_fut = self.handle_email_request(email_request);
 
-                let comms_soup_fut = self.handle_comms_request(req.user.copied());
+                let comms_soup_fut = self.handle_comms_request(comms_request);
 
                 let (main_soup, email_soup, _comms_soup) =
                     tokio::join!(main_soup_fut, email_soup_fut, comms_soup_fut);
