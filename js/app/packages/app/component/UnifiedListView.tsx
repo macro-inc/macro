@@ -868,7 +868,12 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     return debouncedSearchForService().length >= 3;
   });
   const isSearchActive = createMemo(() => {
-    return validSearchTerms();
+    const focusFilters_ = focusFilters();
+    const hasSignalOrNoiseFilter =
+      focusFilters_?.includes('signal') === true ||
+      focusFilters_?.includes('noise') === true;
+
+    return validSearchTerms() && !hasSignalOrNoiseFilter;
   });
 
   const dssQueryParams = createMemo(
