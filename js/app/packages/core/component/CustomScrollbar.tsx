@@ -231,7 +231,7 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
         />
         {/* Thumb */}
         <div
-          class="absolute right-0 cursor-grab active:cursor-grabbing transition-all duration-200 ease-out"
+          class="absolute right-0 cursor-grab active:cursor-grabbing"
           style={{
             top: `${thumbTop()}px`,
             height: `${thumbHeight()}px`,
@@ -240,6 +240,7 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
             'transform-origin': 'right center',
             opacity: getThumbOpacity(),
             transform: getThumbScale(),
+            transition: 'opacity 200ms ease-out, transform 200ms ease-out',
           }}
           onMouseDown={handleMouseDown}
         />
