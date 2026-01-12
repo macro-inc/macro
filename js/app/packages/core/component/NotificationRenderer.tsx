@@ -34,8 +34,9 @@ export function NotificationRenderer(props: NotificationRendererProps) {
         const actorId = d().actor?.id ?? '';
         const macroId = tryMacroId(actorId);
         const [actorName] = useDisplayName(macroId);
-        // Fall back to email if display name is empty, then "Someone" as last resort
-        const emailFallback = macroId ? macroIdToEmail(macroId) : undefined;
+        const emailFallback = macroId
+          ? macroIdToEmail(macroId)
+          : actorId || undefined;
         const displayName = () => actorName() || emailFallback || 'Someone';
 
         if (props.mode === 'preview') {

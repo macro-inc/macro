@@ -25,9 +25,8 @@ export const DefaultUserNameResolver: UserNameResolver = async (id: string) => {
     until(useDisplayName(macroId)[0]),
     RESOLVER_TIMEOUT
   );
-  // Fall back to email if display name resolution fails
   if (resolvedName) return resolvedName;
-  return macroId ? macroIdToEmail(macroId) : undefined;
+  return macroId ? macroIdToEmail(macroId) : id || undefined;
 };
 
 const getPreview = async (id: string, type: EntityType) => {
