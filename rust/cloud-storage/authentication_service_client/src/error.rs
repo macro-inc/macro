@@ -3,6 +3,8 @@
 pub enum AuthServiceClientError {
     #[error("unauthorized")]
     Unauthorized,
+    #[error("forbidden")]
+    Forbidden,
     #[error("not found")]
     NotFound,
     #[error("internal server error: {details}")]
