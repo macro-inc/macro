@@ -93,7 +93,7 @@ impl LexicalClient {
                 status=%status_code,
                 "unexpected response from lexical service while parsing presigned URL content"
             );
-            return Err(anyhow::anyhow!(body));
+            anyhow::bail!(body);
         }
 
         response.json().await.context("unexpected response")
