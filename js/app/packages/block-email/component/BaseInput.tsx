@@ -92,7 +92,10 @@ import { convertEmailRecipientToContactInfo } from '../util/recipientConversion'
 import { getReplyTypeFromDraft } from '../util/replyType';
 import { type EmailRecipient, useEmailContext } from './EmailContext';
 import { getOrInitEmailFormContext } from './EmailFormContext';
-import { useUploadDraftAttachmentsMutation } from '@queries/email/attachment';
+import {
+  useRemoveDraftAttachmentMutation,
+  useUploadDraftAttachmentsMutation,
+} from '@queries/email/attachment';
 import { EmailAttachmentPill } from '@block-email/component/AttachmentPill';
 import type { DraftFormAttachment } from '@block-email/component/createEmailFormState';
 
@@ -619,6 +622,8 @@ export function BaseInput(props: {
     scheduleDraftSave();
   };
 
+  const removeAttachmentMutation = useRemoveDraftAttachmentMutation();
+
   const handleRemoveAttachment = (attachment: DraftFormAttachment) => {
     if (attachment.type === 'local') {
       form().attachments.removeByFile(attachment.file);
@@ -628,7 +633,12 @@ export function BaseInput(props: {
 
     const currentDraftID = savedDraftId();
 
-    if (!currentDraftID) return;
+    if (!currentDraftID || !attachment.attachmentID) return;
+
+    removeAttachmentMutation.mutate({
+      draftID: currentDraftID,
+      attachmentID: attachment.attachmentID,
+    });
   };
 
   return (
