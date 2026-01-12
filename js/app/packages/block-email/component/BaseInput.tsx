@@ -34,20 +34,16 @@ import { ToggleButton as KToggleButton } from '@kobalte/core/toggle-button';
 import {
   $appendWatermarkNodeToLast,
   $removeAllWatermarkNodes,
-  type DocumentMentionInfo,
 } from '@lexical-core';
 import { logger } from '@observability';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { useSendMessageMutation } from '@queries/email/thread';
 import type {
   AttachmentMacro,
-  MessageToSend,
   MessageToSendDbId,
   MessageWithBodyReplyless,
 } from '@service-email/generated/schemas';
 import { useEmail, useUserId } from '@service-gql/client';
-import type { FileType } from '@service-storage/generated/schemas/fileType';
-import type { Item } from '@service-storage/generated/schemas/item';
 import { BrightJoins } from '@ui/components/BrightJoins';
 import { Button } from '@ui/components/Button';
 import {
@@ -83,7 +79,6 @@ import { deleteEmailDraft, saveEmailDraft } from '../signal/emailDraft';
 import { makeAttachmentPublic } from '../util/makeAttachmentPublic';
 import { getFirstName } from '../util/name';
 import {
-  appendItemsAsMacroMentions,
   clearEmailBody,
   prepareEmailBody,
   prepareMacroBody,
@@ -92,7 +87,6 @@ import {
 } from '../util/prepareEmailBody';
 import { convertEmailRecipientToContactInfo } from '../util/recipientConversion';
 import { getReplyTypeFromDraft } from '../util/replyType';
-import { AttachMenu } from './AttachMenu';
 import { type EmailRecipient, useEmailContext } from './EmailContext';
 import { getOrInitEmailFormContext } from './EmailFormContext';
 
@@ -245,8 +239,6 @@ export function BaseInput(props: {
   const userId = useUserId();
   const [userName] = useDisplayName(tryMacroId(userId() ?? ''));
 
-  let bodyDiv!: HTMLDivElement;
-  let attachButtonRef!: HTMLDivElement;
   let draftSaveTimer: number | undefined;
   const DRAFT_DEBOUNCE_MS = 1000;
 
@@ -357,28 +349,6 @@ export function BaseInput(props: {
     }
     untrack(scheduleDraftSave);
   };
-
-  function onAttach(items: Item[]) {
-    const documentMentionItems = items.map((item) => ({
-      documentId: item.id,
-      documentName: item.name,
-      blockName:
-        item.type === 'document' ? (item.fileType as FileType) : item.type,
-    }));
-    appendItemsAsMacroMentions(editor(), documentMentionItems);
-    items.forEach((item) => {
-      makeAttachmentPublic(item.id);
-    });
-    scheduleDraftSave();
-  }
-
-  function onAttachDocuments(items: DocumentMentionInfo[]) {
-    appendItemsAsMacroMentions(editor(), items);
-    items.forEach((item) => {
-      makeAttachmentPublic(item.documentId);
-    });
-    scheduleDraftSave();
-  }
 
   // Handles clicks outside of the expanded recipients area
   const expandedPointerDownHandler = (e: PointerEvent) => {
@@ -813,7 +783,6 @@ export function BaseInput(props: {
         </Show>
         <div
           class="max-h-80 overflow-y-scroll w-full flex flex-col cursor-text placeholder:text-ink-placeholder placeholder:opacity-50 px-3"
-          ref={bodyDiv}
           onclick={() => {
             editor()?.focus();
           }}
@@ -895,17 +864,17 @@ export function BaseInput(props: {
         </div>
         <div class="flex flex-row w-full h-8 justify-between items-center py-2 px-2 mb-2 space-x-2 allow-css-brackets">
           <div class="flex flex-row items-center gap-2">
-            <div class="relative" ref={attachButtonRef}>
-              <AttachMenu
-                trigger={
-                  <Button tooltip="Attach" class="aspect-square *:h-5 p-1">
-                    <Plus />
-                  </Button>
-                }
-                onAttach={onAttach}
-                onAttachDocuments={onAttachDocuments}
-                setIsPending={setIsPendingUpload}
-              />
+            <div class="relative">
+              <Button
+                tooltip="Attach"
+                class="aspect-square p-1"
+                use:fileSelector={{
+                  multiple: true,
+                  onSelect: async (files) => {},
+                }}
+              >
+                <Plus class="h-5" />
+              </Button>
             </div>
 
             <Button
