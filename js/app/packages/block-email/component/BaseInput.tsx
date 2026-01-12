@@ -263,7 +263,8 @@ export function BaseInput(props: {
       );
       return null;
     }
-    // Fail if no body text
+    // Fail if no body text and no attachments
+    // You can have a draft with attachments and no body text
     if (
       prepared.bodyText.trim() === '' &&
       form().attachments.list().length === 0
@@ -275,7 +276,6 @@ export function BaseInput(props: {
       bcc: form().recipients.bcc.map(convertEmailRecipientToContactInfo),
       body_html: prepared.bodyHtml,
       cc: form().recipients.cc.map(convertEmailRecipientToContactInfo),
-      // db_id: props.draft ? props.draft?.db_id : undefined,
       provider_id: props.draft?.provider_id,
       replying_to_id: props.replyingTo()?.db_id,
       subject: form().subject(),
