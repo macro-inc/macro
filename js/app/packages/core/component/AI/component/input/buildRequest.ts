@@ -37,7 +37,6 @@ export function useBuildChatSendRequest() {
     model,
     attachments,
     toolset,
-    source,
   }: {
     userRequest: string;
     chatId: string | undefined;
@@ -49,7 +48,7 @@ export function useBuildChatSendRequest() {
   }): Promise<CreateAndSend | Send> {
     const token = await getMacroApiToken();
 
-    const additional = `${additionalInstructions()}${sourceToPrompt(source)}`;
+    const additional = `${additionalInstructions()}\nYou are ${model}`;
 
     const request = (id: string): Send['request'] => ({
       chat_id: id,
