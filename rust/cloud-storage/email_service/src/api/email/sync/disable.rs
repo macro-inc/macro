@@ -1,5 +1,4 @@
 use crate::api::context::ApiContext;
-use anyhow::Context;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
@@ -24,13 +23,8 @@ impl IntoResponse for DisableSyncError {
             DisableSyncError::EnqueueError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
-        (
-            status_code,
-            Json(ErrorResponse {
-                message: self.to_string().as_str(),
-            }),
-        )
-            .into_response()
+        let message = self.to_string();
+        (status_code, Json(ErrorResponse { message: &message })).into_response()
     }
 }
 
