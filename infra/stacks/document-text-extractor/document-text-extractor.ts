@@ -6,7 +6,8 @@ import { CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '../../packages/shared';
 
 const BASE_NAME = 'document-text-extractor';
 const CLOUD_STORAGE_BASE = `../../../rust/cloud-storage`;
-const ZIP_LOCATION = `${CLOUD_STORAGE_BASE}/target/lambda/${BASE_NAME}/bootstrap.zip`;
+const ZIP_FOLDER_NAME = 'document_text_extractor';
+const ZIP_LOCATION = `${CLOUD_STORAGE_BASE}/target/lambda/${ZIP_FOLDER_NAME}/bootstrap.zip`;
 
 export type DocumentTextExtractorLambdaEnvVars = {
   DATABASE_URL: pulumi.Output<string> | string;
