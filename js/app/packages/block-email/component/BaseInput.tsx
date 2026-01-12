@@ -337,19 +337,12 @@ export function BaseInput(props: {
     if (draftResponse) {
       const attachments = form()
         .attachments.list()
-        .filter((a) => !a.attachmentID);
+        .filter((a) => a.type === 'local');
 
-      const uploaded = await uploadAttachmentMutation.mutateAsync({
+      await uploadAttachmentMutation.mutateAsync({
         draftID: draftResponse,
         attachments: attachments.map((a) => a.file),
       });
-
-      for (const attachment of uploaded.attachments) {
-        form().attachments.assignAttachmentID(
-          attachment.file,
-          attachment.attachmentID
-        );
-      }
 
       setSavedDraftId(draftResponse);
       refetchThreadMessages();
@@ -605,7 +598,10 @@ export function BaseInput(props: {
 
   const handleAddAttachments = (files: File[]) => {
     for (const file of files) {
-      form().attachments.add({ file });
+      form().attachments.add({
+        type: 'local',
+        file,
+      });
     }
 
     scheduleDraftSave();

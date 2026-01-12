@@ -19,6 +19,19 @@ export type EmailFormRecipients = {
   bcc: EmailRecipient[];
 };
 
+type FormDraft =
+  | {
+      type: 'local';
+      file: File;
+    }
+  | {
+      type: 'remote';
+      url: string;
+      fileName: string;
+      contentType: string;
+      attachmentID: string;
+    };
+
 /**
  * Creates a state object for the email form.
  * @param key - The db_id of the email being replied to.
@@ -187,9 +200,15 @@ export function createEmailFormState(key: string) {
     callDirty();
   };
 
-  const [attachments, setAttachments] = createSignal<
-    { file: File; attachmentID?: string }[]
-  >([]);
+  const [attachments, setAttachments] = createSignal<FormDraft[]>(
+    draft?.attachments_draft.map((a) => ({
+      type: 'remote',
+      attachmentID: a.id,
+      contentType: a.content_type,
+      fileName: a.file_name,
+      url: a.s3_key,
+    })) ?? []
+  );
 
   const value = {
     draft,
@@ -217,19 +236,15 @@ export function createEmailFormState(key: string) {
     },
     attachments: {
       list: attachments,
-      add: (attachment: { file: File; attachmentID?: string }) => {
+      add: (attachment: FormDraft) => {
         setAttachments((p) => [...p, attachment]);
       },
-      assignAttachmentID: (file: File, attachmentID: string) => {
-        setAttachments((p) =>
-          p.map((a) => (a.file === file ? { file, attachmentID } : a))
-        );
-      },
-      removeByFile: (file: File) => {
-        setAttachments((p) => p.filter((a) => a.file !== file));
-      },
       removeByID: (attachmentID: string) => {
-        setAttachments((p) => p.filter((a) => a.attachmentID !== attachmentID));
+        setAttachments((p) =>
+          p.filter(
+            (a) => a.type === 'remote' && a.attachmentID !== attachmentID
+          )
+        );
       },
     },
   };
