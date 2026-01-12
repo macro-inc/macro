@@ -13,6 +13,9 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 use uuid::Uuid;
 
+mod dynamic;
+pub use dynamic::get_user_channels_dynamic;
+
 #[derive(Debug, Clone, Copy, Doppleganger, sqlx::Type)]
 #[sqlx(type_name = "comms_channel_type", rename_all = "snake_case")]
 #[dg(forward = models_comms::channel::ChannelType)]
@@ -321,7 +324,7 @@ impl CommsRepo for PgCommsRepo {
         &self,
         req: GetChannelsParams,
     ) -> Result<Vec<ChannelWithParticipants>, rootcause::Report> {
-        Ok(get_user_channels_with_participants(&self.pool, req.user().as_ref()).await?)
+        Ok(get_user_channels_dynamic(&self.pool, &req).await?)
     }
 
     async fn get_latest_channel_messages_batch(

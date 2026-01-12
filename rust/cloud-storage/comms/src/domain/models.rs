@@ -64,7 +64,7 @@ impl GetChannelsRequest {
     }
 }
 
-#[expect(dead_code, reason = "This is used in a later PR")]
+#[derive(Debug)]
 pub struct GetChannelsParams {
     macro_id: MacroUserIdStr<'static>,
     limit: u32,
@@ -74,5 +74,13 @@ pub struct GetChannelsParams {
 impl GetChannelsParams {
     pub fn user(&self) -> &MacroUserIdStr<'static> {
         &self.macro_id
+    }
+
+    pub fn limit(&self) -> u32 {
+        self.limit
+    }
+
+    pub fn query(&self) -> &Query<Uuid, SimpleSortMethod, LiteralTree<ChannelLiteral>> {
+        &self.query
     }
 }

@@ -1833,16 +1833,20 @@ dependencies = [
 name = "comms"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "axum",
  "chrono",
  "doppleganger",
+ "filter_ast",
  "frecency",
  "item_filters",
+ "macro_db_migrator",
  "macro_user_id",
  "model-entity",
  "model_user",
  "models_comms",
  "models_pagination",
+ "recursion",
  "reqwest",
  "rootcause",
  "serde",
