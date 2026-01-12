@@ -210,6 +210,13 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
     return 0;
   };
 
+  const getThumbScale = () => {
+    if (isDragging()) return 'scaleX(2.5)';
+    if (isHovering()) return 'scaleX(2)';
+    if (isScrolling()) return 'scaleX(2)';
+    return 'scaleX(1)';
+  };
+
   return (
     <Show when={isVisible()}>
       <div
@@ -224,13 +231,15 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
         />
         {/* Thumb */}
         <div
-          class="absolute right-0 cursor-grab active:cursor-grabbing transition-opacity duration-200 ease-out"
+          class="absolute right-0 cursor-grab active:cursor-grabbing transition-all duration-200 ease-out"
           style={{
             top: `${thumbTop()}px`,
             height: `${thumbHeight()}px`,
             width: '1px',
             'background-color': 'var(--color-accent)',
+            'transform-origin': 'right center',
             opacity: getThumbOpacity(),
+            transform: getThumbScale(),
           }}
           onMouseDown={handleMouseDown}
         />
