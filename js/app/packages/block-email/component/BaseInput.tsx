@@ -251,7 +251,7 @@ export function BaseInput(props: {
   let draftSaveTimer: number | undefined;
   const DRAFT_DEBOUNCE_MS = 1000;
 
-  function collectDraft(): Omit<MessageToSend, 'link_id'> | null {
+  function collectDraft() {
     $removeAllWatermarkNodes(editor());
     const prepared = prepareEmailBody(editor());
     if (!prepared) {
@@ -261,7 +261,10 @@ export function BaseInput(props: {
       return null;
     }
     // Fail if no body text
-    if (prepared.bodyText.trim() === '') {
+    if (
+      prepared.bodyText.trim() === '' &&
+      form().attachments.list().length === 0
+    ) {
       return null;
     }
     // We attach the drafts entirely using bodyHTML (because this is how the appended reply parsing works) so we are not including bodyMacro or bodyText
