@@ -457,6 +457,7 @@ interface EntityProps<T extends WithNotification<EntityData>>
   ref?: Ref<HTMLDivElement>;
   onChecked?: (checked: boolean, shiftKey?: boolean) => void;
   checked?: boolean;
+  searchActive?: boolean;
 }
 
 const [hoveredEntityId, setHoveredEntityId] = createSignal<string | null>(null);
@@ -505,6 +506,10 @@ export function EntityWithEverything(
     if (!notifications) return [];
     return notifications.filter(({ done }) => !done);
   };
+
+  const isSearch = createMemo(
+    () => !!props.searchActive && isSearchEntity(props.entity)
+  );
 
   const searchHighlightName = () =>
     isSearchEntity(props.entity) && props.entity.search.nameHighlight;
@@ -570,8 +575,6 @@ export function EntityWithEverything(
         if (firstNames.length <= 3) return firstNames.join(', ');
         return `${firstNames[0]} .. ${firstNames[firstNames.length - 2]}, ${firstNames[firstNames.length - 1]}`;
       };
-
-      const isSearch = () => isSearchEntity(props.entity);
 
       return (
         <div class="flex gap-1 items-center text-sm min-w-0 w-full truncate overflow-hidden @max-md/split:flex-col @max-md/split:items-start @max-md/split:gap-1 @max-md/split:truncate-none">
@@ -652,7 +655,10 @@ export function EntityWithEverything(
                 <Show when={isSearch()}>
                   <span class="@max-md/split:hidden"> – </span>
                 </Show>
-                <Show when={searchHighlightName()} fallback={props.entity.name}>
+                <Show
+                  when={isSearch() && searchHighlightName()}
+                  fallback={props.entity.name}
+                >
                   {(name) => (
                     <StaticMarkdown
                       markdown={name()}
@@ -1097,7 +1103,7 @@ export function EntityWithEverything(
           </div>
         </div>
         {/* Content Hits from Search */}
-        <Show when={contentHitData().length > 0}>
+        <Show when={isSearch() && contentHitData().length > 0}>
           <div class="relative row-2 col-2 col-end-4 pb-2 @max-md/split:row-auto @max-md/split:col-auto @max-md/split:w-full @max-md/split:mt-1">
             <CollapsibleList
               items={contentHitData()}

@@ -1860,6 +1860,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                           shiftKey: shiftKey ?? false,
                         })
                       }
+                      searchActive={!!searchText()}
                     />
                   </EntityRow>
                 );
