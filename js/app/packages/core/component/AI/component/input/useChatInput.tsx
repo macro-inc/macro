@@ -1,3 +1,4 @@
+import ArrowUp from '@icon/bold/arrow-up-bold.svg';
 import { withAnalytics } from '@coparse/analytics';
 import { useBuildChatSendRequest } from '@core/component/AI/component/input/buildRequest';
 import { DEFAULT_MODEL, SMART_MODE_MODEL } from '@core/component/AI/constant';
@@ -321,15 +322,11 @@ function ChatInput(props: ChatInputInternalProps) {
                   <Show when={!generating()}>
                     <Button
                       onClick={() => sendMessage('claude-opus-4-5')}
-                      class="border border-accent"
+                      class=""
                     >
-                      Opus
-                    </Button>
-                    <Button
-                      onClick={() => sendMessage('claude-haiku-4-5')}
-                      class="border border-accent"
-                    >
-                      Haiku
+                      <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center">
+                        <ArrowUp class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
+                      </div>
                     </Button>
                   </Show>
                   <Show when={generating()}>
