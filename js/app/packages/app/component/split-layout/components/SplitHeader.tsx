@@ -168,7 +168,7 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
       data-split-header
       ref={props.ref}
     >
-      <div class="absolute inset-0 flex justify-start items-center bg-panel border-b border-b-edge-muted">
+      <div class="absolute inset-0 flex justify-start items-center bg-panel">
         <SplitControlButtons />
         <div
           class="relative w-fit min-w-0 h-full shrink"

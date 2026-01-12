@@ -94,14 +94,14 @@ const ENTITY_TYPE_FILTERS: {
 }[] = [
   {
     type: 'document',
-    label: 'Documents',
+    label: 'Docs',
     iconType: 'md',
     enabled: true,
     shortcut: 'd',
   },
   {
     type: 'chat',
-    label: 'Chats',
+    label: 'Agents',
     iconType: 'chat',
     enabled: true,
     shortcut: 'a',
@@ -473,13 +473,13 @@ function EntityTypeIconFilter() {
     handler: () => void;
   }[] = [
     {
-      hotkey: '1',
-      description: 'Filter by Signal',
+      hotkey: 'i',
+      description: 'Filter by Important',
       handler: () => toggleFocusFilter('signal'),
     },
     {
-      hotkey: '2',
-      description: 'Filter by Noise',
+      hotkey: 'o',
+      description: 'Filter by Other',
       handler: () => toggleFocusFilter('noise'),
     },
     ...ENTITY_TYPE_FILTERS.filter((f) => f.enabled).map((f) => ({
@@ -589,12 +589,12 @@ function EntityTypeIconFilter() {
         class="flex items-center h-full gap-0.5 px-1 overflow-x-auto scrollbar-hidden overscroll-none"
         ref={setScrollRef}
       >
-        {/* Signal/Noise buttons */}
+        {/* Important/Other buttons */}
         <div class="flex items-center mr-1 shrink-0">
           <div class="flex items-center rounded-full border border-edge-muted overflow-hidden">
           <Tooltip
             tooltip={
-              <LabelAndHotKey label="Signal - Important items" shortcut="1" />
+              <LabelAndHotKey label="Important" shortcut="i" />
             }
           >
             <button
@@ -608,20 +608,17 @@ function EntityTypeIconFilter() {
               }}
               onClick={() => toggleFocusFilter('signal')}
             >
-              <SignalIcon class="size-3.5" />
+              <SignalIcon />
               <span class="text-xs leading-none">
-                Signal{' '}
-                <span class="underline underline-offset-2 decoration-current/60 font-mono text-[10px] opacity-70">
-                  1
-                </span>
+                {renderShortcutUnderlinedInLabel('Important', 'i')}
               </span>
             </button>
           </Tooltip>
           <Tooltip
             tooltip={
               <LabelAndHotKey
-                label="Noise - Less important items"
-                shortcut="2"
+                label="Other"
+                shortcut="o"
               />
             }
           >
@@ -636,12 +633,9 @@ function EntityTypeIconFilter() {
               }}
               onClick={() => toggleFocusFilter('noise')}
             >
-              <NoiseIcon class="size-3.5" />
+              <NoiseIcon  />
               <span class="text-xs leading-none">
-                Noise{' '}
-                <span class="underline underline-offset-2 decoration-current/60 font-mono text-[10px] opacity-70">
-                  2
-                </span>
+                {renderShortcutUnderlinedInLabel('Other', 'o')}
               </span>
             </button>
           </Tooltip>
