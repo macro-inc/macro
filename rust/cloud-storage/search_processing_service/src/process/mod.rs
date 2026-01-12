@@ -4,7 +4,6 @@ pub mod context;
 mod document;
 mod email;
 mod name;
-mod project;
 mod user;
 pub mod worker;
 
@@ -106,15 +105,6 @@ pub async fn process_message(
         }
         SearchQueueMessage::RemoveChatMessage(message) => {
             chat::remove_chat_message(&ctx.opensearch_client, &message).await?;
-        }
-        SearchQueueMessage::ProjectMessage(message) => {
-            project::insert_project(&ctx.opensearch_client, &ctx.db, &message).await?;
-        }
-        SearchQueueMessage::RemoveProjectMessage(message) => {
-            project::remove_project(&ctx.opensearch_client, &message).await?;
-        }
-        SearchQueueMessage::BulkRemoveProjectMessage(message) => {
-            project::remove_project_bulk(&ctx.opensearch_client, &message).await?;
         }
     }
 

@@ -9,7 +9,6 @@ import {
   DOCUMENT_INDEX,
   EMAIL_INDEX,
   IS_DRY_RUN,
-  PROJECT_INDEX,
 } from '../constants';
 import type { IndexMigration } from '../utils/migrate_field';
 import { migrateIndex } from '../utils/migrate_field';
@@ -32,10 +31,6 @@ const MIGRATIONS: IndexMigration[] = [
   {
     indexName: EMAIL_INDEX,
     fields: [{ oldField: 'thread_id', newField: ENTITY_ID_FIELD }],
-  },
-  {
-    indexName: PROJECT_INDEX,
-    fields: [{ oldField: 'project_id', newField: ENTITY_ID_FIELD }],
   },
 ];
 

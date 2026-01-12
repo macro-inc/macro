@@ -5,7 +5,6 @@ use config::{Config, Environment};
 use document_cognition_service_client::DocumentCognitionServiceClient;
 use document_storage_service_client::DocumentStorageServiceClient;
 use email_service_client::{EmailServiceClient, EmailServiceClientExternal};
-use insight_service_client::InsightContextProvider;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
@@ -78,7 +77,6 @@ async fn main() -> anyhow::Result<()> {
     let sqs_client = sqs_client::SQS::new(queue_aws_client)
         .document_text_extractor_queue(&config.document_text_extractor_queue)
         .chat_delete_queue(&config.chat_delete_queue)
-        .insight_context_queue(&config.insight_context_queue)
         .search_event_queue(&config.search_event_queue);
 
     let secretsmanager_client =
@@ -139,15 +137,6 @@ async fn main() -> anyhow::Result<()> {
             .await
             .context("failed to create jwt validation args")?;
 
-    let metering_client = Arc::new(
-        metering_service_client::Client::new(
-            internal_auth_key.as_ref().to_string(),
-            config.metering_service_url.clone(),
-            config.disable_metering_service,
-        )
-        .context("failed to create metering client")?,
-    );
-
     let lexical_client = Arc::new(lexical_client::LexicalClient::new(
         sync_service_auth_key,
         config.lexical_service_url.clone(),
@@ -171,7 +160,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("initialized static file service client");
 
     api::setup_and_serve(ApiContext {
-        db,
+        db: db.clone(),
         email_service_client_external: Arc::new(EmailServiceClientExternal::new(
             email_service_client.url().to_owned(),
         )),
@@ -182,6 +171,7 @@ async fn main() -> anyhow::Result<()> {
                         .with_dss_client(document_storage_client.clone())
                         .with_lexical_client(lexical_client)
                         .with_sync_service_client(sync_service_client.clone())
+                        .with_macro_db(db.clone())
                         .build(),
                 )
                 .with_channel_client(comms_service_client.clone())
@@ -189,16 +179,11 @@ async fn main() -> anyhow::Result<()> {
                 .with_email_client(email_service_client)
                 .with_static_file_client(static_file_service_client.clone()),
         ),
-        context_provider_client: Arc::new(InsightContextProvider::create(
-            sqs_client.clone(),
-            "chat",
-        )),
         sqs_client: Arc::new(sqs_client),
         document_storage_client: Arc::new(document_storage_client),
         macro_notify_client: Arc::new(macro_notify_client),
         comms_service_client: Arc::new(comms_service_client),
         search_service_client: Arc::new(search_service_client),
-        metering_client,
         jwt_args,
         config: Arc::new(config),
         internal_auth_key,

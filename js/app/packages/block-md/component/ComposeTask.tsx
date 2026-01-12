@@ -2,6 +2,7 @@ import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { MiniToggleSwitch } from '@core/component/FormControls/MiniToggleSwitch';
+import { Hotkey } from '@core/component/Hotkey';
 import { BlockLink } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
@@ -44,7 +45,6 @@ import { useUpsertToHistoryMutation } from '@queries/history/history';
 import { useUserId } from '@service-gql/client';
 import { propertiesServiceClient } from '@service-properties/client';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
-
 import { debounce } from '@solid-primitives/scheduled';
 import { useQuery } from '@tanstack/solid-query';
 import { Button } from '@ui/components/Button';
@@ -410,9 +410,7 @@ export function ComposeTask(props: ComposeTaskProps) {
     ed && initializeEditorEmpty(ed);
 
     if (!createMore()) {
-      if (splitPanel?.handle.isPopover()) {
-        splitPanel.handle.close();
-      }
+      splitPanel.handle.close();
       props.onCreateTask?.(taskTitle, taskContent);
       props.onClose?.();
     } else {
@@ -421,14 +419,13 @@ export function ComposeTask(props: ComposeTaskProps) {
   };
 
   const handleClose = () => {
-    // Update timestamp when closing to extend draft life
     const currentTitle = title();
     const currentContent = content();
 
     if (currentTitle || currentContent) {
       updateDraftTimestamp();
     }
-
+    splitPanel.handle.close();
     props.onClose?.();
   };
 
@@ -599,11 +596,14 @@ export function ComposeTask(props: ComposeTaskProps) {
         />
         <Button
           onClick={handleCreateTask}
-          class="border border-edge-muted"
+          class="border border-edge-muted pr-1"
           disabled={title().trim().length === 0}
         >
           <EntityIcon targetType="task" theme="monochrome" />
           Create Task
+          <div class="text-[0.625rem] text-ink-extra-muted ml-auto border border-edge-muted/50 px-1.5 py-1 font-sans rounded-xs">
+            <Hotkey shortcut="cmd+enter" />
+          </div>
         </Button>
       </div>
     </div>

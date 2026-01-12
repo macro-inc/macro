@@ -8,6 +8,7 @@ import {
 } from '@core/block';
 import type { SubType } from '@macro-entity';
 import type { ItemType } from '@service-storage/client';
+import type { BasicDocumentSubTypeProperty } from '@service-storage/generated/schemas';
 import type { BasicDocumentFileType } from '@service-storage/generated/schemas/basicDocumentFileType';
 import { ENABLE_DOCX_TO_PDF } from './featureFlags';
 import { DefaultFilename } from './filename';
@@ -206,7 +207,7 @@ export function blockNameToDefaultFile(block?: BlockName | string | null) {
 type ItemLike = {
   type: ItemType;
   fileType?: BasicDocumentFileType;
-  subType?: SubType;
+  subType?: SubType | BasicDocumentSubTypeProperty;
   name?: string;
 };
 
@@ -222,7 +223,10 @@ type ItemLike = {
 export function itemToBlockName(
   item: ItemLike
 ): BlockName | BlockAlias | undefined {
-  const subTypeName = item.subType?.type;
+  const subTypeName =
+    item.subType && 'type' in item.subType
+      ? (item.subType.type as string)
+      : undefined;
   if (subTypeName && isBlockAlias(subTypeName)) {
     return subTypeName;
   }

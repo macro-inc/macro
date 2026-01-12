@@ -303,15 +303,7 @@ export interface ReadResponse {
   content:
     | {
         documents: {
-          content: string;
-          documentId: string;
-          metadata: {
-            deleted: boolean;
-            documentName: string;
-            fileType?: string | null;
-            owner: string;
-            projectId?: string | null;
-          };
+          formattedDocument: string;
         }[];
         type: 'documents';
       }

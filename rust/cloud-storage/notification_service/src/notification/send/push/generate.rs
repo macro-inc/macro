@@ -94,13 +94,13 @@ pub fn generate_apns_notification<T: XmlFormatter>(
                 .build_apns_notification::<T>(parse_user()?)?
                 .map(|()| {
                     create_push_data(Route(format!(
-                        "/channel/{}?message_id={}{}",
+                        "/channel/{}?channel_message_id={}{}",
                         notif.inner.notification_entity.entity_id,
                         channel_mention_metadata.message_id,
                         format_args!(
                             "{}{}",
                             if channel_mention_metadata.thread_id.is_some() {
-                                "&thread_id="
+                                "&channel_thread_id="
                             } else {
                                 ""
                             },
@@ -152,7 +152,7 @@ pub fn generate_apns_notification<T: XmlFormatter>(
                 .build_apns_notification::<T>(())?
                 .map(|()| {
                     create_push_data(Route(format!(
-                        "/channel/{}?message_id={}",
+                        "/channel/{}?channel_message_id={}",
                         notif.inner.notification_entity.entity_id,
                         channel_message_send_metadata.message_id
                     )))
@@ -164,7 +164,7 @@ pub fn generate_apns_notification<T: XmlFormatter>(
                     .build_apns_notification::<T>(parse_user()?)?
                     .map(|()| {
                         create_push_data(Route(format!(
-                            "/channel/{}?message_id={}&thread_id={}",
+                            "/channel/{}?channel_message_id={}&channel_thread_id={}",
                             notif.inner.notification_entity.entity_id,
                             channel_reply_metadata.message_id,
                             channel_reply_metadata.thread_id

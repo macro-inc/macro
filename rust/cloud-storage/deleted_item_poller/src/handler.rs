@@ -5,9 +5,7 @@ use lambda_runtime::{
     Error, LambdaEvent,
     tracing::{self},
 };
-use sqs_client::search::{
-    SearchQueueMessage, chat::RemoveChatMessage, document::DocumentId, project,
-};
+use sqs_client::search::{SearchQueueMessage, chat::RemoveChatMessage, document::DocumentId};
 
 #[tracing::instrument(skip(ctx, _event), err)]
 pub async fn handler(
@@ -42,15 +40,6 @@ async fn handle_projects(ctx: &context::Context) -> anyhow::Result<()> {
     macro_db_client::projects::delete::delete_projects_bulk(&ctx.db, &projects_to_delete)
         .await
         .context("unable to delete projects")?;
-
-    let _ = ctx
-        .sqs_client
-        .send_message_to_search_event_queue(SearchQueueMessage::BulkRemoveProjectMessage(
-            project::BulkRemoveProjectMessage {
-                project_ids: projects_to_delete,
-            },
-        ))
-        .await?;
 
     Ok(())
 }

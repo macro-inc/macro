@@ -379,6 +379,7 @@ where
 }
 
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 pub struct ChannelAdmin(pub UserContextWithRole);
 
 #[async_trait]

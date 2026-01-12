@@ -239,6 +239,7 @@ export function Rightbar(props: {
   chatName: string | undefined;
   stream: Accessor<MessageStream | undefined>;
   onSend: (args: CreateAndSend | Send) => void;
+  stopGenerating: () => void;
   onUnmount?: () => void;
   messages: Accessor<ChatMessageWithAttachments[]>;
   initialState?: {
@@ -281,14 +282,7 @@ export function Rightbar(props: {
 
   registerToolHandler(props.stream);
 
-  const stopGenerating = () => {
-    const stream_ = props.stream();
-    if (!stream_) return;
-    cognitionWebsocketServiceClient.stopChatMessage({
-      stream_id: stream_.request.stream_id,
-    });
-    stream_.close();
-  };
+  const stopGenerating = props.stopGenerating;
 
   // NOTE: due to mount race condition in the markdown area, we need to set the initial value here
   const {
@@ -432,7 +426,7 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
     | undefined
   >();
 
-  const [attachHotkeys, scopeId] = useHotkeyDOMScope('ai-right-panel');
+  const [attachHotkeys, scopeId] = useHotkeyDOMScope('ai-chat');
 
   const clearChatState = () => {
     const attached = attachments();
@@ -620,6 +614,23 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
     },
   });
 
+  const stopGenerating = () => {
+    const stream_ = stream();
+    if (!stream_) return false;
+    cognitionWebsocketServiceClient.stopChatMessage({
+      stream_id: stream_.request.stream_id,
+    });
+    stream_.close();
+    return true;
+  };
+
+  registerHotkey({
+    scopeId,
+    hotkey: 'ctrl+c',
+    description: 'Stop stream',
+    keyDownHandler: stopGenerating,
+    runWithInputFocused: true,
+  });
   return (
     <Show when={isAuthenticated()}>
       <Resize.Panel
@@ -651,6 +662,7 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
               initialState={initialChatState()}
               onSend={onSend}
               stream={stream}
+              stopGenerating={stopGenerating}
               setState={{
                 setChatId,
                 setModel,

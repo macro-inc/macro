@@ -257,7 +257,13 @@ async function fetchDocumentPreviews(ids: string[]): Promise<PreviewItem[]> {
           fileType: doc.file_type as FileType,
           owner: doc.owner,
           updatedAt: doc.updated_at,
-          subType: doc.sub_type ?? undefined,
+          subType:
+            doc.sub_type === null || doc.sub_type === undefined
+              ? undefined
+              : {
+                  type: doc.sub_type.type as 'task',
+                  is_completed: doc.sub_type.is_completed,
+                },
         };
       case 'no_access':
       case 'does_not_exist':

@@ -243,11 +243,13 @@ The migration included comprehensive indexes:
 
 - Always run tests between changes that involve changes to db queries
 
+### Rust Error Handling
+
+- Prefer `anyhow::bail!("error message")` over `Err(anyhow::anyhow!("error message"))`
+- Use `bail!` for early returns with errors - it's more concise and idiomatic
+
 ## Development Memories
 
 ### DB Crate Changes
 
 - When making changes to a db crate you should always update tests, and run prepare
-  ||||||| efd8fa30
-- Metadata stored in PostgreSQL
-  =======

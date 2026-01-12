@@ -28,7 +28,7 @@ import Terminal from '@phosphor-icons/core/regular/terminal.svg?component-solid'
 import type { Channel } from '@service-comms/generated/models/channel';
 import type { Attachment } from '@service-email/generated/schemas';
 import { useUserId } from '@service-gql/client';
-import type { BasicDocumentSubType } from '@service-storage/generated/schemas';
+import type { BasicDocumentSubTypeProperty } from '@service-storage/generated/schemas';
 import type { BasicDocumentFileType } from '@service-storage/generated/schemas/basicDocumentFileType';
 import type { Item } from '@service-storage/generated/schemas/item';
 import { syncServiceClient } from '@service-sync/client';
@@ -263,7 +263,7 @@ type ItemPreview = {
   id: string;
   name: string;
   fileType?: BasicDocumentFileType;
-  subType?: BasicDocumentSubType | null;
+  subType?: BasicDocumentSubTypeProperty;
   itemType: Item['type'];
 };
 
@@ -444,7 +444,7 @@ function getCommandItemBlockName(
 ): BlockName | BlockAlias | undefined {
   if (item.type === 'item') {
     if (item.data.itemType === 'document') {
-      if (item.data.subType?.type === 'task') {
+      if (item.data.subType && item.data.subType.type === 'task') {
         return 'task';
       }
       if (item.data.fileType) {
@@ -512,14 +512,16 @@ export function filterItemByCategory(item: CommandItemCard) {
       return (
         item.type === 'item' &&
         item.data.itemType === 'document' &&
-        item.data.subType?.type !== 'task' &&
+        (!item.data.subType || item.data.subType.type !== 'task') &&
         fileTypeToBlockName(item.data.fileType) === 'md'
       );
     case 'Tasks':
       return (
         item.type === 'item' &&
         item.data.itemType === 'document' &&
-        item.data.subType?.type === 'task'
+        item.data.subType !== null &&
+        item.data.subType !== undefined &&
+        item.data.subType.type === 'task'
       );
     case 'Chats':
       return item.type === 'item' && item.data.itemType === 'chat';
