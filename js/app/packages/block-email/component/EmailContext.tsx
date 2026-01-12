@@ -360,15 +360,17 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
       return containerFilled;
     }
 
-    const messageListHeight = messageList.getBoundingClientRect().height;
-    const containerHeight = containerRef.getBoundingClientRect().height;
+    // For our reversed list (`flex-col-reverse`), the element's `scrollHeight`
+    // will be equal to `clientHeight` until the content actually overflows.
+    // If we have more pages and no overflow yet, keep fetching until either:
+    // - content overflows (scrolling becomes possible), or
+    // - there are no more pages.
+    //
+    // (We still keep `containerRef` in the deps list to ensure layout is ready.)
+    void containerRef;
+    const hasOverflow = messageList.scrollHeight > messageList.clientHeight + 1;
 
-    // Load more if container isn't filled
-    if (
-      messageListHeight < containerHeight &&
-      threadQuery.hasNextPage &&
-      !threadQuery.isFetching
-    ) {
+    if (!hasOverflow && threadQuery.hasNextPage && !threadQuery.isFetching) {
       threadQuery.fetchNextPage();
       containerFilled = false;
       return false;

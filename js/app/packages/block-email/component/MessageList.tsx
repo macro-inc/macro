@@ -49,6 +49,12 @@ export function MessageList(props: MessageListProps) {
         }
       }}
     >
+      {/* 
+        In `flex-col-reverse`, short threads naturally stick to the bottom.
+        This flexible spacer soaks up any extra space at the bottom, keeping
+        short threads top-aligned without affecting scroll behavior.
+      */}
+      <div class="flex-1 w-full" />
       <StaticMarkdownContext>
         <For each={context.messages.list().toReversed()}>
           {(message, index) => {
