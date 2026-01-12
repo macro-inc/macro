@@ -28,6 +28,14 @@ setupQueryPersistence({
       maxAgeMs: 1000 * 60 * 60 * 24 * 7,
       shouldDehydrateQuery: (q) => queryKeyHasPrefix(q.queryKey, ['channel']),
     },
+    {
+      persister: createIDBPersister({
+        key: createPersistenceKey('email-threads', 0),
+      }),
+      maxAgeMs: 1000 * 60 * 60 * 24 * 7,
+      shouldDehydrateQuery: (q) =>
+        queryKeyHasPrefix(q.queryKey, ['email', 'threadMessages']),
+    },
   ],
 });
 

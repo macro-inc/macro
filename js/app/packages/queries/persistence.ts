@@ -1,7 +1,26 @@
-import { persistQueryClient } from '@tanstack/solid-query-persist-client';
+import {
+  type PersistQueryClientOptions,
+  persistQueryClient,
+} from '@tanstack/solid-query-persist-client';
 import type { Persister } from '@tanstack/solid-query-persist-client';
-import type { QueryClient } from '@tanstack/solid-query';
-import type { Query, QueryKey } from '@tanstack/query-core';
+import type { QueryKey } from '@tanstack/query-core';
+
+type Query = NonNullable<
+  PersistQueryClientOptions['dehydrateOptions']
+>['shouldDehydrateQuery'] extends ((query: infer Q) => boolean) | undefined
+  ? Q
+  : never;
+
+type PersistQueryClient = PersistQueryClientOptions['queryClient'];
+
+/**
+ * Structurally compatible QueryClient type. Accepts any QueryClient instance
+ * to work around version mismatches in @tanstack packages.
+ */
+type QueryClientLike = {
+  getQueryCache: () => unknown;
+  getMutationCache: () => unknown;
+};
 
 export type PersistScope = Readonly<{
   persister: Persister;
@@ -32,7 +51,7 @@ export function createPersistenceKey(
 
 export function setupQueryPersistence(
   params: Readonly<{
-    queryClient: QueryClient;
+    queryClient: QueryClientLike;
     buster: string;
     scopes: readonly PersistScope[];
   }>
@@ -40,7 +59,7 @@ export function setupQueryPersistence(
   for (const scope of params.scopes) {
     try {
       persistQueryClient({
-        queryClient: params.queryClient,
+        queryClient: params.queryClient as PersistQueryClient,
         persister: scope.persister,
         maxAge: scope.maxAgeMs,
         buster: params.buster,
