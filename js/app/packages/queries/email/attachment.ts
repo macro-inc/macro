@@ -11,10 +11,12 @@ type UploadDraftAttachmentsParams = {
 };
 
 export const useUploadDraftAttachmentsMutation = (
-  callbacks?: MutationCallbacks<void, Error, UploadDraftAttachmentsParams>
+  callbacks?: MutationCallbacks<string[], Error, UploadDraftAttachmentsParams>
 ) => {
   return useMutation(() => ({
     mutationFn: async (params: UploadDraftAttachmentsParams) => {
+      const uploadedAttachmentIDs = [];
+
       for (const attachment of params.attachments) {
         const arrayBuffer = await attachment.arrayBuffer();
         const sha = await contentHash(arrayBuffer);
@@ -31,7 +33,9 @@ export const useUploadDraftAttachmentsMutation = (
             })
         );
 
-        if (result.status !== 201) return;
+        if (result.status !== 201) return [];
+
+        uploadedAttachmentIDs.push(result.data.attachment_id);
 
         const uploaded = await uploadToPresignedUrl({
           presignedUrl: result.data.upload_url,
@@ -45,7 +49,12 @@ export const useUploadDraftAttachmentsMutation = (
           throw new Error(err.message, { cause: err.code });
         }
       }
+
+      return uploadedAttachmentIDs;
     },
-    ...withCallbacks<void, Error, UploadDraftAttachmentsParams>({}, callbacks),
+    ...withCallbacks<string[], Error, UploadDraftAttachmentsParams>(
+      {},
+      callbacks
+    ),
   }));
 };
