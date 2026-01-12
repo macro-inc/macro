@@ -255,7 +255,7 @@ export const FilterValueEntity: Component<FilterValueEntityProps> = (props) => {
   });
 
   const getPlaceholderText = () => {
-    const type = props.specificEntityType.toLowerCase();
+    const type = props.specificEntityType?.toLowerCase() ?? '';
     if (props.values.length === 0) {
       return `Select ${type}...`;
     }
