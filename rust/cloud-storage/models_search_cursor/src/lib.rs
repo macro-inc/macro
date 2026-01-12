@@ -87,7 +87,7 @@ impl SearchCursorOption {
 }
 
 /// The search cursor contains all the individual `SearchCursorOption` for each search method.
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Default)]
 pub struct SearchCursor {
     /// The document name cursor
     pub document_name_cursor: SearchCursorOption,
@@ -97,6 +97,8 @@ pub struct SearchCursor {
     pub content_cursor: SearchCursorOption,
     /// The email subject cursor
     pub email_subject_cursor: SearchCursorOption,
+    /// The email contact cursor
+    pub email_contact_cursor: SearchCursorOption,
     /// The project cursor
     pub project_name_cursor: SearchCursorOption,
 }

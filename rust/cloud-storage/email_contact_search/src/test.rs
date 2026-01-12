@@ -173,10 +173,11 @@ async fn test_search_email_contacts_partial_match(pool: Pool<Postgres>) -> anyho
     let response = search_email_contacts(&pool, user_id, "John".to_string(), 10, None).await?;
 
     assert!(!response.items.is_empty());
-    assert!(response
-        .items
-        .iter()
-        .any(|r| r.contact_name.as_ref().map_or(false, |n| n.contains("Johnson"))));
+    assert!(response.items.iter().any(|r| {
+        r.contact_name
+            .as_ref()
+            .map_or(false, |n| n.contains("Johnson"))
+    }));
 
     Ok(())
 }
@@ -352,8 +353,7 @@ async fn test_search_email_contacts_searches_both_from_name_and_contact_name(
 
     // Search for "Charlie" - should find thread 3 because the contact name is "Charlie Brown"
     // even though the from_name is "Charles B. Brown"
-    let response =
-        search_email_contacts(&pool, user_id, "Charlie".to_string(), 10, None).await?;
+    let response = search_email_contacts(&pool, user_id, "Charlie".to_string(), 10, None).await?;
 
     // Should find thread 3's sender by searching the contact name
     let charlie_from_match = response.items.iter().find(|r| {
@@ -412,8 +412,7 @@ async fn test_search_email_contacts_pagination_by_thread(
     // This ensures we have 2 threads to paginate over
 
     // Get first thread (limit=1, cursor=None) - should be Thread 1 (most recent)
-    let page1 =
-        search_email_contacts(&pool, user_id.clone(), "Smith".to_string(), 1, None).await?;
+    let page1 = search_email_contacts(&pool, user_id.clone(), "Smith".to_string(), 1, None).await?;
 
     // All results on page 1 should be from Thread 1 (the most recent)
     assert!(!page1.items.is_empty());
