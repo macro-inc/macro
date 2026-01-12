@@ -112,7 +112,7 @@ const processService = async (service: Service, { serviceClientsDir }: { service
     await $`cd ${serviceClientsDir} && bun run orval --config orval.config.ts --project ${service.orvalKey}`;
 
     // Organize imports in generated files to ensure deterministic ordering
-    await $`bunx biome check --write ${generatedDir}`;
+    await $`bunx biome check --write ${outputDir}`;
 
     // Special handling for document-cognition
     if (service.name === 'document-cognition') {
