@@ -236,7 +236,9 @@ export function BaseInput(props: BaseInputProps) {
 
     for (const m of mentions()) {
       if (m.itemType === 'group' && m.groupParticipants) {
-        result.push(...expandGroupParticipants(m.groupParticipants, seenUserIds));
+        result.push(
+          ...expandGroupParticipants(m.groupParticipants, seenUserIds)
+        );
       } else {
         const mention = toSimpleMention(m, seenUserIds);
         if (mention) result.push(mention);

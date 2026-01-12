@@ -56,11 +56,7 @@ export class GroupMentionNode extends DecoratorNode<
     );
   }
 
-  constructor(
-    groupAlias: string,
-    groupParticipants: string[],
-    key?: NodeKey
-  ) {
+  constructor(groupAlias: string, groupParticipants: string[], key?: NodeKey) {
     super(key);
     this.__groupAlias = groupAlias;
     this.__groupParticipants = groupParticipants;
@@ -118,7 +114,9 @@ export class GroupMentionNode extends DecoratorNode<
         return {
           conversion: (domNode: HTMLElement) => {
             const groupAlias = domNode.getAttribute('data-group-alias');
-            const participantsJson = domNode.getAttribute('data-group-participants');
+            const participantsJson = domNode.getAttribute(
+              'data-group-participants'
+            );
 
             if (groupAlias && participantsJson) {
               try {
