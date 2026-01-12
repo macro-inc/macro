@@ -76,6 +76,8 @@ export function createEmailFormState(key: string) {
 
   const [shouldFocusInput, setShouldFocusInput] = createSignal(false);
 
+  // TODO: Replace this signal with a memo deriving the attachments from the draft data
+  // and a temporary queue to track attachments to be uploaded on draft save
   const [attachments, setAttachments] = createSignal<DraftFormAttachment[]>(
     draft?.attachments_draft.map((a) => ({
       type: 'remote',
