@@ -1,8 +1,8 @@
 use cool_asserts::assert_matches;
 
 use crate::parse::{
-    ParsedContactMention, ParsedDateMention, ParsedDocumentMention, ParsedLink, ParsedUserMention,
-    ParsedXmlText, TextSegment, XmlTag,
+    ParsedContactMention, ParsedDateMention, ParsedDocumentMention, ParsedGroupMention, ParsedLink,
+    ParsedUserMention, ParsedXmlText, TextSegment, XmlTag,
 };
 
 // =============================================================================
@@ -613,4 +613,60 @@ fn parse_document_mention_missing_name_with_suffix() {
     let input = r#"<m-document-mention>{"documentId":"6e01eaf5-f497-4b2e-96d0-ea3d527ef47d","blockName":"md","blockParams":{},"collapsed":false}</m-document-mention> asdf"#;
     let result = ParsedXmlText::parse(input);
     assert!(result.is_err());
+}
+
+// =============================================================================
+// Group mention tests
+// =============================================================================
+
+#[test]
+fn parse_single_group_mention() {
+    let input = r#"<m-group-mention>{"groupAlias":"here"}</m-group-mention>"#;
+    let out = ParsedXmlText::parse(input).unwrap();
+    assert_matches!(out.0, [
+        TextSegment::Xml(XmlTag::Group(ParsedGroupMention { group_alias }))
+    ] => {
+        assert_eq!(group_alias.as_ref(), "here");
+    });
+}
+
+#[test]
+fn parse_group_mention_with_surrounding_text() {
+    let input = r#"Hey <m-group-mention>{"groupAlias":"here"}</m-group-mention> check this out"#;
+    let out = ParsedXmlText::parse(input).unwrap();
+    assert_matches!(out.0, [
+        TextSegment::Plain("Hey "),
+        TextSegment::Xml(XmlTag::Group(ParsedGroupMention { group_alias })),
+        TextSegment::Plain(" check this out"),
+    ] => {
+        assert_eq!(group_alias.as_ref(), "here");
+    });
+}
+
+#[test]
+fn parse_group_mention_missing_alias() {
+    let input = r#"<m-group-mention>{}</m-group-mention>"#;
+    let result = ParsedXmlText::parse(input);
+    assert!(result.is_err());
+}
+
+#[test]
+fn parse_group_mention_invalid_json() {
+    let input = r#"<m-group-mention>invalid</m-group-mention>"#;
+    let result = ParsedXmlText::parse(input);
+    assert!(result.is_err());
+}
+
+#[test]
+fn parse_group_mention_with_user_mention() {
+    let input = r#"<m-group-mention>{"groupAlias":"here"}</m-group-mention> and <m-user-mention>{"userId":"macro|a@b.com","email":"a@b.com"}</m-user-mention>"#;
+    let out = ParsedXmlText::parse(input).unwrap();
+    assert_matches!(out.0, [
+        TextSegment::Xml(XmlTag::Group(ParsedGroupMention { group_alias })),
+        TextSegment::Plain(" and "),
+        TextSegment::Xml(XmlTag::User(ParsedUserMention { email, .. })),
+    ] => {
+        assert_eq!(group_alias.as_ref(), "here");
+        assert_eq!(email.as_ref(), "a@b.com");
+    });
 }

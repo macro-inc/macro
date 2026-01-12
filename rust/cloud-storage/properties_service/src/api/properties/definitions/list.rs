@@ -107,16 +107,22 @@ pub async fn list_properties(
     State(context): State<ApiContext>,
     Extension(user_context): Extension<UserContext>,
 ) -> Result<Json<Vec<PropertyDefinitionResponse>>, ListPropertiesErr> {
+    // Note - NOT using organization properties for now
+    let enable_organization_properties = false;
     // Determine query parameters based on scope
     let (org_id, user_id_opt, include_system) = match query.scope {
         PropertyScope::User => (None, Some(user_context.user_id.as_str()), false),
-        PropertyScope::Org => (user_context.organization_id, None, false),
+        PropertyScope::Org if enable_organization_properties => {
+            (user_context.organization_id, None, false)
+        }
+        PropertyScope::Org => (None, None, false),
         PropertyScope::System => (None, None, true),
-        PropertyScope::All => (
+        PropertyScope::All if enable_organization_properties => (
             user_context.organization_id,
             Some(user_context.user_id.as_str()),
             true,
         ),
+        PropertyScope::All => (None, Some(user_context.user_id.as_str()), true),
     };
 
     tracing::info!(
@@ -130,7 +136,7 @@ pub async fn list_properties(
 
     let filter_entity_type = query.for_entity_type;
 
-    if query.scope == PropertyScope::Org && org_id.is_none() {
+    if enable_organization_properties && query.scope == PropertyScope::Org && org_id.is_none() {
         return Err(ListPropertiesErr::MissingOrganizationId);
     }
 

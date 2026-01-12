@@ -6,7 +6,6 @@ publish = false
 version = "0.1.0"
 
 [features]
-backfill_names = ["comms_db_client", "email_db_client"]
 default = ["processing", "service"]
 processing = []
 service = ["macro_db_client"]
@@ -15,11 +14,6 @@ service = ["macro_db_client"]
 name = "backfill_chat"
 path = "src/bin/backfill_chat.rs"
 required-features = ["service"]
-
-[[bin]]
-name = "backfill_entity_names"
-path = "src/bin/backfill_entity_names.rs"
-required-features = ["backfill_names"]
 
 [[bin]]
 name = "search_processing_service"

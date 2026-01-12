@@ -590,6 +590,34 @@ export function BaseInput(props: {
         hotkeyToken: TOKENS.email.sendAndMarkDone,
         displayPriority: 10,
       });
+
+      registerHotkey({
+        hotkey: 'escape',
+        scopeId: composeHotkeyScope,
+        description: 'Close reply',
+        keyDownHandler: () => {
+          const draft = collectDraft();
+          const isEmpty = draft === null;
+
+          if (isEmpty) {
+            // Delete draft and close reply
+            deleteDraftAndReset();
+          } else {
+            // Move focus back to the message
+            const focusedId = ctx.messages.focusedID();
+            if (focusedId) {
+              const messageEl = document.querySelector(
+                `[data-message-body-id="${focusedId}"]`
+              ) as HTMLElement | null;
+              messageEl?.focus();
+            }
+          }
+          return true;
+        },
+        runWithInputFocused: true,
+        hotkeyToken: TOKENS.email.cancelReply,
+        displayPriority: 8,
+      });
     }
   });
 

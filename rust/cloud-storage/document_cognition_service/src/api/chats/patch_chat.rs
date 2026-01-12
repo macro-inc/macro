@@ -117,30 +117,6 @@ async fn patch_chat_v2(
     )
     .await;
 
-    if req.name.is_some() {
-        match macro_uuid::string_to_uuid(&chat_id) {
-            Ok(chat_id) => {
-                let _ = ctx
-                    .sqs_client
-                    .send_message_to_search_event_queue(
-                        sqs_client::search::SearchQueueMessage::UpdateEntityName(
-                            sqs_client::search::name::EntityName {
-                                entity_id: chat_id,
-                                entity_type: models_opensearch::SearchEntityType::Chats,
-                            },
-                        ),
-                    )
-                    .await
-                    .inspect_err(|e| {
-                        tracing::error!(error=?e, "SEARCH_QUEUE unable to enqueue message");
-                    });
-            }
-            Err(err) => {
-                tracing::error!(error=?err, "failed to convert chat_id to uuid");
-            }
-        }
-    }
-
     Ok(())
 }
 

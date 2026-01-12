@@ -150,25 +150,37 @@ export const Hotkey = (props: HotkeyProps) => {
         : key.map((k) => k.toUpperCase());
   };
 
-  return (
-    <div {...rest}>
-      <For each={hotkey().modifiers}>
-        {(mod) => (
-          <>
-            <span class="text-current">
-              {modifierMap[mod as keyof typeof modifierMap] || mod}
-            </span>
+  // Don't render anything if there are no modifiers and no key
+  const hasContent = () => {
+    const h = hotkey();
+    const key = normalizedKey();
+    return (
+      h.modifiers.length > 0 ||
+      (key && (typeof key === 'string' ? key.length > 0 : key.length > 0))
+    );
+  };
 
-            <Show when={local.showPlus}>
-              <span class="text-current"> + </span>
-            </Show>
-          </>
-        )}
-      </For>
-      <Show when={normalizedKey()}>
-        <span class="text-current">{normalizedKey()}</span>
-      </Show>
-    </div>
+  return (
+    <Show when={hasContent()}>
+      <div {...rest}>
+        <For each={hotkey().modifiers}>
+          {(mod) => (
+            <>
+              <span class="text-current">
+                {modifierMap[mod as keyof typeof modifierMap] || mod}
+              </span>
+
+              <Show when={local.showPlus}>
+                <span class="text-current"> + </span>
+              </Show>
+            </>
+          )}
+        </For>
+        <Show when={normalizedKey()}>
+          <span class="text-current">{normalizedKey()}</span>
+        </Show>
+      </div>
+    </Show>
   );
 };
 

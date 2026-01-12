@@ -20,7 +20,7 @@ import {
 } from '@core/hotkey/getCommands';
 import { pressedKeys } from '@core/hotkey/state';
 import type { HotkeyCommand } from '@core/hotkey/types';
-import { runCommand } from '@core/hotkey/utils';
+import { hasValidHotkey, runCommand } from '@core/hotkey/utils';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import { type ChannelWithParticipants, idToDisplayName } from '@core/user';
 import PushPin from '@phosphor-icons/core/regular/push-pin.svg?component-solid';
@@ -47,6 +47,7 @@ import {
   onCleanup,
   onMount,
   type Setter,
+  Show,
   Switch,
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
@@ -631,17 +632,19 @@ export function CommandItemCard(props: CommandItemProps) {
   };
 
   const CommandItemHotkey = () => {
-    if (props.item.type !== 'command') return null;
-    if (props.item.data.command.hotkeys?.length === 0) return null;
+    const token = () => {
+      if (props.item.type !== 'command') return;
+      return props.item.data.command.hotkeyToken;
+    };
+    const validToken = () => hasValidHotkey(token());
     return (
-      <div class="pr-2 flex items-center justify-center text-[0.75rem] font-medium text-ink-extra-muted">
-        <div class="p-2 py-0.5 border border-edge-muted/50 rounded-xs">
-          <Hotkey
-            shortcut={props.item.data.command.hotkeys?.at(0)}
-            class="flex gap-1 items-center"
-          />
+      <Show when={validToken()}>
+        <div class="pr-2 flex items-center justify-center text-[0.75rem] font-medium text-ink-extra-muted">
+          <div class="p-2 py-0.5 border border-edge-muted/50 rounded-xs">
+            <Hotkey token={token()} class="flex gap-1 items-center" />
+          </div>
         </div>
-      </div>
+      </Show>
     );
   };
 
