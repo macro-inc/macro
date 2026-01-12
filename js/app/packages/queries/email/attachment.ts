@@ -10,8 +10,16 @@ type UploadDraftAttachmentsParams = {
   attachments: File[];
 };
 
+type UploadDraftAttachmentsReturn = {
+  attachments: { file: File; attachmentID: string }[];
+};
+
 export const useUploadDraftAttachmentsMutation = (
-  callbacks?: MutationCallbacks<string[], Error, UploadDraftAttachmentsParams>
+  callbacks?: MutationCallbacks<
+    UploadDraftAttachmentsReturn,
+    Error,
+    UploadDraftAttachmentsParams
+  >
 ) => {
   return useMutation(() => ({
     mutationFn: async (params: UploadDraftAttachmentsParams) => {
@@ -33,9 +41,12 @@ export const useUploadDraftAttachmentsMutation = (
             })
         );
 
-        if (result.status !== 201) return [];
+        if (result.status !== 201) return { attachments: [] };
 
-        uploadedAttachmentIDs.push(result.data.attachment_id);
+        uploadedAttachmentIDs.push({
+          file: attachment,
+          attachmentID: result.data.attachment_id,
+        });
 
         const uploaded = await uploadToPresignedUrl({
           presignedUrl: result.data.upload_url,
@@ -50,11 +61,12 @@ export const useUploadDraftAttachmentsMutation = (
         }
       }
 
-      return uploadedAttachmentIDs;
+      return { attachments: uploadedAttachmentIDs };
     },
-    ...withCallbacks<string[], Error, UploadDraftAttachmentsParams>(
-      {},
-      callbacks
-    ),
+    ...withCallbacks<
+      UploadDraftAttachmentsReturn,
+      Error,
+      UploadDraftAttachmentsParams
+    >({}, callbacks),
   }));
 };
