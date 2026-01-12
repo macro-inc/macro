@@ -95,7 +95,7 @@ async fn get_access_token(
         .map_err(|e| {
             tracing::error!(error=?e, "error fetching access token for userid {}", fusionauth_user_id);
             let status_code = match &e {
-                FusionAuthClientError::InvalidGrant => StatusCode::UNAUTHORIZED,
+                FusionAuthClientError::InvalidGrant => StatusCode::FORBIDDEN,
                 _ => StatusCode::INTERNAL_SERVER_ERROR,
             };
             let message = format!("unable to fetch {} access token", identity_provider_name);
