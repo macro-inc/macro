@@ -1,0 +1,581 @@
+import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
+import {
+  SplitHeaderBadge,
+  StaticSplitLabel,
+} from '@app/component/split-layout/components/SplitLabel';
+import { useSplitLayout } from '@app/component/split-layout/layout';
+import { useHasPaidAccess } from '@core/auth';
+import { CircleSpinner } from '@core/component/CircleSpinner';
+import { ClippedPanel } from '@core/component/ClippedPanel';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
+import { RecipientSelector } from '@core/component/RecipientSelector';
+import { toast } from '@core/component/Toast/Toast';
+import { usePaywallState } from '@core/constant/PaywallState';
+import { useEmailLinks } from '@core/email-link';
+import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
+import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
+import {
+  type ContactInfo,
+  tryMacroId,
+  useDisplayName,
+  type WithCustomUserInput,
+} from '@core/user';
+import Caution from '@icon/regular/warning.svg';
+import { useEmailLinksQuery } from '@queries/email/link';
+import { useSendMessageMutation } from '@queries/email/thread';
+import {
+  createMemo,
+  createSignal,
+  Match,
+  onMount,
+  Show,
+  Suspense,
+  Switch,
+} from 'solid-js';
+import { beveledCorners } from '../../block-theme/signals/themeSignals';
+import { ComposeEmailInput, type ComposeInputData } from './ComposeEmailInput';
+
+type EmailComposeErrors =
+  | 'no_recipient'
+  | 'no_message'
+  | 'no_subject'
+  | 'no_link';
+
+class EmailComposeError {
+  constructor(
+    public type: EmailComposeErrors,
+    public message: string
+  ) {}
+}
+
+type EmailComposeElementRefs = {
+  directRecipientsSelector: HTMLElement | undefined;
+  ccRecipientsSelector: HTMLElement | undefined;
+  bccRecipientsSelector: HTMLElement | undefined;
+  containerRef: HTMLElement | undefined;
+  subjectInput: HTMLElement | undefined;
+  messageInput: HTMLElement | undefined;
+};
+
+const INVITE_SUBJECT = "You're invited to try Macro ✨";
+
+const INVITE_BODY = `Hey!
+
+I've been using Macro and thought you'd love it too. It's an all-in-one workspace that brings together email, notes, messaging, and AI in a beautifully designed interface.
+
+Some highlights:
+• **Unified inbox** - Email, messages, and notifications in one place
+• **Built-in AI** - Smart assistance right where you need it
+• **Lightning fast** - Keyboard-first design for power users
+• **Beautiful UI** - A joy to use every day
+
+Check it out at **macro.com** — I think you'll dig it!`;
+
+export function InviteEmailCompose() {
+  const hasPaidAccess = useHasPaidAccess();
+  const { showPaywall } = usePaywallState();
+
+  const [subject, setSubject] = createSignal<string>(INVITE_SUBJECT);
+
+  const emailLinksQuery = useEmailLinksQuery();
+
+  const [refs, setRefs] = createSignal<EmailComposeElementRefs>({
+    directRecipientsSelector: undefined,
+    ccRecipientsSelector: undefined,
+    bccRecipientsSelector: undefined,
+    containerRef: undefined,
+    subjectInput: undefined,
+    messageInput: undefined,
+  });
+
+  const registerRef = (name: keyof EmailComposeElementRefs) => {
+    return (el: HTMLElement) => {
+      setRefs((p) => ({ ...p, [name]: el }));
+    };
+  };
+
+  const [attachComposeHotkeys, composeHotkeyScope] = useHotkeyDOMScope(
+    'invite-compose-email'
+  );
+
+  const link = createMemo(() => {
+    const data = emailLinksQuery.data;
+    if (data && data.links.length > 0) {
+      return data.links[0];
+    }
+    return undefined;
+  });
+
+  const hasLinkError = createMemo(() => {
+    if (emailLinksQuery.isPending) return false;
+    return (
+      emailLinksQuery.isError ||
+      (emailLinksQuery.data && emailLinksQuery.data.links.length === 0)
+    );
+  });
+
+  const { users: destinationOptions } = useCombinedRecipients();
+  const [selectedRecipients, setSelectedRecipients] = createSignal<
+    WithCustomUserInput<'user' | 'contact'>[]
+  >([]);
+  const [ccRecipients, setCcRecipients] = createSignal<
+    WithCustomUserInput<'user' | 'contact'>[]
+  >([]);
+  const [bccRecipients, setBccRecipients] = createSignal<
+    WithCustomUserInput<'user' | 'contact'>[]
+  >([]);
+
+  const [showCc, setShowCc] = createSignal(false);
+  const [showBcc, setShowBcc] = createSignal(false);
+
+  onMount(() => {
+    const container = refs().containerRef;
+    if (!container) return;
+    attachComposeHotkeys(container);
+  });
+
+  registerHotkey({
+    hotkey: 'shift+cmd+o',
+    scopeId: composeHotkeyScope,
+    description: 'Edit "To" recipients',
+    keyDownHandler: () => {
+      refs()?.directRecipientsSelector?.focus();
+      return true;
+    },
+    runWithInputFocused: true,
+    hotkeyToken: TOKENS.email.compose.edit.recipients,
+    shouldReturnFocusOnClose: false,
+  });
+
+  registerHotkey({
+    hotkey: 'shift+cmd+c',
+    scopeId: composeHotkeyScope,
+    description: 'Edit "Cc" recipients',
+    keyDownHandler: () => {
+      const visible = showCc();
+      if (!visible) {
+        setShowCc(true);
+        queueMicrotask(() => refs()?.ccRecipientsSelector?.focus());
+        return true;
+      }
+
+      refs()?.ccRecipientsSelector?.focus();
+
+      return true;
+    },
+    runWithInputFocused: true,
+    hotkeyToken: TOKENS.email.compose.edit.ccRecipients,
+    shouldReturnFocusOnClose: false,
+  });
+
+  registerHotkey({
+    hotkey: 'shift+cmd+b',
+    scopeId: composeHotkeyScope,
+    description: 'Edit "Bcc" recipients',
+    keyDownHandler: () => {
+      const visible = showBcc();
+      if (!visible) {
+        setShowBcc(true);
+        queueMicrotask(() => refs()?.bccRecipientsSelector?.focus());
+        return true;
+      }
+
+      refs()?.bccRecipientsSelector?.focus();
+
+      return true;
+    },
+    runWithInputFocused: true,
+    hotkeyToken: TOKENS.email.compose.edit.bccRecipients,
+    shouldReturnFocusOnClose: false,
+  });
+
+  registerHotkey({
+    hotkey: 'shift+cmd+s',
+    scopeId: composeHotkeyScope,
+    description: 'Edit subject',
+    keyDownHandler: () => {
+      refs()?.subjectInput?.focus();
+      return true;
+    },
+    runWithInputFocused: true,
+    hotkeyToken: TOKENS.email.compose.edit.subject,
+    shouldReturnFocusOnClose: false,
+  });
+
+  registerHotkey({
+    hotkey: 'shift+cmd+m',
+    scopeId: composeHotkeyScope,
+    description: 'Edit message',
+    keyDownHandler: () => {
+      refs()?.messageInput?.focus();
+      return true;
+    },
+    runWithInputFocused: true,
+    hotkeyToken: TOKENS.email.compose.edit.message,
+    shouldReturnFocusOnClose: false,
+  });
+
+  const [triedToSubmit, _setTriedToSubmit] = createSignal(false);
+
+  const { connect: connectEmail } = useEmailLinks();
+
+  const previewName = createMemo(() => {
+    const recipients = selectedRecipients();
+    if (recipients.length === 0) {
+      return 'Invite to Macro';
+    } else if (recipients.length === 1) {
+      const recipientName =
+        recipients[0].kind === 'user'
+          ? useDisplayName(tryMacroId(recipients[0].data.id))[0]()
+          : recipients[0].data.email;
+      return recipientName
+        ? `Invite ${recipientName} to Macro`
+        : 'Invite to Macro';
+    } else {
+      const names = recipients
+        .slice(0, 2)
+        .map((r) => {
+          if (r.kind === 'user') {
+            return useDisplayName(tryMacroId(r.data.id))[0]();
+          }
+          return r.data.email || 'Unknown';
+        })
+        .filter(Boolean);
+
+      if (recipients.length > 2) {
+        return `Invite ${names.join(', ')}, and others to Macro`;
+      } else {
+        return `Invite ${names.join(' and ')} to Macro`;
+      }
+    }
+  });
+
+  const { replaceSplit } = useSplitLayout();
+
+  const [validationError, setValidationError] =
+    createSignal<EmailComposeError | null>(null);
+
+  const sendMutation = useSendMessageMutation({
+    onSuccess: (data) => {
+      toast.success('Invite sent! 🎁');
+      if (data.message.thread_db_id) {
+        replaceSplit({ type: 'email', id: data.message.thread_db_id }, true);
+      }
+    },
+    onError: () => {
+      toast.failure('Failed to send invite');
+    },
+  });
+
+  const onSubmit = (data: ComposeInputData) => {
+    setValidationError(null);
+
+    const currentLink = link();
+
+    if (!selectedRecipients().length) {
+      setValidationError(
+        new EmailComposeError(
+          'no_recipient',
+          'Please select at least one recipient'
+        )
+      );
+      return;
+    }
+
+    if (!data.body.raw.trim()) {
+      setValidationError(
+        new EmailComposeError('no_message', 'Please enter a message')
+      );
+      return;
+    }
+
+    if (!subject()?.trim()) {
+      setValidationError(
+        new EmailComposeError('no_subject', 'Please enter a subject')
+      );
+      return;
+    }
+
+    if (!currentLink) {
+      setValidationError(
+        new EmailComposeError('no_link', 'Unable to find linked email account')
+      );
+      return;
+    }
+
+    sendMutation.mutate({
+      message: {
+        link_id: currentLink.id,
+        to: convertToContactInfoArray(selectedRecipients()),
+        cc:
+          ccRecipients().length > 0
+            ? convertToContactInfoArray(ccRecipients())
+            : [],
+        bcc:
+          bccRecipients().length > 0
+            ? convertToContactInfoArray(bccRecipients())
+            : [],
+        subject: subject(),
+        body_text: data.body.text,
+        body_html: data.body.html,
+        body_macro: data.body.raw,
+        attachments: [],
+      },
+    });
+  };
+
+  const withValidationError = (type: EmailComposeErrors) => {
+    const error = validationError();
+    if (error?.type === type) return error;
+    return undefined;
+  };
+
+  return (
+    <>
+      <SplitHeaderLeft>
+        <StaticSplitLabel
+          label={subject() || previewName()}
+          iconType="email"
+          badges={[
+            <SplitHeaderBadge
+              text="invite"
+              tooltip="Invite a friend to Macro"
+            />,
+          ]}
+        />
+      </SplitHeaderLeft>
+      <div
+        ref={registerRef('containerRef')}
+        class="relative flex flex-col w-full h-full panel min-h-0 overflow-hidden"
+      >
+        <Switch>
+          <Match when={hasLinkError()}>
+            <div class="w-full bg-alert-bg border-b border-t border-alert/20 text-alert-ink p-2">
+              <div class="flex items-center justify-between gap-2">
+                <Caution class="size-4" />
+                <span class="text-sm">
+                  You have not connected an email account.
+                </span>
+                <span class="grow" />
+                <DeprecatedTextButton
+                  theme="base"
+                  text="Connect Email"
+                  onClick={connectEmail}
+                />
+              </div>
+            </div>
+          </Match>
+          <Match when={!hasPaidAccess()}>
+            <div class="w-full bg-alert-bg border-b border-t border-alert/20 text-alert-ink p-2">
+              <div class="flex items-center justify-between gap-2">
+                <Caution class="size-4" />
+                <span class="text-sm">You must upgrade to send email.</span>
+                <span class="grow" />
+                <DeprecatedTextButton
+                  theme="base"
+                  text="Upgrade"
+                  onClick={() => {
+                    showPaywall(null);
+                  }}
+                />
+              </div>
+            </div>
+          </Match>
+        </Switch>
+
+        <div
+          class="macro-message-width mx-auto w-full max-h-full my-12 overflow-hidden px-4"
+          classList={{
+            'pointer-events-none opacity-50': hasLinkError(),
+          }}
+        >
+          <ClippedPanel tl={!beveledCorners()}>
+            <div
+              class="w-full p-4 bg-input max-h-full overflow-hidden flex flex-col min-h-0"
+              classList={{
+                'pointer-events-none opacity-50': hasLinkError(),
+              }}
+            >
+              <div class="macro-message-width mx-auto pb-1 w-full h-max shrink-0">
+                <div class="mb-4 h-6 flex items-center justify-between">
+                  <Suspense
+                    fallback={
+                      <div class="flex gap-1 items-center">
+                        <CircleSpinner class="w-4 h-4 animate-spin" />
+                        <span class="text-ink-extra-muted/50 text-xs">
+                          Processing...
+                        </span>
+                      </div>
+                    }
+                  >
+                    <Show when={link()}>
+                      {(link) => (
+                        <div class="text-xs text-ink-extra-muted/50">
+                          from {link().email_address}
+                        </div>
+                      )}
+                    </Show>
+                  </Suspense>
+                  <div class="flex gap-2 ml-auto">
+                    <Show when={!showCc()}>
+                      <button
+                        type="button"
+                        class="text-sm text-secondary-text hover:text-primary-text hover:bg-hover"
+                        onClick={() => setShowCc(true)}
+                        disabled={hasLinkError()}
+                      >
+                        + Cc
+                      </button>
+                    </Show>
+                    <Show when={!showBcc()}>
+                      <button
+                        type="button"
+                        class="text-sm text-secondary-text hover:text-primary-text hover:bg-hover"
+                        onClick={() => setShowBcc(true)}
+                        disabled={hasLinkError()}
+                      >
+                        + Bcc
+                      </button>
+                    </Show>
+                  </div>
+                </div>
+
+                <div class="flex flex-col gap-2">
+                  <div class="flex items-center gap-2 border-b border-edge-muted focus-within:border-accent">
+                    <div class="text-base w-4 shrink-0 text-ink-placeholder/70">
+                      To
+                    </div>
+                    <div class="flex-1">
+                      <RecipientSelector<'user' | 'contact'>
+                        inputRef={registerRef('directRecipientsSelector')}
+                        options={destinationOptions}
+                        selectedOptions={selectedRecipients}
+                        setSelectedOptions={setSelectedRecipients}
+                        placeholder="Who do you want to invite?"
+                        triedToSubmit={triedToSubmit}
+                        focusOnMount={!hasLinkError()}
+                        hideBorder
+                        noBrackets
+                        disabled={hasLinkError()}
+                      />
+                    </div>
+                    <Show when={withValidationError('no_recipient')}>
+                      {(err) => (
+                        <div class="text-failure-ink text-sm mt-1">
+                          {err().message}
+                        </div>
+                      )}
+                    </Show>
+                  </div>
+
+                  <Show when={showCc()}>
+                    <div class="flex items-center gap-2 border-b border-edge-muted focus-within:border-accent">
+                      <div class="text-sm w-4 shrink-0 text-ink-placeholder/70">
+                        Cc
+                      </div>
+                      <div class="flex-1">
+                        <RecipientSelector<'user' | 'contact'>
+                          inputRef={registerRef('ccRecipientsSelector')}
+                          options={destinationOptions}
+                          selectedOptions={ccRecipients}
+                          setSelectedOptions={setCcRecipients}
+                          placeholder="Macro users or email addresses"
+                          triedToSubmit={triedToSubmit}
+                          hideBorder
+                          noBrackets
+                          disabled={hasLinkError()}
+                        />
+                      </div>
+                    </div>
+                  </Show>
+
+                  <Show when={showBcc()}>
+                    <div class="flex items-center gap-2 border-b border-edge-muted focus-within:border-accent">
+                      <div class="text-sm w-4 shrink-0 text-ink-placeholder/70">
+                        Bcc
+                      </div>
+                      <div class="flex-1">
+                        <RecipientSelector<'user' | 'contact'>
+                          inputRef={registerRef('bccRecipientsSelector')}
+                          options={destinationOptions}
+                          selectedOptions={bccRecipients}
+                          setSelectedOptions={setBccRecipients}
+                          placeholder="Macro users or email addresses"
+                          triedToSubmit={triedToSubmit}
+                          hideBorder
+                          noBrackets
+                          disabled={hasLinkError()}
+                        />
+                      </div>
+                    </div>
+                  </Show>
+
+                  <div class="w-full flex items-center gap-2 border-b border-edge-muted focus-within:border-accent py-2">
+                    <div class="text-base shrink-0 text-ink-placeholder/70">
+                      Subject
+                    </div>
+
+                    <div class="flex-1">
+                      <input
+                        ref={registerRef('subjectInput')}
+                        type="text"
+                        value={subject()}
+                        placeholder="Subject"
+                        class="w-full text-base resize-none placeholder:text-ink-placeholder p-1 ml-1"
+                        onInput={(e) => {
+                          setSubject(e.currentTarget.value);
+                        }}
+                        disabled={hasLinkError()}
+                      />
+                    </div>
+
+                    <Show when={withValidationError('no_subject')}>
+                      {(err) => (
+                        <div class="text-failure-ink text-sm mt-1">
+                          {err().message}
+                        </div>
+                      )}
+                    </Show>
+                  </div>
+                </div>
+              </div>
+
+              <div
+                class="w-full h-full flex flex-col min-h-0 mt-4"
+                classList={{
+                  'pointer-events-none opacity-50': hasLinkError(),
+                }}
+              >
+                <ComposeEmailInput
+                  inputRef={registerRef('messageInput')}
+                  onSubmit={onSubmit}
+                  isSubmitting={sendMutation.isPending}
+                  disabled={hasLinkError()}
+                  initialContent={INVITE_BODY}
+                />
+                <Show when={withValidationError('no_message')}>
+                  {(err) => (
+                    <div class="text-failure-ink text-sm mt-1">
+                      {err().message}
+                    </div>
+                  )}
+                </Show>
+              </div>
+            </div>
+          </ClippedPanel>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function convertToContactInfoArray(
+  recipients: WithCustomUserInput<'user' | 'contact'>[]
+): ContactInfo[] {
+  return recipients.map((recipient) => ({
+    email: recipient.data.email,
+    name:
+      'name' in recipient.data ? recipient.data.name || undefined : undefined,
+  }));
+}

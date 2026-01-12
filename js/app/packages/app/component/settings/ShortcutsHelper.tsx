@@ -1,7 +1,6 @@
 import { useSettingsState } from '@core/constant/SettingsState';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
-import { cornerClip } from '@core/util/clipPath';
 import KeyboardIcon from '@icon/regular/keyboard.svg';
 import CloseIcon from '@icon/regular/x.svg';
 import { makePersisted } from '@solid-primitives/storage';
