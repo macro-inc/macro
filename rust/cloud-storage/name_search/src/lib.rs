@@ -10,8 +10,7 @@ pub use chat::*;
 pub use document::*;
 pub use email::*;
 pub use models_opensearch::SearchEntityType;
-use models_search_cursor::SearchCursorAttributes;
-pub use models_search_cursor::{PaginatedResult, SearchCursorOption, SearchMethodCursor};
+use models_search_cursor::{PaginatedResult, SearchCursorAttributes};
 pub use project::*;
 
 /// Errors for name search crate
