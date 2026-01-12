@@ -255,13 +255,13 @@ export function createEmailFormState(key: string) {
       },
       removeByFile: (file: File) => {
         setAttachments((p) =>
-          p.filter((a) => a.type === 'local' && a.file !== file)
+          p.filter((a) => a.type !== 'local' || a.file !== file)
         );
       },
       removeByID: (attachmentID: string) => {
         setAttachments((p) =>
           p.filter(
-            (a) => a.type === 'remote' && a.attachmentID !== attachmentID
+            (a) => a.type !== 'remote' || a.attachmentID !== attachmentID
           )
         );
       },
