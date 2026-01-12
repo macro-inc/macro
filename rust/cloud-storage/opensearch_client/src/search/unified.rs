@@ -4,7 +4,7 @@ use crate::{
     Result,
     error::{OpensearchClientError, ResponseExt},
     search::{
-        builder::{SearchQueryConfig, create_highlight_field, search_after, updated_at_sort},
+        builder::{SearchQueryConfig, search_after, updated_at_sort},
         channels::{
             ChannelMessageIndex, ChannelMessageQueryBuilder, ChannelMessageSearchArgs,
             ChannelMessageSearchConfig,
@@ -408,7 +408,7 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
     }
 
     // Build highlight
-    let mut highlight = Highlight::new().require_field_match(true).field(
+    let highlight = Highlight::new().require_field_match(true).field(
         "content",
         HighlightField::new()
             .highlight_type("plain")
@@ -416,18 +416,6 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
             .post_tags(vec![MacroEm::Close.to_string()])
             .number_of_fragments(500),
     );
-
-    // For content and name content search, we need to add in highlights for the owner
-    // fields
-    match args.search_on {
-        SearchOn::Content | SearchOn::NameContent => {
-            highlight = highlight.field("sender", create_highlight_field("plain", 1));
-            highlight = highlight.field("recipients", create_highlight_field("plain", 1));
-            highlight = highlight.field("cc", create_highlight_field("plain", 1));
-            highlight = highlight.field("bcc", create_highlight_field("plain", 1));
-        }
-        SearchOn::Name => {}
-    }
 
     search_request_builder.highlight(highlight);
 

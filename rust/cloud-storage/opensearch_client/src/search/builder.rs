@@ -279,58 +279,6 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
 
         inner_bool_query.minimum_should_match(1);
 
-        // For email search, we want to search over the participants
-        // For all other indices we want to search over the owner
-        match T::ENTITY_INDEX {
-            SearchEntityType::Emails => {
-                let mut participant_queries: Vec<QueryType> = Vec::new();
-                for term in &self.terms {
-                    let formatted_term = format!("{}*", term);
-                    participant_queries.push(
-                        WildcardQuery::new("sender", formatted_term.clone(), true, Some(5000.0))
-                            .into(),
-                    );
-                    participant_queries.push(
-                        WildcardQuery::new("cc", formatted_term.clone(), true, Some(5000.0)).into(),
-                    );
-                    participant_queries.push(
-                        WildcardQuery::new("bcc", formatted_term.clone(), true, Some(5000.0))
-                            .into(),
-                    );
-                    participant_queries.push(
-                        WildcardQuery::new(
-                            "recipients",
-                            formatted_term.clone(),
-                            true,
-                            Some(5000.0),
-                        )
-                        .into(),
-                    );
-                }
-
-                for participant_query in participant_queries {
-                    inner_bool_query.should(participant_query);
-                }
-            }
-            _ => {
-                // Create a vec of owner queries for each term
-                // We want to search over the content **and** the owner here
-                let mut owner_queries: Vec<QueryType> = Vec::new();
-                for term in &self.terms {
-                    let formatted_term = format!("macro|{}*", term);
-                    owner_queries.push(
-                        WildcardQuery::new(T::USER_ID_KEY, formatted_term, true, Some(5000.0))
-                            .into(),
-                    );
-                }
-
-                // Add the owner queries to the bool query
-                for owner_query in owner_queries {
-                    inner_bool_query.should(owner_query);
-                }
-            }
-        }
-
         for must in term_must_array {
             inner_bool_query.should(must);
         }

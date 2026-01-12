@@ -472,32 +472,8 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
       },
       "highlight": {
         "fields": {
-          "bcc": {
-            "number_of_fragments": 1,
-            "post_tags": ["</macro_em>"],
-            "pre_tags": ["<macro_em>"],
-            "type": "plain"
-          },
-          "cc": {
-            "number_of_fragments": 1,
-            "post_tags": ["</macro_em>"],
-            "pre_tags": ["<macro_em>"],
-            "type": "plain"
-          },
           "content": {
             "number_of_fragments": 500,
-            "post_tags": ["</macro_em>"],
-            "pre_tags": ["<macro_em>"],
-            "type": "plain"
-          },
-          "recipients": {
-            "number_of_fragments": 1,
-            "post_tags": ["</macro_em>"],
-            "pre_tags": ["<macro_em>"],
-            "type": "plain"
-          },
-          "sender": {
-            "number_of_fragments": 1,
             "post_tags": ["</macro_em>"],
             "pre_tags": ["<macro_em>"],
             "type": "plain"
@@ -540,15 +516,6 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
                     "bool": {
                       "minimum_should_match": 1,
                       "should": [
-                        {
-                          "wildcard": {
-                            "owner_id": {
-                              "boost": 5000.0,
-                              "case_insensitive": true,
-                              "value": "macro|test*"
-                            }
-                          }
-                        },
                         {
                           "match_phrase": {
                             "content": "test"
@@ -689,42 +656,6 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
                       "minimum_should_match": 1,
                       "should": [
                         {
-                          "wildcard": {
-                            "sender": {
-                              "boost": 5000.0,
-                              "case_insensitive": true,
-                              "value": "test*"
-                            }
-                          }
-                        },
-                        {
-                          "wildcard": {
-                            "cc": {
-                              "boost": 5000.0,
-                              "case_insensitive": true,
-                              "value": "test*"
-                            }
-                          }
-                        },
-                        {
-                          "wildcard": {
-                            "bcc": {
-                              "boost": 5000.0,
-                              "case_insensitive": true,
-                              "value": "test*"
-                            }
-                          }
-                        },
-                        {
-                          "wildcard": {
-                            "recipients": {
-                              "boost": 5000.0,
-                              "case_insensitive": true,
-                              "value": "test*"
-                            }
-                          }
-                        },
-                        {
                           "match_phrase": {
                             "content": "test"
                           }
@@ -776,15 +707,6 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
                     "bool": {
                       "minimum_should_match": 1,
                       "should": [
-                        {
-                          "wildcard": {
-                            "sender_id": {
-                              "boost": 5000.0,
-                              "case_insensitive": true,
-                              "value": "macro|test*"
-                            }
-                          }
-                        },
                         {
                           "match_phrase": {
                             "content": "test"
@@ -850,15 +772,6 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
                     "bool": {
                       "minimum_should_match": 1,
                       "should": [
-                        {
-                          "wildcard": {
-                            "user_id": {
-                              "boost": 5000.0,
-                              "case_insensitive": true,
-                              "value": "macro|test*"
-                            }
-                          }
-                        },
                         {
                           "match_phrase": {
                             "content": "test"
@@ -961,32 +874,8 @@ fn test_build_unified_search_request_single_index() -> anyhow::Result<()> {
       },
       "highlight": {
         "fields": {
-          "bcc": {
-            "number_of_fragments": 1,
-            "post_tags": ["</macro_em>"],
-            "pre_tags": ["<macro_em>"],
-            "type": "plain"
-          },
-          "cc": {
-            "number_of_fragments": 1,
-            "post_tags": ["</macro_em>"],
-            "pre_tags": ["<macro_em>"],
-            "type": "plain"
-          },
           "content": {
             "number_of_fragments": 500,
-            "post_tags": ["</macro_em>"],
-            "pre_tags": ["<macro_em>"],
-            "type": "plain"
-          },
-          "recipients": {
-            "number_of_fragments": 1,
-            "post_tags": ["</macro_em>"],
-            "pre_tags": ["<macro_em>"],
-            "type": "plain"
-          },
-          "sender": {
-            "number_of_fragments": 1,
             "post_tags": ["</macro_em>"],
             "pre_tags": ["<macro_em>"],
             "type": "plain"
@@ -1029,15 +918,6 @@ fn test_build_unified_search_request_single_index() -> anyhow::Result<()> {
                     "bool": {
                       "minimum_should_match": 1,
                       "should": [
-                        {
-                          "wildcard": {
-                            "owner_id": {
-                              "boost": 5000.0,
-                              "case_insensitive": true,
-                              "value": "macro|test*"
-                            }
-                          }
-                        },
                         {
                           "match_phrase": {
                             "content": "test"
