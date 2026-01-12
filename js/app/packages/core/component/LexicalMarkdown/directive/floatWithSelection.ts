@@ -43,6 +43,7 @@ export function floatWithSelection(
   floatingEl: HTMLElement,
   accessor: Accessor<FloatWithSelectionOptions | undefined>
 ) {
+  console.log('FLOAT WITH SELECTION', accessor()?.selection);
   style(floatingEl, { position: 'fixed' });
   let cleanupAutoUpdate: () => void = () => {};
 
