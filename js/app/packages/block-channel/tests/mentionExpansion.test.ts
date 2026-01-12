@@ -36,7 +36,10 @@ describe('toSimpleMention', () => {
 
   it('passes through non-user types', () => {
     const seen = new Set<string>();
-    const result = toSimpleMention({ itemType: 'document', itemId: 'd1' }, seen);
+    const result = toSimpleMention(
+      { itemType: 'document', itemId: 'd1' },
+      seen
+    );
     expect(result).toEqual({ entity_type: 'document', entity_id: 'd1' });
   });
 });
