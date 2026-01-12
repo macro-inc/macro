@@ -95,21 +95,24 @@ const processService = async (service: Service, { serviceClientsDir }: { service
     console.log(`[${service.name}] Generating OpenAPI spec from ${crateName}...`);
 
     // Generate OpenAPI JSON from Rust binary
-    const openApiJson = await generateOpenApiFromCrate(crateName);
+    let openApiJson = await generateOpenApiFromCrate(crateName);
 
     // Sort JSON keys to ensure deterministic output across environments
-    const sortedJson = sortJsonKeys(JSON.parse(openApiJson));
+    openApiJson = sortJsonKeys(JSON.parse(openApiJson));
 
     // Remove existing generated dir
     console.log(`[${service.name}] Removing existing generated dir`, generatedDir);
     await $`rm -rf ${generatedDir}`;
 
     // Write the OpenAPI JSON
-    await write(openApiPath, JSON.stringify(sortedJson, null, 2));
+    await write(openApiPath, JSON.stringify(openApiJson, null, 2));
     console.log(`[${service.name}] Saved OpenAPI spec to ${openApiPath}`);
 
     // Run orval to generate types
     await $`cd ${serviceClientsDir} && bun run orval --config orval.config.ts --project ${service.orvalKey}`;
+
+    // Organize imports in generated files to ensure deterministic ordering
+    await $`bunx biome check --write ${generatedDir}`;
 
     // Special handling for document-cognition
     if (service.name === 'document-cognition') {
