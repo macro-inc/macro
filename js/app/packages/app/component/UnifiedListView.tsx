@@ -75,7 +75,7 @@ import {
   type UnifiedNotification,
   useNotificationsForEntity,
 } from '@notifications';
-import type { PaginatedSearchArgs } from '@service-search/client';
+import type { SearchArgs } from '@service-search/client';
 import type {
   ChannelFilters,
   ChatFilters,
@@ -932,9 +932,9 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     })
   );
   const searchUnifiedNameContentQueryParams = createMemo(
-    (): PaginatedSearchArgs => ({
+    (): SearchArgs => ({
       params: {
-        page: 0,
+        cursor: null,
         page_size: 100,
       },
       request: {

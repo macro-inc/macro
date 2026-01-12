@@ -41,13 +41,13 @@ export function searchServiceFetch<T extends ObjectLike = never>(
   return fetchWithToken<T>(`${searchServiceHost}${url}`, init);
 }
 
-type WithPagination = {
-  page: number;
+export type SearchParams = {
+  cursor?: string | null;
   page_size: number;
 };
 
-export type PaginatedSearchArgs = {
-  params: WithPagination;
+export type SearchArgs = {
+  params: SearchParams;
   request: UnifiedSearchRequest;
 };
 
@@ -91,10 +91,17 @@ export const searchClient = {
       (result) => result
     );
   },
-  async search(args: PaginatedSearchArgs, init?: SafeFetchInit) {
+  async search(args: SearchArgs, init?: SafeFetchInit) {
+    const params = new URLSearchParams();
+
+    params.append('page_size', args.params.page_size.toString());
+    if (args.params.cursor) {
+      params.append('cursor', args.params.cursor);
+    }
+
     return mapOk(
       await searchServiceFetch<UnifiedSearchResponse>(
-        `/search?page=${args.params.page}&page_size=${args.params.page_size}`,
+        `/search?${params.toString()}`,
         {
           method: 'POST',
           body: JSON.stringify(args.request),

@@ -1,6 +1,5 @@
 import { ENABLE_SEARCH_SERVICE } from '@core/constant/featureFlags';
-import { isErr, type MaybeResult } from '@core/util/maybeResult';
-import { logger } from '@observability';
+import { isErr } from '@core/util/maybeResult';
 import { searchClient } from '@service-search/client';
 import type { ChatSearchResponse } from '@service-search/generated/models/chatSearchResponse';
 import type { DocumentSearchResponse } from '@service-search/generated/models/documentSearchResponse';
@@ -175,12 +174,12 @@ export function useSearchChats(searchTerm: () => string) {
 // TODO: would be nice to rework things to all use createSearchResource again... sigh
 export function createUnifiedSearchResource(
   searchTerm: () => string,
-  pageNumber: () => number
+  cursor: () => string | null = () => null
 ) {
-  const combined = () => [searchTerm(), pageNumber()] as const;
+  const combined = () => [searchTerm(), cursor()] as const;
   const [signal, , filterError] = makeAbortable();
 
-  return createResource(combined, async ([term, page]) => {
+  return createResource(combined, async ([term, cursorValue]) => {
     if (!ENABLE_SEARCH_SERVICE) return null;
     if (term.length < 3) return null;
 
@@ -191,7 +190,6 @@ export function createUnifiedSearchResource(
             search_on: 'content',
             match_type: 'partial',
             terms: [term],
-            // in order for an index to be searched on, the key needs to exist in "filters"
             filters: {
               channel: {},
               chat: {},
@@ -200,7 +198,7 @@ export function createUnifiedSearchResource(
               project: {},
             },
           },
-          params: { page, page_size: 10 },
+          params: { cursor: cursorValue, page_size: 10 },
         },
         { signal: signal() }
       );
@@ -219,9 +217,9 @@ export function createUnifiedSearchResource(
 
 export function useSearch(
   searchTerm: () => string,
-  pageNumber: () => number = () => 0
+  cursor: () => string | null = () => null
 ) {
-  const [resource] = createUnifiedSearchResource(searchTerm, pageNumber);
+  const [resource] = createUnifiedSearchResource(searchTerm, cursor);
   return createMemo((): UnifiedSearchResponse | undefined => {
     const latest = resource?.latest;
     if (!latest) return undefined;
