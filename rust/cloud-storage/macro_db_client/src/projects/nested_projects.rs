@@ -3,7 +3,7 @@ use sqlx::{Pool, Postgres};
 use super::get_project::get_sub_items::get_all_sub_project_ids;
 
 #[tracing::instrument(skip(db))]
-pub async fn is_project_recursively_nested<'a>(
+pub async fn is_project_recursively_nested(
     db: Pool<Postgres>,
     project_id: &str,
     parent_id: &str,

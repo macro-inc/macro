@@ -110,10 +110,10 @@ impl FusionAuthClient {
     /// If login_hint is provided, it will be used as the login_hint parameter. This is used to
     /// ensure users are correctly redirected for domain specific SSO
     #[tracing::instrument(skip(self, state), fields(application_id=%self.application_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
-    pub fn construct_oauth2_authorize_url<'a, T>(
+    pub fn construct_oauth2_authorize_url<T>(
         &self,
         idp_id: &str,
-        login_hint: Option<&'a str>,
+        login_hint: Option<&str>,
         state: Option<T>,
     ) -> anyhow::Result<String>
     where

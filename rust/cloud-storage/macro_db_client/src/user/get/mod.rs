@@ -10,7 +10,7 @@ use model::user::{UserInfo, UserInfoWithMacroUserId};
 
 /// Gets the stripe customer id for a given user id
 #[tracing::instrument(skip(db))]
-pub async fn get_stripe_customer_id_by_user_id<'a>(
+pub async fn get_stripe_customer_id_by_user_id(
     db: &sqlx::Pool<sqlx::Postgres>,
     user_id: &MacroUserId<Lowercase<'_>>,
 ) -> Result<Option<String>, sqlx::Error> {
