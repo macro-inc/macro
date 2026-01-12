@@ -19,7 +19,6 @@ import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { Hotkey, modifierMap } from '@core/component/Hotkey';
 import { Tooltip } from '@core/component/Tooltip';
 import { pressedKeys } from '@core/hotkey/state';
-import { isMobileWidth } from '@core/mobile/mobileWidth';
 import PlusIcon from '@icon/regular/plus.svg';
 import XIcon from '@icon/regular/x.svg';
 import Stop from '@phosphor-icons/core/regular/stop.svg';
@@ -37,6 +36,7 @@ import {
   type UseChatMarkdown,
   useChatMarkdownArea,
 } from './useChatMarkdownArea';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 const { track, TrackingEvents } = withAnalytics();
 
@@ -226,7 +226,7 @@ function ChatInput(props: ChatInputInternalProps) {
             placeholder="Ask AI -  @mention anything"
             history={availableAttachments}
             dontFocusOnMount={
-              isMobileWidth() || props.autoFocusOnMount === false
+              isTouchDevice() || props.autoFocusOnMount === false
             }
             onPasteFile={props.uploadQueue.upload}
             captureEditor={props.captureEditor}
@@ -273,7 +273,7 @@ function ChatInput(props: ChatInputInternalProps) {
 
           <div class="flex flex-col items-end text-xs leading-tight text-ink-disabled">
             <Switch>
-              <Match when={!isMobileWidth()}>
+              <Match when={!isTouchDevice()}>
                 <div class="text-xs flex flex-col gap-1 opacity-70 items-end absolute bottom-1">
                   <Show when={generating()}>
                     <Tooltip tooltip="ctrl+c to stop" placement="top">
@@ -316,7 +316,7 @@ function ChatInput(props: ChatInputInternalProps) {
                   </Tooltip>
                 </div>
               </Match>
-              <Match when={isMobileWidth()}>
+              <Match when={isTouchDevice()}>
                 <div class="flex flex-row gap-1 items-center">
                   <Show when={!generating()}>
                     <Button
