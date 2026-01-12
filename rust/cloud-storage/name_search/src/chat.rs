@@ -8,13 +8,14 @@ use models_search_cursor::{SearchCursorOption, SearchMethodCursor};
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
-use crate::{NameSearchError, NameSearchResult, PaginatedResult, SearchEntityType};
+use crate::{escape_regex, NameSearchError, NameSearchResult, PaginatedResult, SearchEntityType};
 
 /// Searches chats by IDs only
 async fn ids_search(
     db: &Pool<Postgres>,
     chat_ids: &[Uuid],
     search_pattern: String,
+    highlight_pattern: String,
     limit: u32,
     cursor: Option<SearchMethodCursor>,
 ) -> Result<PaginatedResult<NameSearchResult>, NameSearchError> {
@@ -35,6 +36,12 @@ async fn ids_search(
             SELECT
                 c.id as entity_id,
                 c.name,
+                regexp_replace(
+                    c.name,
+                    $6,
+                    '<macro_em>\1</macro_em>',
+                    'gi'
+                ) as name_highlighted,
                 c."updatedAt" as updated_at
             FROM "Chat" c
             WHERE c.id = ANY($1)
@@ -55,6 +62,7 @@ async fn ids_search(
         fetch_limit,
         cursor_updated_at,
         cursor_entity_id,
+        highlight_pattern,
     )
     .fetch_all(db)
     .await
@@ -65,7 +73,7 @@ async fn ids_search(
         .map(|row| NameSearchResult {
             entity_id: row.entity_id.parse().unwrap(),
             entity_type: SearchEntityType::Chats,
-            name: row.name,
+            name: row.name_highlighted.unwrap_or(row.name),
             updated_at: DateTime::<Utc>::from_naive_utc_and_offset(row.updated_at, Utc),
         })
         .collect();
@@ -79,6 +87,7 @@ async fn owner_search<'a>(
     macro_user_id: &MacroUserId<Lowercase<'a>>,
     chat_ids: &[Uuid],
     search_pattern: String,
+    highlight_pattern: String,
     limit: u32,
     cursor: Option<SearchMethodCursor>,
 ) -> Result<PaginatedResult<NameSearchResult>, NameSearchError> {
@@ -95,6 +104,12 @@ async fn owner_search<'a>(
             SELECT
                 c.id as entity_id,
                 c.name,
+                regexp_replace(
+                    c.name,
+                    $7,
+                    '<macro_em>\1</macro_em>',
+                    'gi'
+                ) as name_highlighted,
                 c."updatedAt" as updated_at
             FROM "Chat" c
             WHERE (c."userId" = $1 OR c.id = ANY($2))
@@ -116,6 +131,7 @@ async fn owner_search<'a>(
         fetch_limit,
         cursor_updated_at,
         cursor_entity_id,
+        highlight_pattern,
     )
     .fetch_all(db)
     .await
@@ -126,7 +142,7 @@ async fn owner_search<'a>(
         .map(|row| NameSearchResult {
             entity_id: row.entity_id.parse().unwrap(),
             entity_type: SearchEntityType::Chats,
-            name: row.name,
+            name: row.name_highlighted.unwrap_or(row.name),
             updated_at: DateTime::<Utc>::from_naive_utc_and_offset(row.updated_at, Utc),
         })
         .collect();
@@ -159,11 +175,29 @@ pub async fn search_chat_names<'a>(
     }
 
     let search_pattern = format!("%{term}%");
+    let highlight_pattern = format!("({})", escape_regex(&term));
 
     if ids_only {
-        ids_search(db, chat_ids, search_pattern, limit, cursor).await
+        ids_search(
+            db,
+            chat_ids,
+            search_pattern,
+            highlight_pattern,
+            limit,
+            cursor,
+        )
+        .await
     } else {
-        owner_search(db, macro_user_id, chat_ids, search_pattern, limit, cursor).await
+        owner_search(
+            db,
+            macro_user_id,
+            chat_ids,
+            search_pattern,
+            highlight_pattern,
+            limit,
+            cursor,
+        )
+        .await
     }
 }
 

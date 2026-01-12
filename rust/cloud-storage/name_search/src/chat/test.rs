@@ -86,13 +86,13 @@ async fn test_search_chat_names_ids_only_mode(pool: Pool<Postgres>) -> anyhow::R
         "22222222-2222-2222-2222-222222222222"
     );
     assert_eq!(response.items[0].entity_type, SearchEntityType::Chats);
-    assert_eq!(response.items[0].name, "Project Review Chat");
+    assert_eq!(response.items[0].name, "<macro_em>Project</macro_em> Review Chat");
 
     assert_eq!(
         response.items[1].entity_id.to_string(),
         "11111111-1111-1111-1111-111111111111"
     );
-    assert_eq!(response.items[1].name, "Project Planning Chat");
+    assert_eq!(response.items[1].name, "<macro_em>Project</macro_em> Planning Chat");
 
     Ok(())
 }
@@ -120,13 +120,13 @@ async fn test_search_chat_names_normal_mode_owned_chats(
         response.items[0].entity_id.to_string(),
         "66666666-6666-6666-6666-666666666666"
     );
-    assert_eq!(response.items[0].name, "IMPORTANT PROJECT");
+    assert_eq!(response.items[0].name, "IMPORTANT <macro_em>PROJECT</macro_em>");
 
     assert_eq!(
         response.items[1].entity_id.to_string(),
         "22222222-2222-2222-2222-222222222222"
     );
-    assert_eq!(response.items[1].name, "Project Review Chat");
+    assert_eq!(response.items[1].name, "<macro_em>Project</macro_em> Review Chat");
 
     Ok(())
 }
@@ -194,7 +194,7 @@ async fn test_search_chat_names_with_shared_chats(pool: Pool<Postgres>) -> anyho
             .eq("99999999-9999-9999-9999-999999999999")
     });
     assert!(user3_chat.is_some());
-    assert_eq!(user3_chat.unwrap().name, "User3 Shared Project");
+    assert_eq!(user3_chat.unwrap().name, "User3 Shared <macro_em>Project</macro_em>");
 
     Ok(())
 }
@@ -343,13 +343,13 @@ async fn test_search_chat_names_partial_match(pool: Pool<Postgres>) -> anyhow::R
         response.items[0].entity_id.to_string(),
         "44444444-4444-4444-4444-444444444444"
     );
-    assert_eq!(response.items[0].name, "Client Meeting");
+    assert_eq!(response.items[0].name, "Client <macro_em>Meet</macro_em>ing");
 
     assert_eq!(
         response.items[1].entity_id.to_string(),
         "33333333-3333-3333-3333-333333333333"
     );
-    assert_eq!(response.items[1].name, "Team Meeting Chat");
+    assert_eq!(response.items[1].name, "Team <macro_em>Meet</macro_em>ing Chat");
 
     Ok(())
 }
