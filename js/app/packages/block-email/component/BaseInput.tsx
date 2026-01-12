@@ -94,6 +94,7 @@ import { type EmailRecipient, useEmailContext } from './EmailContext';
 import { getOrInitEmailFormContext } from './EmailFormContext';
 import { useUploadDraftAttachmentsMutation } from '@queries/email/attachment';
 import { EmailAttachmentPill } from '@block-email/component/AttachmentPill';
+import type { DraftFormAttachment } from '@block-email/component/createEmailFormState';
 
 false && fileFolderDrop;
 false && fileSelector;
@@ -608,6 +609,18 @@ export function BaseInput(props: {
     scheduleDraftSave();
   };
 
+  const handleRemoveAttachment = (attachment: DraftFormAttachment) => {
+    if (attachment.type === 'local') {
+      form().attachments.removeByFile(attachment.file);
+    } else {
+      form().attachments.removeByID(attachment.attachmentID);
+    }
+
+    const currentDraftID = savedDraftId();
+
+    if (!currentDraftID) return;
+  };
+
   return (
     <div
       ref={(el) => {
@@ -904,6 +917,8 @@ export function BaseInput(props: {
                           fileName: attachment().file.name,
                           mimeType: attachment().file.type,
                         }}
+                        removable
+                        onRemove={() => handleRemoveAttachment(attachment())}
                       />
                     )}
                   </Match>
@@ -914,6 +929,8 @@ export function BaseInput(props: {
                           fileName: attachment().fileName,
                           mimeType: attachment().contentType,
                         }}
+                        removable
+                        onRemove={() => handleRemoveAttachment(attachment())}
                       />
                     )}
                   </Match>

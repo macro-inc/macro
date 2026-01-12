@@ -19,7 +19,7 @@ export type EmailFormRecipients = {
   bcc: EmailRecipient[];
 };
 
-type FormDraft =
+export type DraftFormAttachment =
   | {
       type: 'local';
       file: File;
@@ -74,7 +74,7 @@ export function createEmailFormState(key: string) {
 
   const [shouldFocusInput, setShouldFocusInput] = createSignal(false);
 
-  const [attachments, setAttachments] = createSignal<FormDraft[]>(
+  const [attachments, setAttachments] = createSignal<DraftFormAttachment[]>(
     draft?.attachments_draft.map((a) => ({
       type: 'remote',
       attachmentID: a.id,
@@ -238,8 +238,13 @@ export function createEmailFormState(key: string) {
     },
     attachments: {
       list: attachments,
-      add: (attachment: FormDraft) => {
+      add: (attachment: DraftFormAttachment) => {
         setAttachments((p) => [...p, attachment]);
+      },
+      removeByFile: (file: File) => {
+        setAttachments((p) =>
+          p.filter((a) => a.type === 'local' && a.file !== file)
+        );
       },
       removeByID: (attachmentID: string) => {
         setAttachments((p) =>
