@@ -952,7 +952,7 @@ export function BaseInput(props: {
               );
             }}
           />
-          <div>
+          <div class="flex gap-1 flex-wrap w-full py-2">
             <For each={form().attachments.list()}>
               {(attachment) => (
                 <Switch>
