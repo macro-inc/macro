@@ -278,7 +278,6 @@ function $tryInsertLink(
   onCreate?: (info: ILinkInfo | null) => void,
   onEdit?: (info: ILinkInfo | null) => void
 ) {
-  console.debug('TRY INSERT LINK');
   const insertType = $getLinkInsertType();
   if (insertType === 'none') return false;
 
