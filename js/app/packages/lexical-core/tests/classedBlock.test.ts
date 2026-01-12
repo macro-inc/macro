@@ -47,9 +47,9 @@ describe('ClassedBlockNode - macro_quote transformer', () => {
       markdown = $convertToMarkdownString(INTERNAL_TRANSFORMERS);
     });
 
-    // Verify the markdown contains the macro-quote tag and metadata
-    expect(markdown).toContain('<macro-quote>');
-    expect(markdown).toContain('</macro-quote>');
+    // Verify the markdown contains the email-thread-embed tag and metadata
+    expect(markdown).toContain('<m-email-thread-embed>');
+    expect(markdown).toContain('</m-email-thread-embed>');
     expect(markdown).toContain('"tag":"div"');
     expect(markdown).toContain('"classes":["macro_quote","gmail_quote"]');
     expect(markdown).toContain('This is a quoted email');

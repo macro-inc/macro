@@ -45,7 +45,6 @@ export default defineConfig({
         },
       },
       {
-        // Lexical core package tests
         extends: './packages/lexical-core/vitest.config.ts',
         test: {
           include: ['packages/lexical-core/**/*.{test,spec}.{ts,tsx}'],
@@ -53,7 +52,6 @@ export default defineConfig({
         },
       },
       {
-        // Block channel package tests
         extends: './packages/core/vitest.config.ts',
         test: {
           include: ['packages/block-channel/**/*.{test,spec}.{ts,tsx}'],
