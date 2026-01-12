@@ -9,6 +9,7 @@ pub type NameLookup = HashMap<MacroUserIdStr<'static>, String>;
 #[cfg(test)]
 mod tests;
 
+#[tracing::instrument(skip_all)]
 pub fn resolve_channel_name(
     channel_type: &ChannelType,
     channel_name: Option<&str>,

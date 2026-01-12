@@ -1,5 +1,5 @@
-use crate::service::fusionauth_client::FusionAuthClient;
-use crate::service::fusionauth_client::error::FusionAuthClientError;
+use authentication_service::service::fusionauth_client::FusionAuthClient;
+use authentication_service::service::fusionauth_client::error::FusionAuthClientError;
 use axum::{
     Json,
     extract::{self, State},

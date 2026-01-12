@@ -32,6 +32,7 @@ tempfile = "3.19.1"
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
 tokio-util = { workspace = true }
+tracing = { workspace = true }
 walkdir = "2.3.2"
 zip = { workspace = true }
 

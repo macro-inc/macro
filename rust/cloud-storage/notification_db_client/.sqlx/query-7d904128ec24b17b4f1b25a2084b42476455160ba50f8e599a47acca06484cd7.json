@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            n.event_item_id,\n            n.event_item_type,\n            n.notification_event_type\n        FROM notification n\n        WHERE n.id = $1\n        ",
+  "query": "\n        SELECT\n            n.event_item_id,\n            n.event_item_type,\n            n.notification_event_type,\n            n.apns_collapse_key\n        FROM notification n\n        WHERE n.id = $1\n        ",
   "describe": {
     "columns": [
       {
@@ -17,6 +17,11 @@
         "ordinal": 2,
         "name": "notification_event_type",
         "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "apns_collapse_key",
+        "type_info": "Text"
       }
     ],
     "parameters": {
@@ -27,8 +32,9 @@
     "nullable": [
       false,
       false,
-      false
+      false,
+      true
     ]
   },
-  "hash": "68bf7d8dec24932a9826a9e3b9a305e7813c98254bea3ff0f3f3dc5643431449"
+  "hash": "7d904128ec24b17b4f1b25a2084b42476455160ba50f8e599a47acca06484cd7"
 }

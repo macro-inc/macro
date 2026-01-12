@@ -1608,7 +1608,10 @@ async fn test_cursor_pagination_with_document_filter(db: PgPool) -> anyhow::Resu
     )
     .await?;
 
-    assert!(second_page_items.len() > 0, "Second page should have items");
+    assert!(
+        !second_page_items.is_empty(),
+        "Second page should have items"
+    );
 
     // Verify filter still applies on second page
     for item in &second_page_items {
