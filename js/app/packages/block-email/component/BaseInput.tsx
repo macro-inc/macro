@@ -476,8 +476,11 @@ export function BaseInput(props: {
 
     const processedMacroBody = prepareMacroBody(bodyMacro());
 
+    const currentDraftID = savedDraftId();
+
     sendMutation.mutate({
       message: {
+        db_id: currentDraftID,
         bcc,
         body_html: prepared.bodyHtml,
         body_macro: processedMacroBody,
