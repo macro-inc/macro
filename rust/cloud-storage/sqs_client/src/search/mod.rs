@@ -6,7 +6,6 @@ use crate::{
         document::{DocumentId, SearchExtractorMessage},
         email::{EmailLinkMessage, EmailMessage, EmailThreadMessage},
         name::EntityName,
-        project::{BulkRemoveProjectMessage, ProjectMessage},
     },
 };
 use anyhow::Context;
@@ -19,7 +18,6 @@ pub mod chat;
 pub mod document;
 pub mod email;
 pub mod name;
-pub mod project;
 
 use crate::{MAX_BATCH_SIZE, PrimaryId};
 
@@ -83,10 +81,6 @@ pub enum SearchQueueMessage {
     // Channel
     ChannelMessageUpdate(ChannelMessageUpdate),
     RemoveChannelMessage(RemoveChannelMessage),
-    //  Project
-    ProjectMessage(ProjectMessage),
-    RemoveProjectMessage(ProjectMessage),
-    BulkRemoveProjectMessage(BulkRemoveProjectMessage),
 
     // User
     RemoveUserProfile(String),
@@ -117,10 +111,6 @@ impl PrimaryId for SearchQueueMessage {
                     message.message_id.clone().unwrap_or_default()
                 )
             }
-            SearchQueueMessage::ProjectMessage(message) => message.project_id.clone(),
-            SearchQueueMessage::RemoveProjectMessage(message) => message.project_id.clone(),
-            // NOTE: this trait might not make sense for bulk remove
-            SearchQueueMessage::BulkRemoveProjectMessage(message) => message.project_ids[0].clone(),
 
             SearchQueueMessage::RemoveUserProfile(message) => message.clone(),
 
@@ -148,10 +138,6 @@ impl SearchQueueMessage {
             // Channels
             SearchQueueMessage::ChannelMessageUpdate(_) => Operation::ExtractText,
             SearchQueueMessage::RemoveChannelMessage(_) => Operation::Remove,
-            // Projects
-            SearchQueueMessage::ProjectMessage(_) => Operation::UpdateMetadata,
-            SearchQueueMessage::RemoveProjectMessage(_) => Operation::Remove,
-            SearchQueueMessage::BulkRemoveProjectMessage(_) => Operation::Remove,
             // Users
             SearchQueueMessage::RemoveUserProfile(_) => Operation::Remove,
             // Entity Name

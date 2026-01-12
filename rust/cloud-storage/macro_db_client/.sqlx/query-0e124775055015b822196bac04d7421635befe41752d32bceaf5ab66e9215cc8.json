@@ -37,9 +37,9 @@
             "kind": {
               "Enum": [
                 "view",
-                "comment",
                 "edit",
-                "owner"
+                "owner",
+                "comment"
               ]
             }
           }

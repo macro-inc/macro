@@ -1,9 +1,9 @@
+use crate::domain::models::FrecencySoupItem;
 use crate::domain::ports::MockSoupRepo;
 use chrono::Days;
 use cool_asserts::assert_matches;
-use document_sub_type::DocumentSubType;
 use email::domain::models::{EmailErr, EnrichedEmailThreadPreview, PreviewView};
-use frecency::domain::models::FrecencyPageResponse;
+use frecency::domain::models::{FrecencyPageRequest, FrecencyPageResponse};
 use frecency::domain::ports::MockFrecencyQueryService;
 use frecency::domain::services::FrecencyQueryServiceImpl;
 use frecency::{domain::models::AggregateFrecency, outbound::mock::MockFrecencyStorage};
@@ -11,7 +11,7 @@ use model_entity::EntityType;
 use models_pagination::{
     Cursor, CursorVal, FrecencyValue, PaginatedCursor, SimpleSortMethod, TypeEraseCursor,
 };
-use models_soup::document::SoupDocument;
+use models_soup::document::{SoupDocument, SoupDocumentSubType};
 use ordered_float::OrderedFloat;
 use rootcause::Report;
 use sqlx::types::chrono::{DateTime, Utc};
@@ -100,6 +100,14 @@ fn soup_document_with_updated(id: &str, updated_at: DateTime<Utc>) -> SoupDocume
 }
 
 fn soup_document_uuid_with_updated(id: Uuid, updated_at: DateTime<Utc>) -> SoupDocument {
+    soup_document_with_is_completed(id, updated_at, None)
+}
+
+fn soup_document_with_is_completed(
+    id: Uuid,
+    updated_at: DateTime<Utc>,
+    is_completed: Option<bool>,
+) -> SoupDocument {
     SoupDocument {
         id,
         document_version_id: 1,
@@ -114,7 +122,7 @@ fn soup_document_uuid_with_updated(id: Uuid, updated_at: DateTime<Utc>) -> SoupD
         created_at: Default::default(),
         updated_at,
         viewed_at: Default::default(),
-        sub_type: Some(DocumentSubType::Task),
+        sub_type: is_completed.map(|is_completed| SoupDocumentSubType::Task { is_completed }),
     }
 }
 
@@ -773,4 +781,267 @@ async fn cursor_should_return_frecency() {
         assert_eq!(id, expected_uuid_str);
         assert!(filter.is_none());
     })
+}
+
+/// Helper to extract is_completed from a FrecencySoupItem
+fn get_is_completed(item: &FrecencySoupItem) -> Option<bool> {
+    match &item.item {
+        SoupItem::Document(doc) => doc.sub_type.as_ref().and_then(|st| st.is_task_completed()),
+        _ => None,
+    }
+}
+
+#[tokio::test]
+async fn it_should_return_is_completed_true_for_completed_tasks() {
+    let mut soup_mock = MockSoupRepo::new();
+    soup_mock
+        .expect_unexpanded_generic_cursor_soup()
+        .times(1)
+        .returning(|_params| {
+            Box::pin(async move {
+                Ok(vec![SoupItem::Document(soup_document_with_is_completed(
+                    Uuid::from_u128(1),
+                    Default::default(),
+                    Some(true),
+                ))])
+            })
+        });
+
+    let res = SoupImpl::new(
+        soup_mock,
+        FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
+        NoopEmailService,
+        NoopCommsService,
+    )
+    .get_user_soup(SoupRequest {
+        email_preview_view: PreviewView::StandardLabel(
+            email::domain::models::PreviewViewStandardLabel::Inbox,
+        ),
+        link_id: Some(Uuid::new_v4()),
+        soup_type: SoupType::UnExpanded,
+        limit: 0,
+        cursor: SoupQuery::Simple(Query::Sort(SimpleSortMethod::ViewedUpdated, None)),
+        user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+    })
+    .await
+    .unwrap()
+    .type_erase();
+
+    assert_eq!(res.items.len(), 1);
+    assert_eq!(get_is_completed(res.items.first().unwrap()), Some(true));
+}
+
+#[tokio::test]
+async fn it_should_return_is_completed_false_for_incomplete_tasks() {
+    let mut soup_mock = MockSoupRepo::new();
+    soup_mock
+        .expect_unexpanded_generic_cursor_soup()
+        .times(1)
+        .returning(|_params| {
+            Box::pin(async move {
+                Ok(vec![SoupItem::Document(soup_document_with_is_completed(
+                    Uuid::from_u128(1),
+                    Default::default(),
+                    Some(false),
+                ))])
+            })
+        });
+
+    let res = SoupImpl::new(
+        soup_mock,
+        FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
+        NoopEmailService,
+        NoopCommsService,
+    )
+    .get_user_soup(SoupRequest {
+        email_preview_view: PreviewView::StandardLabel(
+            email::domain::models::PreviewViewStandardLabel::Inbox,
+        ),
+        link_id: Some(Uuid::new_v4()),
+        soup_type: SoupType::UnExpanded,
+        limit: 0,
+        cursor: SoupQuery::Simple(Query::Sort(SimpleSortMethod::ViewedUpdated, None)),
+        user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+    })
+    .await
+    .unwrap()
+    .type_erase();
+
+    assert_eq!(res.items.len(), 1);
+    assert_eq!(get_is_completed(res.items.first().unwrap()), Some(false));
+}
+
+#[tokio::test]
+async fn it_should_return_is_completed_none_for_non_tasks() {
+    let mut soup_mock = MockSoupRepo::new();
+    soup_mock
+        .expect_unexpanded_generic_cursor_soup()
+        .times(1)
+        .returning(|_params| {
+            Box::pin(async move {
+                Ok(vec![SoupItem::Document(soup_document_with_is_completed(
+                    Uuid::from_u128(1),
+                    Default::default(),
+                    None,
+                ))])
+            })
+        });
+
+    let res = SoupImpl::new(
+        soup_mock,
+        FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
+        NoopEmailService,
+        NoopCommsService,
+    )
+    .get_user_soup(SoupRequest {
+        email_preview_view: PreviewView::StandardLabel(
+            email::domain::models::PreviewViewStandardLabel::Inbox,
+        ),
+        link_id: Some(Uuid::new_v4()),
+        soup_type: SoupType::UnExpanded,
+        limit: 0,
+        cursor: SoupQuery::Simple(Query::Sort(SimpleSortMethod::ViewedUpdated, None)),
+        user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+    })
+    .await
+    .unwrap()
+    .type_erase();
+
+    assert_eq!(res.items.len(), 1);
+    assert_eq!(get_is_completed(res.items.first().unwrap()), None);
+}
+
+#[tokio::test]
+async fn it_should_preserve_is_completed_for_mixed_items() {
+    let mut soup_mock = MockSoupRepo::new();
+    soup_mock
+        .expect_unexpanded_generic_cursor_soup()
+        .times(1)
+        .returning(|_params| {
+            Box::pin(async move {
+                Ok(vec![
+                    SoupItem::Document(soup_document_with_is_completed(
+                        Uuid::from_u128(1),
+                        Default::default(),
+                        Some(true),
+                    )),
+                    SoupItem::Document(soup_document_with_is_completed(
+                        Uuid::from_u128(2),
+                        Default::default(),
+                        Some(false),
+                    )),
+                    SoupItem::Document(soup_document_with_is_completed(
+                        Uuid::from_u128(3),
+                        Default::default(),
+                        None,
+                    )),
+                ])
+            })
+        });
+
+    let res = SoupImpl::new(
+        soup_mock,
+        FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
+        NoopEmailService,
+        NoopCommsService,
+    )
+    .get_user_soup(SoupRequest {
+        email_preview_view: PreviewView::StandardLabel(
+            email::domain::models::PreviewViewStandardLabel::Inbox,
+        ),
+        link_id: Some(Uuid::new_v4()),
+        soup_type: SoupType::UnExpanded,
+        limit: 0,
+        cursor: SoupQuery::Simple(Query::Sort(SimpleSortMethod::ViewedUpdated, None)),
+        user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+    })
+    .await
+    .unwrap()
+    .type_erase();
+
+    assert_eq!(res.items.len(), 3);
+    assert_eq!(get_is_completed(&res.items[0]), Some(true));
+    assert_eq!(get_is_completed(&res.items[1]), Some(false));
+    assert_eq!(get_is_completed(&res.items[2]), None);
+}
+
+#[tokio::test]
+async fn it_should_preserve_is_completed_in_by_ids_queries() {
+    let mut frecency = MockFrecencyQueryService::new();
+    frecency
+        .expect_get_frecency_page()
+        .withf(|params| assert_matches!(params, FrecencyPageRequest { limit: 20, .. } => true))
+        .times(1)
+        .returning(|params| {
+            // Return 20 items to match the limit and avoid fallback
+            let iter = (1..=params.limit).map(|v| {
+                AggregateFrecency::new_mock(
+                    EntityType::Document
+                        .with_entity_string(uuid::Uuid::from_u128(v as u128).to_string()),
+                    v.into(),
+                )
+            });
+            let res = Ok(FrecencyPageResponse::new_mock(iter));
+            Box::pin(async move { res })
+        });
+
+    let mut soup_mock = MockSoupRepo::new();
+    soup_mock
+        .expect_unexpanded_soup_by_ids()
+        .times(1)
+        .returning(|params| {
+            let res = Ok(params
+                .entities
+                .iter()
+                .enumerate()
+                .map(|(idx, v)| {
+                    // Set is_completed on first 3 items to test the field
+                    let is_completed = match idx {
+                        0 => Some(true),
+                        1 => Some(false),
+                        2 => None,
+                        _ => None,
+                    };
+                    soup_document_with_is_completed(
+                        Uuid::parse_str(&v.entity_id).unwrap(),
+                        Default::default(),
+                        is_completed,
+                    )
+                })
+                .map(SoupItem::Document)
+                .collect());
+            Box::pin(async move { res })
+        });
+
+    let res = SoupImpl::new(soup_mock, frecency, NoopEmailService, NoopCommsService)
+        .get_user_soup(SoupRequest {
+            email_preview_view: PreviewView::StandardLabel(
+                email::domain::models::PreviewViewStandardLabel::Inbox,
+            ),
+            link_id: Some(Uuid::new_v4()),
+            soup_type: SoupType::UnExpanded,
+            limit: 3,
+            cursor: SoupQuery::Frecency(Query::Sort(Frecency, None)),
+            user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+        })
+        .await
+        .unwrap()
+        .unwrap_right();
+
+    // Should have 20 items, verify is_completed values are preserved
+    assert_eq!(res.items.len(), 20);
+    let is_completed_values: Vec<Option<bool>> = res.items.iter().map(get_is_completed).collect();
+    // Verify that all three is_completed values (true, false, None) are present
+    assert!(
+        is_completed_values.contains(&Some(true)),
+        "Should contain is_completed=true"
+    );
+    assert!(
+        is_completed_values.contains(&Some(false)),
+        "Should contain is_completed=false"
+    );
+    assert!(
+        is_completed_values.contains(&None),
+        "Should contain is_completed=None"
+    );
 }

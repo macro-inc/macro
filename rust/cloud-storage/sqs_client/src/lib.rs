@@ -21,9 +21,6 @@ pub mod email;
 #[cfg(feature = "gmail")]
 pub mod gmail;
 
-#[cfg(feature = "insight_context")]
-pub mod insight_context;
-
 #[cfg(feature = "organization_retention")]
 mod organization_retention;
 
@@ -72,8 +69,6 @@ pub struct SQS {
     upload_extractor_queue: Option<String>,
     #[cfg(feature = "convert")]
     convert_queue: Option<String>,
-    #[cfg(feature = "insight_context")]
-    insight_context_queue: Option<String>,
     #[cfg(feature = "gmail")]
     gmail_inbox_sync_queue: Option<String>,
     #[cfg(feature = "gmail")]
@@ -108,8 +103,6 @@ impl SQS {
             upload_extractor_queue: None,
             #[cfg(feature = "convert")]
             convert_queue: None,
-            #[cfg(feature = "insight_context")]
-            insight_context_queue: None,
             #[cfg(feature = "gmail")]
             gmail_inbox_sync_queue: None,
             #[cfg(feature = "gmail")]

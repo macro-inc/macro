@@ -5,14 +5,12 @@ pub mod utils;
 use chrono::serde::ts_seconds_option;
 use macro_user_id::user_id::MacroUserIdStr;
 pub use message::*;
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use strum::Display;
 use utoipa::ToSchema;
 
 use crate::comms::ChannelType;
 use crate::document::FileType;
-use crate::insight_context::document::DocumentSummary;
 
 #[derive(sqlx::FromRow, Serialize, Deserialize, Eq, PartialEq, Debug, Clone, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -158,42 +156,28 @@ pub struct NewMessageAttachment {
     pub attachment_id: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, JsonSchema)]
-pub struct ChatHistory {
-    pub conversation: Vec<ConversationRecord>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, JsonSchema)]
-pub struct ConversationRecord {
-    pub chat_id: String,
-    pub title: String,
-    pub messages: Vec<MessageWithAttachmentSummary>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, ToSchema)]
-pub struct MessageWithAttachmentSummary {
-    pub content: String,
-    pub date: chrono::DateTime<chrono::Utc>,
-    pub attachment_summaries: Vec<Summary>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, ToSchema)]
-pub enum Summary {
-    Summary(DocumentSummary),
-    NoSummary { document_id: String },
-}
-
-impl Summary {
-    pub fn document_id(&self) -> &str {
-        match self {
-            Self::NoSummary { document_id } => document_id.as_str(),
-            Self::Summary(summary) => summary.document_id.as_str(),
-        }
-    }
-}
-
 #[derive(Serialize, Deserialize, Debug, ToSchema, Eq, PartialEq, Clone)]
 pub struct NewAttachment {
     pub attachment_type: AttachmentType,
     pub attachment_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, schemars::JsonSchema)]
+pub struct ChatHistory {
+    pub conversation: Vec<ConversationRecord>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, schemars::JsonSchema)]
+pub struct ConversationRecord {
+    pub chat_id: String,
+    pub title: String,
+    pub messages: Vec<MessageWithAttachments>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct MessageWithAttachments {
+    pub content: String,
+    pub date: chrono::DateTime<chrono::Utc>,
+    pub attachment_ids: Vec<String>,
 }

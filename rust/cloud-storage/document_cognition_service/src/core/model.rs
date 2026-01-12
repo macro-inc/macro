@@ -1,6 +1,6 @@
 use ai::types::Model;
 
-pub static CHAT_MODELS: &[Model] = &[Model::Claude45Haiku, Model::Claude45Sonnet];
+pub static CHAT_MODELS: &[Model] = &[Model::Claude45Haiku, Model::Claude45Opus];
 
 pub static COMPLETION_MODEL: Model = Model::OpenAiGpt41;
 pub static COMPLETION_CONTEXT_WINDOW: i32 = 80000;

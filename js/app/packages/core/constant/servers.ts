@@ -15,7 +15,6 @@ const serverHostLocal: Servers = {
   'unfurl-service': 'http://localhost:8080',
   contacts: 'http://localhost:8092',
   'email-service': 'http://localhost:8094',
-  'insight-service': `http://localhost:8080`,
   'search-service': 'http://localhost:8091',
   'properties-service': `http://localhost:8095`,
 } as const;
@@ -38,7 +37,6 @@ const serverHostRemote = {
   'unfurl-service': `https://unfurl-service${devServerSuffix}.macro.com`,
   contacts: `https://contacts${devServerSuffix}.macro.com`,
   'email-service': `https://email-service${devServerSuffix}.macro.com`,
-  'insight-service': `https://insight-service${devServerSuffix}.macro.com`,
   'search-service': `https://search-service${devServerSuffix}.macro.com`,
   'properties-service': `https://properties-service${devServerSuffix}.macro.com`,
 } as const;

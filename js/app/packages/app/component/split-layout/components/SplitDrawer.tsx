@@ -90,9 +90,9 @@ export function SplitDrawer(
     const constrainedSize = getConstrainedSize();
 
     if (isHorizontal()) {
-      return { width: constrainedSize, top: `${contentOffsetTop() + 1}px` };
+      return { width: constrainedSize, top: `${contentOffsetTop()}px` };
     } else {
-      return { height: constrainedSize, top: `${contentOffsetTop() + 1}px` };
+      return { height: constrainedSize, top: `${contentOffsetTop()}px` };
     }
   };
 

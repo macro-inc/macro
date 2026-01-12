@@ -31,14 +31,10 @@ pub struct Config {
     pub notification_queue: String,
     /// comms service url
     pub comms_service_url: String,
-    /// the sqs to to send chat context to
-    pub insight_context_queue: String,
     pub search_event_queue: String,
     pub sync_service_url: String,
     pub sync_service_auth_key: String,
     pub search_service_url: String,
-    pub disable_metering_service: bool,
-    pub metering_service_url: String,
     pub lexical_service_url: String,
     pub email_service_url: String,
     /// document cognition service url for scribe tool to loopback
@@ -81,9 +77,6 @@ impl Config {
         let comms_service_url =
             std::env::var("COMMS_SERVICE_URL").context("COMMS_SERVICE_URL must be provided")?;
 
-        let insight_context_queue = std::env::var("INSIGHT_CONTEXT_QUEUE")
-            .context("INSIGHT_CONTEXT_QUEUE must be provided")?;
-
         let search_event_queue =
             std::env::var("SEARCH_EVENT_QUEUE").context("SEARCH_EVENT_QUEUE must be provided")?;
 
@@ -94,19 +87,6 @@ impl Config {
 
         let search_service_url =
             std::env::var("SEARCH_SERVICE_URL").context("SEARCH_SERVICE_URL must be provided")?;
-        let disable_metering_service = std::env::var("DISABLE_METERING_SERVICE")
-            .ok()
-            .and_then(|s| s.parse::<bool>().ok())
-            .unwrap_or(false);
-        if disable_metering_service {
-            tracing::info!("Metering service disabled");
-        }
-        let metering_service_url = if disable_metering_service {
-            "".to_string()
-        } else {
-            std::env::var("METERING_SERVICE_URL")
-                .context("METERING_SERVICE_URL must be provided")?
-        };
 
         let lexical_service_url =
             std::env::var("LEXICAL_SERVICE_URL").context("LEXICAL_SERVICE_URL must be provided")?;
@@ -130,13 +110,10 @@ impl Config {
             chat_delete_queue,
             notification_queue,
             comms_service_url,
-            insight_context_queue,
             search_event_queue,
             sync_service_auth_key,
             sync_service_url,
             search_service_url,
-            disable_metering_service,
-            metering_service_url,
             lexical_service_url,
             email_service_url,
             document_cognition_service_url,
@@ -157,13 +134,10 @@ impl Config {
             chat_delete_queue: Default::default(),
             notification_queue: Default::default(),
             comms_service_url: Default::default(),
-            insight_context_queue: Default::default(),
             search_event_queue: Default::default(),
             sync_service_url: Default::default(),
             sync_service_auth_key: Default::default(),
             search_service_url: Default::default(),
-            disable_metering_service: Default::default(),
-            metering_service_url: Default::default(),
             lexical_service_url: Default::default(),
             email_service_url: Default::default(),
             document_cognition_service_url: Default::default(),

@@ -1,6 +1,6 @@
 import { withAnalytics } from '@coparse/analytics';
 import { useBuildChatSendRequest } from '@core/component/AI/component/input/buildRequest';
-import { DEFAULT_MODEL } from '@core/component/AI/constant';
+import { DEFAULT_MODEL, SMART_MODE_MODEL } from '@core/component/AI/constant';
 import {
   useAttachments,
   useChatAttachableHistory,
@@ -15,8 +15,10 @@ import type {
   UploadQueue,
 } from '@core/component/AI/types';
 import { useUploadAttachment } from '@core/component/AI/util/uploadToChat';
-import { CircleSpinner } from '@core/component/CircleSpinner';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
+import { Hotkey, modifierMap } from '@core/component/Hotkey';
+import { Tooltip } from '@core/component/Tooltip';
+import { pressedKeys } from '@core/hotkey/state';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import PlusIcon from '@icon/regular/plus.svg';
 import XIcon from '@icon/regular/x.svg';
@@ -24,11 +26,10 @@ import { createCallback } from '@solid-primitives/rootless';
 import { BrightJoins } from '@ui/components/BrightJoins';
 import type { LexicalEditor } from 'lexical';
 import type { Accessor, Component, Setter } from 'solid-js';
-import { createEffect, createSignal, Match, on, Show, Switch } from 'solid-js';
+import { createEffect, createSignal, on, Show } from 'solid-js';
 import { useTabAttachments } from '../../signal/tabAttachments';
 import { AttachmentList } from './Attachment';
 import { ChatAttachMenu } from './ChatAttachMenu';
-import { SendMessageButton, StopButton } from './SendMessageButton';
 import type { Source } from './ToolsetSelector';
 import {
   type UseChatMarkdown,
@@ -170,7 +171,7 @@ function ChatInput(props: ChatInputInternalProps) {
     !isEmptyInput() && !generating() && !hasUploadingAttachments();
 
   const buildChatSendRequest = useBuildChatSendRequest();
-  const sendMessage = createCallback(async () => {
+  const sendMessage = createCallback(async (modelOverride?: Model) => {
     if (!canSendMessage()) return;
 
     const request = await buildChatSendRequest({
@@ -178,7 +179,7 @@ function ChatInput(props: ChatInputInternalProps) {
       userRequest: props.markdown.markdownText(),
       isPersistent: props.isPersistent,
       attachments: props.attachments.attached(),
-      model: props.model(),
+      model: modelOverride ?? props.model(),
       toolset: toolsetSignal[0](),
       source: source(),
     });
@@ -188,14 +189,15 @@ function ChatInput(props: ChatInputInternalProps) {
 
   function handleEnter(e: KeyboardEvent): boolean {
     if (e.key === 'Enter' && !e.shiftKey) {
-      // Always prevent default for Enter (unless Shift is held)
       e.preventDefault();
 
-      // Only send if we can send, otherwise no-op
       if (canSendMessage()) {
-        sendMessage();
+        if (e.metaKey) {
+          sendMessage(SMART_MODE_MODEL);
+        } else {
+          sendMessage();
+        }
       }
-
       return true;
     } else {
       return false;
@@ -265,28 +267,50 @@ function ChatInput(props: ChatInputInternalProps) {
               onClick={() => setShowAttachMenu((prev) => !prev)}
             />
           </div>
-          <Switch>
-            <Match when={props.uploadQueue.uploading().length !== 0}>
-              <CircleSpinner />
-            </Match>
-            <Match when={!generating()}>
-              <SendMessageButton
-                isDisabled={() => !canSendMessage()}
-                onClick={() => {
-                  track(TrackingEvents.CHAT.MESSAGE.SEND);
-                  sendMessage();
-                }}
-              />
-            </Match>
-            <Match when={generating()}>
-              <StopButton
-                onClick={() => {
-                  track(TrackingEvents.CHAT.MESSAGE.STOP);
-                  props.onStop?.();
-                }}
-              />
-            </Match>
-          </Switch>
+
+          <div class="flex flex-col items-end text-xs leading-tight text-ink-disabled">
+            <div class="text-xs flex flex-col gap-1 opacity-70 items-end absolute bottom-1">
+              <Show when={generating()}>
+                <Tooltip tooltip="ctrl+c to stop" placement="top">
+                  <div
+                    class="flex items-center gap-1.5"
+                    classList={{
+                      'text-accent': pressedKeys().has('ctrl'),
+                    }}
+                  >
+                    <span class="">Stop</span>
+                    <div class="flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1.5 py-0.25 font-normal">
+                      <Hotkey shortcut="ctrl+c" />
+                    </div>
+                  </div>
+                </Tooltip>
+              </Show>
+              <Tooltip tooltip="Enter to send with Haiku" placement="top">
+                <div class="flex items-center gap-1.5">
+                  <span class="">Haiku</span>
+                  <div class="flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1.5 py-0.25 font-normal">
+                    <Hotkey shortcut="Enter" />
+                  </div>
+                </div>
+              </Tooltip>
+              <Tooltip
+                tooltip={`${modifierMap.cmd} + Enter to send with Opus`}
+                placement="top"
+              >
+                <div
+                  class="flex items-center gap-1.5"
+                  classList={{
+                    'text-accent': pressedKeys().has('cmd'),
+                  }}
+                >
+                  <span>Opus</span>
+                  <div class="flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1.5 py-0.25 font-normal">
+                    <Hotkey shortcut={'meta+Enter'} />
+                  </div>
+                </div>
+              </Tooltip>
+            </div>
+          </div>
         </div>
       </div>
     </div>

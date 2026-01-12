@@ -7,7 +7,6 @@ import {
   DOCUMENT_INDEX,
   EMAIL_INDEX,
   IS_DRY_RUN,
-  PROJECT_INDEX,
 } from '../constants';
 import { removeField } from '../utils/remove_field';
 
@@ -36,10 +35,6 @@ const CLEANUPS: IndexCleanup[] = [
   {
     indexName: EMAIL_INDEX,
     fieldsToRemove: [{ fieldName: 'updated_at' }, { fieldName: 'sent_at' }],
-  },
-  {
-    indexName: PROJECT_INDEX,
-    fieldsToRemove: [{ fieldName: 'created_at' }, { fieldName: 'updated_at' }],
   },
 ];
 

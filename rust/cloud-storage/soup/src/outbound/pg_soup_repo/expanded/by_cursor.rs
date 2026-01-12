@@ -7,6 +7,7 @@ use models_pagination::{Frecency, Query, SimpleSortMethod};
 use models_soup::item::SoupItem;
 use sqlx::PgPool;
 use std::str::FromStr;
+use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
 
 /// Returns objects that a user has EXPLICIT and IMPLICIT access to.
@@ -27,6 +28,9 @@ pub async fn expanded_generic_cursor_soup(
     let sort_method_str = cursor.sort_method().to_string();
     let (cursor_id, cursor_timestamp) = cursor.vals();
     let cursor_id = cursor_id.as_ref().map(|u| u.to_string());
+
+    let status_property_id = SystemPropertyKey::STATUS_UUID;
+    let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
 
     let items: Vec<SoupItem> = sqlx::query!(
 r#"        
@@ -94,9 +98,22 @@ r#"
                     WHEN 'viewed_at' THEN COALESCE(uh."updatedAt", '1970-01-01 00:00:00+00')
                     WHEN 'created_at' THEN d."createdAt"
                     ELSE d."updatedAt"
-                END::timestamptz as "sort_ts!"
+                END::timestamptz as "sort_ts!",
+                CASE 
+                    WHEN dt.sub_type = 'task' 
+                        AND ep_status.values->'value' ? $6
+                    THEN true 
+                    WHEN dt.sub_type = 'task'
+                    THEN false
+                    ELSE NULL 
+                END as "is_completed"
             FROM "Document" d
             LEFT JOIN document_sub_type dt ON dt.document_id = d.id
+            LEFT JOIN entity_properties ep_status 
+                ON dt.sub_type = 'task'
+                AND ep_status.entity_id = d.id 
+                AND ep_status.entity_type = 'TASK'
+                AND ep_status.property_definition_id = $7
             INNER JOIN UserAccessibleItems uai ON uai.item_id = d.id AND uai.item_type = 'document'
             -- This MUST be a LEFT JOIN to support all three sort methods
             LEFT JOIN "UserHistory" uh ON uh."itemId" = d.id AND uh."itemType" = 'document' AND uh."userId" = $1
@@ -140,7 +157,8 @@ r#"
                     WHEN 'viewed_at' THEN COALESCE(uh."updatedAt", '1970-01-01 00:00:00+00')
                     WHEN 'created_at' THEN c."createdAt"
                     ELSE c."updatedAt"
-                END::timestamptz as "sort_ts!"
+                END::timestamptz as "sort_ts!",
+                NULL as "is_completed"
             FROM "Chat" c
             INNER JOIN UserAccessibleItems uai ON uai.item_id = c.id AND uai.item_type = 'chat'
             LEFT JOIN "UserHistory" uh ON uh."itemId" = c.id AND uh."itemType" = 'chat' AND uh."userId" = $1
@@ -170,7 +188,8 @@ r#"
                     WHEN 'viewed_at' THEN COALESCE(uh."updatedAt", '1970-01-01 00:00:00+00')
                     WHEN 'created_at'  THEN p."createdAt"
                     ELSE p."updatedAt"
-                END::timestamptz as "sort_ts!"
+                END::timestamptz as "sort_ts!",
+                NULL as "is_completed"
             FROM "Project" p
             INNER JOIN UserAccessibleItems uai
                 ON uai.item_id = p.id
@@ -189,11 +208,13 @@ r#"
         ORDER BY "sort_ts!" DESC, "updated_at!" DESC
         LIMIT $3
 "#,
-        user_id.as_ref(), // $1
-        sort_method_str,  // $2
-        query_limit,      // $3
-        cursor_timestamp, // $4
-        cursor_id,        // $5
+        user_id.as_ref(),    // $1
+        sort_method_str,     // $2
+        query_limit,         // $3
+        cursor_timestamp,    // $4
+        cursor_id,           // $5
+        completed_option_id, // $6
+        status_property_id,  // $7
     )
         .try_map(map_soup_type!())
         .fetch_all(db)
@@ -216,6 +237,9 @@ pub async fn no_frecency_expanded_generic_soup(
     let (cursor_id, cursor_timestamp) = cursor.vals();
     let cursor_id = cursor_id.as_ref().map(|u| u.to_string());
 
+    let status_property_id = SystemPropertyKey::STATUS_UUID;
+    let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
+
     let items: Vec<SoupItem> = sqlx::query!(
 r#"        
         WITH RECURSIVE ProjectHierarchy AS (
@@ -282,9 +306,22 @@ r#"
                     WHEN 'viewed_at' THEN COALESCE(uh."updatedAt", '1970-01-01 00:00:00+00')
                     WHEN 'created_at' THEN d."createdAt"
                     ELSE d."updatedAt"
-                END::timestamptz as "sort_ts!"
+                END::timestamptz as "sort_ts!",
+                CASE 
+                    WHEN dt.sub_type = 'task' 
+                        AND ep_status.values->'value' ? $6
+                    THEN true 
+                    WHEN dt.sub_type = 'task'
+                    THEN false
+                    ELSE NULL 
+                END as "is_completed"
             FROM "Document" d
             LEFT JOIN document_sub_type dt ON dt.document_id = d.id
+            LEFT JOIN entity_properties ep_status 
+                ON dt.sub_type = 'task'
+                AND ep_status.entity_id = d.id 
+                AND ep_status.entity_type = 'TASK'
+                AND ep_status.property_definition_id = $7
             INNER JOIN UserAccessibleItems uai ON uai.item_id = d.id AND uai.item_type = 'document'
             -- This MUST be a LEFT JOIN to support all three sort methods
             LEFT JOIN "UserHistory" uh ON uh."itemId" = d.id AND uh."itemType" = 'document' AND uh."userId" = $1
@@ -328,7 +365,8 @@ r#"
                     WHEN 'viewed_at' THEN COALESCE(uh."updatedAt", '1970-01-01 00:00:00+00')
                     WHEN 'created_at' THEN c."createdAt"
                     ELSE c."updatedAt"
-                END::timestamptz as "sort_ts!"
+                END::timestamptz as "sort_ts!",
+                NULL as "is_completed"
             FROM "Chat" c
             INNER JOIN UserAccessibleItems uai ON uai.item_id = c.id AND uai.item_type = 'chat'
             LEFT JOIN "UserHistory" uh ON uh."itemId" = c.id AND uh."itemType" = 'chat' AND uh."userId" = $1
@@ -358,7 +396,8 @@ r#"
                     WHEN 'viewed_at' THEN COALESCE(uh."updatedAt", '1970-01-01 00:00:00+00')
                     WHEN 'created_at'  THEN p."createdAt"
                     ELSE p."updatedAt"
-                END::timestamptz as "sort_ts!"
+                END::timestamptz as "sort_ts!",
+                NULL as "is_completed"
             FROM "Project" p
             INNER JOIN UserAccessibleItems uai
                 ON uai.item_id = p.id
@@ -383,11 +422,13 @@ r#"
       ORDER BY Combined."sort_ts!" DESC, Combined."updated_at!" DESC
       LIMIT $3
   "#,
-        user_id.as_ref(), // $1
-        sort_method_str,  // $2
-        query_limit,      // $3
-        cursor_timestamp, // $4
-        cursor_id,        // $5
+        user_id.as_ref(),    // $1
+        sort_method_str,     // $2
+        query_limit,         // $3
+        cursor_timestamp,    // $4
+        cursor_id,           // $5
+        completed_option_id, // $6
+        status_property_id,  // $7
     )
         .try_map(map_soup_type!())
         .fetch_all(db)

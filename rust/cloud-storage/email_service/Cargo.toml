@@ -69,7 +69,6 @@ gmail_client = { path = "../gmail_client" }
 html-escape = "0.2"
 http-body-util = { workspace = true }
 infer = "0.19.0"
-insight_service_client = { path = "../insight_service_client" }
 lol_html = "2.4.0"
 macro_auth = { path = "../macro_auth" }
 macro_cors = { path = "../macro_cors" }
@@ -110,7 +109,6 @@ sqs_client = { path = "../sqs_client", default-features = false, features = [
   "contacts",
   "email",
   "gmail",
-  "insight_context",
   "search",
 ] }
 sqs_worker = { path = "../sqs_worker" }

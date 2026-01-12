@@ -4,6 +4,7 @@ use bytes::Bytes;
 use lexical_client::types::CognitionResponseData;
 use model::document::response::LocationResponseV3;
 use model::document::{DocumentBasic, FileType, FileTypeExt};
+use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 
 #[derive(Debug, Clone)]
 pub struct DocumentContent {
@@ -11,6 +12,7 @@ pub struct DocumentContent {
     pub document_id: String,
     pub file_type: FileType,
     pub location: LocationResponseV3,
+    pub properties: Option<Vec<EntityPropertyWithDefinition>>,
 }
 
 #[derive(Clone)]

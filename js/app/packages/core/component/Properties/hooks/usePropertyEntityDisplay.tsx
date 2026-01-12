@@ -154,7 +154,7 @@ export function usePropertyEntityDisplay(
         }
 
         // Tasks are documents with subType 'task'
-        if (previewItem.subType === 'task') {
+        if (previewItem.subType?.type === 'task') {
           return <CoreEntityIcon targetType="task" size="xs" />;
         }
 
@@ -214,7 +214,7 @@ export function usePropertyEntityDisplay(
         return null;
       }
       // Tasks are documents with subType 'task'
-      if (previewItem.subType === 'task') {
+      if (previewItem.subType?.type === 'task') {
         return 'task';
       }
       return previewItem.fileType || null;

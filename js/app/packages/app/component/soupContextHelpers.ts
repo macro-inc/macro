@@ -116,7 +116,7 @@ async function openDocument(
   } = options;
 
   const { id, fileType, subType } = entity;
-  const blockName = fileTypeToBlockName(subType ?? fileType);
+  const blockName = fileTypeToBlockName(subType?.type ?? fileType);
 
   // Create or replace split based on openInNewSplit option
   const handle = openInNewSplit

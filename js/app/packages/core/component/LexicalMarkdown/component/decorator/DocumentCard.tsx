@@ -341,7 +341,7 @@ export function DocumentCard(props: DocumentCardDecoratorProps) {
                 <EntityIcon
                   targetType={
                     props.item.type === 'document'
-                      ? (props.item.subType ?? props.item.fileType)
+                      ? (props.item.subType?.type ?? props.item.fileType)
                       : props.item.type
                   }
                   size="sm"

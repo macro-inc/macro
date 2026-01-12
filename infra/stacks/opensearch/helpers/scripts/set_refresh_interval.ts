@@ -5,7 +5,6 @@ import {
   CHAT_INDEX,
   DOCUMENT_INDEX,
   EMAIL_INDEX,
-  PROJECT_INDEX,
 } from '../constants';
 
 interface RefreshConfig {
@@ -18,7 +17,6 @@ const REFRESH_INTERVALS: RefreshConfig = {
   [CHANNEL_INDEX]: '1s',
   [EMAIL_INDEX]: '2s',
   [DOCUMENT_INDEX]: '1s',
-  [PROJECT_INDEX]: '1s',
 };
 
 async function updateIndexRefreshInterval(
