@@ -1,4 +1,3 @@
-
 import type {
   PersistedClient,
   Persister,
@@ -49,7 +48,9 @@ async function withStore<T>(
   }
 }
 
-export function createIDBPersister(options: IDBPersisterOptions = {}): Persister {
+export function createIDBPersister(
+  options: IDBPersisterOptions = {}
+): Persister {
   const dbName = options.dbName ?? DEFAULT_DB;
   const storeName = options.storeName ?? DEFAULT_STORE;
   const key = options.key ?? DEFAULT_KEY;
@@ -76,7 +77,9 @@ export function createIDBPersister(options: IDBPersisterOptions = {}): Persister
       }
     },
     removeClient: async () => {
-      await withStore(dbName, storeName, 'readwrite', (store) => store.delete(key));
+      await withStore(dbName, storeName, 'readwrite', (store) =>
+        store.delete(key)
+      );
     },
   };
 }
