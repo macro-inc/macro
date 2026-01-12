@@ -49,7 +49,6 @@ setup_test_envs:
     echo "DATABASE_URL={{ MACRODB }}" >> ./organization_retention_handler/.env
     echo "DATABASE_URL={{ MACRODB }}" >> ./sha_cleanup_worker/.env
     echo "DATABASE_URL={{ MACRODB }}" >> ./sha_ref_count_resetter/.env
-    echo "DATABASE_URL={{ MACRODB }}" >> ./metering_service/.env
     echo "DATABASE_URL={{ MACRODB }}" >> ./roles_and_permissions/.env
     echo "DATABASE_URL={{ MACRODB }}" >> ./teams/.env
     echo "DATABASE_URL={{ MACRODB }}" >> ./frecency/.env
@@ -68,5 +67,3 @@ initialize_dbs: setup_macrodb
     just notification_db_client/setup
     # contactsdb
     just contacts_db_client/setup
-    # metering db
-    just metering_db_client/setup

@@ -105,8 +105,6 @@ export const documentStorageServiceUrl: pulumi.Output<string> =
     .getOutput('cloudStorageServiceUrl')
     .apply((cloudStorageServiceUrl) => cloudStorageServiceUrl as string);
 
-export const meteringServiceUrl = `https://metering${stack === 'prod' ? '' : `-${stack}`}.macro.com`;
-
 const documentTextExtractorStack = new pulumi.StackReference(
   'document-text-extractor',
   {
@@ -275,10 +273,6 @@ const documentCognitionService = new DocumentCognitionService(
       {
         name: 'SYNC_SERVICE_AUTH_KEY',
         value: pulumi.interpolate`${SYNC_SERVICE_AUTH_KEY}`,
-      },
-      {
-        name: 'METERING_SERVICE_URL',
-        value: pulumi.interpolate`${meteringServiceUrl}`,
       },
       {
         name: 'SYNC_SERVICE_URL',

@@ -137,15 +137,6 @@ async fn main() -> anyhow::Result<()> {
             .await
             .context("failed to create jwt validation args")?;
 
-    let metering_client = Arc::new(
-        metering_service_client::Client::new(
-            internal_auth_key.as_ref().to_string(),
-            config.metering_service_url.clone(),
-            config.disable_metering_service,
-        )
-        .context("failed to create metering client")?,
-    );
-
     let lexical_client = Arc::new(lexical_client::LexicalClient::new(
         sync_service_auth_key,
         config.lexical_service_url.clone(),
@@ -193,7 +184,6 @@ async fn main() -> anyhow::Result<()> {
         macro_notify_client: Arc::new(macro_notify_client),
         comms_service_client: Arc::new(comms_service_client),
         search_service_client: Arc::new(search_service_client),
-        metering_client,
         jwt_args,
         config: Arc::new(config),
         internal_auth_key,

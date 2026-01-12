@@ -1,7 +1,6 @@
 /* This is misnamed - this is a pdf completion only for the "generalized popup" */
 use aho_corasick::AhoCorasick;
 use anyhow::{Context, Result};
-use metering_service_client::{CreateUsageRecordRequest, OperationType, ServiceName};
 use model::document::FileType;
 use regex::Regex;
 use std::{str::FromStr, sync::Arc};
@@ -14,7 +13,7 @@ use ai::{
 };
 use tokio::sync::mpsc::UnboundedSender;
 
-use futures::{future::join_all, stream::StreamExt};
+use futures::stream::StreamExt;
 
 use crate::{
     api::context::ApiContext,
@@ -160,21 +159,18 @@ async fn build_completion_request(
     Ok(request)
 }
 
-#[instrument(skip_all, err, fields(user_id, request, completion_id))]
+#[instrument(skip(sender), err)]
 async fn stream_completion(
     request: ChatCompletionRequest,
     sender: &UnboundedSender<FromWebSocketMessage>,
     completion_id: &str,
     user_id: &str,
-    ctx: Arc<ApiContext>,
 ) -> Result<()> {
-    let model = request.model();
     tracing::debug!("stream_completion get chat stream {:#?}", request);
     let mut stream = get_chat_stream(request)
         .await
         .context("failed to get chat stream")?;
     let mut response_message = String::new();
-    let mut usage_reqs = vec![];
     while let Some(response) = stream.next().await {
         let parts = response.context("failed to get response message")?;
         for part in parts {
@@ -187,24 +183,9 @@ async fn stream_completion(
                 done: false,
             };
 
-            if let Some(usage) = &content.usage {
-                usage_reqs.push(
-                    ctx.metering_client
-                        .record_usage(CreateUsageRecordRequest::new(
-                            usage.clone(),
-                            true,
-                            model,
-                            user_id.to_string(),
-                            ServiceName::DocumentCognitionService,
-                            OperationType::SimpleStreamCompletion,
-                        )),
-                );
-            }
-
             ws_send(sender, response);
         }
     }
-    let _ = join_all(usage_reqs).await;
 
     ws_send(
         sender,
@@ -234,7 +215,7 @@ pub async fn send_completion_handler(
         .await
         .context("build completion request")?;
 
-    stream_completion(request, sender, &completion_id, user_id, ctx)
+    stream_completion(request, sender, &completion_id, user_id)
         .await
         .context("failed to stream completion")?;
 

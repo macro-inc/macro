@@ -24,7 +24,6 @@ pub struct ApiContext {
     pub comms_service_client: Arc<comms_service_client::CommsServiceClient>,
     pub search_service_client: Arc<SearchServiceClient>,
     pub scribe: Arc<DcsScribe>,
-    pub metering_client: Arc<metering_service_client::Client>,
     pub email_service_client_external: Arc<email_service_client::EmailServiceClientExternal>,
     pub jwt_args: JwtValidationArgs,
     pub config: Arc<Config>,
@@ -42,7 +41,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     use email_service_client::{EmailServiceClient, EmailServiceClientExternal};
     use lexical_client::LexicalClient;
     use macro_notify::MacroNotifyClient;
-    use metering_service_client::Client as MeteringClient;
     use scribe::ScribeClient;
     use search_service_client::SearchServiceClient;
     use sqs_client::SQS;
@@ -107,9 +105,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         .with_email_client(email_service_client)
         .with_static_file_client(static_file_service_client.clone());
 
-    let metering_client =
-        MeteringClient::new("dummy_auth_key".into(), "http://localhost".into(), false).unwrap();
-
     let api_context = ApiContext {
         db: pool.clone(),
         sqs_client: Arc::new(sqs_client),
@@ -118,7 +113,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         comms_service_client,
         search_service_client: Arc::new(search_service_client),
         scribe: Arc::new(content_client),
-        metering_client: Arc::new(metering_client),
         email_service_client_external,
         jwt_args: JwtValidationArgs::new_testing(),
         config: Arc::new(Config::new_empty_for_test()),
