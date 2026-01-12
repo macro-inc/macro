@@ -113,15 +113,6 @@ pub(in crate::api) async fn create_document_handler(
         }
     };
 
-    utils::notify_search_service_of_document_name_update(
-        state.sqs_client.clone(),
-        response_data
-            .document_response
-            .document_metadata
-            .document_id
-            .clone(),
-    );
-
     return GenericResponse::builder()
         .data(&response_data)
         .send(StatusCode::OK);

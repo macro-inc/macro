@@ -20,9 +20,6 @@ use models_email::gmail::operations::GmailApiOperation;
 use models_email::service::attachment::{AttachmentUploadArgs, AttachmentUploadDestination};
 use models_email::service::message::Message;
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
-use models_opensearch::SearchEntityType;
-use sqs_client::search::SearchQueueMessage;
-use sqs_client::search::name::EntityName;
 use std::collections::HashSet;
 use std::result;
 use uuid::Uuid;
@@ -398,26 +395,12 @@ async fn fetch_and_insert_thread(
 
     // insert threads into db
     for thread in threads.into_iter() {
-        let thread_id = threads::insert::insert_thread_and_messages(&ctx.db, thread, link_id)
+        threads::insert::insert_thread_and_messages(&ctx.db, thread, link_id)
             .await
             .map_err(|e| {
                 ProcessingError::Retryable(DetailedError {
                     reason: FailureReason::DatabaseQueryFailed,
                     source: e.context("Failed to insert thread and messages".to_string()),
-                })
-            })?;
-
-        // when a thread is created, add an entry into the names index for it
-        ctx.sqs_client
-            .send_message_to_search_event_queue(SearchQueueMessage::UpdateEntityName(EntityName {
-                entity_id: thread_id,
-                entity_type: SearchEntityType::Emails,
-            }))
-            .await
-            .map_err(|e| {
-                ProcessingError::NonRetryable(DetailedError {
-                    reason: FailureReason::SqsEnqueueFailed,
-                    source: e.context("Failed to send message to search extractor queue"),
                 })
             })?;
     }
