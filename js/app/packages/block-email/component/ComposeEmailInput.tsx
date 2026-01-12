@@ -53,11 +53,12 @@ export type ComposeInputData = {
   };
 };
 
-type ComposeEmailInputProps = {
+export type ComposeEmailInputProps = {
   inputRef?: (el: HTMLDivElement) => void;
   onSubmit: (data: ComposeInputData) => void;
   disabled?: boolean;
   isSubmitting?: boolean;
+  initialContent?: string;
 };
 
 export function ComposeEmailInput(props: ComposeEmailInputProps) {
@@ -233,6 +234,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
             class="text-sm break-words text-ink"
             editable={() => !props.disabled}
             placeholder="Use `@` to reference files"
+            initialValue={props.initialContent}
             watermark={!hasPaidAccess() ? <MacroSignatureButton /> : undefined}
             onChange={setContent}
             onFocusLeaveStart={(e) => {
