@@ -679,7 +679,7 @@
     "/channels/{channel_id}/participants": {
       "post": {
         "tags": ["channels"],
-        "description": "adds a list of participants to the channel, user must be an owner or an admin",
+        "description": "adds a list of participants to the channel, user must be a participant",
         "operationId": "add_participants",
         "parameters": [
           {
@@ -718,7 +718,7 @@
       },
       "delete": {
         "tags": ["channels"],
-        "description": "removes a list of participants to the channel, user must be an owner or an admin",
+        "description": "removes a list of participants from the channel, user must be a participant",
         "operationId": "remove_participants",
         "parameters": [
           {

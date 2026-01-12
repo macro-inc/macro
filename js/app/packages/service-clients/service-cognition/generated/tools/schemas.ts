@@ -26,25 +26,7 @@ export const Read = z.object({ "contentType": z.enum(["document","channel","chan
 
 
 export const ReadResponse = z.object({ "content": z.any().superRefine((x, ctx) => {
-    const schemas = [z.object({ "documents": z.array(z.object({ "formattedDocument": z.string() })), "type": z.literal("documents") }), z.object({ "channel_id": z.string(), "channel_name": z.union([z.string(), z.null()]).optional(), "transcript": z.string(), "type": z.literal("channel") }), z.object({ "conversation": z.array(z.object({ "chat_id": z.string(), "messages": z.array(z.object({ "attachment_summaries": z.array(z.any().superRefine((x, ctx) => {
-    const schemas = [z.object({ "Summary": z.object({ "created_at": z.union([z.string().datetime({ offset: true }), z.null()]).optional(), "document_id": z.string(), "id": z.union([z.string(), z.null()]).optional(), "summary": z.string(), "version_id": z.string() }) }).strict(), z.object({ "NoSummary": z.object({ "document_id": z.string() }) }).strict()];
-    const errors = schemas.reduce<z.ZodError[]>(
-      (errors, schema) =>
-        ((result) =>
-          result.error ? [...errors, result.error] : errors)(
-          schema.safeParse(x),
-        ),
-      [],
-    );
-    if (schemas.length - errors.length !== 1) {
-      ctx.addIssue({
-        path: ctx.path,
-        code: "invalid_union",
-        unionErrors: errors,
-        message: "Invalid input: Should pass single schema",
-      });
-    }
-  })), "content": z.string(), "date": z.string().datetime({ offset: true }) })), "title": z.string() })), "type": z.literal("chat") }), z.object({ "messages": z.array(z.object({ "bcc": z.array(z.string()), "cc": z.array(z.string()), "content": z.string(), "messageId": z.string(), "recipients": z.array(z.string()), "sender": z.string(), "sentAt": z.union([z.string().datetime({ offset: true }), z.null()]).optional() })), "subject": z.union([z.string(), z.null()]).optional(), "thread_id": z.string(), "type": z.literal("email") }), z.object({ "formatted_preview": z.string(), "type": z.literal("itemPreviews") })];
+    const schemas = [z.object({ "documents": z.array(z.object({ "content": z.string(), "documentId": z.string(), "metadata": z.object({ "deleted": z.boolean(), "documentName": z.string(), "fileType": z.union([z.string(), z.null()]).optional(), "owner": z.string(), "projectId": z.union([z.string(), z.null()]).optional() }) })), "type": z.literal("documents") }), z.object({ "channel_id": z.string(), "channel_name": z.union([z.string(), z.null()]).optional(), "transcript": z.string(), "type": z.literal("channel") }), z.object({ "conversation": z.array(z.object({ "chat_id": z.string(), "messages": z.array(z.object({ "attachmentIds": z.array(z.string()), "content": z.string(), "date": z.string().datetime({ offset: true }) })), "title": z.string() })), "type": z.literal("chat") }), z.object({ "messages": z.array(z.object({ "bcc": z.array(z.string()), "cc": z.array(z.string()), "content": z.string(), "messageId": z.string(), "recipients": z.array(z.string()), "sender": z.string(), "sentAt": z.union([z.string().datetime({ offset: true }), z.null()]).optional() })), "subject": z.union([z.string(), z.null()]).optional(), "thread_id": z.string(), "type": z.literal("email") }), z.object({ "formatted_preview": z.string(), "type": z.literal("itemPreviews") })];
     const errors = schemas.reduce<z.ZodError[]>(
       (errors, schema) =>
         ((result) =>

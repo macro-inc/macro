@@ -303,7 +303,15 @@ export interface ReadResponse {
   content:
     | {
         documents: {
-          formattedDocument: string;
+          content: string;
+          documentId: string;
+          metadata: {
+            deleted: boolean;
+            documentName: string;
+            fileType?: string | null;
+            owner: string;
+            projectId?: string | null;
+          };
         }[];
         type: 'documents';
       }
@@ -317,22 +325,7 @@ export interface ReadResponse {
         conversation: {
           chat_id: string;
           messages: {
-            attachment_summaries: (
-              | {
-                  Summary: {
-                    created_at?: string | null;
-                    document_id: string;
-                    id?: string | null;
-                    summary: string;
-                    version_id: string;
-                  };
-                }
-              | {
-                  NoSummary: {
-                    document_id: string;
-                  };
-                }
-            )[];
+            attachmentIds: string[];
             content: string;
             date: string;
           }[];

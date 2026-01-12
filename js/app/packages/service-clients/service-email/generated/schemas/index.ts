@@ -49,6 +49,7 @@ export * from './attachment';
 export * from './attachmentContentId';
 export * from './attachmentDataUrl';
 export * from './attachmentDbId';
+export * from './attachmentDraft';
 export * from './attachmentFilename';
 export * from './attachmentMacro';
 export * from './attachmentMacroDbId';

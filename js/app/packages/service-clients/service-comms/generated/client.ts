@@ -1039,7 +1039,7 @@ export const patchMessage = async (channelId: string,
 
 
 /**
- * adds a list of participants to the channel, user must be an owner or an admin
+ * adds a list of participants to the channel, user must be a participant
  */
 export type addParticipantsResponse200 = {
   data: void
@@ -1100,7 +1100,7 @@ export const addParticipants = async (channelId: string,
 
 
 /**
- * removes a list of participants to the channel, user must be an owner or an admin
+ * removes a list of participants from the channel, user must be a participant
  */
 export type removeParticipantsResponse200 = {
   data: void

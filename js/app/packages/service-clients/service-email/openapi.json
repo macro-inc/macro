@@ -1797,6 +1797,51 @@
           "size_bytes": { "type": ["integer", "null"], "format": "int64" }
         }
       },
+      "AttachmentDraft": {
+        "type": "object",
+        "required": [
+          "id",
+          "draft_id",
+          "file_name",
+          "content_type",
+          "sha",
+          "size",
+          "s3_key"
+        ],
+        "properties": {
+          "content_type": {
+            "type": "string",
+            "description": "MIME type of the attachment (e.g., \"application/pdf\", \"image/png\")."
+          },
+          "draft_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The ID of the draft message this attachment belongs to."
+          },
+          "file_name": {
+            "type": "string",
+            "description": "Original file name of the attachment."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for the attachment."
+          },
+          "s3_key": {
+            "type": "string",
+            "description": "S3 object key where the attachment content is stored."
+          },
+          "sha": {
+            "type": "string",
+            "description": "SHA-256 hash of the file content for integrity verification."
+          },
+          "size": {
+            "type": "integer",
+            "format": "int32",
+            "description": "File size in bytes."
+          }
+        }
+      },
       "AttachmentMacro": {
         "type": "object",
         "description": "Attachments of a message created when sending a message/draft through Macro FE. references\na macro item (document, canvas, etc). These don't actually get sent to the provider when\nsending a message, but we store them so we can display the pills for the Macro objects in the FE\nwhen displaying the message.",
@@ -2136,6 +2181,7 @@
           "labels",
           "attachments",
           "attachments_macro",
+          "attachments_draft",
           "created_at",
           "updated_at"
         ],
@@ -2143,6 +2189,11 @@
           "attachments": {
             "type": "array",
             "items": { "$ref": "#/components/schemas/Attachment" }
+          },
+          "attachments_draft": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/AttachmentDraft" },
+            "description": "Uploaded file attachments for the message, if it is a draft"
           },
           "attachments_macro": {
             "type": "array",
