@@ -2,17 +2,9 @@ const CHAT_INDEX = 'chats';
 const DOCUMENT_INDEX = 'documents';
 const EMAIL_INDEX = 'emails';
 const CHANNEL_INDEX = 'channels';
-const PROJECT_INDEX = 'projects';
 const NAMES_INDEX = 'names';
 
-export {
-  CHAT_INDEX,
-  DOCUMENT_INDEX,
-  EMAIL_INDEX,
-  CHANNEL_INDEX,
-  PROJECT_INDEX,
-  NAMES_INDEX,
-};
+export { CHAT_INDEX, DOCUMENT_INDEX, EMAIL_INDEX, CHANNEL_INDEX, NAMES_INDEX };
 
 export const SHARD_SETTINGS =
   process.env.ENVIRONMENT === 'prod'

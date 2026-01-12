@@ -2,6 +2,7 @@ use super::fetcher::NewDocumentFetcher;
 use super::project::ProjectFetcher;
 use document_storage_service_client::DocumentStorageServiceClient;
 use lexical_client::LexicalClient;
+use sqlx::{Pool, Postgres};
 use std::sync::Arc;
 use sync_service_client::SyncServiceClient;
 
@@ -10,6 +11,7 @@ pub struct DocumentClient {
     pub dss_client: Arc<DocumentStorageServiceClient>,
     pub sync_service_client: Arc<SyncServiceClient>,
     pub lexical_client: Arc<LexicalClient>,
+    pub macro_db: Arc<Pool<Postgres>>,
 }
 
 impl DocumentClient {
@@ -21,11 +23,13 @@ impl DocumentClient {
         dss_client: Arc<DocumentStorageServiceClient>,
         sync_service_client: Arc<SyncServiceClient>,
         lexical_client: Arc<LexicalClient>,
+        macro_db: Arc<Pool<Postgres>>,
     ) -> Self {
         Self {
             dss_client,
             sync_service_client,
             lexical_client,
+            macro_db,
         }
     }
 }
@@ -36,6 +40,7 @@ impl DocumentClient {
             self.dss_client.clone(),
             self.sync_service_client.clone(),
             self.lexical_client.clone(),
+            self.macro_db.clone(),
             document_id.into(),
         )
     }
@@ -50,6 +55,7 @@ impl DocumentClient {
             self.dss_client.clone(),
             self.sync_service_client.clone(),
             self.lexical_client.clone(),
+            self.macro_db.clone(),
             document_id.into(),
         )
         .with_jwt_token(jwt_token)
@@ -62,7 +68,7 @@ impl DocumentClient {
 
 // --- builder --- //
 // slight insanity but its good ong
-pub type NewDocumentClientBuilder = DocumentClientBuilder<(), (), ()>;
+pub type NewDocumentClientBuilder = DocumentClientBuilder<(), (), (), ()>;
 impl Default for NewDocumentClientBuilder {
     fn default() -> Self {
         Self::new()
@@ -75,51 +81,70 @@ impl NewDocumentClientBuilder {
             dss_client: (),
             lexical_client: (),
             sync_service_client: (),
+            macro_db: (),
         }
     }
 }
 
-pub struct DocumentClientBuilder<A, B, C> {
+pub struct DocumentClientBuilder<A, B, C, D> {
     pub dss_client: A,
     pub sync_service_client: B,
     pub lexical_client: C,
+    pub macro_db: D,
 }
 
-impl<A, B, C> DocumentClientBuilder<A, B, C> {
+impl<A, B, C, D> DocumentClientBuilder<A, B, C, D> {
     pub fn with_dss_client<T: Into<Arc<DocumentStorageServiceClient>>>(
         self,
         dss_client: T,
-    ) -> DocumentClientBuilder<Arc<DocumentStorageServiceClient>, B, C> {
+    ) -> DocumentClientBuilder<Arc<DocumentStorageServiceClient>, B, C, D> {
         DocumentClientBuilder {
             dss_client: dss_client.into(),
             lexical_client: self.lexical_client,
             sync_service_client: self.sync_service_client,
+            macro_db: self.macro_db,
         }
     }
 }
 
-impl<A, B, C> DocumentClientBuilder<A, B, C> {
+impl<A, B, C, D> DocumentClientBuilder<A, B, C, D> {
     pub fn with_sync_service_client<T: Into<Arc<SyncServiceClient>>>(
         self,
         sync_service_client: T,
-    ) -> DocumentClientBuilder<A, Arc<SyncServiceClient>, C> {
+    ) -> DocumentClientBuilder<A, Arc<SyncServiceClient>, C, D> {
         DocumentClientBuilder {
             dss_client: self.dss_client,
             lexical_client: self.lexical_client,
             sync_service_client: sync_service_client.into(),
+            macro_db: self.macro_db,
         }
     }
 }
 
-impl<A, B, C> DocumentClientBuilder<A, B, C> {
+impl<A, B, C, D> DocumentClientBuilder<A, B, C, D> {
     pub fn with_lexical_client<T: Into<Arc<LexicalClient>>>(
         self,
         lexical_client: T,
-    ) -> DocumentClientBuilder<A, B, Arc<LexicalClient>> {
+    ) -> DocumentClientBuilder<A, B, Arc<LexicalClient>, D> {
         DocumentClientBuilder {
             dss_client: self.dss_client,
             lexical_client: lexical_client.into(),
             sync_service_client: self.sync_service_client,
+            macro_db: self.macro_db,
+        }
+    }
+}
+
+impl<A, B, C, D> DocumentClientBuilder<A, B, C, D> {
+    pub fn with_macro_db<T: Into<Arc<Pool<Postgres>>>>(
+        self,
+        macro_db: T,
+    ) -> DocumentClientBuilder<A, B, C, Arc<Pool<Postgres>>> {
+        DocumentClientBuilder {
+            dss_client: self.dss_client,
+            lexical_client: self.lexical_client,
+            sync_service_client: self.sync_service_client,
+            macro_db: macro_db.into(),
         }
     }
 }
@@ -129,6 +154,7 @@ impl
         Arc<DocumentStorageServiceClient>,
         Arc<SyncServiceClient>,
         Arc<LexicalClient>,
+        Arc<Pool<Postgres>>,
     >
 {
     pub fn build(self) -> DocumentClient {
@@ -136,6 +162,7 @@ impl
             dss_client: self.dss_client,
             sync_service_client: self.sync_service_client,
             lexical_client: self.lexical_client,
+            macro_db: self.macro_db,
         }
     }
 }

@@ -87,6 +87,7 @@ pub async fn generate_patches(
                 file_type: "md".into(),
                 id: request.markdown_file_id,
                 name: file_name,
+                properties: None,
             }
             .boxed(),
         )

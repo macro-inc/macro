@@ -16,10 +16,7 @@ use model::{
     user::UserContext,
 };
 use models_permissions::share_permission::access_level::OwnerAccessLevel;
-use sqs_client::search::{
-    SearchQueueMessage, chat::RemoveChatMessage, document::DocumentId, project,
-};
-use tracing::Instrument;
+use sqs_client::search::{SearchQueueMessage, chat::RemoveChatMessage, document::DocumentId};
 use utoipa::ToSchema;
 
 #[derive(serde::Deserialize)]
@@ -315,26 +312,6 @@ pub async fn permanently_delete_project_handler(
     }
 
     let response_data = GenericSuccessResponse { success: true };
-
-    // delete projects from search
-    // NOTE: project_ids should contain the root project in addition
-    // to the other projects, so the deletion can be done in one call
-    tokio::spawn({
-        let sqs_client = ctx.sqs_client.clone();
-        let project_ids = project_ids.clone();
-        async move {
-            tracing::trace!("sending message to search extractor queue");
-            let _ = sqs_client
-                .send_message_to_search_event_queue(SearchQueueMessage::BulkRemoveProjectMessage(
-                    project::BulkRemoveProjectMessage { project_ids },
-                ))
-                .await
-                .inspect_err(|e| {
-                    tracing::error!(error=?e, "SEARCH_QUEUE unable to enqueue message");
-                });
-        }
-        .in_current_span()
-    });
 
     Ok(GenericResponse::builder()
         .data(&response_data)

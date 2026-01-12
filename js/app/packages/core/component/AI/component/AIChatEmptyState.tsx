@@ -1,3 +1,4 @@
+import { modifierMap } from '@core/component/Hotkey';
 import { BrightJoins } from '@ui/components/BrightJoins';
 import { useOpenInstructionsMd } from '../util/instructions';
 
@@ -9,6 +10,22 @@ export function AiChatEmptyState() {
       <div class="grid justify-start grid-cols-[max-content_auto] gap-y-1 grid-template items-center">
         <span class="p-1 bg-accent text-panel mr-2 text-center">@</span>
         <span>To attach, files, emails, and channel</span>
+      </div>
+      <div class="grid justify-start grid-cols-[max-content_auto] gap-y-1 grid-template items-center">
+        <span class="p-1 bg-accent text-panel mr-2 text-center">Enter</span>
+        <span>To chat with Haiku</span>
+      </div>
+      <div class="grid justify-start grid-cols-[max-content_auto] gap-y-1 grid-template items-center">
+        <span class="p-1 bg-accent text-panel mr-2 text-center">
+          {modifierMap.cmd} + Enter
+        </span>
+        <span>To chat with Opus</span>
+      </div>
+      <div class="grid justify-start grid-cols-[max-content_auto] gap-y-1 grid-template items-center">
+        <span class="p-1 bg-accent text-panel mr-2 text-center">
+          {modifierMap.ctrl} + C
+        </span>
+        <span>To Stop generating</span>
       </div>
       <div>
         Change the

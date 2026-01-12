@@ -4,10 +4,6 @@ use axum::Extension;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use insight_service_client::InsightContextProvider;
-use model::insight_context::email_insights::{
-    EMAIL_INSIGHT_PROVIDER_SOURCE_NAME, EmailInfo, GenerateEmailInsightContext, LinkDeletedPayload,
-};
 use model::response::{EmptyResponse, ErrorResponse};
 use model::user::UserContext;
 use models_email::email::service::link::Link;
@@ -130,25 +126,6 @@ pub async fn disable_handler(
                 tracing::error!(error=?e, "failed to send message to search extractor queue");
             })
             .ok();
-
-        // send message to insights queue
-
-        let email_info = EmailInfo::LinkDeleted(LinkDeletedPayload {
-            link_id: link_context_cloned.id.to_string(),
-            email_address: link_context_cloned.email_address.0.as_ref().to_string(),
-        });
-
-        let insights_message = GenerateEmailInsightContext {
-            macro_user_id: link_context_cloned.macro_id.to_string(),
-            info: email_info,
-        };
-
-        let provider = InsightContextProvider::create(
-            ctx.sqs_client.as_ref().clone(),
-            EMAIL_INSIGHT_PROVIDER_SOURCE_NAME,
-        );
-
-        provider.provide_email_context(insights_message).await.ok();
 
         if let Err(e) = email_db_client::links::delete::delete_link_by_id(&db, link_id).await {
             tracing::error!(error=?e, link_id=?link_id, "Failed to delete link in background task");

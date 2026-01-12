@@ -26,7 +26,7 @@ export const Read = z.object({ "contentType": z.enum(["document","channel","chan
 
 
 export const ReadResponse = z.object({ "content": z.any().superRefine((x, ctx) => {
-    const schemas = [z.object({ "documents": z.array(z.object({ "content": z.string(), "documentId": z.string(), "metadata": z.object({ "deleted": z.boolean(), "documentName": z.string(), "fileType": z.union([z.string(), z.null()]).optional(), "owner": z.string(), "projectId": z.union([z.string(), z.null()]).optional() }) })), "type": z.literal("documents") }), z.object({ "channel_id": z.string(), "channel_name": z.union([z.string(), z.null()]).optional(), "transcript": z.string(), "type": z.literal("channel") }), z.object({ "conversation": z.array(z.object({ "chat_id": z.string(), "messages": z.array(z.object({ "attachment_summaries": z.array(z.any().superRefine((x, ctx) => {
+    const schemas = [z.object({ "documents": z.array(z.object({ "formattedDocument": z.string() })), "type": z.literal("documents") }), z.object({ "channel_id": z.string(), "channel_name": z.union([z.string(), z.null()]).optional(), "transcript": z.string(), "type": z.literal("channel") }), z.object({ "conversation": z.array(z.object({ "chat_id": z.string(), "messages": z.array(z.object({ "attachment_summaries": z.array(z.any().superRefine((x, ctx) => {
     const schemas = [z.object({ "Summary": z.object({ "created_at": z.union([z.string().datetime({ offset: true }), z.null()]).optional(), "document_id": z.string(), "id": z.union([z.string(), z.null()]).optional(), "summary": z.string(), "version_id": z.string() }) }).strict(), z.object({ "NoSummary": z.object({ "document_id": z.string() }) }).strict()];
     const errors = schemas.reduce<z.ZodError[]>(
       (errors, schema) =>

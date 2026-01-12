@@ -12,7 +12,6 @@ pub mod channel_message;
 pub mod chat;
 pub mod document;
 pub mod email;
-pub mod project;
 
 pub type Result<T> = std::result::Result<T, error::OpensearchClientError>;
 

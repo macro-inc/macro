@@ -7,8 +7,6 @@ use ai::chat_stream::get_chat_stream;
 use ai::types::{ChatStreamCompletionResponse, MessageBuilder, Model, RequestBuilder};
 use anyhow::Result;
 use futures::StreamExt;
-use futures::future::join_all;
-use metering_service_client::{CreateUsageRecordRequest, OperationType, ServiceName};
 use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -17,6 +15,7 @@ use macro_db_client::dcs::get_document_text;
 
 const SIMPLE_COMPLETION_DEFAULT_MODEL: Model = Model::OpenAIGPT4oMini;
 
+#[tracing::instrument(skip(ctx, payload, sender))]
 pub async fn handle_simple_completion(
     ctx: Arc<ApiContext>,
     sender: &UnboundedSender<FromWebSocketMessage>,
@@ -80,7 +79,6 @@ pub async fn handle_simple_completion(
 
     let mut stream = get_chat_stream(request).await?;
     let mut cumulative_content = String::new();
-    let mut usage_reqs = vec![];
     while let Some(response) = stream.next().await {
         let parts = response?;
         for part in parts {
@@ -97,22 +95,8 @@ pub async fn handle_simple_completion(
                     details: Some(err.to_string()),
                 }
             })?;
-            if let Some(usage) = &content.usage {
-                usage_reqs.push(
-                    ctx.metering_client
-                        .record_usage(CreateUsageRecordRequest::new(
-                            usage.clone(),
-                            true,
-                            model,
-                            user_id.to_string(),
-                            ServiceName::DocumentCognitionService,
-                            OperationType::SimpleStreamCompletion,
-                        )),
-                );
-            }
         }
     }
-    let _ = join_all(usage_reqs).await;
     let message = FromWebSocketMessage::CompletionStreamChunk {
         completion_id: payload.completion_id.clone(),
         content: cumulative_content.clone(),

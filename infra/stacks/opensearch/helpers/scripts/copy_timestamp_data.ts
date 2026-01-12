@@ -6,7 +6,6 @@ import {
   CHAT_INDEX,
   DOCUMENT_INDEX,
   EMAIL_INDEX,
-  PROJECT_INDEX,
 } from '../constants';
 import { type IndexMigration, migrateIndex } from '../utils/migrate_field';
 
@@ -31,13 +30,6 @@ const MIGRATIONS: IndexMigration[] = [
     fields: [
       { oldField: 'updated_at', newField: 'updated_at_seconds' },
       { oldField: 'sent_at', newField: 'sent_at_seconds' },
-    ],
-  },
-  {
-    indexName: PROJECT_INDEX,
-    fields: [
-      { oldField: 'created_at', newField: 'created_at_seconds' },
-      { oldField: 'updated_at', newField: 'updated_at_seconds' },
     ],
   },
 ];

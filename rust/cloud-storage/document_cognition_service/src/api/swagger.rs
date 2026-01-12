@@ -58,9 +58,8 @@ use model::{
     chat::{
         AttachmentMetadata, AttachmentType, Chat, ChatAttachment, ChatAttachmentWithName,
         ChatHistory, ChatMessage, ChatMessageWithAttachments, ConversationRecord,
-        MessageWithAttachmentSummary, NewChatMessage, NewMessageAttachment, Summary,
+        MessageWithAttachments, NewChatMessage, NewMessageAttachment,
     },
-    insight_context::document::DocumentSummary,
     macros::{Macro, MacroResponse, MacrosResponse},
     response::{GenericErrorResponse, StringIDResponse},
     version::DocumentCognitionServiceApiVersion,
@@ -131,8 +130,7 @@ use utoipa::OpenApi;
                 ChatAttachmentWithName,
                 ChatHistory,
                 ConversationRecord,
-                MessageWithAttachmentSummary,
-                Summary,
+                MessageWithAttachments,
                 ChatMessage,
                 ChatMessageWithAttachments,
                 ChatResponse,
@@ -141,7 +139,6 @@ use utoipa::OpenApi;
 
                 // Chat History
                 ChatHistoryBatchMessagesRequest,
-                DocumentSummary,
 
                 // Citation
                 DocumentTextPart,

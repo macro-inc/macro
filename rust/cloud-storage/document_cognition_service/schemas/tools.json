@@ -1,416 +1,219 @@
 {
   "schemas": [
     {
-      "name": "ListEmails",
+      "name": "ListDocuments",
       "inputSchema": {
         "additionalProperties": false,
-        "description": "List the emails the user has access to. Use this tool to discover and browse emails before using the Read tool to access their content. Prefer using the search tool to search on a specific matching string within the content or the name of the entity.",
+        "description": "List documents the user has access to with optional filtering and pagination. Only applies to documents, not emails, AI conversations, chat/slack threads, projects aka folders. This tool returns document metadata including access levels and supports filtering by file type, minimum access level, and pagination. Use this tool to discover and browse documents before using the Read tool to access their content. Prefer using the search tool to search on a specific matching string within the content or the name of the entity.",
         "properties": {
-          "cursor": {
+          "exhaustiveSearch": {
             "additionalProperties": false,
-            "default": null,
-            "description": "A preview response will tell you what the next cursor id is.\n        If expected emails are not in the current response and it gives you a cursor id, use this field to list the next page of emails. If no cursor id is provided you've reached the end",
+            "default": false,
+            "description": "Exhaustive search to get all results. Defaults to false. Set to true when you need all matching documents, ignoring pagination limits.",
+            "type": "boolean"
+          },
+          "fileTypes": {
+            "additionalProperties": false,
+            "description": "Document file types to include. Examples: ['pdf'], ['md', 'txt']. Leave empty to include all document types.",
+            "items": {
+              "additionalProperties": false,
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "minAccessLevel": {
+            "additionalProperties": false,
+            "description": "Minimum access level required. Defaults to 'view' if not specified.",
+            "enum": [
+              "view",
+              "comment",
+              "edit",
+              "owner",
+              null
+            ],
             "type": [
               "string",
               "null"
             ]
           },
-          "limit": {
+          "pageOffset": {
             "additionalProperties": false,
-            "default": 20,
-            "description": "limit the max emails returned. This defaults to 20 and has a maximum of 500",
+            "default": 0,
+            "description": "Page offset for pagination. Default is 0. Use higher values to get subsequent pages of results.",
             "format": "int64",
             "type": "integer"
           },
-          "sortMethod": {
+          "pageSize": {
             "additionalProperties": false,
-            "default": "viewed_at",
-            "description": "Sort response by one of: viewed_at | updated_at | created_at | viewed_updated. Prefer viewed_at unless the otherwise specified",
-            "enum": [
-              "viewed_at",
-              "updated_at",
-              "created_at",
-              "viewed_updated"
-            ],
-            "type": "string"
-          },
-          "view": {
-            "additionalProperties": false,
-            "default": {
-              "standardLabel": null,
-              "userLabel": null
-            },
-            "description": "Choose the view to list emails from. One of either standard label or user label must be specified, otherwise defaults to important.",
-            "properties": {
-              "standardLabel": {
-                "additionalProperties": false,
-                "description": "Prefer important or all. Leave empty if using a user label",
-                "enum": [
-                  "Inbox",
-                  "Sent",
-                  "Drafts",
-                  "Starred",
-                  "All",
-                  "Important",
-                  "Other",
-                  null
-                ],
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "userLabel": {
-                "additionalProperties": false,
-                "description": "Choose a custom user label to filter by (optional). Standard label will take precedence over user label if both are specified.",
-                "type": [
-                  "string",
-                  "null"
-                ]
-              }
-            },
-            "required": [
-              "standardLabel",
-              "userLabel"
-            ],
-            "type": "object"
+            "default": 50,
+            "description": "Number of results per page. Max is 100, default is 50. Use smaller values for focused results.",
+            "format": "int64",
+            "type": "integer"
           }
         },
         "required": [
-          "cursor",
-          "limit",
-          "sortMethod",
-          "view"
+          "exhaustiveSearch",
+          "fileTypes",
+          "minAccessLevel",
+          "pageOffset",
+          "pageSize"
         ],
-        "title": "ListEmails",
+        "title": "ListDocuments",
         "type": "object"
       },
       "outputSchema": {
         "properties": {
-          "items": {
+          "results": {
+            "description": "The list results (truncated to `results_returned` limit if applicable)",
             "items": {
               "properties": {
-                "attachments": {
-                  "items": {
-                    "properties": {
-                      "contentId": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
-                      },
-                      "createdAt": {
-                        "format": "int64",
-                        "type": "integer"
-                      },
-                      "filename": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
-                      },
-                      "id": {
-                        "format": "uuid",
-                        "type": "string"
-                      },
-                      "messageId": {
-                        "format": "uuid",
-                        "type": "string"
-                      },
-                      "mimeType": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
-                      },
-                      "providerAttachmentId": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
-                      },
-                      "sizeBytes": {
-                        "format": "int64",
-                        "type": [
-                          "integer",
-                          "null"
-                        ]
-                      }
-                    },
-                    "required": [
-                      "id",
-                      "messageId",
-                      "createdAt"
-                    ],
-                    "type": "object"
-                  },
-                  "type": "array"
-                },
-                "contacts": {
-                  "items": {
-                    "properties": {
-                      "emailAddress": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
-                      },
-                      "id": {
-                        "format": "uuid",
-                        "type": "string"
-                      },
-                      "linkId": {
-                        "format": "uuid",
-                        "type": "string"
-                      },
-                      "name": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
-                      },
-                      "sfsPhotoUrl": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
-                      }
-                    },
-                    "required": [
-                      "id",
-                      "linkId"
-                    ],
-                    "type": "object"
-                  },
-                  "type": "array"
-                },
-                "createdAt": {
-                  "format": "int64",
-                  "type": "integer"
-                },
-                "frecencyScore": {
-                  "format": "double",
-                  "type": [
-                    "number",
-                    "null"
-                  ]
-                },
-                "id": {
-                  "format": "uuid",
-                  "type": "string"
-                },
-                "inboxVisible": {
-                  "type": "boolean"
-                },
-                "isDraft": {
-                  "type": "boolean"
-                },
-                "isImportant": {
-                  "type": "boolean"
-                },
-                "isRead": {
-                  "type": "boolean"
-                },
-                "labels": {
-                  "items": {
-                    "properties": {
-                      "createdAt": {
-                        "format": "date-time",
-                        "type": "string"
-                      },
-                      "id": {
-                        "format": "uuid",
-                        "type": "string"
-                      },
-                      "labelListVisibility": {
-                        "enum": [
-                          "LabelShow",
-                          "LabelShowIfUnread",
-                          "LabelHide"
-                        ],
-                        "type": "string"
-                      },
-                      "linkId": {
-                        "format": "uuid",
-                        "type": "string"
-                      },
-                      "messageListVisibility": {
-                        "enum": [
-                          "Show",
-                          "Hide"
-                        ],
-                        "type": "string"
-                      },
-                      "name": {
-                        "type": "string"
-                      },
-                      "providerLabelId": {
-                        "type": "string"
-                      },
-                      "type": {
-                        "enum": [
-                          "System",
-                          "User"
-                        ],
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "id",
-                      "linkId",
-                      "providerLabelId",
-                      "name",
-                      "createdAt",
-                      "messageListVisibility",
-                      "labelListVisibility",
-                      "type"
-                    ],
-                    "type": "object"
-                  },
-                  "type": "array"
-                },
-                "macroAttachments": {
-                  "items": {
-                    "properties": {
-                      "dbId": {
-                        "format": "uuid",
-                        "type": "string"
-                      },
-                      "itemId": {
-                        "format": "uuid",
-                        "type": "string"
-                      },
-                      "itemType": {
-                        "type": "string"
-                      },
-                      "messageId": {
-                        "format": "uuid",
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "dbId",
-                      "messageId",
-                      "itemId",
-                      "itemType"
-                    ],
-                    "type": "object"
-                  },
-                  "type": "array"
-                },
-                "metadata": {
-                  "properties": {
-                    "calendar_invite": {
-                      "description": "if any email contains a calendar invite",
-                      "type": "boolean"
-                    },
-                    "generic_sender": {
-                      "description": "if any sender in the thread is a generic email",
-                      "type": "boolean"
-                    },
-                    "known_sender": {
-                      "description": "if user has previously emailed any sender in the thread",
-                      "type": "boolean"
-                    },
-                    "tabular": {
-                      "description": "if any email contains a <table> html tag",
-                      "type": "boolean"
-                    }
-                  },
-                  "required": [
-                    "known_sender",
-                    "tabular",
-                    "calendar_invite",
-                    "generic_sender"
+                "access_level": {
+                  "description": "The user's access level to this document",
+                  "enum": [
+                    "view",
+                    "comment",
+                    "edit",
+                    "owner"
                   ],
-                  "type": "object"
-                },
-                "name": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "ownerId": {
                   "type": "string"
                 },
-                "providerId": {
+                "created_at": {
+                  "description": "When the document was created",
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "deleted_at": {
+                  "description": "When the document was deleted (null if not deleted)",
+                  "format": "date-time",
                   "type": [
                     "string",
                     "null"
                   ]
                 },
-                "senderEmail": {
+                "document_id": {
+                  "description": "The document id",
+                  "type": "string"
+                },
+                "document_name": {
+                  "description": "The document name",
+                  "type": "string"
+                },
+                "file_type": {
+                  "description": "The file type of the document",
                   "type": [
                     "string",
                     "null"
                   ]
                 },
-                "senderName": {
+                "owner": {
+                  "description": "The owner of the document",
+                  "type": "string"
+                },
+                "project_id": {
+                  "description": "The project id containing the document",
                   "type": [
                     "string",
                     "null"
                   ]
                 },
-                "senderPhotoUrl": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "snippet": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "sortTs": {
-                  "format": "int64",
-                  "type": "integer"
-                },
-                "updatedAt": {
-                  "format": "int64",
-                  "type": "integer"
-                },
-                "viewedAt": {
-                  "format": "int64",
-                  "type": [
-                    "integer",
-                    "null"
-                  ]
+                "updated_at": {
+                  "description": "When the document was last updated",
+                  "format": "date-time",
+                  "type": "string"
                 }
               },
               "required": [
-                "id",
-                "ownerId",
-                "inboxVisible",
-                "isRead",
-                "isDraft",
-                "isImportant",
-                "sortTs",
-                "createdAt",
-                "updatedAt",
-                "attachments",
-                "macroAttachments",
-                "contacts",
-                "labels",
-                "metadata"
+                "document_id",
+                "document_name",
+                "owner",
+                "created_at",
+                "updated_at",
+                "access_level"
               ],
               "type": "object"
             },
             "type": "array"
           },
-          "next_cursor": {
-            "type": [
-              "string",
-              "null"
-            ]
+          "resultsReturned": {
+            "description": "The number of results returned",
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "totalResults": {
+            "description": "Total number of results found",
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
           }
         },
         "required": [
-          "items"
+          "results",
+          "totalResults",
+          "resultsReturned"
         ],
-        "title": "ApiPaginatedThreadCursor",
+        "title": "ListDocumentsResponse",
+        "type": "object"
+      }
+    },
+    {
+      "name": "MarkdownRewrite",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "Instruct an agent to edit a markdown file identified by an id.\n    This tool should be used when the user include a markdown file in context and requests a revision or edit to that file",
+        "properties": {
+          "instructions": {
+            "additionalProperties": false,
+            "description": "Instructions for the revision agent to follow to edit the markdown. These instructions will be provided by the user.",
+            "type": "string"
+          },
+          "markdown_file_id": {
+            "additionalProperties": false,
+            "description": "The markdown file id to target for editing. This file id will be in your context and labeled as a markdown (md) document",
+            "type": "string"
+          }
+        },
+        "required": [
+          "instructions",
+          "markdown_file_id"
+        ],
+        "title": "MarkdownRewrite",
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "diffs": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "markdown_text": {
+                  "type": "string"
+                },
+                "node_key": {
+                  "type": "string"
+                },
+                "operation": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "operation",
+                "node_key",
+                "markdown_text"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "diffs"
+        ],
+        "title": "AIDiffResponse",
         "type": "object"
       }
     },
@@ -1739,223 +1542,6 @@
       }
     },
     {
-      "name": "ListDocuments",
-      "inputSchema": {
-        "additionalProperties": false,
-        "description": "List documents the user has access to with optional filtering and pagination. Only applies to documents, not emails, AI conversations, chat/slack threads, projects aka folders. This tool returns document metadata including access levels and supports filtering by file type, minimum access level, and pagination. Use this tool to discover and browse documents before using the Read tool to access their content. Prefer using the search tool to search on a specific matching string within the content or the name of the entity.",
-        "properties": {
-          "exhaustiveSearch": {
-            "additionalProperties": false,
-            "default": false,
-            "description": "Exhaustive search to get all results. Defaults to false. Set to true when you need all matching documents, ignoring pagination limits.",
-            "type": "boolean"
-          },
-          "fileTypes": {
-            "additionalProperties": false,
-            "description": "Document file types to include. Examples: ['pdf'], ['md', 'txt']. Leave empty to include all document types.",
-            "items": {
-              "additionalProperties": false,
-              "type": "string"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "minAccessLevel": {
-            "additionalProperties": false,
-            "description": "Minimum access level required. Defaults to 'view' if not specified.",
-            "enum": [
-              "view",
-              "comment",
-              "edit",
-              "owner",
-              null
-            ],
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "pageOffset": {
-            "additionalProperties": false,
-            "default": 0,
-            "description": "Page offset for pagination. Default is 0. Use higher values to get subsequent pages of results.",
-            "format": "int64",
-            "type": "integer"
-          },
-          "pageSize": {
-            "additionalProperties": false,
-            "default": 50,
-            "description": "Number of results per page. Max is 100, default is 50. Use smaller values for focused results.",
-            "format": "int64",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "exhaustiveSearch",
-          "fileTypes",
-          "minAccessLevel",
-          "pageOffset",
-          "pageSize"
-        ],
-        "title": "ListDocuments",
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "results": {
-            "description": "The list results (truncated to `results_returned` limit if applicable)",
-            "items": {
-              "properties": {
-                "access_level": {
-                  "description": "The user's access level to this document",
-                  "enum": [
-                    "view",
-                    "comment",
-                    "edit",
-                    "owner"
-                  ],
-                  "type": "string"
-                },
-                "created_at": {
-                  "description": "When the document was created",
-                  "format": "date-time",
-                  "type": "string"
-                },
-                "deleted_at": {
-                  "description": "When the document was deleted (null if not deleted)",
-                  "format": "date-time",
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "document_id": {
-                  "description": "The document id",
-                  "type": "string"
-                },
-                "document_name": {
-                  "description": "The document name",
-                  "type": "string"
-                },
-                "file_type": {
-                  "description": "The file type of the document",
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "owner": {
-                  "description": "The owner of the document",
-                  "type": "string"
-                },
-                "project_id": {
-                  "description": "The project id containing the document",
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "updated_at": {
-                  "description": "When the document was last updated",
-                  "format": "date-time",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "document_id",
-                "document_name",
-                "owner",
-                "created_at",
-                "updated_at",
-                "access_level"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "resultsReturned": {
-            "description": "The number of results returned",
-            "format": "uint",
-            "minimum": 0,
-            "type": "integer"
-          },
-          "totalResults": {
-            "description": "Total number of results found",
-            "format": "uint",
-            "minimum": 0,
-            "type": "integer"
-          }
-        },
-        "required": [
-          "results",
-          "totalResults",
-          "resultsReturned"
-        ],
-        "title": "ListDocumentsResponse",
-        "type": "object"
-      }
-    },
-    {
-      "name": "MarkdownRewrite",
-      "inputSchema": {
-        "additionalProperties": false,
-        "description": "Instruct an agent to edit a markdown file identified by an id.\n    This tool should be used when the user include a markdown file in context and requests a revision or edit to that file",
-        "properties": {
-          "instructions": {
-            "additionalProperties": false,
-            "description": "Instructions for the revision agent to follow to edit the markdown. These instructions will be provided by the user.",
-            "type": "string"
-          },
-          "markdown_file_id": {
-            "additionalProperties": false,
-            "description": "The markdown file id to target for editing. This file id will be in your context and labeled as a markdown (md) document",
-            "type": "string"
-          }
-        },
-        "required": [
-          "instructions",
-          "markdown_file_id"
-        ],
-        "title": "MarkdownRewrite",
-        "type": "object"
-      },
-      "outputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "diffs": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "markdown_text": {
-                  "type": "string"
-                },
-                "node_key": {
-                  "type": "string"
-                },
-                "operation": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "operation",
-                "node_key",
-                "markdown_text"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "diffs"
-        ],
-        "title": "AIDiffResponse",
-        "type": "object"
-      }
-    },
-    {
       "name": "Read",
       "inputSchema": {
         "additionalProperties": false,
@@ -2107,71 +1693,9 @@
                         "messages": {
                           "items": {
                             "properties": {
-                              "attachment_summaries": {
+                              "attachmentIds": {
                                 "items": {
-                                  "oneOf": [
-                                    {
-                                      "additionalProperties": false,
-                                      "properties": {
-                                        "Summary": {
-                                          "properties": {
-                                            "created_at": {
-                                              "format": "date-time",
-                                              "type": [
-                                                "string",
-                                                "null"
-                                              ]
-                                            },
-                                            "document_id": {
-                                              "type": "string"
-                                            },
-                                            "id": {
-                                              "type": [
-                                                "string",
-                                                "null"
-                                              ]
-                                            },
-                                            "summary": {
-                                              "type": "string"
-                                            },
-                                            "version_id": {
-                                              "type": "string"
-                                            }
-                                          },
-                                          "required": [
-                                            "document_id",
-                                            "summary",
-                                            "version_id"
-                                          ],
-                                          "type": "object"
-                                        }
-                                      },
-                                      "required": [
-                                        "Summary"
-                                      ],
-                                      "type": "object"
-                                    },
-                                    {
-                                      "additionalProperties": false,
-                                      "properties": {
-                                        "NoSummary": {
-                                          "properties": {
-                                            "document_id": {
-                                              "type": "string"
-                                            }
-                                          },
-                                          "required": [
-                                            "document_id"
-                                          ],
-                                          "type": "object"
-                                        }
-                                      },
-                                      "required": [
-                                        "NoSummary"
-                                      ],
-                                      "type": "object"
-                                    }
-                                  ]
+                                  "type": "string"
                                 },
                                 "type": "array"
                               },
@@ -2186,7 +1710,7 @@
                             "required": [
                               "content",
                               "date",
-                              "attachment_summaries"
+                              "attachmentIds"
                             ],
                             "type": "object"
                           },
@@ -2312,6 +1836,420 @@
           "content"
         ],
         "title": "ReadResponse",
+        "type": "object"
+      }
+    },
+    {
+      "name": "ListEmails",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "List the emails the user has access to. Use this tool to discover and browse emails before using the Read tool to access their content. Prefer using the search tool to search on a specific matching string within the content or the name of the entity.",
+        "properties": {
+          "cursor": {
+            "additionalProperties": false,
+            "default": null,
+            "description": "A preview response will tell you what the next cursor id is.\n        If expected emails are not in the current response and it gives you a cursor id, use this field to list the next page of emails. If no cursor id is provided you've reached the end",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "limit": {
+            "additionalProperties": false,
+            "default": 20,
+            "description": "limit the max emails returned. This defaults to 20 and has a maximum of 500",
+            "format": "int64",
+            "type": "integer"
+          },
+          "sortMethod": {
+            "additionalProperties": false,
+            "default": "viewed_at",
+            "description": "Sort response by one of: viewed_at | updated_at | created_at | viewed_updated. Prefer viewed_at unless the otherwise specified",
+            "enum": [
+              "viewed_at",
+              "updated_at",
+              "created_at",
+              "viewed_updated"
+            ],
+            "type": "string"
+          },
+          "view": {
+            "additionalProperties": false,
+            "default": {
+              "standardLabel": null,
+              "userLabel": null
+            },
+            "description": "Choose the view to list emails from. One of either standard label or user label must be specified, otherwise defaults to important.",
+            "properties": {
+              "standardLabel": {
+                "additionalProperties": false,
+                "description": "Prefer important or all. Leave empty if using a user label",
+                "enum": [
+                  "Inbox",
+                  "Sent",
+                  "Drafts",
+                  "Starred",
+                  "All",
+                  "Important",
+                  "Other",
+                  null
+                ],
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "userLabel": {
+                "additionalProperties": false,
+                "description": "Choose a custom user label to filter by (optional). Standard label will take precedence over user label if both are specified.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "standardLabel",
+              "userLabel"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "cursor",
+          "limit",
+          "sortMethod",
+          "view"
+        ],
+        "title": "ListEmails",
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "attachments": {
+                  "items": {
+                    "properties": {
+                      "contentId": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "createdAt": {
+                        "format": "int64",
+                        "type": "integer"
+                      },
+                      "filename": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "id": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "messageId": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "mimeType": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "providerAttachmentId": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "sizeBytes": {
+                        "format": "int64",
+                        "type": [
+                          "integer",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "messageId",
+                      "createdAt"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "contacts": {
+                  "items": {
+                    "properties": {
+                      "emailAddress": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "id": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "linkId": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "sfsPhotoUrl": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "linkId"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "createdAt": {
+                  "format": "int64",
+                  "type": "integer"
+                },
+                "frecencyScore": {
+                  "format": "double",
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "id": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "inboxVisible": {
+                  "type": "boolean"
+                },
+                "isDraft": {
+                  "type": "boolean"
+                },
+                "isImportant": {
+                  "type": "boolean"
+                },
+                "isRead": {
+                  "type": "boolean"
+                },
+                "labels": {
+                  "items": {
+                    "properties": {
+                      "createdAt": {
+                        "format": "date-time",
+                        "type": "string"
+                      },
+                      "id": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "labelListVisibility": {
+                        "enum": [
+                          "LabelShow",
+                          "LabelShowIfUnread",
+                          "LabelHide"
+                        ],
+                        "type": "string"
+                      },
+                      "linkId": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "messageListVisibility": {
+                        "enum": [
+                          "Show",
+                          "Hide"
+                        ],
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "providerLabelId": {
+                        "type": "string"
+                      },
+                      "type": {
+                        "enum": [
+                          "System",
+                          "User"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "linkId",
+                      "providerLabelId",
+                      "name",
+                      "createdAt",
+                      "messageListVisibility",
+                      "labelListVisibility",
+                      "type"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "macroAttachments": {
+                  "items": {
+                    "properties": {
+                      "dbId": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "itemId": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "itemType": {
+                        "type": "string"
+                      },
+                      "messageId": {
+                        "format": "uuid",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "dbId",
+                      "messageId",
+                      "itemId",
+                      "itemType"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "metadata": {
+                  "properties": {
+                    "calendar_invite": {
+                      "description": "if any email contains a calendar invite",
+                      "type": "boolean"
+                    },
+                    "generic_sender": {
+                      "description": "if any sender in the thread is a generic email",
+                      "type": "boolean"
+                    },
+                    "known_sender": {
+                      "description": "if user has previously emailed any sender in the thread",
+                      "type": "boolean"
+                    },
+                    "tabular": {
+                      "description": "if any email contains a <table> html tag",
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "known_sender",
+                    "tabular",
+                    "calendar_invite",
+                    "generic_sender"
+                  ],
+                  "type": "object"
+                },
+                "name": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "ownerId": {
+                  "type": "string"
+                },
+                "providerId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "senderEmail": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "senderName": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "senderPhotoUrl": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "snippet": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "sortTs": {
+                  "format": "int64",
+                  "type": "integer"
+                },
+                "updatedAt": {
+                  "format": "int64",
+                  "type": "integer"
+                },
+                "viewedAt": {
+                  "format": "int64",
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "ownerId",
+                "inboxVisible",
+                "isRead",
+                "isDraft",
+                "isImportant",
+                "sortTs",
+                "createdAt",
+                "updatedAt",
+                "attachments",
+                "macroAttachments",
+                "contacts",
+                "labels",
+                "metadata"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ApiPaginatedThreadCursor",
         "type": "object"
       }
     },

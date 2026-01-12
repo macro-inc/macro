@@ -61,16 +61,7 @@ export default defineConfig({
       target: './service-email/openapi.json',
     },
   },
-  insightsService: {
-    output: {
-      client: 'fetch',
-      target: './service-insight/generated/client.ts',
-      schemas: './service-insight/generated/schemas',
-    },
-    input: {
-      target: './service-insight/openapi.json',
-    },
-  },
+
   notificationService: {
     output: {
       client: 'fetch',
