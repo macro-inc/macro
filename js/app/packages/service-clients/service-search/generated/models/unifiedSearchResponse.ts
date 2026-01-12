@@ -4,8 +4,12 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
+import type { UnifiedSearchResponseNextCursor } from './unifiedSearchResponseNextCursor';
 import type { UnifiedSearchResponseItem } from './unifiedSearchResponseItem';
 
 export interface UnifiedSearchResponse {
+  /** The next cursor to use for paginating results */
+  next_cursor?: UnifiedSearchResponseNextCursor;
+  /** The search results */
   results: UnifiedSearchResponseItem[];
 }

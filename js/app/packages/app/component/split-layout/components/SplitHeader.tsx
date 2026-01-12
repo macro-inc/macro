@@ -133,6 +133,7 @@ function SplitPreviewToggle() {
               hotkeyToken={TOKENS.unifiedList.togglePreview}
             />
           }
+          tabIndex={-1}
           onClick={() => setPreview((prev) => !prev)}
         >
           <SplitIcon />

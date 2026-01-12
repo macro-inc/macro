@@ -10,7 +10,7 @@ import {
   truncateSearchMatch,
 } from '@core/util/searchHighlight';
 import type { ChannelType } from '@service-comms/generated/models';
-import { type PaginatedSearchArgs, searchClient } from '@service-search/client';
+import { type SearchArgs, searchClient } from '@service-search/client';
 import type {
   ChannelSearchResult,
   ChatMessageSearchResult,
@@ -326,10 +326,7 @@ const useMapSearchResponseItem = () => {
   };
 };
 
-const fetchPaginatedSearchResults = async (
-  args: PaginatedSearchArgs,
-  signal?: AbortSignal
-) => {
+const fetchSearchResults = async (args: SearchArgs, signal?: AbortSignal) => {
   const res = await searchClient.search(args, { signal });
   if (isErr(res)) throw res[0];
   const [, data] = res;
@@ -337,13 +334,13 @@ const fetchPaginatedSearchResults = async (
 };
 
 export function createUnifiedSearchInfiniteQuery(
-  args: Accessor<PaginatedSearchArgs>,
+  args: Accessor<SearchArgs>,
   options?: {
     disabled?: Accessor<boolean>;
   }
 ): EntityInfiniteQuery<WithSearch<EntityData>> {
   const params = createMemo(() => args());
-  const pageParams = createMemo(() => params().params);
+  const pageSize = createMemo(() => params().params.page_size);
   const request = createMemo(() => params().request);
   const terms = createMemo(() => {
     const query = request().query;
@@ -385,19 +382,22 @@ export function createUnifiedSearchInfiniteQuery(
       ...params(),
     }),
     queryFn: (ctx) =>
-      fetchPaginatedSearchResults(
+      fetchSearchResults(
         {
           params: ctx.pageParam,
           request: request(),
         },
         ctx.signal
       ),
-    initialPageParam: pageParams(),
-    getNextPageParam: (lastPage, _allPages, lastPageParam, _allPageParams) => {
-      if (lastPage.results.length === 0) return;
+    initialPageParam: {
+      cursor: null as string | null,
+      page_size: pageSize(),
+    },
+    getNextPageParam: (lastPage) => {
+      if (!lastPage.next_cursor) return;
       return {
-        ...pageParams(),
-        page: lastPageParam.page + 1,
+        cursor: lastPage.next_cursor as string | null,
+        page_size: pageSize(),
       };
     },
     select: (data) => {
