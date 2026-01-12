@@ -345,6 +345,9 @@ export function BaseInput(props: {
     });
 
     if (draftResponse) {
+      // If the email draft saved successfully, we want to upload the
+      // attachments as well. We should grab only the attachments that
+      // haven't been uploaded yet
       const attachments = form()
         .attachments.list()
         .filter((a) => a.type === 'local' && !a.attachmentID) as Extract<
@@ -357,6 +360,7 @@ export function BaseInput(props: {
         attachments: attachments.map((a) => a.file),
       });
 
+      // Assign the attachment ids to attachments for later use
       for (const attachment of uploaded.attachments) {
         form().attachments.assignAttachmentID(
           attachment.file,
