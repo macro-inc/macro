@@ -346,7 +346,10 @@ export function BaseInput(props: {
     if (draftResponse) {
       const attachments = form()
         .attachments.list()
-        .filter((a) => a.type === 'local');
+        .filter((a) => a.type === 'local' && !a.attachmentID) as Extract<
+        DraftFormAttachment,
+        { type: 'local' }
+      >[];
 
       const uploaded = await uploadAttachmentMutation.mutateAsync({
         draftID: draftResponse,
@@ -626,8 +629,6 @@ export function BaseInput(props: {
       (sum, a) => sum + (a.type === 'local' ? a.file.size : a.fileSize),
       0
     );
-
-    const attachmentsToAddByteSize = files.reduce((sum, f) => sum + f.size, 0);
 
     if (currentAttachmentsByteSize + attachmentsToAddByteSize >= 18_000_000) {
       toast.failure(
