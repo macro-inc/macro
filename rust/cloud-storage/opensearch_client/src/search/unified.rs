@@ -25,7 +25,7 @@ use chrono::{DateTime, Utc};
 use models_search_cursor::{SearchCursorOption, SearchMethodCursor};
 
 use crate::SearchOn;
-use models_opensearch::{SearchEntityType, SearchIndex};
+use models_opensearch::SearchEntityType;
 use opensearch_query_builder::*;
 
 #[derive(Debug, Default, Clone)]
@@ -456,6 +456,11 @@ pub(crate) async fn search_unified(
         .filter(|i| **i != SearchEntityType::Projects)
         .map(|i| i.as_ref())
         .collect();
+
+    // After we filter out invalid search entities if we have nothing we should return that the cursor is exhausted
+    if search_indices.is_empty() {
+        return Ok((Vec::new(), SearchCursorOption::Done));
+    }
 
     let response = client
         .search(opensearch::SearchParts::Index(&search_indices))
