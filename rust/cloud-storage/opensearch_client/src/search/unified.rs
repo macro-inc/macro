@@ -450,19 +450,12 @@ pub(crate) async fn search_unified(
     tracing::trace!("search request {:?}", search_request);
 
     // We cannot search over the projects index in opensearch as it doesn't exist
-    let mut search_indices: Vec<&str> = args
+    let search_indices: Vec<&str> = args
         .search_indices
         .iter()
         .filter(|i| **i != SearchEntityType::Projects)
         .map(|i| i.as_ref())
         .collect();
-
-    match args.search_on {
-        SearchOn::NameContent | SearchOn::Name => {
-            search_indices.push(SearchIndex::Names.as_ref());
-        }
-        SearchOn::Content => {}
-    }
 
     let response = client
         .search(opensearch::SearchParts::Index(&search_indices))
@@ -494,12 +487,9 @@ pub(crate) async fn search_unified(
     }
 
     let cursor = if has_more {
-        SearchCursorOption::NotDone(results.last().map(|last| {
-            println!("{:?}", last);
-            SearchMethodCursor {
-                entity_id: last.entity_id,
-                updated_at: last.updated_at.unwrap_or(Utc::now()),
-            }
+        SearchCursorOption::NotDone(results.last().map(|last| SearchMethodCursor {
+            entity_id: last.entity_id,
+            updated_at: last.updated_at.unwrap_or(Utc::now()),
         }))
     } else {
         SearchCursorOption::Done
