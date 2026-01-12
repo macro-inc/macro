@@ -162,7 +162,9 @@ export const FilterValueEntity: Component<FilterValueEntityProps> = (props) => {
 
     if (entityType === 'TASK') {
       return history()
-        .filter((item) => item.type === 'document' && item.subType === 'task')
+        .filter(
+          (item) => item.type === 'document' && item.subType?.type === 'task'
+        )
         .map(entityMapper('item'));
     }
 
