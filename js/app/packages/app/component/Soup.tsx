@@ -94,7 +94,7 @@ const ENTITY_TYPE_FILTERS: {
 }[] = [
   {
     type: 'document',
-    label: 'Files',
+    label: 'Documents',
     iconType: 'md',
     enabled: true,
     shortcut: 'd',
@@ -108,7 +108,7 @@ const ENTITY_TYPE_FILTERS: {
   },
   {
     type: 'channel',
-    label: 'Channels',
+    label: 'Messages',
     iconType: 'channel',
     enabled: true,
     shortcut: 'm',
@@ -122,7 +122,7 @@ const ENTITY_TYPE_FILTERS: {
   },
   {
     type: 'email',
-    label: 'Email',
+    label: 'Mail',
     iconType: 'email',
     enabled: true,
     shortcut: 'l',
@@ -137,6 +137,28 @@ const ENTITY_TYPE_FILTERS: {
 ];
 
 function EntityTypeIconFilter() {
+  const renderShortcutUnderlinedInLabel = (label: string, shortcut: string) => {
+    const s = shortcut.trim();
+    if (!s) return label;
+
+    const idx = label.toLowerCase().indexOf(s.toLowerCase());
+    if (idx === -1) return label;
+
+    const before = label.slice(0, idx);
+    const match = label.slice(idx, idx + s.length);
+    const after = label.slice(idx + s.length);
+
+    return (
+      <>
+        {before}
+        <span class="underline underline-offset-2 decoration-current/60">
+          {match}
+        </span>
+        {after}
+      </>
+    );
+  };
+
   const splitContext = useSplitPanelOrThrow();
   const {
     splitHotkeyScope,
@@ -568,7 +590,8 @@ function EntityTypeIconFilter() {
         ref={setScrollRef}
       >
         {/* Signal/Noise buttons */}
-        <div class="flex items-center gap-0.5 mr-1 shrink-0">
+        <div class="flex items-center mr-1 shrink-0">
+          <div class="flex items-center rounded-full border border-edge-muted overflow-hidden">
           <Tooltip
             tooltip={
               <LabelAndHotKey label="Signal - Important items" shortcut="1" />
@@ -576,19 +599,21 @@ function EntityTypeIconFilter() {
           >
             <button
               type="button"
-              class="relative flex items-center justify-center size-7 border border-transparent active:border-accent active:bg-accent active:text-panel"
+              class="flex items-center gap-1.5 h-7 px-2.5 border border-transparent active:border-accent active:bg-accent active:text-panel rounded-l-full"
               classList={{
                 'bg-accent text-panel border-accent':
                   isFocusFilterActive('signal'),
                 'text-ink-muted hover:text-accent hover:bg-accent/20':
                   !isFocusFilterActive('signal'),
               }}
-              style={{ 'clip-path': cornerClip('3px') }}
               onClick={() => toggleFocusFilter('signal')}
             >
-              <SignalIcon />
-              <span class="absolute bottom-0 right-0.5 text-[9px] font-mono font-bold leading-none opacity-60">
-                1
+              <SignalIcon class="size-3.5" />
+              <span class="text-xs leading-none">
+                Signal{' '}
+                <span class="underline underline-offset-2 decoration-current/60 font-mono text-[10px] opacity-70">
+                  1
+                </span>
               </span>
             </button>
           </Tooltip>
@@ -602,22 +627,25 @@ function EntityTypeIconFilter() {
           >
             <button
               type="button"
-              class="relative flex items-center justify-center size-7 border border-transparent active:border-accent active:bg-accent active:text-panel"
+              class="flex items-center gap-1.5 h-7 px-2.5 border border-transparent active:border-accent active:bg-accent active:text-panel rounded-r-full"
               classList={{
                 'bg-accent text-panel border-accent':
                   isFocusFilterActive('noise'),
                 'text-ink-muted hover:text-accent hover:bg-accent/20':
                   !isFocusFilterActive('noise'),
               }}
-              style={{ 'clip-path': cornerClip('3px') }}
               onClick={() => toggleFocusFilter('noise')}
             >
-              <NoiseIcon />
-              <span class="absolute bottom-0 right-0.5 text-[9px] font-mono font-bold leading-none opacity-60">
-                2
+              <NoiseIcon class="size-3.5" />
+              <span class="text-xs leading-none">
+                Noise{' '}
+                <span class="underline underline-offset-2 decoration-current/60 font-mono text-[10px] opacity-70">
+                  2
+                </span>
               </span>
             </button>
           </Tooltip>
+          </div>
         </div>
         {/* Separator */}
         <div class="h-4 w-px bg-edge-muted mx-1 shrink-0" />
@@ -638,18 +666,20 @@ function EntityTypeIconFilter() {
               >
                 <button
                   type="button"
-                  class="relative flex items-center justify-center size-7 border border-transparent active:border-accent active:bg-accent active:text-panel"
+                  class="flex items-center gap-1.5 h-7 px-2.5 border border-transparent active:border-accent active:bg-accent active:text-panel rounded-full"
                   classList={{
                     'bg-accent text-panel border-accent': isActive(),
                     'text-ink-muted hover:text-accent hover:bg-accent/20':
                       !isActive(),
                   }}
-                  style={{ 'clip-path': cornerClip('3px') }}
                   onClick={() => toggleEntityTypeFilter(filter.type)}
                 >
-                  <Dynamic component={iconConfig().icon} class="size-4" />
-                  <span class="absolute bottom-0 right-0.5 text-[9px] font-mono font-bold leading-none opacity-60">
-                    {filter.shortcut}
+                  <Dynamic component={iconConfig().icon} class="size-3.5" />
+                  <span class="text-xs leading-none">
+                    {renderShortcutUnderlinedInLabel(
+                      filter.label,
+                      filter.shortcut
+                    )}
                   </span>
                 </button>
               </Tooltip>
