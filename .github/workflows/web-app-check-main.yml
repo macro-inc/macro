@@ -40,6 +40,8 @@ jobs:
         uses: ./.github/actions/setup-reqs-web
         with:
           npm-rc-token: ${{ secrets.NPMRC_GH_TOKEN }}
+      - name: Setup Biome
+        uses: biomejs/setup-biome@v2
       - name: Generate API Types
         working-directory: js/app
         run: bun run gen-api -- --check
