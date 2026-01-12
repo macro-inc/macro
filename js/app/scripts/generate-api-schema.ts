@@ -38,6 +38,21 @@ async function generateOpenApiFromCrate(crateName: string, rustCloudStorageDir =
   return result;
 }
 
+// Recursively sort all object keys in JSON to ensure deterministic output
+function sortJsonKeys(obj: unknown): unknown {
+  if (Array.isArray(obj)) {
+    return obj.map(sortJsonKeys);
+  }
+  if (obj !== null && typeof obj === 'object') {
+    const sorted: Record<string, unknown> = {};
+    for (const key of Object.keys(obj).sort()) {
+      sorted[key] = sortJsonKeys((obj as Record<string, unknown>)[key]);
+    }
+    return sorted;
+  }
+  return obj;
+}
+
 const getServicesToProcess = (targetServices: string[]) => {
   // Figure out which services to process
   let servicesToProcess: Service[];
@@ -82,12 +97,15 @@ const processService = async (service: Service, { serviceClientsDir }: { service
     // Generate OpenAPI JSON from Rust binary
     const openApiJson = await generateOpenApiFromCrate(crateName);
 
+    // Sort JSON keys to ensure deterministic output across environments
+    const sortedJson = sortJsonKeys(JSON.parse(openApiJson));
+
     // Remove existing generated dir
     console.log(`[${service.name}] Removing existing generated dir`, generatedDir);
     await $`rm -rf ${generatedDir}`;
 
     // Write the OpenAPI JSON
-    await write(openApiPath, openApiJson);
+    await write(openApiPath, JSON.stringify(sortedJson, null, 2));
     console.log(`[${service.name}] Saved OpenAPI spec to ${openApiPath}`);
 
     // Run orval to generate types
