@@ -6,9 +6,7 @@
 use cached::proc_macro::cached;
 use chrono::{DateTime, Utc};
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
-use models_search_cursor::{
-    PaginatedResult, SearchCursorAttributes, SearchCursorOption, SearchMethodCursor,
-};
+use models_search_cursor::{PaginatedResult, SearchCursorAttributes, SearchCursorOption, SearchMethodCursor};
 use sqlx::{Pool, Postgres};
 
 /// Errors for email contact search crate
@@ -53,6 +51,22 @@ pub struct EmailContactMatchThreadResult {
 }
 
 impl SearchCursorAttributes for EmailContactMatchThreadResult {
+    fn entity_id(&self) -> uuid::Uuid {
+        self.thread_id
+    }
+
+    fn updated_at(&self) -> DateTime<Utc> {
+        self.updated_at
+    }
+}
+
+/// Helper struct for paginating by unique threads
+struct ThreadPaginationEntry {
+    thread_id: uuid::Uuid,
+    updated_at: DateTime<Utc>,
+}
+
+impl SearchCursorAttributes for ThreadPaginationEntry {
     fn entity_id(&self) -> uuid::Uuid {
         self.thread_id
     }
@@ -188,51 +202,36 @@ pub async fn search_email_contacts<'a>(
         })
         .collect();
 
-    // Count unique threads to determine pagination
-    // Since each thread can have multiple contact matches, we paginate by thread count
+    // Collect unique threads for pagination (preserving order)
     let mut seen_threads = std::collections::HashSet::new();
-    let mut ordered_threads = Vec::new();
-    for result in &results {
-        if seen_threads.insert(result.thread_id) {
-            ordered_threads.push((result.thread_id, result.updated_at));
-        }
-    }
+    let thread_entries: Vec<ThreadPaginationEntry> = results
+        .iter()
+        .filter(|r| seen_threads.insert(r.thread_id))
+        .map(|r| ThreadPaginationEntry {
+            thread_id: r.thread_id,
+            updated_at: r.updated_at,
+        })
+        .collect();
 
-    let has_more = ordered_threads.len() > limit as usize;
+    // Use paginate helper to determine cursor
+    let paginated_threads = SearchCursorOption::paginate(thread_entries, limit as usize);
 
-    // If we have more threads than limit, filter to keep only the first `limit` threads
-    let (filtered_results, cursor) = if has_more {
-        let threads_to_keep: std::collections::HashSet<_> = ordered_threads
-            .iter()
-            .take(limit as usize)
-            .map(|(id, _)| *id)
-            .collect();
+    // Get the thread IDs we want to keep
+    let threads_to_keep: std::collections::HashSet<_> = paginated_threads
+        .items
+        .iter()
+        .map(|t| t.thread_id)
+        .collect();
 
-        let filtered: Vec<_> = results
-            .into_iter()
-            .filter(|r| threads_to_keep.contains(&r.thread_id))
-            .collect();
-
-        // Get the cursor from the last kept thread
-        let last_thread = ordered_threads.get(limit as usize - 1);
-        let cursor = match last_thread {
-            Some((entity_id, updated_at)) => {
-                SearchCursorOption::NotDone(Some(SearchMethodCursor {
-                    entity_id: *entity_id,
-                    updated_at: *updated_at,
-                }))
-            }
-            None => SearchCursorOption::Done,
-        };
-
-        (filtered, cursor)
-    } else {
-        (results, SearchCursorOption::Done)
-    };
+    // Filter results to only include matches from kept threads
+    let filtered_results: Vec<_> = results
+        .into_iter()
+        .filter(|r| threads_to_keep.contains(&r.thread_id))
+        .collect();
 
     Ok(PaginatedResult {
         items: filtered_results,
-        cursor,
+        cursor: paginated_threads.cursor,
     })
 }
 
