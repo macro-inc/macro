@@ -80,6 +80,7 @@ export function AttachMenu(props: AttachMenuProps) {
             <input
               value={input()}
               onInput={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.stopImmediatePropagation()}
               class="w-full"
               placeholder="Search Attachments"
             />
