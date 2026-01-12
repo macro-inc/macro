@@ -170,7 +170,6 @@ export function BaseInput(props: {
   const [showExpandedRecipients, setShowExpandedRecipients] =
     createSignal<boolean>(false);
   const [isDragging, setIsDragging] = createSignal<boolean>();
-  const [isPendingUpload, setIsPendingUpload] = createSignal<boolean>(false);
   const [showFormatRibbon, setShowFormatRibbon] = createSignal<boolean>(
     props.newMessage ?? false
   );
@@ -419,7 +418,7 @@ export function BaseInput(props: {
   let composeContainerRef: HTMLDivElement | undefined;
 
   const sendEmail = async (markDone = false) => {
-    if (sendMutation.isPending || isPendingUpload()) return;
+    if (sendMutation.isPending || uploadAttachmentMutation.isPending) return;
 
     const to = form().recipients.to.map(convertEmailRecipientToContactInfo);
     const cc = form().recipients.cc.map(convertEmailRecipientToContactInfo);
@@ -1065,12 +1064,16 @@ export function BaseInput(props: {
           </div>
 
           <Button
-            disabled={isPendingUpload() || sendMutation.isPending}
+            disabled={
+              uploadAttachmentMutation.isPending || sendMutation.isPending
+            }
             onClick={() => sendEmail()}
             class="text-ink-muted hover:scale-115 transition ease-in-out flex-col items-center rounded-full p-[0.25lh] hover:bg-transparent"
           >
             <Show
-              when={!isPendingUpload() && !sendMutation.isPending}
+              when={
+                !uploadAttachmentMutation.isPending && !sendMutation.isPending
+              }
               fallback={<Spinner class="size-6 animate-spin cursor-disabled" />}
             >
               <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center p-0">
