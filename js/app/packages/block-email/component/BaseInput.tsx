@@ -93,6 +93,7 @@ import { getReplyTypeFromDraft } from '../util/replyType';
 import { type EmailRecipient, useEmailContext } from './EmailContext';
 import { getOrInitEmailFormContext } from './EmailFormContext';
 import { useUploadDraftAttachmentsMutation } from '@queries/email/attachment';
+import { EmailAttachmentPill } from '@block-email/component/AttachmentPill';
 
 false && fileFolderDrop;
 false && fileSelector;
@@ -892,6 +893,34 @@ export function BaseInput(props: {
               );
             }}
           />
+          <div>
+            <For each={form().attachments.list()}>
+              {(attachment) => (
+                <Switch>
+                  <Match when={attachment.type === 'local' && attachment}>
+                    {(attachment) => (
+                      <EmailAttachmentPill
+                        attachment={{
+                          fileName: attachment().file.name,
+                          mimeType: attachment().file.type,
+                        }}
+                      />
+                    )}
+                  </Match>
+                  <Match when={attachment.type === 'remote' && attachment}>
+                    {(attachment) => (
+                      <EmailAttachmentPill
+                        attachment={{
+                          fileName: attachment().fileName,
+                          mimeType: attachment().contentType,
+                        }}
+                      />
+                    )}
+                  </Match>
+                </Switch>
+              )}
+            </For>
+          </div>
         </div>
         <div class="flex flex-row w-full h-8 justify-between items-center py-2 px-2 mb-2 space-x-2 allow-css-brackets">
           <div class="flex flex-row items-center gap-2">
