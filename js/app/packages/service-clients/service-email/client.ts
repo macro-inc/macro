@@ -12,6 +12,7 @@ import {
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import type {
   AddDraftAttachmentRequest,
+  AddDraftAttachmentResponse,
   ApiPaginatedThreadCursor,
   CreateDraftRequest,
   CreateDraftResponse,
@@ -27,7 +28,6 @@ import type {
   UpdateLabelBatchResponse,
 } from './generated/schemas';
 import type { EmptyResponse } from './generated/schemas/emptyResponse';
-import { addDraftAttachmentResponse } from '@service-email/generated/client';
 
 const emailHost: string = SERVER_HOSTS['email-service'];
 
@@ -211,7 +211,7 @@ export const emailClient = {
     attachment: AddDraftAttachmentRequest;
   }) {
     return mapOk(
-      await emailFetch<addDraftAttachmentResponse>(
+      await emailFetch<AddDraftAttachmentResponse>(
         `/email/drafts/${args.draftID}/attachments`,
         {
           method: 'POST',

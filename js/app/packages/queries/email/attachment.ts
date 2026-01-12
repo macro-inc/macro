@@ -41,18 +41,16 @@ export const useUploadDraftAttachmentsMutation = (
             })
         );
 
-        if (result.status !== 201) return { attachments: [] };
-
         uploadedAttachmentIDs.push({
           file: attachment,
-          attachmentID: result.data.attachment_id,
+          attachmentID: result.attachment_id,
         });
 
         const uploaded = await uploadToPresignedUrl({
-          presignedUrl: result.data.upload_url,
+          presignedUrl: result.upload_url,
           sha,
           buffer: arrayBuffer,
-          type: result.data.content_type,
+          type: result.content_type,
         });
 
         if (uploaded.length && uploaded[0]?.length) {
