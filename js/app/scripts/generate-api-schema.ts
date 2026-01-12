@@ -80,7 +80,7 @@ const getServicesToProcess = (targetServices: string[]) => {
 
 
 // Process all services in parallel
-const processService = async (service: Service, { serviceClientsDir }: { serviceClientDir: string }) => {
+const processService = async (service: Service, { serviceClientsDir }: { serviceClientsDir: string }) => {
   const crateName = serviceToCrate[service.name];
   if (!crateName) {
     console.error(`[${service.name}] No crate mapping found, skipping`);
@@ -148,6 +148,7 @@ async function main() {
   const failed = results.filter((r) => r.status === 'failed');
   const skipped = results.filter((r) => r.status === 'skipped');
 
+
   console.log(`Succeeded: ${succeeded.length}/${servicesToProcess.length}`);
   if (skipped.length > 0) {
     console.log(`Skipped: ${skipped.length}/${servicesToProcess.length}`);
@@ -159,6 +160,7 @@ async function main() {
     });
     process.exit(1);
   }
+  await $`bunx biome check --write --unsafe packages/service-clients/`;
 
   // In check mode, verify no uncommitted changes
   if (checkMode) {
