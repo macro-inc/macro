@@ -68,10 +68,12 @@ import {
   createMemo,
   createSignal,
   For,
+  Match,
   onCleanup,
   onMount,
   type Setter,
   Show,
+  Switch,
   untrack,
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
@@ -576,21 +578,6 @@ export function BaseInput(props: {
     }
   });
 
-  const ReplyIcon = createMemo(() => {
-    let Icon =
-      effectiveReplyType() === 'reply'
-        ? Reply
-        : effectiveReplyType() === 'reply-all'
-          ? ReplyAll
-          : Forward;
-
-    return (
-      <Button showChevron>
-        <Icon class="h-7 p-1" />
-      </Button>
-    );
-  });
-
   return (
     <div
       ref={(el) => {
@@ -603,7 +590,22 @@ export function BaseInput(props: {
       <div class="flex items-start gap-2 p-2">
         <DropdownMenu>
           <DropdownMenu.Trigger>
-            <div class="px-1">{ReplyIcon()}</div>
+            <div class="px-1">
+              <Button showChevron>
+                <Switch>
+                  <Match when={effectiveReplyType() === 'reply'}>
+                    <Reply class="h-7 p-1" />
+                  </Match>
+
+                  <Match when={effectiveReplyType() === 'reply-all'}>
+                    <ReplyAll class="h-7 p-1" />
+                  </Match>
+                  <Match when={effectiveReplyType() === 'forward'}>
+                    <Forward class="h-7 p-1" />
+                  </Match>
+                </Switch>
+              </Button>
+            </div>
           </DropdownMenu.Trigger>
           <DropdownMenu.Portal>
             <DropdownMenuContent>
