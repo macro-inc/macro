@@ -2103,6 +2103,7 @@ function SearchBar(props: {
                   icon={SearchIcon}
                   theme="clear"
                   tooltip={{ label: 'Search' }}
+                  tabIndex={-1}
                   onClick={() => {
                     inputRef?.focus();
                   }}
@@ -2114,6 +2115,7 @@ function SearchBar(props: {
                 icon={XIcon}
                 theme="clear"
                 tooltip={{ label: 'Clear search' }}
+                tabIndex={-1}
                 onClick={() => {
                   setSearchText('');
                   inputRef?.focus();
@@ -2128,6 +2130,7 @@ function SearchBar(props: {
             theme="clear"
             tooltip={{ label: 'Cancel search' }}
             class="[&_svg]:animate-spin"
+            tabIndex={-1}
             onClick={() => {
               setSearchText('');
               inputRef?.focus();
