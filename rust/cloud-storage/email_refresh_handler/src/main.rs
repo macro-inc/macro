@@ -36,6 +36,7 @@ async fn main() -> Result<(), Error> {
     let ctx = context::Context {
         db,
         sqs_client: Arc::new(sqs_client),
+        config,
     };
 
     let func = service_fn(move |event: LambdaEvent<EventBridgeEvent>| {
