@@ -50,4 +50,3 @@ impl SearchCursorAttributes for NameSearchResult {
         self.updated_at
     }
 }
-
