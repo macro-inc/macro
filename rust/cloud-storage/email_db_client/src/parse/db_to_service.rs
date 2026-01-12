@@ -104,12 +104,7 @@ pub fn map_db_macro_attachment_to_service(
     }
 }
 
-#[tracing::instrument(skip(
-    service_message,
-    attachments_res,
-    macro_attachments_res,
-    draft_attachments_res
-))]
+#[tracing::instrument(skip_all)]
 pub fn map_db_message_attachments_to_service(
     mut service_message: message::Message,
     attachments_res: Vec<db::attachment::Attachment>,
@@ -128,7 +123,7 @@ pub fn map_db_message_attachments_to_service(
     Ok(service_message)
 }
 
-#[tracing::instrument(skip(db_message, recipients_res))]
+#[tracing::instrument(skip_all)]
 pub fn map_db_message_to_message_to_send(
     db_message: db::message::Message,
     recipients_res: Vec<(db::contact::Contact, db::address::EmailRecipientType)>,
@@ -172,7 +167,7 @@ pub fn map_db_message_to_message_to_send(
 // Maps the db layer message object to the service layer message object, without attachments. Kept
 // separate so we don't have to pass in an s3 client for generating the attachment data urls if we
 // don't need to (ex. when fetching thread metadata)
-#[tracing::instrument(skip(db_message, sender_res, recipients_res, labels_res))]
+#[tracing::instrument(skip_all)]
 pub fn map_attachmentless_db_message_to_service(
     db_message: db::message::Message, // Take ownership of the base message data
     sender_res: Option<db::contact::Contact>,
