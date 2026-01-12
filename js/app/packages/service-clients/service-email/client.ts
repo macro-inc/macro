@@ -221,6 +221,17 @@ export const emailClient = {
       (result) => result
     );
   },
+  async removeDraftAttachment(args: { draftID: string; attachmentID: string }) {
+    return mapOk(
+      await emailFetch<EmptyResponse>(
+        `/email/drafts/${args.draftID}/attachments/${args.attachmentID}`,
+        {
+          method: 'DELETE',
+        }
+      ),
+      (result) => result
+    );
+  },
   async markThreadAsSeen(args: { thread_id: string }) {
     const { thread_id } = args;
     return mapOk(

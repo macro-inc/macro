@@ -68,3 +68,25 @@ export const useUploadDraftAttachmentsMutation = (
     >({}, callbacks),
   }));
 };
+
+type RemoveDraftAttachmentParams = {
+  draftID: string;
+  attachmentID: string;
+};
+
+export const useRemoveDraftAttachmentMutation = (
+  callbacks?: MutationCallbacks<void, Error, RemoveDraftAttachmentParams>
+) => {
+  return useMutation(() => ({
+    mutationFn: async (params: RemoveDraftAttachmentParams) => {
+      await throwOnErr(
+        async () =>
+          await emailClient.removeDraftAttachment({
+            draftID: params.draftID,
+            attachmentID: params.attachmentID,
+          })
+      );
+    },
+    ...withCallbacks<void, Error, RemoveDraftAttachmentParams>({}, callbacks),
+  }));
+};
