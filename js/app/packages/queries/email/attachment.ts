@@ -1,3 +1,4 @@
+import { toast } from '@core/component/Toast/Toast';
 import { contentHash } from '@core/util/hash';
 import { throwOnErr } from '@core/util/maybeResult';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
@@ -13,6 +14,16 @@ type UploadDraftAttachmentsParams = {
 type UploadDraftAttachmentsReturn = {
   attachments: { file: File; attachmentID: string }[];
 };
+
+class UploadDraftAttachmentError extends Error {
+  constructor(
+    message: string,
+    opts: { cause?: unknown },
+    public context: { attachmentID: string; file: File }
+  ) {
+    super(message, { cause: opts.cause });
+  }
+}
 
 export const useUploadDraftAttachmentsMutation = (
   callbacks?: MutationCallbacks<
@@ -55,11 +66,31 @@ export const useUploadDraftAttachmentsMutation = (
 
         if (uploaded.length && uploaded[0]?.length) {
           const err = uploaded[0][0];
-          throw new Error(err.message, { cause: err.code });
+          throw new UploadDraftAttachmentError(
+            err.message,
+            { cause: err.code },
+            {
+              attachmentID: result.attachment_id,
+              file: attachment,
+            }
+          );
         }
       }
 
       return { attachments: uploadedAttachments };
+    },
+    async onError(error, variables) {
+      if (error instanceof UploadDraftAttachmentError) {
+        try {
+          await emailClient.removeDraftAttachment({
+            draftID: variables.draftID,
+            attachmentID: error.context.attachmentID,
+          });
+        } catch {
+          console.error('Unable to remove draft attachment after failure');
+        }
+      }
+      toast.failure('Failed to save attachments');
     },
     ...withCallbacks<
       UploadDraftAttachmentsReturn,
