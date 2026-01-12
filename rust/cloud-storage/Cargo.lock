@@ -2420,6 +2420,7 @@ dependencies = [
  "s3_client",
  "sns_client",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -2439,6 +2440,7 @@ dependencies = [
  "openssl",
  "sqlx",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -2498,6 +2500,7 @@ dependencies = [
  "sqlx",
  "sqs_client",
  "tokio",
+ "tracing",
  "urlencoding",
 ]
 
@@ -2826,6 +2829,7 @@ dependencies = [
  "serde_json",
  "sqlx",
  "tokio",
+ "tracing",
  "urlencoding",
  "uuid",
 ]
@@ -2860,6 +2864,7 @@ dependencies = [
  "sqlx",
  "sqs_client",
  "tokio",
+ "tracing",
  "urlencoding",
  "zip",
 ]
@@ -3088,6 +3093,7 @@ dependencies = [
  "sqlx",
  "sqs_client",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -3106,6 +3112,7 @@ dependencies = [
  "sqlx",
  "sqs_client",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -3215,6 +3222,7 @@ dependencies = [
  "sqlx",
  "strum",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -6096,6 +6104,7 @@ dependencies = [
  "sqlx",
  "sqs_client",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -6113,6 +6122,7 @@ dependencies = [
  "sqlx",
  "sqs_client",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -7627,6 +7637,7 @@ dependencies = [
  "openssl",
  "sqs_client",
  "tokio",
+ "tracing",
  "urlencoding",
 ]
 
@@ -9373,6 +9384,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tokio-util",
+ "tracing",
  "walkdir",
  "zip",
 ]
@@ -9394,6 +9406,7 @@ dependencies = [
  "serde_json",
  "sqs_client",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -10087,6 +10100,7 @@ dependencies = [
  "mockall",
  "serde_json",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
