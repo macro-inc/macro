@@ -91,6 +91,7 @@ import { convertEmailRecipientToContactInfo } from '../util/recipientConversion'
 import { getReplyTypeFromDraft } from '../util/replyType';
 import { type EmailRecipient, useEmailContext } from './EmailContext';
 import { getOrInitEmailFormContext } from './EmailFormContext';
+import { useUploadDraftAttachmentsMutation } from '@queries/email/attachment';
 
 false && fileFolderDrop;
 
@@ -198,6 +199,8 @@ export function BaseInput(props: {
       toast.failure('Failed to send email');
     },
   });
+
+  const uploadAttachmentMutation = useUploadDraftAttachmentsMutation();
 
   function refetchThreadMessages() {
     ctx.query.refetch();
@@ -328,10 +331,27 @@ export function BaseInput(props: {
       provider_thread_id: currentThread?.provider_id,
       thread_db_id: currentThread?.db_id,
     });
+
     if (draftResponse) {
+      const attachments = form()
+        .attachments.list()
+        .filter((a) => !a.attachmentID);
+
+      const uploaded = await uploadAttachmentMutation.mutateAsync({
+        draftID: draftResponse,
+        attachments: attachments.map((a) => a.file),
+      });
+
+      for (const attachment of uploaded.attachments) {
+        form().attachments.assignAttachmentID(
+          attachment.file,
+          attachment.attachmentID
+        );
+      }
+
       setSavedDraftId(draftResponse);
+      refetchThreadMessages();
     }
-    refetchThreadMessages();
   }
 
   function scheduleDraftSave() {
@@ -577,6 +597,12 @@ export function BaseInput(props: {
       }
     }
   });
+
+  const handleAddAttachments = (files: File[]) => {
+    for (const file of files) {
+      form().attachments.add({ file });
+    }
+  };
 
   return (
     <div
@@ -872,7 +898,7 @@ export function BaseInput(props: {
                 class="aspect-square p-1"
                 use:fileSelector={{
                   multiple: true,
-                  onSelect: async (files) => {},
+                  onSelect: handleAddAttachments,
                 }}
               >
                 <Plus class="h-5" />
