@@ -36,7 +36,7 @@ export function useBuildChatSendRequest() {
     source?: Source;
   }): Promise<CreateAndSend | Send> {
     const token = await getMacroApiToken();
-    const modelInstructions = model ? `\nYou are ${model}` : "";
+    const modelInstructions = model ? `\nYou are ${model}` : '';
     const additional = `${additionalInstructions()}${modelInstructions}`;
 
     const request = (id: string): Send['request'] => ({
