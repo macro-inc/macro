@@ -3,7 +3,6 @@ mod chat;
 pub mod context;
 mod document;
 mod email;
-mod name;
 mod user;
 pub mod worker;
 
@@ -32,12 +31,6 @@ pub async fn process_message(
     );
 
     match search_extractor_message {
-        SearchQueueMessage::UpdateEntityName(message) => {
-            name::upsert_name(&ctx.opensearch_client, &ctx.db, &message).await?;
-        }
-        SearchQueueMessage::RemoveEntityName(message) => {
-            name::remove_name(&ctx.opensearch_client, &message).await?;
-        }
         SearchQueueMessage::RemoveUserProfile(user_profile_id) => {
             tracing::trace!(user_profile_id = user_profile_id, "removing user profile");
             user::remove_user_profile(&ctx.opensearch_client, &user_profile_id).await?;
