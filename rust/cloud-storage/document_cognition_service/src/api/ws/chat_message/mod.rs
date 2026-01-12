@@ -26,9 +26,6 @@ use ai_tools::{AiToolSet, RequestContext, ToolServiceContext};
 use anyhow::{Context, Result};
 use futures::stream::StreamExt;
 use model::chat::{NewAttachment, NewChatMessage};
-use models_opensearch::SearchEntityType;
-use sqs_client::search::SearchQueueMessage;
-use sqs_client::search::name::EntityName;
 use std::sync::Arc;
 use tokio;
 use tokio::sync::mpsc::UnboundedSender;
@@ -389,21 +386,6 @@ pub async fn handle_send_chat_message(
                     },
                 )
             });
-
-        // Send the message to the search event queue for setting chat name
-        match macro_uuid::string_to_uuid(&incoming_message.chat_id) {
-            Ok(chat_id) => {
-                let _ = ctx.sqs_client.send_message_to_search_event_queue(
-                    SearchQueueMessage::UpdateEntityName(EntityName {
-                        entity_id: chat_id,
-                        entity_type: SearchEntityType::Chats,
-                    }),
-                ).await.inspect_err(|err| tracing::error!(error=?err, "failed to send message to search event queue"));
-            }
-            Err(err) => {
-                tracing::error!(error=?err, "failed to convert chat_id to uuid");
-            }
-        }
     }
     Ok(())
 }

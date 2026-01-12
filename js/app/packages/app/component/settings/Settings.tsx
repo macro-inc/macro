@@ -16,6 +16,7 @@ import { Appearance } from './Appearance';
 import { Tabs } from '@kobalte/core/tabs';
 import { Account } from './Account';
 import { Inbox } from './Inbox';
+import { Shortcuts } from './Shortcuts';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 
@@ -114,7 +115,8 @@ export function SettingsPanel(props: SettingsPanelProps) {
   const settingsTabs = createMemo(() => {
     const tabs: {value: string; label: string }[] = [
       {value: 'Appearance', label: 'Appearance'},
-      {value: 'Account', label: 'Account'}
+      {value: 'Account', label: 'Account'},
+      {value: 'Shortcuts', label: 'Shortcuts'}
     ];
 
     if(!orgName() && !isNativeMobilePlatform()){tabs.push({value: 'Subscription', label: 'Subscription'})}
@@ -141,7 +143,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
             <Tabs
               value={activeTabId()}
               onChange={(value: string | undefined) => {
-                if(value && (value === 'Account' || value === 'Subscription' || value === 'Organization' || value === 'Appearance' || value === 'Mobile' || value === 'AI Memory' || value === 'Inbox')){
+                if(value && (value === 'Account' || value === 'Subscription' || value === 'Organization' || value === 'Appearance' || value === 'Mobile' || value === 'AI Memory' || value === 'Inbox' || value === 'Shortcuts')){
                   setActiveTabId(value as SettingsTab);
                   track(TrackingEvents.SETTINGS.CHANGETAB, { tab: value });
                 }
@@ -265,6 +267,9 @@ export function SettingsPanel(props: SettingsPanelProps) {
                 </Show>
                 <Tabs.Content value="Appearance" class="absolute inset-0">
                   <Appearance />
+                </Tabs.Content>
+                <Tabs.Content value="Shortcuts" class="absolute inset-0">
+                  <Shortcuts />
                 </Tabs.Content>
                 <Show when={DEV_MODE_ENV}>
                   <Tabs.Content value="Inbox" class="absolute inset-0">

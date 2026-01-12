@@ -1,20 +1,17 @@
 import { useEmailContext } from '@block-email/component/EmailContext';
 import { isScrollingToMessage } from '@block-email/signal/scrollState';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { createMemo, createSelector, For } from 'solid-js';
-import { createStore } from 'solid-js/store';
+import { createMemo, createSelector, For, Show } from 'solid-js';
 import { MessageContainer } from './MessageContainer';
 
 interface MessageListProps {
   initialLoadComplete: boolean;
+  title: string;
 }
 
 export function MessageList(props: MessageListProps) {
   const getIsScrollingToMessage = isScrollingToMessage.get;
   const context = useEmailContext();
-  const [expandedMessageBodyIds, setExpandedMessageBodyIds] = createStore<
-    Record<string, boolean>
-  >({});
   const isFocusedSelector = createSelector(
     context.messages.focusedID,
     (a, b) => !!a && !!b && a === b
@@ -82,13 +79,20 @@ export function MessageList(props: MessageListProps) {
                 isFocused={isFocusedSelector(message.db_id ?? undefined)}
                 isTarget={isTargetSelector(message.db_id ?? undefined)}
                 message={message}
-                expandedMessageBodyIds={expandedMessageBodyIds}
-                setExpandedMessageBodyIds={setExpandedMessageBodyIds}
               />
             );
           }}
         </For>
       </StaticMarkdownContext>
+      <Show when={props.title}>
+        <div class="shrink-0 w-full flex justify-center pb-4">
+          <div class="macro-message-width w-full">
+            <h1 class="text-4xl font-semibold text-ink pt-8 pb-4">
+              {props.title}
+            </h1>
+          </div>
+        </div>
+      </Show>
     </div>
   );
 }

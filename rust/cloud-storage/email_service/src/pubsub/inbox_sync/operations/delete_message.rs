@@ -3,10 +3,8 @@ use crate::pubsub::util::{cg_refresh_email, complete_transaction_with_processing
 use models_email::email::service::link;
 use models_email::gmail::inbox_sync::DeleteMessagePayload;
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
-use models_opensearch::SearchEntityType;
 use sqs_client::search::SearchQueueMessage;
 use sqs_client::search::email::EmailMessage;
-use sqs_client::search::name::EntityName;
 use std::result;
 use uuid::Uuid;
 
@@ -57,27 +55,6 @@ pub async fn delete_message(
         Ok::<Option<Uuid>, ProcessingError>(result)
     }
     .await;
-
-    if let Ok(deleted_thread) = result
-        && let Some(thread_id) = deleted_thread
-    {
-        let sqs_client = ctx.sqs_client.clone();
-        tokio::spawn({
-            async move {
-                let _ = sqs_client
-                        .send_message_to_search_event_queue(SearchQueueMessage::RemoveEntityName(
-                            EntityName {
-                                entity_id: thread_id,
-                                entity_type: SearchEntityType::Emails,
-                            },
-                        ))
-                        .await
-                        .inspect_err(|e| {
-                            tracing::error!(error=?e, "failed to send message to search extractor queue");
-                        });
-            }
-        });
-    }
 
     complete_transaction_with_processing_error(tx, result).await?;
 

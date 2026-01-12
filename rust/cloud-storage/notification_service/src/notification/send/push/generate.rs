@@ -67,6 +67,13 @@ impl XmlFormatter for PlainTextFormatter {
     ) -> std::fmt::Result {
         write!(f, "{}", date.display_format)
     }
+
+    fn format_group(
+        group: &mention_utils::parse::ParsedGroupMention<'_>,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
+        write!(f, "@{}", group.group_alias)
+    }
 }
 
 pub fn generate_apns_notification<T: XmlFormatter>(
