@@ -1,7 +1,7 @@
 import { useEmail } from '@service-gql/client';
 import type { LexicalEditor } from 'lexical';
 import { createSignal, type Setter } from 'solid-js';
-import { createStore } from 'solid-js/store';
+import { createStore, reconcile, unwrap } from 'solid-js/store';
 import { decodeBase64Utf8 } from '../util/decodeBase64';
 import { TOGGLE_APPEND_EMAIL_THREAD_COMMAND } from '../util/prepareEmailBody';
 import {
@@ -41,6 +41,18 @@ export interface EmailFormStateOptions {
   onRecipientsChange?: (next: EmailRecipient[]) => void;
 }
 
+type EmailFormState = {
+  recipients: {
+    to: EmailRecipient[];
+    cc: EmailRecipient[];
+    bcc: EmailRecipient[];
+  };
+  replyType: ReplyType;
+  withQuotedText: boolean;
+  subject: string;
+  markdownBody: string;
+};
+
 /**
  * Creates a state object for the email form.
  * @param key - The db_id of the email being replied to.
@@ -65,9 +77,45 @@ export function createEmailFormState(
     return parsed.body.querySelector('div.macro_quote') !== null;
   };
 
-  const [replyAppended, setReplyAppended] = createSignal<boolean>(
-    draftContainsAppendedReply() ?? false
-  );
+  const getInitialState = () => {
+    const replyType =
+      (replyingTo?.to.length ?? 0) + (replyingTo?.cc.length ?? 0) > 1
+        ? 'reply-all'
+        : 'reply';
+
+    let initialSubject = draft?.subject;
+
+    if (initialSubject == null) {
+      initialSubject = getSubjectText(replyingTo, replyType);
+    }
+
+    let initialRecipients: EmailFormRecipients = { to: [], cc: [], bcc: [] };
+
+    if (draft) {
+      initialRecipients = {
+        to: draft.to.map(convertContactInfoToEmailRecipient) ?? [],
+        cc: draft.cc.map(convertContactInfoToEmailRecipient) ?? [],
+        bcc: draft.bcc.map(convertContactInfoToEmailRecipient) ?? [],
+      };
+    } else if (replyingTo) {
+      initialRecipients =
+        replyType === 'reply-all'
+          ? getReplyAllRecipients(replyingTo, userEmail() ?? '')
+          : getReplyRecipientsFromParent(replyingTo, userEmail() ?? '');
+    }
+
+    return {
+      recipients: initialRecipients,
+      replyType,
+      withQuotedText: draftContainsAppendedReply(),
+      subject: initialSubject,
+      markdownBody: '',
+    } satisfies EmailFormState;
+  };
+
+  const [state, setState] = createStore<EmailFormState>({
+    ...getInitialState(),
+  });
 
   const [onDirtyCb, setOnDirtyCb] = createSignal<(() => void) | undefined>();
   const [onReplyTypeAppliedCb, setOnReplyTypeAppliedCb] = createSignal<
@@ -78,10 +126,6 @@ export function createEmailFormState(
   const [lastReplyTypeApplied, setLastReplyTypeApplied] = createSignal<
     ReplyType | undefined
   >(undefined);
-
-  const [replyType, setReplyTypeInner] = createSignal<ReplyType | undefined>(
-    undefined
-  );
 
   const [shouldFocusInput, setShouldFocusInput] = createSignal(false);
 
@@ -98,91 +142,55 @@ export function createEmailFormState(
     })) ?? []
   );
 
-  const initialReplyType: ReplyType | undefined = replyingTo
-    ? (replyingTo.to.length ?? 0) + (replyingTo.cc.length ?? 0) > 1
-      ? 'reply-all'
-      : 'reply'
-    : undefined;
-
-  const initialRecipients: EmailFormRecipients = draft
-    ? {
-        to: draft.to.map(convertContactInfoToEmailRecipient) ?? [],
-        cc: draft.cc.map(convertContactInfoToEmailRecipient) ?? [],
-        bcc: draft.bcc.map(convertContactInfoToEmailRecipient) ?? [],
-      }
-    : replyingTo && initialReplyType
-      ? initialReplyType === 'reply-all'
-        ? getReplyAllRecipients(replyingTo, userEmail() ?? '')
-        : getReplyRecipientsFromParent(replyingTo, userEmail() ?? '')
-      : { to: [], cc: [], bcc: [] };
-
-  const [recipients, setRecipientsInner] = createStore<EmailFormRecipients>({
-    to: initialRecipients.to,
-    cc: initialRecipients.cc,
-    bcc: initialRecipients.bcc,
-  });
-
   // A wrapper around setRecipientsInner that runs the side-effects alongside setting the store
   const setRecipients = (
     field: keyof EmailFormRecipients,
-    value: EmailRecipient[] | ((prev: EmailRecipient[]) => EmailRecipient[])
+    value: EmailRecipient[]
   ) => {
-    const next = typeof value === 'function' ? value(recipients[field]) : value;
-    setRecipientsInner(field, next);
+    setState('recipients', field, value);
     callDirty();
+    const recipients = state.recipients;
     const all = [...recipients.to, ...recipients.cc, ...recipients.bcc];
-    options.onRecipientsChange?.(all);
+    options.onRecipientsChange?.(unwrap(all));
   };
 
-  const initialSubject =
-    draft?.subject ??
-    getSubjectText(
-      replyingTo,
-      (replyingTo?.to.length ?? 0) + (replyingTo?.cc.length ?? 0) > 1
-        ? 'reply-all'
-        : 'reply'
-    ) ??
-    '';
-
-  const [subject, setSubjectInner] = createSignal<string>(initialSubject);
-
   const setSubject: Setter<string> = (value) => {
-    const result = setSubjectInner(value);
+    const result = setState('subject', value);
     callDirty();
     return result;
   };
 
   // A wrapper around setReplyTypeInner that runs the side-effects alongside setting the signal
-  type ReplySetter = typeof setReplyTypeInner;
-  const setReplyType = (...args: Parameters<ReplySetter>) => {
-    const rt = setReplyTypeInner(...args);
+  const setReplyType = (next: ReplyType) => {
+    setState('replyType', next);
+    const rt = state.replyType;
     const msg = replyingTo;
     if (msg) {
-      const calculated =
-        rt === 'reply-all'
-          ? getReplyAllRecipients(msg, userEmail() ?? '')
-          : rt === 'reply'
-            ? getReplyRecipientsFromParent(msg, userEmail() ?? '')
-            : { to: [], cc: [], bcc: [] };
+      let calculated: EmailFormRecipients = { to: [], cc: [], bcc: [] };
+
+      switch (rt) {
+        case 'reply-all': {
+          calculated = getReplyAllRecipients(msg, userEmail() ?? '');
+          break;
+        }
+        case 'reply': {
+          calculated = getReplyRecipientsFromParent(msg, userEmail() ?? '');
+        }
+      }
 
       setRecipients('to', calculated.to ?? []);
       setRecipients('cc', calculated.cc ?? []);
       setRecipients('bcc', calculated.bcc ?? []);
 
-      if (rt) {
-        setSubject(getSubjectText(msg, rt));
+      setSubject(getSubjectText(msg, rt));
 
-        if (rt === 'forward') {
-          setReplyAppended(true);
-          capturedEditor()?.dispatchCommand(
-            TOGGLE_APPEND_EMAIL_THREAD_COMMAND,
-            {
-              replyingTo: replyingTo,
-              replyType: rt,
-              visible: true,
-            }
-          );
-        }
+      if (rt === 'forward') {
+        setState('withQuotedText', true);
+        capturedEditor()?.dispatchCommand(TOGGLE_APPEND_EMAIL_THREAD_COMMAND, {
+          replyingTo: replyingTo,
+          replyType: rt,
+          visible: true,
+        });
       }
     }
 
@@ -197,27 +205,13 @@ export function createEmailFormState(
   };
 
   const reset = () => {
-    setReplyAppended(draftContainsAppendedReply() ?? false);
-
-    // Restore reply type first without side effects that recalc recipients
-    setReplyTypeInner(initialReplyType);
-    setLastReplyTypeApplied(initialReplyType);
-
-    // Restore recipients to their initial values (draft or computed)
-    setRecipientsInner('to', initialRecipients.to);
-    setRecipientsInner('cc', initialRecipients.cc);
-    setRecipientsInner('bcc', initialRecipients.bcc);
+    setState(reconcile({ ...getInitialState() }));
+    const recipients = state.recipients;
 
     // Notify context of the full recipient list after reset
-    const all = [
-      ...initialRecipients.to,
-      ...initialRecipients.cc,
-      ...initialRecipients.bcc,
-    ];
-    options.onRecipientsChange?.(all);
+    const all = [...recipients.to, ...recipients.cc, ...recipients.bcc];
+    options.onRecipientsChange?.(unwrap(all));
 
-    // Restore subject and input focus
-    setSubjectInner(initialSubject);
     setShouldFocusInput(false);
 
     setAttachments([]);
@@ -228,13 +222,13 @@ export function createEmailFormState(
 
   const value = {
     draft,
-    replyAppended,
-    setReplyAppended,
-    recipients,
+    replyAppended: () => state.withQuotedText,
+    setReplyAppended: (next: boolean) => setState('withQuotedText', next),
+    recipients: () => state.recipients,
     setRecipients,
-    subject,
+    subject: () => state.subject,
     setSubject,
-    replyType,
+    replyType: () => state.replyType,
     setReplyType,
     shouldFocusInput,
     setShouldFocusInput,
@@ -244,7 +238,7 @@ export function createEmailFormState(
     },
     setOnReplyTypeApplied: (cb?: (rt: ReplyType | undefined) => void) => {
       setOnReplyTypeAppliedCb(() => cb);
-      const rt = lastReplyTypeApplied() ?? replyType();
+      const rt = lastReplyTypeApplied() ?? state.replyType;
       if (cb && rt !== undefined) queueMicrotask(() => cb(rt));
     },
     setCapturedEditor: (editor: LexicalEditor) => {
