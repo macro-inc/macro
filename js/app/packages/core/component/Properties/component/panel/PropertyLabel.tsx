@@ -1,4 +1,8 @@
-import { useBlockId, useMaybeBlockAliasedName } from '@core/block';
+import {
+  useBlockId,
+  useMaybeBlockAliasedName,
+  useMaybeBlockId,
+} from '@core/block';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import DeleteIcon from '@icon/bold/x-bold.svg';
 import PinIcon from '@icon/regular/push-pin.svg';
@@ -31,7 +35,7 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
     onPropertyUnpinned,
     pinnedPropertyIds,
   } = usePropertiesContext();
-  const blockId = useBlockId();
+  const maybeBlockId = useMaybeBlockId();
   const blockName = useMaybeBlockAliasedName();
   const isBuiltin =
     blockName &&
@@ -65,11 +69,12 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
   };
 
   const handleDeleteConfirm = async () => {
+    if (!maybeBlockId) return;
     try {
       await deleteMutation.mutateAsync({
         entityPropertyId: props.property.propertyId,
         entityType,
-        entityId: blockId,
+        entityId: maybeBlockId,
       });
       setDeleteConfirmVisible(false);
       onPropertyDeleted();
