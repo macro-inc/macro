@@ -26,8 +26,8 @@ lazy_static! {
     static ref re: Regex = Regex::new("<m-link>(.+?)</m-link>").expect("link-regex");
 }
 
-fn replace_links(mut s: String) -> String {
-    re.replace_all(&mut s, |caps: &Captures| {
+fn replace_links(s: String) -> String {
+    re.replace_all(&s, |caps: &Captures| {
         let json_str = &caps[1];
         serde_json::from_str::<serde_json::Value>(json_str)
             .ok()
