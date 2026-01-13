@@ -26,7 +26,7 @@ pub async fn handler(
     Ok(())
 }
 
-/// send refresh notifications for links that are active and syncing to Gmail
+/// send refresh notifications for active links
 async fn send_refresh_messages(ctx: &context::Context) -> Result<(), Error> {
     let current_hour = chrono::Utc::now().hour() as i32;
     let provider_filter = DbUserProvider::Gmail;
@@ -80,7 +80,7 @@ async fn send_refresh_messages(ctx: &context::Context) -> Result<(), Error> {
 async fn send_delete_messages(ctx: &context::Context) -> Result<(), Error> {
     let inactive_links = sqlx::query_scalar!(
         r#"
-            -- Condition A: Created > X days ago and has NO history
+            -- Condition A: Created > X days ago and has NO history - hasn't viewed a thread
             SELECT
                 l.id AS "link_id!"
             FROM
@@ -97,7 +97,7 @@ async fn send_delete_messages(ctx: &context::Context) -> Result<(), Error> {
 
             UNION
 
-            -- Condition B: Has history rows, but latest activity > Y days ago
+            -- Condition B: Has history rows, but latest thread viewed was > Y days ago
             SELECT
                 l.id AS "link_id!"
             FROM
