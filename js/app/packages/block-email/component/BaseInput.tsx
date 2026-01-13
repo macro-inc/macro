@@ -1,7 +1,10 @@
 import { fileSelector } from '@core/directive/fileSelector';
 import { FormatRibbon } from '@block-channel/component/FormatRibbon';
 import { MacroSignatureButton } from '@block-email/component/MacroSignatureButton';
-import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
+import {
+  MACRO_EMAIL_SIGNATURE,
+  MAX_ATTACHMENTS_BYTES_SIZE,
+} from '@block-email/constants';
 import { useHasPaidAccess } from '@core/auth';
 import { useBlockId } from '@core/block';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
@@ -102,8 +105,6 @@ import { plural } from '@core/util/string';
 
 false && fileFolderDrop;
 false && fileSelector;
-
-const MAX_ATTACHMENTS_BYTES_SIZE = 18_000_000;
 
 const getRecipientDisplayName = (item: EmailRecipient): string => {
   switch (item.kind) {
