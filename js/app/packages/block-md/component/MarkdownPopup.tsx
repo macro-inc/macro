@@ -347,7 +347,7 @@ export function MarkdownPopup(props: {
           currentSelection.lexicalSelection as import('lexical').RangeSelection,
         onComplete: (results) => {
           setIsConverting(false);
-          const successCount = results.filter((r) => r.success).length;
+          const successCount = results.filter((r) => r.isOk()).length;
           if (successCount > 0) {
             toast.success(
               `Created ${successCount} task${successCount > 1 ? 's' : ''}`

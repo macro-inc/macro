@@ -1,5 +1,6 @@
 import type { ListItemNode } from '@lexical/list';
 import type { RangeSelection } from 'lexical';
+import type { Result } from 'neverthrow';
 
 /**
  * Represents a parsed checkbox/todo item ready for task creation
@@ -19,16 +20,21 @@ export type ParsedCheckbox = {
   dueDate: string | null;
 };
 
-/**
- * Result of creating a task from a checkbox
- */
-export type TaskCreationResult = {
-  success: boolean;
+/** Successful task creation */
+export type TaskCreationSuccess = {
   nodeKey: string;
-  documentId?: string;
-  taskTitle?: string;
-  error?: string;
+  documentId: string;
+  taskTitle: string;
 };
+
+/** Task creation error types */
+export type TaskCreationError =
+  | { tag: 'EmptyCheckbox'; nodeKey: string }
+  | { tag: 'NoDocumentId'; nodeKey: string }
+  | { tag: 'ApiError'; nodeKey: string; message: string };
+
+/** Result of creating a task from a checkbox */
+export type TaskCreationResult = Result<TaskCreationSuccess, TaskCreationError>;
 
 /**
  * Options for the checkbox-to-task conversion

@@ -10,6 +10,7 @@ import {
   type LexicalCommand,
   type LexicalEditor,
 } from 'lexical';
+import { err, ok } from 'neverthrow';
 import { SYSTEM_PROPERTY_IDS } from '../../../Properties/constants';
 import { createTask } from '../../../../util/create';
 import type { PropertyInput } from '@service-storage/generated/schemas/propertyInput';
@@ -33,7 +34,6 @@ export const CONVERT_CHECKBOXES_TO_TASKS: LexicalCommand<ConvertCheckboxesOption
 function buildPropertyValues(checkbox: ParsedCheckbox): PropertyInput[] {
   const properties: PropertyInput[] = [];
 
-  // Add assignees if present (ENTITY type, multi-select)
   if (checkbox.assigneeUserIds.length > 0) {
     properties.push({
       propertyId: SYSTEM_PROPERTY_IDS.ASSIGNEES,
@@ -47,7 +47,6 @@ function buildPropertyValues(checkbox: ParsedCheckbox): PropertyInput[] {
     });
   }
 
-  // Add due date if present (DATE type)
   if (checkbox.dueDate) {
     properties.push({
       propertyId: SYSTEM_PROPERTY_IDS.DUE_DATE,
@@ -67,13 +66,8 @@ function buildPropertyValues(checkbox: ParsedCheckbox): PropertyInput[] {
 async function createTaskFromCheckbox(
   checkbox: ParsedCheckbox
 ): Promise<TaskCreationResult> {
-  // Skip empty checkboxes
   if (!checkbox.title.trim()) {
-    return {
-      success: false,
-      nodeKey: checkbox.nodeKey,
-      error: 'Empty checkbox - skipped',
-    };
+    return err({ tag: 'EmptyCheckbox', nodeKey: checkbox.nodeKey });
   }
 
   try {
@@ -86,25 +80,20 @@ async function createTaskFromCheckbox(
     });
 
     if (!documentId) {
-      return {
-        success: false,
-        nodeKey: checkbox.nodeKey,
-        error: 'Failed to create task - no document ID returned',
-      };
+      return err({ tag: 'NoDocumentId', nodeKey: checkbox.nodeKey });
     }
 
-    return {
-      success: true,
+    return ok({
       nodeKey: checkbox.nodeKey,
       documentId,
       taskTitle: checkbox.title,
-    };
+    });
   } catch (error) {
-    return {
-      success: false,
+    return err({
+      tag: 'ApiError',
       nodeKey: checkbox.nodeKey,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
+      message: error instanceof Error ? error.message : 'Unknown error',
+    });
   }
 }
 
@@ -120,18 +109,14 @@ function $replaceCheckboxWithMention(
   const node = $getNodeByKey(nodeKey);
   if (!node || !$isListItemNode(node)) return;
 
-  // Create document mention for the task
   const mentionNode = $createDocumentMentionNode({
     documentId,
     documentName: taskTitle,
     blockName: 'task',
   });
 
-  // Create a paragraph to hold the mention (replacing the list item)
   const paragraph = $createParagraphNode();
   paragraph.append(mentionNode);
-
-  // Replace the checkbox with the paragraph
   node.replace(paragraph);
 }
 
@@ -145,35 +130,20 @@ async function processCheckboxes(
 ): Promise<void> {
   const { onComplete } = options;
 
-  try {
-    // Create all tasks in parallel
-    const results = await Promise.all(checkboxes.map(createTaskFromCheckbox));
+  const results = await Promise.all(checkboxes.map(createTaskFromCheckbox));
 
-    // Batch replace all successful checkboxes in a single update
-    const successfulResults = results.filter(
-      (
-        r
-      ): r is TaskCreationResult & { documentId: string; taskTitle: string } =>
-        r.success && !!r.documentId && !!r.taskTitle
-    );
+  // Extract successful results for DOM replacement
+  const successes = results.flatMap((r) => (r.isOk() ? [r.value] : []));
 
-    if (successfulResults.length > 0) {
-      editor.update(() => {
-        for (const result of successfulResults) {
-          $replaceCheckboxWithMention(
-            result.nodeKey,
-            result.documentId,
-            result.taskTitle
-          );
-        }
-      });
-    }
-
-    onComplete?.(results);
-  } catch (error) {
-    console.error('Error processing checkboxes:', error);
-    onComplete?.([]);
+  if (successes.length > 0) {
+    editor.update(() => {
+      for (const { nodeKey, documentId, taskTitle } of successes) {
+        $replaceCheckboxWithMention(nodeKey, documentId, taskTitle);
+      }
+    });
   }
+
+  onComplete?.(results);
 }
 
 /**
