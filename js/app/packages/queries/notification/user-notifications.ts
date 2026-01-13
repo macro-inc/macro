@@ -369,7 +369,9 @@ export async function getNotificationById(
   notificationId: string
 ): Promise<NotificationItem | undefined> {
   const res = await throwOnErr(async () => {
-    return await notificationServiceClient.getUserNotificationById(notificationId);
+    return await notificationServiceClient.getUserNotificationById(
+      notificationId
+    );
   });
 
   return res as NotificationItem;

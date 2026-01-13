@@ -6,7 +6,10 @@ import { NotificationType } from '@core/types';
 import { getNotificationById } from '@queries/notification/user-notifications';
 import { errAsync, ResultAsync } from 'neverthrow';
 import { match, P } from 'ts-pattern';
-import { tryToTypedNotification, type TypedNotification } from './notification-metadata';
+import {
+  tryToTypedNotification,
+  type TypedNotification,
+} from './notification-metadata';
 
 /**
  * Notification event types that are all handled by opening a channel
@@ -192,20 +195,20 @@ export function openNotificationFromId(
   notificationId: string,
   layoutManager: SplitManager
 ): ResultAsync<void, OpenNotificationFromIdError> {
-  return ResultAsync.fromSafePromise(getNotificationById(notificationId)).andThen(
-    (unified) => {
-      if (!unified) {
-        const err: NotFoundError = { tag: 'NotFoundError', notificationId };
-        return errAsync(err);
-      }
-
-      const typed = tryToTypedNotification(unified);
-      if (!typed) {
-        const err: NotTypedError = { tag: 'NotTypedError', notificationId };
-        return errAsync(err);
-      }
-
-      return openNotification(typed, layoutManager);
+  return ResultAsync.fromSafePromise(
+    getNotificationById(notificationId)
+  ).andThen((unified) => {
+    if (!unified) {
+      const err: NotFoundError = { tag: 'NotFoundError', notificationId };
+      return errAsync(err);
     }
-  );
+
+    const typed = tryToTypedNotification(unified);
+    if (!typed) {
+      const err: NotTypedError = { tag: 'NotTypedError', notificationId };
+      return errAsync(err);
+    }
+
+    return openNotification(typed, layoutManager);
+  });
 }

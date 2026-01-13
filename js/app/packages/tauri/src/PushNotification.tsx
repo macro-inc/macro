@@ -26,12 +26,6 @@ import {
 import { createTauriNotificationInterface } from './notification';
 import { useExpectTauri } from './TauriProvider';
 
-function splitPathAndQuery(route: string): { path: string; query: string } {
-  const qIndex = route.indexOf('?');
-  if (qIndex === -1) return { path: route, query: '' };
-  return { path: route.slice(0, qIndex), query: route.slice(qIndex + 1) };
-}
-
 function usePushNotifications(
   deviceType: 'android' | 'ios',
   onPushNotification?: (event: NotificationEvent) => void
@@ -135,17 +129,18 @@ export function MaybePushNotificationRegistration(props: {
   }
 
   const push = usePushNotifications(os, (event) => {
-    const openRoute = event.payload.openRoute;
-    if (!openRoute) {
-      return;
-    }
+    const notificationId: string | undefined = event.payload.notificationId;
 
-    const { path, query } = splitPathAndQuery(openRoute);
     const tapped =
       event.type === 'BACKGROUND_TAP' || event.type === 'FOREGROUND_TAP';
     // Only navigate on explicit user interaction.
     if (!tapped) return;
-    emit('navigate', { path, query });
+    if (!notificationId) return;
+
+    emit('navigate', {
+      path: `/component/notification?notificationId=${notificationId}`,
+      query: '',
+    });
   });
 
   // now we compose the standard tauri notif plugin with the push notification plugin

@@ -5,6 +5,7 @@ import { createEffect, onCleanup } from 'solid-js';
 type NavigateEvent = {
   path: string;
   query: string;
+  notificationId?: string;
 };
 
 /// this must be used as a child of router
@@ -16,10 +17,16 @@ export function useTauriNavigationEffect() {
     async function inner() {
       unsubscribe = await listen<NavigateEvent>('navigate', (ev) => {
         console.info({ ev });
-        if (ev.payload.query) {
-          navigate(`${ev.payload.path}?${ev.payload.query}`);
+        if (ev.payload.notificationId) {
+          navigate(
+            `/component/notification?notificationId=${ev.payload.notificationId}`
+          );
         } else {
-          navigate(ev.payload.path);
+          if (ev.payload.query) {
+            navigate(`${ev.payload.path}?${ev.payload.query}`);
+          } else {
+            navigate(ev.payload.path);
+          }
         }
       });
     }
