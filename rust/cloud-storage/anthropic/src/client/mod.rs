@@ -18,19 +18,19 @@ pub struct Client {
 
 impl Client {
     pub fn dangerously_try_from_env(extensions: Option<AnthropicRequestExtensions>) -> Self {
-        let config = Config::dangrously_try_from_env();
-        // if let Some(extensions) = extensions
-        //     && extensions
-        //         .0
-        //         .into_iter()
-        //         .any(|f| f == AnthropicRequestExtension::FetchTool)
-        // {
-        //     tracing::debug!("Adding web_fetch beta header");
-        //     config.headers.append(
-        //         WEB_FETCH_TOOL_HEADER.0.clone(),
-        //         WEB_FETCH_TOOL_HEADER.1.clone(),
-        //     );
-        // }
+        let mut config = Config::dangrously_try_from_env();
+        if let Some(extensions) = extensions
+            && extensions
+                .0
+                .into_iter()
+                .any(|f| f == AnthropicRequestExtension::FetchTool)
+        {
+            tracing::debug!("Adding web_fetch beta header");
+            config.headers.append(
+                WEB_FETCH_TOOL_HEADER.0.clone(),
+                WEB_FETCH_TOOL_HEADER.1.clone(),
+            );
+        }
         tracing::debug!("Anthropic client headers: {:?}", config.headers);
         Self::with_config(config)
     }

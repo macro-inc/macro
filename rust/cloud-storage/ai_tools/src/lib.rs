@@ -28,6 +28,7 @@ impl ToolSchemaGenerator for ToolSetWithPrompt {
     }
 }
 
+/// These are actually sent to the AI provider
 pub fn all_tools() -> ToolSetWithPrompt {
     let toolset = AsyncToolSet::new()
         .add_toolset(search_toolset())
@@ -42,6 +43,8 @@ pub fn all_tools() -> ToolSetWithPrompt {
     ToolSetWithPrompt { toolset, prompt }
 }
 
+/// These are used to generate schemas for the frontend
+/// See [ai::tool::types::schema::PhantomTool]
 pub fn all_tool_schemas() -> ToolSchemas {
     all_tools()
         .merge(&*anthropic_web_search_tool)

@@ -3,7 +3,7 @@ use super::stream_extension::{ExtendedAnthropicStreamItem, ExtendedStream};
 use crate::client::chat::MessageCompletionResponseStream;
 use crate::error::AnthropicError;
 use crate::openai::stream_extension::AnthropicResponseExtension;
-use crate::prelude::ServerToolUse;
+use crate::prelude::{ServerToolUse, transform_request_web_fetch};
 use crate::types::response::{ContentDeltaEvent, StopReason, StreamEvent, Usage};
 use crate::{client::chat::Chat, prelude::CreateMessageRequestBody};
 use async_openai::error::{ApiError, OpenAIError};
@@ -370,6 +370,7 @@ impl<'c> Chat<'c> {
     {
         let mut request = request.into();
         request.stream = Some(true);
+        let request = transform_request_web_fetch(request);
         self.create_stream_openai_unchecked(request).await
     }
 
@@ -385,6 +386,7 @@ impl<'c> Chat<'c> {
         let mut request = request.into();
         request.stream = Some(true);
         let request = extensions.extend_request(request);
+        let request = transform_request_web_fetch(request);
         self.create_stream_extended_unchecked(request).await
     }
 
