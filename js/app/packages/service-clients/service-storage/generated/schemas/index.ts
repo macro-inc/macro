@@ -206,6 +206,7 @@ export * from './editCommentRequestMentions';
 export * from './editCommentRequestText';
 export * from './editCommentResponse';
 export * from './editCommentResponseAllOf';
+export * from './editCommentResponseAllOfFileType';
 export * from './editDocumentRequestV2';
 export * from './editDocumentRequestV2DocumentName';
 export * from './editDocumentRequestV2ProjectId';

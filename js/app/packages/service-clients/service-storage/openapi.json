@@ -5870,10 +5870,19 @@
           },
           {
             "type": "object",
-            "required": ["documentId"],
+            "required": ["documentId", "documentName", "documentOwner"],
             "properties": {
               "documentId": {
                 "type": "string"
+              },
+              "documentName": {
+                "type": "string"
+              },
+              "documentOwner": {
+                "type": "string"
+              },
+              "fileType": {
+                "type": ["string", "null"]
               }
             }
           }

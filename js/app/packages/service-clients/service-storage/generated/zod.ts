@@ -557,6 +557,9 @@ export const editCommentResponse = zod
   .and(
     zod.object({
       documentId: zod.string(),
+      documentName: zod.string(),
+      documentOwner: zod.string(),
+      fileType: zod.string().nullish(),
     })
   );
 
