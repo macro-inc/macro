@@ -224,18 +224,6 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
             onPasteFilesAndDirs={onAddFilesAndDirs}
           />
         </div>
-        <div class="flex flex-wrap items-center gap-2">
-          <DeprecatedTextButton
-            class="w-fit"
-            icon={PaperclipIcon}
-            secondaryIcon={XIcon}
-            secondaryTooltip={{ label: 'Remove attachment' }}
-            onOptionClick={() => {}}
-            theme="base"
-          >
-            Test attachment.pdf
-          </DeprecatedTextButton>
-        </div>
       </div>
       <div class="flex flex-row w-full h-8 justify-between items-center space-x-2 allow-css-brackets mt-2">
         <div class="flex flex-row items-center gap-2">
