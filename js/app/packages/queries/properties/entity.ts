@@ -44,7 +44,7 @@ function bulkIncludesEntityPredicate(queryKey: QueryKey, entityId: string) {
     queryKey.includes('properties') &&
     queryKey.includes('bulk') &&
     queryKey.some(
-      (subKey) => subKey instanceof Array && subKey.includes(entityId)
+      (subKey) => Array.isArray(subKey) && subKey.includes(entityId)
     )
   );
 }
