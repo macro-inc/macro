@@ -261,7 +261,7 @@ export function Thread(props: {
                           updateReply={(content) => {
                             Promise.all([
                               commentOperations.updateComment(
-                                props.comment.threadId,
+                                replyId,
                                 {
                                   text: content,
                                   threadId: props.comment.threadId,
