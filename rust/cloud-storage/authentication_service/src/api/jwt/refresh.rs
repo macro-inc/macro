@@ -83,6 +83,7 @@ pub async fn handler(
     ) {
         Ok(_) => {
             // jwt is valid, return back original tokens
+            tracing::trace!("jwt still valid");
             return Ok(Json(UserTokensResponse {
                 access_token: token_context.access_token.clone(),
                 refresh_token: token_context.refresh_token.clone(),
