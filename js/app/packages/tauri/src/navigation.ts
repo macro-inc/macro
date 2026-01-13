@@ -8,7 +8,6 @@ type NavigateEvent = {
   notificationId?: string;
 };
 
-// Module-level callback storage for JS-to-JS navigation
 let registeredNavigate: ((path: string) => void) | null = null;
 
 /**
@@ -35,7 +34,6 @@ export function triggerNavigation(path: string) {
 export function useTauriNavigationEffect() {
   const navigate = useNavigate();
 
-  // Register the navigate function for JS-to-JS calls
   registerNavigate(navigate);
 
   createEffect(() => {
