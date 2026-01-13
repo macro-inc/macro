@@ -462,7 +462,7 @@ export function EmailCompose() {
         body_text: data.text,
         body_html: data.html,
         body_macro: data.raw,
-        attachments: [],
+        db_id: currentDraftID(),
       },
     });
 
