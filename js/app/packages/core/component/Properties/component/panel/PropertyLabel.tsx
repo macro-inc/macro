@@ -1,8 +1,4 @@
-import {
-  useBlockId,
-  useMaybeBlockAliasedName,
-  useMaybeBlockId,
-} from '@core/block';
+import { useMaybeBlockAliasedName, useMaybeBlockId } from '@core/block';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import DeleteIcon from '@icon/bold/x-bold.svg';
 import PinIcon from '@icon/regular/push-pin.svg';
