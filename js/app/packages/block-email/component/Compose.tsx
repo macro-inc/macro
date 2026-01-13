@@ -201,8 +201,6 @@ export function EmailCompose() {
     shouldReturnFocusOnClose: false,
   });
 
-  const [triedToSubmit, _setTriedToSubmit] = createSignal(false);
-
   const { connect: connectEmail } = useEmailLinks();
 
   const previewName = createMemo(() => {
@@ -436,7 +434,6 @@ export function EmailCompose() {
                         selectedOptions={selectedRecipients}
                         setSelectedOptions={setSelectedRecipients}
                         placeholder="Macro users or email addresses"
-                        triedToSubmit={triedToSubmit}
                         focusOnMount={!hasLinkError()}
                         hideBorder
                         noBrackets
@@ -464,7 +461,6 @@ export function EmailCompose() {
                           selectedOptions={ccRecipients}
                           setSelectedOptions={setCcRecipients}
                           placeholder="Macro users or email addresses"
-                          triedToSubmit={triedToSubmit}
                           hideBorder
                           noBrackets
                           disabled={hasLinkError()}
@@ -485,7 +481,6 @@ export function EmailCompose() {
                           selectedOptions={bccRecipients}
                           setSelectedOptions={setBccRecipients}
                           placeholder="Macro users or email addresses"
-                          triedToSubmit={triedToSubmit}
                           hideBorder
                           noBrackets
                           disabled={hasLinkError()}
