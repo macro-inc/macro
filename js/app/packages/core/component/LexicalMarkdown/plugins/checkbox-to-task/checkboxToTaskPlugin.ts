@@ -209,3 +209,7 @@ export function $canConvertCheckboxesToTasks(): boolean {
   if (!$isRangeSelection(selection)) return false;
   return $getSelectedCheckboxes(selection).length > 0;
 }
+
+export function isCheckboxToTaskPluginEnabled(editor: LexicalEditor): boolean {
+  return editor._commands.has(CONVERT_CHECKBOXES_TO_TASKS);
+}

@@ -29,6 +29,7 @@ import {
 import {
   $canConvertCheckboxesToTasks,
   CONVERT_CHECKBOXES_TO_TASKS,
+  isCheckboxToTaskPluginEnabled,
 } from '@core/component/LexicalMarkdown/plugins/checkbox-to-task';
 import { toast } from '@core/component/Toast/Toast';
 import { ScopedPortal } from '@core/component/ScopedPortal';
@@ -59,7 +60,7 @@ import {
   $getSelectionLocation,
   type PersistentLocation,
 } from 'core/component/LexicalMarkdown/plugins/location/locationPlugin';
-import { $getRoot, COMMAND_PRIORITY_HIGH } from 'lexical';
+import { $getRoot, COMMAND_PRIORITY_HIGH, type RangeSelection } from 'lexical';
 import {
   createEffect,
   createSignal,
@@ -345,8 +346,7 @@ export function MarkdownPopup(props: {
       setIsConverting(true);
       editor.dispatchCommand(CONVERT_CHECKBOXES_TO_TASKS, {
         currentUserId: userId,
-        selection:
-          currentSelection.lexicalSelection as import('lexical').RangeSelection,
+        selection: currentSelection.lexicalSelection as RangeSelection,
         onComplete: (results) => {
           setIsConverting(false);
           const successCount = results.filter((r) => r.isOk()).length;
@@ -409,6 +409,15 @@ export function MarkdownPopup(props: {
       });
     });
 
+    const shouldShowCheckboxToTaskButton = () => {
+      return (
+        isCheckboxToTaskPluginEnabled(editor) &&
+        hasCheckboxes() &&
+        canEdit() &&
+        currentUserId()
+      );
+    };
+
     return (
       <>
         <div
@@ -446,7 +455,7 @@ export function MarkdownPopup(props: {
           >
             <FormatTools withinPopup />
           </Show>
-          <Show when={hasCheckboxes() && canEdit() && currentUserId()}>
+          <Show when={shouldShowCheckboxToTaskButton()}>
             <DeprecatedTextButton
               width={'w-12'}
               theme="clear"
