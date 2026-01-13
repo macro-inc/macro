@@ -3086,6 +3086,7 @@ dependencies = [
  "aws_lambda_events",
  "chrono",
  "lambda_runtime",
+ "macro_db_migrator",
  "macro_entrypoint",
  "macro_env",
  "model",
@@ -3094,6 +3095,7 @@ dependencies = [
  "sqs_client",
  "tokio",
  "tracing",
+ "uuid",
 ]
 
 [[package]]
