@@ -1,9 +1,16 @@
 MACRODB := "postgres://user:password@localhost:5432/macrodb"
 DATABASE_URL := "postgres://user:password@localhost:5432"
 
+mod sqlx './sqlx.just'
+
 check:
     RUSTFLAGS=-Dwarnings RUSTDOCFLAGS=-Dwarnings CARGO_TERM_COLOR=always SQLX_OFFLINE=true cargo check
 
+# This can be used in any crate that uses macrodb under the hood
+[no-cd]
+prepare_db:
+    just sqlx::prepare_db {{ MACRODB }}
+    
 format:
     SQLX_OFFLINE=true cargo fmt
 
@@ -44,6 +51,7 @@ setup_test_envs:
     echo "DATABASE_URL={{ MACRODB }}" >> ./email_db_client/.env
     echo "DATABASE_URL={{ MACRODB }}" >> ./email_refresh_handler/.env
     echo "DATABASE_URL={{ MACRODB }}" >> ./comms_db_client/.env
+    echo "DATABASE_URL={{ MACRODB }}" >> ./comms/.env
     echo "DATABASE_URL={{ MACRODB }}" >> ./document_cognition_service/.env
     echo "DATABASE_URL={{ MACRODB }}" >> ./document_text_extractor/.env
     echo "DATABASE_URL={{ MACRODB }}" >> ./organization_retention_handler/.env
@@ -59,6 +67,7 @@ setup_test_envs:
     echo "DATABASE_URL={{ MACRODB }}" >> ./system_properties/.env
     echo "DATABASE_URL={{ MACRODB }}" >> ./properties/.env
     echo "DATABASE_URL={{ MACRODB }}" >> ./name_search/.env
+    echo "DATABASE_URL={{ MACRODB }}" >> ./email_contact_search/.env 
 
 setup_macrodb:
     just macro_db_client/migrate_db

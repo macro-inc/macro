@@ -5,9 +5,14 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { SoupItemOneOf } from './soupItemOneOf';
-import type { SoupItemOneOfThree } from './soupItemOneOfThree';
 import type { SoupItemOneOfFive } from './soupItemOneOfFive';
-import type { SoupItemOneOfSeven } from './soupItemOneOfSeven';
 import type { SoupItemOneOfNine } from './soupItemOneOfNine';
+import type { SoupItemOneOfSeven } from './soupItemOneOfSeven';
+import type { SoupItemOneOfThree } from './soupItemOneOfThree';
 
-export type SoupItem = SoupItemOneOf | SoupItemOneOfThree | SoupItemOneOfFive | SoupItemOneOfSeven | SoupItemOneOfNine;
+export type SoupItem =
+  | SoupItemOneOf
+  | SoupItemOneOfThree
+  | SoupItemOneOfFive
+  | SoupItemOneOfSeven
+  | SoupItemOneOfNine;

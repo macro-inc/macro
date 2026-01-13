@@ -75,7 +75,7 @@ import {
   type UnifiedNotification,
   useNotificationsForEntity,
 } from '@notifications';
-import type { PaginatedSearchArgs } from '@service-search/client';
+import type { SearchArgs } from '@service-search/client';
 import type {
   ChannelFilters,
   ChatFilters,
@@ -159,8 +159,9 @@ import {
   type ViewConfigBase,
   type ViewData,
 } from './ViewConfig';
+import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 
-const SEARCH_SERVICE_DEBOUNCE_MS = 200;
+const SEARCH_SERVICE_DEBOUNCE_MS = 300;
 const LOCAL_FUZZY_SEARCH_DEBOUNCE_MS = 20;
 
 const NIL_UUID = '00000000-0000-0000-0000-000000000000';
@@ -267,7 +268,20 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     return map;
   });
 
+  const { isKeypressActive } = useIsKeyPressActive();
+
   const setSelectedEntity = (entity: EntityData | undefined) => {
+    setViewDataStore(
+      selectedView(),
+      produce((state) => {
+        if (!state) return;
+        state.selectedEntity = entity;
+      })
+    );
+  };
+  const setSelectedEntityFromMouse = (entity: EntityData | undefined) => {
+    if (isKeypressActive()) return;
+
     setViewDataStore(
       selectedView(),
       produce((state) => {
@@ -939,9 +953,9 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     })
   );
   const searchUnifiedNameContentQueryParams = createMemo(
-    (): PaginatedSearchArgs => ({
+    (): SearchArgs => ({
       params: {
-        page: 0,
+        cursor: null,
         page_size: 100,
       },
       request: {
@@ -1826,7 +1840,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                           'hasUserInteractedEntity',
                           true
                         );
-                        setSelectedEntity(innerProps.entity);
+                        setSelectedEntityFromMouse(innerProps.entity);
                       }}
                       onMouseLeave={() => {}}
                       onFocusIn={() => {
@@ -2111,6 +2125,7 @@ function SearchBar(props: {
                   icon={SearchIcon}
                   theme="clear"
                   tooltip={{ label: 'Search' }}
+                  tabIndex={-1}
                   onClick={() => {
                     inputRef?.focus();
                   }}
@@ -2122,6 +2137,7 @@ function SearchBar(props: {
                 icon={XIcon}
                 theme="clear"
                 tooltip={{ label: 'Clear search' }}
+                tabIndex={-1}
                 onClick={() => {
                   setSearchText('');
                   inputRef?.focus();
@@ -2136,6 +2152,7 @@ function SearchBar(props: {
             theme="clear"
             tooltip={{ label: 'Cancel search' }}
             class="[&_svg]:animate-spin"
+            tabIndex={-1}
             onClick={() => {
               setSearchText('');
               inputRef?.focus();

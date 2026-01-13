@@ -5,18 +5,32 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { FromWebSocketMessageOneOf } from './fromWebSocketMessageOneOf';
-import type { FromWebSocketMessageOneOfFour } from './fromWebSocketMessageOneOfFour';
-import type { FromWebSocketMessageOneOfSix } from './fromWebSocketMessageOneOfSix';
 import type { FromWebSocketMessageOneOfEight } from './fromWebSocketMessageOneOfEight';
-import type { FromWebSocketMessageOneOfOnezero } from './fromWebSocketMessageOneOfOnezero';
-import type { FromWebSocketMessageOneOfOnetwo } from './fromWebSocketMessageOneOfOnetwo';
+import type { FromWebSocketMessageOneOfFour } from './fromWebSocketMessageOneOfFour';
 import type { FromWebSocketMessageOneOfOnefive } from './fromWebSocketMessageOneOfOnefive';
-import type { FromWebSocketMessageOneOfOneseven } from './fromWebSocketMessageOneOfOneseven';
 import type { FromWebSocketMessageOneOfOnenine } from './fromWebSocketMessageOneOfOnenine';
-import type { FromWebSocketMessageOneOfTwoone } from './fromWebSocketMessageOneOfTwoone';
-import type { FromWebSocketMessageOneOfTwothree } from './fromWebSocketMessageOneOfTwothree';
+import type { FromWebSocketMessageOneOfOneseven } from './fromWebSocketMessageOneOfOneseven';
+import type { FromWebSocketMessageOneOfOnetwo } from './fromWebSocketMessageOneOfOnetwo';
+import type { FromWebSocketMessageOneOfOnezero } from './fromWebSocketMessageOneOfOnezero';
+import type { FromWebSocketMessageOneOfSix } from './fromWebSocketMessageOneOfSix';
 import type { FromWebSocketMessageOneOfTwofive } from './fromWebSocketMessageOneOfTwofive';
-import type { FromWebSocketMessageOneOfTwoseven } from './fromWebSocketMessageOneOfTwoseven';
 import type { FromWebSocketMessageOneOfTwonine } from './fromWebSocketMessageOneOfTwonine';
+import type { FromWebSocketMessageOneOfTwoone } from './fromWebSocketMessageOneOfTwoone';
+import type { FromWebSocketMessageOneOfTwoseven } from './fromWebSocketMessageOneOfTwoseven';
+import type { FromWebSocketMessageOneOfTwothree } from './fromWebSocketMessageOneOfTwothree';
 
-export type FromWebSocketMessage = FromWebSocketMessageOneOf | FromWebSocketMessageOneOfFour | FromWebSocketMessageOneOfSix | FromWebSocketMessageOneOfEight | FromWebSocketMessageOneOfOnezero | FromWebSocketMessageOneOfOnetwo | FromWebSocketMessageOneOfOnefive | FromWebSocketMessageOneOfOneseven | FromWebSocketMessageOneOfOnenine | FromWebSocketMessageOneOfTwoone | FromWebSocketMessageOneOfTwothree | FromWebSocketMessageOneOfTwofive | FromWebSocketMessageOneOfTwoseven | FromWebSocketMessageOneOfTwonine;
+export type FromWebSocketMessage =
+  | FromWebSocketMessageOneOf
+  | FromWebSocketMessageOneOfFour
+  | FromWebSocketMessageOneOfSix
+  | FromWebSocketMessageOneOfEight
+  | FromWebSocketMessageOneOfOnezero
+  | FromWebSocketMessageOneOfOnetwo
+  | FromWebSocketMessageOneOfOnefive
+  | FromWebSocketMessageOneOfOneseven
+  | FromWebSocketMessageOneOfOnenine
+  | FromWebSocketMessageOneOfTwoone
+  | FromWebSocketMessageOneOfTwothree
+  | FromWebSocketMessageOneOfTwofive
+  | FromWebSocketMessageOneOfTwoseven
+  | FromWebSocketMessageOneOfTwonine;

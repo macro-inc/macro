@@ -5,8 +5,8 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type AssistantMessagePartOneOfSevenType = typeof AssistantMessagePartOneOfSevenType[keyof typeof AssistantMessagePartOneOfSevenType];
-
+export type AssistantMessagePartOneOfSevenType =
+  (typeof AssistantMessagePartOneOfSevenType)[keyof typeof AssistantMessagePartOneOfSevenType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const AssistantMessagePartOneOfSevenType = {

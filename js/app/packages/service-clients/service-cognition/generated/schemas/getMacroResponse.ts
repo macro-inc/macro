@@ -4,8 +4,9 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
-import type { MacroResponse } from './macroResponse';
+
 import type { AccessLevel } from './accessLevel';
+import type { MacroResponse } from './macroResponse';
 
 export interface GetMacroResponse {
   macroItem: MacroResponse;

@@ -4,8 +4,9 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
-import type { ChatResponse } from './chatResponse';
+
 import type { AccessLevel } from './accessLevel';
+import type { ChatResponse } from './chatResponse';
 
 export interface GetChatResponse {
   chat: ChatResponse;

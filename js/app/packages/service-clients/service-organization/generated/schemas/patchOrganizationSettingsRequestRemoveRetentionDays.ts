@@ -8,4 +8,6 @@
 /**
  * Removes the retention policy you currently have set
  */
-export type PatchOrganizationSettingsRequestRemoveRetentionDays = boolean | null;
+export type PatchOrganizationSettingsRequestRemoveRetentionDays =
+  | boolean
+  | null;

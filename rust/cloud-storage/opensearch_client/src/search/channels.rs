@@ -230,6 +230,7 @@ pub(crate) async fn search_channel_messages(
                     score: hit.score,
                     highlight,
                     goto: None,
+                    updated_at: None,
                 },
                 ChannelMessageNameIndex::ChannelMessage(a) => SearchHit {
                     entity_id: a.entity_id,
@@ -243,6 +244,7 @@ pub(crate) async fn search_channel_messages(
                         created_at: a.created_at_seconds,
                         updated_at: a.updated_at_seconds,
                     })),
+                    updated_at: chrono::DateTime::from_timestamp(a.updated_at_seconds, 0),
                 },
             }
         })

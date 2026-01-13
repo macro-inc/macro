@@ -8,8 +8,7 @@
 /**
  * common types of sorts based on timestamps
  */
-export type ApiSortMethod = typeof ApiSortMethod[keyof typeof ApiSortMethod];
-
+export type ApiSortMethod = (typeof ApiSortMethod)[keyof typeof ApiSortMethod];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const ApiSortMethod = {

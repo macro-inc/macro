@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type BackfillJobStatus = typeof BackfillJobStatus[keyof typeof BackfillJobStatus];
-
+export type BackfillJobStatus =
+  (typeof BackfillJobStatus)[keyof typeof BackfillJobStatus];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const BackfillJobStatus = {

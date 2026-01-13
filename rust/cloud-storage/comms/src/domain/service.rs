@@ -10,7 +10,7 @@ use models_comms::channel::{Activity, ChannelId, ChannelWithLatest};
 use uuid::Uuid;
 
 use crate::domain::{
-    models::channel_name::resolve_channel_name,
+    models::{GetChannelsRequest, channel_name::resolve_channel_name},
     ports::{ChannelsService, CommsRepo, UserRepo},
 };
 
@@ -44,11 +44,14 @@ where
     #[tracing::instrument(err, skip(self))]
     async fn get_channels(
         &self,
-        user: macro_user_id::user_id::MacroUserIdStr<'_>,
+        req: GetChannelsRequest,
     ) -> Result<Vec<models_comms::channel::ChannelWithLatest>, rootcause::Report> {
+        let params = req.into_params();
+        let user = params.user().clone();
+
         let channels = self
             .comms
-            .get_user_channels_with_participants(user.copied())
+            .get_user_channels_with_participants(params)
             .await?;
 
         let channel_entities: Vec<_> = channels

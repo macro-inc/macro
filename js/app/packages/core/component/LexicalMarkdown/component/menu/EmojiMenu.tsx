@@ -21,6 +21,7 @@ import {
   REMOVE_EMOJI_SEARCH_COMMAND,
 } from '../../plugins';
 import type { MenuOperations } from '../../shared/inlineMenu';
+import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 
 false && clickOutside;
 false && floatWithSelection;
@@ -67,6 +68,12 @@ export function EmojiMenu(props: EmojiMenuProps) {
   const [mountSelection, setMountSelection] = createSignal<Selection | null>();
   const [selectedIndex, setSelectedIndex] = createSignal(0);
   const [virtualHandle, setVirtualHandle] = createSignal<VirtualizerHandle>();
+
+  const { isKeypressActive } = useIsKeyPressActive();
+  const setSelectedIndexFromMouse = (index: number) => {
+    if (isKeypressActive()) return;
+    setSelectedIndex(index);
+  };
 
   const [searchTerm, setSearchTerm] = createSignal(props.menu.searchTerm());
   const debouncedSetSearchTerm = debounce(
@@ -148,14 +155,10 @@ export function EmojiMenu(props: EmojiMenuProps) {
         setSelectedIndex((prev) => (prev + 1) % items.length);
         const handle = virtualHandle();
         if (!handle) break;
-        const endIndex = handle.findItemIndex(
-          handle.scrollOffset + handle.viewportSize
-        );
-        if (endIndex && endIndex === selectedIndex()) {
-          virtualHandle()?.scrollToIndex(selectedIndex() + 1, {
-            align: 'center',
-          });
-        }
+
+        virtualHandle()?.scrollToIndex(selectedIndex() + 1, {
+          align: 'nearest',
+        });
         break;
       }
 
@@ -165,12 +168,10 @@ export function EmojiMenu(props: EmojiMenuProps) {
         setSelectedIndex((prev) => (prev - 1 + items.length) % items.length);
         const handle = virtualHandle();
         if (!handle) break;
-        const startIndex = handle.findItemIndex(handle.scrollOffset);
-        if (startIndex && startIndex === selectedIndex()) {
-          virtualHandle()?.scrollToIndex(selectedIndex() - 1, {
-            align: 'center',
-          });
-        }
+
+        virtualHandle()?.scrollToIndex(selectedIndex() - 1, {
+          align: 'nearest',
+        });
         break;
       }
 
@@ -289,7 +290,7 @@ export function EmojiMenu(props: EmojiMenuProps) {
                         insertEmoji(emojiItem.emoji);
                         props.menu.setIsOpen(false);
                       }}
-                      setIndex={setSelectedIndex}
+                      setIndex={setSelectedIndexFromMouse}
                       setOpen={props.menu.setIsOpen}
                       index={index()}
                     />

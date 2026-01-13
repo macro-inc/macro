@@ -3,7 +3,6 @@ import { NUMBER_DECIMAL_PLACES } from '../constants';
 import { usePropertiesContext } from '../context/PropertiesContext';
 import type { Property, PropertyApiValues } from '../types';
 import { formatPropertyValue } from '../utils';
-import { ERROR_MESSAGES, handlePropertyError } from '../utils/errorHandling';
 
 /**
  * Hook for inline editing of string and number properties
@@ -82,18 +81,11 @@ export function useInlineEditor(
         throw new Error(`Unsupported property type: ${property.valueType}`);
       }
 
-      const result = await saveHandler.saveProperty(property, apiValues);
-
-      if (
-        handlePropertyError(
-          result,
-          ERROR_MESSAGES.PROPERTY_SAVE,
-          'useInlineEditor.save'
-        )
-      ) {
-        setIsEditing(false);
-        onSaved?.();
-      }
+      await saveHandler.saveProperty(property, apiValues);
+      setIsEditing(false);
+      onSaved?.();
+    } catch {
+      // Error toast is shown by mutation's onError callback
     } finally {
       setIsSaving(false);
     }

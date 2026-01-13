@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type PreviewViewStandardLabel = typeof PreviewViewStandardLabel[keyof typeof PreviewViewStandardLabel];
-
+export type PreviewViewStandardLabel =
+  (typeof PreviewViewStandardLabel)[keyof typeof PreviewViewStandardLabel];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const PreviewViewStandardLabel = {

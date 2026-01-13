@@ -7,4 +7,5 @@
 import type { Anchor } from './anchor';
 import type { CreateUnthreadedAnchorResponseAllOf } from './createUnthreadedAnchorResponseAllOf';
 
-export type CreateUnthreadedAnchorResponse = Anchor & CreateUnthreadedAnchorResponseAllOf;
+export type CreateUnthreadedAnchorResponse = Anchor &
+  CreateUnthreadedAnchorResponseAllOf;

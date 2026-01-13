@@ -8,4 +8,7 @@ import type { PdfAnchorRequestOneOf } from './pdfAnchorRequestOneOf';
 import type { PdfAnchorRequestOneOfFour } from './pdfAnchorRequestOneOfFour';
 import type { PdfAnchorRequestOneOfSeven } from './pdfAnchorRequestOneOfSeven';
 
-export type PdfAnchorRequest = PdfAnchorRequestOneOf | PdfAnchorRequestOneOfFour | PdfAnchorRequestOneOfSeven;
+export type PdfAnchorRequest =
+  | PdfAnchorRequestOneOf
+  | PdfAnchorRequestOneOfFour
+  | PdfAnchorRequestOneOfSeven;

@@ -5,8 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type SearchOn = typeof SearchOn[keyof typeof SearchOn];
-
+export type SearchOn = (typeof SearchOn)[keyof typeof SearchOn];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const SearchOn = {

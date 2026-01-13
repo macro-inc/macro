@@ -1,12 +1,12 @@
-import { useMaybeBlockAliasedName } from '@core/block';
+import { useBlockId, useMaybeBlockAliasedName } from '@core/block';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import DeleteIcon from '@icon/bold/x-bold.svg';
 import PinIcon from '@icon/regular/push-pin.svg';
 import UnpinIcon from '@icon/regular/push-pin-slash.svg';
 import XIcon from '@icon/regular/x.svg';
 import { Dialog } from '@kobalte/core/dialog';
+import { useDeleteEntityPropertyMutation } from '@queries/properties/entity';
 import { type Component, createMemo, createSignal, Show } from 'solid-js';
-import { deleteEntityProperty } from '../../api';
 import {
   getBuiltinPropertyIds,
   getDefaultPinnedProperties,
@@ -25,11 +25,13 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
   const {
     canEdit,
     documentName,
+    entityType,
     onPropertyDeleted,
     onPropertyPinned,
     onPropertyUnpinned,
     pinnedPropertyIds,
   } = usePropertiesContext();
+  const blockId = useBlockId();
   const blockName = useMaybeBlockAliasedName();
   const isBuiltin =
     blockName &&
@@ -42,12 +44,13 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
       props.property.propertyDefinitionId
     );
 
+  const deleteMutation = useDeleteEntityPropertyMutation();
+
   const isPinned = createMemo(
     () => pinnedPropertyIds?.()?.includes(props.property.propertyId) ?? false
   );
   const [isHovered, setIsHovered] = createSignal(false);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = createSignal(false);
-  const [isDeleting, setIsDeleting] = createSignal(false);
 
   const handlePinClick = () => {
     if (isPinned()) {
@@ -62,15 +65,17 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
   };
 
   const handleDeleteConfirm = async () => {
-    setIsDeleting(true);
-    const result = await deleteEntityProperty(props.property.propertyId);
-
-    if (result.ok) {
+    try {
+      await deleteMutation.mutateAsync({
+        entityPropertyId: props.property.propertyId,
+        entityType,
+        entityId: blockId,
+      });
       setDeleteConfirmVisible(false);
       onPropertyDeleted();
+    } catch {
+      // Error toast is shown by the mutation's onError callback
     }
-
-    setIsDeleting(false);
   };
 
   const handleDeleteCancel = () => {
@@ -160,7 +165,7 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
                   theme="clear"
                   size="sm"
                   onClick={handleDeleteCancel}
-                  disabled={isDeleting()}
+                  disabled={deleteMutation.isPending}
                 />
               </div>
               <div class="px-4 pb-4">
@@ -172,17 +177,17 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
                 <div class="flex justify-end gap-2">
                   <button
                     onClick={handleDeleteCancel}
-                    disabled={isDeleting()}
+                    disabled={deleteMutation.isPending}
                     class="px-3 py-1.5 text-sm border text-ink-muted hover:text-ink border-edge hover:bg-hover"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={handleDeleteConfirm}
-                    disabled={isDeleting()}
+                    disabled={deleteMutation.isPending}
                     class="px-3 py-1.5 text-sm border bg-failure/90 hover:bg-failure/80 text-ink disabled:opacity-50"
                   >
-                    {isDeleting() ? 'Deleting...' : 'Delete'}
+                    {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
                   </button>
                 </div>
               </div>

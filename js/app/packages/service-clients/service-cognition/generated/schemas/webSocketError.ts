@@ -6,15 +6,27 @@
  */
 import type { WebSocketErrorOneOf } from './webSocketErrorOneOf';
 import type { WebSocketErrorOneOfFour } from './webSocketErrorOneOfFour';
-import type { WebSocketErrorOneOfSeven } from './webSocketErrorOneOfSeven';
-import type { WebSocketErrorOneOfOnezero } from './webSocketErrorOneOfOnezero';
-import type { WebSocketErrorOneOfOnethree } from './webSocketErrorOneOfOnethree';
-import type { WebSocketErrorOneOfOnesix } from './webSocketErrorOneOfOnesix';
 import type { WebSocketErrorOneOfOnenine } from './webSocketErrorOneOfOnenine';
-import type { WebSocketErrorOneOfTwotwo } from './webSocketErrorOneOfTwotwo';
-import type { WebSocketErrorOneOfTwofive } from './webSocketErrorOneOfTwofive';
-import type { WebSocketErrorOneOfTwoeight } from './webSocketErrorOneOfTwoeight';
-import type { WebSocketErrorOneOfThreezero } from './webSocketErrorOneOfThreezero';
+import type { WebSocketErrorOneOfOnesix } from './webSocketErrorOneOfOnesix';
+import type { WebSocketErrorOneOfOnethree } from './webSocketErrorOneOfOnethree';
+import type { WebSocketErrorOneOfOnezero } from './webSocketErrorOneOfOnezero';
+import type { WebSocketErrorOneOfSeven } from './webSocketErrorOneOfSeven';
 import type { WebSocketErrorOneOfThreetwo } from './webSocketErrorOneOfThreetwo';
+import type { WebSocketErrorOneOfThreezero } from './webSocketErrorOneOfThreezero';
+import type { WebSocketErrorOneOfTwoeight } from './webSocketErrorOneOfTwoeight';
+import type { WebSocketErrorOneOfTwofive } from './webSocketErrorOneOfTwofive';
+import type { WebSocketErrorOneOfTwotwo } from './webSocketErrorOneOfTwotwo';
 
-export type WebSocketError = WebSocketErrorOneOf | WebSocketErrorOneOfFour | WebSocketErrorOneOfSeven | WebSocketErrorOneOfOnezero | WebSocketErrorOneOfOnethree | WebSocketErrorOneOfOnesix | WebSocketErrorOneOfOnenine | WebSocketErrorOneOfTwotwo | WebSocketErrorOneOfTwofive | WebSocketErrorOneOfTwoeight | WebSocketErrorOneOfThreezero | WebSocketErrorOneOfThreetwo;
+export type WebSocketError =
+  | WebSocketErrorOneOf
+  | WebSocketErrorOneOfFour
+  | WebSocketErrorOneOfSeven
+  | WebSocketErrorOneOfOnezero
+  | WebSocketErrorOneOfOnethree
+  | WebSocketErrorOneOfOnesix
+  | WebSocketErrorOneOfOnenine
+  | WebSocketErrorOneOfTwotwo
+  | WebSocketErrorOneOfTwofive
+  | WebSocketErrorOneOfTwoeight
+  | WebSocketErrorOneOfThreezero
+  | WebSocketErrorOneOfThreetwo;

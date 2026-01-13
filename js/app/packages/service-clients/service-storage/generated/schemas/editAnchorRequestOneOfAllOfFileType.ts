@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type EditAnchorRequestOneOfAllOfFileType = typeof EditAnchorRequestOneOfAllOfFileType[keyof typeof EditAnchorRequestOneOfAllOfFileType];
-
+export type EditAnchorRequestOneOfAllOfFileType =
+  (typeof EditAnchorRequestOneOfAllOfFileType)[keyof typeof EditAnchorRequestOneOfAllOfFileType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const EditAnchorRequestOneOfAllOfFileType = {

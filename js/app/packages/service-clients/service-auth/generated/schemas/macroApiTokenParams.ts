@@ -6,8 +6,8 @@
  */
 
 export type MacroApiTokenParams = {
-/**
- * The email to generate the macro-api-token for. If not provided, we use your default profile.
- */
-email: string;
+  /**
+   * The email to generate the macro-api-token for. If not provided, we use your default profile.
+   */
+  email: string;
 };

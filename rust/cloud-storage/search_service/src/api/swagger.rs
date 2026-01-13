@@ -42,19 +42,9 @@ use models_search::{MatchType, SearchHighlight};
                 health::health_handler,
 
                 /// /search
-                search::document::handler,
-                search::chat::handler,
-                search::email::handler,
-                search::channel::handler,
                 search::unified::handler,
-                search::project::handler,
 
                 /// /search/simple
-                search::simple::simple_document::handler,
-                search::simple::simple_chat::handler,
-                search::simple::simple_email::handler,
-                search::simple::simple_channel::handler,
-                search::simple::simple_project::handler,
                 search::simple::simple_unified::handler,
         ),
         components(

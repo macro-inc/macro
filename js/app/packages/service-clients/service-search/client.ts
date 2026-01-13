@@ -14,13 +14,6 @@ import type { SafeFetchInit } from '@core/util/safeFetch';
 
 const searchServiceHost = `${SERVER_HOSTS['search-service']}`;
 
-import type { ChatSearchRequest } from './generated/models/chatSearchRequest';
-import type { ChatSearchResponse } from './generated/models/chatSearchResponse';
-import type { DocumentSearchRequest } from './generated/models/documentSearchRequest';
-import type { DocumentSearchResponse } from './generated/models/documentSearchResponse';
-import type { EmailSearchParams } from './generated/models/emailSearchParams';
-import type { EmailSearchRequest } from './generated/models/emailSearchRequest';
-import type { EmailSearchResponse } from './generated/models/emailSearchResponse';
 import type { UnifiedSearchRequest } from './generated/models/unifiedSearchRequest';
 import type { UnifiedSearchResponse } from './generated/models/unifiedSearchResponse';
 
@@ -41,66 +34,36 @@ export function searchServiceFetch<T extends ObjectLike = never>(
   return fetchWithToken<T>(`${searchServiceHost}${url}`, init);
 }
 
-type WithPagination = {
-  page: number;
-  page_size: number;
+export type SearchParams = {
+  cursor?: string | null;
+  page_size?: number;
 };
 
-export type PaginatedSearchArgs = {
-  params: WithPagination;
+export type SearchArgs = {
+  params: SearchParams;
   request: UnifiedSearchRequest;
 };
 
 export const searchClient = {
-  async searchDocuments(args: DocumentSearchRequest, init?: SafeFetchInit) {
+  async search(args: SearchArgs, init?: SafeFetchInit) {
+    const params = new URLSearchParams();
+
+    if (args.params.page_size !== undefined) {
+      params.append('page_size', args.params.page_size.toString());
+    }
+    if (args.params.cursor) {
+      params.append('cursor', args.params.cursor);
+    }
+
+    const queryString = params.toString();
+    const url = queryString ? `/search?${queryString}` : '/search';
+
     return mapOk(
-      await searchServiceFetch<DocumentSearchResponse>(`/search/document`, {
+      await searchServiceFetch<UnifiedSearchResponse>(url, {
         method: 'POST',
-        body: JSON.stringify(args),
+        body: JSON.stringify(args.request),
         ...init,
       }),
-      (result) => result
-    );
-  },
-  async searchEmails(
-    args: {
-      request: EmailSearchRequest;
-      params: EmailSearchParams;
-    },
-    init?: SafeFetchInit
-  ) {
-    return mapOk(
-      await searchServiceFetch<EmailSearchResponse>(
-        `/search/email?page=${args.params.page ?? 0}&page_size=${args.params.page_size ?? 10}`,
-        {
-          method: 'POST',
-          body: JSON.stringify(args.request),
-          ...init,
-        }
-      ),
-      (result) => result
-    );
-  },
-  async searchChats(args: ChatSearchRequest, init?: SafeFetchInit) {
-    return mapOk(
-      await searchServiceFetch<ChatSearchResponse>(`/search/chat`, {
-        method: 'POST',
-        body: JSON.stringify(args),
-        ...init,
-      }),
-      (result) => result
-    );
-  },
-  async search(args: PaginatedSearchArgs, init?: SafeFetchInit) {
-    return mapOk(
-      await searchServiceFetch<UnifiedSearchResponse>(
-        `/search?page=${args.params.page}&page_size=${args.params.page_size}`,
-        {
-          method: 'POST',
-          body: JSON.stringify(args.request),
-          ...init,
-        }
-      ),
       (result) => result
     );
   },

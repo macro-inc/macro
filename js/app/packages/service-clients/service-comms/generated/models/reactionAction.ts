@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ReactionAction = typeof ReactionAction[keyof typeof ReactionAction];
-
+export type ReactionAction =
+  (typeof ReactionAction)[keyof typeof ReactionAction];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const ReactionAction = {

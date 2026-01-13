@@ -4,9 +4,10 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
+
+import type { Model } from './model';
 import type { SendChatMessagePayloadAllOfAdditionalInstructions } from './sendChatMessagePayloadAllOfAdditionalInstructions';
 import type { SendChatMessagePayloadAllOfAttachments } from './sendChatMessagePayloadAllOfAttachments';
-import type { Model } from './model';
 import type { ToolSet } from './toolSet';
 
 export type SendChatMessagePayloadAllOf = {

@@ -53,8 +53,8 @@ csharp-build:
     bun scripts/publish-docx-server.js
 
 # Codegen
-gen-api:
-    bun scripts/generate-api-schema.ts
+gen-api *SERVICES:
+    bun scripts/generate-api-schema.ts {{SERVICES}}
 
 gen-dcs-types:
     bun scripts/generate-dcs-types.ts

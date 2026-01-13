@@ -4,8 +4,9 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { NotificationEventOneOfOnenineNotificationEventType } from './notificationEventOneOfOnenineNotificationEventType';
+
 import type { InviteToTeamMetadata } from './inviteToTeamMetadata';
+import type { NotificationEventOneOfOnenineNotificationEventType } from './notificationEventOneOfOnenineNotificationEventType';
 
 /**
  * A user was invited to a team
