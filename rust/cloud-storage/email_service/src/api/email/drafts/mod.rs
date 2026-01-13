@@ -6,7 +6,7 @@ pub(crate) mod scheduled;
 
 use crate::api::ApiContext;
 use axum::Router;
-use axum::routing::{delete, get, post};
+use axum::routing::{delete, post};
 
 pub fn router(state: ApiContext) -> Router<ApiContext> {
     Router::new()

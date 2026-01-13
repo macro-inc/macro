@@ -98,7 +98,7 @@ pub async fn handler(
     // Upsert the scheduled message
     let mut tx = ctx.db.begin().await?;
     email_db_client::messages::scheduled::upsert::upsert_scheduled_message(
-        &mut *tx,
+        &mut tx,
         scheduled_message,
     )
     .await?;
