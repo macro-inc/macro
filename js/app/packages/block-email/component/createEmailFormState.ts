@@ -56,16 +56,17 @@ type EmailFormState = {
 /**
  * Creates a state object for the email form.
  * @param key - The db_id of the email being replied to.
+ * @param options - Required options for the initial state to be calculated from
  * @returns A state object for the email form.
  */
 export function createEmailFormState(
-  key: string,
-  options: EmailFormStateOptions
+  key?: string,
+  options?: EmailFormStateOptions
 ) {
   const userEmail = useEmail();
 
-  const replyingTo = options.getMessageByID(key);
-  const draft = options.getDraftForMessageReply(key);
+  const replyingTo = key ? options?.getMessageByID(key) : undefined;
+  const draft = key ? options?.getDraftForMessageReply(key) : undefined;
 
   const draftContainsAppendedReply = () => {
     const encoded = draft?.body_html_sanitized;
@@ -151,7 +152,7 @@ export function createEmailFormState(
     callDirty();
     const recipients = state.recipients;
     const all = [...recipients.to, ...recipients.cc, ...recipients.bcc];
-    options.onRecipientsChange?.(unwrap(all));
+    options?.onRecipientsChange?.(unwrap(all));
   };
 
   const setSubject: Setter<string> = (value) => {
@@ -210,7 +211,7 @@ export function createEmailFormState(
 
     // Notify context of the full recipient list after reset
     const all = [...recipients.to, ...recipients.cc, ...recipients.bcc];
-    options.onRecipientsChange?.(unwrap(all));
+    options?.onRecipientsChange?.(unwrap(all));
 
     setShouldFocusInput(false);
 
