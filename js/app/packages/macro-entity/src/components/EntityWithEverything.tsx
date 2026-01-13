@@ -528,7 +528,7 @@ export function EntityWithEverything(
     }
   });
 
-  const EntityTitle = () => {
+  const EntityTitle = createMemo(() => {
     if (props.entity.type === 'email') {
       const isLikelyEmail = (value?: string) =>
         typeof value === 'string' && value.includes('@');
@@ -770,7 +770,10 @@ export function EntityWithEverything(
                 'w-[20cqw]': !props.showUnrollNotifications,
               }}
             >
-              <Show when={searchHighlightName()} fallback={props.entity.name}>
+              <Show
+                when={isSearch() && searchHighlightName()}
+                fallback={props.entity.name}
+              >
                 {(name) => (
                   <StaticMarkdown
                     markdown={name()}
@@ -824,7 +827,7 @@ export function EntityWithEverything(
         </span>
       </div>
     );
-  };
+  });
 
   const draggable = createDraggable(props.entity.id, props.entity);
   false && draggable;
