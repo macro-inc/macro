@@ -35,7 +35,7 @@ import {
 } from 'solid-js';
 import { beveledCorners } from '../../block-theme/signals/themeSignals';
 import { ComposeEmailInput, type ComposeInputData } from './ComposeEmailInput';
-import { createEmailFormState } from '@block-email/component/create-email-draft-manager';
+import { createEmailFormState } from '@block-email/component/createEmailFormState';
 
 type EmailComposeErrors =
   | 'no_recipient'
@@ -196,7 +196,7 @@ export function EmailCompose() {
   const { connect: connectEmail } = useEmailLinks();
 
   const previewName = createMemo(() => {
-    const recipients = form.state().recipients.to;
+    const recipients = form.recipients().to;
     if (recipients.length === 0) {
       return 'Draft email';
     }
@@ -253,8 +253,7 @@ export function EmailCompose() {
 
     const currentLink = link();
 
-    const formState = form.state();
-    const recipients = form.state().recipients;
+    const recipients = form.recipients();
 
     if (!recipients.to.length) {
       setValidationError(
@@ -273,7 +272,7 @@ export function EmailCompose() {
       return;
     }
 
-    if (!formState.subject?.trim()) {
+    if (!form.subject()?.trim()) {
       setValidationError(
         new EmailComposeError('no_subject', 'Please enter a subject')
       );
@@ -299,7 +298,7 @@ export function EmailCompose() {
           recipients.bcc.length > 0
             ? convertToContactInfoArray(recipients.bcc)
             : [],
-        subject: formState.subject,
+        subject: form.subject(),
         body_text: data.body.text,
         body_html: data.body.html,
         body_macro: data.body.raw,
@@ -318,7 +317,7 @@ export function EmailCompose() {
     <>
       <SplitHeaderLeft>
         <StaticSplitLabel
-          label={form.state().subject || previewName()}
+          label={form.subject() || previewName()}
           iconType="email"
           badges={[
             <SplitHeaderBadge text="draft" tooltip="This is a Draft Email" />,
@@ -430,9 +429,9 @@ export function EmailCompose() {
                       <RecipientSelector<'user' | 'contact'>
                         inputRef={registerRef('directRecipientsSelector')}
                         options={destinationOptions}
-                        selectedOptions={form.state().recipients.to}
+                        selectedOptions={form.recipients().to}
                         setSelectedOptions={(next) =>
-                          form.onRecipientsChange('to', next)
+                          form.setRecipients('to', next)
                         }
                         placeholder="Macro users or email addresses"
                         focusOnMount={!hasLinkError()}
@@ -459,9 +458,9 @@ export function EmailCompose() {
                         <RecipientSelector<'user' | 'contact'>
                           inputRef={registerRef('ccRecipientsSelector')}
                           options={destinationOptions}
-                          selectedOptions={form.state().recipients.cc}
+                          selectedOptions={form.recipients().cc}
                           setSelectedOptions={(next) =>
-                            form.onRecipientsChange('cc', next)
+                            form.setRecipients('cc', next)
                           }
                           placeholder="Macro users or email addresses"
                           hideBorder
@@ -481,9 +480,9 @@ export function EmailCompose() {
                         <RecipientSelector<'user' | 'contact'>
                           inputRef={registerRef('bccRecipientsSelector')}
                           options={destinationOptions}
-                          selectedOptions={form.state().recipients.bcc}
+                          selectedOptions={form.recipients().bcc}
                           setSelectedOptions={(next) =>
-                            form.onRecipientsChange('bcc', next)
+                            form.setRecipients('bcc', next)
                           }
                           placeholder="Macro users or email addresses"
                           hideBorder
@@ -503,7 +502,7 @@ export function EmailCompose() {
                       <input
                         ref={registerRef('subjectInput')}
                         type="text"
-                        value={form.state().subject}
+                        value={form.subject()}
                         placeholder="Subject"
                         class="w-full text-base resize-none placeholder:text-ink-placeholder p-1 ml-1"
                         onInput={(e) => {
