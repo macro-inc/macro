@@ -1,6 +1,5 @@
 use crate::api::context::ApiContext;
 use crate::api::email::validation::{self, ValidationError};
-use anyhow::Context;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
@@ -115,6 +114,7 @@ pub async fn handler(
     }
 }
 
+#[tracing::instrument(skip(tx), err)]
 async fn insert_draft(
     tx: &mut sqlx::PgConnection,
     draft: &mut message::MessageToSend,
@@ -141,25 +141,19 @@ async fn insert_draft(
             messages: Vec::new(),
         };
 
-        let new_id = email_db_client::threads::insert::insert_thread(&mut *tx, &thread, link_id)
-            .await
-            .context("unable to insert thread")?;
+        let new_id =
+            email_db_client::threads::insert::insert_thread(&mut *tx, &thread, link_id).await?;
 
         draft.thread_db_id = Some(new_id);
         new_id
     };
 
-    let from_email_id = email_db_client::contacts::get::fetch_id_by_email(tx, link_id, from_email)
-        .await
-        .context("unable to fetch from email id")?;
+    let from_email_id =
+        email_db_client::contacts::get::fetch_id_by_email(tx, link_id, from_email).await?;
 
-    insert_message_to_send(tx, draft, thread_db_id, from_email_id, true)
-        .await
-        .context("unable to insert message to send")?;
+    insert_message_to_send(tx, draft, thread_db_id, from_email_id, true).await?;
 
-    upsert_user_history(tx, link_id, thread_db_id)
-        .await
-        .context("unable to upsert user history for draft")?;
+    upsert_user_history(tx, link_id, thread_db_id).await?;
 
     Ok(())
 }

@@ -8,7 +8,7 @@ use sqlx::{Executor, PgPool, Postgres};
 use std::collections::HashMap;
 
 // upsert user_history row for user and thread
-#[tracing::instrument(skip(executor), level = "info")]
+#[tracing::instrument(skip(executor), err)]
 pub async fn upsert_user_history<'e, E>(
     executor: E,
     link_id: Uuid,
