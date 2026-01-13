@@ -35,6 +35,7 @@ import {
 } from 'solid-js';
 import { beveledCorners } from '../../block-theme/signals/themeSignals';
 import { ComposeEmailInput, type ComposeInputData } from './ComposeEmailInput';
+import { createEmailFormState } from '@block-email/component/create-email-draft-manager';
 
 type EmailComposeErrors =
   | 'no_recipient'
@@ -61,8 +62,6 @@ type EmailComposeElementRefs = {
 export function EmailCompose() {
   const hasPaidAccess = useHasPaidAccess();
   const { showPaywall } = usePaywallState();
-
-  const [subject, setSubject] = createSignal<string>('');
 
   const emailLinksQuery = useEmailLinksQuery();
 
@@ -101,15 +100,8 @@ export function EmailCompose() {
   });
 
   const { users: destinationOptions } = useCombinedRecipients();
-  const [selectedRecipients, setSelectedRecipients] = createSignal<
-    WithCustomUserInput<'user' | 'contact'>[]
-  >([]);
-  const [ccRecipients, setCcRecipients] = createSignal<
-    WithCustomUserInput<'user' | 'contact'>[]
-  >([]);
-  const [bccRecipients, setBccRecipients] = createSignal<
-    WithCustomUserInput<'user' | 'contact'>[]
-  >([]);
+
+  const form = createEmailFormState();
 
   const [showCc, setShowCc] = createSignal(false);
   const [showBcc, setShowBcc] = createSignal(false);
@@ -204,7 +196,7 @@ export function EmailCompose() {
   const { connect: connectEmail } = useEmailLinks();
 
   const previewName = createMemo(() => {
-    const recipients = selectedRecipients();
+    const recipients = form.state().recipients.to;
     if (recipients.length === 0) {
       return 'Draft email';
     }
@@ -261,7 +253,10 @@ export function EmailCompose() {
 
     const currentLink = link();
 
-    if (!selectedRecipients().length) {
+    const formState = form.state();
+    const recipients = form.state().recipients;
+
+    if (!recipients.to.length) {
       setValidationError(
         new EmailComposeError(
           'no_recipient',
@@ -278,7 +273,7 @@ export function EmailCompose() {
       return;
     }
 
-    if (!subject()?.trim()) {
+    if (!formState.subject?.trim()) {
       setValidationError(
         new EmailComposeError('no_subject', 'Please enter a subject')
       );
@@ -295,16 +290,16 @@ export function EmailCompose() {
     sendMutation.mutate({
       message: {
         link_id: currentLink.id,
-        to: convertToContactInfoArray(selectedRecipients()),
+        to: convertToContactInfoArray(recipients.to),
         cc:
-          ccRecipients().length > 0
-            ? convertToContactInfoArray(ccRecipients())
+          recipients.cc.length > 0
+            ? convertToContactInfoArray(recipients.cc)
             : [],
         bcc:
-          bccRecipients().length > 0
-            ? convertToContactInfoArray(bccRecipients())
+          recipients.bcc.length > 0
+            ? convertToContactInfoArray(recipients.bcc)
             : [],
-        subject: subject(),
+        subject: formState.subject,
         body_text: data.body.text,
         body_html: data.body.html,
         body_macro: data.body.raw,
@@ -323,7 +318,7 @@ export function EmailCompose() {
     <>
       <SplitHeaderLeft>
         <StaticSplitLabel
-          label={subject() || previewName()}
+          label={form.state().subject || previewName()}
           iconType="email"
           badges={[
             <SplitHeaderBadge text="draft" tooltip="This is a Draft Email" />,
@@ -435,8 +430,10 @@ export function EmailCompose() {
                       <RecipientSelector<'user' | 'contact'>
                         inputRef={registerRef('directRecipientsSelector')}
                         options={destinationOptions}
-                        selectedOptions={selectedRecipients}
-                        setSelectedOptions={setSelectedRecipients}
+                        selectedOptions={form.state().recipients.to}
+                        setSelectedOptions={(next) =>
+                          form.onRecipientsChange('to', next)
+                        }
                         placeholder="Macro users or email addresses"
                         focusOnMount={!hasLinkError()}
                         hideBorder
@@ -462,8 +459,10 @@ export function EmailCompose() {
                         <RecipientSelector<'user' | 'contact'>
                           inputRef={registerRef('ccRecipientsSelector')}
                           options={destinationOptions}
-                          selectedOptions={ccRecipients}
-                          setSelectedOptions={setCcRecipients}
+                          selectedOptions={form.state().recipients.cc}
+                          setSelectedOptions={(next) =>
+                            form.onRecipientsChange('cc', next)
+                          }
                           placeholder="Macro users or email addresses"
                           hideBorder
                           noBrackets
@@ -482,8 +481,10 @@ export function EmailCompose() {
                         <RecipientSelector<'user' | 'contact'>
                           inputRef={registerRef('bccRecipientsSelector')}
                           options={destinationOptions}
-                          selectedOptions={bccRecipients}
-                          setSelectedOptions={setBccRecipients}
+                          selectedOptions={form.state().recipients.bcc}
+                          setSelectedOptions={(next) =>
+                            form.onRecipientsChange('bcc', next)
+                          }
                           placeholder="Macro users or email addresses"
                           hideBorder
                           noBrackets
@@ -502,11 +503,11 @@ export function EmailCompose() {
                       <input
                         ref={registerRef('subjectInput')}
                         type="text"
-                        value={subject()}
+                        value={form.state().subject}
                         placeholder="Subject"
                         class="w-full text-base resize-none placeholder:text-ink-placeholder p-1 ml-1"
                         onInput={(e) => {
-                          setSubject(e.currentTarget.value);
+                          form.onSubjectChange(e.currentTarget.value);
                         }}
                         disabled={hasLinkError()}
                       />
