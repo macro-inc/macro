@@ -260,15 +260,12 @@ export function Thread(props: {
                           }
                           updateReply={(content) => {
                             Promise.all([
-                              commentOperations.updateComment(
-                                replyId,
-                                {
-                                  text: content,
-                                  threadId: props.comment.threadId,
-                                  mentions:
-                                    getAndClearCommentMentions(mentionsSignal),
-                                }
-                              ),
+                              commentOperations.updateComment(replyId, {
+                                text: content,
+                                threadId: props.comment.threadId,
+                                mentions:
+                                  getAndClearCommentMentions(mentionsSignal),
+                              }),
                             ]);
                           }}
                         />
