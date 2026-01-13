@@ -100,15 +100,22 @@ export default function ImportLinear() {
   });
 
   const previewDrafts = createMemo(() => {
-    const rows = records().slice(0, 20);
-    return rows.map((r) => {
+    const allRows = records();
+
+    const allDrafts = allRows.map((r, index) => {
       const assigneeRaw = normalize(r['Assignee'] ?? '');
       const assigneeUserId = assigneeRaw ? assigneeMapping[assigneeRaw] : '';
-      return linearCsvRecordToMacroTaskDraft({
-        record: r,
-        assigneeUserId: assigneeUserId ? assigneeUserId : null,
-      });
+      return {
+        rowNum: index + 1,
+        ...linearCsvRecordToMacroTaskDraft({
+          record: r,
+          assigneeUserId: assigneeUserId ? assigneeUserId : null,
+        }),
+      };
     });
+
+    // Show first 20 plus any additional rows with warnings
+    return allDrafts.filter((d, i) => i < 20 || d.warnings.length > 0);
   });
 
   const handleFileChange = async (file: File | undefined) => {
@@ -196,14 +203,10 @@ export default function ImportLinear() {
   };
 
   return (
-    <div class="flex flex-col h-full w-full p-4 gap-4">
-      <div class="flex items-center justify-between">
-        <div class="flex flex-col">
-          <div class="text-lg font-medium text-ink">Import Linear CSV</div>
-          <div class="text-sm text-ink-muted">
-            Route: <span class="font-mono">/component/import-linear</span>
-          </div>
-        </div>
+    <div class="flex flex-col h-full w-full">
+      <div class="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+        <div class="flex items-center justify-between">
+        <div class="text-lg font-medium text-ink">Import Linear CSV</div>
         <DeprecatedTextButton
           theme="base"
           text="Clear"
@@ -220,14 +223,19 @@ export default function ImportLinear() {
 
       <div class="flex flex-col gap-2">
         <label class="text-sm text-ink-muted">CSV file</label>
-        <input
-          type="file"
-          accept=".csv,text/csv"
-          onChange={(e) => handleFileChange(e.currentTarget.files?.[0])}
-          class="text-sm"
-        />
+        <label class="inline-flex items-center gap-2 px-4 py-2 bg-accent text-accent-contrast font-medium rounded-md cursor-pointer hover:bg-accent-hover transition-colors w-fit">
+          <span>Choose File</span>
+          <input
+            type="file"
+            accept=".csv,text/csv"
+            onChange={(e) => handleFileChange(e.currentTarget.files?.[0])}
+            class="sr-only"
+          />
+        </label>
         <Show when={fileName()}>
-          <div class="text-xs text-ink-muted">Loaded: {fileName()}</div>
+          <div class="text-sm text-ink">
+            <span class="text-ink-muted">Loaded:</span> {fileName()}
+          </div>
         </Show>
         <Show when={parseError()}>
           <div class="text-sm text-failure-ink">{parseError()}</div>
@@ -278,11 +286,14 @@ export default function ImportLinear() {
 
       <Show when={records().length > 0}>
         <div class="flex flex-col gap-2">
-          <div class="text-sm font-medium text-ink">Preview (first 20)</div>
+          <div class="text-sm font-medium text-ink">
+            Preview (first 20 + all rows with warnings)
+          </div>
           <div class="border border-edge rounded-sm overflow-hidden">
             <table class="w-full text-sm">
               <thead class="bg-hover">
                 <tr class="text-left">
+                  <th class="p-2">Row</th>
                   <th class="p-2">Title</th>
                   <th class="p-2">Warnings</th>
                 </tr>
@@ -291,6 +302,9 @@ export default function ImportLinear() {
                 <For each={previewDrafts()}>
                   {(d) => (
                     <tr class="border-t border-edge">
+                      <td class="p-2 align-top">
+                        <div class="text-ink-muted">{d.rowNum}</div>
+                      </td>
                       <td class="p-2 align-top">
                         <div class="text-ink">{d.title || '(missing title)'}</div>
                       </td>
@@ -307,26 +321,6 @@ export default function ImportLinear() {
           </div>
         </div>
       </Show>
-
-      <div class="flex items-center gap-3">
-        <Button onClick={runImport} disabled={!canImport()}>
-          Import tasks
-        </Button>
-        <Show when={runningProgress()}>
-          {(p) => (
-            <div class="text-sm text-ink-muted">
-              Importing… {p().done}/{p().total}
-            </div>
-          )}
-        </Show>
-        <Show when={doneProgress()}>
-          {(p) => (
-            <div class="text-sm text-ink-muted">
-              Done — created {p().created}, skipped {p().skipped}, failed {p().failed}
-            </div>
-          )}
-        </Show>
-      </div>
 
       <Show when={createdIds().length > 0}>
         <div class="flex flex-col gap-2">
@@ -347,6 +341,27 @@ export default function ImportLinear() {
           </div>
         </div>
       </Show>
+      </div>
+
+      <div class="border-t border-edge p-4 flex items-center gap-3 shrink-0">
+        <Button onClick={runImport} disabled={!canImport()}>
+          Import tasks
+        </Button>
+        <Show when={runningProgress()}>
+          {(p) => (
+            <div class="text-sm text-ink-muted">
+              Importing… {p().done}/{p().total}
+            </div>
+          )}
+        </Show>
+        <Show when={doneProgress()}>
+          {(p) => (
+            <div class="text-sm text-ink-muted">
+              Done — created {p().created}, skipped {p().skipped}, failed {p().failed}
+            </div>
+          )}
+        </Show>
+      </div>
     </div>
   );
 }
