@@ -4,7 +4,9 @@
     "title": "email_service",
     "description": "",
     "termsOfService": "https://macro.com/terms",
-    "license": { "name": "" },
+    "license": {
+      "name": ""
+    },
     "version": "0.1.0"
   },
   "paths": {
@@ -19,7 +21,10 @@
             "in": "path",
             "description": "Attachment ID.",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -37,7 +42,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -45,7 +52,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -53,7 +62,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -61,7 +72,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -79,7 +92,10 @@
             "in": "path",
             "description": "Attachment ID.",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -97,7 +113,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -105,7 +123,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -113,7 +133,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -121,7 +143,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -136,7 +160,9 @@
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CancelBackfillParams" }
+              "schema": {
+                "$ref": "#/components/schemas/CancelBackfillParams"
+              }
             }
           },
           "required": true
@@ -146,7 +172,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           },
@@ -154,7 +182,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -162,7 +192,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -170,7 +202,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -197,7 +231,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           },
@@ -205,7 +241,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -213,7 +251,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -231,7 +271,10 @@
             "in": "path",
             "description": "Job ID.",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -249,7 +292,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -257,7 +302,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -265,7 +312,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -292,7 +341,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -300,7 +351,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -308,7 +361,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -323,7 +378,9 @@
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CreateDraftRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/CreateDraftRequest"
+              }
             }
           },
           "required": true
@@ -333,7 +390,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/CreateDraftResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/CreateDraftResponse"
+                }
               }
             }
           },
@@ -341,7 +400,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -349,7 +410,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -357,7 +420,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -375,7 +440,10 @@
             "in": "path",
             "description": "Draft ID.",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -383,7 +451,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           },
@@ -391,7 +461,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -399,7 +471,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -407,7 +481,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -415,7 +491,171 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/drafts/{id}/attachments": {
+      "post": {
+        "tags": ["Drafts"],
+        "summary": "Add an attachment to a draft.",
+        "operationId": "add_draft_attachment",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The ID of the draft to add the attachment to.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddDraftAttachmentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddDraftAttachmentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/drafts/{id}/attachments/{attachment_id}": {
+      "delete": {
+        "tags": ["Drafts"],
+        "summary": "Remove an attachment from a draft.",
+        "operationId": "remove_draft_attachment",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The ID of the draft to remove the attachment from.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "attachment_id",
+            "in": "path",
+            "description": "The ID of the attachment to remove.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -432,7 +672,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/InitResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/InitResponse"
+                }
               }
             }
           },
@@ -440,7 +682,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -448,7 +692,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -456,7 +702,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -473,7 +721,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ListLabelsResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ListLabelsResponse"
+                }
               }
             }
           },
@@ -481,7 +731,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -489,7 +741,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -497,7 +751,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -510,7 +766,9 @@
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CreateLabelRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/CreateLabelRequest"
+              }
             }
           },
           "required": true
@@ -520,7 +778,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/CreateLabelResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/CreateLabelResponse"
+                }
               }
             }
           },
@@ -528,7 +788,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -536,7 +798,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -544,7 +808,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -552,7 +818,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -570,7 +838,10 @@
             "in": "path",
             "description": "Label ID.",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -578,7 +849,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           },
@@ -586,7 +859,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -594,7 +869,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -602,7 +879,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -610,7 +889,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -622,12 +903,25 @@
         "tags": ["Links"],
         "summary": "List all links belonging to the user.",
         "operationId": "list_links",
+        "parameters": [
+          {
+            "name": "include_signature",
+            "in": "query",
+            "description": "If the user's gmail signature should be included in the response. Defaults to false.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ListLinksResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ListLinksResponse"
+                }
               }
             }
           },
@@ -635,7 +929,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -643,7 +939,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -651,7 +949,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -666,7 +966,9 @@
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/SendMessageRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/SendMessageRequest"
+              }
             }
           },
           "required": true
@@ -676,7 +978,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/SendMessageResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/SendMessageResponse"
+                }
               }
             }
           },
@@ -684,7 +988,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -692,7 +998,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -700,7 +1008,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -716,7 +1026,10 @@
             "application/json": {
               "schema": {
                 "type": "array",
-                "items": { "type": "string", "format": "uuid" }
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
               }
             }
           },
@@ -729,7 +1042,9 @@
               "application/json": {
                 "schema": {
                   "type": "array",
-                  "items": { "$ref": "#/components/schemas/ParsedMessage" }
+                  "items": {
+                    "$ref": "#/components/schemas/ParsedMessage"
+                  }
                 }
               }
             }
@@ -738,7 +1053,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -746,7 +1063,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -754,7 +1073,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -762,7 +1083,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -799,7 +1122,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -807,7 +1132,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -815,7 +1142,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -823,7 +1152,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -840,7 +1171,10 @@
             "in": "path",
             "description": "Message ID.",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -848,7 +1182,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ParsedMessage" }
+                "schema": {
+                  "$ref": "#/components/schemas/ParsedMessage"
+                }
               }
             }
           },
@@ -856,7 +1192,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -864,7 +1202,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -872,7 +1212,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -880,7 +1222,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -895,7 +1239,9 @@
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/PatchSettingsRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/PatchSettingsRequest"
+              }
             }
           },
           "required": true
@@ -915,7 +1261,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -923,7 +1271,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -931,7 +1281,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -948,7 +1300,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           },
@@ -956,7 +1310,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -964,7 +1320,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -972,7 +1330,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -987,7 +1347,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           },
@@ -995,7 +1357,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -1003,7 +1367,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -1011,7 +1377,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -1029,28 +1397,38 @@
             "in": "query",
             "description": "Limit for pagination. Default is 20. Max is 500.",
             "required": false,
-            "schema": { "type": "integer", "format": "int32", "minimum": 0 }
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
           },
           {
             "name": "sort_method",
             "in": "query",
             "description": "Sort method. Options are viewed_at, created_at, updated_at, viewed_updated. Defaults to viewed_updated.",
             "required": false,
-            "schema": { "$ref": "#/components/schemas/ApiSortMethod" }
+            "schema": {
+              "$ref": "#/components/schemas/ApiSortMethod"
+            }
           },
           {
             "name": "view",
             "in": "path",
             "description": "View type. Supported values: inbox, sent, drafts, starred, all, important, other, user:<label>",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "cursor",
             "in": "query",
             "description": "Cursor value. Base64 encoded timestamp and item id, separated by |.",
             "required": false,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -1068,7 +1446,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -1076,7 +1456,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -1084,7 +1466,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -1102,21 +1486,30 @@
             "in": "path",
             "description": "Thread ID.",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           },
           {
             "name": "offset",
             "in": "query",
             "description": "Offset for message pagination. Default is 0.",
             "required": true,
-            "schema": { "type": "integer", "format": "int64" }
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
           },
           {
             "name": "limit",
             "in": "query",
             "description": "Limit for message pagination. Default is 5.",
             "required": true,
-            "schema": { "type": "integer", "format": "int64" }
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
           }
         ],
         "responses": {
@@ -1124,7 +1517,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/GetThreadResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/GetThreadResponse"
+                }
               }
             }
           },
@@ -1132,7 +1527,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -1140,7 +1537,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -1148,7 +1547,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -1156,7 +1557,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -1173,13 +1576,18 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/ArchiveThreadRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/ArchiveThreadRequest"
+              }
             }
           },
           "required": true
@@ -1189,7 +1597,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           },
@@ -1197,7 +1607,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -1205,7 +1617,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -1213,7 +1627,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -1230,21 +1646,29 @@
             "in": "path",
             "description": "Thread ID",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "since",
             "in": "query",
             "description": "Filter messages after this date",
             "required": false,
-            "schema": { "type": "string", "format": "date-time" }
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
           },
           {
             "name": "limit",
             "in": "query",
             "description": "Limit number of messages returned",
             "required": false,
-            "schema": { "type": "integer", "format": "int64" }
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
           }
         ],
         "responses": {
@@ -1254,7 +1678,9 @@
               "application/json": {
                 "schema": {
                   "type": "array",
-                  "items": { "$ref": "#/components/schemas/ParsedMessage" }
+                  "items": {
+                    "$ref": "#/components/schemas/ParsedMessage"
+                  }
                 }
               }
             }
@@ -1263,7 +1689,9 @@
             "description": "Bad Request",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -1271,7 +1699,9 @@
             "description": "Unauthorized",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -1279,7 +1709,9 @@
             "description": "Not Found",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -1287,7 +1719,9 @@
             "description": "Internal Server Error",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -1305,7 +1739,10 @@
             "in": "path",
             "description": "Thread ID.",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -1313,7 +1750,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           },
@@ -1321,7 +1760,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -1329,7 +1770,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -1337,7 +1780,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -1354,7 +1799,9 @@
             "description": "Health",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           }
@@ -1404,11 +1851,23 @@
           "messages"
         ],
         "properties": {
-          "access_level": { "$ref": "#/components/schemas/AccessLevel" },
-          "created_at": { "type": "string", "format": "date-time" },
-          "db_id": { "type": ["string", "null"], "format": "uuid" },
-          "inbox_visible": { "type": "boolean" },
-          "is_read": { "type": "boolean" },
+          "access_level": {
+            "$ref": "#/components/schemas/AccessLevel"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "db_id": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "inbox_visible": {
+            "type": "boolean"
+          },
+          "is_read": {
+            "type": "boolean"
+          },
           "latest_inbound_message_ts": {
             "type": ["string", "null"],
             "format": "date-time"
@@ -1421,13 +1880,23 @@
             "type": ["string", "null"],
             "format": "date-time"
           },
-          "link_id": { "type": "string", "format": "uuid" },
+          "link_id": {
+            "type": "string",
+            "format": "uuid"
+          },
           "messages": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/MessageWithBodyReplyless" }
+            "items": {
+              "$ref": "#/components/schemas/MessageWithBodyReplyless"
+            }
           },
-          "provider_id": { "type": ["string", "null"] },
-          "updated_at": { "type": "string", "format": "date-time" }
+          "provider_id": {
+            "type": ["string", "null"]
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
         }
       },
       "AccessLevel": {
@@ -1435,39 +1904,121 @@
         "description": "Ordered from least to most access top -> bottom",
         "enum": ["view", "comment", "edit", "owner"]
       },
+      "AddDraftAttachmentRequest": {
+        "type": "object",
+        "description": "The request passed to send a message",
+        "required": ["file_name", "sha", "size"],
+        "properties": {
+          "file_name": {
+            "type": "string",
+            "description": "The name of the file being uploaded."
+          },
+          "sha": {
+            "type": "string",
+            "description": "The SHA256 hash of the file being uploaded."
+          },
+          "size": {
+            "type": "integer",
+            "format": "int32",
+            "description": "The size of the file in bytes."
+          }
+        }
+      },
+      "AddDraftAttachmentResponse": {
+        "type": "object",
+        "required": ["attachment_id", "upload_url", "content_type"],
+        "properties": {
+          "attachment_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The ID of the attachment in the database."
+          },
+          "content_type": {
+            "type": "string",
+            "description": "The MIME type of the attachment."
+          },
+          "upload_url": {
+            "type": "string",
+            "description": "The URL to upload the attachment to."
+          }
+        }
+      },
       "ApiAttachment": {
         "type": "object",
         "required": ["id", "messageId", "createdAt"],
         "properties": {
-          "contentId": { "type": ["string", "null"] },
-          "createdAt": { "type": "integer", "format": "int64" },
-          "filename": { "type": ["string", "null"] },
-          "id": { "type": "string", "format": "uuid" },
-          "messageId": { "type": "string", "format": "uuid" },
-          "mimeType": { "type": ["string", "null"] },
-          "providerAttachmentId": { "type": ["string", "null"] },
-          "sizeBytes": { "type": ["integer", "null"], "format": "int64" }
+          "contentId": {
+            "type": ["string", "null"]
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "filename": {
+            "type": ["string", "null"]
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "messageId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "mimeType": {
+            "type": ["string", "null"]
+          },
+          "providerAttachmentId": {
+            "type": ["string", "null"]
+          },
+          "sizeBytes": {
+            "type": ["integer", "null"],
+            "format": "int64"
+          }
         }
       },
       "ApiAttachmentMacro": {
         "type": "object",
         "required": ["dbId", "messageId", "itemId", "itemType"],
         "properties": {
-          "dbId": { "type": "string", "format": "uuid" },
-          "itemId": { "type": "string", "format": "uuid" },
-          "itemType": { "type": "string" },
-          "messageId": { "type": "string", "format": "uuid" }
+          "dbId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "itemId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "itemType": {
+            "type": "string"
+          },
+          "messageId": {
+            "type": "string",
+            "format": "uuid"
+          }
         }
       },
       "ApiContact": {
         "type": "object",
         "required": ["id", "linkId"],
         "properties": {
-          "emailAddress": { "type": ["string", "null"] },
-          "id": { "type": "string", "format": "uuid" },
-          "linkId": { "type": "string", "format": "uuid" },
-          "name": { "type": ["string", "null"] },
-          "sfsPhotoUrl": { "type": ["string", "null"] }
+          "emailAddress": {
+            "type": ["string", "null"]
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "linkId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": ["string", "null"]
+          },
+          "sfsPhotoUrl": {
+            "type": ["string", "null"]
+          }
         }
       },
       "ApiLabel": {
@@ -1483,25 +2034,43 @@
           "type"
         ],
         "properties": {
-          "createdAt": { "type": "string", "format": "date-time" },
-          "id": { "type": "string", "format": "uuid" },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
           "labelListVisibility": {
             "$ref": "#/components/schemas/ApiLabelListVisibility"
           },
-          "linkId": { "type": "string", "format": "uuid" },
+          "linkId": {
+            "type": "string",
+            "format": "uuid"
+          },
           "messageListVisibility": {
             "$ref": "#/components/schemas/ApiMessageListVisibility"
           },
-          "name": { "type": "string" },
-          "providerLabelId": { "type": "string" },
-          "type": { "$ref": "#/components/schemas/ApiLabelType" }
+          "name": {
+            "type": "string"
+          },
+          "providerLabelId": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/ApiLabelType"
+          }
         }
       },
       "ApiLabelListVisibility": {
         "type": "string",
         "enum": ["LabelShow", "LabelShowIfUnread", "LabelHide"]
       },
-      "ApiLabelType": { "type": "string", "enum": ["System", "User"] },
+      "ApiLabelType": {
+        "type": "string",
+        "enum": ["System", "User"]
+      },
       "ApiMessageListVisibility": {
         "type": "string",
         "enum": ["Show", "Hide"]
@@ -1512,9 +2081,13 @@
         "properties": {
           "items": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/ApiThreadPreviewCursor" }
+            "items": {
+              "$ref": "#/components/schemas/ApiThreadPreviewCursor"
+            }
           },
-          "next_cursor": { "type": ["string", "null"] }
+          "next_cursor": {
+            "type": ["string", "null"]
+          }
         }
       },
       "ApiSortMethod": {
@@ -1524,7 +2097,9 @@
       },
       "ApiThreadPreviewCursor": {
         "allOf": [
-          { "$ref": "#/components/schemas/ApiThreadPreviewCursorInner" },
+          {
+            "$ref": "#/components/schemas/ApiThreadPreviewCursorInner"
+          },
           {
             "type": "object",
             "required": [
@@ -1537,11 +2112,15 @@
             "properties": {
               "attachments": {
                 "type": "array",
-                "items": { "$ref": "#/components/schemas/ApiAttachment" }
+                "items": {
+                  "$ref": "#/components/schemas/ApiAttachment"
+                }
               },
               "contacts": {
                 "type": "array",
-                "items": { "$ref": "#/components/schemas/ApiContact" }
+                "items": {
+                  "$ref": "#/components/schemas/ApiContact"
+                }
               },
               "frecencyScore": {
                 "type": ["number", "null"],
@@ -1549,11 +2128,15 @@
               },
               "labels": {
                 "type": "array",
-                "items": { "$ref": "#/components/schemas/ApiLabel" }
+                "items": {
+                  "$ref": "#/components/schemas/ApiLabel"
+                }
               },
               "macroAttachments": {
                 "type": "array",
-                "items": { "$ref": "#/components/schemas/ApiAttachmentMacro" }
+                "items": {
+                  "$ref": "#/components/schemas/ApiAttachmentMacro"
+                }
               },
               "metadata": {
                 "$ref": "#/components/schemas/APIEmailThreadPreviewMetadata"
@@ -1577,41 +2160,146 @@
           "viewedAt"
         ],
         "properties": {
-          "createdAt": { "type": "integer", "format": "int64" },
-          "id": { "type": "string", "format": "uuid" },
-          "inboxVisible": { "type": "boolean" },
-          "isDraft": { "type": "boolean" },
-          "isImportant": { "type": "boolean" },
-          "isRead": { "type": "boolean" },
-          "name": { "type": ["string", "null"] },
-          "ownerId": { "type": "string" },
-          "providerId": { "type": ["string", "null"] },
-          "senderEmail": { "type": ["string", "null"] },
-          "senderName": { "type": ["string", "null"] },
-          "senderPhotoUrl": { "type": ["string", "null"] },
-          "snippet": { "type": ["string", "null"] },
-          "sortTs": { "type": "integer", "format": "int64" },
-          "updatedAt": { "type": "integer", "format": "int64" },
-          "viewedAt": { "type": ["integer", "null"], "format": "int64" }
+          "createdAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "inboxVisible": {
+            "type": "boolean"
+          },
+          "isDraft": {
+            "type": "boolean"
+          },
+          "isImportant": {
+            "type": "boolean"
+          },
+          "isRead": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": ["string", "null"]
+          },
+          "ownerId": {
+            "type": "string"
+          },
+          "providerId": {
+            "type": ["string", "null"]
+          },
+          "senderEmail": {
+            "type": ["string", "null"]
+          },
+          "senderName": {
+            "type": ["string", "null"]
+          },
+          "senderPhotoUrl": {
+            "type": ["string", "null"]
+          },
+          "snippet": {
+            "type": ["string", "null"]
+          },
+          "sortTs": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updatedAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "viewedAt": {
+            "type": ["integer", "null"],
+            "format": "int64"
+          }
         }
       },
       "ArchiveThreadRequest": {
         "type": "object",
         "required": ["value"],
-        "properties": { "value": { "type": "boolean" } }
+        "properties": {
+          "value": {
+            "type": "boolean"
+          }
+        }
       },
       "Attachment": {
         "type": "object",
         "description": "Attachments of a message, as sent to us by the provider.",
         "properties": {
-          "content_id": { "type": ["string", "null"] },
-          "data_url": { "type": ["string", "null"] },
-          "db_id": { "type": ["string", "null"], "format": "uuid" },
-          "filename": { "type": ["string", "null"] },
-          "mime_type": { "type": ["string", "null"] },
-          "provider_id": { "type": ["string", "null"] },
-          "sfs_id": { "type": ["string", "null"], "format": "uuid" },
-          "size_bytes": { "type": ["integer", "null"], "format": "int64" }
+          "content_id": {
+            "type": ["string", "null"]
+          },
+          "data_url": {
+            "type": ["string", "null"]
+          },
+          "db_id": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "filename": {
+            "type": ["string", "null"]
+          },
+          "mime_type": {
+            "type": ["string", "null"]
+          },
+          "provider_id": {
+            "type": ["string", "null"]
+          },
+          "sfs_id": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "size_bytes": {
+            "type": ["integer", "null"],
+            "format": "int64"
+          }
+        }
+      },
+      "AttachmentDraft": {
+        "type": "object",
+        "required": [
+          "id",
+          "draft_id",
+          "file_name",
+          "content_type",
+          "sha",
+          "size",
+          "s3_key"
+        ],
+        "properties": {
+          "content_type": {
+            "type": "string",
+            "description": "MIME type of the attachment (e.g., \"application/pdf\", \"image/png\")."
+          },
+          "draft_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The ID of the draft message this attachment belongs to."
+          },
+          "file_name": {
+            "type": "string",
+            "description": "Original file name of the attachment."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for the attachment."
+          },
+          "s3_key": {
+            "type": "string",
+            "description": "S3 object key where the attachment content is stored."
+          },
+          "sha": {
+            "type": "string",
+            "description": "SHA-256 hash of the file content for integrity verification."
+          },
+          "size": {
+            "type": "integer",
+            "format": "int32",
+            "description": "File size in bytes."
+          }
         }
       },
       "AttachmentMacro": {
@@ -1619,10 +2307,42 @@
         "description": "Attachments of a message created when sending a message/draft through Macro FE. references\na macro item (document, canvas, etc). These don't actually get sent to the provider when\nsending a message, but we store them so we can display the pills for the Macro objects in the FE\nwhen displaying the message.",
         "required": ["item_id", "item_type"],
         "properties": {
-          "db_id": { "type": ["string", "null"], "format": "uuid" },
-          "item_id": { "type": "string", "format": "uuid" },
-          "item_type": { "type": "string" },
-          "message_id": { "type": ["string", "null"], "format": "uuid" }
+          "db_id": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "item_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "item_type": {
+            "type": "string"
+          },
+          "message_id": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          }
+        }
+      },
+      "AttachmentToSend": {
+        "type": "object",
+        "description": "The attachment data we need to include when sending a message to a provider.",
+        "required": ["file_name", "content_type", "data"],
+        "properties": {
+          "content_type": {
+            "type": "string"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          "file_name": {
+            "type": "string"
+          }
         }
       },
       "BackfillJob": {
@@ -1637,18 +2357,40 @@
           "updated_at"
         ],
         "properties": {
-          "created_at": { "type": "string", "format": "date-time" },
-          "fusionauth_user_id": { "type": "string" },
-          "id": { "type": "string", "format": "uuid" },
-          "link_id": { "type": ["string", "null"], "format": "uuid" },
-          "status": { "$ref": "#/components/schemas/BackfillJobStatus" },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "fusionauth_user_id": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "link_id": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "status": {
+            "$ref": "#/components/schemas/BackfillJobStatus"
+          },
           "threads_requested_limit": {
             "type": ["integer", "null"],
             "format": "int32"
           },
-          "threads_retrieved_count": { "type": "integer", "format": "int32" },
-          "total_threads": { "type": "integer", "format": "int32" },
-          "updated_at": { "type": "string", "format": "date-time" }
+          "threads_retrieved_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total_threads": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
         }
       },
       "BackfillJobStatus": {
@@ -1658,47 +2400,85 @@
       "CancelBackfillParams": {
         "type": "object",
         "required": ["job_id"],
-        "properties": { "job_id": { "type": "string", "format": "uuid" } }
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
       },
       "Contact": {
         "type": "object",
         "required": ["link_id"],
         "properties": {
-          "email_address": { "type": ["string", "null"] },
-          "id": { "type": ["string", "null"], "format": "uuid" },
-          "link_id": { "type": "string", "format": "uuid" },
-          "name": { "type": ["string", "null"] },
-          "original_photo_url": { "type": ["string", "null"] },
-          "sfs_photo_url": { "type": ["string", "null"] }
+          "email_address": {
+            "type": ["string", "null"]
+          },
+          "id": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "link_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": ["string", "null"]
+          },
+          "original_photo_url": {
+            "type": ["string", "null"]
+          },
+          "sfs_photo_url": {
+            "type": ["string", "null"]
+          }
         }
       },
       "ContactInfo": {
         "type": "object",
         "required": ["email"],
         "properties": {
-          "email": { "type": "string" },
-          "name": { "type": ["string", "null"] },
-          "photo_url": { "type": ["string", "null"] }
+          "email": {
+            "type": "string"
+          },
+          "name": {
+            "type": ["string", "null"]
+          },
+          "photo_url": {
+            "type": ["string", "null"]
+          }
         }
       },
       "ContactInfoLegacy": {
         "type": "object",
         "required": ["email", "email_address"],
         "properties": {
-          "email": { "type": "string" },
-          "email_address": { "type": "string" },
-          "name": { "type": ["string", "null"] },
-          "photo_url": { "type": ["string", "null"] }
+          "email": {
+            "type": "string"
+          },
+          "email_address": {
+            "type": "string"
+          },
+          "name": {
+            "type": ["string", "null"]
+          },
+          "photo_url": {
+            "type": ["string", "null"]
+          }
         }
       },
       "ContactInfoWithInteraction": {
         "allOf": [
-          { "$ref": "#/components/schemas/ContactInfoLegacy" },
+          {
+            "$ref": "#/components/schemas/ContactInfoLegacy"
+          },
           {
             "type": "object",
             "required": ["last_interaction"],
             "properties": {
-              "last_interaction": { "type": "string", "format": "date-time" }
+              "last_interaction": {
+                "type": "string",
+                "format": "date-time"
+              }
             }
           }
         ]
@@ -1708,20 +2488,28 @@
         "description": "The request passed to send a message",
         "required": ["draft"],
         "properties": {
-          "draft": { "$ref": "#/components/schemas/MessageToSend" }
+          "draft": {
+            "$ref": "#/components/schemas/MessageToSend"
+          }
         }
       },
       "CreateDraftResponse": {
         "type": "object",
         "required": ["draft"],
         "properties": {
-          "draft": { "$ref": "#/components/schemas/MessageToSend" }
+          "draft": {
+            "$ref": "#/components/schemas/MessageToSend"
+          }
         }
       },
       "CreateLabelRequest": {
         "type": "object",
         "required": ["label_name"],
-        "properties": { "label_name": { "type": "string" } }
+        "properties": {
+          "label_name": {
+            "type": "string"
+          }
+        }
       },
       "CreateLabelResponse": {
         "type": "object",
@@ -1753,15 +2541,24 @@
         "type": "object",
         "description": "The response returned from the get backfill job endpoint",
         "required": ["job"],
-        "properties": { "job": { "$ref": "#/components/schemas/BackfillJob" } }
+        "properties": {
+          "job": {
+            "$ref": "#/components/schemas/BackfillJob"
+          }
+        }
       },
       "GetAttachmentDocumentIDResponse": {
         "type": "object",
         "description": "The response returned from the get attachment endpoint",
         "required": ["attachment_id", "document_id"],
         "properties": {
-          "attachment_id": { "type": "string", "format": "uuid" },
-          "document_id": { "type": "string" }
+          "attachment_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "document_id": {
+            "type": "string"
+          }
         }
       },
       "GetAttachmentResponse": {
@@ -1769,14 +2566,20 @@
         "description": "The response returned from the get attachment endpoint",
         "required": ["attachment"],
         "properties": {
-          "attachment": { "$ref": "#/components/schemas/Attachment" }
+          "attachment": {
+            "$ref": "#/components/schemas/Attachment"
+          }
         }
       },
       "GetBackfillJobResponse": {
         "type": "object",
         "description": "The response returned from the get backfill job endpoint",
         "required": ["job"],
-        "properties": { "job": { "$ref": "#/components/schemas/BackfillJob" } }
+        "properties": {
+          "job": {
+            "$ref": "#/components/schemas/BackfillJob"
+          }
+        }
       },
       "GetPreviewsCursorParams": {
         "type": "object",
@@ -1790,7 +2593,9 @@
           },
           "sort_method": {
             "oneOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "$ref": "#/components/schemas/ApiSortMethod",
                 "description": "Sort method. Options are viewed_at, created_at, updated_at, viewed_updated. Defaults to viewed_updated."
@@ -1814,35 +2619,66 @@
         "type": "object",
         "required": ["link_id", "backfill_job_id"],
         "properties": {
-          "backfill_job_id": { "type": "string", "format": "uuid" },
-          "link_id": { "type": "string", "format": "uuid" }
+          "backfill_job_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "link_id": {
+            "type": "string",
+            "format": "uuid"
+          }
         }
       },
       "Label": {
         "type": "object",
         "required": ["link_id", "provider_label_id", "created_at"],
         "properties": {
-          "created_at": { "type": "string", "format": "date-time" },
-          "id": { "type": ["string", "null"], "format": "uuid" },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
           "label_list_visibility": {
             "oneOf": [
-              { "type": "null" },
-              { "$ref": "#/components/schemas/LabelListVisibility" }
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LabelListVisibility"
+              }
             ]
           },
-          "link_id": { "type": "string", "format": "uuid" },
+          "link_id": {
+            "type": "string",
+            "format": "uuid"
+          },
           "message_list_visibility": {
             "oneOf": [
-              { "type": "null" },
-              { "$ref": "#/components/schemas/MessageListVisibility" }
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MessageListVisibility"
+              }
             ]
           },
-          "name": { "type": ["string", "null"] },
-          "provider_label_id": { "type": "string" },
+          "name": {
+            "type": ["string", "null"]
+          },
+          "provider_label_id": {
+            "type": "string"
+          },
           "type_": {
             "oneOf": [
-              { "type": "null" },
-              { "$ref": "#/components/schemas/LabelType" }
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LabelType"
+              }
             ]
           }
         }
@@ -1851,15 +2687,22 @@
         "type": "object",
         "required": ["provider_id", "name"],
         "properties": {
-          "name": { "type": "string" },
-          "provider_id": { "type": "string" }
+          "name": {
+            "type": "string"
+          },
+          "provider_id": {
+            "type": "string"
+          }
         }
       },
       "LabelListVisibility": {
         "type": "string",
         "enum": ["LabelShow", "LabelShowIfUnread", "LabelHide"]
       },
-      "LabelType": { "type": "string", "enum": ["System", "User"] },
+      "LabelType": {
+        "type": "string",
+        "enum": ["System", "User"]
+      },
       "Link": {
         "type": "object",
         "required": [
@@ -1874,16 +2717,39 @@
           "updated_at"
         ],
         "properties": {
-          "created_at": { "type": "string", "format": "date-time" },
-          "email_address": { "type": "string" },
-          "fusionauth_user_id": { "type": "string" },
-          "id": { "type": "string", "format": "uuid" },
-          "is_sync_active": { "type": "boolean" },
-          "macro_id": { "type": "string" },
-          "provider": { "$ref": "#/components/schemas/UserProvider" },
-          "settings": { "$ref": "#/components/schemas/Settings" },
-          "signature": { "type": ["string", "null"] },
-          "updated_at": { "type": "string", "format": "date-time" }
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "email_address": {
+            "type": "string"
+          },
+          "fusionauth_user_id": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "is_sync_active": {
+            "type": "boolean"
+          },
+          "macro_id": {
+            "type": "string"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/UserProvider"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/Settings"
+          },
+          "signature": {
+            "type": ["string", "null"]
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
         }
       },
       "ListContactsResponse": {
@@ -1899,7 +2765,10 @@
                 "$ref": "#/components/schemas/ContactInfoWithInteraction"
               }
             },
-            "propertyNames": { "type": "string", "format": "uuid" }
+            "propertyNames": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         }
       },
@@ -1909,7 +2778,9 @@
         "properties": {
           "labels": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/Label" }
+            "items": {
+              "$ref": "#/components/schemas/Label"
+            }
           }
         }
       },
@@ -1920,7 +2791,9 @@
         "properties": {
           "links": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/Link" },
+            "items": {
+              "$ref": "#/components/schemas/Link"
+            },
             "description": "the thread, with messages inside"
           }
         }
@@ -1940,131 +2813,259 @@
           "labels",
           "attachments",
           "attachments_macro",
+          "attachments_draft",
           "created_at",
           "updated_at"
         ],
         "properties": {
           "attachments": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/Attachment" }
+            "items": {
+              "$ref": "#/components/schemas/Attachment"
+            }
+          },
+          "attachments_draft": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AttachmentDraft"
+            },
+            "description": "Uploaded file attachments for the message, if it is a draft"
           },
           "attachments_macro": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/AttachmentMacro" }
+            "items": {
+              "$ref": "#/components/schemas/AttachmentMacro"
+            }
           },
           "bcc": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/ContactInfo" }
+            "items": {
+              "$ref": "#/components/schemas/ContactInfo"
+            }
           },
-          "body_html_sanitized": { "type": ["string", "null"] },
-          "body_macro": { "type": ["string", "null"] },
-          "body_text": { "type": ["string", "null"] },
+          "body_html_sanitized": {
+            "type": ["string", "null"]
+          },
+          "body_macro": {
+            "type": ["string", "null"]
+          },
+          "body_text": {
+            "type": ["string", "null"]
+          },
           "cc": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/ContactInfo" }
+            "items": {
+              "$ref": "#/components/schemas/ContactInfo"
+            }
           },
-          "created_at": { "type": "string", "format": "date-time" },
-          "db_id": { "type": ["string", "null"], "format": "uuid" },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "db_id": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
           "from": {
             "oneOf": [
-              { "type": "null" },
-              { "$ref": "#/components/schemas/ContactInfo" }
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ContactInfo"
+              }
             ]
           },
           "global_id": {
             "type": ["string", "null"],
             "description": "The globally unique Message-ID header value created by the sender to uniquely identify this email\nUsed for threading across all providers (In-Reply-To header, References header)"
           },
-          "has_attachments": { "type": "boolean" },
+          "has_attachments": {
+            "type": "boolean"
+          },
           "headers_json": {
             "oneOf": [
-              { "type": "null" },
-              { "$ref": "#/components/schemas/Value" }
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Value"
+              }
             ]
           },
           "internal_date_ts": {
             "type": ["string", "null"],
             "format": "date-time"
           },
-          "is_draft": { "type": "boolean" },
-          "is_read": { "type": "boolean" },
-          "is_sent": { "type": "boolean" },
-          "is_starred": { "type": "boolean" },
+          "is_draft": {
+            "type": "boolean"
+          },
+          "is_read": {
+            "type": "boolean"
+          },
+          "is_sent": {
+            "type": "boolean"
+          },
+          "is_starred": {
+            "type": "boolean"
+          },
           "labels": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/Label" }
+            "items": {
+              "$ref": "#/components/schemas/Label"
+            }
           },
-          "link_id": { "type": "string", "format": "uuid" },
-          "provider_history_id": { "type": ["string", "null"] },
-          "provider_id": { "type": ["string", "null"] },
-          "provider_thread_id": { "type": ["string", "null"] },
-          "replying_to_id": { "type": ["string", "null"], "format": "uuid" },
+          "link_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "provider_history_id": {
+            "type": ["string", "null"]
+          },
+          "provider_id": {
+            "type": ["string", "null"]
+          },
+          "provider_thread_id": {
+            "type": ["string", "null"]
+          },
+          "replying_to_id": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
           "scheduled_send_time": {
             "type": ["string", "null"],
             "format": "date-time"
           },
-          "sent_at": { "type": ["string", "null"], "format": "date-time" },
-          "size_estimate": { "type": ["integer", "null"], "format": "int64" },
-          "snippet": { "type": ["string", "null"] },
-          "subject": { "type": ["string", "null"] },
-          "thread_db_id": { "type": ["string", "null"], "format": "uuid" },
+          "sent_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "size_estimate": {
+            "type": ["integer", "null"],
+            "format": "int64"
+          },
+          "snippet": {
+            "type": ["string", "null"]
+          },
+          "subject": {
+            "type": ["string", "null"]
+          },
+          "thread_db_id": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
           "to": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/ContactInfo" }
+            "items": {
+              "$ref": "#/components/schemas/ContactInfo"
+            }
           },
-          "updated_at": { "type": "string", "format": "date-time" }
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
         }
       },
-      "MessageListVisibility": { "type": "string", "enum": ["Show", "Hide"] },
+      "MessageListVisibility": {
+        "type": "string",
+        "enum": ["Show", "Hide"]
+      },
       "MessageToSend": {
         "type": "object",
         "required": ["link_id", "subject"],
         "properties": {
           "attachments": {
             "type": ["array", "null"],
-            "items": { "$ref": "#/components/schemas/Attachment" }
+            "items": {
+              "$ref": "#/components/schemas/AttachmentToSend"
+            }
           },
           "attachments_macro": {
             "type": ["array", "null"],
-            "items": { "$ref": "#/components/schemas/AttachmentMacro" }
+            "items": {
+              "$ref": "#/components/schemas/AttachmentMacro"
+            }
           },
           "bcc": {
             "type": ["array", "null"],
-            "items": { "$ref": "#/components/schemas/ContactInfo" }
+            "items": {
+              "$ref": "#/components/schemas/ContactInfo"
+            }
           },
-          "body_html": { "type": ["string", "null"] },
-          "body_macro": { "type": ["string", "null"] },
-          "body_text": { "type": ["string", "null"] },
+          "body_html": {
+            "type": ["string", "null"]
+          },
+          "body_macro": {
+            "type": ["string", "null"]
+          },
+          "body_text": {
+            "type": ["string", "null"]
+          },
           "cc": {
             "type": ["array", "null"],
-            "items": { "$ref": "#/components/schemas/ContactInfo" }
+            "items": {
+              "$ref": "#/components/schemas/ContactInfo"
+            }
           },
-          "db_id": { "type": ["string", "null"], "format": "uuid" },
+          "db_id": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
           "headers_json": {
             "oneOf": [
-              { "type": "null" },
-              { "$ref": "#/components/schemas/Value" }
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Value"
+              }
             ]
           },
-          "link_id": { "type": "string", "format": "uuid" },
-          "provider_id": { "type": ["string", "null"] },
-          "provider_thread_id": { "type": ["string", "null"] },
-          "replying_to_id": { "type": ["string", "null"], "format": "uuid" },
-          "send_time": { "type": ["string", "null"], "format": "date-time" },
-          "subject": { "type": "string" },
-          "thread_db_id": { "type": ["string", "null"], "format": "uuid" },
+          "link_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "provider_id": {
+            "type": ["string", "null"]
+          },
+          "provider_thread_id": {
+            "type": ["string", "null"]
+          },
+          "replying_to_id": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "send_time": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "thread_db_id": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
           "to": {
             "type": ["array", "null"],
-            "items": { "$ref": "#/components/schemas/ContactInfo" }
+            "items": {
+              "$ref": "#/components/schemas/ContactInfo"
+            }
           }
         }
       },
       "MessageWithBodyReplyless": {
         "allOf": [
-          { "$ref": "#/components/schemas/Message" },
+          {
+            "$ref": "#/components/schemas/Message"
+          },
           {
             "type": "object",
-            "properties": { "body_replyless": { "type": ["string", "null"] } }
+            "properties": {
+              "body_replyless": {
+                "type": ["string", "null"]
+              }
+            }
           }
         ]
       },
@@ -2082,18 +3083,31 @@
         "properties": {
           "bcc": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/ContactInfo" }
+            "items": {
+              "$ref": "#/components/schemas/ContactInfo"
+            }
           },
-          "body_parsed": { "type": ["string", "null"] },
+          "body_parsed": {
+            "type": ["string", "null"]
+          },
           "cc": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/ContactInfo" }
+            "items": {
+              "$ref": "#/components/schemas/ContactInfo"
+            }
           },
-          "db_id": { "type": "string", "format": "uuid" },
+          "db_id": {
+            "type": "string",
+            "format": "uuid"
+          },
           "from": {
             "oneOf": [
-              { "type": "null" },
-              { "$ref": "#/components/schemas/ContactInfo" }
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ContactInfo"
+              }
             ]
           },
           "internal_date_ts": {
@@ -2102,14 +3116,26 @@
           },
           "labels": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/LabelInfo" }
+            "items": {
+              "$ref": "#/components/schemas/LabelInfo"
+            }
           },
-          "link_id": { "type": "string", "format": "uuid" },
-          "subject": { "type": ["string", "null"] },
-          "thread_db_id": { "type": "string", "format": "uuid" },
+          "link_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "subject": {
+            "type": ["string", "null"]
+          },
+          "thread_db_id": {
+            "type": "string",
+            "format": "uuid"
+          },
           "to": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/ContactInfo" }
+            "items": {
+              "$ref": "#/components/schemas/ContactInfo"
+            }
           }
         }
       },
@@ -2117,14 +3143,18 @@
         "type": "object",
         "required": ["settings"],
         "properties": {
-          "settings": { "$ref": "#/components/schemas/Settings" }
+          "settings": {
+            "$ref": "#/components/schemas/Settings"
+          }
         }
       },
       "PatchSettingsResponse": {
         "type": "object",
         "required": ["settings"],
         "properties": {
-          "settings": { "$ref": "#/components/schemas/Settings" }
+          "settings": {
+            "$ref": "#/components/schemas/Settings"
+          }
         }
       },
       "PreviewView": {
@@ -2141,7 +3171,10 @@
               "other"
             ]
           },
-          { "type": "string", "format": "user:<label>" }
+          {
+            "type": "string",
+            "format": "user:<label>"
+          }
         ],
         "description": "View type. Supported values include standard labels and a custom user label user:<label>"
       },
@@ -2162,20 +3195,26 @@
         "description": "The request passed to send a message",
         "required": ["message"],
         "properties": {
-          "message": { "$ref": "#/components/schemas/MessageToSend" }
+          "message": {
+            "$ref": "#/components/schemas/MessageToSend"
+          }
         }
       },
       "SendMessageResponse": {
         "type": "object",
         "required": ["message"],
         "properties": {
-          "message": { "$ref": "#/components/schemas/MessageToSend" }
+          "message": {
+            "$ref": "#/components/schemas/MessageToSend"
+          }
         }
       },
       "Settings": {
         "type": "object",
         "properties": {
-          "signature_on_replies_forwards": { "type": ["boolean", "null"] }
+          "signature_on_replies_forwards": {
+            "type": ["boolean", "null"]
+          }
         }
       },
       "Thread": {
@@ -2189,10 +3228,20 @@
           "messages"
         ],
         "properties": {
-          "created_at": { "type": "string", "format": "date-time" },
-          "db_id": { "type": ["string", "null"], "format": "uuid" },
-          "inbox_visible": { "type": "boolean" },
-          "is_read": { "type": "boolean" },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "db_id": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "inbox_visible": {
+            "type": "boolean"
+          },
+          "is_read": {
+            "type": "boolean"
+          },
           "latest_inbound_message_ts": {
             "type": ["string", "null"],
             "format": "date-time"
@@ -2205,23 +3254,37 @@
             "type": ["string", "null"],
             "format": "date-time"
           },
-          "link_id": { "type": "string", "format": "uuid" },
+          "link_id": {
+            "type": "string",
+            "format": "uuid"
+          },
           "messages": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/Message" }
+            "items": {
+              "$ref": "#/components/schemas/Message"
+            }
           },
-          "provider_id": { "type": ["string", "null"] },
-          "updated_at": { "type": "string", "format": "date-time" }
+          "provider_id": {
+            "type": ["string", "null"]
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
         }
       },
       "ThreadList": {
         "type": "object",
         "required": ["threads"],
         "properties": {
-          "next_page_token": { "type": ["string", "null"] },
+          "next_page_token": {
+            "type": ["string", "null"]
+          },
           "threads": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/ThreadSummary" }
+            "items": {
+              "$ref": "#/components/schemas/ThreadSummary"
+            }
           }
         }
       },
@@ -2246,49 +3309,104 @@
         "properties": {
           "attachments": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/Attachment" }
+            "items": {
+              "$ref": "#/components/schemas/Attachment"
+            }
           },
           "attachmentsMacro": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/AttachmentMacro" }
+            "items": {
+              "$ref": "#/components/schemas/AttachmentMacro"
+            }
           },
-          "createdAt": { "type": "integer", "format": "int64" },
-          "id": { "type": "string", "format": "uuid" },
-          "inboxVisible": { "type": "boolean" },
-          "isDraft": { "type": "boolean" },
-          "isImportant": { "type": "boolean" },
-          "isRead": { "type": "boolean" },
-          "name": { "type": ["string", "null"] },
-          "ownerId": { "type": "string" },
+          "createdAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "inboxVisible": {
+            "type": "boolean"
+          },
+          "isDraft": {
+            "type": "boolean"
+          },
+          "isImportant": {
+            "type": "boolean"
+          },
+          "isRead": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": ["string", "null"]
+          },
+          "ownerId": {
+            "type": "string"
+          },
           "participants": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/Contact" }
+            "items": {
+              "$ref": "#/components/schemas/Contact"
+            }
           },
-          "providerId": { "type": ["string", "null"] },
-          "senderEmail": { "type": ["string", "null"] },
-          "senderName": { "type": ["string", "null"] },
-          "senderPhotoUrl": { "type": ["string", "null"] },
-          "snippet": { "type": ["string", "null"] },
-          "sortTs": { "type": "integer", "format": "int64" },
-          "updatedAt": { "type": "integer", "format": "int64" },
-          "viewedAt": { "type": ["integer", "null"], "format": "int64" }
+          "providerId": {
+            "type": ["string", "null"]
+          },
+          "senderEmail": {
+            "type": ["string", "null"]
+          },
+          "senderName": {
+            "type": ["string", "null"]
+          },
+          "senderPhotoUrl": {
+            "type": ["string", "null"]
+          },
+          "snippet": {
+            "type": ["string", "null"]
+          },
+          "sortTs": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updatedAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "viewedAt": {
+            "type": ["integer", "null"],
+            "format": "int64"
+          }
         }
       },
       "ThreadSummary": {
         "type": "object",
         "required": ["provider_id"],
-        "properties": { "provider_id": { "type": "string" } }
+        "properties": {
+          "provider_id": {
+            "type": "string"
+          }
+        }
       },
       "UpdateLabelBatchRequest": {
         "type": "object",
         "required": ["message_ids", "label_id", "value"],
         "properties": {
-          "label_id": { "type": "string", "format": "uuid" },
+          "label_id": {
+            "type": "string",
+            "format": "uuid"
+          },
           "message_ids": {
             "type": "array",
-            "items": { "type": "string", "format": "uuid" }
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
           },
-          "value": { "type": "boolean" }
+          "value": {
+            "type": "boolean"
+          }
         }
       },
       "UpdateLabelBatchResponse": {
@@ -2297,21 +3415,38 @@
         "properties": {
           "failed_ids": {
             "type": "array",
-            "items": { "type": "string", "format": "uuid" }
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
           },
           "missing_ids": {
             "type": "array",
-            "items": { "type": "string", "format": "uuid" }
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
           },
           "successful_ids": {
             "type": "array",
-            "items": { "type": "string", "format": "uuid" }
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         }
       },
-      "UserProvider": { "type": "string", "enum": ["GMAIL"] },
+      "UserProvider": {
+        "type": "string",
+        "enum": ["GMAIL"]
+      },
       "Value": {}
     }
   },
-  "tags": [{ "name": "Email Service", "description": "Macro Email Service" }]
+  "tags": [
+    {
+      "name": "Email Service",
+      "description": "Macro Email Service"
+    }
+  ]
 }

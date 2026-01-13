@@ -248,6 +248,47 @@ The migration included comprehensive indexes:
 - Prefer `anyhow::bail!("error message")` over `Err(anyhow::anyhow!("error message"))`
 - Use `bail!` for early returns with errors - it's more concise and idiomatic
 
+### Documentation Requirements
+
+- Add `#![deny(missing_docs)]` to `lib.rs` in new crates to enforce documentation on all public items
+- This ensures all public functions, structs, enums, and modules have documentation comments
+
+### Test File Organization
+
+Place tests in a separate `test.rs` file within the same module directory, rather than inline with `#[cfg(test)]` blocks in the implementation file.
+
+**Pattern:**
+- Implementation: `foo/mod.rs` or `foo.rs`
+- Tests: `foo/test.rs`
+
+**Example structure:**
+```
+src/
+  user/
+    mod.rs      # Contains: mod test;  (with #[cfg(test)])
+    test.rs     # Contains: use super::*; and test functions
+```
+
+**In `mod.rs`:**
+```rust
+#[cfg(test)]
+mod test;
+
+// implementation code...
+```
+
+**In `test.rs`:**
+```rust
+use super::*;
+
+#[tokio::test]
+async fn test_something() {
+    // test code
+}
+```
+
+This keeps implementation files focused and makes tests easier to locate and maintain.
+
 ## Development Memories
 
 ### DB Crate Changes

@@ -6,12 +6,12 @@
  */
 
 export type GetUsersHandlerParams = {
-/**
- * The maximum number of users to retreive. Default 10, max 100.
- */
-limit: number;
-/**
- * The offset to start from. Default 0.
- */
-offset: number;
+  /**
+   * The maximum number of users to retreive. Default 10, max 100.
+   */
+  limit: number;
+  /**
+   * The offset to start from. Default 0.
+   */
+  offset: number;
 };

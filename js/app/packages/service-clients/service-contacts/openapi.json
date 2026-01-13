@@ -4,7 +4,9 @@
     "title": "contacts_service",
     "description": "",
     "termsOfService": "https://macro.com/terms",
-    "license": { "name": "" },
+    "license": {
+      "name": ""
+    },
     "version": "0.1.0"
   },
   "paths": {
@@ -17,21 +19,41 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/GetContactsResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/GetContactsResponse"
+                }
               }
             }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -43,12 +65,20 @@
         "type": "object",
         "required": ["contacts"],
         "properties": {
-          "contacts": { "type": "array", "items": { "type": "string" } }
+          "contacts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
         }
       }
     }
   },
   "tags": [
-    { "name": "macro contacts service", "description": "Contacts Service" }
+    {
+      "name": "macro contacts service",
+      "description": "Contacts Service"
+    }
   ]
 }

@@ -4,7 +4,9 @@
     "title": "comms_service",
     "description": "",
     "termsOfService": "https://macro.com/terms",
-    "license": { "name": "" },
+    "license": {
+      "name": ""
+    },
     "version": "0.1.0"
   },
   "paths": {
@@ -19,22 +21,42 @@
               "application/json": {
                 "schema": {
                   "type": "array",
-                  "items": { "$ref": "#/components/schemas/ApiActivity" }
+                  "items": {
+                    "$ref": "#/components/schemas/ApiActivity"
+                  }
                 }
               }
             }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       },
@@ -44,7 +66,9 @@
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/PostActivityRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/PostActivityRequest"
+              }
             }
           },
           "required": true
@@ -54,21 +78,41 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/Activity" }
+                "schema": {
+                  "$ref": "#/components/schemas/Activity"
+                }
               }
             }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -83,14 +127,18 @@
             "in": "path",
             "description": "type of the attachment entity",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "entity_id",
             "in": "path",
             "description": "id of the attachment entity",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -106,15 +154,33 @@
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -139,15 +205,33 @@
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       },
@@ -157,7 +241,9 @@
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CreateChannelRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/CreateChannelRequest"
+              }
             }
           },
           "required": true
@@ -175,19 +261,43 @@
           },
           "400": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -200,7 +310,9 @@
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/GetOrCreateDmRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/GetOrCreateDmRequest"
+              }
             }
           },
           "required": true
@@ -218,19 +330,43 @@
           },
           "400": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -263,19 +399,43 @@
           },
           "400": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -290,21 +450,29 @@
             "in": "query",
             "description": "ID of the message to get context around",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "before",
             "in": "query",
             "description": "Number of messages to fetch before the target message (defaults to 0)",
             "required": true,
-            "schema": { "type": "integer", "format": "int64" }
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
           },
           {
             "name": "after",
             "in": "query",
             "description": "Number of messages to fetch after the target message (defaults to 0)",
             "required": true,
-            "schema": { "type": "integer", "format": "int64" }
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
           }
         ],
         "responses": {
@@ -320,15 +488,33 @@
           },
           "400": {
             "description": "Invalid request parameters",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "401": {
             "description": "Unauthorized",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "Internal server error",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -343,21 +529,28 @@
             "in": "path",
             "description": "id of the channel",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "since",
             "in": "query",
             "description": "ISO8601 timestamp to fetch messages since",
             "required": false,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "limit",
             "in": "query",
             "description": "Maximum number of messages to fetch",
             "required": false,
-            "schema": { "type": "integer", "format": "int64" }
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
           }
         ],
         "responses": {
@@ -365,21 +558,41 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/GetChannelResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/GetChannelResponse"
+                }
               }
             }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       },
@@ -392,25 +605,51 @@
             "in": "path",
             "description": "id of the channel",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
           "204": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "400": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       },
@@ -423,13 +662,17 @@
             "in": "path",
             "description": "id of the channel",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/PatchChannelOptions" }
+              "schema": {
+                "$ref": "#/components/schemas/PatchChannelOptions"
+              }
             }
           },
           "required": true
@@ -437,11 +680,23 @@
         "responses": {
           "200": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -457,22 +712,44 @@
             "in": "path",
             "description": "channel id",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
-          "200": { "description": "" },
+          "200": {
+            "description": ""
+          },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -488,22 +765,44 @@
             "in": "path",
             "description": "channel id",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
-          "200": { "description": "" },
+          "200": {
+            "description": ""
+          },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -518,7 +817,9 @@
             "in": "path",
             "description": "id of the channel",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -526,21 +827,41 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/GetMentionsResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/GetMentionsResponse"
+                }
               }
             }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -555,13 +876,17 @@
             "in": "path",
             "description": "id of the channel",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/PostMessageRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/PostMessageRequest"
+              }
             }
           },
           "required": true
@@ -571,21 +896,41 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/PostMessageResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/PostMessageResponse"
+                }
               }
             }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -600,32 +945,60 @@
             "in": "path",
             "description": "id of the channel",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "message_id",
             "in": "path",
             "description": "id of the message",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
           "201": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       },
@@ -638,20 +1011,26 @@
             "in": "path",
             "description": "id of the channel",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "message_id",
             "in": "path",
             "description": "id of the message",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/PatchMessageRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/PatchMessageRequest"
+              }
             }
           },
           "required": true
@@ -659,19 +1038,43 @@
         "responses": {
           "201": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -679,7 +1082,7 @@
     "/channels/{channel_id}/participants": {
       "post": {
         "tags": ["channels"],
-        "description": "adds a list of participants to the channel, user must be an owner or an admin",
+        "description": "adds a list of participants to the channel, user must be a participant",
         "operationId": "add_participants",
         "parameters": [
           {
@@ -687,7 +1090,9 @@
             "in": "path",
             "description": "channel id",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -701,24 +1106,44 @@
           "required": true
         },
         "responses": {
-          "200": { "description": "" },
+          "200": {
+            "description": ""
+          },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       },
       "delete": {
         "tags": ["channels"],
-        "description": "removes a list of participants to the channel, user must be an owner or an admin",
+        "description": "removes a list of participants from the channel, user must be a participant",
         "operationId": "remove_participants",
         "parameters": [
           {
@@ -726,7 +1151,9 @@
             "in": "path",
             "description": "channel id",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -740,18 +1167,38 @@
           "required": true
         },
         "responses": {
-          "200": { "description": "" },
+          "200": {
+            "description": ""
+          },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -766,13 +1213,17 @@
             "in": "path",
             "description": "id of the channel",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/PostReactionRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/PostReactionRequest"
+              }
             }
           },
           "required": true
@@ -780,19 +1231,43 @@
         "responses": {
           "201": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -807,13 +1282,17 @@
             "in": "path",
             "description": "id of the channel",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/PostTypingRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/PostTypingRequest"
+              }
             }
           },
           "required": true
@@ -821,19 +1300,43 @@
         "responses": {
           "201": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -863,8 +1366,12 @@
               }
             }
           },
-          "400": { "description": "Invalid request parameters" },
-          "500": { "description": "Internal server error" }
+          "400": {
+            "description": "Invalid request parameters"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
         }
       }
     },
@@ -878,7 +1385,9 @@
             "in": "path",
             "description": "UUID of the entity mention to delete",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -892,10 +1401,18 @@
               }
             }
           },
-          "400": { "description": "Invalid request parameters" },
-          "403": { "description": "Insufficient permissions" },
-          "404": { "description": "Entity mention not found" },
-          "500": { "description": "Internal server error" }
+          "400": {
+            "description": "Invalid request parameters"
+          },
+          "403": {
+            "description": "Insufficient permissions"
+          },
+          "404": {
+            "description": "Entity mention not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
         }
       }
     },
@@ -965,16 +1482,30 @@
         "description": "Represents a user's activity in a channel",
         "required": ["id", "user_id", "channel_id", "created_at", "updated_at"],
         "properties": {
-          "channel_id": { "type": "string", "format": "uuid" },
-          "created_at": { "type": "string", "format": "date-time" },
-          "id": { "type": "string", "format": "uuid" },
+          "channel_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
           "interacted_at": {
             "type": ["string", "null"],
             "format": "date-time",
             "description": "the last time the user intereacted with the channel\neg. reacting, replying, sending a message"
           },
-          "updated_at": { "type": "string", "format": "date-time" },
-          "user_id": { "type": "string" },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "user_id": {
+            "type": "string"
+          },
           "viewed_at": {
             "type": ["string", "null"],
             "format": "date-time",
@@ -982,28 +1513,50 @@
           }
         }
       },
-      "ActivityType": { "type": "string", "enum": ["view", "interact"] },
+      "ActivityType": {
+        "type": "string",
+        "enum": ["view", "interact"]
+      },
       "AddParticipantsRequest": {
         "type": "object",
         "required": ["participants"],
         "properties": {
-          "participants": { "type": "array", "items": { "type": "string" } }
+          "participants": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
         }
       },
       "ApiActivity": {
         "type": "object",
         "required": ["id", "user_id", "channel_id", "created_at", "updated_at"],
         "properties": {
-          "channel_id": { "type": "string", "format": "uuid" },
-          "created_at": { "type": "string", "format": "date-time" },
-          "id": { "type": "string", "format": "uuid" },
+          "channel_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
           "interacted_at": {
             "type": ["string", "null"],
             "format": "date-time",
             "description": "the last time the user intereacted with the channel\neg. reacting, replying, sending a message"
           },
-          "updated_at": { "type": "string", "format": "date-time" },
-          "user_id": { "type": "string" },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "user_id": {
+            "type": "string"
+          },
           "viewed_at": {
             "type": ["string", "null"],
             "format": "date-time",
@@ -1013,8 +1566,12 @@
       },
       "ApiChannelWithLatest": {
         "allOf": [
-          { "$ref": "#/components/schemas/ChannelWithParticipants" },
-          { "$ref": "#/components/schemas/LatestMessage" },
+          {
+            "$ref": "#/components/schemas/ChannelWithParticipants"
+          },
+          {
+            "$ref": "#/components/schemas/LatestMessage"
+          },
           {
             "type": "object",
             "properties": {
@@ -1026,7 +1583,10 @@
                 "type": ["string", "null"],
                 "format": "date-time"
               },
-              "viewed_at": { "type": ["string", "null"], "format": "date-time" }
+              "viewed_at": {
+                "type": ["string", "null"],
+                "format": "date-time"
+              }
             }
           }
         ]
@@ -1042,13 +1602,32 @@
           "created_at"
         ],
         "properties": {
-          "channel_id": { "type": "string", "format": "uuid" },
-          "created_at": { "type": "string", "format": "date-time" },
-          "entity_id": { "type": "string" },
-          "entity_type": { "type": "string" },
-          "height": { "type": ["integer", "null"], "format": "int32" },
-          "id": { "type": "string", "format": "uuid" },
-          "message_id": { "type": "string", "format": "uuid" },
+          "channel_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "entity_id": {
+            "type": "string"
+          },
+          "entity_type": {
+            "type": "string"
+          },
+          "height": {
+            "type": ["integer", "null"],
+            "format": "int32"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "message_id": {
+            "type": "string",
+            "format": "uuid"
+          },
           "width": {
             "type": ["integer", "null"],
             "format": "int32",
@@ -1112,18 +1691,39 @@
           "mentions"
         ],
         "properties": {
-          "content": { "type": "string" },
-          "created_at": { "type": "string", "format": "date-time" },
-          "deleted_at": { "type": ["string", "null"], "format": "date-time" },
+          "content": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deleted_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
           "mentions": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`"
           },
-          "message_id": { "type": "string", "format": "uuid" },
-          "sender_id": { "type": "string" },
-          "thread_id": { "type": ["string", "null"], "format": "uuid" },
-          "updated_at": { "type": "string", "format": "date-time" }
+          "message_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sender_id": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
         }
       },
       "ChannelParticipant": {
@@ -1149,43 +1749,61 @@
             "$ref": "#/components/schemas/ParticipantRole",
             "description": "type of the participant"
           },
-          "user_id": { "type": "string", "description": "id of the user" }
+          "user_id": {
+            "type": "string",
+            "description": "id of the user"
+          }
         }
       },
       "ChannelPreview": {
         "oneOf": [
           {
             "allOf": [
-              { "$ref": "#/components/schemas/ChannelPreviewData" },
+              {
+                "$ref": "#/components/schemas/ChannelPreviewData"
+              },
               {
                 "type": "object",
                 "required": ["type"],
                 "properties": {
-                  "type": { "type": "string", "enum": ["access"] }
+                  "type": {
+                    "type": "string",
+                    "enum": ["access"]
+                  }
                 }
               }
             ]
           },
           {
             "allOf": [
-              { "$ref": "#/components/schemas/WithChannelId" },
+              {
+                "$ref": "#/components/schemas/WithChannelId"
+              },
               {
                 "type": "object",
                 "required": ["type"],
                 "properties": {
-                  "type": { "type": "string", "enum": ["no_access"] }
+                  "type": {
+                    "type": "string",
+                    "enum": ["no_access"]
+                  }
                 }
               }
             ]
           },
           {
             "allOf": [
-              { "$ref": "#/components/schemas/WithChannelId" },
+              {
+                "$ref": "#/components/schemas/WithChannelId"
+              },
               {
                 "type": "object",
                 "required": ["type"],
                 "properties": {
-                  "type": { "type": "string", "enum": ["does_not_exist"] }
+                  "type": {
+                    "type": "string",
+                    "enum": ["does_not_exist"]
+                  }
                 }
               }
             ]
@@ -1196,9 +1814,15 @@
         "type": "object",
         "required": ["channel_id", "channel_name", "channel_type"],
         "properties": {
-          "channel_id": { "type": "string" },
-          "channel_name": { "type": "string" },
-          "channel_type": { "$ref": "#/components/schemas/ChannelType" }
+          "channel_id": {
+            "type": "string"
+          },
+          "channel_name": {
+            "type": "string"
+          },
+          "channel_type": {
+            "$ref": "#/components/schemas/ChannelType"
+          }
         }
       },
       "ChannelReference": {
@@ -1258,26 +1882,40 @@
       },
       "ChannelWithParticipants": {
         "allOf": [
-          { "$ref": "#/components/schemas/Channel" },
+          {
+            "$ref": "#/components/schemas/Channel"
+          },
           {
             "type": "object",
             "required": ["participants"],
             "properties": {
               "participants": {
                 "type": "array",
-                "items": { "$ref": "#/components/schemas/ChannelParticipant" }
+                "items": {
+                  "$ref": "#/components/schemas/ChannelParticipant"
+                }
               }
             }
           }
         ]
       },
-      "CommunicationServiceApiVersion": { "type": "string", "enum": ["v1"] },
+      "CommunicationServiceApiVersion": {
+        "type": "string",
+        "enum": ["v1"]
+      },
       "CountedReaction": {
         "type": "object",
         "required": ["emoji", "users"],
         "properties": {
-          "emoji": { "type": "string" },
-          "users": { "type": "array", "items": { "type": "string" } }
+          "emoji": {
+            "type": "string"
+          },
+          "users": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
         }
       },
       "CreateChannelRequest": {
@@ -1294,7 +1932,9 @@
           },
           "participants": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "list of participants not including the owner"
           }
         }
@@ -1302,7 +1942,11 @@
       "CreateChannelResponse": {
         "type": "object",
         "required": ["id"],
-        "properties": { "id": { "type": "string" } }
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        }
       },
       "CreateEntityMentionRequest": {
         "type": "object",
@@ -1313,10 +1957,18 @@
           "entity_id"
         ],
         "properties": {
-          "entity_id": { "type": "string" },
-          "entity_type": { "type": "string" },
-          "source_entity_id": { "type": "string" },
-          "source_entity_type": { "type": "string" }
+          "entity_id": {
+            "type": "string"
+          },
+          "entity_type": {
+            "type": "string"
+          },
+          "source_entity_id": {
+            "type": "string"
+          },
+          "source_entity_type": {
+            "type": "string"
+          }
         }
       },
       "CreateEntityMentionResponse": {
@@ -1330,31 +1982,58 @@
           "created_at"
         ],
         "properties": {
-          "created_at": { "type": "string", "format": "date-time" },
-          "entity_id": { "type": "string" },
-          "entity_type": { "type": "string" },
-          "id": { "type": "string" },
-          "source_entity_id": { "type": "string" },
-          "source_entity_type": { "type": "string" },
-          "user_id": { "type": ["string", "null"] }
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "entity_id": {
+            "type": "string"
+          },
+          "entity_type": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "source_entity_id": {
+            "type": "string"
+          },
+          "source_entity_type": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": ["string", "null"]
+          }
         }
       },
       "DeleteEntityMentionRequest": {
         "type": "object",
         "required": ["entity_mention_id"],
-        "properties": { "entity_mention_id": { "type": "string" } }
+        "properties": {
+          "entity_mention_id": {
+            "type": "string"
+          }
+        }
       },
       "DeleteEntityMentionResponse": {
         "type": "object",
         "required": ["deleted"],
-        "properties": { "deleted": { "type": "boolean" } }
+        "properties": {
+          "deleted": {
+            "type": "boolean"
+          }
+        }
       },
       "DeleteMessageParams": {
         "type": "object",
         "required": ["channel_id", "message_id"],
         "properties": {
-          "channel_id": { "type": "string" },
-          "message_id": { "type": "string" }
+          "channel_id": {
+            "type": "string"
+          },
+          "message_id": {
+            "type": "string"
+          }
         }
       },
       "EntityMention": {
@@ -1368,13 +2047,29 @@
           "created_at"
         ],
         "properties": {
-          "created_at": { "type": "string", "format": "date-time" },
-          "entity_id": { "type": "string" },
-          "entity_type": { "type": "string" },
-          "id": { "type": "string", "format": "uuid" },
-          "source_entity_id": { "type": "string" },
-          "source_entity_type": { "type": "string" },
-          "user_id": { "type": ["string", "null"] }
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "entity_id": {
+            "type": "string"
+          },
+          "entity_type": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "source_entity_id": {
+            "type": "string"
+          },
+          "source_entity_type": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": ["string", "null"]
+          }
         }
       },
       "EntityReference": {
@@ -1389,7 +2084,10 @@
                 "type": "object",
                 "required": ["reference_type"],
                 "properties": {
-                  "reference_type": { "type": "string", "enum": ["channel"] }
+                  "reference_type": {
+                    "type": "string",
+                    "enum": ["channel"]
+                  }
                 }
               }
             ],
@@ -1405,7 +2103,10 @@
                 "type": "object",
                 "required": ["reference_type"],
                 "properties": {
-                  "reference_type": { "type": "string", "enum": ["generic"] }
+                  "reference_type": {
+                    "type": "string",
+                    "enum": ["generic"]
+                  }
                 }
               }
             ],
@@ -1474,7 +2175,9 @@
         "properties": {
           "references": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/EntityReference" }
+            "items": {
+              "$ref": "#/components/schemas/EntityReference"
+            }
           }
         }
       },
@@ -1482,7 +2185,12 @@
         "type": "object",
         "required": ["channel_ids"],
         "properties": {
-          "channel_ids": { "type": "array", "items": { "type": "string" } }
+          "channel_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
         }
       },
       "GetBatchChannelPreviewResponse": {
@@ -1491,7 +2199,9 @@
         "properties": {
           "previews": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/ChannelPreview" }
+            "items": {
+              "$ref": "#/components/schemas/ChannelPreview"
+            }
           }
         }
       },
@@ -1512,7 +2222,9 @@
           },
           "activity": {
             "oneOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "$ref": "#/components/schemas/Activity",
                 "description": "the last activity for the given user on this channel"
@@ -1521,7 +2233,9 @@
           },
           "attachments": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/Attachment" },
+            "items": {
+              "$ref": "#/components/schemas/Attachment"
+            },
             "description": "Attachments that are linked to messages in this channel"
           },
           "channel": {
@@ -1530,12 +2244,16 @@
           },
           "messages": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/Message" },
+            "items": {
+              "$ref": "#/components/schemas/Message"
+            },
             "description": "messages"
           },
           "participants": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/ChannelParticipant" },
+            "items": {
+              "$ref": "#/components/schemas/ChannelParticipant"
+            },
             "description": "list of participants"
           },
           "reactions": {
@@ -1543,9 +2261,13 @@
             "description": "reactions grouped by message",
             "additionalProperties": {
               "type": "array",
-              "items": { "$ref": "#/components/schemas/CountedReaction" }
+              "items": {
+                "$ref": "#/components/schemas/CountedReaction"
+              }
             },
-            "propertyNames": { "type": "string" }
+            "propertyNames": {
+              "type": "string"
+            }
           }
         }
       },
@@ -1555,7 +2277,9 @@
         "properties": {
           "mentions": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/MessageMention" }
+            "items": {
+              "$ref": "#/components/schemas/MessageMention"
+            }
           }
         }
       },
@@ -1565,37 +2289,59 @@
         "properties": {
           "messages": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/Message" }
+            "items": {
+              "$ref": "#/components/schemas/Message"
+            }
           }
         }
       },
-      "GetOrCreateAction": { "type": "string", "enum": ["get", "create"] },
+      "GetOrCreateAction": {
+        "type": "string",
+        "enum": ["get", "create"]
+      },
       "GetOrCreateDmRequest": {
         "type": "object",
         "required": ["recipient_id"],
-        "properties": { "recipient_id": { "type": "string" } }
+        "properties": {
+          "recipient_id": {
+            "type": "string"
+          }
+        }
       },
       "GetOrCreateDmResponse": {
         "type": "object",
         "required": ["channel_id", "action"],
         "properties": {
-          "action": { "$ref": "#/components/schemas/GetOrCreateAction" },
-          "channel_id": { "type": "string" }
+          "action": {
+            "$ref": "#/components/schemas/GetOrCreateAction"
+          },
+          "channel_id": {
+            "type": "string"
+          }
         }
       },
       "GetOrCreatePrivateRequest": {
         "type": "object",
         "required": ["recipients"],
         "properties": {
-          "recipients": { "type": "array", "items": { "type": "string" } }
+          "recipients": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
         }
       },
       "GetOrCreatePrivateResponse": {
         "type": "object",
         "required": ["channel_id", "action"],
         "properties": {
-          "action": { "$ref": "#/components/schemas/GetOrCreateAction" },
-          "channel_id": { "type": "string" }
+          "action": {
+            "$ref": "#/components/schemas/GetOrCreateAction"
+          },
+          "channel_id": {
+            "type": "string"
+          }
         }
       },
       "LatestMessage": {
@@ -1603,14 +2349,22 @@
         "properties": {
           "latest_message": {
             "oneOf": [
-              { "type": "null" },
-              { "$ref": "#/components/schemas/ChannelMessage" }
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ChannelMessage"
+              }
             ]
           },
           "latest_non_thread_message": {
             "oneOf": [
-              { "type": "null" },
-              { "$ref": "#/components/schemas/ChannelMessage" }
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ChannelMessage"
+              }
             ]
           }
         }
@@ -1626,39 +2380,81 @@
           "updated_at"
         ],
         "properties": {
-          "channel_id": { "type": "string", "format": "uuid" },
-          "content": { "type": "string" },
-          "created_at": { "type": "string", "format": "date-time" },
-          "deleted_at": { "type": ["string", "null"], "format": "date-time" },
-          "edited_at": { "type": ["string", "null"], "format": "date-time" },
-          "id": { "type": "string", "format": "uuid" },
-          "sender_id": { "type": "string" },
-          "thread_id": { "type": ["string", "null"], "format": "uuid" },
-          "updated_at": { "type": "string", "format": "date-time" }
+          "channel_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "content": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deleted_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "edited_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sender_id": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
         }
       },
       "MessageMention": {
         "type": "object",
         "required": ["message_id", "entity_type", "entity_id", "created_at"],
         "properties": {
-          "created_at": { "type": "string", "format": "date-time" },
-          "entity_id": { "type": "string" },
-          "entity_type": { "type": "string" },
-          "message_id": { "type": "string", "format": "uuid" }
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "entity_id": {
+            "type": "string"
+          },
+          "entity_type": {
+            "type": "string"
+          },
+          "message_id": {
+            "type": "string",
+            "format": "uuid"
+          }
         }
       },
       "NewAttachment": {
         "type": "object",
         "required": ["entity_type", "entity_id"],
         "properties": {
-          "entity_id": { "type": "string" },
-          "entity_type": { "type": "string" },
+          "entity_id": {
+            "type": "string"
+          },
+          "entity_type": {
+            "type": "string"
+          },
           "height": {
             "type": ["integer", "null"],
             "format": "int32",
             "description": "dimensions of image/video"
           },
-          "width": { "type": ["integer", "null"], "format": "int32" }
+          "width": {
+            "type": ["integer", "null"],
+            "format": "int32"
+          }
         }
       },
       "ParticipantAccess": {
@@ -1671,12 +2467,17 @@
                 "type": "object",
                 "required": ["role"],
                 "properties": {
-                  "role": { "$ref": "#/components/schemas/ParticipantRole" }
+                  "role": {
+                    "$ref": "#/components/schemas/ParticipantRole"
+                  }
                 }
               }
             }
           },
-          { "type": "string", "enum": ["NoAccess"] }
+          {
+            "type": "string",
+            "enum": ["NoAccess"]
+          }
         ]
       },
       "ParticipantRole": {
@@ -1685,14 +2486,22 @@
       },
       "PatchChannelOptions": {
         "type": "object",
-        "properties": { "channel_name": { "type": ["string", "null"] } }
+        "properties": {
+          "channel_name": {
+            "type": ["string", "null"]
+          }
+        }
       },
       "PatchMessageParams": {
         "type": "object",
         "required": ["channel_id", "message_id"],
         "properties": {
-          "channel_id": { "type": "string" },
-          "message_id": { "type": "string" }
+          "channel_id": {
+            "type": "string"
+          },
+          "message_id": {
+            "type": "string"
+          }
         }
       },
       "PatchMessageRequest": {
@@ -1700,17 +2509,25 @@
         "properties": {
           "attachment_ids_to_delete": {
             "type": ["array", "null"],
-            "items": { "type": "string" }
+            "items": {
+              "type": "string"
+            }
           },
-          "content": { "type": ["string", "null"] }
+          "content": {
+            "type": ["string", "null"]
+          }
         }
       },
       "PostActivityRequest": {
         "type": "object",
         "required": ["channel_id", "activity_type"],
         "properties": {
-          "activity_type": { "$ref": "#/components/schemas/ActivityType" },
-          "channel_id": { "type": "string" }
+          "activity_type": {
+            "$ref": "#/components/schemas/ActivityType"
+          },
+          "channel_id": {
+            "type": "string"
+          }
         }
       },
       "PostMessageRequest": {
@@ -1719,76 +2536,137 @@
         "properties": {
           "attachments": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/NewAttachment" }
+            "items": {
+              "$ref": "#/components/schemas/NewAttachment"
+            }
           },
-          "content": { "type": "string" },
+          "content": {
+            "type": "string"
+          },
           "mentions": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/SimpleMention" }
+            "items": {
+              "$ref": "#/components/schemas/SimpleMention"
+            }
           },
-          "thread_id": { "type": ["string", "null"], "format": "uuid" }
+          "thread_id": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          }
         }
       },
       "PostMessageResponse": {
         "type": "object",
         "required": ["id"],
-        "properties": { "id": { "type": "string" } }
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        }
       },
       "PostReactionRequest": {
         "type": "object",
         "required": ["emoji", "message_id", "action"],
         "properties": {
-          "action": { "$ref": "#/components/schemas/ReactionAction" },
-          "emoji": { "type": "string" },
-          "message_id": { "type": "string" }
+          "action": {
+            "$ref": "#/components/schemas/ReactionAction"
+          },
+          "emoji": {
+            "type": "string"
+          },
+          "message_id": {
+            "type": "string"
+          }
         }
       },
       "PostTypingRequest": {
         "type": "object",
         "required": ["action"],
         "properties": {
-          "action": { "$ref": "#/components/schemas/TypingAction" },
-          "thread_id": { "type": ["string", "null"] }
+          "action": {
+            "$ref": "#/components/schemas/TypingAction"
+          },
+          "thread_id": {
+            "type": ["string", "null"]
+          }
         }
       },
       "Reaction": {
         "type": "object",
         "required": ["message_id", "user_id", "emoji", "created_at"],
         "properties": {
-          "created_at": { "type": "string", "format": "date-time" },
-          "emoji": { "type": "string" },
-          "message_id": { "type": "string", "format": "uuid" },
-          "user_id": { "type": "string" }
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "emoji": {
+            "type": "string"
+          },
+          "message_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "user_id": {
+            "type": "string"
+          }
         }
       },
-      "ReactionAction": { "type": "string", "enum": ["Add", "Remove"] },
+      "ReactionAction": {
+        "type": "string",
+        "enum": ["Add", "Remove"]
+      },
       "RemoveParticipantsRequest": {
         "type": "object",
         "required": ["participants"],
         "properties": {
-          "participants": { "type": "array", "items": { "type": "string" } }
+          "participants": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
         }
       },
       "SimpleMention": {
         "type": "object",
         "required": ["entity_type", "entity_id"],
         "properties": {
-          "entity_id": { "type": "string" },
-          "entity_type": { "type": "string" }
+          "entity_id": {
+            "type": "string"
+          },
+          "entity_type": {
+            "type": "string"
+          }
         }
       },
       "StringIDResponse": {
         "type": "object",
         "required": ["id"],
-        "properties": { "id": { "type": "string" } }
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        }
       },
-      "TypingAction": { "type": "string", "enum": ["start", "stop"] },
+      "TypingAction": {
+        "type": "string",
+        "enum": ["start", "stop"]
+      },
       "WithChannelId": {
         "type": "object",
         "required": ["channel_id"],
-        "properties": { "channel_id": { "type": "string" } }
+        "properties": {
+          "channel_id": {
+            "type": "string"
+          }
+        }
       }
     }
   },
-  "tags": [{ "name": "macro comms service", "description": "Comms Service" }]
+  "tags": [
+    {
+      "name": "macro comms service",
+      "description": "Comms Service"
+    }
+  ]
 }

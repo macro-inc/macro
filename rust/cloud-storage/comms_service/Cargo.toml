@@ -15,6 +15,10 @@ name = "backfill_comms_search"
 path = "src/bin/backfill_search.rs"
 required-features = []
 
+[[bin]]
+name = "comms_service_openapi"
+path = "src/openapi.rs"
+
 [features]
 channel_search = []
 default = ["channel_search", "service"]

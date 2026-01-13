@@ -4,7 +4,9 @@
     "title": "connection_gateway",
     "description": "",
     "termsOfService": "https://macro.com/terms",
-    "license": { "name": "" },
+    "license": {
+      "name": ""
+    },
     "version": "0.1.0"
   },
   "paths": {
@@ -15,7 +17,9 @@
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/BatchSendMessageBody" }
+              "schema": {
+                "$ref": "#/components/schemas/BatchSendMessageBody"
+              }
             }
           },
           "required": true
@@ -25,13 +29,21 @@
             "description": "Message sent successfully",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/SendMessageResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/SendMessageResponse"
+                }
               }
             }
           },
           "500": {
             "description": "Internal server error",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -46,20 +58,26 @@
             "in": "path",
             "description": "the type of the entity to send the msssage to e.g. \"user\" | \"channel\" | \"document\" etc...",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "entity_id",
             "in": "path",
             "description": "the id of the entity to send the message to",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/SendMessageBody" }
+              "schema": {
+                "$ref": "#/components/schemas/SendMessageBody"
+              }
             }
           },
           "required": true
@@ -69,21 +87,41 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/SendMessageResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/SendMessageResponse"
+                }
               }
             }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -98,14 +136,18 @@
             "in": "path",
             "description": "the type of the entity to send the msssage to e.g. \"user\" | \"channel\" | \"document\" etc...",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "entity_id",
             "in": "path",
             "description": "the id of the entity to send the message to",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -113,17 +155,34 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "type": "array", "items": { "type": "string" } }
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
               }
             }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -137,10 +196,14 @@
         "properties": {
           "entities": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/Entity" },
+            "items": {
+              "$ref": "#/components/schemas/Entity"
+            },
             "description": "all entities to send the message to"
           },
-          "message": { "description": "the message to send" },
+          "message": {
+            "description": "the message to send"
+          },
           "message_type": {
             "type": "string",
             "description": "the type of the message we are sending"
@@ -213,7 +276,12 @@
       "SendMessageBody": {
         "type": "object",
         "required": ["message", "message_type"],
-        "properties": { "message": {}, "message_type": { "type": "string" } }
+        "properties": {
+          "message": {},
+          "message_type": {
+            "type": "string"
+          }
+        }
       },
       "SendMessageResponse": {
         "type": "object",
@@ -221,7 +289,9 @@
         "properties": {
           "receipts": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/MessageReceipt" }
+            "items": {
+              "$ref": "#/components/schemas/MessageReceipt"
+            }
           }
         }
       },
@@ -237,8 +307,12 @@
           "user_id"
         ],
         "properties": {
-          "PK": { "type": "string" },
-          "SK": { "type": "string" },
+          "PK": {
+            "type": "string"
+          },
+          "SK": {
+            "type": "string"
+          },
           "connection_id": {
             "type": "string",
             "description": "id of the connection"
@@ -249,7 +323,10 @@
             "description": "timestamp when the connection was initiated",
             "minimum": 0
           },
-          "entity_id": { "type": "string", "description": "id of the entity" },
+          "entity_id": {
+            "type": "string",
+            "description": "id of the entity"
+          },
           "entity_type": {
             "$ref": "#/components/schemas/EntityType",
             "description": "type of the entity"
@@ -269,18 +346,27 @@
       "StringIDResponse": {
         "type": "object",
         "required": ["id"],
-        "properties": { "id": { "type": "string" } }
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        }
       },
       "ToWebsocketMessage": {
         "oneOf": [
           {
             "allOf": [
-              { "$ref": "#/components/schemas/TrackEntityMessage" },
+              {
+                "$ref": "#/components/schemas/TrackEntityMessage"
+              },
               {
                 "type": "object",
                 "required": ["type"],
                 "properties": {
-                  "type": { "type": "string", "enum": ["track_entity"] }
+                  "type": {
+                    "type": "string",
+                    "enum": ["track_entity"]
+                  }
                 }
               }
             ]
@@ -294,12 +380,16 @@
       },
       "TrackEntityMessage": {
         "allOf": [
-          { "$ref": "#/components/schemas/Entity" },
+          {
+            "$ref": "#/components/schemas/Entity"
+          },
           {
             "type": "object",
             "required": ["action"],
             "properties": {
-              "action": { "$ref": "#/components/schemas/TrackAction" }
+              "action": {
+                "$ref": "#/components/schemas/TrackAction"
+              }
             }
           }
         ]
@@ -310,34 +400,58 @@
             "type": "object",
             "required": ["requestId", "projectId", "status"],
             "properties": {
-              "projectId": { "type": "string" },
-              "requestId": { "type": "string" },
-              "status": { "type": "string", "enum": ["completed"] }
+              "projectId": {
+                "type": "string"
+              },
+              "requestId": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": ["completed"]
+              }
             }
           },
           {
             "type": "object",
             "required": ["requestId", "projectId", "status"],
             "properties": {
-              "projectId": { "type": "string" },
-              "requestId": { "type": "string" },
-              "status": { "type": "string", "enum": ["partially_completed"] }
+              "projectId": {
+                "type": "string"
+              },
+              "requestId": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": ["partially_completed"]
+              }
             }
           },
           {
             "type": "object",
             "required": ["requestId", "status"],
             "properties": {
-              "requestId": { "type": "string" },
-              "status": { "type": "string", "enum": ["failed"] }
+              "requestId": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": ["failed"]
+              }
             }
           },
           {
             "type": "object",
             "required": ["requestId", "status"],
             "properties": {
-              "requestId": { "type": "string" },
-              "status": { "type": "string", "enum": ["unknown"] }
+              "requestId": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": ["unknown"]
+              }
             }
           }
         ]
@@ -345,6 +459,9 @@
     }
   },
   "tags": [
-    { "name": "connection gateway", "description": "Connection gateway API" }
+    {
+      "name": "connection gateway",
+      "description": "Connection gateway API"
+    }
   ]
 }

@@ -5,8 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type LabelType = typeof LabelType[keyof typeof LabelType];
-
+export type LabelType = (typeof LabelType)[keyof typeof LabelType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const LabelType = {

@@ -117,6 +117,15 @@ export const notificationServiceClient = {
       }
     );
   },
+  async getUserNotificationById(notificationId: string) {
+    return mapOk(
+      await notificationFetch<UserNotification>(
+        `/user_notifications/${notificationId}`,
+        { method: 'GET' }
+      ),
+      (result) => result
+    );
+  },
   async bulkGetUserNotificationsByEventItemId(
     args: GetUserNotificationParams &
       BulkGetUserNotificationsByEventItemIdRequest

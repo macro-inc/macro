@@ -217,7 +217,7 @@ pub async fn insert_message(
 }
 
 /// insert message that user created via macro frontend
-#[tracing::instrument(skip(tx, service_message))]
+#[tracing::instrument(skip(tx, service_message), err)]
 pub async fn insert_message_to_send(
     tx: &mut sqlx::PgConnection,
     service_message: &mut message::MessageToSend,
@@ -241,8 +241,7 @@ pub async fn insert_message_to_send(
         db_message_to_send.link_id,
         addresses,
     )
-    .await
-    .context("Failed to insert address ids")?;
+    .await?;
 
     // Insert the message into the database
     sqlx::query!(
@@ -300,24 +299,17 @@ pub async fn insert_message_to_send(
         Utc::now()
     )
     .execute(&mut *tx)
-    .await
-    .with_context(|| format!("Failed to insert message with thread_id {}", thread_id))?;
+    .await?;
 
     service_message.db_id = Some(message_db_id);
 
-    process_scheduled_message(tx, service_message, message_db_id, is_draft)
-        .await
-        .context("Failed to process scheduled message")?;
+    process_scheduled_message(tx, service_message, message_db_id, is_draft).await?;
 
     if let Some(mut attachments) = service_message.attachments_macro.clone() {
-        marco::insert_macro_attachments(tx, message_db_id, &mut attachments)
-            .await
-            .context("Failed to insert macro attachments")?;
+        marco::insert_macro_attachments(tx, message_db_id, &mut attachments).await?;
     }
 
-    contacts::upsert_message::upsert_message_recipients(tx, message_db_id, &recipients)
-        .await
-        .context("Failed to insert recipients")?;
+    contacts::upsert_message::upsert_message_recipients(tx, message_db_id, &recipients).await?;
 
     Ok(())
 }

@@ -8,4 +8,6 @@
 /**
  * Optional document ID to provide context
  */
-export type GetSimpleCompletionStreamPayloadContentDocumentIds = string[] | null;
+export type GetSimpleCompletionStreamPayloadContentDocumentIds =
+  | string[]
+  | null;

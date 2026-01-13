@@ -4,9 +4,10 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
-import type { Model } from './model';
+
 import type { FromWebSocketMessageOneOfOnetwoNewModel } from './fromWebSocketMessageOneOfOnetwoNewModel';
 import type { FromWebSocketMessageOneOfOnetwoType } from './fromWebSocketMessageOneOfOnetwoType';
+import type { Model } from './model';
 
 /**
  * Notifies the client that the available models have changed

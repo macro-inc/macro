@@ -174,7 +174,7 @@ function TopBar(props: {
 
   return (
     <div
-      class="h-[calc(2.5rem-1px)] border-b border-edge-muted flex items-center w-full px-2 shrink-0 grow-0"
+      class="h-10 border-b border-edge-muted flex items-center w-full px-2 shrink-0 grow-0"
       data-split-panel
     >
       <DeprecatedIconButton

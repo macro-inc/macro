@@ -9,8 +9,8 @@ import type { APIThreadDbId } from './aPIThreadDbId';
 import type { APIThreadLatestInboundMessageTs } from './aPIThreadLatestInboundMessageTs';
 import type { APIThreadLatestNonSpamMessageTs } from './aPIThreadLatestNonSpamMessageTs';
 import type { APIThreadLatestOutboundMessageTs } from './aPIThreadLatestOutboundMessageTs';
-import type { MessageWithBodyReplyless } from './messageWithBodyReplyless';
 import type { APIThreadProviderId } from './aPIThreadProviderId';
+import type { MessageWithBodyReplyless } from './messageWithBodyReplyless';
 
 /**
  * Thread object exposed to the FE in Get Threads Call

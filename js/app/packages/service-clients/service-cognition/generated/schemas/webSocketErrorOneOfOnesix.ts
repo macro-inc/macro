@@ -7,4 +7,5 @@
 import type { GenericErrorResponse } from './genericErrorResponse';
 import type { WebSocketErrorOneOfOnesixAllOf } from './webSocketErrorOneOfOnesixAllOf';
 
-export type WebSocketErrorOneOfOnesix = GenericErrorResponse & WebSocketErrorOneOfOnesixAllOf;
+export type WebSocketErrorOneOfOnesix = GenericErrorResponse &
+  WebSocketErrorOneOfOnesixAllOf;

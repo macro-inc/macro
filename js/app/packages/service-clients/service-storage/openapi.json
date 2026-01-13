@@ -4,7 +4,9 @@
     "title": "document_storage_service",
     "description": "",
     "termsOfService": "https://macro.com/terms",
-    "license": { "name": "" },
+    "license": {
+      "name": ""
+    },
     "version": "0.1.0"
   },
   "paths": {
@@ -19,14 +21,20 @@
             "in": "query",
             "description": "The maximum number of items to retreive. Default 10, max 100.",
             "required": true,
-            "schema": { "type": "integer", "format": "int64" }
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
           },
           {
             "name": "offset",
             "in": "query",
             "description": "The offset to start from. Default 0.",
             "required": true,
-            "schema": { "type": "integer", "format": "int64" }
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
           }
         ],
         "responses": {
@@ -104,7 +112,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -112,7 +122,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -120,7 +132,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -133,7 +147,9 @@
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/EditAnchorRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/EditAnchorRequest"
+              }
             }
           },
           "required": true
@@ -143,7 +159,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EditAnchorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EditAnchorResponse"
+                }
               }
             }
           },
@@ -151,7 +169,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -159,7 +179,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -167,7 +189,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -185,7 +209,9 @@
             "in": "path",
             "description": "The document id",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -213,7 +239,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -221,7 +249,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -229,7 +259,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -247,7 +279,9 @@
             "in": "path",
             "description": "Document ID",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -255,7 +289,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/AnchorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/AnchorResponse"
+                }
               }
             }
           },
@@ -263,7 +299,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -271,7 +309,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -279,7 +319,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -297,13 +339,18 @@
             "in": "path",
             "description": "The comment id",
             "required": true,
-            "schema": { "type": "integer", "format": "int64" }
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
           }
         ],
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/DeleteCommentRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/DeleteCommentRequest"
+              }
             }
           },
           "required": true
@@ -323,7 +370,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -331,7 +380,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -339,7 +390,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -355,13 +408,18 @@
             "in": "path",
             "description": "The comment id",
             "required": true,
-            "schema": { "type": "integer", "format": "int64" }
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
           }
         ],
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/EditCommentRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/EditCommentRequest"
+              }
             }
           },
           "required": true
@@ -371,7 +429,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EditCommentResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EditCommentResponse"
+                }
               }
             }
           },
@@ -379,7 +439,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -387,7 +449,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -395,7 +459,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -413,13 +479,17 @@
             "in": "path",
             "description": "The document id",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CreateCommentRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/CreateCommentRequest"
+              }
             }
           },
           "required": true
@@ -439,7 +509,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -447,7 +519,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -455,7 +529,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -473,7 +549,9 @@
             "in": "path",
             "description": "Document ID",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -481,7 +559,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ThreadResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadResponse"
+                }
               }
             }
           },
@@ -489,7 +569,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -497,7 +579,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -505,7 +589,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -523,21 +609,29 @@
             "in": "query",
             "description": "The maximum number of documents to retreive. Default 10, max 100.",
             "required": true,
-            "schema": { "type": "integer", "format": "int64" }
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
           },
           {
             "name": "offset",
             "in": "query",
             "description": "The offset to start from. Default 0.",
             "required": true,
-            "schema": { "type": "integer", "format": "int64" }
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
           },
           {
             "name": "file_type",
             "in": "query",
             "description": "The file type to filter by. Default all.",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -590,7 +684,9 @@
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CreateDocumentRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/CreateDocumentRequest"
+              }
             }
           },
           "required": true
@@ -608,7 +704,9 @@
                       "oneOf": [
                         {
                           "allOf": [
-                            { "$ref": "#/components/schemas/DocumentResponse" },
+                            {
+                              "$ref": "#/components/schemas/DocumentResponse"
+                            },
                             {
                               "type": "object",
                               "required": ["contentType"],
@@ -689,7 +787,9 @@
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CreateTaskRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/CreateTaskRequest"
+              }
             }
           },
           "required": true
@@ -717,7 +817,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -725,7 +827,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -733,7 +837,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -741,7 +847,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -875,7 +983,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -883,7 +993,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -891,7 +1003,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -909,7 +1023,9 @@
             "in": "path",
             "description": "Document ID",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -927,7 +1043,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -935,7 +1053,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -943,7 +1063,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -961,7 +1083,9 @@
             "in": "path",
             "description": "Document ID",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -1088,7 +1212,9 @@
             "in": "path",
             "description": "Document ID",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -1096,7 +1222,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/GetDocumentResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/GetDocumentResponse"
+                }
               }
             }
           },
@@ -1142,13 +1270,17 @@
             "in": "path",
             "description": "Document ID",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/SaveDocumentRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/SaveDocumentRequest"
+              }
             }
           },
           "required": true
@@ -1216,7 +1348,9 @@
             "in": "path",
             "description": "Document ID",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -1224,7 +1358,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
               }
             }
           },
@@ -1272,20 +1408,27 @@
             "in": "path",
             "description": "Document ID",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "version_id",
             "in": "query",
             "description": "The version id of the document to copy. Defaults to copying the latest version of the document.",
             "required": false,
-            "schema": { "type": "integer", "format": "int64" }
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
           }
         ],
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CopyDocumentRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/CopyDocumentRequest"
+              }
             }
           },
           "required": true
@@ -1295,7 +1438,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/GetDocumentResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/GetDocumentResponse"
+                }
               }
             }
           },
@@ -1363,7 +1508,9 @@
             "in": "path",
             "description": "Document ID",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -1431,21 +1578,28 @@
             "in": "path",
             "description": "Document ID",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "document_version_id",
             "in": "query",
             "description": "A specific document version id to get the location for.",
             "required": true,
-            "schema": { "type": "integer", "format": "int64" }
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
           },
           {
             "name": "get_converted_docx_url",
             "in": "query",
             "description": "If true, this will return the converted docx url.",
             "required": true,
-            "schema": { "type": "boolean" }
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -1513,7 +1667,9 @@
             "in": "path",
             "description": "Document ID",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -1521,7 +1677,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
               }
             }
           },
@@ -1569,7 +1727,9 @@
             "in": "path",
             "description": "Document ID",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -1627,14 +1787,18 @@
             "in": "path",
             "description": "Document ID",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "job_id",
             "in": "path",
             "description": "Job ID",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -1692,7 +1856,9 @@
             "in": "path",
             "description": "Document ID",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -1700,7 +1866,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
               }
             }
           },
@@ -1748,7 +1916,9 @@
             "in": "path",
             "description": "Document ID",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -1806,7 +1976,9 @@
             "in": "path",
             "description": "Document ID",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -1814,7 +1986,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/UserViewsResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/UserViewsResponse"
+                }
               }
             }
           },
@@ -1862,14 +2036,19 @@
             "in": "path",
             "description": "Document ID",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "document_version_id",
             "in": "path",
             "description": "Document Version ID",
             "required": true,
-            "schema": { "type": "integer", "format": "int64" }
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
           }
         ],
         "responses": {
@@ -1877,7 +2056,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/GetDocumentResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/GetDocumentResponse"
+                }
               }
             }
           },
@@ -1922,7 +2103,13 @@
         "responses": {
           "200": {
             "description": "health",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -1977,14 +2164,18 @@
             "in": "path",
             "description": "Type of the item",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "item_id",
             "in": "path",
             "description": "ID of the item",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -1992,7 +2183,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
               }
             }
           },
@@ -2048,14 +2241,18 @@
             "in": "path",
             "description": "Type of the item",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "item_id",
             "in": "path",
             "description": "ID of the item",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -2063,7 +2260,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
               }
             }
           },
@@ -2197,28 +2396,38 @@
             "in": "query",
             "description": "Whether to expand projects. Defaults to true.",
             "required": false,
-            "schema": { "type": "boolean" }
+            "schema": {
+              "type": "boolean"
+            }
           },
           {
             "name": "limit",
             "in": "query",
             "description": "Limit the number of items returned. Defaults to 20. Max 500.",
             "required": false,
-            "schema": { "type": "integer", "format": "int32", "minimum": 0 }
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
           },
           {
             "name": "sort_method",
             "in": "query",
             "description": "Sort method. Options are viewed_at, created_at, updated_at, viewed_updated. Defaults to viewed_at.",
             "required": false,
-            "schema": { "$ref": "#/components/schemas/SoupApiSort" }
+            "schema": {
+              "$ref": "#/components/schemas/SoupApiSort"
+            }
           },
           {
             "name": "cursor",
             "in": "query",
             "description": "Base64 encoded cursor value.",
             "required": false,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -2226,7 +2435,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/SoupPage" }
+                "schema": {
+                  "$ref": "#/components/schemas/SoupPage"
+                }
               }
             }
           },
@@ -2234,7 +2445,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -2250,13 +2463,17 @@
             "in": "query",
             "description": "Base64 encoded cursor value.",
             "required": false,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/PostSoupRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/PostSoupRequest"
+              }
             }
           },
           "required": true
@@ -2266,7 +2483,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/SoupPage" }
+                "schema": {
+                  "$ref": "#/components/schemas/SoupPage"
+                }
               }
             }
           },
@@ -2274,7 +2493,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -2291,7 +2512,9 @@
             "in": "path",
             "description": "Document ID",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -2309,7 +2532,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           },
@@ -2356,7 +2581,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/GetPinsResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/GetPinsResponse"
+                }
               }
             }
           },
@@ -2391,7 +2618,9 @@
             "application/json": {
               "schema": {
                 "type": "array",
-                "items": { "$ref": "#/components/schemas/ReorderPinRequest" }
+                "items": {
+                  "$ref": "#/components/schemas/ReorderPinRequest"
+                }
               }
             }
           },
@@ -2402,7 +2631,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
               }
             }
           },
@@ -2450,13 +2681,17 @@
             "in": "path",
             "description": "ID of the pinned item",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/AddPinRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/AddPinRequest"
+              }
             }
           },
           "required": true
@@ -2466,7 +2701,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
               }
             }
           },
@@ -2512,13 +2749,17 @@
             "in": "path",
             "description": "ID of the pinned item",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/PinRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/PinRequest"
+              }
             }
           },
           "required": true
@@ -2528,7 +2769,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
               }
             }
           },
@@ -2575,7 +2818,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/GetProjectsResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/GetProjectsResponse"
+                }
               }
             }
           },
@@ -2608,7 +2853,9 @@
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CreateProjectRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/CreateProjectRequest"
+              }
             }
           },
           "required": true
@@ -2667,7 +2914,9 @@
                           "type": "array",
                           "items": {
                             "allOf": [
-                              { "$ref": "#/components/schemas/Project" },
+                              {
+                                "$ref": "#/components/schemas/Project"
+                              },
                               {
                                 "type": "object",
                                 "required": ["documentStatuses"],
@@ -2774,7 +3023,9 @@
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/UploadFolderRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/UploadFolderRequest"
+              }
             }
           },
           "required": true
@@ -2879,8 +3130,12 @@
                           "type": "object",
                           "required": ["requestId", "presignedUrl"],
                           "properties": {
-                            "presignedUrl": { "type": "string" },
-                            "requestId": { "type": "string" }
+                            "presignedUrl": {
+                              "type": "string"
+                            },
+                            "requestId": {
+                              "type": "string"
+                            }
                           }
                         }
                       ],
@@ -2938,7 +3193,9 @@
             "in": "path",
             "description": "ID of the project",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -2946,7 +3203,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/GetProjectResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/GetProjectResponse"
+                }
               }
             }
           },
@@ -2982,7 +3241,9 @@
             "in": "path",
             "description": "ID of the project",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -3006,17 +3267,23 @@
                           "properties": {
                             "chat_ids": {
                               "type": "array",
-                              "items": { "type": "string" },
+                              "items": {
+                                "type": "string"
+                              },
                               "description": "The ids of the chats that were marked as deleted"
                             },
                             "document_ids": {
                               "type": "array",
-                              "items": { "type": "string" },
+                              "items": {
+                                "type": "string"
+                              },
                               "description": "The ids of the documents that were marked as deleted"
                             },
                             "project_ids": {
                               "type": "array",
-                              "items": { "type": "string" },
+                              "items": {
+                                "type": "string"
+                              },
                               "description": "The ids of the project that were marked as deleted"
                             }
                           }
@@ -3067,7 +3334,9 @@
             "in": "path",
             "description": "ID of the project",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -3075,7 +3344,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/AccessLevel" }
+                "schema": {
+                  "$ref": "#/components/schemas/AccessLevel"
+                }
               }
             }
           },
@@ -3123,7 +3394,9 @@
             "in": "path",
             "description": "ID of the project",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -3171,7 +3444,9 @@
             "in": "path",
             "description": "ID of the project",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -3179,7 +3454,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
               }
             }
           },
@@ -3227,7 +3504,9 @@
             "in": "path",
             "description": "ID of the project",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -3235,7 +3514,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/SharePermissionV2" }
+                "schema": {
+                  "$ref": "#/components/schemas/SharePermissionV2"
+                }
               }
             }
           },
@@ -3273,7 +3554,9 @@
             "in": "path",
             "description": "ID of the project",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -3281,7 +3564,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
               }
             }
           },
@@ -3376,7 +3661,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ViewsResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ViewsResponse"
+                }
               }
             }
           },
@@ -3384,7 +3671,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -3392,7 +3681,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -3404,7 +3695,9 @@
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CreateViewRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/CreateViewRequest"
+              }
             }
           },
           "required": true
@@ -3414,7 +3707,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/View" }
+                "schema": {
+                  "$ref": "#/components/schemas/View"
+                }
               }
             }
           },
@@ -3422,7 +3717,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -3430,7 +3727,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -3445,16 +3744,22 @@
             "in": "path",
             "description": "The id of the saved view to delete",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
-          "200": { "description": "" },
+          "200": {
+            "description": ""
+          },
           "401": {
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -3462,7 +3767,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -3484,12 +3791,16 @@
           "required": true
         },
         "responses": {
-          "200": { "description": "" },
+          "200": {
+            "description": ""
+          },
           "401": {
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -3497,7 +3808,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -3514,24 +3827,32 @@
             "in": "path",
             "description": "The id of the saved view to patch",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/ViewPatch" }
+              "schema": {
+                "$ref": "#/components/schemas/ViewPatch"
+              }
             }
           },
           "required": true
         },
         "responses": {
-          "200": { "description": "" },
+          "200": {
+            "description": ""
+          },
           "401": {
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -3539,7 +3860,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -3559,7 +3882,9 @@
             "in": "path",
             "description": "Document ID",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -3577,7 +3902,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/GenericResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/GenericResponse"
+                }
               }
             }
           },
@@ -3614,7 +3941,9 @@
             "in": "path",
             "description": "Document ID",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -3632,7 +3961,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           },
@@ -3680,7 +4011,9 @@
             "in": "path",
             "description": "Document ID",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -3688,7 +4021,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           },
@@ -3716,13 +4051,17 @@
             "in": "path",
             "description": "Document ID",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/EditDocumentRequestV2" }
+              "schema": {
+                "$ref": "#/components/schemas/EditDocumentRequestV2"
+              }
             }
           },
           "required": true
@@ -3732,7 +4071,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
               }
             }
           },
@@ -3780,7 +4121,9 @@
             "in": "path",
             "description": "Document ID",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -3828,13 +4171,17 @@
             "in": "path",
             "description": "ID of the project",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/PatchProjectRequestV2" }
+              "schema": {
+                "$ref": "#/components/schemas/PatchProjectRequestV2"
+              }
             }
           },
           "required": true
@@ -3844,7 +4191,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
               }
             }
           },
@@ -3882,13 +4231,17 @@
             "in": "path",
             "description": "thread ID",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/PatchThreadRequestV2" }
+              "schema": {
+                "$ref": "#/components/schemas/PatchThreadRequestV2"
+              }
             }
           },
           "required": true
@@ -3898,7 +4251,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
               }
             }
           },
@@ -3939,13 +4294,19 @@
             "type": "object",
             "required": ["Document"],
             "properties": {
-              "Document": { "$ref": "#/components/schemas/BasicDocument" }
+              "Document": {
+                "$ref": "#/components/schemas/BasicDocument"
+              }
             }
           },
           {
             "type": "object",
             "required": ["Chat"],
-            "properties": { "Chat": { "$ref": "#/components/schemas/Chat" } }
+            "properties": {
+              "Chat": {
+                "$ref": "#/components/schemas/Chat"
+              }
+            }
           }
         ]
       },
@@ -3958,20 +4319,34 @@
             "format": "int32",
             "description": "The index of the pin"
           },
-          "pinType": { "type": "string", "description": "The type of the pin" }
+          "pinType": {
+            "type": "string",
+            "description": "The type of the pin"
+          }
         }
       },
-      "Anchor": { "oneOf": [{ "$ref": "#/components/schemas/PdfAnchor" }] },
+      "Anchor": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/PdfAnchor"
+          }
+        ]
+      },
       "AnchorId": {
         "oneOf": [
           {
             "allOf": [
-              { "$ref": "#/components/schemas/PdfAnchorId" },
+              {
+                "$ref": "#/components/schemas/PdfAnchorId"
+              },
               {
                 "type": "object",
                 "required": ["fileType"],
                 "properties": {
-                  "fileType": { "type": "string", "enum": ["pdf"] }
+                  "fileType": {
+                    "type": "string",
+                    "enum": ["pdf"]
+                  }
                 }
               }
             ]
@@ -3982,12 +4357,17 @@
         "oneOf": [
           {
             "allOf": [
-              { "$ref": "#/components/schemas/PdfAnchorRequest" },
+              {
+                "$ref": "#/components/schemas/PdfAnchorRequest"
+              },
               {
                 "type": "object",
                 "required": ["fileType"],
                 "properties": {
-                  "fileType": { "type": "string", "enum": ["pdf"] }
+                  "fileType": {
+                    "type": "string",
+                    "enum": ["pdf"]
+                  }
                 }
               }
             ]
@@ -4000,7 +4380,9 @@
         "properties": {
           "data": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/Anchor" }
+            "items": {
+              "$ref": "#/components/schemas/Anchor"
+            }
           }
         }
       },
@@ -4014,14 +4396,21 @@
                 "type": "object",
                 "required": ["sender", "documentId", "response"],
                 "properties": {
-                  "documentId": { "type": "string" },
+                  "documentId": {
+                    "type": "string"
+                  },
                   "response": {
                     "$ref": "#/components/schemas/CreateCommentResponse"
                   },
-                  "sender": { "type": "string" }
+                  "sender": {
+                    "type": "string"
+                  }
                 }
               },
-              "updateType": { "type": "string", "enum": ["create-comment"] }
+              "updateType": {
+                "type": "string",
+                "enum": ["create-comment"]
+              }
             }
           },
           {
@@ -4032,14 +4421,21 @@
                 "type": "object",
                 "required": ["sender", "documentId", "response"],
                 "properties": {
-                  "documentId": { "type": "string" },
+                  "documentId": {
+                    "type": "string"
+                  },
                   "response": {
                     "$ref": "#/components/schemas/CreateUnthreadedAnchorResponse"
                   },
-                  "sender": { "type": "string" }
+                  "sender": {
+                    "type": "string"
+                  }
                 }
               },
-              "updateType": { "type": "string", "enum": ["create-anchor"] }
+              "updateType": {
+                "type": "string",
+                "enum": ["create-anchor"]
+              }
             }
           },
           {
@@ -4050,14 +4446,21 @@
                 "type": "object",
                 "required": ["sender", "documentId", "response"],
                 "properties": {
-                  "documentId": { "type": "string" },
+                  "documentId": {
+                    "type": "string"
+                  },
                   "response": {
                     "$ref": "#/components/schemas/EditCommentResponse"
                   },
-                  "sender": { "type": "string" }
+                  "sender": {
+                    "type": "string"
+                  }
                 }
               },
-              "updateType": { "type": "string", "enum": ["edit-comment"] }
+              "updateType": {
+                "type": "string",
+                "enum": ["edit-comment"]
+              }
             }
           },
           {
@@ -4068,14 +4471,21 @@
                 "type": "object",
                 "required": ["sender", "documentId", "response"],
                 "properties": {
-                  "documentId": { "type": "string" },
+                  "documentId": {
+                    "type": "string"
+                  },
                   "response": {
                     "$ref": "#/components/schemas/EditAnchorResponse"
                   },
-                  "sender": { "type": "string" }
+                  "sender": {
+                    "type": "string"
+                  }
                 }
               },
-              "updateType": { "type": "string", "enum": ["edit-anchor"] }
+              "updateType": {
+                "type": "string",
+                "enum": ["edit-anchor"]
+              }
             }
           },
           {
@@ -4086,14 +4496,21 @@
                 "type": "object",
                 "required": ["sender", "documentId", "response"],
                 "properties": {
-                  "documentId": { "type": "string" },
+                  "documentId": {
+                    "type": "string"
+                  },
                   "response": {
                     "$ref": "#/components/schemas/DeleteCommentResponse"
                   },
-                  "sender": { "type": "string" }
+                  "sender": {
+                    "type": "string"
+                  }
                 }
               },
-              "updateType": { "type": "string", "enum": ["delete-comment"] }
+              "updateType": {
+                "type": "string",
+                "enum": ["delete-comment"]
+              }
             }
           },
           {
@@ -4104,14 +4521,21 @@
                 "type": "object",
                 "required": ["sender", "documentId", "response"],
                 "properties": {
-                  "documentId": { "type": "string" },
+                  "documentId": {
+                    "type": "string"
+                  },
                   "response": {
                     "$ref": "#/components/schemas/DeleteUnthreadedAnchorResponse"
                   },
-                  "sender": { "type": "string" }
+                  "sender": {
+                    "type": "string"
+                  }
                 }
               },
-              "updateType": { "type": "string", "enum": ["delete-anchor"] }
+              "updateType": {
+                "type": "string",
+                "enum": ["delete-anchor"]
+              }
             }
           }
         ]
@@ -4161,7 +4585,10 @@
             "type": ["string", "null"],
             "description": "The file type of the document (e.g. pdf, docx)"
           },
-          "id": { "type": "string", "description": "The document id" },
+          "id": {
+            "type": "string",
+            "description": "The document id"
+          },
           "name": {
             "type": "string",
             "description": "The name of the document"
@@ -4180,7 +4607,9 @@
           },
           "subType": {
             "oneOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "$ref": "#/components/schemas/BasicDocumentSubType",
                 "description": "The sub type of the document if present.\nTask-related properties are encoded within the variant."
@@ -4205,7 +4634,10 @@
                 "type": "boolean",
                 "description": "Whether the task is completed.\nTrue if the Status property is set to \"Completed\"."
               },
-              "type": { "type": "string", "enum": ["task"] }
+              "type": {
+                "type": "string",
+                "enum": ["task"]
+              }
             }
           }
         ],
@@ -4215,7 +4647,10 @@
         "type": "object",
         "required": ["id", "sha", "path"],
         "properties": {
-          "id": { "type": "string", "description": "The uuid of the bom part" },
+          "id": {
+            "type": "string",
+            "description": "The uuid of the bom part"
+          },
           "path": {
             "type": "string",
             "description": "The file path of the bom part content"
@@ -4236,17 +4671,32 @@
           "owner_id"
         ],
         "properties": {
-          "channel_type": { "$ref": "#/components/schemas/ChannelType" },
-          "created_at": { "type": "string", "format": "date-time" },
-          "id": { "type": "string", "format": "uuid" },
-          "name": { "type": ["string", "null"] },
+          "channel_type": {
+            "$ref": "#/components/schemas/ChannelType"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": ["string", "null"]
+          },
           "org_id": {
             "type": ["integer", "null"],
             "format": "int32",
             "minimum": 0
           },
-          "owner_id": { "type": "string" },
-          "updated_at": { "type": "string", "format": "date-time" }
+          "owner_id": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
         }
       },
       "ChannelFilters": {
@@ -4255,12 +4705,16 @@
         "properties": {
           "channel_ids": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "Channel IDs to search within. Examples: ['general']. Empty to search all accessible channels."
           },
           "mentions": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "Channel user mentions to search for. Examples: ['@username']. Empty if not filtering by mentions."
           },
           "org_id": {
@@ -4270,12 +4724,16 @@
           },
           "sender_ids": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "Sender IDs to search within. Examples: ['user1']. Empty to search all accessible senders."
           },
           "thread_ids": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "Channel thread IDs to search within. Examples: ['thread123']. Empty to search all threads."
           }
         }
@@ -4291,29 +4749,63 @@
           "mentions"
         ],
         "properties": {
-          "content": { "type": "string" },
-          "created_at": { "type": "string", "format": "date-time" },
-          "deleted_at": { "type": ["string", "null"], "format": "date-time" },
+          "content": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deleted_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
           "mentions": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`"
           },
-          "message_id": { "type": "string", "format": "uuid" },
-          "sender_id": { "type": "string" },
-          "thread_id": { "type": ["string", "null"], "format": "uuid" },
-          "updated_at": { "type": "string", "format": "date-time" }
+          "message_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sender_id": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
         }
       },
       "ChannelParticipant": {
         "type": "object",
         "required": ["channel_id", "user_id", "role", "joined_at"],
         "properties": {
-          "channel_id": { "type": "string", "format": "uuid" },
-          "joined_at": { "type": "string", "format": "date-time" },
-          "left_at": { "type": ["string", "null"], "format": "date-time" },
-          "role": { "$ref": "#/components/schemas/ParticipantRole" },
-          "user_id": { "type": "string" }
+          "channel_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "joined_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "left_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "role": {
+            "$ref": "#/components/schemas/ParticipantRole"
+          },
+          "user_id": {
+            "type": "string"
+          }
         }
       },
       "ChannelSharePermission": {
@@ -4325,7 +4817,10 @@
             "$ref": "#/components/schemas/AccessLevel",
             "description": "The access level for the channel"
           },
-          "channel_id": { "type": "string", "description": "The channel id" }
+          "channel_id": {
+            "type": "string",
+            "description": "The channel id"
+          }
         }
       },
       "ChannelType": {
@@ -4336,10 +4831,14 @@
         "type": "object",
         "required": ["channel", "participants"],
         "properties": {
-          "channel": { "$ref": "#/components/schemas/Channel" },
+          "channel": {
+            "$ref": "#/components/schemas/Channel"
+          },
           "participants": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/ChannelParticipant" }
+            "items": {
+              "$ref": "#/components/schemas/ChannelParticipant"
+            }
           }
         }
       },
@@ -4365,18 +4864,29 @@
             "format": "int64",
             "description": "The time the chat was deleted"
           },
-          "id": { "type": "string", "description": "The chat uuid" },
-          "isPersistent": { "type": "boolean" },
+          "id": {
+            "type": "string",
+            "description": "The chat uuid"
+          },
+          "isPersistent": {
+            "type": "boolean"
+          },
           "model": {
             "type": ["string", "null"],
             "description": "The model used to generate the chat"
           },
-          "name": { "type": "string", "description": "The name of the chat" },
+          "name": {
+            "type": "string",
+            "description": "The name of the chat"
+          },
           "projectId": {
             "type": ["string", "null"],
             "description": "The project id of the chat"
           },
-          "tokenCount": { "type": ["integer", "null"], "format": "int64" },
+          "tokenCount": {
+            "type": ["integer", "null"],
+            "format": "int64"
+          },
           "updatedAt": {
             "type": "integer",
             "format": "int64",
@@ -4394,22 +4904,30 @@
         "properties": {
           "chat_ids": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "Chat ids to search over. Examples: ['chat1'], ['chat1', 'chat2']. When provided, chat search will only match results on these chats. Empty to search all accessible chats."
           },
           "owners": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "Filter by chat owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
           },
           "project_ids": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "A list of project ids to search within. Examples: ['project1']. Empty to ignore project filtering."
           },
           "role": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "Chat message roles to search. Examples: ['user'], ['assistant']. Empty to search all roles."
           }
         }
@@ -4430,16 +4948,40 @@
           "deletedAt"
         ],
         "properties": {
-          "commentId": { "type": "integer", "format": "int64" },
-          "createdAt": { "type": "integer", "format": "int64" },
-          "deletedAt": { "type": ["integer", "null"], "format": "int64" },
+          "commentId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "deletedAt": {
+            "type": ["integer", "null"],
+            "format": "int64"
+          },
           "metadata": {},
-          "order": { "type": ["integer", "null"], "format": "int32" },
-          "owner": { "type": "string" },
-          "sender": { "type": ["string", "null"] },
-          "text": { "type": "string" },
-          "threadId": { "type": "integer", "format": "int64" },
-          "updatedAt": { "type": "integer", "format": "int64" }
+          "order": {
+            "type": ["integer", "null"],
+            "format": "int32"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "sender": {
+            "type": ["string", "null"]
+          },
+          "text": {
+            "type": "string"
+          },
+          "threadId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updatedAt": {
+            "type": "integer",
+            "format": "int64"
+          }
         }
       },
       "CommentThread": {
@@ -4448,9 +4990,13 @@
         "properties": {
           "comments": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/Comment" }
+            "items": {
+              "$ref": "#/components/schemas/Comment"
+            }
           },
-          "thread": { "$ref": "#/components/schemas/Thread" }
+          "thread": {
+            "$ref": "#/components/schemas/Thread"
+          }
         }
       },
       "CopyDocumentQueryParams": {
@@ -4473,8 +5019,12 @@
           },
           "versionId": {
             "oneOf": [
-              { "type": "null" },
-              { "$ref": "#/components/schemas/SyncServiceVersionID" }
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SyncServiceVersionID"
+              }
             ]
           }
         }
@@ -4502,7 +5052,9 @@
         "properties": {
           "documentMetadata": {
             "oneOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "$ref": "#/components/schemas/DocumentMetadata",
                 "description": "The created documents metadata\nOnly returned if the document was created successfully"
@@ -4511,7 +5063,9 @@
           },
           "presignedUrl": {
             "oneOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "$ref": "#/components/schemas/PresignedUrl",
                 "description": "The presigned url used to upload the document\nOnly returned if the document was created successfully"
@@ -4530,30 +5084,47 @@
         "properties": {
           "anchor": {
             "oneOf": [
-              { "type": "null" },
-              { "$ref": "#/components/schemas/AnchorRequest" }
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AnchorRequest"
+              }
             ]
           },
           "metadata": {},
-          "text": { "type": "string" },
-          "threadId": { "type": ["integer", "null"], "format": "int64" },
+          "text": {
+            "type": "string"
+          },
+          "threadId": {
+            "type": ["integer", "null"],
+            "format": "int64"
+          },
           "threadMetadata": {}
         }
       },
       "CreateCommentResponse": {
         "allOf": [
-          { "$ref": "#/components/schemas/CommentThread" },
+          {
+            "$ref": "#/components/schemas/CommentThread"
+          },
           {
             "type": "object",
             "required": ["documentId"],
             "properties": {
               "anchor": {
                 "oneOf": [
-                  { "type": "null" },
-                  { "$ref": "#/components/schemas/Anchor" }
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/Anchor"
+                  }
                 ]
               },
-              "documentId": { "type": "string" }
+              "documentId": {
+                "type": "string"
+              }
             }
           }
         ]
@@ -4610,13 +5181,20 @@
             "type": ["string", "null"],
             "description": "The content type of the document (currently only used for logging matches against file type)."
           },
-          "projectId": { "type": ["string", "null"] },
-          "sha": { "type": "string", "description": "The sha of the document." }
+          "projectId": {
+            "type": ["string", "null"]
+          },
+          "sha": {
+            "type": "string",
+            "description": "The sha of the document."
+          }
         }
       },
       "CreateDocumentResponseData": {
         "allOf": [
-          { "$ref": "#/components/schemas/DocumentResponse" },
+          {
+            "$ref": "#/components/schemas/DocumentResponse"
+          },
           {
             "type": "object",
             "required": ["contentType"],
@@ -4636,7 +5214,11 @@
       "CreateInstructionsDocumentResponse": {
         "type": "object",
         "required": ["documentId"],
-        "properties": { "documentId": { "type": "string" } }
+        "properties": {
+          "documentId": {
+            "type": "string"
+          }
+        }
       },
       "CreateProjectRequest": {
         "type": "object",
@@ -4677,7 +5259,9 @@
           },
           "propertyValues": {
             "type": ["array", "null"],
-            "items": { "$ref": "#/components/schemas/PropertyInput" },
+            "items": {
+              "$ref": "#/components/schemas/PropertyInput"
+            },
             "description": "Optional property values to set on the task"
           },
           "taskName": {
@@ -4708,7 +5292,10 @@
                 "type": "object",
                 "required": ["fileType"],
                 "properties": {
-                  "fileType": { "type": "string", "enum": ["pdf"] }
+                  "fileType": {
+                    "type": "string",
+                    "enum": ["pdf"]
+                  }
                 }
               }
             ]
@@ -4717,11 +5304,17 @@
       },
       "CreateUnthreadedAnchorResponse": {
         "allOf": [
-          { "$ref": "#/components/schemas/Anchor" },
+          {
+            "$ref": "#/components/schemas/Anchor"
+          },
           {
             "type": "object",
             "required": ["documentId"],
-            "properties": { "documentId": { "type": "string" } }
+            "properties": {
+              "documentId": {
+                "type": "string"
+              }
+            }
           }
         ]
       },
@@ -4729,12 +5322,17 @@
         "oneOf": [
           {
             "allOf": [
-              { "$ref": "#/components/schemas/PdfHighlightAnchorRequest" },
+              {
+                "$ref": "#/components/schemas/PdfHighlightAnchorRequest"
+              },
               {
                 "type": "object",
                 "required": ["anchorType"],
                 "properties": {
-                  "anchorType": { "type": "string", "enum": ["highlight"] }
+                  "anchorType": {
+                    "type": "string",
+                    "enum": ["highlight"]
+                  }
                 }
               }
             ]
@@ -4744,15 +5342,26 @@
       "CreateViewRequest": {
         "type": "object",
         "required": ["name", "config"],
-        "properties": { "config": {}, "name": { "type": "string" } }
+        "properties": {
+          "config": {},
+          "name": {
+            "type": "string"
+          }
+        }
       },
       "DeleteAnchorInfo": {
         "allOf": [
-          { "$ref": "#/components/schemas/AnchorId" },
+          {
+            "$ref": "#/components/schemas/AnchorId"
+          },
           {
             "type": "object",
             "required": ["deleted"],
-            "properties": { "deleted": { "type": "boolean" } }
+            "properties": {
+              "deleted": {
+                "type": "boolean"
+              }
+            }
           }
         ]
       },
@@ -4771,21 +5380,37 @@
         "properties": {
           "anchor": {
             "oneOf": [
-              { "type": "null" },
-              { "$ref": "#/components/schemas/DeleteAnchorInfo" }
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DeleteAnchorInfo"
+              }
             ]
           },
-          "commentId": { "type": "integer", "format": "int64" },
-          "documentId": { "type": "string" },
-          "thread": { "$ref": "#/components/schemas/DeleteThreadInfo" }
+          "commentId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "documentId": {
+            "type": "string"
+          },
+          "thread": {
+            "$ref": "#/components/schemas/DeleteThreadInfo"
+          }
         }
       },
       "DeleteThreadInfo": {
         "type": "object",
         "required": ["threadId", "deleted"],
         "properties": {
-          "deleted": { "type": "boolean" },
-          "threadId": { "type": "integer", "format": "int64" }
+          "deleted": {
+            "type": "boolean"
+          },
+          "threadId": {
+            "type": "integer",
+            "format": "int64"
+          }
         }
       },
       "DeleteUnthreadedAnchorRequest": {
@@ -4799,7 +5424,10 @@
                 "type": "object",
                 "required": ["fileType"],
                 "properties": {
-                  "fileType": { "type": "string", "enum": ["pdf"] }
+                  "fileType": {
+                    "type": "string",
+                    "enum": ["pdf"]
+                  }
                 }
               }
             ]
@@ -4808,13 +5436,20 @@
       },
       "DeleteUnthreadedAnchorResponse": {
         "allOf": [
-          { "$ref": "#/components/schemas/AnchorId" },
+          {
+            "$ref": "#/components/schemas/AnchorId"
+          },
           {
             "type": "object",
             "required": ["documentId"],
             "properties": {
-              "documentId": { "type": "string" },
-              "threadId": { "type": ["integer", "null"], "format": "int64" }
+              "documentId": {
+                "type": "string"
+              },
+              "threadId": {
+                "type": ["integer", "null"],
+                "format": "int64"
+              }
             }
           }
         ]
@@ -4825,8 +5460,14 @@
             "type": "object",
             "required": ["uuid", "anchorType"],
             "properties": {
-              "anchorType": { "type": "string", "enum": ["highlight"] },
-              "uuid": { "type": "string", "format": "uuid" }
+              "anchorType": {
+                "type": "string",
+                "enum": ["highlight"]
+              },
+              "uuid": {
+                "type": "string",
+                "format": "uuid"
+              }
             }
           }
         ]
@@ -4837,22 +5478,30 @@
         "properties": {
           "document_ids": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "Document ids to search over. Examples: ['doc1'], ['doc1', 'doc2']. Empty to search all accessible documents."
           },
           "file_types": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "Document file types to search. Examples: ['pdf'], ['md', 'txt']. Empty to search all file types."
           },
           "owners": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "Filter by document owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
           },
           "project_ids": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "A list of project ids to search within. Examples: ['project1'].\nfiltering. Empty to ignore project filtering."
           }
         }
@@ -4884,7 +5533,9 @@
           },
           "documentBom": {
             "type": ["array", "null"],
-            "items": { "$ref": "#/components/schemas/BomPart" },
+            "items": {
+              "$ref": "#/components/schemas/BomPart"
+            },
             "description": "If the document is a DOCX document and unzipped, the document_bom will be present"
           },
           "documentFamilyId": {
@@ -4892,7 +5543,10 @@
             "format": "int64",
             "description": "The id of the document family this document belongs to"
           },
-          "documentId": { "type": "string", "description": "The document id" },
+          "documentId": {
+            "type": "string",
+            "description": "The document id"
+          },
           "documentName": {
             "type": "string",
             "description": "The name of the document"
@@ -4927,7 +5581,9 @@
           },
           "subType": {
             "oneOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "$ref": "#/components/schemas/DocumentSubType",
                 "description": "The sub type of the document if present."
@@ -4949,13 +5605,19 @@
             "$ref": "#/components/schemas/AccessLevel",
             "description": "The access level of the user for the document"
           },
-          "document_id": { "type": "string", "description": "The document id" },
+          "document_id": {
+            "type": "string",
+            "description": "The document id"
+          },
           "exp": {
             "type": "integer",
             "description": "The expiration time of the token",
             "minimum": 0
           },
-          "iss": { "type": "string", "description": "The issuer of the token" },
+          "iss": {
+            "type": "string",
+            "description": "The issuer of the token"
+          },
           "user_id": {
             "type": ["string", "null"],
             "description": "The users id if present"
@@ -4986,36 +5648,51 @@
         "oneOf": [
           {
             "allOf": [
-              { "$ref": "#/components/schemas/DocumentPreviewData" },
+              {
+                "$ref": "#/components/schemas/DocumentPreviewData"
+              },
               {
                 "type": "object",
                 "required": ["type"],
                 "properties": {
-                  "type": { "type": "string", "enum": ["access"] }
+                  "type": {
+                    "type": "string",
+                    "enum": ["access"]
+                  }
                 }
               }
             ]
           },
           {
             "allOf": [
-              { "$ref": "#/components/schemas/WithDocumentId" },
+              {
+                "$ref": "#/components/schemas/WithDocumentId"
+              },
               {
                 "type": "object",
                 "required": ["type"],
                 "properties": {
-                  "type": { "type": "string", "enum": ["no_access"] }
+                  "type": {
+                    "type": "string",
+                    "enum": ["no_access"]
+                  }
                 }
               }
             ]
           },
           {
             "allOf": [
-              { "$ref": "#/components/schemas/WithDocumentId" },
+              {
+                "$ref": "#/components/schemas/WithDocumentId"
+              },
               {
                 "type": "object",
                 "required": ["type"],
                 "properties": {
-                  "type": { "type": "string", "enum": ["does_not_exist"] }
+                  "type": {
+                    "type": "string",
+                    "enum": ["does_not_exist"]
+                  }
                 }
               }
             ]
@@ -5026,7 +5703,10 @@
         "type": "object",
         "required": ["document_id", "document_name", "owner", "updated_at"],
         "properties": {
-          "document_id": { "type": "string", "description": "The document id" },
+          "document_id": {
+            "type": "string",
+            "description": "The document id"
+          },
           "document_name": {
             "type": "string",
             "description": "The name of the document"
@@ -5041,7 +5721,9 @@
           },
           "sub_type": {
             "oneOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "$ref": "#/components/schemas/DocumentPreviewDataSubType",
                 "description": "The sub type of the document if present.\nTask-related properties are encoded within the variant."
@@ -5066,7 +5748,10 @@
                 "type": "boolean",
                 "description": "Whether the task is completed.\nTrue if the Status property is set to \"Completed\"."
               },
-              "type": { "type": "string", "enum": ["task"] }
+              "type": {
+                "type": "string",
+                "enum": ["task"]
+              }
             }
           }
         ],
@@ -5079,7 +5764,9 @@
           "documentMetadata": {
             "$ref": "#/components/schemas/DocumentResponseMetadata"
           },
-          "presignedUrl": { "type": ["string", "null"] }
+          "presignedUrl": {
+            "type": ["string", "null"]
+          }
         }
       },
       "DocumentResponseMetadata": {
@@ -5109,7 +5796,9 @@
           },
           "documentBom": {
             "type": ["array", "null"],
-            "items": { "$ref": "#/components/schemas/BomPart" },
+            "items": {
+              "$ref": "#/components/schemas/BomPart"
+            },
             "description": "If the document is a DOCX document, the document_bom will be present"
           },
           "documentFamilyId": {
@@ -5117,7 +5806,10 @@
             "format": "int64",
             "description": "The id of the document family this document belongs to"
           },
-          "documentId": { "type": "string", "description": "The document id" },
+          "documentId": {
+            "type": "string",
+            "description": "The document id"
+          },
           "documentName": {
             "type": "string",
             "description": "The name of the document"
@@ -5144,7 +5836,9 @@
           },
           "subType": {
             "oneOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "$ref": "#/components/schemas/DocumentSubType",
                 "description": "The sub type of the document if present."
@@ -5171,12 +5865,17 @@
         "oneOf": [
           {
             "allOf": [
-              { "$ref": "#/components/schemas/EditPdfAnchorRequest" },
+              {
+                "$ref": "#/components/schemas/EditPdfAnchorRequest"
+              },
               {
                 "type": "object",
                 "required": ["fileType"],
                 "properties": {
-                  "fileType": { "type": "string", "enum": ["pdf"] }
+                  "fileType": {
+                    "type": "string",
+                    "enum": ["pdf"]
+                  }
                 }
               }
             ]
@@ -5185,25 +5884,42 @@
       },
       "EditAnchorResponse": {
         "allOf": [
-          { "$ref": "#/components/schemas/Anchor" },
+          {
+            "$ref": "#/components/schemas/Anchor"
+          },
           {
             "type": "object",
             "required": ["documentId"],
-            "properties": { "documentId": { "type": "string" } }
+            "properties": {
+              "documentId": {
+                "type": "string"
+              }
+            }
           }
         ]
       },
       "EditCommentRequest": {
         "type": "object",
-        "properties": { "metadata": {}, "text": { "type": ["string", "null"] } }
+        "properties": {
+          "metadata": {},
+          "text": {
+            "type": ["string", "null"]
+          }
+        }
       },
       "EditCommentResponse": {
         "allOf": [
-          { "$ref": "#/components/schemas/Comment" },
+          {
+            "$ref": "#/components/schemas/Comment"
+          },
           {
             "type": "object",
             "required": ["documentId"],
-            "properties": { "documentId": { "type": "string" } }
+            "properties": {
+              "documentId": {
+                "type": "string"
+              }
+            }
           }
         ]
       },
@@ -5220,7 +5936,9 @@
           },
           "sharePermission": {
             "oneOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "$ref": "#/components/schemas/UpdateSharePermissionRequestV2",
                 "description": "Updated share permissions for the document."
@@ -5240,7 +5958,10 @@
                 "type": "object",
                 "required": ["anchorType"],
                 "properties": {
-                  "anchorType": { "type": "string", "enum": ["free-comment"] }
+                  "anchorType": {
+                    "type": "string",
+                    "enum": ["free-comment"]
+                  }
                 }
               }
             ]
@@ -5252,18 +5973,51 @@
         "required": ["uuid"],
         "properties": {
           "allowableEdits": {},
-          "heightPct": { "type": ["number", "null"], "format": "double" },
-          "originalIndex": { "type": ["integer", "null"], "format": "int32" },
-          "originalPage": { "type": ["integer", "null"], "format": "int32" },
-          "page": { "type": ["integer", "null"], "format": "int32" },
-          "rotation": { "type": ["number", "null"], "format": "double" },
-          "shouldLockOnSave": { "type": ["boolean", "null"] },
-          "uuid": { "type": "string", "format": "uuid" },
-          "wasDeleted": { "type": ["boolean", "null"] },
-          "wasEdited": { "type": ["boolean", "null"] },
-          "widthPct": { "type": ["number", "null"], "format": "double" },
-          "xPct": { "type": ["number", "null"], "format": "double" },
-          "yPct": { "type": ["number", "null"], "format": "double" }
+          "heightPct": {
+            "type": ["number", "null"],
+            "format": "double"
+          },
+          "originalIndex": {
+            "type": ["integer", "null"],
+            "format": "int32"
+          },
+          "originalPage": {
+            "type": ["integer", "null"],
+            "format": "int32"
+          },
+          "page": {
+            "type": ["integer", "null"],
+            "format": "int32"
+          },
+          "rotation": {
+            "type": ["number", "null"],
+            "format": "double"
+          },
+          "shouldLockOnSave": {
+            "type": ["boolean", "null"]
+          },
+          "uuid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "wasDeleted": {
+            "type": ["boolean", "null"]
+          },
+          "wasEdited": {
+            "type": ["boolean", "null"]
+          },
+          "widthPct": {
+            "type": ["number", "null"],
+            "format": "double"
+          },
+          "xPct": {
+            "type": ["number", "null"],
+            "format": "double"
+          },
+          "yPct": {
+            "type": ["number", "null"],
+            "format": "double"
+          }
         }
       },
       "EmailFilters": {
@@ -5272,22 +6026,30 @@
         "properties": {
           "bcc": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "Email BCC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by BCC."
           },
           "cc": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "Email CC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by CC."
           },
           "recipients": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "Email Recipient addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by Recipient."
           },
           "senders": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "Email sender addresses to filter by. Examples: ['user@example.com']. Empty to search all senders."
           }
         }
@@ -5327,8 +6089,12 @@
         "description": "Entity reference for entity-type property values.",
         "required": ["entity_id", "entity_type"],
         "properties": {
-          "entity_id": { "type": "string" },
-          "entity_type": { "$ref": "#/components/schemas/EntityType" },
+          "entity_id": {
+            "type": "string"
+          },
+          "entity_type": {
+            "$ref": "#/components/schemas/EntityType"
+          },
           "specific_message_id": {
             "type": ["string", "null"],
             "format": "uuid",
@@ -5364,16 +6130,27 @@
       "ExcludeDefaultViewRequest": {
         "type": "object",
         "required": ["defaultViewId"],
-        "properties": { "defaultViewId": { "type": "string" } }
+        "properties": {
+          "defaultViewId": {
+            "type": "string"
+          }
+        }
       },
       "ExcludedDefaultView": {
         "type": "object",
         "description": "Frontend can define any set of its own default views for the user.\nThis is a list of views that are excluded from the default views list on the frontend.\n\nIt is important that the frontend can quickly iterate on default views, for that reason\nwe don't keep track of default views in the database, only those that are explicitly excluded.",
         "required": ["id", "userId", "defaultViewId"],
         "properties": {
-          "defaultViewId": { "type": "string" },
-          "id": { "type": "string", "format": "uuid" },
-          "userId": { "type": "string" }
+          "defaultViewId": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userId": {
+            "type": "string"
+          }
         }
       },
       "ExportDocumentResponse": {
@@ -5392,9 +6169,16 @@
             "type": "object",
             "required": ["item", "document_id", "type"],
             "properties": {
-              "document_id": { "type": "string" },
-              "item": { "$ref": "#/components/schemas/FolderItem" },
-              "type": { "type": "string", "enum": ["file"] }
+              "document_id": {
+                "type": "string"
+              },
+              "item": {
+                "$ref": "#/components/schemas/FolderItem"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["file"]
+              }
             }
           },
           {
@@ -5406,10 +6190,17 @@
                 "additionalProperties": {
                   "$ref": "#/components/schemas/FileSystemNodeWithIds"
                 },
-                "propertyNames": { "type": "string" }
+                "propertyNames": {
+                  "type": "string"
+                }
               },
-              "project_id": { "type": "string" },
-              "type": { "type": "string", "enum": ["folder"] }
+              "project_id": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["folder"]
+              }
             }
           }
         ]
@@ -5848,7 +6639,9 @@
         "properties": {
           "fileType": {
             "oneOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "$ref": "#/components/schemas/FileType",
                 "description": "The file type of the file"
@@ -5867,7 +6660,10 @@
             "type": "string",
             "description": "The relative path of the file.\n\nThis is the `webkitRelativePath` with the name of the file stripped at the end."
           },
-          "sha": { "type": "string", "description": "The sha of the file." }
+          "sha": {
+            "type": "string",
+            "description": "The sha of the file."
+          }
         }
       },
       "GenericErrorResponse": {
@@ -5888,7 +6684,9 @@
         "type": "object",
         "required": ["error"],
         "properties": {
-          "data": { "description": "Data to be returned" },
+          "data": {
+            "description": "Data to be returned"
+          },
           "error": {
             "type": "boolean",
             "description": "Indicates if an error occurred"
@@ -5915,7 +6713,9 @@
         "properties": {
           "data": {
             "oneOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "$ref": "#/components/schemas/UserActivitiesResponse",
                 "description": "Data to be returned"
@@ -5933,7 +6733,12 @@
         "type": "object",
         "required": ["document_ids"],
         "properties": {
-          "document_ids": { "type": "array", "items": { "type": "string" } }
+          "document_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
         }
       },
       "GetBatchPreviewResponse": {
@@ -5942,7 +6747,9 @@
         "properties": {
           "previews": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/DocumentPreview" }
+            "items": {
+              "$ref": "#/components/schemas/DocumentPreview"
+            }
           }
         }
       },
@@ -5950,7 +6757,12 @@
         "type": "object",
         "required": ["projectIds"],
         "properties": {
-          "projectIds": { "type": "array", "items": { "type": "string" } }
+          "projectIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
         }
       },
       "GetBatchProjectPreviewResponse": {
@@ -5959,7 +6771,9 @@
         "properties": {
           "previews": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/ProjectPreview" }
+            "items": {
+              "$ref": "#/components/schemas/ProjectPreview"
+            }
           }
         }
       },
@@ -5981,7 +6795,10 @@
         "type": "object",
         "required": ["key"],
         "properties": {
-          "key": { "type": "string", "description": "The key of the document" }
+          "key": {
+            "type": "string",
+            "description": "The key of the document"
+          }
         }
       },
       "GetDocumentListResult": {
@@ -6062,7 +6879,9 @@
         "properties": {
           "data": {
             "oneOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "$ref": "#/components/schemas/GetDocumentProcessingResult",
                 "description": "Data to be returned"
@@ -6117,7 +6936,9 @@
         "properties": {
           "data": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/GetDocumentListResult" },
+            "items": {
+              "$ref": "#/components/schemas/GetDocumentListResult"
+            },
             "description": "Data to be returned"
           },
           "error": {
@@ -6142,7 +6963,9 @@
         "properties": {
           "data": {
             "oneOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "$ref": "#/components/schemas/UserDocumentsResponse",
                 "description": "Data to be returned"
@@ -6162,7 +6985,11 @@
       "GetInstructionsDocumentResponse": {
         "type": "object",
         "required": ["documentId"],
-        "properties": { "documentId": { "type": "string" } }
+        "properties": {
+          "documentId": {
+            "type": "string"
+          }
+        }
       },
       "GetPinsResponse": {
         "type": "object",
@@ -6170,7 +6997,9 @@
         "properties": {
           "data": {
             "oneOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "$ref": "#/components/schemas/UserPinsResponse",
                 "description": "Data to be returned"
@@ -6189,7 +7018,9 @@
         "properties": {
           "data": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/ItemWithUserAccessLevel" },
+            "items": {
+              "$ref": "#/components/schemas/ItemWithUserAccessLevel"
+            },
             "description": "DSS Items inside of a given project with their user access level attached to each item"
           },
           "error": {
@@ -6232,7 +7063,9 @@
         "properties": {
           "data": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/Project" },
+            "items": {
+              "$ref": "#/components/schemas/Project"
+            },
             "description": "Data to be returned"
           },
           "error": {
@@ -6247,7 +7080,9 @@
         "properties": {
           "data": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/Item" },
+            "items": {
+              "$ref": "#/components/schemas/Item"
+            },
             "description": "Data to be returned"
           },
           "error": {
@@ -6262,38 +7097,59 @@
           "oneOf": [
             {
               "allOf": [
-                { "$ref": "#/components/schemas/PresignedUrl" },
+                {
+                  "$ref": "#/components/schemas/PresignedUrl"
+                },
                 {
                   "type": "object",
                   "required": ["type"],
                   "properties": {
-                    "type": { "type": "string", "enum": ["external"] }
+                    "type": {
+                      "type": "string",
+                      "enum": ["external"]
+                    }
                   }
                 }
               ]
             },
             {
               "allOf": [
-                { "$ref": "#/components/schemas/S3ObjectInfo" },
+                {
+                  "$ref": "#/components/schemas/S3ObjectInfo"
+                },
                 {
                   "type": "object",
                   "required": ["type"],
                   "properties": {
-                    "type": { "type": "string", "enum": ["internal"] }
+                    "type": {
+                      "type": "string",
+                      "enum": ["internal"]
+                    }
                   }
                 }
               ]
             }
           ]
         },
-        "propertyNames": { "type": "string" }
+        "propertyNames": {
+          "type": "string"
+        }
       },
-      "HighlightType": { "type": "integer", "enum": [1, 2, 3] },
+      "HighlightType": {
+        "type": "integer",
+        "enum": [1, 2, 3]
+      },
       "Item": {
         "oneOf": [
-          { "$ref": "#/components/schemas/BasicDocument" },
-          { "$ref": "#/components/schemas/Chat" },
-          { "$ref": "#/components/schemas/Project" }
+          {
+            "$ref": "#/components/schemas/BasicDocument"
+          },
+          {
+            "$ref": "#/components/schemas/Chat"
+          },
+          {
+            "$ref": "#/components/schemas/Project"
+          }
         ],
         "discriminator": {
           "propertyName": "type",
@@ -6308,8 +7164,12 @@
         "type": "object",
         "required": ["item", "userAccessLevel"],
         "properties": {
-          "item": { "$ref": "#/components/schemas/Item" },
-          "userAccessLevel": { "$ref": "#/components/schemas/AccessLevel" }
+          "item": {
+            "$ref": "#/components/schemas/Item"
+          },
+          "userAccessLevel": {
+            "$ref": "#/components/schemas/AccessLevel"
+          }
         }
       },
       "LatestMessage": {
@@ -6317,14 +7177,22 @@
         "properties": {
           "latest_message": {
             "oneOf": [
-              { "type": "null" },
-              { "$ref": "#/components/schemas/ChannelMessage" }
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ChannelMessage"
+              }
             ]
           },
           "latest_non_thread_message": {
             "oneOf": [
-              { "type": "null" },
-              { "$ref": "#/components/schemas/ChannelMessage" }
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ChannelMessage"
+              }
             ]
           }
         }
@@ -6349,7 +7217,9 @@
             "properties": {
               "presignedUrls": {
                 "type": "array",
-                "items": { "$ref": "#/components/schemas/PresignedUrl" },
+                "items": {
+                  "$ref": "#/components/schemas/PresignedUrl"
+                },
                 "description": "The presigned urls of the docx bom parts if it is a docx"
               }
             }
@@ -6371,7 +7241,9 @@
           },
           "sort_method": {
             "oneOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "$ref": "#/components/schemas/SoupApiSort",
                 "description": "Sort method. Options are viewed_at, created_at, updated_at, viewed_updated. Defaults to viewed_at."
@@ -6397,7 +7269,9 @@
           },
           "sharePermission": {
             "oneOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "$ref": "#/components/schemas/UpdateSharePermissionRequestV2",
                 "description": "The share permissions for the project."
@@ -6415,7 +7289,9 @@
           },
           "sharePermission": {
             "oneOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "$ref": "#/components/schemas/UpdateSharePermissionRequestV2",
                 "description": "The share permissions for the thread."
@@ -6428,24 +7304,34 @@
         "oneOf": [
           {
             "allOf": [
-              { "$ref": "#/components/schemas/PdfPlaceableCommentAnchor" },
+              {
+                "$ref": "#/components/schemas/PdfPlaceableCommentAnchor"
+              },
               {
                 "type": "object",
                 "required": ["anchorType"],
                 "properties": {
-                  "anchorType": { "type": "string", "enum": ["placeable"] }
+                  "anchorType": {
+                    "type": "string",
+                    "enum": ["placeable"]
+                  }
                 }
               }
             ]
           },
           {
             "allOf": [
-              { "$ref": "#/components/schemas/PdfHighlightAnchor" },
+              {
+                "$ref": "#/components/schemas/PdfHighlightAnchor"
+              },
               {
                 "type": "object",
                 "required": ["anchorType"],
                 "properties": {
-                  "anchorType": { "type": "string", "enum": ["highlight"] }
+                  "anchorType": {
+                    "type": "string",
+                    "enum": ["highlight"]
+                  }
                 }
               }
             ]
@@ -6458,16 +7344,28 @@
             "type": "object",
             "required": ["uuid", "anchorType"],
             "properties": {
-              "anchorType": { "type": "string", "enum": ["free-comment"] },
-              "uuid": { "type": "string", "format": "uuid" }
+              "anchorType": {
+                "type": "string",
+                "enum": ["free-comment"]
+              },
+              "uuid": {
+                "type": "string",
+                "format": "uuid"
+              }
             }
           },
           {
             "type": "object",
             "required": ["uuid", "anchorType"],
             "properties": {
-              "anchorType": { "type": "string", "enum": ["highlight"] },
-              "uuid": { "type": "string", "format": "uuid" }
+              "anchorType": {
+                "type": "string",
+                "enum": ["highlight"]
+              },
+              "uuid": {
+                "type": "string",
+                "format": "uuid"
+              }
             }
           }
         ]
@@ -6483,31 +7381,44 @@
                 "type": "object",
                 "required": ["anchorType"],
                 "properties": {
-                  "anchorType": { "type": "string", "enum": ["free-comment"] }
+                  "anchorType": {
+                    "type": "string",
+                    "enum": ["free-comment"]
+                  }
                 }
               }
             ]
           },
           {
             "allOf": [
-              { "$ref": "#/components/schemas/PdfHighlightAnchorRequest" },
+              {
+                "$ref": "#/components/schemas/PdfHighlightAnchorRequest"
+              },
               {
                 "type": "object",
                 "required": ["anchorType"],
                 "properties": {
-                  "anchorType": { "type": "string", "enum": ["highlight"] }
+                  "anchorType": {
+                    "type": "string",
+                    "enum": ["highlight"]
+                  }
                 }
               }
             ]
           },
           {
             "allOf": [
-              { "$ref": "#/components/schemas/UnthreadedPdfUuidRequest" },
+              {
+                "$ref": "#/components/schemas/UnthreadedPdfUuidRequest"
+              },
               {
                 "type": "object",
                 "required": ["anchorType"],
                 "properties": {
-                  "anchorType": { "type": "string", "enum": ["attachment"] }
+                  "anchorType": {
+                    "type": "string",
+                    "enum": ["attachment"]
+                  }
                 }
               }
             ]
@@ -6535,26 +7446,72 @@
           "highlightRects"
         ],
         "properties": {
-          "alpha": { "type": "number", "format": "double" },
-          "blue": { "type": "integer", "format": "int32" },
-          "createdAt": { "type": "integer", "format": "int64" },
-          "deletedAt": { "type": ["integer", "null"], "format": "int64" },
-          "documentId": { "type": "string" },
-          "green": { "type": "integer", "format": "int32" },
+          "alpha": {
+            "type": "number",
+            "format": "double"
+          },
+          "blue": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "deletedAt": {
+            "type": ["integer", "null"],
+            "format": "int64"
+          },
+          "documentId": {
+            "type": "string"
+          },
+          "green": {
+            "type": "integer",
+            "format": "int32"
+          },
           "highlightRects": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/PdfHighlightRect" }
+            "items": {
+              "$ref": "#/components/schemas/PdfHighlightRect"
+            }
           },
-          "highlightType": { "$ref": "#/components/schemas/HighlightType" },
-          "owner": { "type": "string" },
-          "page": { "type": "integer", "format": "int32" },
-          "pageViewportHeight": { "type": "number", "format": "double" },
-          "pageViewportWidth": { "type": "number", "format": "double" },
-          "red": { "type": "integer", "format": "int32" },
-          "text": { "type": "string" },
-          "threadId": { "type": ["integer", "null"], "format": "int64" },
-          "updatedAt": { "type": "integer", "format": "int64" },
-          "uuid": { "type": "string", "format": "uuid" }
+          "highlightType": {
+            "$ref": "#/components/schemas/HighlightType"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageViewportHeight": {
+            "type": "number",
+            "format": "double"
+          },
+          "pageViewportWidth": {
+            "type": "number",
+            "format": "double"
+          },
+          "red": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "text": {
+            "type": "string"
+          },
+          "threadId": {
+            "type": ["integer", "null"],
+            "format": "int64"
+          },
+          "updatedAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "uuid": {
+            "type": "string",
+            "format": "uuid"
+          }
         }
       },
       "PdfHighlightAnchorRequest": {
@@ -6572,43 +7529,98 @@
           "highlightRects"
         ],
         "properties": {
-          "alpha": { "type": "number", "format": "double" },
-          "blue": { "type": "integer", "format": "int32" },
-          "green": { "type": "integer", "format": "int32" },
+          "alpha": {
+            "type": "number",
+            "format": "double"
+          },
+          "blue": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "green": {
+            "type": "integer",
+            "format": "int32"
+          },
           "highlightRects": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/PdfHighlightRectAnchorRequest"
             }
           },
-          "highlightType": { "$ref": "#/components/schemas/HighlightType" },
-          "page": { "type": "integer", "format": "int32" },
-          "pageViewportHeight": { "type": "number", "format": "double" },
-          "pageViewportWidth": { "type": "number", "format": "double" },
-          "red": { "type": "integer", "format": "int32" },
-          "text": { "type": "string" },
-          "uuid": { "type": ["string", "null"], "format": "uuid" }
+          "highlightType": {
+            "$ref": "#/components/schemas/HighlightType"
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageViewportHeight": {
+            "type": "number",
+            "format": "double"
+          },
+          "pageViewportWidth": {
+            "type": "number",
+            "format": "double"
+          },
+          "red": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "text": {
+            "type": "string"
+          },
+          "uuid": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          }
         }
       },
       "PdfHighlightRect": {
         "type": "object",
         "required": ["id", "top", "left", "width", "height"],
         "properties": {
-          "height": { "type": "number", "format": "double" },
-          "id": { "type": "integer", "format": "int64" },
-          "left": { "type": "number", "format": "double" },
-          "top": { "type": "number", "format": "double" },
-          "width": { "type": "number", "format": "double" }
+          "height": {
+            "type": "number",
+            "format": "double"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "left": {
+            "type": "number",
+            "format": "double"
+          },
+          "top": {
+            "type": "number",
+            "format": "double"
+          },
+          "width": {
+            "type": "number",
+            "format": "double"
+          }
         }
       },
       "PdfHighlightRectAnchorRequest": {
         "type": "object",
         "required": ["top", "left", "width", "height"],
         "properties": {
-          "height": { "type": "number", "format": "double" },
-          "left": { "type": "number", "format": "double" },
-          "top": { "type": "number", "format": "double" },
-          "width": { "type": "number", "format": "double" }
+          "height": {
+            "type": "number",
+            "format": "double"
+          },
+          "left": {
+            "type": "number",
+            "format": "double"
+          },
+          "top": {
+            "type": "number",
+            "format": "double"
+          },
+          "width": {
+            "type": "number",
+            "format": "double"
+          }
         }
       },
       "PdfPlaceableCommentAnchor": {
@@ -6632,21 +7644,61 @@
         ],
         "properties": {
           "allowableEdits": {},
-          "documentId": { "type": "string" },
-          "heightPct": { "type": "number", "format": "double" },
-          "originalIndex": { "type": "integer", "format": "int32" },
-          "originalPage": { "type": "integer", "format": "int32" },
-          "owner": { "type": "string" },
-          "page": { "type": "integer", "format": "int32" },
-          "rotation": { "type": "number", "format": "double" },
-          "shouldLockOnSave": { "type": "boolean" },
-          "threadId": { "type": "integer", "format": "int64" },
-          "uuid": { "type": "string", "format": "uuid" },
-          "wasDeleted": { "type": "boolean" },
-          "wasEdited": { "type": "boolean" },
-          "widthPct": { "type": "number", "format": "double" },
-          "xPct": { "type": "number", "format": "double" },
-          "yPct": { "type": "number", "format": "double" }
+          "documentId": {
+            "type": "string"
+          },
+          "heightPct": {
+            "type": "number",
+            "format": "double"
+          },
+          "originalIndex": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "originalPage": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "rotation": {
+            "type": "number",
+            "format": "double"
+          },
+          "shouldLockOnSave": {
+            "type": "boolean"
+          },
+          "threadId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "uuid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "wasDeleted": {
+            "type": "boolean"
+          },
+          "wasEdited": {
+            "type": "boolean"
+          },
+          "widthPct": {
+            "type": "number",
+            "format": "double"
+          },
+          "xPct": {
+            "type": "number",
+            "format": "double"
+          },
+          "yPct": {
+            "type": "number",
+            "format": "double"
+          }
         }
       },
       "PdfPlaceableCommentAnchorRequest": {
@@ -6666,25 +7718,61 @@
         ],
         "properties": {
           "allowableEdits": {},
-          "heightPct": { "type": "number", "format": "double" },
-          "originalIndex": { "type": "integer", "format": "int32" },
-          "originalPage": { "type": "integer", "format": "int32" },
-          "page": { "type": "integer", "format": "int32" },
-          "rotation": { "type": "number", "format": "double" },
-          "shouldLockOnSave": { "type": "boolean" },
-          "uuid": { "type": ["string", "null"], "format": "uuid" },
-          "wasDeleted": { "type": "boolean" },
-          "wasEdited": { "type": "boolean" },
-          "widthPct": { "type": "number", "format": "double" },
-          "xPct": { "type": "number", "format": "double" },
-          "yPct": { "type": "number", "format": "double" }
+          "heightPct": {
+            "type": "number",
+            "format": "double"
+          },
+          "originalIndex": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "originalPage": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "rotation": {
+            "type": "number",
+            "format": "double"
+          },
+          "shouldLockOnSave": {
+            "type": "boolean"
+          },
+          "uuid": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "wasDeleted": {
+            "type": "boolean"
+          },
+          "wasEdited": {
+            "type": "boolean"
+          },
+          "widthPct": {
+            "type": "number",
+            "format": "double"
+          },
+          "xPct": {
+            "type": "number",
+            "format": "double"
+          },
+          "yPct": {
+            "type": "number",
+            "format": "double"
+          }
         }
       },
       "PinRequest": {
         "type": "object",
         "required": ["pinType"],
         "properties": {
-          "pinType": { "type": "string", "description": "The type of the pin" }
+          "pinType": {
+            "type": "string",
+            "description": "The type of the pin"
+          }
         }
       },
       "PinnedItem": {
@@ -6708,8 +7796,12 @@
       },
       "PostSoupRequest": {
         "allOf": [
-          { "$ref": "#/components/schemas/EntityFilters" },
-          { "$ref": "#/components/schemas/Params" },
+          {
+            "$ref": "#/components/schemas/EntityFilters"
+          },
+          {
+            "$ref": "#/components/schemas/Params"
+          },
           {
             "type": "object",
             "properties": {
@@ -6727,7 +7819,9 @@
         "properties": {
           "newBom": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/SaveBomPart" },
+            "items": {
+              "$ref": "#/components/schemas/SaveBomPart"
+            },
             "description": "The updated BOM for the document\nContaining the file path and the sha"
           }
         }
@@ -6752,7 +7846,9 @@
         "properties": {
           "presignedUrls": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/PresignedUrl" },
+            "items": {
+              "$ref": "#/components/schemas/PresignedUrl"
+            },
             "description": "Contains any presigned urls you need to upload specific bom parts with."
           }
         }
@@ -6765,7 +7861,10 @@
             "type": "string",
             "description": "The presigned url used to upload the sha"
           },
-          "sha": { "type": "string", "description": "The sha of the item" }
+          "sha": {
+            "type": "string",
+            "description": "The sha of the item"
+          }
         }
       },
       "Project": {
@@ -6784,8 +7883,14 @@
             "format": "int64",
             "description": "The time the project was created"
           },
-          "deletedAt": { "type": ["integer", "null"], "format": "int64" },
-          "id": { "type": "string", "description": "The id of the project" },
+          "deletedAt": {
+            "type": ["integer", "null"],
+            "format": "int64"
+          },
+          "id": {
+            "type": "string",
+            "description": "The id of the project"
+          },
           "name": {
             "type": "string",
             "description": "The name of the project"
@@ -6811,17 +7916,23 @@
         "properties": {
           "chat_ids": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "The ids of the chats that were marked as deleted"
           },
           "document_ids": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "The ids of the documents that were marked as deleted"
           },
           "project_ids": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "The ids of the project that were marked as deleted"
           }
         }
@@ -6830,8 +7941,12 @@
         "type": "object",
         "required": ["documentId", "status"],
         "properties": {
-          "documentId": { "type": "string" },
-          "status": { "$ref": "#/components/schemas/UploadDocumentStatus" }
+          "documentId": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/UploadDocumentStatus"
+          }
         }
       },
       "ProjectFilters": {
@@ -6840,12 +7955,16 @@
         "properties": {
           "owners": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "Filter by project owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
           },
           "project_ids": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "Project IDs to search within. Examples: ['project1']. Empty to search all accessible projects."
           }
         }
@@ -6854,36 +7973,51 @@
         "oneOf": [
           {
             "allOf": [
-              { "$ref": "#/components/schemas/ProjectPreviewData" },
+              {
+                "$ref": "#/components/schemas/ProjectPreviewData"
+              },
               {
                 "type": "object",
                 "required": ["access"],
                 "properties": {
-                  "access": { "type": "string", "enum": ["access"] }
+                  "access": {
+                    "type": "string",
+                    "enum": ["access"]
+                  }
                 }
               }
             ]
           },
           {
             "allOf": [
-              { "$ref": "#/components/schemas/WithProjectId" },
+              {
+                "$ref": "#/components/schemas/WithProjectId"
+              },
               {
                 "type": "object",
                 "required": ["access"],
                 "properties": {
-                  "access": { "type": "string", "enum": ["no_access"] }
+                  "access": {
+                    "type": "string",
+                    "enum": ["no_access"]
+                  }
                 }
               }
             ]
           },
           {
             "allOf": [
-              { "$ref": "#/components/schemas/WithProjectId" },
+              {
+                "$ref": "#/components/schemas/WithProjectId"
+              },
               {
                 "type": "object",
                 "required": ["access"],
                 "properties": {
-                  "access": { "type": "string", "enum": ["does_not_exist"] }
+                  "access": {
+                    "type": "string",
+                    "enum": ["does_not_exist"]
+                  }
                 }
               }
             ]
@@ -6894,11 +8028,25 @@
         "type": "object",
         "required": ["id", "name", "owner", "path", "updatedAt"],
         "properties": {
-          "id": { "type": "string" },
-          "name": { "type": "string" },
-          "owner": { "type": "string" },
-          "path": { "type": "array", "items": { "type": "string" } },
-          "updatedAt": { "type": "integer", "format": "int64" }
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "path": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "updatedAt": {
+            "type": "integer",
+            "format": "int64"
+          }
         }
       },
       "PropertyInput": {
@@ -6922,7 +8070,9 @@
         "properties": {
           "items": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/Item" },
+            "items": {
+              "$ref": "#/components/schemas/Item"
+            },
             "description": "The items returned from the call"
           }
         }
@@ -6950,8 +8100,12 @@
         "type": "object",
         "required": ["bucket", "key"],
         "properties": {
-          "bucket": { "type": "string" },
-          "key": { "type": "string" }
+          "bucket": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          }
         }
       },
       "SaveBomPart": {
@@ -6976,7 +8130,9 @@
           },
           "newBom": {
             "type": ["array", "null"],
-            "items": { "$ref": "#/components/schemas/SaveBomPart" },
+            "items": {
+              "$ref": "#/components/schemas/SaveBomPart"
+            },
             "description": "**DOCX ONLY**\nThe updated BOM for the document.\nContaining the file path and the sha."
           },
           "sha": {
@@ -7020,8 +8176,13 @@
             "description": "Boolean true/false value",
             "required": ["value", "type"],
             "properties": {
-              "type": { "type": "string", "enum": ["boolean"] },
-              "value": { "type": "boolean" }
+              "type": {
+                "type": "string",
+                "enum": ["boolean"]
+              },
+              "value": {
+                "type": "boolean"
+              }
             }
           },
           {
@@ -7029,8 +8190,14 @@
             "description": "Date and time value",
             "required": ["value", "type"],
             "properties": {
-              "type": { "type": "string", "enum": ["date"] },
-              "value": { "type": "string", "format": "date-time" }
+              "type": {
+                "type": "string",
+                "enum": ["date"]
+              },
+              "value": {
+                "type": "string",
+                "format": "date-time"
+              }
             }
           },
           {
@@ -7038,8 +8205,14 @@
             "description": "Numeric value",
             "required": ["value", "type"],
             "properties": {
-              "type": { "type": "string", "enum": ["number"] },
-              "value": { "type": "number", "format": "double" }
+              "type": {
+                "type": "string",
+                "enum": ["number"]
+              },
+              "value": {
+                "type": "number",
+                "format": "double"
+              }
             }
           },
           {
@@ -7047,8 +8220,13 @@
             "description": "String/text value",
             "required": ["value", "type"],
             "properties": {
-              "type": { "type": "string", "enum": ["string"] },
-              "value": { "type": "string" }
+              "type": {
+                "type": "string",
+                "enum": ["string"]
+              },
+              "value": {
+                "type": "string"
+              }
             }
           },
           {
@@ -7056,8 +8234,14 @@
             "description": "Select option by ID (for select-type properties)",
             "required": ["option_id", "type"],
             "properties": {
-              "option_id": { "type": "string", "format": "uuid" },
-              "type": { "type": "string", "enum": ["select_option"] }
+              "option_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["select_option"]
+              }
             }
           },
           {
@@ -7067,9 +8251,15 @@
             "properties": {
               "option_ids": {
                 "type": "array",
-                "items": { "type": "string", "format": "uuid" }
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
               },
-              "type": { "type": "string", "enum": ["multi_select_option"] }
+              "type": {
+                "type": "string",
+                "enum": ["multi_select_option"]
+              }
             }
           },
           {
@@ -7077,8 +8267,13 @@
             "description": "Entity reference",
             "required": ["reference", "type"],
             "properties": {
-              "reference": { "$ref": "#/components/schemas/EntityReference" },
-              "type": { "type": "string", "enum": ["entity_reference"] }
+              "reference": {
+                "$ref": "#/components/schemas/EntityReference"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["entity_reference"]
+              }
             }
           },
           {
@@ -7088,9 +8283,14 @@
             "properties": {
               "references": {
                 "type": "array",
-                "items": { "$ref": "#/components/schemas/EntityReference" }
+                "items": {
+                  "$ref": "#/components/schemas/EntityReference"
+                }
               },
-              "type": { "type": "string", "enum": ["multi_entity_reference"] }
+              "type": {
+                "type": "string",
+                "enum": ["multi_entity_reference"]
+              }
             }
           },
           {
@@ -7098,8 +8298,13 @@
             "description": "Link value",
             "required": ["url", "type"],
             "properties": {
-              "type": { "type": "string", "enum": ["link"] },
-              "url": { "type": "string" }
+              "type": {
+                "type": "string",
+                "enum": ["link"]
+              },
+              "url": {
+                "type": "string"
+              }
             }
           },
           {
@@ -7107,8 +8312,16 @@
             "description": "Multiple link values (for multi-select link properties)",
             "required": ["urls", "type"],
             "properties": {
-              "type": { "type": "string", "enum": ["multi_link"] },
-              "urls": { "type": "array", "items": { "type": "string" } }
+              "type": {
+                "type": "string",
+                "enum": ["multi_link"]
+              },
+              "urls": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
             }
           }
         ],
@@ -7120,18 +8333,28 @@
         "properties": {
           "channelSharePermissions": {
             "type": ["array", "null"],
-            "items": { "$ref": "#/components/schemas/ChannelSharePermission" },
+            "items": {
+              "$ref": "#/components/schemas/ChannelSharePermission"
+            },
             "description": "The channel share permissions for the item"
           },
-          "id": { "type": "string", "description": "The share permission id" },
+          "id": {
+            "type": "string",
+            "description": "The share permission id"
+          },
           "isPublic": {
             "type": "boolean",
             "description": "If the item is publicly accessible"
           },
-          "owner": { "type": "string", "description": "The owner of the item" },
+          "owner": {
+            "type": "string",
+            "description": "The owner of the item"
+          },
           "publicAccessLevel": {
             "oneOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "$ref": "#/components/schemas/AccessLevel",
                 "description": "The level of public access"
@@ -7142,12 +8365,17 @@
       },
       "SoupApiItem": {
         "allOf": [
-          { "$ref": "#/components/schemas/SoupItem" },
+          {
+            "$ref": "#/components/schemas/SoupItem"
+          },
           {
             "type": "object",
             "required": ["frecency_score"],
             "properties": {
-              "frecency_score": { "type": "number", "format": "double" }
+              "frecency_score": {
+                "type": "number",
+                "format": "double"
+              }
             }
           }
         ]
@@ -7166,20 +8394,44 @@
         "type": "object",
         "required": ["id", "messageId", "createdAt"],
         "properties": {
-          "contentId": { "type": ["string", "null"] },
-          "createdAt": { "type": "integer", "format": "int64" },
-          "filename": { "type": ["string", "null"] },
-          "id": { "type": "string", "format": "uuid" },
-          "messageId": { "type": "string", "format": "uuid" },
-          "mimeType": { "type": ["string", "null"] },
-          "providerAttachmentId": { "type": ["string", "null"] },
-          "sizeBytes": { "type": ["integer", "null"], "format": "int64" }
+          "contentId": {
+            "type": ["string", "null"]
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "filename": {
+            "type": ["string", "null"]
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "messageId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "mimeType": {
+            "type": ["string", "null"]
+          },
+          "providerAttachmentId": {
+            "type": ["string", "null"]
+          },
+          "sizeBytes": {
+            "type": ["integer", "null"],
+            "format": "int64"
+          }
         }
       },
       "SoupChannel": {
         "allOf": [
-          { "$ref": "#/components/schemas/ChannelWithParticipants" },
-          { "$ref": "#/components/schemas/LatestMessage" },
+          {
+            "$ref": "#/components/schemas/ChannelWithParticipants"
+          },
+          {
+            "$ref": "#/components/schemas/LatestMessage"
+          },
           {
             "type": "object",
             "properties": {
@@ -7187,7 +8439,10 @@
                 "type": ["string", "null"],
                 "format": "date-time"
               },
-              "viewed_at": { "type": ["string", "null"], "format": "date-time" }
+              "viewed_at": {
+                "type": ["string", "null"],
+                "format": "date-time"
+              }
             }
           }
         ]
@@ -7218,7 +8473,10 @@
             "type": "boolean",
             "description": "Whether the chat is persistent or not"
           },
-          "name": { "type": "string", "description": "The name of the chat" },
+          "name": {
+            "type": "string",
+            "description": "The name of the chat"
+          },
           "ownerId": {
             "type": "string",
             "description": "Who the chat belongs to"
@@ -7244,11 +8502,23 @@
         "type": "object",
         "required": ["id", "linkId"],
         "properties": {
-          "emailAddress": { "type": ["string", "null"] },
-          "id": { "type": "string", "format": "uuid" },
-          "linkId": { "type": "string", "format": "uuid" },
-          "name": { "type": ["string", "null"] },
-          "sfsPhotoUrl": { "type": ["string", "null"] }
+          "emailAddress": {
+            "type": ["string", "null"]
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "linkId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": ["string", "null"]
+          },
+          "sfsPhotoUrl": {
+            "type": ["string", "null"]
+          }
         }
       },
       "SoupDocument": {
@@ -7316,7 +8586,9 @@
           },
           "subType": {
             "oneOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "$ref": "#/components/schemas/SoupDocumentSubType",
                 "description": "The sub type of the document if present.\nTask-related properties are encoded within the variant."
@@ -7346,7 +8618,10 @@
                 "type": "boolean",
                 "description": "Whether the task is completed.\nTrue if the Status property is set to \"Completed\"."
               },
-              "type": { "type": "string", "enum": ["task"] }
+              "type": {
+                "type": "string",
+                "enum": ["task"]
+              }
             }
           }
         ],
@@ -7367,22 +8642,59 @@
           "viewedAt"
         ],
         "properties": {
-          "createdAt": { "type": "integer", "format": "int64" },
-          "id": { "type": "string", "format": "uuid" },
-          "inboxVisible": { "type": "boolean" },
-          "isDraft": { "type": "boolean" },
-          "isImportant": { "type": "boolean" },
-          "isRead": { "type": "boolean" },
-          "name": { "type": ["string", "null"] },
-          "ownerId": { "type": "string" },
-          "providerId": { "type": ["string", "null"] },
-          "senderEmail": { "type": ["string", "null"] },
-          "senderName": { "type": ["string", "null"] },
-          "senderPhotoUrl": { "type": ["string", "null"] },
-          "snippet": { "type": ["string", "null"] },
-          "sortTs": { "type": "integer", "format": "int64" },
-          "updatedAt": { "type": "integer", "format": "int64" },
-          "viewedAt": { "type": ["integer", "null"], "format": "int64" }
+          "createdAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "inboxVisible": {
+            "type": "boolean"
+          },
+          "isDraft": {
+            "type": "boolean"
+          },
+          "isImportant": {
+            "type": "boolean"
+          },
+          "isRead": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": ["string", "null"]
+          },
+          "ownerId": {
+            "type": "string"
+          },
+          "providerId": {
+            "type": ["string", "null"]
+          },
+          "senderEmail": {
+            "type": ["string", "null"]
+          },
+          "senderName": {
+            "type": ["string", "null"]
+          },
+          "senderPhotoUrl": {
+            "type": ["string", "null"]
+          },
+          "snippet": {
+            "type": ["string", "null"]
+          },
+          "sortTs": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updatedAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "viewedAt": {
+            "type": ["integer", "null"],
+            "format": "int64"
+          }
         }
       },
       "SoupEmailThreadPreviewMetadata": {
@@ -7414,7 +8726,9 @@
       },
       "SoupEnrichedEmailThreadPreview": {
         "allOf": [
-          { "$ref": "#/components/schemas/SoupEmailThreadPreview" },
+          {
+            "$ref": "#/components/schemas/SoupEmailThreadPreview"
+          },
           {
             "type": "object",
             "required": [
@@ -7427,22 +8741,30 @@
             "properties": {
               "attachments": {
                 "type": "array",
-                "items": { "$ref": "#/components/schemas/SoupAttachment" }
+                "items": {
+                  "$ref": "#/components/schemas/SoupAttachment"
+                }
               },
               "attachmentsMacro": {
                 "type": "array",
-                "items": { "$ref": "#/components/schemas/SoupMacroAttachment" }
+                "items": {
+                  "$ref": "#/components/schemas/SoupMacroAttachment"
+                }
               },
               "labels": {
                 "type": "array",
-                "items": { "$ref": "#/components/schemas/SoupLabel" }
+                "items": {
+                  "$ref": "#/components/schemas/SoupLabel"
+                }
               },
               "metadata": {
                 "$ref": "#/components/schemas/SoupEmailThreadPreviewMetadata"
               },
               "participants": {
                 "type": "array",
-                "items": { "$ref": "#/components/schemas/SoupContact" }
+                "items": {
+                  "$ref": "#/components/schemas/SoupContact"
+                }
               }
             }
           }
@@ -7454,24 +8776,39 @@
             "type": "object",
             "required": ["data", "tag"],
             "properties": {
-              "data": { "$ref": "#/components/schemas/SoupDocument" },
-              "tag": { "type": "string", "enum": ["document"] }
+              "data": {
+                "$ref": "#/components/schemas/SoupDocument"
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["document"]
+              }
             }
           },
           {
             "type": "object",
             "required": ["data", "tag"],
             "properties": {
-              "data": { "$ref": "#/components/schemas/SoupChat" },
-              "tag": { "type": "string", "enum": ["chat"] }
+              "data": {
+                "$ref": "#/components/schemas/SoupChat"
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["chat"]
+              }
             }
           },
           {
             "type": "object",
             "required": ["data", "tag"],
             "properties": {
-              "data": { "$ref": "#/components/schemas/SoupProject" },
-              "tag": { "type": "string", "enum": ["project"] }
+              "data": {
+                "$ref": "#/components/schemas/SoupProject"
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["project"]
+              }
             }
           },
           {
@@ -7481,15 +8818,23 @@
               "data": {
                 "$ref": "#/components/schemas/SoupEnrichedEmailThreadPreview"
               },
-              "tag": { "type": "string", "enum": ["emailThread"] }
+              "tag": {
+                "type": "string",
+                "enum": ["emailThread"]
+              }
             }
           },
           {
             "type": "object",
             "required": ["data", "tag"],
             "properties": {
-              "data": { "$ref": "#/components/schemas/SoupChannel" },
-              "tag": { "type": "string", "enum": ["channel"] }
+              "data": {
+                "$ref": "#/components/schemas/SoupChannel"
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["channel"]
+              }
             }
           }
         ]
@@ -7507,34 +8852,66 @@
           "type"
         ],
         "properties": {
-          "createdAt": { "type": "string", "format": "date-time" },
-          "id": { "type": "string", "format": "uuid" },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
           "labelListVisibility": {
             "$ref": "#/components/schemas/SoupLabelListVisibility"
           },
-          "linkId": { "type": "string", "format": "uuid" },
+          "linkId": {
+            "type": "string",
+            "format": "uuid"
+          },
           "messageListVisibility": {
             "$ref": "#/components/schemas/SoupMessageListVisibility"
           },
-          "name": { "type": "string" },
-          "providerLabelId": { "type": "string" },
-          "type": { "$ref": "#/components/schemas/SoupLabelType" }
+          "name": {
+            "type": "string"
+          },
+          "providerLabelId": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/SoupLabelType"
+          }
         }
       },
       "SoupLabelListVisibility": {
         "type": "string",
         "enum": ["labelShow", "labelShowIfUnread", "labelHide"]
       },
-      "SoupLabelType": { "type": "string", "enum": ["system", "user"] },
+      "SoupLabelType": {
+        "type": "string",
+        "enum": ["system", "user"]
+      },
       "SoupMacroAttachment": {
         "type": "object",
         "required": ["threadId", "dbId", "messageId", "itemId", "itemType"],
         "properties": {
-          "dbId": { "type": "string", "format": "uuid" },
-          "itemId": { "type": "string", "format": "uuid" },
-          "itemType": { "type": "string" },
-          "messageId": { "type": "string", "format": "uuid" },
-          "threadId": { "type": "string", "format": "uuid" }
+          "dbId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "itemId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "itemType": {
+            "type": "string"
+          },
+          "messageId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "threadId": {
+            "type": "string",
+            "format": "uuid"
+          }
         }
       },
       "SoupMessageListVisibility": {
@@ -7547,9 +8924,13 @@
         "properties": {
           "items": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/SoupApiItem" }
+            "items": {
+              "$ref": "#/components/schemas/SoupApiItem"
+            }
           },
-          "next_cursor": { "type": ["string", "null"] }
+          "next_cursor": {
+            "type": ["string", "null"]
+          }
         }
       },
       "SoupProject": {
@@ -7616,8 +8997,13 @@
         "type": "object",
         "required": ["peer", "counter"],
         "properties": {
-          "counter": { "type": "integer", "format": "int32" },
-          "peer": { "type": "string" }
+          "counter": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "peer": {
+            "type": "string"
+          }
         }
       },
       "Thread": {
@@ -7632,14 +9018,32 @@
           "deletedAt"
         ],
         "properties": {
-          "createdAt": { "type": "integer", "format": "int64" },
-          "deletedAt": { "type": ["integer", "null"], "format": "int64" },
-          "documentId": { "type": "string" },
+          "createdAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "deletedAt": {
+            "type": ["integer", "null"],
+            "format": "int64"
+          },
+          "documentId": {
+            "type": "string"
+          },
           "metadata": {},
-          "owner": { "type": "string" },
-          "resolved": { "type": "boolean" },
-          "threadId": { "type": "integer", "format": "int64" },
-          "updatedAt": { "type": "integer", "format": "int64" }
+          "owner": {
+            "type": "string"
+          },
+          "resolved": {
+            "type": "boolean"
+          },
+          "threadId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updatedAt": {
+            "type": "integer",
+            "format": "int64"
+          }
         }
       },
       "ThreadResponse": {
@@ -7648,7 +9052,9 @@
         "properties": {
           "data": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/CommentThread" }
+            "items": {
+              "$ref": "#/components/schemas/CommentThread"
+            }
           }
         }
       },
@@ -7664,7 +9070,9 @@
                 "properties": {
                   "items": {
                     "type": "array",
-                    "items": { "$ref": "#/components/schemas/Item" },
+                    "items": {
+                      "$ref": "#/components/schemas/Item"
+                    },
                     "description": "The items returned from the call"
                   }
                 }
@@ -7684,8 +9092,14 @@
             "type": "object",
             "required": ["uuid", "attachmentType"],
             "properties": {
-              "attachmentType": { "type": "string", "enum": ["highlight"] },
-              "uuid": { "type": "string", "format": "uuid" }
+              "attachmentType": {
+                "type": "string",
+                "enum": ["highlight"]
+              },
+              "uuid": {
+                "type": "string",
+                "format": "uuid"
+              }
             }
           }
         ]
@@ -7696,14 +9110,19 @@
         "properties": {
           "accessLevel": {
             "oneOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "$ref": "#/components/schemas/AccessLevel",
                 "description": "The access level for the channel\nThis is required if the operation is add or replace"
               }
             ]
           },
-          "channelId": { "type": "string", "description": "The channel id" },
+          "channelId": {
+            "type": "string",
+            "description": "The channel id"
+          },
           "operation": {
             "$ref": "#/components/schemas/UpdateOperation",
             "description": "The type of operation to be performed on the chanel share permission\nYou can add, remove or replace and existing permission"
@@ -7730,7 +9149,9 @@
           },
           "publicAccessLevel": {
             "oneOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "$ref": "#/components/schemas/AccessLevel",
                 "description": "The level of public access"
@@ -7748,9 +9169,15 @@
         "type": "object",
         "required": ["sha"],
         "properties": {
-          "name": { "type": ["string", "null"] },
-          "parentId": { "type": ["string", "null"] },
-          "sha": { "type": "string" }
+          "name": {
+            "type": ["string", "null"]
+          },
+          "parentId": {
+            "type": ["string", "null"]
+          },
+          "sha": {
+            "type": "string"
+          }
         }
       },
       "UploadFolderRequest": {
@@ -7759,7 +9186,9 @@
         "properties": {
           "content": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/FolderItem" },
+            "items": {
+              "$ref": "#/components/schemas/FolderItem"
+            },
             "description": "The content of the folder"
           },
           "parentId": {
@@ -7779,7 +9208,11 @@
       "UpsertUserDocumentViewLocationRequest": {
         "type": "object",
         "required": ["location"],
-        "properties": { "location": { "type": "string" } }
+        "properties": {
+          "location": {
+            "type": "string"
+          }
+        }
       },
       "UpsertUserMentionsRequest": {
         "type": "object",
@@ -7787,7 +9220,9 @@
         "properties": {
           "mentions": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "List of user ids that are mentioned for this notification"
           },
           "metadata": {
@@ -7806,7 +9241,9 @@
           },
           "recent": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/Activity" },
+            "items": {
+              "$ref": "#/components/schemas/Activity"
+            },
             "description": "The activities returned from the query"
           },
           "total": {
@@ -7822,14 +9259,24 @@
         "description": "The last place a user viewed a particular document at",
         "required": ["user_id", "document_id", "location"],
         "properties": {
-          "document_id": { "type": "string" },
-          "location": { "type": "string" },
-          "user_id": { "type": "string" }
+          "document_id": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": "string"
+          }
         }
       },
       "UserDocumentViewLocationResponse": {
         "type": "object",
-        "properties": { "location": { "type": ["string", "null"] } }
+        "properties": {
+          "location": {
+            "type": ["string", "null"]
+          }
+        }
       },
       "UserDocumentsResponse": {
         "type": "object",
@@ -7837,7 +9284,9 @@
         "properties": {
           "documents": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/DocumentMetadata" }
+            "items": {
+              "$ref": "#/components/schemas/DocumentMetadata"
+            }
           },
           "next_offset": {
             "type": ["integer", "null"],
@@ -7857,7 +9306,9 @@
         "properties": {
           "recent": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/PinnedItem" },
+            "items": {
+              "$ref": "#/components/schemas/PinnedItem"
+            },
             "description": "The pins returned from the query"
           }
         }
@@ -7873,7 +9324,9 @@
           },
           "users": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "List of user emails who have viewed the document"
           }
         }
@@ -7892,16 +9345,34 @@
           "config": {
             "description": "It is an explicit choice that the structure of the view configuration\nis up to the frontend. The structure and composition of view configuration\nis still very much in flux."
           },
-          "createdAt": { "type": "string", "format": "date-time" },
-          "id": { "type": "string", "format": "uuid" },
-          "name": { "type": "string" },
-          "updatedAt": { "type": "string", "format": "date-time" },
-          "userId": { "type": "string" }
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "userId": {
+            "type": "string"
+          }
         }
       },
       "ViewPatch": {
         "type": "object",
-        "properties": { "config": {}, "name": { "type": ["string", "null"] } }
+        "properties": {
+          "config": {},
+          "name": {
+            "type": ["string", "null"]
+          }
+        }
       },
       "ViewsResponse": {
         "type": "object",
@@ -7909,23 +9380,35 @@
         "properties": {
           "excludedDefaultViews": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/ExcludedDefaultView" }
+            "items": {
+              "$ref": "#/components/schemas/ExcludedDefaultView"
+            }
           },
           "views": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/View" }
+            "items": {
+              "$ref": "#/components/schemas/View"
+            }
           }
         }
       },
       "WithDocumentId": {
         "type": "object",
         "required": ["document_id"],
-        "properties": { "document_id": { "type": "string" } }
+        "properties": {
+          "document_id": {
+            "type": "string"
+          }
+        }
       },
       "WithProjectId": {
         "type": "object",
         "required": ["id"],
-        "properties": { "id": { "type": "string" } }
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        }
       }
     }
   },

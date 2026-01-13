@@ -1,26 +1,15 @@
 use crate::api::ApiContext;
 use crate::api::search::simple::SearchError;
-use crate::api::search::simple::simple_email::search_emails;
-use axum::{
-    Extension,
-    extract::{self, State},
-    http::StatusCode,
-    response::{IntoResponse, Json, Response},
-};
 use indexmap::IndexMap;
-use model::{response::ErrorResponse, user::UserContext};
 use models_email::service::message::{
     MessageSenderInfo, MessageSendersRequest, ThreadHistoryInfo, ThreadHistoryRequest,
 };
 use models_search::email::{
-    EmailSearchRequest, EmailSearchResponse, EmailSearchResponseItem,
-    EmailSearchResponseItemWithMetadata, EmailSearchResult,
+    EmailSearchResponseItem, EmailSearchResponseItemWithMetadata, EmailSearchResult,
 };
 use opensearch_client::search::model::SearchGotoContent;
 use sqlx::types::Uuid;
 use std::collections::{HashMap, HashSet};
-
-use super::SearchPaginationParams;
 
 /// Enriches email search results with metadata
 #[tracing::instrument(skip(ctx, results), err)]
@@ -84,53 +73,6 @@ pub(in crate::api::search) async fn enrich_emails(
     .map_err(SearchError::InternalError)?;
 
     Ok(enriched_results)
-}
-
-/// Performs a search through emails and enriches the results with metadata
-#[tracing::instrument(skip(ctx, query_params, req), err)]
-pub async fn search_emails_enriched(
-    ctx: &ApiContext,
-    user_id: &str,
-    query_params: &SearchPaginationParams,
-    req: EmailSearchRequest,
-) -> Result<Vec<EmailSearchResponseItemWithMetadata>, SearchError> {
-    // Use the simple search to get raw OpenSearch results
-    let opensearch_results = search_emails(ctx, user_id, query_params, req).await?;
-
-    enrich_emails(ctx, user_id, opensearch_results).await
-}
-
-/// Perform a search through your emails
-#[utoipa::path(
-        post,
-        path = "/search/email",
-        operation_id = "email_search",
-        params(
-            ("page" = i64, Query, description = "The page. Defaults to 0."),
-            ("page_size" = i64, Query, description = "The page size. Defaults to 10."),
-        ),
-        responses(
-            (status = 200, body=EmailSearchResponse),
-            (status = 400, body=ErrorResponse),
-            (status = 401, body=ErrorResponse),
-            (status = 500, body=ErrorResponse),
-        )
-    )]
-#[tracing::instrument(skip(ctx, user_context, query_params), fields(user_id=user_context.user_id), err)]
-pub async fn handler(
-    user_context: Extension<UserContext>,
-    State(ctx): State<ApiContext>,
-    extract::Query(query_params): extract::Query<SearchPaginationParams>,
-    extract::Json(req): extract::Json<EmailSearchRequest>,
-) -> Result<Response, SearchError> {
-    tracing::info!("email_search");
-    let user_id = user_context.user_id.as_str();
-
-    let results = search_emails_enriched(&ctx, user_id, &query_params, req).await?;
-
-    let result = EmailSearchResponse { results };
-
-    Ok((StatusCode::OK, Json(result)).into_response())
 }
 
 pub fn construct_search_result(

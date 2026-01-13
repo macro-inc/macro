@@ -28,7 +28,7 @@ import {
   useEmails,
 } from '@macro-entity';
 import { useHistoryQuery } from '@queries/history/history';
-import type { PaginatedSearchArgs } from '@service-search/client';
+import type { SearchArgs } from '@service-search/client';
 import type { Item } from '@service-storage/generated/schemas/item';
 import { debounce } from '@solid-primitives/scheduled';
 import { globalSplitManager } from 'app/signal/splitLayout';
@@ -73,6 +73,7 @@ import {
   handleUserMention,
   type UserMentionRecord,
 } from '../../utils/mentionsUtils';
+import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 
 false && clickOutside;
 false && floatWithSelection;
@@ -382,7 +383,7 @@ export function MentionsMenuItem(props: {
         props.setOpen(false);
         e.stopPropagation();
       }}
-      on:mouseover={() => props.setIndex(props.index)}
+      on:mousemove={() => props.setIndex(props.index)}
       class="group flex items-center p-1.5 mx-1.5"
       classList={{ 'bg-active bracket': props.selected }}
     >
@@ -476,11 +477,10 @@ function MentionsMenuInner(props: {
     });
   }
 
-  const args = createMemo((): PaginatedSearchArgs => {
+  const args = createMemo((): SearchArgs => {
     return {
       params: {
-        page: 0,
-        // small -> fast!
+        cursor: null,
         page_size: 10,
       },
       request: {
@@ -603,6 +603,11 @@ function MentionsMenuInner(props: {
 
   const [selectedIndex, setSelectedIndex] = createSignal(0);
   const [viewAllMode, setViewAllMode] = createSignal<ViewAllMode>(null);
+  const { isKeypressActive } = useIsKeyPressActive();
+  const setSelectedIndexFromMouse = (index: number) => {
+    if (isKeypressActive()) return;
+    setSelectedIndex(index);
+  };
 
   let menuRef!: HTMLDivElement;
 
@@ -1041,7 +1046,7 @@ function MentionsMenuInner(props: {
                     index={i()}
                     selected={i() === selectedIndex()}
                     itemAction={itemAction}
-                    setIndex={setSelectedIndex}
+                    setIndex={setSelectedIndexFromMouse}
                     setOpen={setMenuOpen}
                   />
                 )}
@@ -1092,7 +1097,7 @@ function MentionsMenuInner(props: {
                   index={i()}
                   selected={i() === selectedIndex()}
                   itemAction={itemAction}
-                  setIndex={setSelectedIndex}
+                  setIndex={setSelectedIndexFromMouse}
                   setOpen={setMenuOpen}
                 />
               )}
@@ -1118,7 +1123,7 @@ function MentionsMenuInner(props: {
                   index={users.length + i()}
                   selected={users.length + i() === selectedIndex()}
                   itemAction={itemAction}
-                  setIndex={setSelectedIndex}
+                  setIndex={setSelectedIndexFromMouse}
                   setOpen={setMenuOpen}
                 />
               )}
@@ -1146,7 +1151,7 @@ function MentionsMenuInner(props: {
                     users.length + docs.length + i() === selectedIndex()
                   }
                   itemAction={itemAction}
-                  setIndex={setSelectedIndex}
+                  setIndex={setSelectedIndexFromMouse}
                   setOpen={setMenuOpen}
                 />
               )}
@@ -1176,7 +1181,7 @@ function MentionsMenuInner(props: {
                     selectedIndex()
                   }
                   itemAction={itemAction}
-                  setIndex={setSelectedIndex}
+                  setIndex={setSelectedIndexFromMouse}
                   setOpen={setMenuOpen}
                 />
               )}

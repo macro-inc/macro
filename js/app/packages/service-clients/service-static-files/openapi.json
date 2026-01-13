@@ -4,7 +4,9 @@
     "title": "static_file_service",
     "description": "",
     "termsOfService": "https://macro.com/terms",
-    "license": { "name": "" },
+    "license": {
+      "name": ""
+    },
     "version": "0.1.0"
   },
   "paths": {
@@ -15,7 +17,9 @@
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/PutFileRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/PutFileRequest"
+              }
             }
           },
           "required": true
@@ -25,17 +29,31 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/PutFileResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/PutFileResponse"
+                }
               }
             }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -50,7 +68,9 @@
             "in": "path",
             "description": "File ID",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -58,17 +78,31 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/FileMetadata" }
+                "schema": {
+                  "$ref": "#/components/schemas/FileMetadata"
+                }
               }
             }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -83,25 +117,51 @@
             "in": "path",
             "description": "File ID",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
           "200": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "403": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -116,7 +176,9 @@
             "in": "path",
             "description": "Unique identifier of the file to retrieve",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -135,7 +197,9 @@
               }
             }
           },
-          "404": { "description": "File not found" }
+          "404": {
+            "description": "File not found"
+          }
         }
       }
     }
@@ -154,18 +218,33 @@
           "s3_key"
         ],
         "properties": {
-          "content_type": { "type": "string", "description": "mimetype" },
+          "content_type": {
+            "type": "string",
+            "description": "mimetype"
+          },
           "extension_data": {
             "description": "extra metadata, uploaded with the file"
           },
-          "file_id": { "type": "string", "description": "id of static file" },
-          "file_name": { "type": "string", "description": "file name" },
+          "file_id": {
+            "type": "string",
+            "description": "id of static file"
+          },
+          "file_name": {
+            "type": "string",
+            "description": "file name"
+          },
           "is_uploaded": {
             "type": "boolean",
             "description": "is data uploaded to s3"
           },
-          "owner_id": { "type": "string", "description": "owner" },
-          "s3_key": { "type": "string", "description": "s3 key" }
+          "owner_id": {
+            "type": "string",
+            "description": "owner"
+          },
+          "s3_key": {
+            "type": "string",
+            "description": "s3 key"
+          }
         }
       },
       "PutFileRequest": {
@@ -179,15 +258,24 @@
           "extension_data": {
             "description": "extra metadata to store with file\ndon't put anything private in here it is public"
           },
-          "file_name": { "type": "string", "description": "file name" }
+          "file_name": {
+            "type": "string",
+            "description": "file name"
+          }
         }
       },
       "PutFileResponse": {
         "type": "object",
         "required": ["upload_url", "file_location", "id"],
         "properties": {
-          "file_location": { "type": "string", "description": "permalink" },
-          "id": { "type": "string", "description": "key to retrieve metadata" },
+          "file_location": {
+            "type": "string",
+            "description": "permalink"
+          },
+          "id": {
+            "type": "string",
+            "description": "key to retrieve metadata"
+          },
           "upload_url": {
             "type": "string",
             "description": "expiring url to upload file blob to"

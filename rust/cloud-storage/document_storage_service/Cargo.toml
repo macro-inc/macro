@@ -17,6 +17,10 @@ path = "src/bin/backfill_search.rs"
 name = "backfill_useritemaccess"
 path = "src/bin/backfill_useritemaccess/mod.rs"
 
+[[bin]]
+name = "document_storage_service_openapi"
+path = "src/openapi.rs"
+
 [features]
 connection_gateway = []
 default = ["connection_gateway", "location_check"]

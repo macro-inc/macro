@@ -6,8 +6,11 @@ version = "0.1.0"
 
 [dependencies]
 anyhow = { workspace = true }
+cached = { workspace = true }
+chrono = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
 models_opensearch = { path = "../models_opensearch" }
+models_search_cursor = { path = "../models_search_cursor" }
 non_empty = { path = "../non_empty" }
 serde = { workspace = true }
 sqlx = { workspace = true }

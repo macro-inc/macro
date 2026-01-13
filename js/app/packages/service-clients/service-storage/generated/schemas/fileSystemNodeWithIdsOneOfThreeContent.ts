@@ -6,4 +6,6 @@
  */
 import type { FileSystemNodeWithIds } from './fileSystemNodeWithIds';
 
-export type FileSystemNodeWithIdsOneOfThreeContent = {[key: string]: FileSystemNodeWithIds};
+export type FileSystemNodeWithIdsOneOfThreeContent = {
+  [key: string]: FileSystemNodeWithIds;
+};

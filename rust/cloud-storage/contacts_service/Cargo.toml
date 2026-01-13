@@ -9,6 +9,10 @@ version = "0.1.0"
 name = "contacts_service"
 path = "src/main.rs"
 
+[[bin]]
+name = "contacts_service_openapi"
+path = "src/openapi.rs"
+
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }

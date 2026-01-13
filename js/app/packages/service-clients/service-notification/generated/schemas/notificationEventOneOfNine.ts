@@ -4,8 +4,9 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { NotificationEventOneOfNineNotificationEventType } from './notificationEventOneOfNineNotificationEventType';
+
 import type { ChannelInviteMetadata } from './channelInviteMetadata';
+import type { NotificationEventOneOfNineNotificationEventType } from './notificationEventOneOfNineNotificationEventType';
 
 /**
  * The user was invited to a channel

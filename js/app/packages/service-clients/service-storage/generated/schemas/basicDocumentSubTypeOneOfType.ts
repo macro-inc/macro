@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type BasicDocumentSubTypeOneOfType = typeof BasicDocumentSubTypeOneOfType[keyof typeof BasicDocumentSubTypeOneOfType];
-
+export type BasicDocumentSubTypeOneOfType =
+  (typeof BasicDocumentSubTypeOneOfType)[keyof typeof BasicDocumentSubTypeOneOfType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const BasicDocumentSubTypeOneOfType = {

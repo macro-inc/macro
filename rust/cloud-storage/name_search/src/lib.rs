@@ -10,7 +10,23 @@ pub use chat::*;
 pub use document::*;
 pub use email::*;
 pub use models_opensearch::SearchEntityType;
+use models_search_cursor::{PaginatedResult, SearchCursorAttributes};
 pub use project::*;
+
+/// Escapes special regex characters in a search term
+pub(crate) fn escape_regex(term: &str) -> String {
+    let special_chars = [
+        '\\', '.', '+', '*', '?', '(', ')', '[', ']', '{', '}', '^', '$', '|',
+    ];
+    let mut escaped = String::with_capacity(term.len() * 2);
+    for c in term.chars() {
+        if special_chars.contains(&c) {
+            escaped.push('\\');
+        }
+        escaped.push(c);
+    }
+    escaped
+}
 
 /// Errors for name search crate
 #[derive(Debug, thiserror::Error)]
@@ -35,4 +51,16 @@ pub struct NameSearchResult {
     pub entity_type: SearchEntityType,
     /// The name that was matched
     pub name: String,
+    /// The timestamp used for cursor-based pagination
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+impl SearchCursorAttributes for NameSearchResult {
+    fn entity_id(&self) -> uuid::Uuid {
+        self.entity_id
+    }
+
+    fn updated_at(&self) -> chrono::DateTime<chrono::Utc> {
+        self.updated_at
+    }
 }

@@ -4,6 +4,6 @@
  * email_service
  * OpenAPI spec version: 0.1.0
  */
-import type { Attachment } from './attachment';
+import type { AttachmentToSend } from './attachmentToSend';
 
-export type MessageToSendAttachments = Attachment[] | null;
+export type MessageToSendAttachments = AttachmentToSend[] | null;

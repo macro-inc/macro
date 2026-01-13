@@ -13,6 +13,10 @@ path = "src/notification_email_poller_worker.rs"
 name = "notification_service"
 path = "src/main.rs"
 
+[[bin]]
+name = "notification_service_openapi"
+path = "src/openapi.rs"
+
 [features]
 connection_gateway = ["notification_worker"]
 default = [

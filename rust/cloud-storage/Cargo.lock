@@ -1833,14 +1833,20 @@ dependencies = [
 name = "comms"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "axum",
  "chrono",
  "doppleganger",
+ "filter_ast",
  "frecency",
+ "item_filters",
+ "macro_db_migrator",
  "macro_user_id",
  "model-entity",
  "model_user",
  "models_comms",
+ "models_pagination",
+ "recursion",
  "reqwest",
  "rootcause",
  "serde",
@@ -3051,6 +3057,24 @@ dependencies = [
  "tokio",
  "tracing",
  "utoipa",
+ "uuid",
+]
+
+[[package]]
+name = "email_contact_search"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "cached",
+ "chrono",
+ "macro_db_migrator",
+ "macro_user_id",
+ "models_search_cursor",
+ "serde",
+ "sqlx",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
  "uuid",
 ]
 
@@ -4882,6 +4906,7 @@ dependencies = [
  "jsonwebtoken",
  "macro_env",
  "macro_env_var",
+ "macro_user_id",
  "rand 0.9.0",
  "remote_env_var",
  "serde",
@@ -5620,6 +5645,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "models_search_cursor"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "chrono",
+ "serde",
+ "serde_json",
+ "uuid",
+]
+
+[[package]]
 name = "models_sfs"
 version = "0.1.0"
 dependencies = [
@@ -5698,9 +5734,12 @@ name = "name_search"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "cached",
+ "chrono",
  "macro_db_migrator",
  "macro_user_id",
  "models_opensearch",
+ "models_search_cursor",
  "non_empty",
  "serde",
  "sqlx",
@@ -6005,6 +6044,7 @@ dependencies = [
  "chrono",
  "macro_entrypoint",
  "models_opensearch",
+ "models_search_cursor",
  "opensearch",
  "opensearch_query_builder",
  "serde",
@@ -7581,6 +7621,7 @@ dependencies = [
  "comms_service_client",
  "document_storage_service_client",
  "document_sub_type",
+ "email_contact_search",
  "email_service_client",
  "futures",
  "http-body-util",
@@ -7597,6 +7638,7 @@ dependencies = [
  "models_email",
  "models_opensearch",
  "models_search",
+ "models_search_cursor",
  "name_search",
  "opensearch_client",
  "secretsmanager_client",

@@ -5,8 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ApiLabelType = typeof ApiLabelType[keyof typeof ApiLabelType];
-
+export type ApiLabelType = (typeof ApiLabelType)[keyof typeof ApiLabelType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const ApiLabelType = {

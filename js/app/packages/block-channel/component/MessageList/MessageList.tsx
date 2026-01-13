@@ -294,6 +294,10 @@ function MessageListImpl(props: MessageListProps) {
   const [lastTargetMessageTimestamp, setLastTargetMessageTimestamp] =
     createSignal<number>(Date.now());
 
+  // Track missing target message retries
+  let missingTargetRetryCount = 0;
+  let lastMissingTargetId: string | undefined;
+
   // represents active highlighted state on the target message
   const [targetMessageActive, setTargetMessageActive] =
     createSignal<boolean>(false);
@@ -338,10 +342,31 @@ function MessageListImpl(props: MessageListProps) {
       ?.findIndex((m) => m.id === targetMessageId);
 
     if (index === -1) {
+      // Retry briefly to allow hydration to complete before showing an error. Necessary for push notifications.
+      if (lastMissingTargetId !== targetMessageId) {
+        lastMissingTargetId = targetMessageId;
+        missingTargetRetryCount = 0;
+      }
+
+      const retries = missingTargetRetryCount;
+      if (retries < 6) {
+        missingTargetRetryCount = retries + 1;
+        setLastTargetMessageTimestamp(Date.now());
+        setTimeout(() => {
+          scrollToBottomOrTarget();
+        }, 200);
+        return;
+      }
+
       console.warn('Target message not found');
       toast.failure('Message not found.');
       scrollToBottomOrTarget({ forceBottom: true });
       return;
+    }
+
+    // Reset retry state on success.
+    if (lastMissingTargetId === targetMessageId) {
+      missingTargetRetryCount = 0;
     }
 
     if (threadId) {

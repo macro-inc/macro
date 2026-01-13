@@ -6,8 +6,8 @@
  */
 
 export type PutProfilePictureParams = {
-/**
- * profile picture URL
- */
-url: string;
+  /**
+   * profile picture URL
+   */
+  url: string;
 };
