@@ -16,7 +16,6 @@ use macro_auth::{
     middleware::decode_jwt::{JwtValidationArgs, decode_macro_access_token_allow_expired},
 };
 use macro_db_client::advisory_lock::try_acquire_user_refresh_xact_lock;
-use macro_user_id::user_id::MacroUserId;
 use model::response::UserTokensResponse;
 use sqlx::PgPool;
 use std::sync::Arc;
@@ -38,9 +37,7 @@ impl IntoResponse for RefreshError {
     fn into_response(self) -> Response {
         let status_code = match self {
             RefreshError::InternalServerError => StatusCode::INTERNAL_SERVER_ERROR,
-            RefreshError::InvalidMacroUserId | RefreshError::InvalidRefreshToken => {
-                StatusCode::BAD_REQUEST
-            }
+            RefreshError::InvalidRefreshToken => StatusCode::BAD_REQUEST,
             RefreshError::RefreshInProgress => StatusCode::TOO_MANY_REQUESTS,
             RefreshError::Unauthorized => StatusCode::UNAUTHORIZED,
         };
