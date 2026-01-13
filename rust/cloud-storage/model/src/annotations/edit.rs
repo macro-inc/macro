@@ -52,6 +52,9 @@ pub enum EditAnchorRequest {
 #[serde(rename_all = "camelCase")]
 pub struct EditCommentResponse {
     pub document_id: String,
+    pub document_name: String,
+    pub file_type: Option<String>,
+    pub document_owner: String,
     #[serde(flatten)]
     pub comment: Comment,
 }

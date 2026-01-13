@@ -50,7 +50,6 @@ pub async fn edit_comment_handler(
     State(macro_notify_client): State<Arc<macro_notify::MacroNotify>>,
     State(conn_gateway_client): State<Arc<ConnectionGatewayClient>>,
     Extension(UserContext { user_id, .. }): Extension<UserContext>,
-    document_context: Extension<DocumentBasic>,
     Path(Params { comment_id }): Path<Params>,
     Json(req): Json<EditCommentRequest>,
 ) -> Result<Response, Response> {
@@ -64,7 +63,9 @@ pub async fn edit_comment_handler(
                     Some(&res.comment),
                     req.thread_id,
                     &users,
-                    &document_context,
+                    res.document_name,
+                    res.document_owner.clone().try_into().ok(),
+                    res.file_type.clone(),
                     user_id.clone().try_into().ok(),
                     res.document_id.to_string(),
                     &mention_id,

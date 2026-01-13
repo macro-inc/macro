@@ -17,7 +17,7 @@ use axum::{
 };
 use macro_db_client::annotations::CommentError;
 use macro_user_id::user_id::MacroUserIdStr;
-use model::{annotations::Comment, document::DocumentBasic, response::ErrorResponse};
+use model::{annotations::Comment, response::ErrorResponse};
 use model_entity::EntityType;
 use model_notifications::{DocumentMentionMetadata, NotificationQueueMessage};
 use serde::Serialize;
@@ -168,22 +168,24 @@ struct Metadata {
     location: Location,
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 fn build_mention_notif(
     notif_location_type: NotifLocationType,
     text: String,
     comment: Option<&Comment>,
     thread_id: i64,
     mentions: &[String],
-    document_context: &DocumentBasic,
+    document_name: String,
+    owner: MacroUserIdStr<'static>,
+    file_type: Option<String>,
     sender_id: Option<MacroUserIdStr<'static>>,
     document_id: String,
     mention_id: &str,
 ) -> NotificationQueueMessage {
     let metadata = DocumentMentionMetadata {
-        document_name: document_context.document_name.clone(),
-        owner: document_context.owner.clone(),
-        file_type: document_context.file_type.clone(),
+        document_name,
+        owner,
+        file_type,
         metadata: Some(
             serde_json::to_value(Metadata {
                 mention_id: mention_id.to_string(),
