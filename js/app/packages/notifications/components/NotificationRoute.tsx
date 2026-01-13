@@ -5,19 +5,21 @@ import { toast } from '@core/component/Toast/Toast';
 import { openNotificationFromId } from '@notifications/notification-navigation';
 import { logger } from '@observability';
 import { useSearchParams } from '@solidjs/router';
-import { createEffect } from 'solid-js';
+import { createEffect, onCleanup, onMount } from 'solid-js';
 
 export default function NotificationRoute() {
   const split = useSplitPanelOrThrow();
   const [searchParams] = useSearchParams();
 
-  const replaceWithUnifiedList = (reason?: unknown) => {
-    if (reason) {
-      logger.error(
-        `Falling back from NotificationRoute to unified-list: ${reason}`,
-        { cause: new Error() }
-      );
-    }
+  const getNotificationId = (): string | undefined => {
+    const raw = searchParams.notificationId;
+    if (typeof raw === 'string') return raw;
+    if (Array.isArray(raw) && typeof raw[0] === 'string') return raw[0];
+    return undefined;
+  };
+
+  const replaceWithUnifiedList = (cause?: Error) => {
+    logger.error('Failed to open notification.', { cause });
     toast.failure('Failed to open notification.');
     split.handle.replace({
       next: { type: 'component', id: 'unified-list' },
@@ -25,17 +27,22 @@ export default function NotificationRoute() {
     });
   };
 
+  // Give the router a tick to populate params before falling back to unified-list
+  onMount(() => {
+    const timeout = window.setTimeout(() => {
+      const notificationId = getNotificationId();
+      if (!notificationId) {
+        replaceWithUnifiedList(new Error('No notification ID found.'));
+      }
+    }, 0);
+    onCleanup(() => window.clearTimeout(timeout));
+  });
+
   createEffect(() => {
-    const notificationId = searchParams.notificationId;
+    const notificationId = getNotificationId();
     const layoutManager = globalSplitManager();
-    if (!notificationId || typeof notificationId !== 'string') {
-      replaceWithUnifiedList({ tag: 'MissingNotificationId', notificationId });
-      return;
-    }
-    if (!layoutManager) {
-      replaceWithUnifiedList({ tag: 'MissingSplitManager' });
-      return;
-    }
+    if (!notificationId) return;
+    if (!layoutManager) return;
 
     openNotificationFromId(notificationId, layoutManager).match(
       () => {
@@ -44,7 +51,7 @@ export default function NotificationRoute() {
         split.handle.close();
       },
       (err) => {
-        replaceWithUnifiedList(err);
+        replaceWithUnifiedList(new Error(err.tag));
       }
     );
   });
