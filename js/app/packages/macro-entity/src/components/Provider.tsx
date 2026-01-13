@@ -39,6 +39,7 @@ export function Provider(props: ParentProps) {
   });
   queryClient.setQueryDefaults(queryKeys.auth.apiToken, {
     queryFn: fetchApiToken,
+    staleTime: 1000 * 60 * 55, // 55 minutes (token expires in 60 minutes)
   });
 
   queryClient.setQueryDefaults(queryKeys.all.entity, {
