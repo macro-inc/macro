@@ -133,7 +133,7 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
 
   useSearchInputFocus(
     () => searchInputRef,
-    () => props.isOpen && availableProperties.length > 0
+    () => props.isOpen && availableProperties().length > 0
   );
 
   createEffect(() => {
@@ -189,7 +189,7 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
             />
           </div>
 
-          <Show when={availableProperties.length > 0}>
+          <Show when={availableProperties().length > 0}>
             <div class="px-4 pb-2">
               <div class="relative">
                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none z-10">

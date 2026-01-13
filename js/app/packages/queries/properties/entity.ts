@@ -16,33 +16,34 @@ import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import { propertiesKeys } from './keys';
 
-/**
- * Query hook for fetching properties for a single entity.
- */
 export function useEntityPropertiesQuery(
   entityType: Accessor<EntityType>,
   entityId: Accessor<string>,
   includeMetadata: boolean
 ) {
   return useQuery(
-    () => ({
-      queryKey: propertiesKeys.entity({
-        entityType: entityType(),
-        entityId: entityId(),
-      }).queryKey,
-      queryFn: async () => {
-        const data = await throwOnErr(
-          async () =>
-            await propertiesServiceClient.getEntityProperties({
-              entity_type: entityType(),
-              entity_id: entityId(),
-              query: { include_metadata: includeMetadata },
-            })
-        );
-        return data.properties.map(entityPropertyFromApi);
-      },
-      staleTime: 0,
-    }),
+    () => {
+      const type = entityType();
+      const id = entityId();
+      return {
+        queryKey: propertiesKeys.entity({
+          entityType: type,
+          entityId: id,
+        }).queryKey,
+        queryFn: async () => {
+          const data = await throwOnErr(
+            async () =>
+              await propertiesServiceClient.getEntityProperties({
+                entity_type: type,
+                entity_id: id,
+                query: { include_metadata: includeMetadata },
+              })
+          );
+          return data.properties.map(entityPropertyFromApi);
+        },
+        staleTime: 0,
+      };
+    },
     () => queryClient
   );
 }
@@ -57,9 +58,6 @@ function bulkIncludesEntityPredicate(queryKey: QueryKey, entityId: string) {
   );
 }
 
-/**
- * Invalidates and refetches all property queries for a specific entity.
- */
 export function invalidatePropertiesForEntity(
   entityType: EntityType,
   entityId: string
@@ -82,9 +80,6 @@ export type SaveEntityPropertyParams = {
   apiValues: PropertyApiValues;
 };
 
-/**
- * Mutation to save an entity property value.
- */
 export function useSaveEntityPropertyMutation(
   callbacks?: MutationCallbacks<void, Error, SaveEntityPropertyParams>
 ) {
@@ -131,9 +126,6 @@ export type DeleteEntityPropertyParams = {
   entityId: string;
 };
 
-/**
- * Mutation to delete a property from an entity.
- */
 export function useDeleteEntityPropertyMutation(
   callbacks?: MutationCallbacks<void, Error, DeleteEntityPropertyParams>
 ) {
@@ -170,10 +162,7 @@ export type AddEntityPropertyParams = {
   propertyDefinitionId: string;
 };
 
-/**
- * Mutation to add an entity property without an initial value.
- * Users can set the value later.
- */
+/** Adds property without initial value - user sets it later */
 export function useAddEntityPropertyMutation(
   callbacks?: MutationCallbacks<void, Error, AddEntityPropertyParams>
 ) {

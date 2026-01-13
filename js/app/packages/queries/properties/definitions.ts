@@ -17,38 +17,35 @@ export type ListPropertiesQueryParams = {
   forEntityType?: EntityType;
 };
 
-/**
- * Query hook for fetching property definitions.
- */
 export function useListPropertiesQuery(
   params: Accessor<ListPropertiesQueryParams>,
   enabled: Accessor<boolean> = () => true
 ) {
-  return useQuery(() => ({
-    queryKey: propertiesKeys.definitions({
-      scope: params().scope,
-      includeOptions: params().includeOptions,
-      forEntityType: params().forEntityType,
-    }).queryKey,
-    queryFn: async () => {
-      const data = await throwOnErr(
-        async () =>
-          await propertiesServiceClient.listProperties({
-            scope: params().scope,
-            include_options: params().includeOptions,
-            for_entity_type: params().forEntityType,
-          })
-      );
-      return data;
-    },
-    enabled: enabled(),
-    staleTime: 1000 * 60 * 5, // 5 minutes
-  }));
+  return useQuery(() => {
+    const { scope, includeOptions, forEntityType } = params();
+    return {
+      queryKey: propertiesKeys.definitions({
+        scope,
+        includeOptions,
+        forEntityType,
+      }).queryKey,
+      queryFn: async () => {
+        const data = await throwOnErr(
+          async () =>
+            await propertiesServiceClient.listProperties({
+              scope,
+              include_options: includeOptions,
+              for_entity_type: forEntityType,
+            })
+        );
+        return data;
+      },
+      enabled: enabled(),
+      staleTime: 1000 * 60 * 5, // 5 minutes
+    };
+  });
 }
 
-/**
- * Invalidates all property definition queries.
- */
 export function invalidatePropertyDefinitions() {
   queryClient.invalidateQueries({
     predicate: ({ queryKey }) =>
@@ -60,9 +57,6 @@ export type CreatePropertyDefinitionParams = {
   body: CreatePropertyDefinitionRequest;
 };
 
-/**
- * Mutation to create a new property definition.
- */
 export function useCreatePropertyDefinitionMutation(
   callbacks?: MutationCallbacks<
     PropertyDefinition,

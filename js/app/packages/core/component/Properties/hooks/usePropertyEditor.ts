@@ -1,8 +1,4 @@
-import {
-  AddPropertyOptionAsyncMutation,
-  PropertyOptionsQuery,
-  useAddPropertyOptionMutation,
-} from '@queries/properties/options';
+import type { AddPropertyOptionAsyncMutation } from '@queries/properties/options';
 import { createSignal } from 'solid-js';
 import type { Accessor } from 'solid-js';
 import type { Property, PropertyOption } from '../types';

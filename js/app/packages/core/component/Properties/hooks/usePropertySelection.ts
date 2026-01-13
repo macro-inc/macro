@@ -1,13 +1,6 @@
 import { type Accessor, createMemo, createSignal } from 'solid-js';
 import type { PropertyDefinitionFlat } from '../types';
 
-/**
- * Hook for managing property selection in the "Add Properties" modal
- * Handles fetching available properties, filtering, and tracking selections
- * @param existingPropertyIds - IDs of properties already attached to the entity
- * @param searchQuery - Optional search query for filtering
- * @param entityType - Optional entity type to filter properties applicable to this type
- */
 export function usePropertySelection(
   existingPropertyIds: () => string[],
   availableProperties: Accessor<PropertyDefinitionFlat[]>,
@@ -17,7 +10,6 @@ export function usePropertySelection(
     Set<string>
   >(new Set());
 
-  // Memoize Set creation to avoid recreation on every search keystroke
   const existingPropertyIdsSet = createMemo(
     () => new Set(existingPropertyIds())
   );
@@ -26,13 +18,12 @@ export function usePropertySelection(
     const query = searchQuery ? searchQuery().toLowerCase().trim() : '';
     const existingIds = existingPropertyIdsSet();
 
-    // First filter out existing properties and hidden entity types
     const filtered = availableProperties().filter(
       (property) =>
         property &&
         property.id &&
         !existingIds.has(property.id) &&
-        // Hide COMPANY entity properties (not yet implemented)
+        // COMPANY entity properties not yet implemented
         property.specific_entity_type !== 'COMPANY'
     );
 

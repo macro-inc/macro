@@ -9,36 +9,31 @@ import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import { propertiesKeys } from './keys';
 
-/**
- * Query to fetch property options for a property definition.
- */
 export function usePropertyOptionsQuery(
   propertyDefinitionId: Accessor<string>,
   enabled: Accessor<boolean> = () => true
 ) {
-  return useQuery(() => ({
-    queryKey: propertiesKeys.options({
-      propertyDefinitionId: propertyDefinitionId(),
-    }).queryKey,
-    queryFn: async () => {
-      const result = await throwOnErr(
-        async () =>
-          await propertiesServiceClient.getPropertyOptions({
-            definition_id: propertyDefinitionId(),
-          })
-      );
-      return result;
-    },
-    enabled: enabled(),
-    staleTime: 1000 * 60 * 5, // 5 minutes
-  }));
+  return useQuery(() => {
+    const defId = propertyDefinitionId();
+    return {
+      queryKey: propertiesKeys.options({ propertyDefinitionId: defId }).queryKey,
+      queryFn: async () => {
+        const result = await throwOnErr(
+          async () =>
+            await propertiesServiceClient.getPropertyOptions({
+              definition_id: defId,
+            })
+        );
+        return result;
+      },
+      enabled: enabled(),
+      staleTime: 1000 * 60 * 5, // 5 minutes
+    };
+  });
 }
 
 export type PropertyOptionsQuery = ReturnType<typeof usePropertyOptionsQuery>;
 
-/**
- * Invalidates options for a specific property definition.
- */
 export function invalidatePropertyOptions(propertyDefinitionId: string) {
   queryClient.invalidateQueries({
     queryKey: propertiesKeys.options({ propertyDefinitionId }).queryKey,
@@ -54,9 +49,6 @@ export type AddPropertyOptionParams = {
   body: AddPropertyOptionRequest;
 };
 
-/**
- * Mutation to add a new option to a property definition.
- */
 export function useAddPropertyOptionMutation(
   callbacks?: MutationCallbacks<PropertyOption, Error, AddPropertyOptionParams>
 ) {

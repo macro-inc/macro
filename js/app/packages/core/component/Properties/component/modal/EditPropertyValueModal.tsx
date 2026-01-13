@@ -13,7 +13,6 @@ import {
   onCleanup,
   onMount,
   Show,
-  Suspense,
 } from 'solid-js';
 import { MODAL_DIMENSIONS } from '../../constants';
 import { usePropertiesContext } from '../../context/PropertiesContext';
