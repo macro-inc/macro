@@ -8,6 +8,7 @@ use crate::search::query::Keys;
 use crate::search::query::QueryKey;
 use crate::search::query::generate_terms_must_query;
 use models_opensearch::SearchEntityType;
+use models_search_cursor::SearchMethodCursor;
 use opensearch_query_builder::*;
 
 /// A macro for generating delegation methods that forward calls to an inner field
@@ -57,7 +58,8 @@ pub(crate) fn create_highlight_field<'a>(
         .number_of_fragments(number_of_fragments)
 }
 
-/// Creates sort vec to sort by the updated_at with a fallback to score sort
+/// Creates sort vec to sort by the updated_at with entity_id as a tiebreaker.
+/// Items without a timestamp are pushed to the end by returning 0L (DESC order).
 pub(crate) fn updated_at_sort<'a>() -> Vec<SortType<'a>> {
     vec![
         SortType::ScriptSort(ScriptSort::new(
@@ -67,15 +69,23 @@ pub(crate) fn updated_at_sort<'a>() -> Vec<SortType<'a>> {
                 } else if (doc.containsKey('updated_at_seconds') && doc['updated_at_seconds'].size() > 0) {
                     return doc['updated_at_seconds'].value.toInstant().toEpochMilli();
                 } else {
-                    return 0L;  // Or Long.MAX_VALUE to push to end
+                    return 0L;
                 }"#,
             ),
             ScriptSortType::Number,
             SortOrder::Desc,
         )),
-        SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
+        SortType::Field(FieldSort::new("entity_id", SortOrder::Asc)),
     ]
 }
+
+pub(crate) fn search_after(cursor: SearchMethodCursor) -> Vec<serde_json::Value> {
+    vec![
+        serde_json::json!(cursor.updated_at.timestamp_millis()),
+        serde_json::json!(cursor.entity_id.to_string()),
+    ]
+}
+
 pub trait SearchQueryConfig {
     /// Key for item id
     const ID_KEY: &'static str = "entity_id";
@@ -268,58 +278,6 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
         let mut inner_bool_query = BoolQueryBuilder::new();
 
         inner_bool_query.minimum_should_match(1);
-
-        // For email search, we want to search over the participants
-        // For all other indices we want to search over the owner
-        match T::ENTITY_INDEX {
-            SearchEntityType::Emails => {
-                let mut participant_queries: Vec<QueryType> = Vec::new();
-                for term in &self.terms {
-                    let formatted_term = format!("{}*", term);
-                    participant_queries.push(
-                        WildcardQuery::new("sender", formatted_term.clone(), true, Some(5000.0))
-                            .into(),
-                    );
-                    participant_queries.push(
-                        WildcardQuery::new("cc", formatted_term.clone(), true, Some(5000.0)).into(),
-                    );
-                    participant_queries.push(
-                        WildcardQuery::new("bcc", formatted_term.clone(), true, Some(5000.0))
-                            .into(),
-                    );
-                    participant_queries.push(
-                        WildcardQuery::new(
-                            "recipients",
-                            formatted_term.clone(),
-                            true,
-                            Some(5000.0),
-                        )
-                        .into(),
-                    );
-                }
-
-                for participant_query in participant_queries {
-                    inner_bool_query.should(participant_query);
-                }
-            }
-            _ => {
-                // Create a vec of owner queries for each term
-                // We want to search over the content **and** the owner here
-                let mut owner_queries: Vec<QueryType> = Vec::new();
-                for term in &self.terms {
-                    let formatted_term = format!("macro|{}*", term);
-                    owner_queries.push(
-                        WildcardQuery::new(T::USER_ID_KEY, formatted_term, true, Some(5000.0))
-                            .into(),
-                    );
-                }
-
-                // Add the owner queries to the bool query
-                for owner_query in owner_queries {
-                    inner_bool_query.should(owner_query);
-                }
-            }
-        }
 
         for must in term_must_array {
             inner_bool_query.should(must);

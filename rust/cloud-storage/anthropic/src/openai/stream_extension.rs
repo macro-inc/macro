@@ -1,5 +1,6 @@
 use crate::prelude::ServerToolUse;
 use crate::types::response::Citation;
+use crate::types::response::web_fetch::WebFetchResponse;
 use crate::types::response::web_search::WebSearchResponse;
 use async_openai::error::OpenAIError;
 use async_openai::types::CreateChatCompletionStreamResponse;
@@ -11,6 +12,7 @@ use std::pin::Pin;
 pub enum AnthropicResponseExtension {
     Citation(Citation),
     WebSearchToolResponse(WebSearchResponse),
+    WebFetchToolResponse(WebFetchResponse),
     ServerToolUse(ServerToolUse),
 }
 

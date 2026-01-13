@@ -4,6 +4,14 @@ name = "static_file_service"
 publish = false
 version = "0.1.0"
 
+[[bin]]
+name = "static_file_service"
+path = "src/main.rs"
+
+[[bin]]
+name = "static_file_service_openapi"
+path = "src/openapi.rs"
+
 [features]
 dynamodb_client_test = []
 local_auth = []

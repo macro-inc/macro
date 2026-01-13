@@ -5,8 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ProjectType = typeof ProjectType[keyof typeof ProjectType];
-
+export type ProjectType = (typeof ProjectType)[keyof typeof ProjectType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const ProjectType = {

@@ -477,6 +477,7 @@ interface EntityProps<T extends WithNotification<EntityData>>
   ref?: Ref<HTMLDivElement>;
   onChecked?: (checked: boolean, shiftKey?: boolean) => void;
   checked?: boolean;
+  searchActive?: boolean;
 }
 
 const [hoveredEntityId, setHoveredEntityId] = createSignal<string | null>(null);
@@ -526,6 +527,10 @@ export function EntityWithEverything(
     return notifications.filter(({ done }) => !done);
   };
 
+  const isSearch = createMemo(
+    () => !!props.searchActive && isSearchEntity(props.entity)
+  );
+
   const searchHighlightName = () =>
     isSearchEntity(props.entity) && props.entity.search.nameHighlight;
 
@@ -543,7 +548,7 @@ export function EntityWithEverything(
     }
   });
 
-  const EntityTitle = () => {
+  const EntityTitle = createMemo(() => {
     if (props.entity.type === 'email') {
       const isLikelyEmail = (value?: string) =>
         typeof value === 'string' && value.includes('@');
@@ -590,8 +595,6 @@ export function EntityWithEverything(
         if (firstNames.length <= 3) return firstNames.join(', ');
         return `${firstNames[0]} .. ${firstNames[firstNames.length - 2]}, ${firstNames[firstNames.length - 1]}`;
       };
-
-      const isSearch = () => isSearchEntity(props.entity);
 
       return (
         <div class="flex gap-1 items-center text-sm min-w-0 w-full truncate overflow-hidden @max-md/uList:flex-col @max-md/uList:items-start @max-md/uList:gap-1 @max-md/uList:truncate-none">
@@ -672,7 +675,10 @@ export function EntityWithEverything(
                 <Show when={isSearch()}>
                   <span class="@max-md/uList:hidden"> – </span>
                 </Show>
-                <Show when={searchHighlightName()} fallback={props.entity.name}>
+                <Show
+                  when={isSearch() && searchHighlightName()}
+                  fallback={props.entity.name}
+                >
                   {(name) => (
                     <StaticMarkdown
                       markdown={name()}
@@ -784,7 +790,10 @@ export function EntityWithEverything(
                 'w-[20cqw]': !props.showUnrollNotifications,
               }}
             >
-              <Show when={searchHighlightName()} fallback={props.entity.name}>
+              <Show
+                when={isSearch() && searchHighlightName()}
+                fallback={props.entity.name}
+              >
                 {(name) => (
                   <StaticMarkdown
                     markdown={name()}
@@ -838,14 +847,12 @@ export function EntityWithEverything(
         </span>
       </div>
     );
-  };
+  });
 
   const draggable = createDraggable(props.entity.id, props.entity);
   false && draggable;
   const droppable = createDroppable(props.entity.id, props.entity);
   false && droppable;
-
-  const { didCursorMove } = useCursorMove();
 
   // The main click handler for the entity row should navigate to an entity
   // without forcing focus back to the source split until after navigation.
@@ -905,11 +912,9 @@ export function EntityWithEverything(
         'active:bracket active:outline active:outline-accent/20 active:outline-offset-[-1px]':
           isTouchDevice() && !props.checked,
       }}
-      onMouseOver={(e) => {
+      onMouseMove={() => {
         if (isTouchDevice()) return;
-        if (!didCursorMove(e)) {
-          return;
-        }
+
         setHoveredEntityId(props.entity.id);
         props.onMouseOver?.();
       }}
@@ -1136,8 +1141,8 @@ export function EntityWithEverything(
           </div>
         </div>
         {/* Content Hits from Search */}
-        <Show when={contentHitData().length > 0}>
-          <div class="relative row-2 col-2 col-end-4 pb-2 @max-md/uList:row-auto @max-md/uList:col-auto @max-md/uList:w-full @max-md/uList:mt-1">
+        <Show when={isSearch() && contentHitData().length > 0}>
+          <div class="relative row-2 col-2 col-end-4 pb-2 @max-md/split:row-auto @max-md/split:col-auto @max-md/split:w-full @max-md/split:mt-1">
             <CollapsibleList
               items={contentHitData()}
               threadBorder
@@ -1402,44 +1407,4 @@ const createFormattedDate = (timestamp: number) => {
     day: 'numeric',
     year: '2-digit',
   });
-};
-
-let lastMouseX: number | null = null;
-let lastMouseY: number | null = null;
-let initialMouseMove: boolean = false;
-let cursorInit = true;
-
-const useCursorMove = () => {
-  const didCursorMove = (event: MouseEvent) => {
-    if (!initialMouseMove) return;
-    const { clientX, clientY } = event;
-    // If the mouse hasn't moved, ignore the event
-    if (clientX === lastMouseX && clientY === lastMouseY) {
-      return false;
-    }
-
-    // Update the last known position
-    lastMouseX = clientX;
-    lastMouseY = clientY;
-
-    return true;
-  };
-
-  const moveEvent = (event: MouseEvent) => {
-    const { clientX, clientY } = event;
-    initialMouseMove = true;
-
-    setTimeout(() => {
-      lastMouseX = clientX;
-      lastMouseY = clientY;
-    });
-  };
-  onMount(() => {
-    if (!cursorInit) {
-      return;
-    }
-    cursorInit = false;
-    document.addEventListener('mousemove', moveEvent, { capture: true });
-  });
-  return { didCursorMove };
 };

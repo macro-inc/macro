@@ -12,4 +12,5 @@ import type { ProjectSearchResponseItemWithMetadataAllOf } from './projectSearch
 timestamps in opensearch as they would require us to update the project record
 every time the project updates (specifically for updated_at and viewed_at)
  */
-export type ProjectSearchResponseItemWithMetadata = ProjectSearchResponseItem & ProjectSearchResponseItemWithMetadataAllOf;
+export type ProjectSearchResponseItemWithMetadata = ProjectSearchResponseItem &
+  ProjectSearchResponseItemWithMetadataAllOf;

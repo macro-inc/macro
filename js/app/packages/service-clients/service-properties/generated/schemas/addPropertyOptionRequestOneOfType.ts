@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type AddPropertyOptionRequestOneOfType = typeof AddPropertyOptionRequestOneOfType[keyof typeof AddPropertyOptionRequestOneOfType];
-
+export type AddPropertyOptionRequestOneOfType =
+  (typeof AddPropertyOptionRequestOneOfType)[keyof typeof AddPropertyOptionRequestOneOfType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const AddPropertyOptionRequestOneOfType = {

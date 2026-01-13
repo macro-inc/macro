@@ -5,7 +5,8 @@ import { CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '../../packages/shared';
 
 const BASE_NAME = 'docx-unzip-lambda';
 const CLOUD_STORAGE_BASE = `../../../rust/cloud-storage`;
-const ZIP_LOCATION = `${CLOUD_STORAGE_BASE}/target/lambda/docx-unzip-handler/bootstrap.zip`;
+const ZIP_FOLDER_NAME = 'docx_unzip_handler';
+const ZIP_LOCATION = `${CLOUD_STORAGE_BASE}/target/lambda/${ZIP_FOLDER_NAME}/bootstrap.zip`;
 
 export type DocxUnzipLambdaEnvVars = {
   DATABASE_URL: pulumi.Output<string> | string;

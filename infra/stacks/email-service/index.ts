@@ -154,6 +154,8 @@ export const inboxSyncRetryQueueName = pulumi.interpolate`${inbox_sync_retry_que
 
 const link_manager_queue = new Queue('email-service-refresh', {
   tags,
+  // deleting a link from the database can sometimes take a long time
+  visibilityTimeoutSeconds: 300,
 });
 
 export const linkManagerQueueArn = pulumi.interpolate`${link_manager_queue.queue.arn}`;
@@ -513,6 +515,9 @@ new EmailPubSubWorkers('email-pubsub-workers', {
   containerEnvVars,
 });
 
+const DELETE_UNUSED_AFTER_DAYS = config.require(`delete_unused_after_days`);
+const DELETE_INACTIVE_AFTER_DAYS = config.require(`delete_inactive_after_days`);
+
 const emailRefreshHandler = new EmailRefreshHandler('email-refresh-handler', {
   queueArns: [linkManagerQueueArn],
   vpc: coparse_api_vpc,
@@ -521,6 +526,8 @@ const emailRefreshHandler = new EmailRefreshHandler('email-refresh-handler', {
     LINK_MANAGER_QUEUE: pulumi.interpolate`${linkManagerQueueName}`,
     ENVIRONMENT: stack,
     RUST_LOG: 'email_refresh_handler=info',
+    DELETE_UNUSED_AFTER_DAYS: pulumi.interpolate`${DELETE_UNUSED_AFTER_DAYS}`,
+    DELETE_INACTIVE_AFTER_DAYS: pulumi.interpolate`${DELETE_INACTIVE_AFTER_DAYS}`,
   },
   tags,
 });

@@ -10,4 +10,5 @@ import type { ToWebSocketMessageOneOfOnethreeAllOf } from './toWebSocketMessageO
 /**
  * Get extraction status for a given attachment
  */
-export type ToWebSocketMessageOneOfOnethree = ExtractionStatusPayload & ToWebSocketMessageOneOfOnethreeAllOf;
+export type ToWebSocketMessageOneOfOnethree = ExtractionStatusPayload &
+  ToWebSocketMessageOneOfOnethreeAllOf;

@@ -30,7 +30,8 @@ mod api;
 mod config;
 mod generate_password;
 mod rate_limit_config;
-mod service;
+
+use authentication_service::service;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -127,7 +128,7 @@ async fn main() -> anyhow::Result<()> {
             .to_string(),
     };
 
-    let auth_client = crate::service::fusionauth_client::FusionAuthClient::new(
+    let auth_client = service::fusionauth_client::FusionAuthClient::new(
         fusionauth_api_key,
         config.fusionauth_client_id.clone(),
         fusionauth_client_secret,

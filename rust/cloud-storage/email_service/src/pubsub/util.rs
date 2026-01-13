@@ -1,13 +1,10 @@
-use crate::util::gmail::auth::fetch_gmail_access_token;
 use crate::util::redis::RedisClient;
 use crate::util::redis::rate_limit::RateLimitArgs;
 use anyhow::anyhow;
-use authentication_service_client::AuthServiceClient;
 use connection_gateway_client::client::ConnectionGatewayClient;
 /// shared utils across different pubsub workers
 use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use models_email::gmail::operations::GmailApiOperation;
-use models_email::service::cache::TokenCacheKey;
 use models_email::service::link::Link;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -93,26 +90,6 @@ pub async fn cg_refresh_email(client: &ConnectionGatewayClient, macro_id: &str, 
             .await
             .inspect_err(|e| tracing::error!(macro_id = %macro_id, "Failed to refresh email: {e}"));
     }
-}
-
-pub async fn fetch_access_token_for_link(
-    redis_client: &RedisClient,
-    auth_service_client: &AuthServiceClient,
-    link: &Link,
-) -> anyhow::Result<String> {
-    let cache_key = TokenCacheKey {
-        fusion_user_id: link.fusionauth_user_id.clone(),
-        macro_id: link.macro_id.to_string(),
-        provider: link.provider,
-    };
-
-    fetch_gmail_access_token(&cache_key, redis_client, auth_service_client)
-        .await
-        .map_err(|e| {
-            let error_message = "Unable to get Gmail access token";
-            tracing::error!(error = ?e, cache_key = ?cache_key, error_message);
-            anyhow!(error_message)
-        })
 }
 
 /// Fetches the Link details from the database using the link_id from the notification.

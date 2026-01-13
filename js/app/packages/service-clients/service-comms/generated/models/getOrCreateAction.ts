@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type GetOrCreateAction = typeof GetOrCreateAction[keyof typeof GetOrCreateAction];
-
+export type GetOrCreateAction =
+  (typeof GetOrCreateAction)[keyof typeof GetOrCreateAction];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const GetOrCreateAction = {

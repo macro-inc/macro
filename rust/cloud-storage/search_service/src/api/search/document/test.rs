@@ -29,6 +29,7 @@ fn test_construct_search_result_single_document() {
             content: vec!["Test content".to_string()],
             ..Default::default()
         },
+        updated_at: None,
     }];
 
     let mut document_histories = HashMap::new();
@@ -98,6 +99,7 @@ fn test_construct_search_result_multiple_nodes_same_document() {
                 content: vec!["First content".to_string()],
                 ..Default::default()
             },
+            updated_at: None,
         },
         opensearch_client::search::model::SearchHit {
             entity_id: "11111111-1111-1111-1111-111111111111".parse().unwrap(),
@@ -116,6 +118,7 @@ fn test_construct_search_result_multiple_nodes_same_document() {
                 content: vec!["Second content".to_string()],
                 ..Default::default()
             },
+            updated_at: None,
         },
     ];
 
@@ -184,6 +187,7 @@ fn create_test_document_response(
             content: content.unwrap_or_default(),
             ..Default::default()
         },
+        updated_at: None,
     }
 }
 
@@ -492,6 +496,7 @@ fn test_sort_stability() {
                 content: vec!["third".to_string()],
                 ..Default::default()
             },
+            updated_at: None,
         },
         opensearch_client::search::model::SearchHit {
             entity_id: "11111111-1111-1111-1111-111111111111".parse().unwrap(),
@@ -510,6 +515,7 @@ fn test_sort_stability() {
                 content: vec!["first".to_string()],
                 ..Default::default()
             },
+            updated_at: None,
         },
         opensearch_client::search::model::SearchHit {
             entity_id: "55555555-5555-5555-5555-555555555555".parse().unwrap(),
@@ -528,6 +534,7 @@ fn test_sort_stability() {
                 content: vec!["fifth".to_string()],
                 ..Default::default()
             },
+            updated_at: None,
         },
         opensearch_client::search::model::SearchHit {
             entity_id: "22222222-2222-2222-2222-222222222222".parse().unwrap(),
@@ -546,6 +553,7 @@ fn test_sort_stability() {
                 content: vec!["second".to_string()],
                 ..Default::default()
             },
+            updated_at: None,
         },
         opensearch_client::search::model::SearchHit {
             entity_id: "44444444-4444-4444-4444-444444444444".parse().unwrap(),
@@ -564,6 +572,7 @@ fn test_sort_stability() {
                 content: vec!["fourth".to_string()],
                 ..Default::default()
             },
+            updated_at: None,
         },
     ];
 

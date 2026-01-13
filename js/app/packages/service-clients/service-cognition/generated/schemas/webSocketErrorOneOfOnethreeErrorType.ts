@@ -5,8 +5,8 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type WebSocketErrorOneOfOnethreeErrorType = typeof WebSocketErrorOneOfOnethreeErrorType[keyof typeof WebSocketErrorOneOfOnethreeErrorType];
-
+export type WebSocketErrorOneOfOnethreeErrorType =
+  (typeof WebSocketErrorOneOfOnethreeErrorType)[keyof typeof WebSocketErrorOneOfOnethreeErrorType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const WebSocketErrorOneOfOnethreeErrorType = {

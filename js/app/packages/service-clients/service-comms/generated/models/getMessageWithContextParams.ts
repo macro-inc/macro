@@ -6,16 +6,16 @@
  */
 
 export type GetMessageWithContextParams = {
-/**
- * ID of the message to get context around
- */
-message_id: string;
-/**
- * Number of messages to fetch before the target message (defaults to 0)
- */
-before: number;
-/**
- * Number of messages to fetch after the target message (defaults to 0)
- */
-after: number;
+  /**
+   * ID of the message to get context around
+   */
+  message_id: string;
+  /**
+   * Number of messages to fetch before the target message (defaults to 0)
+   */
+  before: number;
+  /**
+   * Number of messages to fetch after the target message (defaults to 0)
+   */
+  after: number;
 };

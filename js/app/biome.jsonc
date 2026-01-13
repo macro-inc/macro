@@ -11,10 +11,10 @@
       "**/*.{ts,tsx,js,jsx}",
       "**/openapi.json",
       "!**/*.d.ts",
-      "!**/generated",
       "!chrome-extension-vite",
       "!infra/web-app/output",
       "!scripts",
+      "packages/service-clients/**/generated/**",
       "!packages/filesystem",
       "!packages/_app-mobile",
       "!packages/loro-mirror/packages",
@@ -137,6 +137,16 @@
         "actions": {
           "source": {
             "organizeImports": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/service-clients/**"],
+      "assist": {
+        "actions": {
+          "source": {
+            "organizeImports": "on"
           }
         }
       }

@@ -20,6 +20,7 @@ import { getDateSuggestions } from '@core/util/dateParser';
 import { createFreshSearch } from '@core/util/freshSort';
 import ClockIcon from '@icon/regular/clock.svg';
 import EmailIcon from '@icon/regular/envelope.svg';
+import UsersIcon from '@icon/regular/users.svg';
 import type { EntityData, WithSearch } from '@macro-entity';
 import {
   createUnifiedSearchInfiniteQuery,
@@ -27,7 +28,7 @@ import {
   useEmails,
 } from '@macro-entity';
 import { useHistoryQuery } from '@queries/history/history';
-import type { PaginatedSearchArgs } from '@service-search/client';
+import type { SearchArgs } from '@service-search/client';
 import type { Item } from '@service-storage/generated/schemas/item';
 import { debounce } from '@solid-primitives/scheduled';
 import { globalSplitManager } from 'app/signal/splitLayout';
@@ -57,6 +58,7 @@ import {
 import type { MenuOperations } from '../../shared/inlineMenu';
 import {
   type CombinedEntity,
+  createGroupAlias,
   type Entity,
   type EntityMap,
   entityMapper,
@@ -67,9 +69,11 @@ import {
   handleChannelMention,
   handleDateMention,
   handleEmailMention,
+  handleGroupMention,
   handleUserMention,
   type UserMentionRecord,
 } from '../../utils/mentionsUtils';
+import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 
 false && clickOutside;
 false && floatWithSelection;
@@ -101,6 +105,8 @@ const getItemSearchText = (item: CombinedEntity): string => {
       return item.data.displayFormat;
     case 'email':
       return item.data.name ?? 'No Subject';
+    case 'group':
+      return item.data.groupAlias;
   }
 };
 
@@ -148,6 +154,8 @@ function createItemHandler(dependencies: HandlerDependencies) {
         return await handleChannelMention(item.data, dependencies);
       case 'email':
         return await handleEmailMention(item.data, dependencies);
+      case 'group':
+        return await handleGroupMention(item.data, dependencies);
     }
   };
 }
@@ -327,6 +335,9 @@ export function MentionsMenuItem(props: {
       case 'user':
         return <UserIcon id={props.item.id} size="sm" isDeleted={false} />;
 
+      case 'group':
+        return <UsersIcon class="size-4 text-ink-muted" />;
+
       case 'date':
         return <ClockIcon class="size-4 text-ink-muted" />;
 
@@ -372,7 +383,7 @@ export function MentionsMenuItem(props: {
         props.setOpen(false);
         e.stopPropagation();
       }}
-      on:mouseover={() => props.setIndex(props.index)}
+      on:mousemove={() => props.setIndex(props.index)}
       class="group flex items-center p-1.5 mx-1.5"
       classList={{ 'bg-active bracket': props.selected }}
     >
@@ -466,11 +477,10 @@ function MentionsMenuInner(props: {
     });
   }
 
-  const args = createMemo((): PaginatedSearchArgs => {
+  const args = createMemo((): SearchArgs => {
     return {
       params: {
-        page: 0,
-        // small -> fast!
+        cursor: null,
         page_size: 10,
       },
       request: {
@@ -593,6 +603,11 @@ function MentionsMenuInner(props: {
 
   const [selectedIndex, setSelectedIndex] = createSignal(0);
   const [viewAllMode, setViewAllMode] = createSignal<ViewAllMode>(null);
+  const { isKeypressActive } = useIsKeyPressActive();
+  const setSelectedIndexFromMouse = (index: number) => {
+    if (isKeypressActive()) return;
+    setSelectedIndex(index);
+  };
 
   let menuRef!: HTMLDivElement;
 
@@ -637,10 +652,30 @@ function MentionsMenuInner(props: {
     { timeWeight: 0, brevityWeight: 0.3 },
     getItemSearchText
   );
+
+  // Group aliases available in channel context
+  const specialGroups = createMemo((): Entity<'group'>[] => {
+    if (props.block !== 'channel') return [];
+    if (!useMaybeBlockId()) return [];
+
+    const term = searchTerm().toLowerCase();
+
+    const availableGroups = [
+      { alias: 'here', match: (t: string) => t === '' || 'here'.startsWith(t) },
+    ];
+
+    return availableGroups
+      .filter((g) => g.match(term))
+      .map((g) => createGroupAlias(g.alias));
+  });
+
   const filteredUsers = createMemo(() => {
-    return userSearch(users(), searchTerm()).map((result) => {
+    const searchedUsers = userSearch(users(), searchTerm()).map((result) => {
       return result.item;
     });
+    return [...specialGroups(), ...searchedUsers] as CombinedEntity<
+      'user' | 'group'
+    >[];
   });
 
   const emailSearch = createFreshSearch<Entity<'email'>>(
@@ -1011,7 +1046,7 @@ function MentionsMenuInner(props: {
                     index={i()}
                     selected={i() === selectedIndex()}
                     itemAction={itemAction}
-                    setIndex={setSelectedIndex}
+                    setIndex={setSelectedIndexFromMouse}
                     setOpen={setMenuOpen}
                   />
                 )}
@@ -1062,7 +1097,7 @@ function MentionsMenuInner(props: {
                   index={i()}
                   selected={i() === selectedIndex()}
                   itemAction={itemAction}
-                  setIndex={setSelectedIndex}
+                  setIndex={setSelectedIndexFromMouse}
                   setOpen={setMenuOpen}
                 />
               )}
@@ -1088,7 +1123,7 @@ function MentionsMenuInner(props: {
                   index={users.length + i()}
                   selected={users.length + i() === selectedIndex()}
                   itemAction={itemAction}
-                  setIndex={setSelectedIndex}
+                  setIndex={setSelectedIndexFromMouse}
                   setOpen={setMenuOpen}
                 />
               )}
@@ -1116,7 +1151,7 @@ function MentionsMenuInner(props: {
                     users.length + docs.length + i() === selectedIndex()
                   }
                   itemAction={itemAction}
-                  setIndex={setSelectedIndex}
+                  setIndex={setSelectedIndexFromMouse}
                   setOpen={setMenuOpen}
                 />
               )}
@@ -1146,7 +1181,7 @@ function MentionsMenuInner(props: {
                     selectedIndex()
                   }
                   itemAction={itemAction}
-                  setIndex={setSelectedIndex}
+                  setIndex={setSelectedIndexFromMouse}
                   setOpen={setMenuOpen}
                 />
               )}

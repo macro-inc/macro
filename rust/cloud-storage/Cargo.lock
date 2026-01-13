@@ -91,6 +91,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "chrono",
+ "comms_service_client",
  "cool_asserts",
  "email",
  "email_service_client",
@@ -242,6 +243,7 @@ dependencies = [
  "futures",
  "lazy_static",
  "rand 0.9.0",
+ "regex",
  "reqwest",
  "reqwest-eventsource",
  "schemars",
@@ -1833,14 +1835,20 @@ dependencies = [
 name = "comms"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "axum",
  "chrono",
  "doppleganger",
+ "filter_ast",
  "frecency",
+ "item_filters",
+ "macro_db_migrator",
  "macro_user_id",
  "model-entity",
  "model_user",
  "models_comms",
+ "models_pagination",
+ "recursion",
  "reqwest",
  "rootcause",
  "serde",
@@ -2420,6 +2428,7 @@ dependencies = [
  "s3_client",
  "sns_client",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -2439,6 +2448,7 @@ dependencies = [
  "openssl",
  "sqlx",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -2498,6 +2508,7 @@ dependencies = [
  "sqlx",
  "sqs_client",
  "tokio",
+ "tracing",
  "urlencoding",
 ]
 
@@ -2704,6 +2715,7 @@ dependencies = [
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
  "axum",
+ "axum-extra",
  "base64 0.22.1",
  "bytes",
  "bzip2",
@@ -2825,6 +2837,7 @@ dependencies = [
  "serde_json",
  "sqlx",
  "tokio",
+ "tracing",
  "urlencoding",
  "uuid",
 ]
@@ -2859,6 +2872,7 @@ dependencies = [
  "sqlx",
  "sqs_client",
  "tokio",
+ "tracing",
  "urlencoding",
  "zip",
 ]
@@ -3049,6 +3063,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "email_contact_search"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "cached",
+ "chrono",
+ "macro_db_migrator",
+ "macro_user_id",
+ "models_search_cursor",
+ "serde",
+ "sqlx",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "email_db_client"
 version = "0.1.0"
 dependencies = [
@@ -3080,6 +3112,7 @@ dependencies = [
  "aws_lambda_events",
  "chrono",
  "lambda_runtime",
+ "macro_db_migrator",
  "macro_entrypoint",
  "macro_env",
  "model",
@@ -3087,6 +3120,8 @@ dependencies = [
  "sqlx",
  "sqs_client",
  "tokio",
+ "tracing",
+ "uuid",
 ]
 
 [[package]]
@@ -3105,6 +3140,7 @@ dependencies = [
  "sqlx",
  "sqs_client",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -3214,6 +3250,7 @@ dependencies = [
  "sqlx",
  "strum",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -4873,6 +4910,7 @@ dependencies = [
  "jsonwebtoken",
  "macro_env",
  "macro_env_var",
+ "macro_user_id",
  "rand 0.9.0",
  "remote_env_var",
  "serde",
@@ -5611,6 +5649,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "models_search_cursor"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "chrono",
+ "serde",
+ "serde_json",
+ "uuid",
+]
+
+[[package]]
 name = "models_sfs"
 version = "0.1.0"
 dependencies = [
@@ -5689,9 +5738,12 @@ name = "name_search"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "cached",
+ "chrono",
  "macro_db_migrator",
  "macro_user_id",
  "models_opensearch",
+ "models_search_cursor",
  "non_empty",
  "serde",
  "sqlx",
@@ -5996,6 +6048,7 @@ dependencies = [
  "chrono",
  "macro_entrypoint",
  "models_opensearch",
+ "models_search_cursor",
  "opensearch",
  "opensearch_query_builder",
  "serde",
@@ -6095,6 +6148,7 @@ dependencies = [
  "sqlx",
  "sqs_client",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -6112,6 +6166,7 @@ dependencies = [
  "sqlx",
  "sqs_client",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -7570,6 +7625,7 @@ dependencies = [
  "comms_service_client",
  "document_storage_service_client",
  "document_sub_type",
+ "email_contact_search",
  "email_service_client",
  "futures",
  "http-body-util",
@@ -7586,6 +7642,7 @@ dependencies = [
  "models_email",
  "models_opensearch",
  "models_search",
+ "models_search_cursor",
  "name_search",
  "opensearch_client",
  "secretsmanager_client",
@@ -7626,6 +7683,7 @@ dependencies = [
  "openssl",
  "sqs_client",
  "tokio",
+ "tracing",
  "urlencoding",
 ]
 
@@ -9072,9 +9130,9 @@ checksum = "8df9b6e13f2d32c91b9bd719c00d1958837bc7dec474d94952798cc8e69eeec3"
 
 [[package]]
 name = "tracing"
-version = "0.1.41"
+version = "0.1.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "784e0ac535deb450455cbfa28a6f0df145ea1bb7ae51b821cf5e7927fdcfbdd0"
+checksum = "63e71662fa4b2a2c3a26f570f037eb95bb1f85397f3cd8076caed2f026a6d100"
 dependencies = [
  "log",
  "pin-project-lite",
@@ -9084,9 +9142,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-attributes"
-version = "0.1.28"
+version = "0.1.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "395ae124c09f9e6918a2310af6038fba074bcf474ac352496d5910dd59a2226d"
+checksum = "7490cfa5ec963746568740651ac6781f701c9c5ea257c58e057f3ba8cf69e8da"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -9095,9 +9153,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-core"
-version = "0.1.33"
+version = "0.1.36"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e672c95779cf947c5311f83787af4fa8fffd12fb27e4993211a84bdfd9610f9c"
+checksum = "db97caf9d906fbde555dd62fa95ddba9eecfd14cb388e4f491a66d74cd5fb79a"
 dependencies = [
  "once_cell",
  "valuable",
@@ -9136,9 +9194,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-subscriber"
-version = "0.3.20"
+version = "0.3.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2054a14f5307d601f88daf0553e1cbf472acc4f2c51afab632431cdcd72124d5"
+checksum = "2f30143827ddab0d256fd843b7a66d164e9f271cfa0dde49142c5ca0ca291f1e"
 dependencies = [
  "matchers",
  "nu-ansi-term",
@@ -9372,6 +9430,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tokio-util",
+ "tracing",
  "walkdir",
  "zip",
 ]
@@ -9393,6 +9452,7 @@ dependencies = [
  "serde_json",
  "sqs_client",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -10086,6 +10146,7 @@ dependencies = [
  "mockall",
  "serde_json",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

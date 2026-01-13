@@ -1,5 +1,6 @@
 use crate::pubsub::scheduled::context::ScheduledContext;
-use crate::pubsub::util::{fetch_access_token_for_link, fetch_link};
+use crate::pubsub::util::fetch_link;
+use crate::util::gmail::auth::fetch_gmail_access_token_from_link;
 use crate::util::gmail::send::{
     cleanup_draft_attachments, fetch_and_attach_draft_attachments, generate_email_threading_headers,
 };
@@ -19,7 +20,8 @@ pub async fn process_message(
 
     let link = fetch_link(&ctx.db, data.link_id).await?;
     let gmail_access_token =
-        fetch_access_token_for_link(&ctx.redis_client, &ctx.auth_service_client, &link).await?;
+        fetch_gmail_access_token_from_link(&link, &ctx.redis_client, &ctx.auth_service_client)
+            .await?;
 
     // Get scheduled message from database
     let scheduled_message =

@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ProjectPreviewOneOfFourAllOfAccess = typeof ProjectPreviewOneOfFourAllOfAccess[keyof typeof ProjectPreviewOneOfFourAllOfAccess];
-
+export type ProjectPreviewOneOfFourAllOfAccess =
+  (typeof ProjectPreviewOneOfFourAllOfAccess)[keyof typeof ProjectPreviewOneOfFourAllOfAccess];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const ProjectPreviewOneOfFourAllOfAccess = {

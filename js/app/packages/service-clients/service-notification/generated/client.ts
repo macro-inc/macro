@@ -16,1035 +16,1158 @@ import type {
   GetUserNotificationsByEventItemIdParams,
   Notification,
   NotificationBulkRequest,
-  UserUnsubscribe
+  UserNotification,
+  UserUnsubscribe,
 } from './schemas';
 
 /**
  * @summary Register a user device for push notifications.
  */
 export type registerDeviceResponse200 = {
-  data: EmptyResponse
-  status: 200
-}
+  data: EmptyResponse;
+  status: 200;
+};
 
 export type registerDeviceResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type registerDeviceResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
+  data: ErrorResponse;
+  status: 500;
+};
 
 export type registerDeviceResponse501 = {
-  data: ErrorResponse
-  status: 501
-}
-    
-export type registerDeviceResponseSuccess = (registerDeviceResponse200) & {
+  data: ErrorResponse;
+  status: 501;
+};
+
+export type registerDeviceResponseSuccess = registerDeviceResponse200 & {
   headers: Headers;
 };
-export type registerDeviceResponseError = (registerDeviceResponse401 | registerDeviceResponse500 | registerDeviceResponse501) & {
+export type registerDeviceResponseError = (
+  | registerDeviceResponse401
+  | registerDeviceResponse500
+  | registerDeviceResponse501
+) & {
   headers: Headers;
 };
 
-export type registerDeviceResponse = (registerDeviceResponseSuccess | registerDeviceResponseError)
+export type registerDeviceResponse =
+  | registerDeviceResponseSuccess
+  | registerDeviceResponseError;
 
 export const getRegisterDeviceUrl = () => {
+  return `/device/register`;
+};
 
-
-  
-
-  return `/device/register`
-}
-
-export const registerDevice = async (deviceRequest: DeviceRequest, options?: RequestInit): Promise<registerDeviceResponse> => {
-  
-  const res = await fetch(getRegisterDeviceUrl(),
-  {      
+export const registerDevice = async (
+  deviceRequest: DeviceRequest,
+  options?: RequestInit
+): Promise<registerDeviceResponse> => {
+  const res = await fetch(getRegisterDeviceUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      deviceRequest,)
-  }
-)
+    body: JSON.stringify(deviceRequest),
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: registerDeviceResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as registerDeviceResponse
-}
 
-
+  const data: registerDeviceResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as registerDeviceResponse;
+};
 
 /**
  * @summary Unregister a device from receiving push notifications.
  */
 export type unregisterDeviceResponse200 = {
-  data: EmptyResponse
-  status: 200
-}
+  data: EmptyResponse;
+  status: 200;
+};
 
 export type unregisterDeviceResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type unregisterDeviceResponse404 = {
-  data: ErrorResponse
-  status: 404
-}
+  data: ErrorResponse;
+  status: 404;
+};
 
 export type unregisterDeviceResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type unregisterDeviceResponseSuccess = (unregisterDeviceResponse200) & {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type unregisterDeviceResponseSuccess = unregisterDeviceResponse200 & {
   headers: Headers;
 };
-export type unregisterDeviceResponseError = (unregisterDeviceResponse401 | unregisterDeviceResponse404 | unregisterDeviceResponse500) & {
+export type unregisterDeviceResponseError = (
+  | unregisterDeviceResponse401
+  | unregisterDeviceResponse404
+  | unregisterDeviceResponse500
+) & {
   headers: Headers;
 };
 
-export type unregisterDeviceResponse = (unregisterDeviceResponseSuccess | unregisterDeviceResponseError)
+export type unregisterDeviceResponse =
+  | unregisterDeviceResponseSuccess
+  | unregisterDeviceResponseError;
 
 export const getUnregisterDeviceUrl = () => {
+  return `/device/unregister`;
+};
 
-
-  
-
-  return `/device/unregister`
-}
-
-export const unregisterDevice = async (deviceRequest: DeviceRequest, options?: RequestInit): Promise<unregisterDeviceResponse> => {
-  
-  const res = await fetch(getUnregisterDeviceUrl(),
-  {      
+export const unregisterDevice = async (
+  deviceRequest: DeviceRequest,
+  options?: RequestInit
+): Promise<unregisterDeviceResponse> => {
+  const res = await fetch(getUnregisterDeviceUrl(), {
     ...options,
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      deviceRequest,)
-  }
-)
+    body: JSON.stringify(deviceRequest),
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: unregisterDeviceResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as unregisterDeviceResponse
-}
 
-
+  const data: unregisterDeviceResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as unregisterDeviceResponse;
+};
 
 /**
  * @summary Health check
  */
 export type healthHandlerResponse200 = {
-  data: EmptyResponse
-  status: 200
-}
-    
-export type healthHandlerResponseSuccess = (healthHandlerResponse200) & {
+  data: EmptyResponse;
+  status: 200;
+};
+
+export type healthHandlerResponseSuccess = healthHandlerResponse200 & {
   headers: Headers;
 };
-;
 
-export type healthHandlerResponse = (healthHandlerResponseSuccess)
+export type healthHandlerResponse = healthHandlerResponseSuccess;
 
 export const getHealthHandlerUrl = () => {
+  return `/health`;
+};
 
-
-  
-
-  return `/health`
-}
-
-export const healthHandler = async ( options?: RequestInit): Promise<healthHandlerResponse> => {
-  
-  const res = await fetch(getHealthHandlerUrl(),
-  {      
+export const healthHandler = async (
+  options?: RequestInit
+): Promise<healthHandlerResponse> => {
+  const res = await fetch(getHealthHandlerUrl(), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: healthHandlerResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as healthHandlerResponse
-}
 
-
+  const data: healthHandlerResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as healthHandlerResponse;
+};
 
 /**
  * @summary Creates a notification.
 Will generate an id for the notification.
  */
 export type createNotificationResponse200 = {
-  data: Notification
-  status: 200
-}
-    
-export type createNotificationResponseSuccess = (createNotificationResponse200) & {
-  headers: Headers;
+  data: Notification;
+  status: 200;
 };
-;
 
-export type createNotificationResponse = (createNotificationResponseSuccess)
+export type createNotificationResponseSuccess =
+  createNotificationResponse200 & {
+    headers: Headers;
+  };
+
+export type createNotificationResponse = createNotificationResponseSuccess;
 
 export const getCreateNotificationUrl = () => {
+  return `/notifications`;
+};
 
-
-  
-
-  return `/notifications`
-}
-
-export const createNotification = async (createNotification: CreateNotification, options?: RequestInit): Promise<createNotificationResponse> => {
-  
-  const res = await fetch(getCreateNotificationUrl(),
-  {      
+export const createNotification = async (
+  createNotification: CreateNotification,
+  options?: RequestInit
+): Promise<createNotificationResponse> => {
+  const res = await fetch(getCreateNotificationUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      createNotification,)
-  }
-)
+    body: JSON.stringify(createNotification),
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: createNotificationResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as createNotificationResponse
-}
 
-
+  const data: createNotificationResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as createNotificationResponse;
+};
 
 /**
  * @summary Gets the users unsubscribe items.
  */
 export type getUnsubscribesResponse200 = {
-  data: UserUnsubscribe[]
-  status: 200
-}
+  data: UserUnsubscribe[];
+  status: 200;
+};
 
 export type getUnsubscribesResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type getUnsubscribesResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type getUnsubscribesResponseSuccess = (getUnsubscribesResponse200) & {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getUnsubscribesResponseSuccess = getUnsubscribesResponse200 & {
   headers: Headers;
 };
-export type getUnsubscribesResponseError = (getUnsubscribesResponse401 | getUnsubscribesResponse500) & {
+export type getUnsubscribesResponseError = (
+  | getUnsubscribesResponse401
+  | getUnsubscribesResponse500
+) & {
   headers: Headers;
 };
 
-export type getUnsubscribesResponse = (getUnsubscribesResponseSuccess | getUnsubscribesResponseError)
+export type getUnsubscribesResponse =
+  | getUnsubscribesResponseSuccess
+  | getUnsubscribesResponseError;
 
 export const getGetUnsubscribesUrl = () => {
+  return `/unsubscribe`;
+};
 
-
-  
-
-  return `/unsubscribe`
-}
-
-export const getUnsubscribes = async ( options?: RequestInit): Promise<getUnsubscribesResponse> => {
-  
-  const res = await fetch(getGetUnsubscribesUrl(),
-  {      
+export const getUnsubscribes = async (
+  options?: RequestInit
+): Promise<getUnsubscribesResponse> => {
+  const res = await fetch(getGetUnsubscribesUrl(), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: getUnsubscribesResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getUnsubscribesResponse
-}
 
-
+  const data: getUnsubscribesResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getUnsubscribesResponse;
+};
 
 /**
  * @summary Unsubscribes a user from receiving emails
  */
 export type unsubscribeEmailResponse200 = {
-  data: EmptyResponse
-  status: 200
-}
+  data: EmptyResponse;
+  status: 200;
+};
 
 export type unsubscribeEmailResponse404 = {
-  data: ErrorResponse
-  status: 404
-}
+  data: ErrorResponse;
+  status: 404;
+};
 
 export type unsubscribeEmailResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type unsubscribeEmailResponseSuccess = (unsubscribeEmailResponse200) & {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type unsubscribeEmailResponseSuccess = unsubscribeEmailResponse200 & {
   headers: Headers;
 };
-export type unsubscribeEmailResponseError = (unsubscribeEmailResponse404 | unsubscribeEmailResponse500) & {
+export type unsubscribeEmailResponseError = (
+  | unsubscribeEmailResponse404
+  | unsubscribeEmailResponse500
+) & {
   headers: Headers;
 };
 
-export type unsubscribeEmailResponse = (unsubscribeEmailResponseSuccess | unsubscribeEmailResponseError)
+export type unsubscribeEmailResponse =
+  | unsubscribeEmailResponseSuccess
+  | unsubscribeEmailResponseError;
 
 export const getUnsubscribeEmailUrl = () => {
+  return `/unsubscribe/email`;
+};
 
-
-  
-
-  return `/unsubscribe/email`
-}
-
-export const unsubscribeEmail = async ( options?: RequestInit): Promise<unsubscribeEmailResponse> => {
-  
-  const res = await fetch(getUnsubscribeEmailUrl(),
-  {      
+export const unsubscribeEmail = async (
+  options?: RequestInit
+): Promise<unsubscribeEmailResponse> => {
+  const res = await fetch(getUnsubscribeEmailUrl(), {
     ...options,
-    method: 'POST'
-    
-    
-  }
-)
+    method: 'POST',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: unsubscribeEmailResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as unsubscribeEmailResponse
-}
 
-
+  const data: unsubscribeEmailResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as unsubscribeEmailResponse;
+};
 
 /**
  * @summary Unsubscribes a user from a given item for notifications.
  */
 export type unsubscribeItemResponse200 = {
-  data: EmptyResponse
-  status: 200
-}
+  data: EmptyResponse;
+  status: 200;
+};
 
 export type unsubscribeItemResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type unsubscribeItemResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type unsubscribeItemResponseSuccess = (unsubscribeItemResponse200) & {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type unsubscribeItemResponseSuccess = unsubscribeItemResponse200 & {
   headers: Headers;
 };
-export type unsubscribeItemResponseError = (unsubscribeItemResponse401 | unsubscribeItemResponse500) & {
+export type unsubscribeItemResponseError = (
+  | unsubscribeItemResponse401
+  | unsubscribeItemResponse500
+) & {
   headers: Headers;
 };
 
-export type unsubscribeItemResponse = (unsubscribeItemResponseSuccess | unsubscribeItemResponseError)
+export type unsubscribeItemResponse =
+  | unsubscribeItemResponseSuccess
+  | unsubscribeItemResponseError;
 
 export const getUnsubscribeItemUrl = () => {
+  return `/unsubscribe/item/:item_type/:item_id`;
+};
 
-
-  
-
-  return `/unsubscribe/item/:item_type/:item_id`
-}
-
-export const unsubscribeItem = async ( options?: RequestInit): Promise<unsubscribeItemResponse> => {
-  
-  const res = await fetch(getUnsubscribeItemUrl(),
-  {      
+export const unsubscribeItem = async (
+  options?: RequestInit
+): Promise<unsubscribeItemResponse> => {
+  const res = await fetch(getUnsubscribeItemUrl(), {
     ...options,
-    method: 'POST'
-    
-    
-  }
-)
+    method: 'POST',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: unsubscribeItemResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as unsubscribeItemResponse
-}
 
-
+  const data: unsubscribeItemResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as unsubscribeItemResponse;
+};
 
 /**
  * @summary Removes a unsubscribe item for a user.
  */
 export type removeUnsubscribeItemResponse200 = {
-  data: EmptyResponse
-  status: 200
-}
+  data: EmptyResponse;
+  status: 200;
+};
 
 export type removeUnsubscribeItemResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type removeUnsubscribeItemResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type removeUnsubscribeItemResponseSuccess = (removeUnsubscribeItemResponse200) & {
-  headers: Headers;
+  data: ErrorResponse;
+  status: 500;
 };
-export type removeUnsubscribeItemResponseError = (removeUnsubscribeItemResponse401 | removeUnsubscribeItemResponse500) & {
+
+export type removeUnsubscribeItemResponseSuccess =
+  removeUnsubscribeItemResponse200 & {
+    headers: Headers;
+  };
+export type removeUnsubscribeItemResponseError = (
+  | removeUnsubscribeItemResponse401
+  | removeUnsubscribeItemResponse500
+) & {
   headers: Headers;
 };
 
-export type removeUnsubscribeItemResponse = (removeUnsubscribeItemResponseSuccess | removeUnsubscribeItemResponseError)
+export type removeUnsubscribeItemResponse =
+  | removeUnsubscribeItemResponseSuccess
+  | removeUnsubscribeItemResponseError;
 
 export const getRemoveUnsubscribeItemUrl = () => {
+  return `/unsubscribe/item/:item_type/:item_id`;
+};
 
-
-  
-
-  return `/unsubscribe/item/:item_type/:item_id`
-}
-
-export const removeUnsubscribeItem = async ( options?: RequestInit): Promise<removeUnsubscribeItemResponse> => {
-  
-  const res = await fetch(getRemoveUnsubscribeItemUrl(),
-  {      
+export const removeUnsubscribeItem = async (
+  options?: RequestInit
+): Promise<removeUnsubscribeItemResponse> => {
+  const res = await fetch(getRemoveUnsubscribeItemUrl(), {
     ...options,
-    method: 'DELETE'
-    
-    
-  }
-)
+    method: 'DELETE',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: removeUnsubscribeItemResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as removeUnsubscribeItemResponse
-}
 
-
+  const data: removeUnsubscribeItemResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as removeUnsubscribeItemResponse;
+};
 
 /**
  * @summary Unsubscribes user from all notifications.
  */
 export type unsubscribeAllResponse200 = {
-  data: EmptyResponse
-  status: 200
-}
+  data: EmptyResponse;
+  status: 200;
+};
 
 export type unsubscribeAllResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type unsubscribeAllResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type unsubscribeAllResponseSuccess = (unsubscribeAllResponse200) & {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type unsubscribeAllResponseSuccess = unsubscribeAllResponse200 & {
   headers: Headers;
 };
-export type unsubscribeAllResponseError = (unsubscribeAllResponse401 | unsubscribeAllResponse500) & {
+export type unsubscribeAllResponseError = (
+  | unsubscribeAllResponse401
+  | unsubscribeAllResponse500
+) & {
   headers: Headers;
 };
 
-export type unsubscribeAllResponse = (unsubscribeAllResponseSuccess | unsubscribeAllResponseError)
+export type unsubscribeAllResponse =
+  | unsubscribeAllResponseSuccess
+  | unsubscribeAllResponseError;
 
 export const getUnsubscribeAllUrl = () => {
+  return `/unsubscribe/mute`;
+};
 
-
-  
-
-  return `/unsubscribe/mute`
-}
-
-export const unsubscribeAll = async ( options?: RequestInit): Promise<unsubscribeAllResponse> => {
-  
-  const res = await fetch(getUnsubscribeAllUrl(),
-  {      
+export const unsubscribeAll = async (
+  options?: RequestInit
+): Promise<unsubscribeAllResponse> => {
+  const res = await fetch(getUnsubscribeAllUrl(), {
     ...options,
-    method: 'POST'
-    
-    
-  }
-)
+    method: 'POST',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: unsubscribeAllResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as unsubscribeAllResponse
-}
 
-
+  const data: unsubscribeAllResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as unsubscribeAllResponse;
+};
 
 /**
  * @summary Unmutes all notifications.
 Existing notifications that were muted manually will remain muted.
  */
 export type removeUnsubscribeAllResponse200 = {
-  data: EmptyResponse
-  status: 200
-}
+  data: EmptyResponse;
+  status: 200;
+};
 
 export type removeUnsubscribeAllResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type removeUnsubscribeAllResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type removeUnsubscribeAllResponseSuccess = (removeUnsubscribeAllResponse200) & {
-  headers: Headers;
+  data: ErrorResponse;
+  status: 500;
 };
-export type removeUnsubscribeAllResponseError = (removeUnsubscribeAllResponse401 | removeUnsubscribeAllResponse500) & {
+
+export type removeUnsubscribeAllResponseSuccess =
+  removeUnsubscribeAllResponse200 & {
+    headers: Headers;
+  };
+export type removeUnsubscribeAllResponseError = (
+  | removeUnsubscribeAllResponse401
+  | removeUnsubscribeAllResponse500
+) & {
   headers: Headers;
 };
 
-export type removeUnsubscribeAllResponse = (removeUnsubscribeAllResponseSuccess | removeUnsubscribeAllResponseError)
+export type removeUnsubscribeAllResponse =
+  | removeUnsubscribeAllResponseSuccess
+  | removeUnsubscribeAllResponseError;
 
 export const getRemoveUnsubscribeAllUrl = () => {
+  return `/unsubscribe/mute`;
+};
 
-
-  
-
-  return `/unsubscribe/mute`
-}
-
-export const removeUnsubscribeAll = async ( options?: RequestInit): Promise<removeUnsubscribeAllResponse> => {
-  
-  const res = await fetch(getRemoveUnsubscribeAllUrl(),
-  {      
+export const removeUnsubscribeAll = async (
+  options?: RequestInit
+): Promise<removeUnsubscribeAllResponse> => {
+  const res = await fetch(getRemoveUnsubscribeAllUrl(), {
     ...options,
-    method: 'DELETE'
-    
-    
-  }
-)
+    method: 'DELETE',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: removeUnsubscribeAllResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as removeUnsubscribeAllResponse
-}
 
-
+  const data: removeUnsubscribeAllResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as removeUnsubscribeAllResponse;
+};
 
 /**
  * @summary Gets the user's unseen notifications in a paginated format.
  */
 export type getUserNotificationResponse200 = {
-  data: GetAllUserNotificationsResponse
-  status: 200
-}
+  data: GetAllUserNotificationsResponse;
+  status: 200;
+};
 
 export type getUserNotificationResponse400 = {
-  data: ErrorResponse
-  status: 400
-}
+  data: ErrorResponse;
+  status: 400;
+};
 
 export type getUserNotificationResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type getUserNotificationResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type getUserNotificationResponseSuccess = (getUserNotificationResponse200) & {
-  headers: Headers;
+  data: ErrorResponse;
+  status: 500;
 };
-export type getUserNotificationResponseError = (getUserNotificationResponse400 | getUserNotificationResponse401 | getUserNotificationResponse500) & {
+
+export type getUserNotificationResponseSuccess =
+  getUserNotificationResponse200 & {
+    headers: Headers;
+  };
+export type getUserNotificationResponseError = (
+  | getUserNotificationResponse400
+  | getUserNotificationResponse401
+  | getUserNotificationResponse500
+) & {
   headers: Headers;
 };
 
-export type getUserNotificationResponse = (getUserNotificationResponseSuccess | getUserNotificationResponseError)
+export type getUserNotificationResponse =
+  | getUserNotificationResponseSuccess
+  | getUserNotificationResponseError;
 
-export const getGetUserNotificationUrl = (params: GetUserNotificationParams,) => {
+export const getGetUserNotificationUrl = (
+  params: GetUserNotificationParams
+) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
-    
     if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
     }
   });
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/user_notifications?${stringifiedParams}` : `/user_notifications`
-}
+  return stringifiedParams.length > 0
+    ? `/user_notifications?${stringifiedParams}`
+    : `/user_notifications`;
+};
 
-export const getUserNotification = async (params: GetUserNotificationParams, options?: RequestInit): Promise<getUserNotificationResponse> => {
-  
-  const res = await fetch(getGetUserNotificationUrl(params),
-  {      
+export const getUserNotification = async (
+  params: GetUserNotificationParams,
+  options?: RequestInit
+): Promise<getUserNotificationResponse> => {
+  const res = await fetch(getGetUserNotificationUrl(params), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: getUserNotificationResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getUserNotificationResponse
-}
 
-
+  const data: getUserNotificationResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getUserNotificationResponse;
+};
 
 /**
  * @summary Marks the user's notifications as deleted
  */
 export type bulkDeleteUserNotificationResponse200 = {
-  data: EmptyResponse
-  status: 200
-}
-    
-export type bulkDeleteUserNotificationResponseSuccess = (bulkDeleteUserNotificationResponse200) & {
-  headers: Headers;
+  data: EmptyResponse;
+  status: 200;
 };
-;
 
-export type bulkDeleteUserNotificationResponse = (bulkDeleteUserNotificationResponseSuccess)
+export type bulkDeleteUserNotificationResponseSuccess =
+  bulkDeleteUserNotificationResponse200 & {
+    headers: Headers;
+  };
+
+export type bulkDeleteUserNotificationResponse =
+  bulkDeleteUserNotificationResponseSuccess;
 
 export const getBulkDeleteUserNotificationUrl = () => {
+  return `/user_notifications/bulk`;
+};
 
-
-  
-
-  return `/user_notifications/bulk`
-}
-
-export const bulkDeleteUserNotification = async (notificationBulkRequest: NotificationBulkRequest, options?: RequestInit): Promise<bulkDeleteUserNotificationResponse> => {
-  
-  const res = await fetch(getBulkDeleteUserNotificationUrl(),
-  {      
+export const bulkDeleteUserNotification = async (
+  notificationBulkRequest: NotificationBulkRequest,
+  options?: RequestInit
+): Promise<bulkDeleteUserNotificationResponse> => {
+  const res = await fetch(getBulkDeleteUserNotificationUrl(), {
     ...options,
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      notificationBulkRequest,)
-  }
-)
+    body: JSON.stringify(notificationBulkRequest),
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: bulkDeleteUserNotificationResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as bulkDeleteUserNotificationResponse
-}
 
-
+  const data: bulkDeleteUserNotificationResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as bulkDeleteUserNotificationResponse;
+};
 
 /**
  * @summary Marks the user's notifications as done
  */
 export type bulkMarkUserNotificationDoneResponse200 = {
-  data: EmptyResponse
-  status: 200
-}
-    
-export type bulkMarkUserNotificationDoneResponseSuccess = (bulkMarkUserNotificationDoneResponse200) & {
-  headers: Headers;
+  data: EmptyResponse;
+  status: 200;
 };
-;
 
-export type bulkMarkUserNotificationDoneResponse = (bulkMarkUserNotificationDoneResponseSuccess)
+export type bulkMarkUserNotificationDoneResponseSuccess =
+  bulkMarkUserNotificationDoneResponse200 & {
+    headers: Headers;
+  };
+
+export type bulkMarkUserNotificationDoneResponse =
+  bulkMarkUserNotificationDoneResponseSuccess;
 
 export const getBulkMarkUserNotificationDoneUrl = () => {
+  return `/user_notifications/bulk/done`;
+};
 
-
-  
-
-  return `/user_notifications/bulk/done`
-}
-
-export const bulkMarkUserNotificationDone = async (notificationBulkRequest: NotificationBulkRequest, options?: RequestInit): Promise<bulkMarkUserNotificationDoneResponse> => {
-  
-  const res = await fetch(getBulkMarkUserNotificationDoneUrl(),
-  {      
+export const bulkMarkUserNotificationDone = async (
+  notificationBulkRequest: NotificationBulkRequest,
+  options?: RequestInit
+): Promise<bulkMarkUserNotificationDoneResponse> => {
+  const res = await fetch(getBulkMarkUserNotificationDoneUrl(), {
     ...options,
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      notificationBulkRequest,)
-  }
-)
+    body: JSON.stringify(notificationBulkRequest),
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: bulkMarkUserNotificationDoneResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as bulkMarkUserNotificationDoneResponse
-}
 
-
+  const data: bulkMarkUserNotificationDoneResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as bulkMarkUserNotificationDoneResponse;
+};
 
 /**
  * @summary Marks the user's notifications as seen
  */
 export type bulkMarkUserNotificationSeenResponse200 = {
-  data: EmptyResponse
-  status: 200
-}
-    
-export type bulkMarkUserNotificationSeenResponseSuccess = (bulkMarkUserNotificationSeenResponse200) & {
-  headers: Headers;
+  data: EmptyResponse;
+  status: 200;
 };
-;
 
-export type bulkMarkUserNotificationSeenResponse = (bulkMarkUserNotificationSeenResponseSuccess)
+export type bulkMarkUserNotificationSeenResponseSuccess =
+  bulkMarkUserNotificationSeenResponse200 & {
+    headers: Headers;
+  };
+
+export type bulkMarkUserNotificationSeenResponse =
+  bulkMarkUserNotificationSeenResponseSuccess;
 
 export const getBulkMarkUserNotificationSeenUrl = () => {
+  return `/user_notifications/bulk/seen`;
+};
 
-
-  
-
-  return `/user_notifications/bulk/seen`
-}
-
-export const bulkMarkUserNotificationSeen = async (notificationBulkRequest: NotificationBulkRequest, options?: RequestInit): Promise<bulkMarkUserNotificationSeenResponse> => {
-  
-  const res = await fetch(getBulkMarkUserNotificationSeenUrl(),
-  {      
+export const bulkMarkUserNotificationSeen = async (
+  notificationBulkRequest: NotificationBulkRequest,
+  options?: RequestInit
+): Promise<bulkMarkUserNotificationSeenResponse> => {
+  const res = await fetch(getBulkMarkUserNotificationSeenUrl(), {
     ...options,
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      notificationBulkRequest,)
-  }
-)
+    body: JSON.stringify(notificationBulkRequest),
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: bulkMarkUserNotificationSeenResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as bulkMarkUserNotificationSeenResponse
-}
 
-
+  const data: bulkMarkUserNotificationSeenResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as bulkMarkUserNotificationSeenResponse;
+};
 
 /**
  * @summary Marks the user's notifications as undone.
  */
 export type bulkMarkUserNotificationUndoneResponse200 = {
-  data: EmptyResponse
-  status: 200
-}
-    
-export type bulkMarkUserNotificationUndoneResponseSuccess = (bulkMarkUserNotificationUndoneResponse200) & {
-  headers: Headers;
+  data: EmptyResponse;
+  status: 200;
 };
-;
 
-export type bulkMarkUserNotificationUndoneResponse = (bulkMarkUserNotificationUndoneResponseSuccess)
+export type bulkMarkUserNotificationUndoneResponseSuccess =
+  bulkMarkUserNotificationUndoneResponse200 & {
+    headers: Headers;
+  };
+
+export type bulkMarkUserNotificationUndoneResponse =
+  bulkMarkUserNotificationUndoneResponseSuccess;
 
 export const getBulkMarkUserNotificationUndoneUrl = () => {
+  return `/user_notifications/bulk/undone`;
+};
 
-
-  
-
-  return `/user_notifications/bulk/undone`
-}
-
-export const bulkMarkUserNotificationUndone = async (notificationBulkRequest: NotificationBulkRequest, options?: RequestInit): Promise<bulkMarkUserNotificationUndoneResponse> => {
-  
-  const res = await fetch(getBulkMarkUserNotificationUndoneUrl(),
-  {      
+export const bulkMarkUserNotificationUndone = async (
+  notificationBulkRequest: NotificationBulkRequest,
+  options?: RequestInit
+): Promise<bulkMarkUserNotificationUndoneResponse> => {
+  const res = await fetch(getBulkMarkUserNotificationUndoneUrl(), {
     ...options,
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      notificationBulkRequest,)
-  }
-)
+    body: JSON.stringify(notificationBulkRequest),
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: bulkMarkUserNotificationUndoneResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as bulkMarkUserNotificationUndoneResponse
-}
 
-
+  const data: bulkMarkUserNotificationUndoneResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as bulkMarkUserNotificationUndoneResponse;
+};
 
 /**
  * @summary Gets the user's notifications for a provided event item ids in a paginated format.
 This will only return unseen notifications.
  */
 export type bulkGetUserNotificationsByEventItemIdResponse200 = {
-  data: GetAllUserNotificationsResponse
-  status: 200
-}
+  data: GetAllUserNotificationsResponse;
+  status: 200;
+};
 
 export type bulkGetUserNotificationsByEventItemIdResponse400 = {
-  data: ErrorResponse
-  status: 400
-}
+  data: ErrorResponse;
+  status: 400;
+};
 
 export type bulkGetUserNotificationsByEventItemIdResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type bulkGetUserNotificationsByEventItemIdResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type bulkGetUserNotificationsByEventItemIdResponseSuccess = (bulkGetUserNotificationsByEventItemIdResponse200) & {
-  headers: Headers;
+  data: ErrorResponse;
+  status: 500;
 };
-export type bulkGetUserNotificationsByEventItemIdResponseError = (bulkGetUserNotificationsByEventItemIdResponse400 | bulkGetUserNotificationsByEventItemIdResponse401 | bulkGetUserNotificationsByEventItemIdResponse500) & {
+
+export type bulkGetUserNotificationsByEventItemIdResponseSuccess =
+  bulkGetUserNotificationsByEventItemIdResponse200 & {
+    headers: Headers;
+  };
+export type bulkGetUserNotificationsByEventItemIdResponseError = (
+  | bulkGetUserNotificationsByEventItemIdResponse400
+  | bulkGetUserNotificationsByEventItemIdResponse401
+  | bulkGetUserNotificationsByEventItemIdResponse500
+) & {
   headers: Headers;
 };
 
-export type bulkGetUserNotificationsByEventItemIdResponse = (bulkGetUserNotificationsByEventItemIdResponseSuccess | bulkGetUserNotificationsByEventItemIdResponseError)
+export type bulkGetUserNotificationsByEventItemIdResponse =
+  | bulkGetUserNotificationsByEventItemIdResponseSuccess
+  | bulkGetUserNotificationsByEventItemIdResponseError;
 
-export const getBulkGetUserNotificationsByEventItemIdUrl = (params: BulkGetUserNotificationsByEventItemIdParams,) => {
+export const getBulkGetUserNotificationsByEventItemIdUrl = (
+  params: BulkGetUserNotificationsByEventItemIdParams
+) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
-    
     if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
     }
   });
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/user_notifications/item/bulk?${stringifiedParams}` : `/user_notifications/item/bulk`
-}
+  return stringifiedParams.length > 0
+    ? `/user_notifications/item/bulk?${stringifiedParams}`
+    : `/user_notifications/item/bulk`;
+};
 
-export const bulkGetUserNotificationsByEventItemId = async (bulkGetUserNotificationsByEventItemIdRequest: BulkGetUserNotificationsByEventItemIdRequest,
-    params: BulkGetUserNotificationsByEventItemIdParams, options?: RequestInit): Promise<bulkGetUserNotificationsByEventItemIdResponse> => {
-  
-  const res = await fetch(getBulkGetUserNotificationsByEventItemIdUrl(params),
-  {      
+export const bulkGetUserNotificationsByEventItemId = async (
+  bulkGetUserNotificationsByEventItemIdRequest: BulkGetUserNotificationsByEventItemIdRequest,
+  params: BulkGetUserNotificationsByEventItemIdParams,
+  options?: RequestInit
+): Promise<bulkGetUserNotificationsByEventItemIdResponse> => {
+  const res = await fetch(getBulkGetUserNotificationsByEventItemIdUrl(params), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      bulkGetUserNotificationsByEventItemIdRequest,)
-  }
-)
+    body: JSON.stringify(bulkGetUserNotificationsByEventItemIdRequest),
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: bulkGetUserNotificationsByEventItemIdResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as bulkGetUserNotificationsByEventItemIdResponse
-}
 
-
+  const data: bulkGetUserNotificationsByEventItemIdResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as bulkGetUserNotificationsByEventItemIdResponse;
+};
 
 /**
  * @summary Gets the user's notifications for a given event item id in a paginated format.
  */
 export type getUserNotificationsByEventItemIdResponse200 = {
-  data: GetAllUserNotificationsResponse
-  status: 200
-}
+  data: GetAllUserNotificationsResponse;
+  status: 200;
+};
 
 export type getUserNotificationsByEventItemIdResponse400 = {
-  data: ErrorResponse
-  status: 400
-}
+  data: ErrorResponse;
+  status: 400;
+};
 
 export type getUserNotificationsByEventItemIdResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type getUserNotificationsByEventItemIdResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type getUserNotificationsByEventItemIdResponseSuccess = (getUserNotificationsByEventItemIdResponse200) & {
-  headers: Headers;
+  data: ErrorResponse;
+  status: 500;
 };
-export type getUserNotificationsByEventItemIdResponseError = (getUserNotificationsByEventItemIdResponse400 | getUserNotificationsByEventItemIdResponse401 | getUserNotificationsByEventItemIdResponse500) & {
+
+export type getUserNotificationsByEventItemIdResponseSuccess =
+  getUserNotificationsByEventItemIdResponse200 & {
+    headers: Headers;
+  };
+export type getUserNotificationsByEventItemIdResponseError = (
+  | getUserNotificationsByEventItemIdResponse400
+  | getUserNotificationsByEventItemIdResponse401
+  | getUserNotificationsByEventItemIdResponse500
+) & {
   headers: Headers;
 };
 
-export type getUserNotificationsByEventItemIdResponse = (getUserNotificationsByEventItemIdResponseSuccess | getUserNotificationsByEventItemIdResponseError)
+export type getUserNotificationsByEventItemIdResponse =
+  | getUserNotificationsByEventItemIdResponseSuccess
+  | getUserNotificationsByEventItemIdResponseError;
 
-export const getGetUserNotificationsByEventItemIdUrl = (eventItemId: string,
-    params: GetUserNotificationsByEventItemIdParams,) => {
+export const getGetUserNotificationsByEventItemIdUrl = (
+  eventItemId: string,
+  params: GetUserNotificationsByEventItemIdParams
+) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
-    
     if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
     }
   });
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/user_notifications/item/${eventItemId}?${stringifiedParams}` : `/user_notifications/item/${eventItemId}`
-}
+  return stringifiedParams.length > 0
+    ? `/user_notifications/item/${eventItemId}?${stringifiedParams}`
+    : `/user_notifications/item/${eventItemId}`;
+};
 
-export const getUserNotificationsByEventItemId = async (eventItemId: string,
-    params: GetUserNotificationsByEventItemIdParams, options?: RequestInit): Promise<getUserNotificationsByEventItemIdResponse> => {
-  
-  const res = await fetch(getGetUserNotificationsByEventItemIdUrl(eventItemId,params),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-)
+export const getUserNotificationsByEventItemId = async (
+  eventItemId: string,
+  params: GetUserNotificationsByEventItemIdParams,
+  options?: RequestInit
+): Promise<getUserNotificationsByEventItemIdResponse> => {
+  const res = await fetch(
+    getGetUserNotificationsByEventItemIdUrl(eventItemId, params),
+    {
+      ...options,
+      method: 'GET',
+    }
+  );
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: getUserNotificationsByEventItemIdResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getUserNotificationsByEventItemIdResponse
-}
 
-
+  const data: getUserNotificationsByEventItemIdResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getUserNotificationsByEventItemIdResponse;
+};
 
 /**
  * @summary Marks the user's notification as done for a given event item id and type.
  */
 export type bulkMarkUserNotificationDoneByEventResponse200 = {
-  data: EmptyResponse
-  status: 200
-}
-    
-export type bulkMarkUserNotificationDoneByEventResponseSuccess = (bulkMarkUserNotificationDoneByEventResponse200) & {
-  headers: Headers;
+  data: EmptyResponse;
+  status: 200;
 };
-;
 
-export type bulkMarkUserNotificationDoneByEventResponse = (bulkMarkUserNotificationDoneByEventResponseSuccess)
+export type bulkMarkUserNotificationDoneByEventResponseSuccess =
+  bulkMarkUserNotificationDoneByEventResponse200 & {
+    headers: Headers;
+  };
 
-export const getBulkMarkUserNotificationDoneByEventUrl = (eventItemId: string,) => {
+export type bulkMarkUserNotificationDoneByEventResponse =
+  bulkMarkUserNotificationDoneByEventResponseSuccess;
 
+export const getBulkMarkUserNotificationDoneByEventUrl = (
+  eventItemId: string
+) => {
+  return `/user_notifications/item/${eventItemId}/done`;
+};
 
-  
-
-  return `/user_notifications/item/${eventItemId}/done`
-}
-
-export const bulkMarkUserNotificationDoneByEvent = async (eventItemId: string, options?: RequestInit): Promise<bulkMarkUserNotificationDoneByEventResponse> => {
-  
-  const res = await fetch(getBulkMarkUserNotificationDoneByEventUrl(eventItemId),
-  {      
-    ...options,
-    method: 'PATCH'
-    
-    
-  }
-)
+export const bulkMarkUserNotificationDoneByEvent = async (
+  eventItemId: string,
+  options?: RequestInit
+): Promise<bulkMarkUserNotificationDoneByEventResponse> => {
+  const res = await fetch(
+    getBulkMarkUserNotificationDoneByEventUrl(eventItemId),
+    {
+      ...options,
+      method: 'PATCH',
+    }
+  );
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: bulkMarkUserNotificationDoneByEventResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as bulkMarkUserNotificationDoneByEventResponse
-}
 
-
+  const data: bulkMarkUserNotificationDoneByEventResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as bulkMarkUserNotificationDoneByEventResponse;
+};
 
 /**
  * @summary Marks the user's notification as seen for a given event item id and type.
  */
 export type bulkMarkUserNotificationSeenByEventResponse200 = {
-  data: EmptyResponse
-  status: 200
-}
-    
-export type bulkMarkUserNotificationSeenByEventResponseSuccess = (bulkMarkUserNotificationSeenByEventResponse200) & {
-  headers: Headers;
+  data: EmptyResponse;
+  status: 200;
 };
-;
 
-export type bulkMarkUserNotificationSeenByEventResponse = (bulkMarkUserNotificationSeenByEventResponseSuccess)
+export type bulkMarkUserNotificationSeenByEventResponseSuccess =
+  bulkMarkUserNotificationSeenByEventResponse200 & {
+    headers: Headers;
+  };
 
-export const getBulkMarkUserNotificationSeenByEventUrl = (eventItemId: string,) => {
+export type bulkMarkUserNotificationSeenByEventResponse =
+  bulkMarkUserNotificationSeenByEventResponseSuccess;
 
+export const getBulkMarkUserNotificationSeenByEventUrl = (
+  eventItemId: string
+) => {
+  return `/user_notifications/item/${eventItemId}/seen`;
+};
 
-  
-
-  return `/user_notifications/item/${eventItemId}/seen`
-}
-
-export const bulkMarkUserNotificationSeenByEvent = async (eventItemId: string, options?: RequestInit): Promise<bulkMarkUserNotificationSeenByEventResponse> => {
-  
-  const res = await fetch(getBulkMarkUserNotificationSeenByEventUrl(eventItemId),
-  {      
-    ...options,
-    method: 'PATCH'
-    
-    
-  }
-)
+export const bulkMarkUserNotificationSeenByEvent = async (
+  eventItemId: string,
+  options?: RequestInit
+): Promise<bulkMarkUserNotificationSeenByEventResponse> => {
+  const res = await fetch(
+    getBulkMarkUserNotificationSeenByEventUrl(eventItemId),
+    {
+      ...options,
+      method: 'PATCH',
+    }
+  );
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: bulkMarkUserNotificationSeenByEventResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as bulkMarkUserNotificationSeenByEventResponse
-}
 
+  const data: bulkMarkUserNotificationSeenByEventResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as bulkMarkUserNotificationSeenByEventResponse;
+};
 
+/**
+ * @summary Gets a single user notification by id.
+ */
+export type getUserNotificationByIdResponse200 = {
+  data: UserNotification;
+  status: 200;
+};
+
+export type getUserNotificationByIdResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type getUserNotificationByIdResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getUserNotificationByIdResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type getUserNotificationByIdResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getUserNotificationByIdResponseSuccess =
+  getUserNotificationByIdResponse200 & {
+    headers: Headers;
+  };
+export type getUserNotificationByIdResponseError = (
+  | getUserNotificationByIdResponse400
+  | getUserNotificationByIdResponse401
+  | getUserNotificationByIdResponse404
+  | getUserNotificationByIdResponse500
+) & {
+  headers: Headers;
+};
+
+export type getUserNotificationByIdResponse =
+  | getUserNotificationByIdResponseSuccess
+  | getUserNotificationByIdResponseError;
+
+export const getGetUserNotificationByIdUrl = (notificationId: string) => {
+  return `/user_notifications/${notificationId}`;
+};
+
+export const getUserNotificationById = async (
+  notificationId: string,
+  options?: RequestInit
+): Promise<getUserNotificationByIdResponse> => {
+  const res = await fetch(getGetUserNotificationByIdUrl(notificationId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getUserNotificationByIdResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getUserNotificationByIdResponse;
+};
 
 /**
  * @summary Marks the user's notification as deleted.
  */
 export type deleteUserNotificationResponse200 = {
-  data: EmptyResponse
-  status: 200
-}
-    
-export type deleteUserNotificationResponseSuccess = (deleteUserNotificationResponse200) & {
-  headers: Headers;
+  data: EmptyResponse;
+  status: 200;
 };
-;
 
-export type deleteUserNotificationResponse = (deleteUserNotificationResponseSuccess)
+export type deleteUserNotificationResponseSuccess =
+  deleteUserNotificationResponse200 & {
+    headers: Headers;
+  };
 
-export const getDeleteUserNotificationUrl = (notificationId: string,) => {
+export type deleteUserNotificationResponse =
+  deleteUserNotificationResponseSuccess;
 
+export const getDeleteUserNotificationUrl = (notificationId: string) => {
+  return `/user_notifications/${notificationId}`;
+};
 
-  
-
-  return `/user_notifications/${notificationId}`
-}
-
-export const deleteUserNotification = async (notificationId: string, options?: RequestInit): Promise<deleteUserNotificationResponse> => {
-  
-  const res = await fetch(getDeleteUserNotificationUrl(notificationId),
-  {      
+export const deleteUserNotification = async (
+  notificationId: string,
+  options?: RequestInit
+): Promise<deleteUserNotificationResponse> => {
+  const res = await fetch(getDeleteUserNotificationUrl(notificationId), {
     ...options,
-    method: 'DELETE'
-    
-    
-  }
-)
+    method: 'DELETE',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: deleteUserNotificationResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as deleteUserNotificationResponse
-}
+
+  const data: deleteUserNotificationResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as deleteUserNotificationResponse;
+};

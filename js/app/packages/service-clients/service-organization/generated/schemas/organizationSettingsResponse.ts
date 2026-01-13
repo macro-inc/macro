@@ -4,8 +4,9 @@
  * organization_service
  * OpenAPI spec version: 0.1.0
  */
-import type { OrganizationShareType } from './organizationShareType';
+
 import type { OrganizationSettingsResponseRetentionDays } from './organizationSettingsResponseRetentionDays';
+import type { OrganizationShareType } from './organizationShareType';
 
 export interface OrganizationSettingsResponse {
   /** The default share permission for the organization */

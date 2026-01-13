@@ -16,8 +16,29 @@ import { v7 } from 'uuid';
 import {
   INSERT_DATE_MENTION_COMMAND,
   INSERT_DOCUMENT_MENTION_COMMAND,
+  INSERT_GROUP_MENTION_COMMAND,
   INSERT_USER_MENTION_COMMAND,
 } from '../plugins/mentions';
+
+export type GroupItem = {
+  id: string;
+  groupAlias: string;
+};
+
+/**
+ * Creates a group mention entity from an alias.
+ * Use this to define new group aliases (e.g., @here, @team, @online).
+ */
+export function createGroupAlias(alias: string): Entity<'group'> {
+  return {
+    kind: 'group',
+    id: alias,
+    data: {
+      id: alias,
+      groupAlias: alias,
+    },
+  };
+}
 
 export type EntityMap = {
   item: Item;
@@ -25,6 +46,7 @@ export type EntityMap = {
   channel: ChannelWithParticipants;
   date: DateItem;
   email: EmailEntity;
+  group: GroupItem;
 };
 
 export type Entity<T extends keyof EntityMap> = {
@@ -100,6 +122,8 @@ export const getItemName = (item: CombinedEntity): string => {
       return item.data.name ?? 'No Subject';
     case 'date':
       return item.data.displayFormat;
+    case 'group':
+      return `@${item.data.groupAlias}`;
   }
 };
 
@@ -171,6 +195,16 @@ export async function handleDateMention(
   editor.dispatchCommand(INSERT_DATE_MENTION_COMMAND, {
     date: date.date.toISOString(),
     displayFormat: date.displayFormat,
+  });
+}
+
+export async function handleGroupMention(
+  group: GroupItem,
+  dependencies: HandlerDependencies
+) {
+  const { editor } = dependencies;
+  editor.dispatchCommand(INSERT_GROUP_MENTION_COMMAND, {
+    groupAlias: group.groupAlias,
   });
 }
 

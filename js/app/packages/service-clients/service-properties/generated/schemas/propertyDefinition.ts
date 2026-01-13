@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { DataType } from './dataType';
-import type { PropertyOwner } from './propertyOwner';
 import type { PropertyDefinitionSpecificEntityType } from './propertyDefinitionSpecificEntityType';
+import type { PropertyOwner } from './propertyOwner';
 
 /**
  * Property definition model (service representation).

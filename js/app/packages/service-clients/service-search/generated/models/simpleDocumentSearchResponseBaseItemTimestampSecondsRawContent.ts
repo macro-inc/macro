@@ -8,4 +8,6 @@
 /**
  * The raw content of the document
  */
-export type SimpleDocumentSearchResponseBaseItemTimestampSecondsRawContent = string | null;
+export type SimpleDocumentSearchResponseBaseItemTimestampSecondsRawContent =
+  | string
+  | null;

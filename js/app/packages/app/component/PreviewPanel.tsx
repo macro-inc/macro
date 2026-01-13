@@ -160,7 +160,7 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
 
 export const PreviewPanel: Component<PreviewPanel> = (props) => {
   return (
-    <div class="flex flex-row size-full w-[70%] shrink-0">
+    <div class="flex flex-row size-full sm:w-[70%] max-sm:h-[50%] max-sm:border-t border-edge-muted shrink-0">
       <Show when={props.selectedEntity}>
         {(selectedEntity) => (
           <PreviewPanelContent

@@ -259,9 +259,7 @@ export function createUnifiedInfiniteList<T extends EntityData>({
       entityQueries?.map((query) => {
         const operations = getOperations(query.operations);
         const data =
-          query.query.isSuccess && query.query.isEnabled
-            ? query.query.data
-            : [];
+          query.query.isEnabled && query.query.data ? query.query.data : [];
         return {
           data,
           operations,
@@ -418,9 +416,19 @@ export function createUnifiedInfiniteList<T extends EntityData>({
   };
 
   createEffect(() => {
-    entityInfiniteQueries.map((query) => {
-      if (!query.query.isEnabled || !query.query.isError) return;
+    const enabledQueries = entityInfiniteQueries.filter(
+      (q) => q.query.isEnabled
+    );
+    const errorQueries = enabledQueries.filter((q) => q.query.isError);
 
+    // Only show error if all enabled queries failed
+    if (
+      errorQueries.length === 0 ||
+      errorQueries.length < enabledQueries.length
+    )
+      return;
+
+    errorQueries.forEach((query) => {
       if (query.query.isFetchNextPageError) {
         console.error('failed to fetch next page', query.query.failureReason);
         toast.failure('Failed to fetch more data');

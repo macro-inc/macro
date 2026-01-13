@@ -6,4 +6,5 @@
  */
 import type { DocumentMetadata } from './documentMetadata';
 
-export type CreateBulkDocumentResponseDataDocumentMetadata = null | DocumentMetadata;
+export type CreateBulkDocumentResponseDataDocumentMetadata =
+  null | DocumentMetadata;

@@ -26,6 +26,12 @@ import {
   RECOMPUTE_SELECTION_RECT,
   REMOVE_HIGHLIGHT_SELECTED_NODES,
 } from '@core/component/LexicalMarkdown/plugins/popup/popupPlugin';
+import {
+  $canConvertCheckboxesToTasks,
+  CONVERT_CHECKBOXES_TO_TASKS,
+  isCheckboxToTaskPluginEnabled,
+} from '@core/component/LexicalMarkdown/plugins/checkbox-to-task';
+import { toast } from '@core/component/Toast/Toast';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
@@ -36,6 +42,7 @@ import { debouncedDependent } from '@core/util/debounce';
 import { createFromMarkdownText } from '@core/util/md';
 import { getScrollParentElement } from '@core/util/scrollParent';
 import type { NodeIdMappings } from '@lexical-core';
+import { useUserId } from '@service-gql/client';
 import MacroGridLoader from '@macro-icons/macro-grid-noise-loader-4.svg';
 import CheckIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
 import ClipboardIcon from '@phosphor-icons/core/bold/clipboard-bold.svg?component-solid';
@@ -44,6 +51,7 @@ import LoadingIcon from '@phosphor-icons/core/bold/spinner-gap-bold.svg?componen
 import PaperPlaneRight from '@phosphor-icons/core/fill/paper-plane-right-fill.svg?component-solid';
 import LinkIcon from '@phosphor-icons/core/regular/link.svg?component-solid';
 import PencilIcon from '@phosphor-icons/core/regular/pencil.svg?component-solid';
+import CheckSquareIcon from '@phosphor-icons/core/regular/check-square.svg?component-solid';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import { createCallback } from '@solid-primitives/rootless';
 import { GlitchText } from '@ui/components/GlitchText';
@@ -52,7 +60,7 @@ import {
   $getSelectionLocation,
   type PersistentLocation,
 } from 'core/component/LexicalMarkdown/plugins/location/locationPlugin';
-import { $getRoot, COMMAND_PRIORITY_HIGH } from 'lexical';
+import { $getRoot, COMMAND_PRIORITY_HIGH, type RangeSelection } from 'lexical';
 import {
   createEffect,
   createSignal,
@@ -109,10 +117,13 @@ export function MarkdownPopup(props: {
 
   const canEdit = useCanEdit();
   const canComment = useCanComment();
+  const currentUserId = useUserId();
 
   const [copied, setCopied] = createSignal(false);
   const [locationCopied, setLocationCopied] = createSignal(false);
   const [isLoading, setIsLoading] = createSignal<boolean>(false);
+  const [isConverting, setIsConverting] = createSignal(false);
+  const [hasCheckboxes, setHasCheckboxes] = createSignal(false);
   const { replaceOrInsertSplit } = useSplitLayout();
   let markdownRootRef!: HTMLDivElement;
 
@@ -134,10 +145,12 @@ export function MarkdownPopup(props: {
   const selectedNodesText = () => selection()?.nodeText ?? undefined;
   const selectionType = () => selection()?.type ?? undefined;
 
-  // Reset location copied state on selection change.
   createEffect(
     on([selection], () => {
       setLocationCopied(false);
+      editor.read(() => {
+        setHasCheckboxes($canConvertCheckboxesToTasks());
+      });
     })
   );
 
@@ -323,6 +336,29 @@ export function MarkdownPopup(props: {
       setIsLoading(false);
     });
 
+    const handleConvertToTasks = () => {
+      const currentSelection = selection();
+      const userId = currentUserId();
+      if (!currentSelection?.lexicalSelection || !userId) {
+        return;
+      }
+
+      setIsConverting(true);
+      editor.dispatchCommand(CONVERT_CHECKBOXES_TO_TASKS, {
+        selection: currentSelection.lexicalSelection as RangeSelection,
+        onComplete: (results) => {
+          setIsConverting(false);
+          const successCount = results.filter((r) => r.isOk()).length;
+          if (successCount > 0) {
+            toast.success(
+              `Created ${successCount} task${successCount > 1 ? 's' : ''}`
+            );
+          }
+          setPopupVisible(false);
+        },
+      });
+    };
+
     const contentSize = () => {
       let charCount = 0;
       editor.getEditorState().read(() => {
@@ -372,6 +408,15 @@ export function MarkdownPopup(props: {
       });
     });
 
+    const shouldShowCheckboxToTaskButton = () => {
+      return (
+        isCheckboxToTaskPluginEnabled(editor) &&
+        hasCheckboxes() &&
+        canEdit() &&
+        currentUserId()
+      );
+    };
+
     return (
       <>
         <div
@@ -408,6 +453,16 @@ export function MarkdownPopup(props: {
             }
           >
             <FormatTools withinPopup />
+          </Show>
+          <Show when={shouldShowCheckboxToTaskButton()}>
+            <DeprecatedTextButton
+              width={'w-12'}
+              theme="clear"
+              icon={isConverting() ? LoadingIcon : CheckSquareIcon}
+              text={isConverting() ? 'Converting...' : 'Tasks'}
+              onClick={handleConvertToTasks}
+              disabled={isConverting()}
+            />
           </Show>
           <DeprecatedTextButton
             width={'w-12'}

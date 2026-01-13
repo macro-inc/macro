@@ -54,6 +54,9 @@ pub enum OpensearchClientError {
 
     #[error("unsupported search_on")]
     InvalidSearchOn,
+
+    #[error("searching with exhausted cursor")]
+    SearchWithExhaustedCursor,
 }
 
 impl From<anyhow::Error> for OpensearchClientError {

@@ -7,4 +7,5 @@
 import type { DocumentSearchRequestAllOf } from './documentSearchRequestAllOf';
 import type { DocumentSearchRequestAllOfTwo } from './documentSearchRequestAllOfTwo';
 
-export type DocumentSearchRequest = DocumentSearchRequestAllOf & DocumentSearchRequestAllOfTwo;
+export type DocumentSearchRequest = DocumentSearchRequestAllOf &
+  DocumentSearchRequestAllOfTwo;

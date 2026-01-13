@@ -1,4 +1,6 @@
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
+import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
+import type { PropertyDefinitionResponse } from '@service-properties/generated/schemas/propertyDefinitionResponse';
 import type { Property } from '../types';
 
 /**
@@ -92,4 +94,15 @@ export function isEntityReferenceArray(
       'entity_id' in ref &&
       'entity_type' in ref
   );
+}
+
+/**
+ * Type guard to narrow PropertyDefinitionResponse to PropertyDefinition
+ * PropertyDefinitionWithOptions has { definition, property_options } structure
+ * PropertyDefinition has { id, data_type, ... } directly
+ */
+export function isPropertyDefinition(
+  p: PropertyDefinitionResponse
+): p is PropertyDefinition {
+  return !('definition' in p);
 }

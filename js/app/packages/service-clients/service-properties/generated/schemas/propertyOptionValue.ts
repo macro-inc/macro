@@ -10,4 +10,6 @@ import type { PropertyOptionValueOneOfThree } from './propertyOptionValueOneOfTh
 /**
  * The value of a property option - either a string or a number.
  */
-export type PropertyOptionValue = PropertyOptionValueOneOf | PropertyOptionValueOneOfThree;
+export type PropertyOptionValue =
+  | PropertyOptionValueOneOf
+  | PropertyOptionValueOneOfThree;

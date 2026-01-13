@@ -4,7 +4,10 @@
     "title": "Document Cognition Service",
     "description": "",
     "termsOfService": "https://macro.com/terms",
-    "license": { "name": "Proprietary", "identifier": "Proprietary" },
+    "license": {
+      "name": "Proprietary",
+      "identifier": "Proprietary"
+    },
     "version": "1.0.0"
   },
   "paths": {
@@ -35,15 +38,33 @@
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -75,15 +96,33 @@
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -98,7 +137,9 @@
             "in": "path",
             "description": "id of the attachment",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -114,15 +155,33 @@
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -137,21 +196,41 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ChatsResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ChatsResponse"
+                }
               }
             }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       },
@@ -163,21 +242,41 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/StringIDResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/StringIDResponse"
+                }
               }
             }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -193,7 +292,9 @@
             "in": "path",
             "description": "Chat ID to retrieve history for",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -201,17 +302,31 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ChatHistory" }
+                "schema": {
+                  "$ref": "#/components/schemas/ChatHistory"
+                }
               }
             }
           },
           "404": {
             "description": "Chat not found",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "Internal server error",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -236,21 +351,41 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ChatHistory" }
+                "schema": {
+                  "$ref": "#/components/schemas/ChatHistory"
+                }
               }
             }
           },
           "403": {
             "description": "Access denied to chat",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "Messages not found",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "Internal server error",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -266,7 +401,9 @@
             "in": "path",
             "description": "id of the chat",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -274,21 +411,41 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/GetChatResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/GetChatResponse"
+                }
               }
             }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       },
@@ -302,7 +459,9 @@
             "in": "path",
             "description": "Chat id",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -310,21 +469,41 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -339,13 +518,17 @@
             "in": "path",
             "description": "Chat id",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CopyChatRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/CopyChatRequest"
+              }
             }
           },
           "required": true
@@ -355,21 +538,41 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/StringIDResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/StringIDResponse"
+                }
               }
             }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -385,7 +588,9 @@
             "in": "path",
             "description": "Chat id",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -393,21 +598,41 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -423,7 +648,9 @@
             "in": "path",
             "description": "Chat ID",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -431,7 +658,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
               }
             }
           },
@@ -478,7 +707,9 @@
             "in": "path",
             "description": "id of the citation",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -486,17 +717,31 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/DocumentTextPart" }
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentTextPart"
+                }
               }
             }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -508,7 +753,9 @@
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/GetCompletionRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/GetCompletionRequest"
+              }
             }
           },
           "required": true
@@ -526,19 +773,43 @@
           },
           "400": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "422": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -570,15 +841,33 @@
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -593,30 +882,54 @@
             "in": "path",
             "description": "Id of the document to create text for",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CreateTextRequestBody" }
+              "schema": {
+                "$ref": "#/components/schemas/CreateTextRequestBody"
+              }
             }
           },
           "required": true
         },
         "responses": {
-          "201": { "description": "" },
+          "201": {
+            "description": ""
+          },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -629,7 +942,13 @@
         "responses": {
           "200": {
             "description": "health",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -644,21 +963,41 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/MacrosResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/MacrosResponse"
+                }
               }
             }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       },
@@ -668,7 +1007,9 @@
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CreateMacroRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/CreateMacroRequest"
+              }
             }
           },
           "required": true
@@ -678,21 +1019,41 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/StringIDResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/StringIDResponse"
+                }
               }
             }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -708,7 +1069,9 @@
             "in": "path",
             "description": "id of the macro",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -716,21 +1079,41 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/GetMacroResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/GetMacroResponse"
+                }
               }
             }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       },
@@ -744,22 +1127,44 @@
             "in": "path",
             "description": "id of the macro",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
-          "200": { "description": "" },
+          "200": {
+            "description": ""
+          },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       },
@@ -772,30 +1177,54 @@
             "in": "path",
             "description": "id of the macro",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/PatchMacroRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/PatchMacroRequest"
+              }
             }
           },
           "required": true
         },
         "responses": {
-          "200": { "description": "" },
+          "200": {
+            "description": ""
+          },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -811,7 +1240,9 @@
             "in": "path",
             "description": "id of the macro",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -827,11 +1258,23 @@
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -846,7 +1289,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/GetModelsResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/GetModelsResponse"
+                }
               }
             }
           }
@@ -880,11 +1325,23 @@
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -899,26 +1356,14 @@
           },
           "500": {
             "description": "Failed to connect to streaming websocket",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
-          }
-        }
-      }
-    },
-    "/tools/schemas": {
-      "get": {
-        "tags": ["tools"],
-        "summary": "Get all available tool schemas as JSON Schema definitions",
-        "operationId": "get_tool_schemas",
-        "responses": {
-          "200": {
-            "description": "Tool schemas retrieved successfully",
             "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ToolSchemasResponse" }
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
               }
             }
-          },
-          "500": { "description": "Internal server error" }
+          }
         }
       }
     },
@@ -933,7 +1378,9 @@
             "in": "path",
             "description": "id of the chat",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -949,11 +1396,23 @@
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -965,9 +1424,15 @@
         "type": "object",
         "required": ["name", "provider", "metadata"],
         "properties": {
-          "metadata": { "$ref": "#/components/schemas/ModelMetadata" },
-          "name": { "type": "string" },
-          "provider": { "$ref": "#/components/schemas/Provider" }
+          "metadata": {
+            "$ref": "#/components/schemas/ModelMetadata"
+          },
+          "name": {
+            "type": "string"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/Provider"
+          }
         }
       },
       "AccessLevel": {
@@ -981,38 +1446,66 @@
             "type": "object",
             "required": ["text", "type"],
             "properties": {
-              "text": { "type": "string" },
-              "type": { "type": "string", "enum": ["text"] }
+              "text": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["text"]
+              }
             }
           },
           {
             "type": "object",
             "required": ["name", "json", "id", "type"],
             "properties": {
-              "id": { "type": "string" },
+              "id": {
+                "type": "string"
+              },
               "json": {},
-              "name": { "type": "string" },
-              "type": { "type": "string", "enum": ["toolCall"] }
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["toolCall"]
+              }
             }
           },
           {
             "type": "object",
             "required": ["name", "json", "id", "type"],
             "properties": {
-              "id": { "type": "string" },
+              "id": {
+                "type": "string"
+              },
               "json": {},
-              "name": { "type": "string" },
-              "type": { "type": "string", "enum": ["toolCallResponseJson"] }
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["toolCallResponseJson"]
+              }
             }
           },
           {
             "type": "object",
             "required": ["name", "description", "id", "type"],
             "properties": {
-              "description": { "type": "string" },
-              "id": { "type": "string" },
-              "name": { "type": "string" },
-              "type": { "type": "string", "enum": ["toolCallErr"] }
+              "description": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["toolCallErr"]
+              }
             }
           }
         ]
@@ -1031,15 +1524,23 @@
                 "$ref": "#/components/schemas/FileType",
                 "description": "Type of the document ['pdf' | 'docx' | 'md']"
               },
-              "type": { "type": "string", "enum": ["document"] }
+              "type": {
+                "type": "string",
+                "enum": ["document"]
+              }
             }
           },
           {
             "type": "object",
             "required": ["project_name", "type"],
             "properties": {
-              "project_name": { "type": "string" },
-              "type": { "type": "string", "enum": ["project"] }
+              "project_name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["project"]
+              }
             }
           },
           {
@@ -1050,17 +1551,30 @@
                 "$ref": "#/components/schemas/FileType",
                 "description": "jpg | png | etc"
               },
-              "image_name": { "type": "string", "description": "image name" },
-              "type": { "type": "string", "enum": ["image"] }
+              "image_name": {
+                "type": "string",
+                "description": "image name"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["image"]
+              }
             }
           },
           {
             "type": "object",
             "required": ["channel_name", "channel_type", "type"],
             "properties": {
-              "channel_name": { "type": "string" },
-              "channel_type": { "$ref": "#/components/schemas/ChannelType" },
-              "type": { "type": "string", "enum": ["channel"] }
+              "channel_name": {
+                "type": "string"
+              },
+              "channel_type": {
+                "$ref": "#/components/schemas/ChannelType"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["channel"]
+              }
             }
           },
           {
@@ -1068,8 +1582,13 @@
             "description": "an email thread",
             "required": ["email_subject", "type"],
             "properties": {
-              "email_subject": { "type": "string" },
-              "type": { "type": "string", "enum": ["email"] }
+              "email_subject": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["email"]
+              }
             }
           }
         ]
@@ -1087,7 +1606,10 @@
             "$ref": "#/components/schemas/AccessLevel",
             "description": "The access level for the channel"
           },
-          "channel_id": { "type": "string", "description": "The channel id" }
+          "channel_id": {
+            "type": "string",
+            "description": "The channel id"
+          }
         }
       },
       "ChannelType": {
@@ -1116,18 +1638,29 @@
             "format": "int64",
             "description": "The time the chat was deleted"
           },
-          "id": { "type": "string", "description": "The chat uuid" },
-          "isPersistent": { "type": "boolean" },
+          "id": {
+            "type": "string",
+            "description": "The chat uuid"
+          },
+          "isPersistent": {
+            "type": "boolean"
+          },
           "model": {
             "type": ["string", "null"],
             "description": "The model used to generate the chat"
           },
-          "name": { "type": "string", "description": "The name of the chat" },
+          "name": {
+            "type": "string",
+            "description": "The name of the chat"
+          },
           "projectId": {
             "type": ["string", "null"],
             "description": "The project id of the chat"
           },
-          "tokenCount": { "type": ["integer", "null"], "format": "int64" },
+          "tokenCount": {
+            "type": ["integer", "null"],
+            "format": "int64"
+          },
           "updatedAt": {
             "type": "integer",
             "format": "int64",
@@ -1183,7 +1716,9 @@
           },
           "metadata": {
             "oneOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "$ref": "#/components/schemas/AttachmentMetadata",
                 "description": "Metadata about the attachment, depending on the type"
@@ -1198,7 +1733,9 @@
         "properties": {
           "conversation": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/ConversationRecord" }
+            "items": {
+              "$ref": "#/components/schemas/ConversationRecord"
+            }
           }
         }
       },
@@ -1206,7 +1743,12 @@
         "type": "object",
         "required": ["message_ids"],
         "properties": {
-          "message_ids": { "type": "array", "items": { "type": "string" } }
+          "message_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
         }
       },
       "ChatMessage": {
@@ -1217,7 +1759,10 @@
             "$ref": "#/components/schemas/ChatMessageContent",
             "description": "Message content"
           },
-          "id": { "type": "string", "description": "The chat message id" },
+          "id": {
+            "type": "string",
+            "description": "The chat message id"
+          },
           "model": {
             "type": ["string", "null"],
             "description": "the model used to generate the message"
@@ -1230,10 +1775,14 @@
       },
       "ChatMessageContent": {
         "oneOf": [
-          { "type": "string" },
+          {
+            "type": "string"
+          },
           {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/AssistantMessagePart" }
+            "items": {
+              "$ref": "#/components/schemas/AssistantMessagePart"
+            }
           }
         ]
       },
@@ -1243,14 +1792,19 @@
         "properties": {
           "attachments": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/ChatAttachmentWithName" },
+            "items": {
+              "$ref": "#/components/schemas/ChatAttachmentWithName"
+            },
             "description": "The ids of the attachments used to generate the message"
           },
           "content": {
             "$ref": "#/components/schemas/ChatMessageContent",
             "description": "Message content"
           },
-          "id": { "type": "string", "description": "The chat message id" },
+          "id": {
+            "type": "string",
+            "description": "The chat message id"
+          },
           "model": {
             "type": ["string", "null"],
             "description": "The model used to generate the message"
@@ -1265,36 +1819,51 @@
         "oneOf": [
           {
             "allOf": [
-              { "$ref": "#/components/schemas/ChatPreviewData" },
+              {
+                "$ref": "#/components/schemas/ChatPreviewData"
+              },
               {
                 "type": "object",
                 "required": ["type"],
                 "properties": {
-                  "type": { "type": "string", "enum": ["access"] }
+                  "type": {
+                    "type": "string",
+                    "enum": ["access"]
+                  }
                 }
               }
             ]
           },
           {
             "allOf": [
-              { "$ref": "#/components/schemas/WithChatId" },
+              {
+                "$ref": "#/components/schemas/WithChatId"
+              },
               {
                 "type": "object",
                 "required": ["type"],
                 "properties": {
-                  "type": { "type": "string", "enum": ["no_access"] }
+                  "type": {
+                    "type": "string",
+                    "enum": ["no_access"]
+                  }
                 }
               }
             ]
           },
           {
             "allOf": [
-              { "$ref": "#/components/schemas/WithChatId" },
+              {
+                "$ref": "#/components/schemas/WithChatId"
+              },
               {
                 "type": "object",
                 "required": ["type"],
                 "properties": {
-                  "type": { "type": "string", "enum": ["does_not_exist"] }
+                  "type": {
+                    "type": "string",
+                    "enum": ["does_not_exist"]
+                  }
                 }
               }
             ]
@@ -1305,10 +1874,19 @@
         "type": "object",
         "required": ["chat_id", "chat_name", "owner", "updated_at"],
         "properties": {
-          "chat_id": { "type": "string" },
-          "chat_name": { "type": "string" },
-          "owner": { "type": "string" },
-          "updated_at": { "type": "integer", "format": "int64" }
+          "chat_id": {
+            "type": "string"
+          },
+          "chat_name": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "integer",
+            "format": "int64"
+          }
         }
       },
       "ChatResponse": {
@@ -1328,13 +1906,17 @@
         "properties": {
           "attachments": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/ChatAttachmentWithName" },
+            "items": {
+              "$ref": "#/components/schemas/ChatAttachmentWithName"
+            },
             "description": "attachment context - attachments not attached to messages",
             "deprecated": true
           },
           "availableModels": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/Model" },
+            "items": {
+              "$ref": "#/components/schemas/Model"
+            },
             "description": "Available models for the chat"
           },
           "createdAt": {
@@ -1342,7 +1924,10 @@
             "format": "int64",
             "description": "The time the chat was created"
           },
-          "id": { "type": "string", "description": "The chat uuid" },
+          "id": {
+            "type": "string",
+            "description": "The chat uuid"
+          },
           "isPersistent": {
             "type": "boolean",
             "description": "whether the chat is persistent or not"
@@ -1356,14 +1941,19 @@
           },
           "model": {
             "oneOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "$ref": "#/components/schemas/Model",
                 "description": "The model used to generate the chat"
               }
             ]
           },
-          "name": { "type": "string", "description": "The name of the Chat" },
+          "name": {
+            "type": "string",
+            "description": "The name of the Chat"
+          },
           "projectId": {
             "type": ["string", "null"],
             "description": "The project id the chat belongs to"
@@ -1388,18 +1978,30 @@
               "type": "array",
               "items": false,
               "prefixItems": [
-                { "type": "string" },
+                {
+                  "type": "string"
+                },
                 {
                   "type": "array",
                   "items": {
                     "type": "object",
                     "required": ["url", "title"],
                     "properties": {
-                      "description": { "type": ["string", "null"] },
-                      "favicon_url": { "type": ["string", "null"] },
-                      "image_url": { "type": ["string", "null"] },
-                      "title": { "type": "string" },
-                      "url": { "type": "string" }
+                      "description": {
+                        "type": ["string", "null"]
+                      },
+                      "favicon_url": {
+                        "type": ["string", "null"]
+                      },
+                      "image_url": {
+                        "type": ["string", "null"]
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "url": {
+                        "type": "string"
+                      }
                     }
                   }
                 }
@@ -1415,7 +2017,9 @@
         "properties": {
           "chats": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/Chat" }
+            "items": {
+              "$ref": "#/components/schemas/Chat"
+            }
           }
         }
       },
@@ -1423,59 +2027,98 @@
         "type": "object",
         "required": ["chat_id", "title", "messages"],
         "properties": {
-          "chat_id": { "type": "string" },
+          "chat_id": {
+            "type": "string"
+          },
           "messages": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/MessageWithAttachmentSummary"
+              "$ref": "#/components/schemas/MessageWithAttachments"
             }
           },
-          "title": { "type": "string" }
+          "title": {
+            "type": "string"
+          }
         }
       },
       "CopyChatRequest": {
         "type": "object",
         "required": ["name"],
-        "properties": { "name": { "type": "string" } }
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        }
       },
       "CreateChatRequest": {
         "type": "object",
         "properties": {
           "attachments": {
             "type": ["array", "null"],
-            "items": { "$ref": "#/components/schemas/NewAttachment" }
+            "items": {
+              "$ref": "#/components/schemas/NewAttachment"
+            }
           },
-          "isPersistent": { "type": ["boolean", "null"] },
+          "isPersistent": {
+            "type": ["boolean", "null"]
+          },
           "model": {
             "oneOf": [
-              { "type": "null" },
-              { "$ref": "#/components/schemas/Model" }
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Model"
+              }
             ]
           },
-          "name": { "type": ["string", "null"] },
-          "projectId": { "type": ["string", "null"] }
+          "name": {
+            "type": ["string", "null"]
+          },
+          "projectId": {
+            "type": ["string", "null"]
+          }
         }
       },
       "CreateMacroRequest": {
         "type": "object",
         "required": ["title", "prompt", "icon", "color"],
         "properties": {
-          "color": { "type": "string" },
-          "icon": { "type": "string" },
-          "prompt": { "type": "string" },
-          "requiredDocs": { "type": ["integer", "null"], "format": "int32" },
-          "title": { "type": "string" }
+          "color": {
+            "type": "string"
+          },
+          "icon": {
+            "type": "string"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "requiredDocs": {
+            "type": ["integer", "null"],
+            "format": "int32"
+          },
+          "title": {
+            "type": "string"
+          }
         }
       },
       "CreateTextRequestBody": {
         "type": "object",
         "required": ["content"],
-        "properties": { "content": { "type": "string" } }
+        "properties": {
+          "content": {
+            "type": "string"
+          }
+        }
       },
       "CreateTextRequestParams": {
         "type": "object",
         "required": ["document_id"],
-        "properties": { "document_id": { "type": "string" } }
+        "properties": {
+          "document_id": {
+            "type": "string"
+          }
+        }
       },
       "DocumentCognitionServiceApiVersion": {
         "type": "string",
@@ -1485,34 +2128,36 @@
         "oneOf": [
           {
             "allOf": [
-              { "$ref": "#/components/schemas/UserPdfRect" },
+              {
+                "$ref": "#/components/schemas/UserPdfRect"
+              },
               {
                 "type": "object",
                 "required": ["kind"],
-                "properties": { "kind": { "type": "string", "enum": ["pdf"] } }
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": ["pdf"]
+                  }
+                }
               }
             ]
           }
         ]
       },
-      "DocumentSummary": {
-        "type": "object",
-        "required": ["document_id", "summary", "version_id"],
-        "properties": {
-          "created_at": { "type": ["string", "null"], "format": "date-time" },
-          "document_id": { "type": "string" },
-          "id": { "type": ["string", "null"] },
-          "summary": { "type": "string" },
-          "version_id": { "type": "string" }
-        }
-      },
       "DocumentTextPart": {
         "type": "object",
         "required": ["id", "document_id", "reference"],
         "properties": {
-          "document_id": { "type": "string" },
-          "id": { "type": "string" },
-          "reference": { "$ref": "#/components/schemas/DocumentReference" }
+          "document_id": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "reference": {
+            "$ref": "#/components/schemas/DocumentReference"
+          }
         }
       },
       "EmptyResponse": {
@@ -1525,32 +2170,52 @@
             "type": "object",
             "required": ["type"],
             "properties": {
-              "type": { "type": "string", "enum": ["incomplete"] }
+              "type": {
+                "type": "string",
+                "enum": ["incomplete"]
+              }
             }
-          },
-          {
-            "type": "object",
-            "required": ["type"],
-            "properties": { "type": { "type": "string", "enum": ["empty"] } }
           },
           {
             "type": "object",
             "required": ["type"],
             "properties": {
-              "type": { "type": "string", "enum": ["insufficient"] }
+              "type": {
+                "type": "string",
+                "enum": ["empty"]
+              }
             }
           },
           {
             "type": "object",
             "required": ["type"],
-            "properties": { "type": { "type": "string", "enum": ["complete"] } }
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["insufficient"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["complete"]
+              }
+            }
           }
         ]
       },
       "ExtractionStatusPayload": {
         "type": "object",
         "required": ["attachment_id"],
-        "properties": { "attachment_id": { "type": "string" } }
+        "properties": {
+          "attachment_id": {
+            "type": "string"
+          }
+        }
       },
       "FileType": {
         "type": "string",
@@ -1740,6 +2405,7 @@
           "rbi",
           "rs",
           "scss",
+          "sass",
           "shader",
           "sh",
           "bash",
@@ -1991,7 +2657,10 @@
                 "type": "object",
                 "required": ["type"],
                 "properties": {
-                  "type": { "type": "string", "enum": ["error"] }
+                  "type": {
+                    "type": "string",
+                    "enum": ["error"]
+                  }
                 }
               }
             ],
@@ -2002,9 +2671,16 @@
             "description": "Acknowledges that a message has been received for processing",
             "required": ["message_id", "chat_id", "type"],
             "properties": {
-              "chat_id": { "type": "string" },
-              "message_id": { "type": "string" },
-              "type": { "type": "string", "enum": ["chat_message_ack"] }
+              "chat_id": {
+                "type": "string"
+              },
+              "message_id": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["chat_message_ack"]
+              }
             }
           },
           {
@@ -2018,13 +2694,22 @@
               "type"
             ],
             "properties": {
-              "chat_id": { "type": "string" },
+              "chat_id": {
+                "type": "string"
+              },
               "content": {
                 "$ref": "#/components/schemas/AssistantMessagePart"
               },
-              "message_id": { "type": "string" },
-              "stream_id": { "type": "string" },
-              "type": { "type": "string", "enum": ["chat_message_response"] }
+              "message_id": {
+                "type": "string"
+              },
+              "stream_id": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["chat_message_response"]
+              }
             }
           },
           {
@@ -2032,10 +2717,19 @@
             "description": "Indicates that a message has been finished",
             "required": ["message_id", "chat_id", "user_message_id", "type"],
             "properties": {
-              "chat_id": { "type": "string" },
-              "message_id": { "type": "string" },
-              "type": { "type": "string", "enum": ["chat_message_finished"] },
-              "user_message_id": { "type": "string" }
+              "chat_id": {
+                "type": "string"
+              },
+              "message_id": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["chat_message_finished"]
+              },
+              "user_message_id": {
+                "type": "string"
+              }
             }
           },
           {
@@ -2043,10 +2737,19 @@
             "description": "Indicates that a chat has been renamed",
             "required": ["stream_id", "chat_id", "name", "type"],
             "properties": {
-              "chat_id": { "type": "string" },
-              "name": { "type": "string" },
-              "stream_id": { "type": "string" },
-              "type": { "type": "string", "enum": ["chat_renamed"] }
+              "chat_id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "stream_id": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["chat_renamed"]
+              }
             }
           },
           {
@@ -2056,25 +2759,44 @@
             "properties": {
               "available_models": {
                 "type": "array",
-                "items": { "$ref": "#/components/schemas/Model" }
+                "items": {
+                  "$ref": "#/components/schemas/Model"
+                }
               },
-              "chat_id": { "type": "string" },
+              "chat_id": {
+                "type": "string"
+              },
               "new_model": {
                 "oneOf": [
-                  { "type": "null" },
-                  { "$ref": "#/components/schemas/Model" }
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/Model"
+                  }
                 ]
               },
-              "type": { "type": "string", "enum": ["model_selection_changed"] }
+              "type": {
+                "type": "string",
+                "enum": ["model_selection_changed"]
+              }
             }
           },
           {
             "type": "object",
             "required": ["chat_id", "token_count", "type"],
             "properties": {
-              "chat_id": { "type": "string" },
-              "token_count": { "type": "integer", "format": "int64" },
-              "type": { "type": "string", "enum": ["token_count_changed"] }
+              "chat_id": {
+                "type": "string"
+              },
+              "token_count": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["token_count_changed"]
+              }
             }
           },
           {
@@ -2082,9 +2804,15 @@
             "description": "Status update",
             "required": ["chat_id", "message_id", "message", "type"],
             "properties": {
-              "chat_id": { "type": "string" },
-              "message": { "type": "string" },
-              "message_id": { "type": "string" },
+              "chat_id": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "message_id": {
+                "type": "string"
+              },
               "type": {
                 "type": "string",
                 "enum": ["chat_message_status_update"]
@@ -2096,9 +2824,16 @@
             "description": "Acknowledges the request to get extraction status\nif the `status` field is 'incomplete', we need to await the extraction status updates\nif the `status` field is 'empty', extraction is complete but text content is empty\nif the `status` field is 'complete', the extraction is already complete",
             "required": ["attachment_id", "status", "type"],
             "properties": {
-              "attachment_id": { "type": "string" },
-              "status": { "$ref": "#/components/schemas/ExtractionStatusEnum" },
-              "type": { "type": "string", "enum": ["extraction_status_ack"] }
+              "attachment_id": {
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/components/schemas/ExtractionStatusEnum"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["extraction_status_ack"]
+              }
             }
           },
           {
@@ -2106,43 +2841,78 @@
             "description": "Status update for the extraction status",
             "required": ["attachment_id", "status", "type"],
             "properties": {
-              "attachment_id": { "type": "string" },
-              "status": { "$ref": "#/components/schemas/ExtractionStatusEnum" },
-              "type": { "type": "string", "enum": ["extraction_status_update"] }
+              "attachment_id": {
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/components/schemas/ExtractionStatusEnum"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["extraction_status_update"]
+              }
             }
           },
           {
             "type": "object",
             "required": ["type"],
-            "properties": { "type": { "type": "string", "enum": ["pong"] } }
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["pong"]
+              }
+            }
           },
           {
             "type": "object",
             "description": "pdf completion",
             "required": ["completion_id", "content", "done", "type"],
             "properties": {
-              "completion_id": { "type": "string" },
-              "content": { "type": "string" },
-              "done": { "type": "boolean" },
-              "type": { "type": "string", "enum": ["completion_response"] }
+              "completion_id": {
+                "type": "string"
+              },
+              "content": {
+                "type": "string"
+              },
+              "done": {
+                "type": "boolean"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["completion_response"]
+              }
             }
           },
           {
             "type": "object",
             "required": ["completion_id", "content", "done", "type"],
             "properties": {
-              "completion_id": { "type": "string" },
-              "content": { "type": "string" },
-              "done": { "type": "boolean" },
-              "type": { "type": "string", "enum": ["completion_stream_chunk"] }
+              "completion_id": {
+                "type": "string"
+              },
+              "content": {
+                "type": "string"
+              },
+              "done": {
+                "type": "boolean"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["completion_stream_chunk"]
+              }
             }
           },
           {
             "type": "object",
             "required": ["stream_id", "type"],
             "properties": {
-              "stream_id": { "type": "string" },
-              "type": { "type": "string", "enum": ["stream_end"] }
+              "stream_id": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["stream_end"]
+              }
             }
           }
         ]
@@ -2175,7 +2945,12 @@
         "type": "object",
         "required": ["chat_ids"],
         "properties": {
-          "chat_ids": { "type": "array", "items": { "type": "string" } }
+          "chat_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
         }
       },
       "GetBatchPreviewResponse": {
@@ -2184,28 +2959,40 @@
         "properties": {
           "previews": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/ChatPreview" }
+            "items": {
+              "$ref": "#/components/schemas/ChatPreview"
+            }
           }
         }
       },
       "GetChatPathParams": {
         "type": "object",
         "required": ["chat_id"],
-        "properties": { "chat_id": { "type": "string" } }
+        "properties": {
+          "chat_id": {
+            "type": "string"
+          }
+        }
       },
       "GetChatPermissionsResponseV2": {
         "type": "object",
         "required": ["permissions"],
         "properties": {
-          "permissions": { "$ref": "#/components/schemas/SharePermissionV2" }
+          "permissions": {
+            "$ref": "#/components/schemas/SharePermissionV2"
+          }
         }
       },
       "GetChatResponse": {
         "type": "object",
         "required": ["chat", "userAccessLevel"],
         "properties": {
-          "chat": { "$ref": "#/components/schemas/ChatResponse" },
-          "userAccessLevel": { "$ref": "#/components/schemas/AccessLevel" }
+          "chat": {
+            "$ref": "#/components/schemas/ChatResponse"
+          },
+          "userAccessLevel": {
+            "$ref": "#/components/schemas/AccessLevel"
+          }
         }
       },
       "GetChatsForAttachmentResponse": {
@@ -2214,12 +3001,18 @@
         "properties": {
           "all_chats": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/Chat" }
+            "items": {
+              "$ref": "#/components/schemas/Chat"
+            }
           },
           "recent_chat": {
             "oneOf": [
-              { "type": "null" },
-              { "$ref": "#/components/schemas/Chat" }
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Chat"
+              }
             ]
           }
         }
@@ -2235,37 +3028,59 @@
           },
           "model": {
             "oneOf": [
-              { "type": "null" },
-              { "$ref": "#/components/schemas/Model" }
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Model"
+              }
             ]
           },
-          "prompt": { "type": "string" },
-          "user_message": { "type": "string" }
+          "prompt": {
+            "type": "string"
+          },
+          "user_message": {
+            "type": "string"
+          }
         }
       },
       "GetCompletionResponse": {
         "type": "object",
         "required": ["completion"],
-        "properties": { "completion": { "type": "string" } }
+        "properties": {
+          "completion": {
+            "type": "string"
+          }
+        }
       },
       "GetMacroPathParams": {
         "type": "object",
         "required": ["macro_prompt_id"],
-        "properties": { "macro_prompt_id": { "type": "string" } }
+        "properties": {
+          "macro_prompt_id": {
+            "type": "string"
+          }
+        }
       },
       "GetMacroPermissionsResponseV2": {
         "type": "object",
         "required": ["permissions"],
         "properties": {
-          "permissions": { "$ref": "#/components/schemas/SharePermissionV2" }
+          "permissions": {
+            "$ref": "#/components/schemas/SharePermissionV2"
+          }
         }
       },
       "GetMacroResponse": {
         "type": "object",
         "required": ["macroItem", "userAccessLevel"],
         "properties": {
-          "macroItem": { "$ref": "#/components/schemas/MacroResponse" },
-          "userAccessLevel": { "$ref": "#/components/schemas/AccessLevel" }
+          "macroItem": {
+            "$ref": "#/components/schemas/MacroResponse"
+          },
+          "userAccessLevel": {
+            "$ref": "#/components/schemas/AccessLevel"
+          }
         }
       },
       "GetModelsForAttachmentsRequest": {
@@ -2274,13 +3089,19 @@
         "properties": {
           "active_model": {
             "oneOf": [
-              { "type": "null" },
-              { "$ref": "#/components/schemas/Model" }
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Model"
+              }
             ]
           },
           "attachments": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/NewAttachment" }
+            "items": {
+              "$ref": "#/components/schemas/NewAttachment"
+            }
           }
         }
       },
@@ -2290,12 +3111,18 @@
         "properties": {
           "available_models": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/Model" }
+            "items": {
+              "$ref": "#/components/schemas/Model"
+            }
           },
           "new_model": {
             "oneOf": [
-              { "type": "null" },
-              { "$ref": "#/components/schemas/Model" }
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Model"
+              }
             ]
           }
         }
@@ -2306,7 +3133,9 @@
         "properties": {
           "models": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/AIModel" }
+            "items": {
+              "$ref": "#/components/schemas/AIModel"
+            }
           }
         }
       },
@@ -2320,7 +3149,9 @@
           },
           "content_document_ids": {
             "type": ["array", "null"],
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "Optional document ID to provide context"
           },
           "max_tokens": {
@@ -2333,14 +3164,24 @@
             "type": ["string", "null"],
             "description": "model to use for the completion"
           },
-          "prompt": { "type": "string", "description": "system prompt" },
-          "user_request": { "type": "string", "description": "user request" }
+          "prompt": {
+            "type": "string",
+            "description": "system prompt"
+          },
+          "user_request": {
+            "type": "string",
+            "description": "user request"
+          }
         }
       },
       "JwtPayload": {
         "type": "object",
         "required": ["token"],
-        "properties": { "token": { "type": "string" } }
+        "properties": {
+          "token": {
+            "type": "string"
+          }
+        }
       },
       "Macro": {
         "type": "object",
@@ -2364,8 +3205,14 @@
             "format": "int64",
             "description": "The time the macro was created"
           },
-          "icon": { "type": "string", "description": "The icon of the macro" },
-          "id": { "type": "string", "description": "The macro uuid" },
+          "icon": {
+            "type": "string",
+            "description": "The icon of the macro"
+          },
+          "id": {
+            "type": "string",
+            "description": "The macro uuid"
+          },
           "prompt": {
             "type": "string",
             "description": "The prompt used in the macro"
@@ -2412,8 +3259,14 @@
             "format": "int64",
             "description": "The time the macro was created"
           },
-          "icon": { "type": "string", "description": "The icon of the macro" },
-          "id": { "type": "string", "description": "The macro uuid" },
+          "icon": {
+            "type": "string",
+            "description": "The icon of the macro"
+          },
+          "id": {
+            "type": "string",
+            "description": "The macro uuid"
+          },
           "prompt": {
             "type": "string",
             "description": "The prompt used in the macro"
@@ -2444,20 +3297,29 @@
         "properties": {
           "macros": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/Macro" }
+            "items": {
+              "$ref": "#/components/schemas/Macro"
+            }
           }
         }
       },
-      "MessageWithAttachmentSummary": {
+      "MessageWithAttachments": {
         "type": "object",
-        "required": ["content", "date", "attachment_summaries"],
+        "required": ["content", "date", "attachmentIds"],
         "properties": {
-          "attachment_summaries": {
+          "attachmentIds": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/Summary" }
+            "items": {
+              "type": "string"
+            }
           },
-          "content": { "type": "string" },
-          "date": { "type": "string", "format": "date-time" }
+          "content": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string",
+            "format": "date-time"
+          }
         }
       },
       "Model": {
@@ -2473,28 +3335,35 @@
           "gpt-4o-mini",
           "o1",
           "gpt-4o-search-preview",
-          "gpt-4o-mini-search-preview",
           "o3",
           "claude-3-5-sonnet",
           "claude-3-7-sonnet",
           "claude-sonnet-4",
           "claude-sonnet-4-5",
-          "claude-haiku-4-5"
+          "claude-haiku-4-5",
+          "claude-opus-4-5"
         ]
       },
       "ModelMetadata": {
         "type": "object",
         "required": ["contextWindow"],
         "properties": {
-          "contextWindow": { "type": "integer", "format": "int32" }
+          "contextWindow": {
+            "type": "integer",
+            "format": "int32"
+          }
         }
       },
       "NewAttachment": {
         "type": "object",
         "required": ["attachment_type", "attachment_id"],
         "properties": {
-          "attachment_id": { "type": "string" },
-          "attachment_type": { "$ref": "#/components/schemas/AttachmentType" }
+          "attachment_id": {
+            "type": "string"
+          },
+          "attachment_type": {
+            "$ref": "#/components/schemas/AttachmentType"
+          }
         }
       },
       "NewChatMessage": {
@@ -2503,14 +3372,19 @@
         "properties": {
           "attachments": {
             "type": ["array", "null"],
-            "items": { "$ref": "#/components/schemas/NewAttachment" },
+            "items": {
+              "$ref": "#/components/schemas/NewAttachment"
+            },
             "description": "The ids of the attachments used to generate the message"
           },
           "content": {
             "$ref": "#/components/schemas/ChatMessageContent",
             "description": "Content of the message"
           },
-          "createdAt": { "type": "string", "format": "date-time" },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
           "model": {
             "$ref": "#/components/schemas/Model",
             "description": "The model used to generate the chat"
@@ -2519,36 +3393,61 @@
             "$ref": "#/components/schemas/Role",
             "description": "Whether the chat is from the user or system"
           },
-          "updatedAt": { "type": "string", "format": "date-time" }
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
         }
       },
       "NewMessageAttachment": {
         "type": "object",
         "required": ["messageId", "attachmentType", "attachmentId"],
         "properties": {
-          "attachmentId": { "type": "string" },
-          "attachmentType": { "$ref": "#/components/schemas/AttachmentType" },
-          "messageId": { "type": "string" }
+          "attachmentId": {
+            "type": "string"
+          },
+          "attachmentType": {
+            "$ref": "#/components/schemas/AttachmentType"
+          },
+          "messageId": {
+            "type": "string"
+          }
         }
       },
       "PatchChatRequest": {
         "type": "object",
         "properties": {
-          "model": { "type": ["string", "null"] },
-          "name": { "type": ["string", "null"] },
-          "projectId": { "type": ["string", "null"] }
+          "model": {
+            "type": ["string", "null"]
+          },
+          "name": {
+            "type": ["string", "null"]
+          },
+          "projectId": {
+            "type": ["string", "null"]
+          }
         }
       },
       "PatchChatRequestV2": {
         "type": "object",
         "properties": {
-          "model": { "type": ["string", "null"] },
-          "name": { "type": ["string", "null"] },
-          "projectId": { "type": ["string", "null"] },
+          "model": {
+            "type": ["string", "null"]
+          },
+          "name": {
+            "type": ["string", "null"]
+          },
+          "projectId": {
+            "type": ["string", "null"]
+          },
           "sharePermission": {
             "oneOf": [
-              { "type": "null" },
-              { "$ref": "#/components/schemas/UpdateSharePermissionRequestV2" }
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/UpdateSharePermissionRequestV2"
+              }
             ]
           }
         }
@@ -2556,29 +3455,49 @@
       "PatchMacroRequest": {
         "type": "object",
         "properties": {
-          "color": { "type": ["string", "null"] },
-          "icon": { "type": ["string", "null"] },
-          "prompt": { "type": ["string", "null"] },
-          "requiredDocs": { "type": ["integer", "null"], "format": "int32" },
-          "title": { "type": ["string", "null"] }
+          "color": {
+            "type": ["string", "null"]
+          },
+          "icon": {
+            "type": ["string", "null"]
+          },
+          "prompt": {
+            "type": ["string", "null"]
+          },
+          "requiredDocs": {
+            "type": ["integer", "null"],
+            "format": "int32"
+          },
+          "title": {
+            "type": ["string", "null"]
+          }
         }
       },
       "Provider": {
         "type": "string",
         "enum": ["openai", "google", "anthropic", "googleanthropic", "xai"]
       },
-      "Role": { "type": "string", "enum": ["user", "assistant", "system"] },
+      "Role": {
+        "type": "string",
+        "enum": ["user", "assistant", "system"]
+      },
       "SelectModelPayload": {
         "type": "object",
         "required": ["chat_id", "model"],
         "properties": {
-          "chat_id": { "type": "string" },
-          "model": { "type": "string" }
+          "chat_id": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          }
         }
       },
       "SendChatMessagePayload": {
         "allOf": [
-          { "$ref": "#/components/schemas/JwtPayload" },
+          {
+            "$ref": "#/components/schemas/JwtPayload"
+          },
           {
             "type": "object",
             "required": ["stream_id", "content", "chat_id", "model"],
@@ -2646,18 +3565,28 @@
         "properties": {
           "channelSharePermissions": {
             "type": ["array", "null"],
-            "items": { "$ref": "#/components/schemas/ChannelSharePermission" },
+            "items": {
+              "$ref": "#/components/schemas/ChannelSharePermission"
+            },
             "description": "The channel share permissions for the item"
           },
-          "id": { "type": "string", "description": "The share permission id" },
+          "id": {
+            "type": "string",
+            "description": "The share permission id"
+          },
           "isPublic": {
             "type": "boolean",
             "description": "If the item is publicly accessible"
           },
-          "owner": { "type": "string", "description": "The owner of the item" },
+          "owner": {
+            "type": "string",
+            "description": "The owner of the item"
+          },
           "publicAccessLevel": {
             "oneOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "$ref": "#/components/schemas/AccessLevel",
                 "description": "The level of public access"
@@ -2670,7 +3599,10 @@
         "type": "object",
         "required": ["stream_id"],
         "properties": {
-          "stream_id": { "type": "string", "description": "stream id" }
+          "stream_id": {
+            "type": "string",
+            "description": "stream id"
+          }
         }
       },
       "StreamError": {
@@ -2679,9 +3611,16 @@
             "type": "object",
             "required": ["stream_id", "model", "stream_error"],
             "properties": {
-              "model": { "$ref": "#/components/schemas/Model" },
-              "stream_error": { "type": "string", "enum": ["provider_error"] },
-              "stream_id": { "type": "string" }
+              "model": {
+                "$ref": "#/components/schemas/Model"
+              },
+              "stream_error": {
+                "type": "string",
+                "enum": ["provider_error"]
+              },
+              "stream_id": {
+                "type": "string"
+              }
             }
           },
           {
@@ -2692,23 +3631,35 @@
                 "type": "string",
                 "enum": ["model_context_overflow"]
               },
-              "stream_id": { "type": "string" }
+              "stream_id": {
+                "type": "string"
+              }
             }
           },
           {
             "type": "object",
             "required": ["stream_id", "stream_error"],
             "properties": {
-              "stream_error": { "type": "string", "enum": ["internal_error"] },
-              "stream_id": { "type": "string" }
+              "stream_error": {
+                "type": "string",
+                "enum": ["internal_error"]
+              },
+              "stream_id": {
+                "type": "string"
+              }
             }
           },
           {
             "type": "object",
             "required": ["stream_id", "stream_error"],
             "properties": {
-              "stream_error": { "type": "string", "enum": ["unauthorized"] },
-              "stream_id": { "type": "string" }
+              "stream_error": {
+                "type": "string",
+                "enum": ["unauthorized"]
+              },
+              "stream_id": {
+                "type": "string"
+              }
             }
           },
           {
@@ -2719,7 +3670,9 @@
                 "type": "string",
                 "enum": ["payment_required"]
               },
-              "stream_id": { "type": "string" }
+              "stream_id": {
+                "type": "string"
+              }
             }
           }
         ]
@@ -2727,21 +3680,31 @@
       "StringIDResponse": {
         "type": "object",
         "required": ["id"],
-        "properties": { "id": { "type": "string" } }
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        }
       },
       "StructedOutputCompletionRequest": {
         "type": "object",
         "required": ["prompt", "schema", "schema_name"],
         "properties": {
-          "prompt": { "type": "string" },
+          "prompt": {
+            "type": "string"
+          },
           "schema": {},
-          "schema_name": { "type": "string" }
+          "schema_name": {
+            "type": "string"
+          }
         }
       },
       "StructedOutputCompletionResponse": {
         "type": "object",
         "required": ["completion"],
-        "properties": { "completion": {} }
+        "properties": {
+          "completion": {}
+        }
       },
       "SuccessResponse": {
         "type": "object",
@@ -2757,28 +3720,6 @@
           }
         }
       },
-      "Summary": {
-        "oneOf": [
-          {
-            "type": "object",
-            "required": ["Summary"],
-            "properties": {
-              "Summary": { "$ref": "#/components/schemas/DocumentSummary" }
-            }
-          },
-          {
-            "type": "object",
-            "required": ["NoSummary"],
-            "properties": {
-              "NoSummary": {
-                "type": "object",
-                "required": ["document_id"],
-                "properties": { "document_id": { "type": "string" } }
-              }
-            }
-          }
-        ]
-      },
       "ToWebSocketMessage": {
         "oneOf": [
           {
@@ -2791,7 +3732,10 @@
                 "type": "object",
                 "required": ["type"],
                 "properties": {
-                  "type": { "type": "string", "enum": ["send_chat_message"] }
+                  "type": {
+                    "type": "string",
+                    "enum": ["send_chat_message"]
+                  }
                 }
               }
             ],
@@ -2807,7 +3751,10 @@
                 "type": "object",
                 "required": ["type"],
                 "properties": {
-                  "type": { "type": "string", "enum": ["edit_chat_message"] }
+                  "type": {
+                    "type": "string",
+                    "enum": ["edit_chat_message"]
+                  }
                 }
               }
             ],
@@ -2823,7 +3770,10 @@
                 "type": "object",
                 "required": ["type"],
                 "properties": {
-                  "type": { "type": "string", "enum": ["stop_chat_message"] }
+                  "type": {
+                    "type": "string",
+                    "enum": ["stop_chat_message"]
+                  }
                 }
               }
             ],
@@ -2858,7 +3808,10 @@
                 "type": "object",
                 "required": ["type"],
                 "properties": {
-                  "type": { "type": "string", "enum": ["extraction_status"] }
+                  "type": {
+                    "type": "string",
+                    "enum": ["extraction_status"]
+                  }
                 }
               }
             ],
@@ -2874,7 +3827,10 @@
                 "type": "object",
                 "required": ["type"],
                 "properties": {
-                  "type": { "type": "string", "enum": ["send_completion"] }
+                  "type": {
+                    "type": "string",
+                    "enum": ["send_completion"]
+                  }
                 }
               }
             ],
@@ -2906,17 +3862,21 @@
         "required": ["name", "inputSchema", "outputSchema"],
         "properties": {
           "inputSchema": {},
-          "name": { "type": "string" },
+          "name": {
+            "type": "string"
+          },
           "outputSchema": {}
         }
       },
-      "ToolSchemasResponse": {
+      "ToolSchemas": {
         "type": "object",
         "required": ["schemas"],
         "properties": {
           "schemas": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/ToolSchema" }
+            "items": {
+              "$ref": "#/components/schemas/ToolSchema"
+            }
           }
         }
       },
@@ -2925,12 +3885,22 @@
           {
             "type": "object",
             "required": ["type"],
-            "properties": { "type": { "type": "string", "enum": ["all"] } }
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["all"]
+              }
+            }
           },
           {
             "type": "object",
             "required": ["type"],
-            "properties": { "type": { "type": "string", "enum": ["none"] } }
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["none"]
+              }
+            }
           }
         ]
       },
@@ -2940,14 +3910,19 @@
         "properties": {
           "accessLevel": {
             "oneOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "$ref": "#/components/schemas/AccessLevel",
                 "description": "The access level for the channel\nThis is required if the operation is add or replace"
               }
             ]
           },
-          "channelId": { "type": "string", "description": "The channel id" },
+          "channelId": {
+            "type": "string",
+            "description": "The channel id"
+          },
           "operation": {
             "$ref": "#/components/schemas/UpdateOperation",
             "description": "The type of operation to be performed on the chanel share permission\nYou can add, remove or replace and existing permission"
@@ -2974,7 +3949,9 @@
           },
           "publicAccessLevel": {
             "oneOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "$ref": "#/components/schemas/AccessLevel",
                 "description": "The level of public access"
@@ -2988,37 +3965,68 @@
         "description": "UserPdfRect is in UserSpace\n(0,0) top left\npercent page units\n1-based page index",
         "required": ["page_index", "left", "top", "width", "height"],
         "properties": {
-          "height": { "type": "number", "format": "float" },
-          "left": { "type": "number", "format": "float" },
-          "page_index": { "type": "integer", "format": "int32", "minimum": 0 },
-          "top": { "type": "number", "format": "float" },
-          "width": { "type": "number", "format": "float" }
+          "height": {
+            "type": "number",
+            "format": "float"
+          },
+          "left": {
+            "type": "number",
+            "format": "float"
+          },
+          "page_index": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "top": {
+            "type": "number",
+            "format": "float"
+          },
+          "width": {
+            "type": "number",
+            "format": "float"
+          }
         }
       },
       "VerifyAttachmentsRequest": {
         "type": "object",
         "required": ["attachments"],
         "properties": {
-          "attachments": { "type": "array", "items": { "type": "string" } }
+          "attachments": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
         }
       },
       "VerifyAttachmentsResponse": {
         "type": "object",
         "required": ["attachments"],
         "properties": {
-          "attachments": { "type": "array", "items": { "type": "string" } }
+          "attachments": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
         }
       },
       "WebSocketError": {
         "oneOf": [
           {
             "allOf": [
-              { "$ref": "#/components/schemas/StreamError" },
+              {
+                "$ref": "#/components/schemas/StreamError"
+              },
               {
                 "type": "object",
                 "required": ["error_type"],
                 "properties": {
-                  "error_type": { "type": "string", "enum": ["stream_error"] }
+                  "error_type": {
+                    "type": "string",
+                    "enum": ["stream_error"]
+                  }
                 }
               }
             ]
@@ -3027,34 +4035,50 @@
             "type": "object",
             "required": ["chat_id", "message_id", "stream_id", "error_type"],
             "properties": {
-              "chat_id": { "type": "string" },
-              "details": { "type": ["string", "null"] },
+              "chat_id": {
+                "type": "string"
+              },
+              "details": {
+                "type": ["string", "null"]
+              },
               "error_type": {
                 "type": "string",
                 "enum": ["failed_to_send_chat_message"]
               },
-              "message_id": { "type": "string" },
-              "stream_id": { "type": "string" }
+              "message_id": {
+                "type": "string"
+              },
+              "stream_id": {
+                "type": "string"
+              }
             }
           },
           {
             "type": "object",
             "required": ["chat_id", "stream_id", "error_type"],
             "properties": {
-              "chat_id": { "type": "string" },
-              "details": { "type": ["string", "null"] },
+              "chat_id": {
+                "type": "string"
+              },
+              "details": {
+                "type": ["string", "null"]
+              },
               "error_type": {
                 "type": "string",
                 "enum": ["failed_to_rename_chat"]
               },
-              "stream_id": { "type": "string" }
+              "stream_id": {
+                "type": "string"
+              }
             }
           },
           {
             "type": "object",
             "required": ["error_type"],
             "properties": {
-              "details": { "type": ["string", "null"] },
+              "details": {
+                "type": ["string", "null"]
+              },
               "error_type": {
                 "type": "string",
                 "enum": ["failed_to_send_error_message"]
@@ -3065,23 +4089,34 @@
             "type": "object",
             "required": ["chat_id", "stream_id", "error_type"],
             "properties": {
-              "chat_id": { "type": "string" },
-              "details": { "type": ["string", "null"] },
+              "chat_id": {
+                "type": "string"
+              },
+              "details": {
+                "type": ["string", "null"]
+              },
               "error_type": {
                 "type": "string",
                 "enum": ["failed_to_store_chat"]
               },
-              "stream_id": { "type": "string" }
+              "stream_id": {
+                "type": "string"
+              }
             }
           },
           {
             "allOf": [
-              { "$ref": "#/components/schemas/GenericErrorResponse" },
+              {
+                "$ref": "#/components/schemas/GenericErrorResponse"
+              },
               {
                 "type": "object",
                 "required": ["error_type"],
                 "properties": {
-                  "error_type": { "type": "string", "enum": ["generic"] }
+                  "error_type": {
+                    "type": "string",
+                    "enum": ["generic"]
+                  }
                 }
               }
             ]
@@ -3090,7 +4125,9 @@
             "type": "object",
             "required": ["error_type"],
             "properties": {
-              "details": { "type": ["string", "null"] },
+              "details": {
+                "type": ["string", "null"]
+              },
               "error_type": {
                 "type": "string",
                 "enum": ["failed_to_send_websocket_message"]
@@ -3101,7 +4138,9 @@
             "type": "object",
             "required": ["error_type"],
             "properties": {
-              "details": { "type": ["string", "null"] },
+              "details": {
+                "type": ["string", "null"]
+              },
               "error_type": {
                 "type": "string",
                 "enum": ["failed_to_select_model"]
@@ -3112,21 +4151,31 @@
             "type": "object",
             "required": ["chat_id", "message_id", "stream_id", "error_type"],
             "properties": {
-              "chat_id": { "type": "string" },
-              "details": { "type": ["string", "null"] },
+              "chat_id": {
+                "type": "string"
+              },
+              "details": {
+                "type": ["string", "null"]
+              },
               "error_type": {
                 "type": "string",
                 "enum": ["failed_to_update_token_count"]
               },
-              "message_id": { "type": "string" },
-              "stream_id": { "type": "string" }
+              "message_id": {
+                "type": "string"
+              },
+              "stream_id": {
+                "type": "string"
+              }
             }
           },
           {
             "type": "object",
             "required": ["attachment_id", "error_type"],
             "properties": {
-              "attachment_id": { "type": "string" },
+              "attachment_id": {
+                "type": "string"
+              },
               "error_type": {
                 "type": "string",
                 "enum": ["extraction_status_failed"]
@@ -3139,7 +4188,9 @@
             "properties": {
               "attachment_ids": {
                 "type": "array",
-                "items": { "type": "string" }
+                "items": {
+                  "type": "string"
+                }
               },
               "error_type": {
                 "type": "string",
@@ -3155,8 +4206,12 @@
                 "type": "string",
                 "enum": ["failed_to_edit_message"]
               },
-              "reason": { "type": "string" },
-              "stream_id": { "type": "string" }
+              "reason": {
+                "type": "string"
+              },
+              "stream_id": {
+                "type": "string"
+              }
             }
           }
         ]
@@ -3164,7 +4219,11 @@
       "WithChatId": {
         "type": "object",
         "required": ["chat_id"],
-        "properties": { "chat_id": { "type": "string" } }
+        "properties": {
+          "chat_id": {
+            "type": "string"
+          }
+        }
       }
     }
   },

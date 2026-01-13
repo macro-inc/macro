@@ -4,7 +4,9 @@
     "title": "organization_service",
     "description": "",
     "termsOfService": "https://macro.com/terms",
-    "license": { "name": "" },
+    "license": {
+      "name": ""
+    },
     "version": "0.1.0"
   },
   "paths": {
@@ -16,7 +18,13 @@
         "responses": {
           "200": {
             "description": "health",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -39,15 +47,33 @@
           },
           "400": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       },
@@ -66,18 +92,38 @@
           "required": true
         },
         "responses": {
-          "200": { "description": "" },
+          "200": {
+            "description": ""
+          },
           "400": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -93,14 +139,20 @@
             "in": "query",
             "description": "The maximum number of users to retreive. Default 10, max 100.",
             "required": true,
-            "schema": { "type": "integer", "format": "int64" }
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
           },
           {
             "name": "offset",
             "in": "query",
             "description": "The offset to start from. Default 0.",
             "required": true,
-            "schema": { "type": "integer", "format": "int64" }
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
           }
         ],
         "responses": {
@@ -108,21 +160,41 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/GetUsersResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/GetUsersResponse"
+                }
               }
             }
           },
           "400": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       },
@@ -133,28 +205,56 @@
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/DeleteUserRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/DeleteUserRequest"
+              }
             }
           },
           "required": true
         },
         "responses": {
-          "200": { "description": "" },
+          "200": {
+            "description": ""
+          },
           "400": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -167,28 +267,56 @@
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/InviteUserRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/InviteUserRequest"
+              }
             }
           },
           "required": true
         },
         "responses": {
-          "200": { "description": "" },
+          "200": {
+            "description": ""
+          },
           "400": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       },
@@ -200,28 +328,56 @@
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/InviteUserRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/InviteUserRequest"
+              }
             }
           },
           "required": true
         },
         "responses": {
-          "200": { "description": "" },
+          "200": {
+            "description": ""
+          },
           "400": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -244,15 +400,33 @@
           },
           "400": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -265,28 +439,56 @@
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/PatchUserRoleRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/PatchUserRoleRequest"
+              }
             }
           },
           "required": true
         },
         "responses": {
-          "200": { "description": "" },
+          "200": {
+            "description": ""
+          },
           "400": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -319,7 +521,9 @@
         "properties": {
           "invited_users": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "The invited users in your organization"
           }
         }
@@ -340,7 +544,9 @@
           },
           "users": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/User" },
+            "items": {
+              "$ref": "#/components/schemas/User"
+            },
             "description": "The users in your organization returned from the query"
           }
         }
@@ -369,7 +575,9 @@
           },
           "organization_access_level": {
             "oneOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "$ref": "#/components/schemas/AccessLevel",
                 "description": "The access level for users if the item is accessible by organization"
@@ -378,7 +586,9 @@
           },
           "public_access_level": {
             "oneOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "$ref": "#/components/schemas/AccessLevel",
                 "description": "The access level for users if the item is publicly accessible"
@@ -410,7 +620,10 @@
         "type": "string",
         "enum": ["public", "organization", "private"]
       },
-      "OrganizationUserRole": { "type": "string", "enum": ["owner", "member"] },
+      "OrganizationUserRole": {
+        "type": "string",
+        "enum": ["owner", "member"]
+      },
       "PatchOrganizationSettingsRequest": {
         "type": "object",
         "properties": {
@@ -447,8 +660,14 @@
         "type": "object",
         "required": ["id", "email", "is_it_admin"],
         "properties": {
-          "email": { "type": "string", "description": "The email of the user" },
-          "id": { "type": "string", "description": "The id of the user" },
+          "email": {
+            "type": "string",
+            "description": "The email of the user"
+          },
+          "id": {
+            "type": "string",
+            "description": "The id of the user"
+          },
           "is_it_admin": {
             "type": "boolean",
             "description": "If the user is an it admin or not"

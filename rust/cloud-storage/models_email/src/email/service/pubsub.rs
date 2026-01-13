@@ -43,6 +43,17 @@ pub enum FailureReason {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LinkManagerMessage {
     pub link_id: Uuid,
+    pub operation: LinkManagerOperation,
+}
+
+/// The operations that can be performed by the LinkManager.
+#[derive(Debug, Serialize, Deserialize)]
+pub enum LinkManagerOperation {
+    /// Triggers a contact sync and refreshes the Gmail watch subscription to continue receiving
+    /// inbox notifications for the user.
+    Refresh,
+    /// Delete the link from the database.
+    Delete,
 }
 
 /// The message we send from the email_scheduled_handler lambda to the service via SQS to trigger

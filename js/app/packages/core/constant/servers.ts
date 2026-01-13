@@ -1,6 +1,5 @@
 const serverHostLocal: Servers = {
   'auth-service': 'http://localhost:8084',
-  'docx-service': 'http://localhost:34512',
   'pdf-service': 'http://localhost:4567',
   'document-storage-service': 'http://localhost:8083',
   'organization-service': 'todo',
@@ -23,7 +22,6 @@ const devServerSuffix = import.meta.env.MODE === 'development' ? '-dev' : '';
 
 const serverHostRemote = {
   'auth-service': `https://auth-service${devServerSuffix}.macro.com`,
-  'docx-service': `https://docx-service${devServerSuffix}.macro.com`,
   'pdf-service': `https://pdf-service${devServerSuffix}.macro.com`,
   'document-storage-service': `https://cloud-storage${devServerSuffix}.macro.com`,
   'websocket-service': `wss://services${devServerSuffix}.macro.com`,

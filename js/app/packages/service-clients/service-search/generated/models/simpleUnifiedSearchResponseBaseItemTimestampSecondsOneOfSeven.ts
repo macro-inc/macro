@@ -7,4 +7,6 @@
 import type { SimpleEmailSearchResponseBaseItemTimestampSeconds } from './simpleEmailSearchResponseBaseItemTimestampSeconds';
 import type { SimpleUnifiedSearchResponseBaseItemTimestampSecondsOneOfSevenAllOf } from './simpleUnifiedSearchResponseBaseItemTimestampSecondsOneOfSevenAllOf';
 
-export type SimpleUnifiedSearchResponseBaseItemTimestampSecondsOneOfSeven = SimpleEmailSearchResponseBaseItemTimestampSeconds & SimpleUnifiedSearchResponseBaseItemTimestampSecondsOneOfSevenAllOf;
+export type SimpleUnifiedSearchResponseBaseItemTimestampSecondsOneOfSeven =
+  SimpleEmailSearchResponseBaseItemTimestampSeconds &
+    SimpleUnifiedSearchResponseBaseItemTimestampSecondsOneOfSevenAllOf;

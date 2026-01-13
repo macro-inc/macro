@@ -5,8 +5,8 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type AttachmentType = typeof AttachmentType[keyof typeof AttachmentType];
-
+export type AttachmentType =
+  (typeof AttachmentType)[keyof typeof AttachmentType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const AttachmentType = {

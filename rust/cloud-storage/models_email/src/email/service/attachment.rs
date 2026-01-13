@@ -87,7 +87,7 @@ pub enum AttachmentUploadDestination {
     Sfs,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct AttachmentDraft {
     /// Unique identifier for the attachment.
     pub id: Uuid,

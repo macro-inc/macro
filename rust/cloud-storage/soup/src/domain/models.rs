@@ -1,3 +1,4 @@
+use comms::domain::models::GetChannelsRequest;
 use email::domain::models::{GetEmailsRequest, PreviewView};
 use frecency::domain::models::{AggregateFrecency, FrecencyQueryErr};
 use item_filters::ast::EntityFilterAst;
@@ -142,6 +143,32 @@ impl SoupRequest {
                     filter: filter.as_ref().and_then(|f| f.email_filter.clone()),
                 })),
                 // we don't yet have sort by frecency implemented for emails yet
+                SoupQuery::Frecency(_) => None,
+            }?,
+        })
+    }
+
+    pub(crate) fn build_comms_request(&self) -> Option<GetChannelsRequest> {
+        Some(GetChannelsRequest {
+            macro_id: self.user.clone(),
+            limit: Some(self.limit as u32),
+            query: match &self.cursor {
+                SoupQuery::Simple(Query::Sort(t, f)) => Some(Query::Sort(
+                    *t,
+                    f.as_ref().and_then(|f| f.channel_filter.clone()),
+                )),
+                SoupQuery::Simple(Query::Cursor(CursorWithValAndFilter {
+                    id,
+                    limit,
+                    val,
+                    filter,
+                })) => Some(Query::Cursor(CursorWithValAndFilter {
+                    id: *id,
+                    limit: *limit,
+                    val: val.clone(),
+                    filter: filter.as_ref().and_then(|f| f.channel_filter.clone()),
+                })),
+                // query by frecency not yet implemented for channels
                 SoupQuery::Frecency(_) => None,
             }?,
         })

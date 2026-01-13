@@ -6,12 +6,12 @@
  */
 
 export type GetUserNotificationParams = {
-/**
- * Size limit per page. Default 20, max 500.
- */
-limit: number;
-/**
- * Base 64 encoded cursor
- */
-cursor?: string;
+  /**
+   * Size limit per page. Default 20, max 500.
+   */
+  limit: number;
+  /**
+   * Base 64 encoded cursor
+   */
+  cursor?: string;
 };

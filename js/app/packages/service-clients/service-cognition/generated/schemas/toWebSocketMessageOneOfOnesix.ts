@@ -10,4 +10,5 @@ import type { ToWebSocketMessageOneOfOnesixAllOf } from './toWebSocketMessageOne
 /**
  * pdf completion
  */
-export type ToWebSocketMessageOneOfOnesix = SendCompletionPayload & ToWebSocketMessageOneOfOnesixAllOf;
+export type ToWebSocketMessageOneOfOnesix = SendCompletionPayload &
+  ToWebSocketMessageOneOfOnesixAllOf;

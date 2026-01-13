@@ -1,7 +1,7 @@
 use crate::api::channels::create_channel::to_lowercase;
 use crate::api::context::{AppState, ChannelImpl};
 use crate::api::extractors::{
-    ChannelAdmin, ChannelId, ChannelName, ChannelParticipants, ChannelTypeExtractor,
+    ChannelId, ChannelMember, ChannelName, ChannelParticipants, ChannelTypeExtractor,
 };
 use crate::notification as comms_notification;
 use anyhow::Result;
@@ -28,7 +28,7 @@ pub struct AddParticipantsRequest {
     post,
     tag = "channels",
     operation_id = "add_participants",
-    description = "adds a list of participants to the channel, user must be an owner or an admin",
+    description = "adds a list of participants to the channel, user must be a participant",
     path = "/channels/{channel_id}/participants",
     params(
         ("channel_id" = String, Path, description = "channel id"),
@@ -44,7 +44,7 @@ pub struct AddParticipantsRequest {
 #[axum::debug_handler]
 pub async fn handler(
     State(ctx): State<AppState>,
-    Cached(ChannelAdmin(channel_admin)): Cached<ChannelAdmin>,
+    Cached(ChannelMember(channel_member)): Cached<ChannelMember>,
     Cached(ChannelName(channel_name, ..)): Cached<ChannelName<ChannelImpl>>,
     Cached(ChannelTypeExtractor(channel_type)): Cached<ChannelTypeExtractor>,
     Cached(ChannelParticipants(channel_participants)): Cached<ChannelParticipants>,
@@ -106,7 +106,7 @@ pub async fn handler(
         comms_notification::dispatch_notifications_for_invite(
             &ctx,
             &channel_id,
-            &MacroUserIdStr::parse_from_str(&channel_admin.context.user_id)
+            &MacroUserIdStr::parse_from_str(&channel_member.context.user_id)
                 .map_err(|_e| (StatusCode::BAD_REQUEST, "Invalid macro user id".to_string()))?
                 .into_owned(),
             req.participants.clone(),

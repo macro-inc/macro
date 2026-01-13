@@ -8,11 +8,12 @@ use email::domain::{
     ports::EmailService,
 };
 use http_body_util::BodyExt;
+use item_filters::ast::EntityFilterAst;
 use macro_user_id::{email::EmailStr, user_id::MacroUserIdStr};
 use model_user::UserContext;
 use models_pagination::{
-    Cursor, CursorVal, Frecency, FrecencyValue, Identify, Paginate, PaginateOn, Query,
-    SimpleSortMethod, SortOn, Sortable, TypeEraseCursor,
+    Cursor, CursorVal, Frecency, FrecencyValue, Identify, PaginateOn, Query, SimpleSortMethod,
+    SortOn, TypeEraseCursor,
 };
 use serde::Serialize;
 use serde_json::json;
@@ -25,7 +26,7 @@ use crate::{
         models::{SoupErr, SoupQuery, SoupRequest, SoupType},
         ports::{SoupOutput, SoupService},
     },
-    inbound::axum_router::{SoupCursor, SoupRouterState, soup_router},
+    inbound::axum_router::{SoupRouterState, soup_router},
 };
 
 static CURSOR: &str = "eyJpZCI6ImUzNmM5MTJlLTU2M2MtNDIxZS1iMTAzLWE0YjAwY2ZmMzBlZSIsImxpbWl0IjoxMDAsInZhbCI6eyJzb3J0X3R5cGUiOiJ1cGRhdGVkX2F0IiwibGFzdF92YWwiOiIyMDI1LTExLTA3VDE5OjEyOjU5Ljc4MFoifX0=";
@@ -404,7 +405,7 @@ async fn cursor_with_assoc_works() {
     }
 
     impl SortOn<Frecency> for Data {
-        fn sort_on(sort: Frecency) -> impl FnMut(&Self) -> models_pagination::CursorVal<Frecency> {
+        fn sort_on(_sort: Frecency) -> impl FnMut(&Self) -> models_pagination::CursorVal<Frecency> {
             |v| CursorVal {
                 sort_type: Frecency,
                 last_val: FrecencyValue::FrecencyScore(v.0 as f64),
@@ -508,7 +509,7 @@ async fn cursor_with_all_works() {
     }
 
     impl SortOn<Frecency> for Data {
-        fn sort_on(sort: Frecency) -> impl FnMut(&Self) -> models_pagination::CursorVal<Frecency> {
+        fn sort_on(_sort: Frecency) -> impl FnMut(&Self) -> models_pagination::CursorVal<Frecency> {
             |v| CursorVal {
                 sort_type: Frecency,
                 last_val: FrecencyValue::FrecencyScore(v.0 as f64),
@@ -557,6 +558,65 @@ async fn cursor_with_all_works() {
                 filter: Some(_f),
                 ..
             })),
+            ..
+        }
+    )
+}
+
+#[tokio::test]
+async fn it_parses_channel_filters() {
+    let soup = MockSoup::new();
+    let inner_counter = soup.called.clone();
+    let router: Router = soup_router(SoupRouterState::new(
+        soup.clone(),
+        MockEmailLinkResult {
+            get_link_result: Arc::new(|| Ok(None)),
+        },
+    ))
+    .layer(Extension(UserContext {
+        user_id: "macro|test@example.com".to_string(),
+        fusion_user_id: "1234".to_string(),
+        permissions: None,
+        organization_id: None,
+    }));
+
+    let uuid1 = Uuid::new_v4();
+    let uuid2 = Uuid::new_v4();
+    let request = Request::builder()
+        .uri("/soup")
+        .method(Method::POST)
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::to_vec(&serde_json::json!({
+                "channel_filters": {
+                    "channel_ids": [uuid1, uuid2]
+                }
+            }))
+            .unwrap(),
+        ))
+        .unwrap();
+
+    let _res = router.oneshot(request).await.unwrap();
+
+    let arg = {
+        let mut guard = inner_counter.lock().unwrap();
+        guard.pop().unwrap()
+    };
+
+    assert_matches!(
+        arg,
+        SoupRequest {
+            cursor: SoupQuery::Simple(Query::Sort(
+                _,
+                Some(EntityFilterAst {
+                    document_filter: None,
+                    project_filter: None,
+                    chat_filter: None,
+                    email_filter: None,
+                    channel_filter: Some(_),
+                    ..
+                }),
+            )),
             ..
         }
     )

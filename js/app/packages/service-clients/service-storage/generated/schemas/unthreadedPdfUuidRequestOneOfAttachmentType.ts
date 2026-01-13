@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type UnthreadedPdfUuidRequestOneOfAttachmentType = typeof UnthreadedPdfUuidRequestOneOfAttachmentType[keyof typeof UnthreadedPdfUuidRequestOneOfAttachmentType];
-
+export type UnthreadedPdfUuidRequestOneOfAttachmentType =
+  (typeof UnthreadedPdfUuidRequestOneOfAttachmentType)[keyof typeof UnthreadedPdfUuidRequestOneOfAttachmentType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const UnthreadedPdfUuidRequestOneOfAttachmentType = {

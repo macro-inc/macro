@@ -7,9 +7,9 @@ use axum::{
 use macro_middleware::auth::internal_access::ValidInternalKey;
 use rand::Rng;
 
-use crate::{
-    api::context::ApiContext,
-    service::{fusionauth_client::error::FusionAuthClientError, user::create_user::create_user},
+use crate::api::context::ApiContext;
+use authentication_service::service::{
+    fusionauth_client::error::FusionAuthClientError, user::create_user::create_user,
 };
 use model::authentication::webhooks::FusionAuthUserWebhook;
 
