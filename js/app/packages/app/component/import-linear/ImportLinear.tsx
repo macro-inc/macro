@@ -11,13 +11,7 @@ import {
 import { useUpsertToHistoryMutation } from '@queries/history/history';
 import { useContacts } from '@core/user';
 import { Button } from '@ui/components/Button';
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  For,
-  Show,
-} from 'solid-js';
+import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 
 type ImportProgress =
@@ -47,7 +41,9 @@ export default function ImportLinear() {
     Record<string, string>
   >({});
   const [createdIds, setCreatedIds] = createSignal<readonly string[]>([]);
-  const [progress, setProgress] = createSignal<ImportProgress>({ type: 'idle' });
+  const [progress, setProgress] = createSignal<ImportProgress>({
+    type: 'idle',
+  });
   const [isImporting, setIsImporting] = createSignal(false);
 
   const runningProgress = createMemo(() => {
@@ -74,7 +70,8 @@ export default function ImportLinear() {
     return cs
       .map((c) => ({
         id: c.id,
-        label: c.name && c.name !== c.email ? `${c.name} (${c.email})` : c.email,
+        label:
+          c.name && c.name !== c.email ? `${c.name} (${c.email})` : c.email,
         email: c.email,
         name: c.name,
       }))
@@ -90,10 +87,9 @@ export default function ImportLinear() {
       if (assigneeMapping[a] !== undefined) continue;
 
       const aLower = lower(a);
-      const mapped =
-        a.includes('@')
-          ? options.find((o) => lower(o.email) === aLower)
-          : options.find((o) => lower(o.name) === aLower);
+      const mapped = a.includes('@')
+        ? options.find((o) => lower(o.email) === aLower)
+        : options.find((o) => lower(o.name) === aLower);
 
       setAssigneeMapping(a, mapped?.id ?? '');
     }
@@ -141,7 +137,8 @@ export default function ImportLinear() {
     setRecords(result.records);
   };
 
-  const canImport = () => records().length > 0 && !parseError() && !isImporting();
+  const canImport = () =>
+    records().length > 0 && !parseError() && !isImporting();
 
   const runImport = async () => {
     const rows = records();
@@ -206,141 +203,147 @@ export default function ImportLinear() {
     <div class="flex flex-col h-full w-full">
       <div class="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
         <div class="flex items-center justify-between">
-        <div class="text-lg font-medium text-ink">Import Linear CSV</div>
-        <DeprecatedTextButton
-          theme="base"
-          text="Clear"
-          onClick={() => {
-            setFileName('');
-            setParseError('');
-            setRecords([]);
-            setCreatedIds([]);
-            setProgress({ type: 'idle' });
-            setAssigneeMapping(reconcile({}));
-          }}
-        />
-      </div>
-
-      <div class="flex flex-col gap-2">
-        <label class="text-sm text-ink-muted">CSV file</label>
-        <label class="inline-flex items-center gap-2 px-4 py-2 bg-accent text-accent-contrast font-medium rounded-md cursor-pointer hover:bg-accent-hover transition-colors w-fit">
-          <span>Choose File</span>
-          <input
-            type="file"
-            accept=".csv,text/csv"
-            onChange={(e) => handleFileChange(e.currentTarget.files?.[0])}
-            class="sr-only"
+          <div class="text-lg font-medium text-ink">Import Linear CSV</div>
+          <DeprecatedTextButton
+            theme="base"
+            text="Clear"
+            onClick={() => {
+              setFileName('');
+              setParseError('');
+              setRecords([]);
+              setCreatedIds([]);
+              setProgress({ type: 'idle' });
+              setAssigneeMapping(reconcile({}));
+            }}
           />
-        </label>
-        <Show when={fileName()}>
-          <div class="text-sm text-ink">
-            <span class="text-ink-muted">Loaded:</span> {fileName()}
-          </div>
-        </Show>
-        <Show when={parseError()}>
-          <div class="text-sm text-failure-ink">{parseError()}</div>
-        </Show>
-      </div>
+        </div>
 
-      <Show when={records().length > 0}>
         <div class="flex flex-col gap-2">
-          <div class="text-sm text-ink-muted">
-            Rows: <span class="text-ink">{records().length}</span>
-          </div>
-
-          <Show when={uniqueAssignees().length > 0}>
-            <div class="flex flex-col gap-2">
-              <div class="text-sm font-medium text-ink">Assignee mapping</div>
-              <div class="text-xs text-ink-muted">
-                Linear assignees that don’t match your contacts will import as
-                unassigned unless you map them here.
-              </div>
-
-              <div class="flex flex-col gap-2 border border-edge rounded-sm p-2">
-                <For each={uniqueAssignees()}>
-                  {(assignee) => (
-                    <div class="flex items-center gap-3">
-                      <div class="flex-1 min-w-0">
-                        <div class="text-sm text-ink truncate">{assignee}</div>
-                      </div>
-                      <select
-                        class="text-sm bg-menu border border-edge rounded-xs px-2 py-1"
-                        value={assigneeMapping[assignee] ?? ''}
-                        onChange={(e) =>
-                          setAssigneeMapping(assignee, e.currentTarget.value)
-                        }
-                      >
-                        <option value="">Unassigned</option>
-                        <For each={contactOptions()}>
-                          {(o) => <option value={o.id}>{o.label}</option>}
-                        </For>
-                      </select>
-                    </div>
-                  )}
-                </For>
-              </div>
+          <label class="text-sm text-ink-muted">CSV file</label>
+          <label class="inline-flex items-center gap-2 px-4 py-2 bg-accent text-accent-contrast font-medium rounded-md cursor-pointer hover:bg-accent-hover transition-colors w-fit">
+            <span>Choose File</span>
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              onChange={(e) => handleFileChange(e.currentTarget.files?.[0])}
+              class="sr-only"
+            />
+          </label>
+          <Show when={fileName()}>
+            <div class="text-sm text-ink">
+              <span class="text-ink-muted">Loaded:</span> {fileName()}
             </div>
           </Show>
+          <Show when={parseError()}>
+            <div class="text-sm text-failure-ink">{parseError()}</div>
+          </Show>
         </div>
-      </Show>
 
-      <Show when={records().length > 0}>
-        <div class="flex flex-col gap-2">
-          <div class="text-sm font-medium text-ink">
-            Preview (first 20 + all rows with warnings)
-          </div>
-          <div class="border border-edge rounded-sm overflow-hidden">
-            <table class="w-full text-sm">
-              <thead class="bg-hover">
-                <tr class="text-left">
-                  <th class="p-2">Row</th>
-                  <th class="p-2">Title</th>
-                  <th class="p-2">Warnings</th>
-                </tr>
-              </thead>
-              <tbody>
-                <For each={previewDrafts()}>
-                  {(d) => (
-                    <tr class="border-t border-edge">
-                      <td class="p-2 align-top">
-                        <div class="text-ink-muted">{d.rowNum}</div>
-                      </td>
-                      <td class="p-2 align-top">
-                        <div class="text-ink">{d.title || '(missing title)'}</div>
-                      </td>
-                      <td class="p-2 align-top">
-                        <div class="text-xs text-ink-muted">
-                          {d.warnings.length > 0 ? d.warnings.join(' · ') : '—'}
+        <Show when={records().length > 0}>
+          <div class="flex flex-col gap-2">
+            <div class="text-sm text-ink-muted">
+              Rows: <span class="text-ink">{records().length}</span>
+            </div>
+
+            <Show when={uniqueAssignees().length > 0}>
+              <div class="flex flex-col gap-2">
+                <div class="text-sm font-medium text-ink">Assignee mapping</div>
+                <div class="text-xs text-ink-muted">
+                  Linear assignees that don’t match your contacts will import as
+                  unassigned unless you map them here.
+                </div>
+
+                <div class="flex flex-col gap-2 border border-edge rounded-sm p-2">
+                  <For each={uniqueAssignees()}>
+                    {(assignee) => (
+                      <div class="flex items-center gap-3">
+                        <div class="flex-1 min-w-0">
+                          <div class="text-sm text-ink truncate">
+                            {assignee}
+                          </div>
                         </div>
-                      </td>
-                    </tr>
-                  )}
-                </For>
-              </tbody>
-            </table>
+                        <select
+                          class="text-sm bg-menu border border-edge rounded-xs px-2 py-1"
+                          value={assigneeMapping[assignee] ?? ''}
+                          onChange={(e) =>
+                            setAssigneeMapping(assignee, e.currentTarget.value)
+                          }
+                        >
+                          <option value="">Unassigned</option>
+                          <For each={contactOptions()}>
+                            {(o) => <option value={o.id}>{o.label}</option>}
+                          </For>
+                        </select>
+                      </div>
+                    )}
+                  </For>
+                </div>
+              </div>
+            </Show>
           </div>
-        </div>
-      </Show>
+        </Show>
 
-      <Show when={createdIds().length > 0}>
-        <div class="flex flex-col gap-2">
-          <div class="text-sm font-medium text-ink">Created tasks</div>
-          <div class="flex flex-col gap-1">
-            <For each={createdIds()}>
-              {(id) => (
-                <a
-                  class="text-sm text-ink underline underline-offset-2"
-                  href={buildSimpleEntityUrl({ type: 'task', id }, {})}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  {id}
-                </a>
-              )}
-            </For>
+        <Show when={records().length > 0}>
+          <div class="flex flex-col gap-2">
+            <div class="text-sm font-medium text-ink">
+              Preview (first 20 + all rows with warnings)
+            </div>
+            <div class="border border-edge rounded-sm overflow-hidden">
+              <table class="w-full text-sm">
+                <thead class="bg-hover">
+                  <tr class="text-left">
+                    <th class="p-2">Row</th>
+                    <th class="p-2">Title</th>
+                    <th class="p-2">Warnings</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <For each={previewDrafts()}>
+                    {(d) => (
+                      <tr class="border-t border-edge">
+                        <td class="p-2 align-top">
+                          <div class="text-ink-muted">{d.rowNum}</div>
+                        </td>
+                        <td class="p-2 align-top">
+                          <div class="text-ink">
+                            {d.title || '(missing title)'}
+                          </div>
+                        </td>
+                        <td class="p-2 align-top">
+                          <div class="text-xs text-ink-muted">
+                            {d.warnings.length > 0
+                              ? d.warnings.join(' · ')
+                              : '—'}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </For>
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
-      </Show>
+        </Show>
+
+        <Show when={createdIds().length > 0}>
+          <div class="flex flex-col gap-2">
+            <div class="text-sm font-medium text-ink">Created tasks</div>
+            <div class="flex flex-col gap-1">
+              <For each={createdIds()}>
+                {(id) => (
+                  <a
+                    class="text-sm text-ink underline underline-offset-2"
+                    href={buildSimpleEntityUrl({ type: 'task', id }, {})}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {id}
+                  </a>
+                )}
+              </For>
+            </div>
+          </div>
+        </Show>
       </div>
 
       <div class="border-t border-edge p-4 flex items-center gap-3 shrink-0">
@@ -357,7 +360,8 @@ export default function ImportLinear() {
         <Show when={doneProgress()}>
           {(p) => (
             <div class="text-sm text-ink-muted">
-              Done — created {p().created}, skipped {p().skipped}, failed {p().failed}
+              Done — created {p().created}, skipped {p().skipped}, failed{' '}
+              {p().failed}
             </div>
           )}
         </Show>
@@ -365,4 +369,3 @@ export default function ImportLinear() {
     </div>
   );
 }
-

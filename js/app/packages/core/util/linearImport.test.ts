@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'vitest';
-import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '../component/Properties/constants';
+import {
+  PROPERTY_OPTION_IDS,
+  SYSTEM_PROPERTY_IDS,
+} from '../component/Properties/constants';
 import { linearCsvRecordToMacroTaskDraft } from './linearImport';
 
 describe('linearCsvRecordToMacroTaskDraft', () => {
@@ -78,4 +81,3 @@ describe('linearCsvRecordToMacroTaskDraft', () => {
     });
   });
 });
-

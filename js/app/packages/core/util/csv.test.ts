@@ -34,4 +34,3 @@ describe('parseCsv', () => {
     expect(res.error).toContain('unterminated');
   });
 });
-

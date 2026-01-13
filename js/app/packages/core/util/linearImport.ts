@@ -1,4 +1,7 @@
-import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
+import {
+  PROPERTY_OPTION_IDS,
+  SYSTEM_PROPERTY_IDS,
+} from '@core/component/Properties/constants';
 import { EntityType } from '@service-storage/generated/schemas/entityType';
 import type { PropertyInput } from '@service-storage/generated/schemas/propertyInput';
 
@@ -36,7 +39,9 @@ function hasValue(s: string | undefined): boolean {
   return normalizeText(s).length > 0;
 }
 
-function parseLinearPriority(value: string | undefined): PriorityOptionId | null {
+function parseLinearPriority(
+  value: string | undefined
+): PriorityOptionId | null {
   const raw = normalizeText(value);
   if (!raw) return null;
 
@@ -61,7 +66,8 @@ function parseLinearPriority(value: string | undefined): PriorityOptionId | null
   const p = raw.toLowerCase();
   if (p.includes('urgent')) return PROPERTY_OPTION_IDS.PRIORITY.URGENT;
   if (p.includes('high')) return PROPERTY_OPTION_IDS.PRIORITY.HIGH;
-  if (p.includes('medium') || p === 'med') return PROPERTY_OPTION_IDS.PRIORITY.MEDIUM;
+  if (p.includes('medium') || p === 'med')
+    return PROPERTY_OPTION_IDS.PRIORITY.MEDIUM;
   if (p.includes('low')) return PROPERTY_OPTION_IDS.PRIORITY.LOW;
   if (p.includes('no priority') || p.includes('none')) return null;
 
@@ -85,7 +91,8 @@ function parseLinearStatusOptionId(args: {
   const s = lower(args.status);
 
   if (s.includes('cancel')) return PROPERTY_OPTION_IDS.STATUS.CANCELED;
-  if (s.includes('done') || s.includes('complete')) return PROPERTY_OPTION_IDS.STATUS.COMPLETED;
+  if (s.includes('done') || s.includes('complete'))
+    return PROPERTY_OPTION_IDS.STATUS.COMPLETED;
   if (s.includes('review')) return PROPERTY_OPTION_IDS.STATUS.IN_REVIEW;
   if (
     s.includes('progress') ||
@@ -120,7 +127,9 @@ export function linearCsvRecordToMacroTaskDraft(args: {
     archived: record[LINEAR_CSV_HEADERS.archived],
   });
 
-  const priorityOptionId = parseLinearPriority(record[LINEAR_CSV_HEADERS.priority]);
+  const priorityOptionId = parseLinearPriority(
+    record[LINEAR_CSV_HEADERS.priority]
+  );
 
   const warnings: string[] = [];
   if (!title) warnings.push('Missing Title');
@@ -159,7 +168,9 @@ export function linearCsvRecordToMacroTaskDraft(args: {
       },
     });
   } else if (hasValue(record[LINEAR_CSV_HEADERS.assignee])) {
-    warnings.push(`Assignee not mapped: ${record[LINEAR_CSV_HEADERS.assignee]}`);
+    warnings.push(
+      `Assignee not mapped: ${record[LINEAR_CSV_HEADERS.assignee]}`
+    );
   }
 
   const meta: string[] = [];
@@ -192,4 +203,3 @@ export function linearCsvRecordToMacroTaskDraft(args: {
 
   return { title, content, propertyValues, warnings };
 }
-
