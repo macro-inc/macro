@@ -5,8 +5,8 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type AttachmentMetadataOneOfThreeType = typeof AttachmentMetadataOneOfThreeType[keyof typeof AttachmentMetadataOneOfThreeType];
-
+export type AttachmentMetadataOneOfThreeType =
+  (typeof AttachmentMetadataOneOfThreeType)[keyof typeof AttachmentMetadataOneOfThreeType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const AttachmentMetadataOneOfThreeType = {

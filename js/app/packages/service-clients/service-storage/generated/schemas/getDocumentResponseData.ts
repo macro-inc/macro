@@ -4,8 +4,9 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { DocumentMetadata } from './documentMetadata';
+
 import type { AccessLevel } from './accessLevel';
+import type { DocumentMetadata } from './documentMetadata';
 import type { GetDocumentResponseDataViewLocation } from './getDocumentResponseDataViewLocation';
 
 export interface GetDocumentResponseData {

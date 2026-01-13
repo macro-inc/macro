@@ -8,8 +8,8 @@
 /**
  * The upload status of the document
  */
-export type UploadDocumentStatus = typeof UploadDocumentStatus[keyof typeof UploadDocumentStatus];
-
+export type UploadDocumentStatus =
+  (typeof UploadDocumentStatus)[keyof typeof UploadDocumentStatus];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const UploadDocumentStatus = {

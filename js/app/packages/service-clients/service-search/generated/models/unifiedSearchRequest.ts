@@ -4,12 +4,13 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
+
+import type { MatchType } from './matchType';
+import type { SearchOn } from './searchOn';
+import type { UnifiedSearchIndex } from './unifiedSearchIndex';
 import type { UnifiedSearchRequestCollapse } from './unifiedSearchRequestCollapse';
 import type { UnifiedSearchRequestFilters } from './unifiedSearchRequestFilters';
-import type { UnifiedSearchIndex } from './unifiedSearchIndex';
-import type { MatchType } from './matchType';
 import type { UnifiedSearchRequestQuery } from './unifiedSearchRequestQuery';
-import type { SearchOn } from './searchOn';
 import type { UnifiedSearchRequestTerms } from './unifiedSearchRequestTerms';
 
 export interface UnifiedSearchRequest {

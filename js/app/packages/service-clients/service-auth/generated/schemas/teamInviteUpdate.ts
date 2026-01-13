@@ -4,8 +4,9 @@
  * authentication_service
  * OpenAPI spec version: 0.1.0
  */
-import type { TeamUpdateOperation } from './teamUpdateOperation';
+
 import type { TeamInviteUpdateTeamRole } from './teamInviteUpdateTeamRole';
+import type { TeamUpdateOperation } from './teamUpdateOperation';
 
 export interface TeamInviteUpdate {
   /** The operation to perform

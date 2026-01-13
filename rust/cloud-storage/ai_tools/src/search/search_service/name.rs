@@ -60,7 +60,7 @@ impl AsyncTool<ToolServiceContext, RequestContext> for NameSearch {
 
         let response = context
             .search_service_client
-            .search_unified(&request_context.user_id, search_request, 0, PAGE_SIZE)
+            .search_unified(&request_context.user_id, search_request, None, PAGE_SIZE)
             .await
             .map_err(|e| ToolCallError {
                 description: format!("failed to perform name search: {}", e),

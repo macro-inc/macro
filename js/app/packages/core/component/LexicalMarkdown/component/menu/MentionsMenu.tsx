@@ -28,7 +28,7 @@ import {
   useEmails,
 } from '@macro-entity';
 import { useHistoryQuery } from '@queries/history/history';
-import type { PaginatedSearchArgs } from '@service-search/client';
+import type { SearchArgs } from '@service-search/client';
 import type { Item } from '@service-storage/generated/schemas/item';
 import { debounce } from '@solid-primitives/scheduled';
 import { globalSplitManager } from 'app/signal/splitLayout';
@@ -476,11 +476,10 @@ function MentionsMenuInner(props: {
     });
   }
 
-  const args = createMemo((): PaginatedSearchArgs => {
+  const args = createMemo((): SearchArgs => {
     return {
       params: {
-        page: 0,
-        // small -> fast!
+        cursor: null,
         page_size: 10,
       },
       request: {

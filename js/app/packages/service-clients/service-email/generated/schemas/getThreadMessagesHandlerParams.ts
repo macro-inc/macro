@@ -6,12 +6,12 @@
  */
 
 export type GetThreadMessagesHandlerParams = {
-/**
- * Filter messages after this date
- */
-since?: string;
-/**
- * Limit number of messages returned
- */
-limit?: number;
+  /**
+   * Filter messages after this date
+   */
+  since?: string;
+  /**
+   * Limit number of messages returned
+   */
+  limit?: number;
 };

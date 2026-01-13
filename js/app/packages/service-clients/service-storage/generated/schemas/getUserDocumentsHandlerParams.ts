@@ -6,16 +6,16 @@
  */
 
 export type GetUserDocumentsHandlerParams = {
-/**
- * The maximum number of documents to retreive. Default 10, max 100.
- */
-limit: number;
-/**
- * The offset to start from. Default 0.
- */
-offset: number;
-/**
- * The file type to filter by. Default all.
- */
-file_type: string;
+  /**
+   * The maximum number of documents to retreive. Default 10, max 100.
+   */
+  limit: number;
+  /**
+   * The offset to start from. Default 0.
+   */
+  offset: number;
+  /**
+   * The file type to filter by. Default all.
+   */
+  file_type: string;
 };

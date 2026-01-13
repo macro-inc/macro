@@ -5,10 +5,12 @@ use axum::{
     response::{IntoResponse, Response},
     routing::post,
 };
+use email_contact_search::EmailContactSearchError;
 use model::response::ErrorResponse;
 use name_search::NameSearchError;
 use opensearch_client::error::OpensearchClientError;
 
+pub(in crate::api) mod filter;
 pub(in crate::api) mod simple_channel;
 pub(in crate::api) mod simple_chat;
 pub(in crate::api) mod simple_document;
@@ -17,13 +19,7 @@ pub(in crate::api) mod simple_project;
 pub(in crate::api) mod simple_unified;
 
 pub fn router() -> Router<ApiContext> {
-    Router::new()
-        .route("/", post(simple_unified::handler))
-        .route("/document", post(simple_document::handler))
-        .route("/chat", post(simple_chat::handler))
-        .route("/email", post(simple_email::handler))
-        .route("/channel", post(simple_channel::handler))
-        .route("/project", post(simple_project::handler))
+    Router::new().route("/", post(simple_unified::handler))
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -43,12 +39,18 @@ pub enum SearchError {
     /// No query or terms provided
     #[error("query or terms must be provided and at least 3 characters")]
     NoQueryOrTermsProvided,
+    #[error("searching with an invalid cursor")]
+    /// Searching with an invalid cursor
+    InvalidCursor,
     /// Opensearch error occurred
     #[error("unable to search")]
     Search(#[from] OpensearchClientError),
     /// Name search error occurred
     #[error("unable to name search")]
     NameSearch(#[from] NameSearchError),
+    /// Email contact search error occurred
+    #[error("unable to search email contacts")]
+    EmailContactSearch(#[from] EmailContactSearchError),
     /// Internal error occurred
     #[error("internal error")]
     InternalError(#[from] anyhow::Error),
@@ -60,10 +62,12 @@ impl IntoResponse for SearchError {
             SearchError::NoUserId | SearchError::InvalidUserId(_) => StatusCode::UNAUTHORIZED,
             SearchError::InvalidPageSize
             | SearchError::InvalidQuerySize
+            | SearchError::InvalidCursor
             | SearchError::NoQueryOrTermsProvided => StatusCode::BAD_REQUEST,
-            SearchError::Search(_) | SearchError::NameSearch(_) | SearchError::InternalError(_) => {
-                StatusCode::INTERNAL_SERVER_ERROR
-            }
+            SearchError::Search(_)
+            | SearchError::NameSearch(_)
+            | SearchError::EmailContactSearch(_)
+            | SearchError::InternalError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
         (

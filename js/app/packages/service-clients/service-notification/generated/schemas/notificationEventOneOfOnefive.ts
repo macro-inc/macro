@@ -4,8 +4,9 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { NotificationEventOneOfOnefiveNotificationEventType } from './notificationEventOneOfOnefiveNotificationEventType';
+
 import type { DocumentMentionMetadata } from './documentMentionMetadata';
+import type { NotificationEventOneOfOnefiveNotificationEventType } from './notificationEventOneOfOnefiveNotificationEventType';
 
 /**
  * If a document is included via mention or attachment on a message

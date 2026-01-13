@@ -8,8 +8,8 @@
 /**
  * Auto-generated discriminant enum variants
  */
-export type NotificationEventType = typeof NotificationEventType[keyof typeof NotificationEventType];
-
+export type NotificationEventType =
+  (typeof NotificationEventType)[keyof typeof NotificationEventType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const NotificationEventType = {

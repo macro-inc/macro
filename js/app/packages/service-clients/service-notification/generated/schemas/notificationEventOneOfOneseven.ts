@@ -4,8 +4,9 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { NotificationEventOneOfOnesevenNotificationEventType } from './notificationEventOneOfOnesevenNotificationEventType';
+
 import type { NewEmailMetadata } from './newEmailMetadata';
+import type { NotificationEventOneOfOnesevenNotificationEventType } from './notificationEventOneOfOnesevenNotificationEventType';
 
 /**
  * A new email has been sent to the user

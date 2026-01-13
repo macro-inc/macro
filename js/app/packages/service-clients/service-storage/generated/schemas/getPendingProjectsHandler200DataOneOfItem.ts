@@ -4,7 +4,9 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { Project } from './project';
-import type { GetPendingProjectsHandler200DataOneOfItemAllOf } from './getPendingProjectsHandler200DataOneOfItemAllOf';
 
-export type GetPendingProjectsHandler200DataOneOfItem = Project & GetPendingProjectsHandler200DataOneOfItemAllOf;
+import type { GetPendingProjectsHandler200DataOneOfItemAllOf } from './getPendingProjectsHandler200DataOneOfItemAllOf';
+import type { Project } from './project';
+
+export type GetPendingProjectsHandler200DataOneOfItem = Project &
+  GetPendingProjectsHandler200DataOneOfItemAllOf;

@@ -4,20 +4,21 @@
  * properties_service
  * OpenAPI spec version: 0.1.0
  */
-import type { PropertyScope } from './propertyScope';
+
 import type { EntityType } from './entityType';
+import type { PropertyScope } from './propertyScope';
 
 export type ListPropertiesParams = {
-/**
- * Filter by scope: 'user', 'org', 'system', or 'all'
- */
-scope: PropertyScope;
-/**
- * Whether to include property options in the response
- */
-include_options?: boolean;
-/**
- * Filter properties applicable to a specific entity type
- */
-for_entity_type?: EntityType;
+  /**
+   * Filter by scope: 'user', 'org', 'system', or 'all'
+   */
+  scope: PropertyScope;
+  /**
+   * Whether to include property options in the response
+   */
+  include_options?: boolean;
+  /**
+   * Filter properties applicable to a specific entity type
+   */
+  for_entity_type?: EntityType;
 };

@@ -3,6 +3,7 @@ import {
   useGlobalNotificationSource,
 } from '@app/component/GlobalAppState';
 import { useSplitLayout } from '@app/component/split-layout/layout';
+import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import { useChannelsContext } from '@core/component/ChannelsProvider';
 import { Tooltip } from '@core/component/Tooltip';
 import { UserIcon } from '@core/component/UserIcon';
@@ -64,8 +65,8 @@ function QuickAccessItem(props: QuickAccessItemProps) {
   ) => {
     const blockHandle = await blockOrchestrator.getBlockHandle(channelId);
     await blockHandle?.goToLocationFromParams({
-      message_id: messageId,
-      thread_id: threadId,
+      [CHANNEL_URL_PARAMS.message]: messageId,
+      [CHANNEL_URL_PARAMS.thread]: threadId,
     });
   };
 

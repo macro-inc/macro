@@ -5,16 +5,31 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { NotificationEventOneOf } from './notificationEventOneOf';
-import type { NotificationEventOneOfThree } from './notificationEventOneOfThree';
 import type { NotificationEventOneOfFive } from './notificationEventOneOfFive';
-import type { NotificationEventOneOfSeven } from './notificationEventOneOfSeven';
 import type { NotificationEventOneOfNine } from './notificationEventOneOfNine';
-import type { NotificationEventOneOfOneone } from './notificationEventOneOfOneone';
-import type { NotificationEventOneOfOnethree } from './notificationEventOneOfOnethree';
 import type { NotificationEventOneOfOnefive } from './notificationEventOneOfOnefive';
-import type { NotificationEventOneOfOneseven } from './notificationEventOneOfOneseven';
 import type { NotificationEventOneOfOnenine } from './notificationEventOneOfOnenine';
+import type { NotificationEventOneOfOneone } from './notificationEventOneOfOneone';
+import type { NotificationEventOneOfOneseven } from './notificationEventOneOfOneseven';
+import type { NotificationEventOneOfOnethree } from './notificationEventOneOfOnethree';
+import type { NotificationEventOneOfSeven } from './notificationEventOneOfSeven';
+import type { NotificationEventOneOfThree } from './notificationEventOneOfThree';
 import type { NotificationEventOneOfTwoone } from './notificationEventOneOfTwoone';
 import type { NotificationEventOneOfTwothree } from './notificationEventOneOfTwothree';
 
-export type NotificationEvent = NotificationEventOneOf | NotificationEventOneOfThree | NotificationEventOneOfFive | NotificationEventOneOfSeven | NotificationEventOneOfNine | NotificationEventOneOfOneone | NotificationEventOneOfOnethree | NotificationEventOneOfOnefive | NotificationEventOneOfOneseven | NotificationEventOneOfOnenine | NotificationEventOneOfTwoone | NotificationEventOneOfTwothree;
+/**
+ * The types of events that the notification system is aware of
+ */
+export type NotificationEvent =
+  | NotificationEventOneOf
+  | NotificationEventOneOfThree
+  | NotificationEventOneOfFive
+  | NotificationEventOneOfSeven
+  | NotificationEventOneOfNine
+  | NotificationEventOneOfOneone
+  | NotificationEventOneOfOnethree
+  | NotificationEventOneOfOnefive
+  | NotificationEventOneOfOneseven
+  | NotificationEventOneOfOnenine
+  | NotificationEventOneOfTwoone
+  | NotificationEventOneOfTwothree;

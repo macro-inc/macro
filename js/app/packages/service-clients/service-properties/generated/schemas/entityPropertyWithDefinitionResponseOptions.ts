@@ -6,4 +6,6 @@
  */
 import type { PropertyOptionResponse } from './propertyOptionResponse';
 
-export type EntityPropertyWithDefinitionResponseOptions = PropertyOptionResponse[] | null;
+export type EntityPropertyWithDefinitionResponseOptions =
+  | PropertyOptionResponse[]
+  | null;

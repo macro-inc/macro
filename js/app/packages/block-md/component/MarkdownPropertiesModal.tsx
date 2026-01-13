@@ -14,7 +14,6 @@ import TagIcon from '@icon/regular/tag.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { createEffect, createSignal, Suspense } from 'solid-js';
 import { mdStore } from '../signal/markdownBlockData';
-import { propertiesRefreshSignal } from '../signal/propertiesRefresh';
 
 const DRAWER_ID = 'properties';
 
@@ -50,9 +49,6 @@ function MarkdownPropertiesContent(_props: { documentId: string }) {
   const blockName = useBlockAliasedName();
   const entityType: EntityType = blockName === 'task' ? 'TASK' : 'DOCUMENT';
 
-  // Destructure block signal setter before any async operations
-  const triggerRefresh = propertiesRefreshSignal.set;
-
   // Track pinned property IDs from Lexical - reactively updates on editor state changes
   const [pinnedPropertyIds, setPinnedPropertyIds] = createSignal<string[]>([]);
 
@@ -86,7 +82,6 @@ function MarkdownPropertiesContent(_props: { documentId: string }) {
     const editor = mdData.editor;
     if (editor) {
       editor.dispatchCommand(ADD_PINNED_PROPERTY_COMMAND, propertyId);
-      triggerRefresh(true);
     }
   };
 
@@ -94,7 +89,6 @@ function MarkdownPropertiesContent(_props: { documentId: string }) {
     const editor = mdData.editor;
     if (editor) {
       editor.dispatchCommand(REMOVE_PINNED_PROPERTY_COMMAND, propertyId);
-      triggerRefresh(true);
     }
   };
 
@@ -111,7 +105,6 @@ function MarkdownPropertiesContent(_props: { documentId: string }) {
         onPropertyPinned={handlePropertyPinned}
         onPropertyUnpinned={handlePropertyUnpinned}
         pinnedPropertyIds={pinnedPropertyIds}
-        onRefresh={() => triggerRefresh(true)}
       />
     </div>
   );

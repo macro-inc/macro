@@ -6,8 +6,8 @@
  */
 import type { Attachment } from './attachment';
 import type { AttachmentMacro } from './attachmentMacro';
-import type { ThreadPreviewCursorName } from './threadPreviewCursorName';
 import type { Contact } from './contact';
+import type { ThreadPreviewCursorName } from './threadPreviewCursorName';
 import type { ThreadPreviewCursorProviderId } from './threadPreviewCursorProviderId';
 import type { ThreadPreviewCursorSenderEmail } from './threadPreviewCursorSenderEmail';
 import type { ThreadPreviewCursorSenderName } from './threadPreviewCursorSenderName';

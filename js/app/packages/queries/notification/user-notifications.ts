@@ -362,6 +362,21 @@ export const useMarkNotificationsAsDoneMutation = createNotificationsMutation(
 
 type NotificationItem = GetAllUserNotificationsResponse['items'][number];
 
+/**
+ * Lookup a notification by id via the notification-service.
+ */
+export async function getNotificationById(
+  notificationId: string
+): Promise<NotificationItem | undefined> {
+  const res = await throwOnErr(async () => {
+    return await notificationServiceClient.getUserNotificationById(
+      notificationId
+    );
+  });
+
+  return res as NotificationItem;
+}
+
 export function optimisticInsertNotification(
   notification: Omit<NotificationItem, 'ownerId'>
 ) {

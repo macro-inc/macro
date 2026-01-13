@@ -29,6 +29,10 @@ path = "src/bin/backfill_sfs_attachments/backfill_sfs_attachments.rs"
 name = "pubsub_workers"
 path = "src/bin/pubsub_workers/pubsub_workers.rs"
 
+[[bin]]
+name = "email_service_openapi"
+path = "src/openapi.rs"
+
 [features]
 attachment_upload = []
 connection_gateway = []
@@ -110,7 +114,7 @@ sqs_client = { path = "../sqs_client", default-features = false, features = [
   "email",
   "gmail",
   "search",
-  "sfs_uploader",
+  "sfs_uploader"
 ] }
 sqs_worker = { path = "../sqs_worker" }
 static_file_service_client = { path = "../static_file_service_client" }

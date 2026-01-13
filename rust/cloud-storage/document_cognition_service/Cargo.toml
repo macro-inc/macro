@@ -13,6 +13,10 @@ path = "src/main.rs"
 name = "backfill_dcs_search"
 path = "src/bin/backfill_search.rs"
 
+[[bin]]
+name = "document_cognition_service_openapi"
+path = "src/openapi.rs"
+
 [features]
 local = []
 local_queue = []

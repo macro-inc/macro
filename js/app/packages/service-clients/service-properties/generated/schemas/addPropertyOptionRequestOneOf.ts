@@ -4,8 +4,9 @@
  * properties_service
  * OpenAPI spec version: 0.1.0
  */
-import type { AddStringOptionRequest } from './addStringOptionRequest';
+
 import type { AddPropertyOptionRequestOneOfType } from './addPropertyOptionRequestOneOfType';
+import type { AddStringOptionRequest } from './addStringOptionRequest';
 
 /**
  * Add a string option to a SelectString property

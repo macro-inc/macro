@@ -10,4 +10,5 @@ import type { ToWebSocketMessageOneOfFourAllOf } from './toWebSocketMessageOneOf
 /**
  * Replace user message and restream response
  */
-export type ToWebSocketMessageOneOfFour = SendChatMessagePayload & ToWebSocketMessageOneOfFourAllOf;
+export type ToWebSocketMessageOneOfFour = SendChatMessagePayload &
+  ToWebSocketMessageOneOfFourAllOf;

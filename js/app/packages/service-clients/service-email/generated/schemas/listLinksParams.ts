@@ -6,8 +6,8 @@
  */
 
 export type ListLinksParams = {
-/**
- * If the user's gmail signature should be included in the response. Defaults to false.
- */
-include_signature?: boolean;
+  /**
+   * If the user's gmail signature should be included in the response. Defaults to false.
+   */
+  include_signature?: boolean;
 };

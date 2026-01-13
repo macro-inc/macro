@@ -1,0 +1,12 @@
+[package]
+edition = "2024"
+name = "models_search_cursor"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+base64 = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }

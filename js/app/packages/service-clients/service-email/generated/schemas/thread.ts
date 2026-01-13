@@ -4,11 +4,12 @@
  * email_service
  * OpenAPI spec version: 0.1.0
  */
+
+import type { Message } from './message';
 import type { ThreadDbId } from './threadDbId';
 import type { ThreadLatestInboundMessageTs } from './threadLatestInboundMessageTs';
 import type { ThreadLatestNonSpamMessageTs } from './threadLatestNonSpamMessageTs';
 import type { ThreadLatestOutboundMessageTs } from './threadLatestOutboundMessageTs';
-import type { Message } from './message';
 import type { ThreadProviderId } from './threadProviderId';
 
 export interface Thread {

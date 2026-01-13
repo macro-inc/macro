@@ -4,9 +4,10 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { PdfHighlightRectAnchorRequest } from './pdfHighlightRectAnchorRequest';
+
 import type { HighlightType } from './highlightType';
 import type { PdfHighlightAnchorRequestUuid } from './pdfHighlightAnchorRequestUuid';
+import type { PdfHighlightRectAnchorRequest } from './pdfHighlightRectAnchorRequest';
 
 export interface PdfHighlightAnchorRequest {
   alpha: number;

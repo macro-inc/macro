@@ -6,13 +6,13 @@
  */
 
 export type BulkGetUserNotificationsByEventItemIdParams = {
-/**
- * Size limit per page. Default 20, max 500.
- * @minimum 0
- */
-limit: number;
-/**
- * Cursor value. Base64 encoded timestamp and item id, separated by |.
- */
-cursor?: string;
+  /**
+   * Size limit per page. Default 20, max 500.
+   * @minimum 0
+   */
+  limit: number;
+  /**
+   * Cursor value. Base64 encoded timestamp and item id, separated by |.
+   */
+  cursor?: string;
 };

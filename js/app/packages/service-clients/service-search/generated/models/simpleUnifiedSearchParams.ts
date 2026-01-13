@@ -6,12 +6,12 @@
  */
 
 export type SimpleUnifiedSearchParams = {
-/**
- * The page. Defaults to 0.
- */
-page: number;
-/**
- * The page size. Defaults to 10.
- */
-page_size: number;
+  /**
+   * The page size. Defaults to 10.
+   */
+  page_size: number;
+  /**
+   * Base64 encoded cursor for pagination.
+   */
+  cursor?: string;
 };

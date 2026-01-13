@@ -1,10 +1,15 @@
 import type { SplitManager } from '@app/component/split-layout/layoutManager';
+import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import type { BlockAlias, BlockName } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { NotificationType } from '@core/types';
-import type { TypedNotification } from '@notifications';
+import { getNotificationById } from '@queries/notification/user-notifications';
 import { errAsync, ResultAsync } from 'neverthrow';
 import { match, P } from 'ts-pattern';
+import {
+  tryToTypedNotification,
+  type TypedNotification,
+} from './notification-metadata';
 
 /**
  * Notification event types that are all handled by opening a channel
@@ -37,14 +42,16 @@ function openSplitIfNotOpen(
   type: BlockName | BlockAlias | 'component',
   id: string
 ) {
-  const isSplitOpen = layoutManager.hasSplit(type, id);
-
-  if (!isSplitOpen) {
-    layoutManager.createNewSplit({
-      content: { type, id },
-      referredFrom: null,
-    });
+  const existing = layoutManager.getSplitByContent(type, id);
+  if (existing) {
+    existing.activate();
+    return;
   }
+  layoutManager.createNewSplit({
+    content: { type, id },
+    activate: true,
+    referredFrom: null,
+  });
 }
 
 /**
@@ -71,8 +78,8 @@ async function openChannelNotification(
   const handle = await orchestrator.getBlockHandle(channelId, 'channel');
 
   handle?.goToLocationFromParams({
-    message_id: messageId,
-    thread_id: threadId,
+    [CHANNEL_URL_PARAMS.message]: messageId,
+    [CHANNEL_URL_PARAMS.thread]: threadId,
   });
 }
 
@@ -84,6 +91,21 @@ type NotSupportedError = {
   tag: 'NotSupportedError';
   notificationType: NotificationType;
 };
+
+type NotFoundError = {
+  tag: 'NotFoundError';
+  notificationId: string;
+};
+
+type NotTypedError = {
+  tag: 'NotTypedError';
+  notificationId: string;
+};
+
+export type OpenNotificationFromIdError =
+  | NotSupportedError
+  | NotFoundError
+  | NotTypedError;
 
 function getSupportedHandler(
   notification: TypedNotification<NotificationType>
@@ -167,4 +189,26 @@ export function openNotification(
     });
   }
   return ResultAsync.fromSafePromise(handler(layoutManager));
+}
+
+export function openNotificationFromId(
+  notificationId: string,
+  layoutManager: SplitManager
+): ResultAsync<void, OpenNotificationFromIdError> {
+  return ResultAsync.fromSafePromise(
+    getNotificationById(notificationId)
+  ).andThen((unified) => {
+    if (!unified) {
+      const err: NotFoundError = { tag: 'NotFoundError', notificationId };
+      return errAsync(err);
+    }
+
+    const typed = tryToTypedNotification(unified);
+    if (!typed) {
+      const err: NotTypedError = { tag: 'NotTypedError', notificationId };
+      return errAsync(err);
+    }
+
+    return openNotification(typed, layoutManager);
+  });
 }
