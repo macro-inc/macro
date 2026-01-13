@@ -207,29 +207,33 @@ export function EmailCompose() {
     const recipients = selectedRecipients();
     if (recipients.length === 0) {
       return 'Draft email';
-    } else if (recipients.length === 1) {
-      const recipientName =
-        recipients[0].kind === 'user'
-          ? useDisplayName(tryMacroId(recipients[0].data.id))[0]()
-          : recipients[0].data.email;
-      return recipientName ? `Email to ${recipientName}` : 'Draft email';
-    } else {
-      const names = recipients
-        .slice(0, 2)
-        .map((r) => {
-          if (r.kind === 'user') {
-            return useDisplayName(tryMacroId(r.data.id))[0]();
-          }
-          return r.data.email || 'Unknown';
-        })
-        .filter(Boolean);
-
-      if (recipients.length > 2) {
-        return `Email to ${names.join(', ')}, and others`;
-      } else {
-        return `Email to ${names.join(' and ')}`;
-      }
     }
+
+    if (recipients.length === 1) {
+      let recipientName = recipients[0].data.email;
+
+      if (recipients[0].kind === 'user') {
+        recipientName = useDisplayName(tryMacroId(recipients[0].data.id))[0]();
+      }
+
+      return recipientName ? `Email to ${recipientName}` : 'Draft email';
+    }
+
+    const names = recipients
+      .slice(0, 2)
+      .map((r) => {
+        if (r.kind === 'user') {
+          return useDisplayName(tryMacroId(r.data.id))[0]();
+        }
+        return r.data.email || 'Unknown';
+      })
+      .filter(Boolean);
+
+    if (recipients.length > 2) {
+      return `Email to ${names.join(', ')}, and others`;
+    }
+
+    return `Email to ${names.join(' and ')}`;
   });
 
   const { replaceSplit } = useSplitLayout();
