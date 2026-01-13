@@ -9,10 +9,6 @@ import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import { propertiesKeys } from './keys';
 
-// ============================================================================
-// Queries
-// ============================================================================
-
 /**
  * Query to fetch property options for a property definition.
  */
@@ -38,6 +34,8 @@ export function usePropertyOptionsQuery(
   }));
 }
 
+export type PropertyOptionsQuery = ReturnType<typeof usePropertyOptionsQuery>;
+
 /**
  * Invalidates options for a specific property definition.
  */
@@ -47,9 +45,9 @@ export function invalidatePropertyOptions(propertyDefinitionId: string) {
   });
 }
 
-// ============================================================================
-// Mutations
-// ============================================================================
+export type AddPropertyOptionAsyncMutation = ReturnType<
+  typeof useAddPropertyOptionMutation
+>['mutateAsync'];
 
 export type AddPropertyOptionParams = {
   propertyDefinitionId: string;

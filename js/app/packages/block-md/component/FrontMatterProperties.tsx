@@ -32,6 +32,7 @@ import {
   on,
   onCleanup,
   Show,
+  Suspense,
 } from 'solid-js';
 import {
   frontMatterPreference,
@@ -166,75 +167,77 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
 
   return (
     <Show when={!error()} fallback={props.fallback}>
-      <div class="mt-6 mb-6" ref={setContainerRef}>
-        <PropertiesProvider
-          entityType={entityType}
-          canEdit={props.canEdit}
-          documentName={props.documentName}
-          properties={filteredPinnedProperties}
-          onRefresh={refetch}
-          onPropertyAdded={handlePropertyAdded}
-          onPropertyDeleted={handlePropertyDeleted}
-          onPropertyPinned={handlePropertyPinned}
-          onPropertyUnpinned={handlePropertyUnpinned}
-          pinnedPropertyIds={pinnedPropertyIds}
-          saveHandler={saveHandler}
-        >
-          {/* Collapsible header with horizontal line */}
-          <div class="flex items-center gap-2 pt-2">
-            <div class="w-6 border-t border-edge-muted" />
-            <button
-              class="flex items-center gap-1 px-2 cursor-pointer hover:opacity-70 transition-opacity"
-              onClick={toggleExpanded}
-            >
-              {isExpanded() ? (
-                <CaretDown class="w-3 h-3" />
-              ) : (
-                <CaretRight class="w-3 h-3" />
-              )}
-              <span class="text-xs">Properties</span>
-            </button>
-            <div class="flex-1 border-t border-edge-muted" />
-          </div>
-
-          {/* Collapsible content */}
-          <Show when={isExpanded()}>
-            <div class="py-2 text-xs">
-              <Show when={isLoading()}>
-                <div class="flex items-center justify-center py-8">
-                  <div class="w-5 h-5 animate-spin">
-                    <LoadingSpinner />
-                  </div>
-                </div>
-              </Show>
-
-              <Show when={error()}>
-                <div class="text-failure-ink text-center py-4">{error()}</div>
-              </Show>
-
-              <PanelContainer
-                properties={filteredPinnedProperties}
-                isLoading={isLoading}
-                error={error}
-                emptyMessage="No properties pinned yet"
-              />
-
-              <div class="pt-4 pb-2">
-                <button
-                  class="flex items-center gap-1 cursor-pointer opacity-75 hover:opacity-50 transition-opacity"
-                  onClick={toggleExpanded}
-                >
-                  <EyeSlash class="w-3 h-3 mr-2" />
-                  <span class="text-ink-muted">Hide Properties</span>
-                </button>
-              </div>
-
-              <Modals />
+      <Suspense>
+        <div class="mt-6 mb-6" ref={setContainerRef}>
+          <PropertiesProvider
+            entityType={entityType}
+            canEdit={props.canEdit}
+            documentName={props.documentName}
+            properties={filteredPinnedProperties}
+            onRefresh={refetch}
+            onPropertyAdded={handlePropertyAdded}
+            onPropertyDeleted={handlePropertyDeleted}
+            onPropertyPinned={handlePropertyPinned}
+            onPropertyUnpinned={handlePropertyUnpinned}
+            pinnedPropertyIds={pinnedPropertyIds}
+            saveHandler={saveHandler}
+          >
+            {/* Collapsible header with horizontal line */}
+            <div class="flex items-center gap-2 pt-2">
+              <div class="w-6 border-t border-edge-muted" />
+              <button
+                class="flex items-center gap-1 px-2 cursor-pointer hover:opacity-70 transition-opacity"
+                onClick={toggleExpanded}
+              >
+                {isExpanded() ? (
+                  <CaretDown class="w-3 h-3" />
+                ) : (
+                  <CaretRight class="w-3 h-3" />
+                )}
+                <span class="text-xs">Properties</span>
+              </button>
+              <div class="flex-1 border-t border-edge-muted" />
             </div>
-            <div class="border-t border-edge-muted pt-2" />
-          </Show>
-        </PropertiesProvider>
-      </div>
+
+            {/* Collapsible content */}
+            <Show when={isExpanded()}>
+              <div class="py-2 text-xs">
+                <Show when={isLoading()}>
+                  <div class="flex items-center justify-center py-8">
+                    <div class="w-5 h-5 animate-spin">
+                      <LoadingSpinner />
+                    </div>
+                  </div>
+                </Show>
+
+                <Show when={error()}>
+                  <div class="text-failure-ink text-center py-4">{error()}</div>
+                </Show>
+
+                <PanelContainer
+                  properties={filteredPinnedProperties}
+                  isLoading={isLoading}
+                  error={error}
+                  emptyMessage="No properties pinned yet"
+                />
+
+                <div class="pt-4 pb-2">
+                  <button
+                    class="flex items-center gap-1 cursor-pointer opacity-75 hover:opacity-50 transition-opacity"
+                    onClick={toggleExpanded}
+                  >
+                    <EyeSlash class="w-3 h-3 mr-2" />
+                    <span class="text-ink-muted">Hide Properties</span>
+                  </button>
+                </div>
+
+                <Modals />
+              </div>
+              <div class="border-t border-edge-muted pt-2" />
+            </Show>
+          </PropertiesProvider>
+        </div>
+      </Suspense>
     </Show>
   );
 }

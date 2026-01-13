@@ -1,6 +1,8 @@
-import { useAddPropertyOptionMutation } from '@queries/properties/options';
-import { isErr } from '@core/util/maybeResult';
-import { propertiesServiceClient } from '@service-properties/client';
+import {
+  AddPropertyOptionAsyncMutation,
+  PropertyOptionsQuery,
+  useAddPropertyOptionMutation,
+} from '@queries/properties/options';
 import { createSignal } from 'solid-js';
 import type { Accessor } from 'solid-js';
 import type { Property, PropertyOption } from '../types';
@@ -10,19 +12,9 @@ type LocalState = {
   hasChanges: boolean;
 };
 
-type OptionsState = {
-  data: PropertyOption[];
-  isLoading: boolean;
-  error: string | null;
-};
-
 export interface PropertyEditorReturn {
-  options: Accessor<PropertyOption[]>;
-  isLoading: Accessor<boolean>;
-  error: Accessor<string | null>;
   selectedOptions: Accessor<Set<string>>;
   hasChanges: Accessor<boolean>;
-  fetchOptions: () => void;
   initializeSelectedOptions: () => void;
   toggleOption: (optionValue: string) => void;
   addOption: (value: string) => Promise<void>;
@@ -35,49 +27,15 @@ export interface PropertyEditorReturn {
  * Note: Uses manual fetch instead of TanStack Query to avoid
  * triggering Suspense boundaries when the modal opens.
  */
-export function usePropertyEditor(property: Property): PropertyEditorReturn {
-  const addOptionMutation = useAddPropertyOptionMutation();
-
+export function usePropertyEditor(
+  property: Property,
+  propertyOptions: Accessor<PropertyOption[]>,
+  addPropertyOption: AddPropertyOptionAsyncMutation
+): PropertyEditorReturn {
   const [localState, setLocalState] = createSignal<LocalState>({
     selectedOptions: new Set(),
     hasChanges: false,
   });
-
-  // Manual options state management to avoid Suspense triggers
-  const [optionsState, setOptionsState] = createSignal<OptionsState>({
-    data: [],
-    isLoading: false,
-    error: null,
-  });
-
-  // Individual accessors for fine-grained reactivity
-  const options: Accessor<PropertyOption[]> = () => optionsState().data;
-  const isLoading: Accessor<boolean> = () => optionsState().isLoading;
-  const error: Accessor<string | null> = () => optionsState().error;
-
-  const fetchOptions = async () => {
-    setOptionsState((prev) => ({ ...prev, isLoading: true, error: null }));
-
-    const result = await propertiesServiceClient.getPropertyOptions({
-      definition_id: property.propertyDefinitionId,
-    });
-
-    if (isErr(result)) {
-      setOptionsState((prev) => ({
-        ...prev,
-        isLoading: false,
-        error: 'Unable to load options',
-      }));
-      return;
-    }
-
-    const [, data] = result;
-    setOptionsState({
-      data: (data as PropertyOption[]) ?? [],
-      isLoading: false,
-      error: null,
-    });
-  };
 
   const initializeSelectedOptions = () => {
     const selected = new Set<string>();
@@ -127,7 +85,7 @@ export function usePropertyEditor(property: Property): PropertyEditorReturn {
   };
 
   const addOption = async (value: string) => {
-    const currentOptions = options();
+    const currentOptions = propertyOptions();
     const nextDisplayOrder =
       currentOptions.length > 0
         ? Math.max(...currentOptions.map((opt) => opt.display_order)) + 1
@@ -169,16 +127,10 @@ export function usePropertyEditor(property: Property): PropertyEditorReturn {
       );
     }
 
-    const newOption = await addOptionMutation.mutateAsync({
+    const newOption = await addPropertyOption({
       propertyDefinitionId: property.propertyDefinitionId,
       body: optionBody,
     });
-
-    // Add the new option to our local state
-    setOptionsState((prev) => ({
-      ...prev,
-      data: [...prev.data, newOption as PropertyOption],
-    }));
 
     // Select the newly created option
     const newSelected = new Set(localState().selectedOptions);
@@ -199,12 +151,8 @@ export function usePropertyEditor(property: Property): PropertyEditorReturn {
   };
 
   return {
-    options,
-    isLoading,
-    error,
     selectedOptions: () => localState().selectedOptions,
     hasChanges: () => localState().hasChanges,
-    fetchOptions,
     initializeSelectedOptions,
     toggleOption,
     addOption,
