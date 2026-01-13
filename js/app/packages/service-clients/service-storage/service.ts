@@ -671,17 +671,6 @@ export const StorageService = new Svc('Document++ Storage Service API')
     modifies: true,
     throws: withFetchErrors(),
   })
-  .fn('upsertUserMentions', {
-    description: 'Upsert the user mentions for a document',
-    args: {
-      documentId: schemas.upsertUserMentionsParams.shape.document_id,
-      mentions: schemas.upsertUserMentionsBody.shape.mentions,
-      metadata: documentMentionMetadata,
-    },
-    result: schemas.upsertUserMentionsResponse.shape,
-    modifies: true,
-    throws: withFetchErrors(),
-  })
   .fn('getDeletedItems', {
     description: 'Get the list of deleted items',
     result: schemas.recentlyDeletedResponse.shape.data.shape,

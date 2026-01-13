@@ -166,8 +166,6 @@ export async function handleUserMention(
       };
       if (onUserMention) {
         onUserMention(record);
-      } else {
-        storageServiceClient.upsertUserMentions(record);
       }
       if (!disableMentionTracking) {
         mentionId = await trackMention(blockId, 'user', user.id);
