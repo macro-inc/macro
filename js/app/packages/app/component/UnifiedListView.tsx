@@ -1760,6 +1760,11 @@ export function UnifiedListView(props: UnifiedListViewProps) {
               searchText={searchText()}
               hasRefinementsFromBase={isViewConfigChanged()}
               entityMinHeight={ENTITY_HEIGHT}
+              viewType={view()?.viewType}
+              projectId={
+                view()?.viewType === 'project' ? view()?.id : undefined
+              }
+              projectName={view()?.view}
             >
               {(innerProps) => {
                 const displayDoneButton = () => {

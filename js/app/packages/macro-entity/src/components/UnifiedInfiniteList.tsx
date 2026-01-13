@@ -3,9 +3,11 @@ import { EmptyState } from '@app/component/UnifiedListEmptyState';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { toast } from '@core/component/Toast/Toast';
 import type { ViewId } from '@core/types/view';
+import FolderOpen from '@phosphor-icons/core/duotone/folder-open-duotone.svg?component-solid';
 import { onElementConnect } from '@solid-primitives/lifecycle';
 import { debounce } from '@solid-primitives/scheduled';
 import { createVirtualizer, type Virtualizer } from '@tanstack/solid-virtual';
+import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
 import { StaticMarkdownContext } from 'core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import {
   type Accessor,
@@ -452,9 +454,53 @@ export function createUnifiedInfiniteList<T extends EntityData>({
     viewId?: ViewId;
     searchText?: string;
     entityMinHeight?: number;
+    viewType?: string;
+    projectId?: string;
+    projectName?: string;
   }) => {
     const [scrollParentRef, setScrollParentRef] =
       createSignal<HTMLDivElement>();
+
+    // Track drag state for soup entries
+    const [state] = useDragDropContext() ?? [];
+    const isDraggingSoupEntry = createMemo(() => {
+      const draggable = state?.active.draggable;
+      if (!draggable) return false;
+      return draggable.data.type !== undefined;
+    });
+
+    // Create droppable for project block
+    const droppable = props.projectId
+      ? createDroppable(props.projectId, {
+          type: 'project',
+          name: props.projectName ?? 'folder',
+          id: props.projectId,
+          isOwner: true,
+        })
+      : null;
+    false && droppable;
+
+    const showProjectOverlay = createMemo(() => {
+      if (!isDraggingSoupEntry()) return false;
+      if (props.viewType !== 'project') return false;
+      if (!props.projectId) return false;
+
+      const activeDroppable = state?.active.droppable;
+      if (!activeDroppable) return false;
+
+      // Show overlay if dropping on this project or an entity within it
+      if (activeDroppable.id === props.projectId) return true;
+      if (
+        activeDroppable.data &&
+        typeof activeDroppable.data === 'object' &&
+        'projectId' in activeDroppable.data &&
+        activeDroppable.data.projectId === props.projectId
+      ) {
+        return true;
+      }
+
+      return false;
+    });
 
     // Estimate items per viewport and derive overscan and page size
     // Keep a conservative default item size for estimation;
@@ -636,6 +682,23 @@ export function createUnifiedInfiniteList<T extends EntityData>({
         </Match>
         <Match when={true}>
           <div class="flex size-full relative" ref={setListRef}>
+            <Show when={droppable}>
+              <div
+                use:droppable
+                class="absolute inset-0 pointer-events-none z-10"
+              />
+            </Show>
+            <Show when={showProjectOverlay()}>
+              <div class="flex flex-col absolute top-0 left-0 w-full h-full backdrop-blur-sm bg-accent/10 items-center justify-center space-y-3 z-50 pointer-events-none">
+                <FolderOpen class="w-[80px] h-[80px] text-ink" />
+                <h3 class="text-2xl font-semibold text-ink">
+                  Move to {props.projectName ?? 'folder'}
+                </h3>
+                <p class="text-sm text-ink-muted">
+                  Drop here to move items to this project
+                </p>
+              </div>
+            </Show>
             <StaticMarkdownContext>
               <div
                 class="size-full relative scrollbar-hidden"
