@@ -6,6 +6,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
 use email_db_client::messages::insert::insert_message_to_send;
+use email_db_client::user_history::upsert_user_history;
 use model::response::ErrorResponse;
 use model::user::UserContext;
 use models_email::service::link::Link;
@@ -119,13 +120,12 @@ async fn insert_draft(
     draft: &mut message::MessageToSend,
     from_email: &str,
 ) -> anyhow::Result<()> {
-    let mut thread_db_id = draft.thread_db_id;
     let link_id = draft.link_id;
     let now: DateTime<Utc> = Utc::now();
 
-    // if there isn't already a thread associated with this message, create one
-    if thread_db_id.is_none() {
-        let link_id = draft.link_id;
+    let thread_db_id = if let Some(id) = draft.thread_db_id {
+        id
+    } else {
         let thread = thread::Thread {
             db_id: None,
             provider_id: None,
@@ -141,22 +141,25 @@ async fn insert_draft(
             messages: Vec::new(),
         };
 
-        thread_db_id = Option::from(
-            email_db_client::threads::insert::insert_thread(&mut *tx, &thread, link_id)
-                .await
-                .context("unable to insert thread")?,
-        );
-        draft.thread_db_id = thread_db_id;
-    }
+        let new_id = email_db_client::threads::insert::insert_thread(&mut *tx, &thread, link_id)
+            .await
+            .context("unable to insert thread")?;
 
-    let from_email_id =
-        // safe because we always populate the from field before calling this function
-        email_db_client::contacts::get::fetch_id_by_email(tx, link_id, from_email)
-            .await.context("unable to fetch from email id")?;
+        draft.thread_db_id = Some(new_id);
+        new_id
+    };
 
-    insert_message_to_send(tx, draft, thread_db_id.unwrap(), from_email_id, true)
+    let from_email_id = email_db_client::contacts::get::fetch_id_by_email(tx, link_id, from_email)
+        .await
+        .context("unable to fetch from email id")?;
+
+    insert_message_to_send(tx, draft, thread_db_id, from_email_id, true)
         .await
         .context("unable to insert message to send")?;
+
+    upsert_user_history(tx, link_id, thread_db_id)
+        .await
+        .context("unable to upsert user history for draft")?;
 
     Ok(())
 }
