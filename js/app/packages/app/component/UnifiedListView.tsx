@@ -42,7 +42,6 @@ import LoadingSpinner from '@icon/regular/spinner.svg?component-solid';
 import XIcon from '@icon/regular/x.svg?component-solid';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import {
-  createChannelsQuery,
   createDssInfiniteQuery,
   createFilterComposer,
   createProjectFilterFn,
@@ -902,7 +901,11 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const dssQueryRequestBody = createMemo(
     (): PostSoupRequest => ({
       channel_filters: {
-        channel_ids: [NIL_UUID],
+        channel_ids:
+          entityTypeFilter().includes('channel') ||
+          entityTypeFilter().length === 0
+            ? []
+            : [NIL_UUID],
       },
       document_filters: {
         document_ids:
@@ -983,14 +986,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       return arr.length === 1 && arr[0] === value;
     }
 
-    if (onlyHas(typeFilter, 'channel')) return true;
     if (isSearchActive() && onlyHas(typeFilter, 'email')) return true;
-    return false;
-  });
-
-  const disableChannelsQuery = createMemo(() => {
-    const typeFilter = entityTypeFilter();
-    if (typeFilter.length > 0 && !typeFilter.includes('channel')) return true;
     return false;
   });
 
@@ -1053,9 +1049,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     UnifiedListComponent,
     isLoading,
   } = createRoot((dispose) => {
-    const channelsQuery = createChannelsQuery({
-      disabled: disableChannelsQuery,
-    });
     const dssInfiniteQuery = createDssInfiniteQuery(
       dssQueryParams,
       dssQueryRequestBody,
@@ -1102,9 +1095,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
           },
         ],
         entityMapper,
-        entityQueries: [
-          { query: channelsQuery, operations: { filter: true, search: true } },
-        ],
         requiredFilter,
         optionalFilter,
         entitySort,
