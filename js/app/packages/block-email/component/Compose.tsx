@@ -228,6 +228,24 @@ export function EmailCompose() {
     void executeSaveDraft();
   }, DRAFT_DEBOUNCE_MS);
 
+  const onAddAttachments = (attachments: DraftFormAttachment[]) => {
+    for (const attachment of attachments) {
+      form.attachments.add(attachment);
+    }
+    scheduleDraftSave();
+  };
+
+  // We are consuming the first change, because it is the initial value
+  let firstChangeConsumed = false;
+  const onContentChange = (content: string) => {
+    setContent(content);
+    if (!firstChangeConsumed) {
+      firstChangeConsumed = true;
+      return;
+    }
+    scheduleDraftSave();
+  };
+
   const [showCc, setShowCc] = createSignal(false);
   const [showBcc, setShowBcc] = createSignal(false);
 
@@ -673,7 +691,8 @@ export function EmailCompose() {
                 <ComposeEmailInput
                   captureEditor={setEditor}
                   inputRef={registerRef('messageInput')}
-                  onContentChange={setContent}
+                  onContentChange={onContentChange}
+                  onAddAttachments={onAddAttachments}
                   onSubmit={onSubmit}
                   isSubmitting={sendMutation.isPending}
                   disabled={hasLinkError()}

@@ -39,23 +39,9 @@ import { Button } from '@ui/components/Button';
 import { fileSelector } from '@core/directive/fileSelector';
 import { toast } from '@core/component/Toast/Toast';
 import { plural } from '@core/util/string';
+import type { DraftFormAttachment } from '@block-email/component/createEmailFormState';
 
 false && fileFolderDrop;
-
-export type ComposeAttachment =
-  | {
-      type: 'local';
-      file: File;
-      attachmentID?: string;
-    }
-  | {
-      type: 'remote';
-      url: string;
-      fileName: string;
-      contentType: string;
-      attachmentID: string;
-      fileSize: number;
-    };
 
 type ComposeEmailInputProps = {
   inputRef?: (el: HTMLDivElement) => void;
@@ -63,8 +49,8 @@ type ComposeEmailInputProps = {
   onSubmit: () => void;
   disabled?: boolean;
   isSubmitting?: boolean;
-  attachments?: ComposeAttachment[];
-  onAddAttachments?: (attachments: ComposeAttachment[]) => void;
+  attachments?: DraftFormAttachment[];
+  onAddAttachments?: (attachments: DraftFormAttachment[]) => void;
   onContentChange?: (content: string) => void;
 };
 
