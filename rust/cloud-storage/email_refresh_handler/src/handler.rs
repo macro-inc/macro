@@ -89,7 +89,7 @@ async fn send_delete_messages(ctx: &context::Context) -> Result<(), Error> {
     )
     .await
     .unwrap_or_else(|e| {
-        tracing::error!("Error fetching inactive links for deletion: {}", e);
+        tracing::error!(error=?e, "Error fetching inactive links for deletion");
         Vec::new()
     });
 
