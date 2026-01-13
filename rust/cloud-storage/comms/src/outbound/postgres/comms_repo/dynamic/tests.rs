@@ -118,6 +118,54 @@ async fn test_get_user_channels_dynamic_filter_by_org_id(pool: Pool<sqlx::Postgr
     }
 }
 
+/// Tests that mixing supported (channel_id) and unsupported (thread_id) filters
+/// does not produce malformed SQL. Thread filters are message-level and should
+/// be ignored at the channel query level.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("channels"))
+)]
+async fn test_get_user_channels_dynamic_mixed_supported_and_unsupported_filters(
+    pool: Pool<sqlx::Postgres>,
+) {
+    use filter_ast::ExpandFrame;
+    use item_filters::ChannelFilters;
+
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+    let channel_id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+    let thread_id = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+
+    // Create filter with both channel_id (supported) and thread_id (unsupported at channel level)
+    // This combination previously produced malformed SQL like "( AND c.id = '...')"
+    let channel_filters = ChannelFilters {
+        channel_ids: vec![channel_id.to_string()],
+        thread_ids: vec![thread_id.to_string()],
+        ..Default::default()
+    };
+
+    let filter_ast = ChannelFilters::expand_ast(channel_filters)
+        .unwrap()
+        .map(std::sync::Arc::new);
+
+    let params = GetChannelsRequest {
+        macro_id: user_id.into_owned(),
+        limit: Some(20),
+        query: Query::Sort(SimpleSortMethod::UpdatedAt, filter_ast),
+    }
+    .into_params();
+
+    // This should not fail with a SQL syntax error
+    let channels = get_user_channels_dynamic(&pool, &params).await.unwrap();
+
+    // Should still filter by the supported channel_id filter
+    assert_eq!(channels.len(), 1, "Should return exactly one channel");
+    assert_eq!(
+        channels[0].channel.id.0.to_string(),
+        channel_id,
+        "Should return the correct channel"
+    );
+}
+
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("channels"))
