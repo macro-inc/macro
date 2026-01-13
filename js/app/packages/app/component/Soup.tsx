@@ -24,7 +24,6 @@ import {
   type ViewLabel,
 } from '@core/types/view';
 import { cornerClip } from '@core/util/clipPath';
-import { unwrapSignals } from '@core/util/unwrapSignals';
 import { handleFileFolderDrop } from '@core/util/upload';
 import { Popover } from '@kobalte/core/popover';
 import { Tabs } from '@kobalte/core/tabs';
@@ -75,7 +74,6 @@ import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 import { UnifiedListView } from './UnifiedListView';
 import type { SystemSortOption } from './ViewConfig';
 import {
-  isConfigEqual,
   VIEWCONFIG_BASE,
   VIEWCONFIG_DEFAULTS_IDS,
   type ViewConfigBase,
@@ -167,6 +165,14 @@ function EntityTypeIconFilter() {
         </>
       );
     }
+    if (s === '/') {
+      return (
+        <>
+          {label}
+          <span class="ml-1 font-mono opacity-70">/</span>
+        </>
+      );
+    }
 
     const idx = label.toLowerCase().indexOf(s.toLowerCase());
     if (idx === -1) return label;
@@ -199,63 +205,6 @@ function EntityTypeIconFilter() {
   } = splitContext;
   const [preview, setPreview] = previewState;
 
-  // Get all views (excluding default views to show only custom/saved views)
-  const customViews = createMemo(() => {
-    const allViews = Object.entries(viewsDataStore);
-    return allViews.filter(
-      ([id]) => !VIEWCONFIG_DEFAULTS_IDS.includes(id as any)
-    );
-  });
-
-  const [viewsDropdownOpen, setViewsDropdownOpen] = createSignal(false);
-  const [viewsFocusedIndex, setViewsFocusedIndex] = createSignal(0);
-  const [editingViewId, setEditingViewId] = createSignal<string | null>(null);
-  const [editingViewName, setEditingViewName] = createSignal('');
-
-  const queryClient = useQueryClient();
-
-  const handleRenameView = async (viewId: string) => {
-    const newName = editingViewName().trim();
-    if (!newName) return;
-
-    const viewData = viewsDataStore[viewId];
-    if (!viewData) return;
-
-    try {
-      await storageServiceClient.views.patchView({
-        saved_view_id: viewId,
-        name: newName,
-        config: {
-          display: viewData.display,
-          filters: viewData.filters,
-          sort: viewData.sort,
-        } as ViewConfigBase,
-      });
-      queryClient.invalidateQueries({ queryKey: ['savedViews'] });
-    } catch (e) {
-      console.error('Failed to rename view:', e);
-    }
-
-    setEditingViewId(null);
-    setEditingViewName('');
-  };
-
-  const handleDeleteView = async (viewId: string) => {
-    try {
-      await storageServiceClient.views.deleteView({
-        savedViewId: viewId,
-      });
-      queryClient.invalidateQueries({ queryKey: ['savedViews'] });
-
-      // If we deleted the currently selected view, switch to default
-      if (selectedView() === viewId) {
-        setSelectedView('all');
-      }
-    } catch (e) {
-      console.error('Failed to delete view:', e);
-    }
-  };
-
   const view = createMemo(() => viewsDataStore[selectedView()]);
 
   // Search state (must be after view is defined)
@@ -263,78 +212,6 @@ function EntityTypeIconFilter() {
   const searchText = createMemo(() => view()?.searchText ?? '');
   const setSearchText = (text: string) => {
     setViewDataStore(selectedView(), 'searchText', text);
-  };
-
-  // View config change detection and save functions
-  const currentViewConfigBase = createMemo(() => {
-    const v = view();
-    if (!v) return null;
-    return unwrapSignals<ViewConfigBase>({
-      display: v.display,
-      filters: v.filters,
-      sort: v.sort,
-    });
-  });
-
-  const stringifiedCurrentViewConfigBase = createMemo(() => {
-    const config = currentViewConfigBase();
-    if (!config) return null;
-    return JSON.stringify(config);
-  });
-
-  const isViewConfigChanged = createMemo(() => {
-    const v = view();
-    if (!v) return false;
-
-    const initialConfigStr = v.initialConfig;
-    if (initialConfigStr == null || initialConfigStr === '') return false;
-
-    try {
-      const initialConfigObj = JSON.parse(initialConfigStr);
-      const currentConfigObj = currentViewConfigBase();
-
-      if (!currentConfigObj) return false;
-
-      return !isConfigEqual(initialConfigObj, currentConfigObj);
-    } catch (e) {
-      console.warn(e);
-      return false;
-    }
-  });
-
-  const saveViewMutation = useUpsertSavedViewMutation();
-
-  const onClickSaveViewConfigChanges = () => {
-    const v = view();
-    const config = currentViewConfigBase();
-    if (!v || !config) return;
-
-    saveViewMutation.mutate({
-      id: v.id,
-      name: v.view,
-      config,
-    });
-    // only for default views
-    if (VIEWCONFIG_DEFAULTS_IDS.includes(v.id as any)) {
-      const currentConfig = stringifiedCurrentViewConfigBase();
-      if (currentConfig !== null && currentConfig !== undefined) {
-        setViewDataStore(selectedView(), 'initialConfig', currentConfig);
-      }
-    }
-  };
-
-  const onClickSaveAsNewView = () => {
-    const v = view();
-    const config = currentViewConfigBase();
-    if (!v || !config) return;
-
-    const baseName = v.view || 'View';
-    const newName = `${baseName} Copy`;
-
-    saveViewMutation.mutate({
-      name: newName,
-      config,
-    });
   };
 
   const entityTypeFilter = createMemo(
@@ -371,86 +248,65 @@ function EntityTypeIconFilter() {
     return sameSet(documentTypeFilter(), types);
   };
 
-  const toggleEntityTypeFilter = (type: ExpandedEntityType) => {
-    setViewDataStore(selectedView(), 'filters', 'typeFilter', (prev) => {
-      const current = prev ?? [];
-      if (current.includes(type)) {
-        return current.filter((t) => t !== type);
+  // Topbar filter behavior: only one of the ENTITY_TYPE_FILTERS can be active at a time.
+  // (Inbox/unread are separate and can still be combined with the selected type filter.)
+  const clearTopbarTypeFilters = () => {
+    setViewDataStore(selectedView(), 'filters', 'typeFilter', []);
+    setViewDataStore(selectedView(), 'filters', 'documentTypeFilter', []);
+    setViewDataStore(selectedView(), 'filters', 'channelCategoryFilter', []);
+  };
+
+  const setExclusiveEntityTypeFilter = (type: ExpandedEntityType) => {
+    const current = entityTypeFilter();
+    const isActive = current.length === 1 && current[0] === type;
+
+    batch(() => {
+      if (isActive) {
+        clearTopbarTypeFilters();
+        return;
       }
-      return [...current, type];
-    });
-    // Reset document type filter when toggling off document type
-    if (type === 'document' && entityTypeFilter().includes('document')) {
+      setViewDataStore(selectedView(), 'filters', 'typeFilter', [type]);
       setViewDataStore(selectedView(), 'filters', 'documentTypeFilter', []);
-    }
+      setViewDataStore(selectedView(), 'filters', 'channelCategoryFilter', []);
+    });
   };
 
   const toggleDocumentPreset = (
     preset: Array<'md' | 'code' | 'image' | 'canvas' | 'pdf' | 'unknown'>
   ) => {
-    const types = entityTypeFilter();
-    const hasDoc = types.includes('document');
-    const active = isDocumentPresetActive(preset);
-
+    const active =
+      entityTypeFilter().length === 1 && isDocumentPresetActive(preset);
     batch(() => {
       if (active) {
-        // Turning off the active doc preset turns off document filtering entirely.
-        setViewDataStore(
-          selectedView(),
-          'filters',
-          'typeFilter',
-          types.filter((t) => t !== 'document')
-        );
-        setViewDataStore(selectedView(), 'filters', 'documentTypeFilter', []);
+        clearTopbarTypeFilters();
         return;
       }
-
-      if (!hasDoc) {
-        setViewDataStore(selectedView(), 'filters', 'typeFilter', [
-          ...types,
-          'document',
-        ]);
-      }
-
+      setViewDataStore(selectedView(), 'filters', 'typeFilter', ['document']);
       setViewDataStore(selectedView(), 'filters', 'documentTypeFilter', preset);
+      setViewDataStore(selectedView(), 'filters', 'channelCategoryFilter', []);
     });
   };
 
   const toggleChannelCategoryFilter = (category: 'people' | 'groups') => {
-    const types = entityTypeFilter();
-    const cats = channelCategoryFilter() ?? [];
-    const hasChannel = types.includes('channel');
-
-    let nextTypes = types;
-    let nextCats: Array<'people' | 'groups'> = cats;
-
-    if (!hasChannel) {
-      nextTypes = [...types, 'channel'];
-      nextCats = [category];
-    } else if (cats.length === 0) {
-      // Empty means "all channel categories" (both active).
-      // Clicking one removes it, leaving only the other.
-      nextCats = category === 'people' ? ['groups'] : ['people'];
-    } else if (cats.includes(category)) {
-      nextCats = cats.filter((c) => c !== category);
-      if (nextCats.length === 0) {
-        // Turning off the last category turns off channel filtering entirely.
-        nextTypes = types.filter((t) => t !== 'channel');
-      }
-    } else {
-      nextCats = [...cats, category];
-      // Both selected => normalize back to "all".
-      if (nextCats.includes('people') && nextCats.includes('groups')) nextCats = [];
-    }
-
     batch(() => {
-      setViewDataStore(selectedView(), 'filters', 'typeFilter', nextTypes);
-      setViewDataStore(
-        selectedView(),
-        'filters',
-        'channelCategoryFilter',
-        nextCats
-      );
+      const currentTypes = entityTypeFilter();
+      const currentCats = channelCategoryFilter() ?? [];
+      const isActive =
+        currentTypes.length === 1 &&
+        currentTypes[0] === 'channel' &&
+        currentCats.length === 1 &&
+        currentCats[0] === category;
+
+      if (isActive) {
+        clearTopbarTypeFilters();
+        return;
+      }
+
+      setViewDataStore(selectedView(), 'filters', 'typeFilter', ['channel']);
+      setViewDataStore(selectedView(), 'filters', 'channelCategoryFilter', [
+        category,
+      ]);
+      setViewDataStore(selectedView(), 'filters', 'documentTypeFilter', []);
     });
   };
 
@@ -492,8 +348,8 @@ function EntityTypeIconFilter() {
     if (types.length === 0) return false;
     if (!types.includes('channel')) return false;
     const cats = channelCategoryFilter() ?? [];
-    // Empty means "all channel categories"
-    if (cats.length === 0) return true;
+    // For the topbar we keep this exclusive: empty doesn't light up either option.
+    if (cats.length === 0) return false;
     return cats.includes(category);
   };
 
@@ -571,7 +427,7 @@ function EntityTypeIconFilter() {
           toggleChannelCategoryFilter(f.channelCategory!);
           return;
         }
-        toggleEntityTypeFilter(f.type!);
+        setExclusiveEntityTypeFilter(f.type!);
       },
     })),
     {
@@ -583,11 +439,6 @@ function EntityTypeIconFilter() {
       hotkey: 's',
       description: 'Open sort menu',
       handler: () => setSortDropdownOpen((prev) => !prev),
-    },
-    {
-      hotkey: '0',
-      description: 'Open views menu',
-      handler: () => setViewsDropdownOpen((prev) => !prev),
     },
     {
       hotkey: '/',
@@ -673,17 +524,17 @@ function EntityTypeIconFilter() {
         style={{ opacity: rightOpacity() }}
       />
       <div
-        class="flex items-center h-full gap-0.5 px-1 overflow-x-auto scrollbar-hidden overscroll-none"
+        class="flex items-center h-full gap-0.5 pl-0.5 pr-1 overflow-x-auto scrollbar-hidden overscroll-none"
         ref={setScrollRef}
       >
         {/* Inbox toggle */}
-        <div class="flex items-center mr-1 shrink-0">
+        <div class="flex items-center mr-0.5 shrink-0">
           <Tooltip tooltip={<LabelAndHotKey label="Inbox" shortcut="i" />}>
             <button
               type="button"
-              class="flex items-center gap-1.5 h-7 px-2.5 border border-edge-muted active:border-accent active:bg-accent active:text-panel rounded-full"
+              class="flex items-center gap-1.5 h-[22px] px-2.5 active:bg-accent active:text-panel rounded-full"
               classList={{
-                'bg-accent text-panel border-accent': isInboxFilterActive(),
+                'bg-accent text-panel': isInboxFilterActive(),
                 'text-ink-muted hover:text-accent hover:bg-accent/20':
                   !isInboxFilterActive(),
               }}
@@ -696,8 +547,38 @@ function EntityTypeIconFilter() {
             </button>
           </Tooltip>
         </div>
+        <div class="mx-0.5 w-px h-5 bg-edge-muted/50 shrink-0" />
+        {/* Unread filter */}
+        <div class="flex items-center mr-0.5 shrink-0">
+          <Tooltip tooltip={<LabelAndHotKey label="Unread Only" shortcut="u" />}>
+            <button
+              type="button"
+              class="flex items-center gap-1.5 h-[22px] px-2.5 active:bg-accent active:text-panel rounded-full"
+              classList={{
+                'bg-accent text-panel': isUnreadFilterActive(),
+                'text-ink-muted hover:text-accent hover:bg-accent/20':
+                  !isUnreadFilterActive(),
+              }}
+              onClick={() => toggleUnreadFilter()}
+            >
+              <svg
+                class="size-3.5"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                stroke="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <circle cx="12" cy="12" r="4" />
+              </svg>
+              <span class="text-xs leading-none">
+                {renderShortcutUnderlinedInLabel('Unread', 'u')}
+              </span>
+            </button>
+          </Tooltip>
+        </div>
+        <div class="mx-0.5 w-px h-5 bg-edge-muted/50 shrink-0" />
         {/* Entity type icons */}
-        <div class="flex items-center rounded-full border border-edge-muted overflow-hidden shrink-0">
+        <div class="flex items-center shrink-0">
           <For each={ENTITY_TYPE_FILTERS.filter((f) => f.enabled)}>
             {(filter) => {
               const iconConfig = () => getIconConfig(filter.iconType);
@@ -722,7 +603,7 @@ function EntityTypeIconFilter() {
                 >
                   <button
                     type="button"
-                    class="flex items-center gap-1.5 h-7 px-2.5 border-r border-edge-muted/50 last:border-r-0 active:bg-accent active:text-panel rounded-none"
+                    class="flex items-center gap-1.5 h-[22px] px-2.5 active:bg-accent active:text-panel rounded-full"
                     classList={{
                       'bg-accent text-panel': isActive(),
                       'text-ink-muted hover:text-accent hover:bg-accent/20':
@@ -737,7 +618,7 @@ function EntityTypeIconFilter() {
                         toggleChannelCategoryFilter(filter.channelCategory!);
                         return;
                       }
-                      toggleEntityTypeFilter(filter.type!);
+                      setExclusiveEntityTypeFilter(filter.type!);
                     }}
                   >
                     <Dynamic component={iconConfig().icon} class="size-3.5" />
@@ -753,41 +634,16 @@ function EntityTypeIconFilter() {
             }}
           </For>
         </div>
-        {/* Unread filter */}
-        <Tooltip tooltip={<LabelAndHotKey label="Unread Only" shortcut="u" />}>
-          <button
-            type="button"
-            class="flex items-center gap-1.5 h-7 px-2.5 border border-edge-muted active:border-accent active:bg-accent active:text-panel rounded-full"
-            classList={{
-              'bg-accent text-panel border-accent': isUnreadFilterActive(),
-              'text-ink-muted hover:text-accent hover:bg-accent/20':
-                !isUnreadFilterActive(),
-            }}
-            onClick={() => toggleUnreadFilter()}
-          >
-            <svg
-              class="size-3.5"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-              stroke="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <circle cx="12" cy="12" r="4" />
-            </svg>
-            <span class="text-xs leading-none">
-              {renderShortcutUnderlinedInLabel('Unread', 'u')}
-            </span>
-          </button>
-        </Tooltip>
+        <div class="mx-0.5 w-px h-5 bg-edge-muted/50 shrink-0" />
         {/* Preview toggle */}
         <Tooltip
           tooltip={<LabelAndHotKey label="Toggle Preview" shortcut="space" />}
         >
           <button
             type="button"
-            class="flex items-center gap-1.5 h-7 px-2.5 border border-edge-muted active:border-accent active:bg-accent active:text-panel rounded-full"
+            class="flex items-center gap-1.5 h-[22px] px-2.5 active:bg-accent active:text-panel rounded-full"
             classList={{
-              'bg-accent text-panel border-accent': preview(),
+              'bg-accent text-panel': preview(),
               'text-ink-muted hover:text-accent hover:bg-accent/20': !preview(),
             }}
             onClick={() => {
@@ -801,6 +657,7 @@ function EntityTypeIconFilter() {
             </span>
           </button>
         </Tooltip>
+        <div class="mx-0.5 w-px h-5 bg-edge-muted/50 shrink-0" />
         {/* Sort dropdown */}
         <Popover
           open={sortDropdownOpen()}
@@ -814,9 +671,9 @@ function EntityTypeIconFilter() {
           <Popover.Trigger
             as="button"
             type="button"
-            class="flex items-center gap-1.5 h-7 px-2.5 shrink-0 border border-edge-muted rounded-full active:border-accent active:bg-accent active:text-panel"
+            class="flex items-center gap-1.5 h-[22px] px-2.5 shrink-0 rounded-full active:bg-accent active:text-panel"
             classList={{
-              'bg-accent text-panel border-accent': sortDropdownOpen(),
+              'bg-accent text-panel': sortDropdownOpen(),
               'text-ink-muted hover:text-accent hover:bg-accent/20':
                 !sortDropdownOpen(),
             }}
@@ -879,243 +736,14 @@ function EntityTypeIconFilter() {
             </Popover.Content>
           </Popover.Portal>
         </Popover>
-        {/* Views dropdown - show if there are custom views or unsaved changes */}
-        <Show when={customViews().length > 0 || isViewConfigChanged()}>
-          {/* Views dropdown */}
-          <Popover
-            open={viewsDropdownOpen()}
-            onOpenChange={(open) => {
-              setViewsDropdownOpen(open);
-              if (!open) {
-                setEditingViewId(null);
-                setEditingViewName('');
-              } else {
-                // Reset focus to first item when opening
-                setViewsFocusedIndex(0);
-              }
-            }}
-            placement="bottom-start"
-            gutter={4}
-          >
-            <Popover.Trigger
-              as={(props: any) => (
-                <Tooltip
-                  tooltip={<LabelAndHotKey label="Saved Views" shortcut="0" />}
-                >
-                  <button
-                    type="button"
-                    class="relative flex items-center justify-center size-7 text-ink-muted hover:text-accent hover:bg-accent/20 border border-transparent active:border-accent active:bg-accent active:text-panel"
-                    style={{ 'clip-path': cornerClip('3px') }}
-                    {...props}
-                  >
-                    <svg
-                      width="100%"
-                      height="100%"
-                      viewBox="0 0 24 24"
-                      fill="currentColor"
-                      stroke="none"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <path d="M4 5H20V7H4V5ZM4 11H20V13H4V11ZM4 17H20V19H4V17Z" />
-                    </svg>
-                    <span class="absolute bottom-0 right-0.5 text-[9px] font-mono font-bold leading-none opacity-60">
-                      0
-                    </span>
-                  </button>
-                </Tooltip>
-              )}
-            />
-            <Popover.Portal>
-              <Popover.Content
-                class="z-50 bg-panel border border-edge-muted shadow-lg"
-                onKeyDown={(e: KeyboardEvent) => {
-                  const views = customViews();
-                  // Count total items: views + save options if changed
-                  const hasChangeOptions = isViewConfigChanged();
-                  const totalItems = views.length + (hasChangeOptions ? 2 : 0);
-
-                  if (e.key === 'ArrowDown') {
-                    e.preventDefault();
-                    setViewsFocusedIndex((prev) => (prev + 1) % totalItems);
-                  } else if (e.key === 'ArrowUp') {
-                    e.preventDefault();
-                    setViewsFocusedIndex(
-                      (prev) => (prev - 1 + totalItems) % totalItems
-                    );
-                  } else if (e.key === 'Enter') {
-                    e.preventDefault();
-                    const idx = viewsFocusedIndex();
-                    if (idx < views.length) {
-                      // Select view
-                      const [viewId] = views[idx];
-                      setSelectedView(viewId);
-                      setViewsDropdownOpen(false);
-                    } else if (hasChangeOptions) {
-                      // Save options
-                      if (idx === views.length) {
-                        onClickSaveViewConfigChanges();
-                      } else {
-                        onClickSaveAsNewView();
-                      }
-                      setViewsDropdownOpen(false);
-                    }
-                  } else if (e.key === 'Escape') {
-                    e.preventDefault();
-                    setViewsDropdownOpen(false);
-                  }
-                }}
-                tabIndex={0}
-                ref={(el) => setTimeout(() => el?.focus(), 0)}
-              >
-                <div class="flex flex-col gap-1 p-2 min-w-[200px]">
-                  <For each={customViews()}>
-                    {([viewId, viewData], index) => (
-                      <div class="flex items-center gap-1 group">
-                        <Show
-                          when={editingViewId() === viewId}
-                          fallback={
-                            <button
-                              type="button"
-                              class="flex-1 flex items-center justify-between px-2 py-1.5 text-sm hover:bg-hover"
-                              classList={{
-                                'bg-hover text-ink': selectedView() === viewId,
-                                'text-ink': selectedView() !== viewId,
-                                'bg-hover': viewsFocusedIndex() === index(),
-                              }}
-                              onClick={() => {
-                                setSelectedView(viewId);
-                                setViewsDropdownOpen(false);
-                              }}
-                              onMouseEnter={() => setViewsFocusedIndex(index())}
-                            >
-                              <span class="truncate max-w-[100px]">
-                                {viewData.view || viewId}
-                              </span>
-                              <Show when={selectedView() === viewId}>
-                                <span class="text-accent ml-2">✓</span>
-                              </Show>
-                            </button>
-                          }
-                        >
-                          <input
-                            type="text"
-                            value={editingViewName()}
-                            onInput={(e) =>
-                              setEditingViewName(e.currentTarget.value)
-                            }
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                handleRenameView(viewId);
-                              } else if (e.key === 'Escape') {
-                                e.preventDefault();
-                                setEditingViewId(null);
-                                setEditingViewName('');
-                              }
-                            }}
-                            class="flex-1 px-2 py-1 text-sm bg-surface border border-edge rounded focus:outline-none focus:border-accent"
-                            ref={(el) => setTimeout(() => el.focus(), 0)}
-                          />
-                          <button
-                            type="button"
-                            class="p-1 text-accent hover:bg-accent/20 rounded"
-                            onClick={() => handleRenameView(viewId)}
-                          >
-                            ✓
-                          </button>
-                        </Show>
-                        <Show when={editingViewId() !== viewId}>
-                          <button
-                            type="button"
-                            class="p-1 text-ink-muted hover:text-ink hover:bg-hover opacity-0 group-hover:opacity-100"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setEditingViewId(viewId);
-                              setEditingViewName(viewData.view || viewId);
-                            }}
-                            title="Rename"
-                          >
-                            <svg
-                              width="14"
-                              height="14"
-                              viewBox="0 0 24 24"
-                              fill="currentColor"
-                            >
-                              <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
-                            </svg>
-                          </button>
-                          <button
-                            type="button"
-                            class="p-1 text-ink-muted hover:text-red-500 hover:bg-red-500/10 opacity-0 group-hover:opacity-100"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteView(viewId);
-                            }}
-                            title="Delete"
-                          >
-                            <svg
-                              width="14"
-                              height="14"
-                              viewBox="0 0 24 24"
-                              fill="currentColor"
-                            >
-                              <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
-                            </svg>
-                          </button>
-                        </Show>
-                      </div>
-                    )}
-                  </For>
-                  {/* Save options when view config has changed */}
-                  <Show when={isViewConfigChanged()}>
-                    <div class="border-t border-edge-muted my-1" />
-                    <button
-                      type="button"
-                      class="flex items-center px-2 py-1.5 text-sm hover:bg-hover text-ink"
-                      classList={{
-                        'bg-hover':
-                          viewsFocusedIndex() === customViews().length,
-                      }}
-                      onClick={() => {
-                        onClickSaveViewConfigChanges();
-                        setViewsDropdownOpen(false);
-                      }}
-                      onMouseEnter={() =>
-                        setViewsFocusedIndex(customViews().length)
-                      }
-                    >
-                      Save Changes
-                    </button>
-                    <button
-                      type="button"
-                      class="flex items-center px-2 py-1.5 text-sm hover:bg-hover text-ink"
-                      classList={{
-                        'bg-hover':
-                          viewsFocusedIndex() === customViews().length + 1,
-                      }}
-                      onClick={() => {
-                        onClickSaveAsNewView();
-                        setViewsDropdownOpen(false);
-                      }}
-                      onMouseEnter={() =>
-                        setViewsFocusedIndex(customViews().length + 1)
-                      }
-                    >
-                      Save as New View
-                    </button>
-                  </Show>
-                </div>
-              </Popover.Content>
-            </Popover.Portal>
-          </Popover>
-        </Show>
+        <div class="mx-0.5 w-px h-5 bg-edge-muted/50 shrink-0" />
         {/* Compact search bar */}
         <div class="flex items-center gap-1 shrink-0">
           <Tooltip tooltip={<LabelAndHotKey label="Search" shortcut="⌘F" />}>
             <div
-              class="relative flex items-center gap-1.5 h-7 px-2.5 border border-edge-muted rounded-full transition-colors"
+              class="relative flex items-center gap-1.5 h-[22px] px-2.5 rounded-full transition-colors"
               classList={{
-                'bg-accent text-panel border-accent': !!searchText(),
+                'bg-accent text-panel': !!searchText(),
                 'text-ink-muted hover:text-accent hover:bg-accent/20': !searchText(),
               }}
             >
@@ -1170,11 +798,14 @@ function ClearFiltersButton() {
     <Tooltip tooltip={<LabelAndHotKey label="Clear filters" shortcut="/" />}>
       <button
         type="button"
-        class="flex items-center gap-1.5 h-7 px-2.5 border border-edge-muted rounded-full text-ink-muted hover:text-accent hover:bg-accent/20 active:border-accent active:bg-accent active:text-panel"
+        class="flex items-center gap-1.5 h-[22px] px-2.5 rounded-full text-ink-muted hover:text-accent hover:bg-accent/20 active:bg-accent active:text-panel"
         onClick={clearAllFilters}
       >
         <span class="text-sm leading-none">✕</span>
-        <span class="text-xs leading-none">Clear</span>
+        <span class="text-xs leading-none">
+          Clear
+          <span class="ml-1 font-mono opacity-70">/</span>
+        </span>
       </button>
     </Tooltip>
   );
@@ -1199,16 +830,15 @@ function SettingsButton() {
       >
         <button
           type="button"
-          class="relative flex items-center justify-center size-7 border border-transparent active:border-accent active:bg-accent active:text-panel"
+          class="relative flex items-center justify-center size-[22px] rounded-full active:bg-accent active:text-panel"
           classList={{
             'bg-hover text-ink': settingsOpen(),
             'text-ink-muted hover:text-accent hover:bg-accent/20':
               !settingsOpen(),
           }}
-          style={{ 'clip-path': cornerClip('3px') }}
           onClick={() => toggleSettings()}
         >
-          <IconGear class="size-4" />
+          <IconGear class="size-3.5" />
         </button>
       </Tooltip>
     </Show>
@@ -1521,6 +1151,7 @@ export function Soup() {
             <SplitHeaderRight>
               <div class="flex items-center h-full gap-0.5">
                 <ClearFiltersButton />
+                <div class="mx-0.5 w-px h-5 bg-edge-muted/50 shrink-0" />
                 <SettingsButton />
               </div>
             </SplitHeaderRight>

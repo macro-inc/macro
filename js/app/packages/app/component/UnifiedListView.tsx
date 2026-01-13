@@ -236,7 +236,11 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   );
   const defaultDisplayOptions = mergeProps(
     VIEWCONFIG_BASE.display,
-    props.defaultDisplayOptions
+    props.defaultDisplayOptions,
+    // When the toolbar is hidden (e.g. `Soup`'s topbar is used instead), users
+    // have no in-view way to toggle this on. Default it to on so unread dots
+    // are visible in the list.
+    props.hideToolbar ? { showUnreadIndicator: true } : {}
   );
 
   const splitContext = useSplitPanelOrThrow();
@@ -350,6 +354,10 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       importantFilter
     );
   };
+
+  const unreadOnly = createMemo(
+    () => view()?.filters?.unreadOnly ?? defaultFilterOptions.unreadOnly
+  );
 
   const entityTypeFilter = createMemo(
     () => view()?.filters?.typeFilter ?? defaultFilterOptions.typeFilter
@@ -497,11 +505,15 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     );
   };
 
-  const showUnreadIndicator = createMemo(
-    () =>
+  const showUnreadIndicator = createMemo(() => {
+    // When the toolbar is hidden, the user has no in-view way to toggle this.
+    // Keep unread indicators visible by default in these contexts.
+    if (props.hideToolbar) return true;
+    return (
       view()?.display?.showUnreadIndicator ??
       defaultDisplayOptions.showUnreadIndicator
-  );
+    );
+  });
   const setShowUnreadIndicator = (
     showUnreadIndicator: DisplayOptions['showUnreadIndicator']
   ) => {
@@ -682,7 +694,9 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
     if (importantFilter()) filterFns.push(importantFilterFn);
 
-    if (notificationFilter() === 'unread') filterFns.push(unreadFilterFn);
+    const shouldFilterUnread =
+      unreadOnly() === true || notificationFilter() === 'unread';
+    if (shouldFilterUnread) filterFns.push(unreadFilterFn);
 
     if (notificationFilter() === 'notDone') filterFns.push(notDoneFilterFn);
 

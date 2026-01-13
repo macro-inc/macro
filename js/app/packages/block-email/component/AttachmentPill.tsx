@@ -13,7 +13,7 @@ export function EmailAttachmentPill(props: {
   attachment: Attachment;
   removable?: boolean;
   onRemove?: () => void;
-  onClick: (attachment: Attachment, fileType?: FileType) => void;
+  onClick: (attachment: Attachment, fileType: FileType | undefined, e: MouseEvent) => void;
 }) {
   let parentDiv!: HTMLDivElement;
 
@@ -28,7 +28,7 @@ export function EmailAttachmentPill(props: {
       classList={{
         'pl-2': props.removable,
       }}
-      onclick={() => props.onClick(props.attachment, fileType)}
+      onclick={(e) => props.onClick(props.attachment, fileType, e)}
     >
       <Show when={fileType !== undefined || props.attachment.mime_type}>
         <EntityIcon

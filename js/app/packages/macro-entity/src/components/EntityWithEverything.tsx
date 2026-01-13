@@ -971,6 +971,19 @@ export function EntityWithEverything(
             grow: props.contentPlacement === 'bottom-row',
           }}
         >
+          {/* When the left checkbox column is hidden in narrow split containers, we still want
+              unread indicators to be visible. */}
+          <Show
+            when={
+              props.showLeftColumnIndicator &&
+              !props.checked &&
+              !props.highlighted
+            }
+          >
+            <div class="flex size-4 items-center justify-center @min-md/split:hidden">
+              <UnreadIndicator active={props.unreadIndicatorActive} />
+            </div>
+          </Show>
           {/* Icon/Checkbox container - in narrow mode, shows icon by default, checkbox on hover */}
           {/* For emails, icon is inline with sender, so hide this container in narrow mode */}
           <div class="flex size-5 shrink-0 items-center justify-center relative group/icon-checkbox @max-md/split:hidden">

@@ -261,7 +261,6 @@ export function createNavigationEntityListShortcut({
     actionRegistry,
   } = soupContext;
   const viewData = createMemo(() => viewsData[selectedView()]);
-  const viewIds = createMemo<ViewId[]>(() => Object.keys(viewsData));
 
   const [attachEntityHotkeys, _entityHotkeyScope] = useHotkeyDOMScope('entity');
   const selectedEntity = () => viewData().selectedEntity;
@@ -1240,66 +1239,9 @@ export function createNavigationEntityListShortcut({
     hide: true,
   });
 
-  const navigateThroughViews = ({
-    axis,
-  }: {
-    axis: 'start' | 'end'; // movement direction
-  }) => {
-    let index = viewIds().indexOf(selectedView());
-    const maxLength = viewIds().length;
-    index = (index + (axis === 'start' ? -1 : 1) + maxLength) % maxLength;
-    const newViewId = viewIds()[index];
-    setSelectedView(newViewId);
-  };
-
   const splitIsUnifiedList = createMemo(
     () => splitHandle.content().id === 'unified-list'
   );
-
-  for (let i = 0; i < viewIds().length && i < 9; i++) {
-    const viewId = viewIds()[i];
-    const viewData = viewsData[viewId];
-    registerHotkey({
-      hotkeyToken:
-        TOKENS.soup.tabs[i.toString() as keyof typeof TOKENS.soup.tabs],
-      hotkey: [(i + 1).toString() as ValidHotkey],
-      scopeId: splitHotkeyScope,
-      description: viewData.view,
-      condition: splitIsUnifiedList,
-      keyDownHandler: () => {
-        setSelectedView(viewData.id);
-        return true;
-      },
-      // displayPriority: 0,
-      hide: true,
-    });
-  }
-  1;
-
-  registerHotkey({
-    hotkey: 'tab',
-    scopeId: splitHotkeyScope,
-    description: 'Next View',
-    condition: splitIsUnifiedList,
-    keyDownHandler: () => {
-      navigateThroughViews({ axis: 'end' });
-      return true;
-    },
-    // displayPriority: 0,
-    hide: true,
-  });
-  registerHotkey({
-    hotkey: 'shift+tab',
-    scopeId: splitHotkeyScope,
-    description: 'Previous View',
-    condition: splitIsUnifiedList,
-    keyDownHandler: () => {
-      navigateThroughViews({ axis: 'start' });
-      return true;
-    },
-    // displayPriority: 0,
-    hide: true,
-  });
 
   registerEntityHotkey({
     hotkey: ['enter'],

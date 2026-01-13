@@ -36,7 +36,6 @@ import type { SimpleMention } from '@service-comms/generated/models/simpleMentio
 import { staticFileClient } from '@service-static-files/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { leading, throttle } from '@solid-primitives/scheduled';
-import { BrightJoins } from '@ui/components/BrightJoins';
 import { activeElement } from 'app/signal/focus';
 import { toast } from 'core/component/Toast/Toast';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
@@ -439,9 +438,6 @@ export function BaseInput(props: BaseInputProps) {
         },
       }}
     >
-      <Show when={!props.isReplyInput}>
-        <BrightJoins dots={[false, false, true, true]} />
-      </Show>
       <Show when={isDraggedOver() || isDraggingOverChannel()}>
         <FileDropOverlay valid={isValidChannelDrag()}>
           <Show when={!isValidChannelDrag()}>
