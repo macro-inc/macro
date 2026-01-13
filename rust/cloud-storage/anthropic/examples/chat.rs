@@ -10,7 +10,7 @@ use futures::StreamExt;
 
 #[tokio::main]
 async fn main() {
-    let client = Client::dangerously_try_from_env();
+    let client = Client::dangerously_try_from_env(None);
     let mut request = CreateMessageRequestBody::default();
     request.max_tokens = 1000;
     request.system = Some(SystemPrompt::Text(

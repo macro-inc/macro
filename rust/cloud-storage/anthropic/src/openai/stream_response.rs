@@ -207,6 +207,9 @@ fn map_stream_extended(mut stream: MessageCompletionResponseStream) -> ExtendedS
                             ContentDeltaEvent::WebSearchToolResult(web_search_response) => {
                                 yield Ok(AnthropicResponseExtension::WebSearchToolResponse(web_search_response).into());
                             }
+                            ContentDeltaEvent::WebFetchToolResult(web_fetch_response) => {
+                                yield Ok(AnthropicResponseExtension::WebFetchToolResponse(web_fetch_response).into());
+                            }
                             _ => {}
                         }
                         // Skip content block start events
@@ -221,6 +224,9 @@ fn map_stream_extended(mut stream: MessageCompletionResponseStream) -> ExtendedS
                             }
                             ContentDeltaEvent::WebSearchToolResult(web_search_response) => {
                                 yield Ok(AnthropicResponseExtension::WebSearchToolResponse(web_search_response).into());
+                            }
+                            ContentDeltaEvent::WebFetchToolResult(web_fetch_response) => {
+                                yield Ok(AnthropicResponseExtension::WebFetchToolResponse(web_fetch_response).into());
                             }
                             ContentDeltaEvent::TextDelta { text } | ContentDeltaEvent::StartTextDelta { text } => {
                                 yield Ok(create_response(
