@@ -515,6 +515,9 @@ new EmailPubSubWorkers('email-pubsub-workers', {
   containerEnvVars,
 });
 
+const DELETE_UNUSED_AFTER_DAYS = config.require(`delete_unused_after_days`);
+const DELETE_INACTIVE_AFTER_DAYS = config.require(`delete_inactive_after_days`);
+
 const emailRefreshHandler = new EmailRefreshHandler('email-refresh-handler', {
   queueArns: [linkManagerQueueArn],
   vpc: coparse_api_vpc,
@@ -523,12 +526,11 @@ const emailRefreshHandler = new EmailRefreshHandler('email-refresh-handler', {
     LINK_MANAGER_QUEUE: pulumi.interpolate`${linkManagerQueueName}`,
     ENVIRONMENT: stack,
     RUST_LOG: 'email_refresh_handler=info',
+    DELETE_UNUSED_AFTER_DAYS: pulumi.interpolate`${DELETE_UNUSED_AFTER_DAYS}`,
+    DELETE_INACTIVE_AFTER_DAYS: pulumi.interpolate`${DELETE_INACTIVE_AFTER_DAYS}`,
   },
   tags,
 });
-
-const DELETE_UNUSED_AFTER_DAYS = config.require(`delete_unused_after_days`);
-const DELETE_INACTIVE_AFTER_DAYS = config.require(`delete_inactive_after_days`);
 
 const emailScheduledHandler = new EmailScheduledHandler(
   'email-scheduled-handler',
@@ -539,8 +541,6 @@ const emailScheduledHandler = new EmailScheduledHandler(
       DATABASE_URL: pulumi.interpolate`${MACRO_DB_URL}`,
       EMAIL_SCHEDULED_QUEUE: pulumi.interpolate`${scheduledQueueName}`,
       ENVIRONMENT: stack,
-      DELETE_UNUSED_AFTER_DAYS: pulumi.interpolate`${DELETE_UNUSED_AFTER_DAYS}`,
-      DELETE_INACTIVE_AFTER_DAYS: pulumi.interpolate`${DELETE_INACTIVE_AFTER_DAYS}`,
       RUST_LOG: 'email_scheduled_handler=info',
     },
     tags,
