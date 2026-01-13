@@ -2133,7 +2133,7 @@ function SearchBar(props: {
   });
 
   return (
-    <SplitToolbarLeft>
+    <SplitToolbarLeft class="min-w-0">
       <div class="flex ml-2 h-full items-center gap-1">
         <Show
           when={props.isLoading() && searchText()}
@@ -2202,7 +2202,7 @@ function SearchBar(props: {
               focusNextEntity();
             }
           }}
-          class="p-1 pr-0 border-0 outline-none! focus:outline-none ring-0! focus:ring-0 flex-1 text-ink text-sm truncate"
+          class="p-1 pr-0 border-0 outline-none! focus:outline-none ring-0! focus:ring-0 flex-1 text-ink text-sm truncate min-w-0"
         />
       </div>
     </SplitToolbarLeft>
