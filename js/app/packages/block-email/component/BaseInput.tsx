@@ -158,7 +158,7 @@ export function BaseInput(props: {
 }) {
   const ctx = useEmailContext();
   const form = createMemo(() =>
-    getOrInitEmailFormContext(props.replyingTo().db_id!)()
+    getOrInitEmailFormContext(props.replyingTo().db_id!)
   );
   const blockId = useBlockId();
   const emailLinksQuery = useEmailLinksQuery();
