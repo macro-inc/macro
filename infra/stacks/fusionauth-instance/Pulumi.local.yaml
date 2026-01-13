@@ -1,0 +1,10 @@
+config:
+    aws-native:region: us-east-1
+    aws:region: us-east-1
+    fusionauth-instance:authentication-service-domain: http://localhost:8084
+    fusionauth-instance:fusionauth-license-key-secret-key: fusionauth-license-key-dev
+    fusionauth-instance:smtp-user-secret-key: smtp-user
+    fusionauth-instance:fusionauth-issuer: local.macro.com
+    fusionauth-instance:default-from-email: auth-local@macro.com
+    fusionauth:host: http://localhost:9011
+    fusionauth:apiKey: bf69486b-4733-4954-a44e-2e1b5f2c8a91
