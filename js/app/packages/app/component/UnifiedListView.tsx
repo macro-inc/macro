@@ -2009,6 +2009,8 @@ function SearchBar(props: {
   isLoading: Accessor<boolean>;
   setIsLoading: Setter<boolean>;
 }) {
+  const getInputId = (selectedView: string) =>
+    `search-input-${splitContext.handle.id}-${selectedView}`;
   const splitContext = useSplitPanelOrThrow();
   const {
     viewsDataStore,
@@ -2071,13 +2073,34 @@ function SearchBar(props: {
     return loading;
   }, props.isLoading());
 
+  // waits for input element to be mounted before focusing it
   const focusSearch = () => {
+    const inputId = getInputId(selectedView());
+    const existingInput = document.getElementById(inputId) as HTMLInputElement;
+    if (existingInput) {
+      existingInput.focus();
+      return;
+    }
+
+    const mutationObserver = new MutationObserver(() => {
+      const input = document.getElementById(inputId) as HTMLInputElement;
+      if (input) {
+        mutationObserver.disconnect();
+        input.focus();
+      }
+    });
+
+    const toolbarLeft = splitContext.layoutRefs.toolbarLeft;
+    if (toolbarLeft) {
+      mutationObserver.observe(toolbarLeft, {
+        childList: true,
+        subtree: true,
+      });
+    }
+
     setTimeout(() => {
-      const searchInput = document.getElementById(
-        `search-input-${splitContext.handle.id}-${selectedView()}`
-      ) as HTMLInputElement;
-      searchInput?.focus();
-    }, 0);
+      mutationObserver.disconnect();
+    }, 1000);
   };
 
   onMount(() => {
@@ -2088,7 +2111,9 @@ function SearchBar(props: {
       hotkeyToken: TOKENS.soup.openSearch,
       keyDownHandler: () => {
         setSelectedView(VIEWCONFIG_DEFAULTS_IDS_ENUM.all);
-        focusSearch();
+        setTimeout(() => {
+          focusSearch();
+        }, 0);
         return true;
       },
       displayPriority: 5,
@@ -2161,7 +2186,7 @@ function SearchBar(props: {
         </Show>
         <input
           ref={inputRef}
-          id={`search-input-${splitContext.handle.id}-${selectedView()}`}
+          id={getInputId(selectedView())}
           placeholder={`Search in ${viewName()}`}
           value={searchText()}
           onInput={(e) => {
