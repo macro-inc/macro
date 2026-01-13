@@ -26,7 +26,7 @@ pub struct ViewSelection {
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 #[schemars(
-    description = "List the emails the user has access to. Use this tool to discover and browse emails before using the Read tool to access their content. Prefer using the search tool to search on a specific matching string within the content or the name of the entity.",
+    description = "List the emails the user has access to. Use this tool to find all emails from / to a specific person. Prefer using the search tool to search on a specific matching string within the content or the name of the entity.",
     title = "ListEmails"
 )]
 pub struct ListEmails {

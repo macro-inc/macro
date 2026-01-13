@@ -1,0 +1,5 @@
+{
+  "name": "styled-email",
+  "description": "Email with inline styles and formatting",
+  "body_html_sanitized": "<div style=\"font-family: Arial, sans-serif;\"><h1 style=\"color: #333; margin-bottom: 16px;\">Welcome!</h1><p style=\"color: #666; font-size: 14px; line-height: 1.5;\">Thank you for signing up. We're excited to have you on board.</p><a href=\"#\" style=\"color: blue; text-decoration: underline;\">Click here to get started</a></div>"
+}

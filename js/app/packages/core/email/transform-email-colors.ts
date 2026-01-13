@@ -1,11 +1,19 @@
-import { themeReactive } from '../../block-theme/signals/themeReactive';
-
 export interface TextNodeContrast {
   text: string;
   fg: OKLCH | null;
   bg: OKLCH | null;
   node: Text;
   insideAnchor: boolean;
+}
+
+export interface ThemeColorParams {
+  inkL: number;
+  inkC: number;
+  inkH: number;
+  panelL: number;
+  accentL: number;
+  accentC: number;
+  accentH: number;
 }
 
 const CONTRAST_THRESHOLD = 0.5;
@@ -17,21 +25,13 @@ type OKLCH = { l: number; c: number; h: number; a?: number };
 /**
  * Process the colors of the email content so that 1) the text colors are in line with our theme colors, and 2) the text colors have enough contrast with the background colors.
  * @param root - The root node of the email content.
+ * @param theme - The theme color parameters.
  */
-export function processEmailColors(root: Node) {
-  const inkL = themeReactive.c0.l[0]();
-  const inkC = themeReactive.c0.c[0]();
-  const inkH = themeReactive.c0.h[0]();
-
-  const panelL = themeReactive.b1.l[0]();
-
-  const accentL = themeReactive.a0.l[0]();
-  const accentC = themeReactive.a0.c[0]();
-  const accentH = themeReactive.a0.h[0]();
+export function processEmailColors(root: Node, theme: ThemeColorParams) {
+  const { inkL, inkC, inkH, panelL, accentL, accentC, accentH } = theme;
 
   const themeIsDarkModish = inkL > panelL;
   const textNodeColors = computeTextNodeColor(root);
-  // console.log('textNodeColors', textNodeColors);
   textNodeColors.forEach((textNodeColor) => {
     // if the text has a background color set, trust that the email sender's choices and don't change anything
     if ((textNodeColor.bg?.a ?? 0) > 0) return;
@@ -143,7 +143,7 @@ export function rgbaToOklch(rgba: RGBA | null): OKLCH | null {
 }
 
 // parses the result of getComputedStyle().color
-function parseRGBA(color: string): RGBA | null {
+export function parseRGBA(color: string): RGBA | null {
   if (!color) return null;
   const s = color.trim().toLowerCase();
   if (s === 'transparent') return { r: 0, g: 0, b: 0, a: 0 };
@@ -161,7 +161,7 @@ function parseRGBA(color: string): RGBA | null {
   return null;
 }
 
-function normalizeRGBA(rgba: RGBA | null) {
+export function normalizeRGBA(rgba: RGBA | null) {
   if (!rgba) return null;
   const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
   return {
@@ -172,7 +172,7 @@ function normalizeRGBA(rgba: RGBA | null) {
   };
 }
 
-function computeTextNodeColor(root: Node): TextNodeContrast[] {
+export function computeTextNodeColor(root: Node): TextNodeContrast[] {
   const out: TextNodeContrast[] = [];
 
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
