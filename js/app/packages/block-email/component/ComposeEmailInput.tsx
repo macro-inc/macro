@@ -1,7 +1,7 @@
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { FormatRibbon } from '@block-channel/component/FormatRibbon';
 import { MacroSignatureButton } from '@block-email/component/MacroSignatureButton';
-import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
+import { MAX_ATTACHMENTS_BYTES_SIZE } from '@block-email/constants';
 import { useHasPaidAccess } from '@core/auth';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
@@ -15,10 +15,6 @@ import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { handleFileFolderDrop } from '@core/util/upload';
 import TextAa from '@icon/regular/text-aa.svg';
 import XIcon from '@icon/regular/x.svg';
-import {
-  $appendWatermarkNodeToLast,
-  type DocumentMentionInfo,
-} from '@lexical-core';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import ArrowFatLineUp from '@phosphor-icons/core/fill/arrow-fat-line-up-fill.svg?component-solid';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
@@ -39,27 +35,37 @@ import {
 import { createSignal, onMount, Show } from 'solid-js';
 import { type FocusableElement, tabbable } from 'tabbable';
 import { makeAttachmentPublic } from '../util/makeAttachmentPublic';
-import {
-  appendItemsAsMacroMentions,
-  prepareEmailBody,
-} from '../util/prepareEmailBody';
-import { AttachMenu } from './AttachMenu';
+import { Button } from '@ui/components/Button';
+import { fileSelector } from '@core/directive/fileSelector';
+import { toast } from '@core/component/Toast/Toast';
+import { plural } from '@core/util/string';
 
 false && fileFolderDrop;
 
-export type ComposeInputData = {
-  body: {
-    text: string;
-    html: string;
-    raw: string;
-  };
-};
+export type ComposeAttachment =
+  | {
+      type: 'local';
+      file: File;
+      attachmentID?: string;
+    }
+  | {
+      type: 'remote';
+      url: string;
+      fileName: string;
+      contentType: string;
+      attachmentID: string;
+      fileSize: number;
+    };
 
 type ComposeEmailInputProps = {
   inputRef?: (el: HTMLDivElement) => void;
-  onSubmit: (data: ComposeInputData) => void;
+  captureEditor: (editor: LexicalEditor) => void;
+  onSubmit: () => void;
   disabled?: boolean;
   isSubmitting?: boolean;
+  attachments?: ComposeAttachment[];
+  onAddAttachments?: (attachments: ComposeAttachment[]) => void;
+  onContentChange?: (content: string) => void;
 };
 
 export function ComposeEmailInput(props: ComposeEmailInputProps) {
@@ -71,8 +77,6 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
   const [isPendingUpload, setIsPendingUpload] = createSignal<boolean>(false);
 
   const [showFormatRibbon, setShowFormatRibbon] = createSignal<boolean>(false);
-
-  const [content, setContent] = createSignal('');
 
   const panel = useSplitPanel();
 
@@ -127,31 +131,8 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
     HTMLElement | undefined
   >();
 
-  async function handleSend() {
-    const currentEditor = editor();
-
-    // We handle cleaning up the signature after we've sent the request because
-    // otherwise the `bodyMacro` signal would update after the clean up call and
-    // not contain the signature in the request data
-    const cleanupWatermark = $appendWatermarkNodeToLast(
-      currentEditor,
-      !hasPaidAccess() ? MACRO_EMAIL_SIGNATURE : undefined
-    );
-
-    const prepared = prepareEmailBody(currentEditor, undefined);
-    if (!prepared) return;
-
-    const bodyMacro = content();
-
-    props.onSubmit({
-      body: {
-        text: prepared.bodyText,
-        html: prepared.bodyHtml,
-        raw: bodyMacro,
-      },
-    });
-
-    cleanupWatermark();
+  function handleSend() {
+    props.onSubmit();
   }
 
   onMount(() => {
@@ -244,7 +225,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
             editable={() => !props.disabled}
             placeholder="Use `@` to reference files"
             watermark={!hasPaidAccess() ? <MacroSignatureButton /> : undefined}
-            onChange={setContent}
+            onChange={props.onContentChange}
             onFocusLeaveStart={(e) => {
               e.preventDefault();
               focusSibling('prev');
