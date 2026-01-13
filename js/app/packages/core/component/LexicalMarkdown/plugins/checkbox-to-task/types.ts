@@ -1,4 +1,3 @@
-import type { ListItemNode } from '@lexical/list';
 import type { RangeSelection } from 'lexical';
 import type { Result } from 'neverthrow';
 
@@ -6,17 +5,10 @@ import type { Result } from 'neverthrow';
  * Represents a parsed checkbox/todo item ready for task creation
  */
 export type ParsedCheckbox = {
-  /** The Lexical node key for this checkbox */
   nodeKey: string;
-  /** The ListItemNode reference */
-  node: ListItemNode;
-  /** Extracted title (text content without mention XML) */
   title: string;
-  /** Raw markdown text of the checkbox content */
   rawMarkdown: string;
-  /** Extracted user IDs from @user mentions */
   assigneeUserIds: string[];
-  /** Extracted due date ISO string from date mention (if present) */
   dueDate: string | null;
 };
 
@@ -40,6 +32,8 @@ export type TaskCreationResult = Result<TaskCreationSuccess, TaskCreationError>;
  * Options for the checkbox-to-task conversion
  */
 export type ConvertCheckboxesOptions = {
+  /** Current user ID for auto-assignment */
+  currentUserId: string;
   /** The selection to use (from popup's stored selection) */
   selection?: RangeSelection;
   /** Callback when all tasks are created */

@@ -79,7 +79,6 @@ export function $parseCheckboxNode(node: ListItemNode): ParsedCheckbox {
 
   return {
     nodeKey: node.getKey(),
-    node,
     title: extractTitleFromMarkdown(rawMarkdown),
     rawMarkdown,
     assigneeUserIds: extractUserMentions(rawMarkdown),

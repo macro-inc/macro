@@ -41,6 +41,7 @@ import { debouncedDependent } from '@core/util/debounce';
 import { createFromMarkdownText } from '@core/util/md';
 import { getScrollParentElement } from '@core/util/scrollParent';
 import type { NodeIdMappings } from '@lexical-core';
+import { useUserId } from '@service-gql/client';
 import MacroGridLoader from '@macro-icons/macro-grid-noise-loader-4.svg';
 import CheckIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
 import ClipboardIcon from '@phosphor-icons/core/bold/clipboard-bold.svg?component-solid';
@@ -115,6 +116,7 @@ export function MarkdownPopup(props: {
 
   const canEdit = useCanEdit();
   const canComment = useCanComment();
+  const currentUserId = useUserId();
 
   const [copied, setCopied] = createSignal(false);
   const [locationCopied, setLocationCopied] = createSignal(false);
@@ -142,11 +144,9 @@ export function MarkdownPopup(props: {
   const selectedNodesText = () => selection()?.nodeText ?? undefined;
   const selectionType = () => selection()?.type ?? undefined;
 
-  // Reset state and check for checkboxes on selection change.
   createEffect(
     on([selection], () => {
       setLocationCopied(false);
-      // Check if selection contains checkboxes
       editor.read(() => {
         setHasCheckboxes($canConvertCheckboxesToTasks());
       });
@@ -337,12 +337,14 @@ export function MarkdownPopup(props: {
 
     const handleConvertToTasks = () => {
       const currentSelection = selection();
-      if (!currentSelection?.lexicalSelection) {
+      const userId = currentUserId();
+      if (!currentSelection?.lexicalSelection || !userId) {
         return;
       }
 
       setIsConverting(true);
       editor.dispatchCommand(CONVERT_CHECKBOXES_TO_TASKS, {
+        currentUserId: userId,
         selection:
           currentSelection.lexicalSelection as import('lexical').RangeSelection,
         onComplete: (results) => {
@@ -444,7 +446,7 @@ export function MarkdownPopup(props: {
           >
             <FormatTools withinPopup />
           </Show>
-          <Show when={hasCheckboxes() && canEdit()}>
+          <Show when={hasCheckboxes() && canEdit() && currentUserId()}>
             <DeprecatedTextButton
               width={'w-12'}
               theme="clear"

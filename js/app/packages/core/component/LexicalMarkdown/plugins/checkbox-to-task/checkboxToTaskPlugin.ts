@@ -29,23 +29,31 @@ export const CONVERT_CHECKBOXES_TO_TASKS: LexicalCommand<ConvertCheckboxesOption
   createCommand('CONVERT_CHECKBOXES_TO_TASKS');
 
 /**
- * Build PropertyInput array from parsed checkbox data
+ * Build PropertyInput array from parsed checkbox data.
+ * Auto-assigns to current user when no assignees are extracted.
  */
-function buildPropertyValues(checkbox: ParsedCheckbox): PropertyInput[] {
+function buildPropertyValues(
+  checkbox: ParsedCheckbox,
+  currentUserId: string
+): PropertyInput[] {
   const properties: PropertyInput[] = [];
 
-  if (checkbox.assigneeUserIds.length > 0) {
-    properties.push({
-      propertyId: SYSTEM_PROPERTY_IDS.ASSIGNEES,
-      value: {
-        type: 'multi_entity_reference',
-        references: checkbox.assigneeUserIds.map((userId) => ({
-          entity_id: userId,
-          entity_type: 'USER' as const,
-        })),
-      },
-    });
-  }
+  // Use extracted assignees or default to current user
+  const assigneeIds =
+    checkbox.assigneeUserIds.length > 0
+      ? checkbox.assigneeUserIds
+      : [currentUserId];
+
+  properties.push({
+    propertyId: SYSTEM_PROPERTY_IDS.ASSIGNEES,
+    value: {
+      type: 'multi_entity_reference',
+      references: assigneeIds.map((userId) => ({
+        entity_id: userId,
+        entity_type: 'USER' as const,
+      })),
+    },
+  });
 
   if (checkbox.dueDate) {
     properties.push({
@@ -64,19 +72,20 @@ function buildPropertyValues(checkbox: ParsedCheckbox): PropertyInput[] {
  * Create a single task from a parsed checkbox
  */
 async function createTaskFromCheckbox(
-  checkbox: ParsedCheckbox
+  checkbox: ParsedCheckbox,
+  currentUserId: string
 ): Promise<TaskCreationResult> {
   if (!checkbox.title.trim()) {
     return err({ tag: 'EmptyCheckbox', nodeKey: checkbox.nodeKey });
   }
 
   try {
-    const propertyValues = buildPropertyValues(checkbox);
+    const propertyValues = buildPropertyValues(checkbox, currentUserId);
 
     const documentId = await createTask({
       title: checkbox.title,
       content: '',
-      propertyValues: propertyValues.length > 0 ? propertyValues : undefined,
+      propertyValues,
     });
 
     if (!documentId) {
@@ -128,9 +137,13 @@ async function processCheckboxes(
   checkboxes: ParsedCheckbox[],
   options: ConvertCheckboxesOptions
 ): Promise<void> {
-  const { onComplete } = options;
+  const { currentUserId, onComplete } = options;
 
-  const results = await Promise.all(checkboxes.map(createTaskFromCheckbox));
+  const results = await Promise.all(
+    checkboxes.map((checkbox) =>
+      createTaskFromCheckbox(checkbox, currentUserId)
+    )
+  );
 
   // Extract successful results for DOM replacement
   const successes = results.flatMap((r) => (r.isOk() ? [r.value] : []));

@@ -8,7 +8,6 @@ import { $getRoot, type LexicalNode, type RangeSelection } from 'lexical';
  */
 export function $isCheckboxNode(node: LexicalNode): node is ListItemNode {
   if (!$isListItemNode(node)) return false;
-  // Checklist items have a boolean checked state
   return typeof node.getChecked() === 'boolean';
 }
 
