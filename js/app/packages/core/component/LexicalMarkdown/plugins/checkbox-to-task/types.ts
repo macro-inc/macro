@@ -28,12 +28,17 @@ export type TaskCreationError =
 /** Result of creating a task from a checkbox */
 export type TaskCreationResult = Result<TaskCreationSuccess, TaskCreationError>;
 
+export type ConvertCheckboxesPluginOptions = {
+  /** Current user ID for auto-assignment */
+  currentUserId?: string;
+  /** Optionally pass a parent id to set the parent id property of the tasks **/
+  parentTaskId?: string;
+};
+
 /**
  * Options for the checkbox-to-task conversion
  */
 export type ConvertCheckboxesOptions = {
-  /** Current user ID for auto-assignment */
-  currentUserId: string;
   /** The selection to use (from popup's stored selection) */
   selection?: RangeSelection;
   /** Callback when all tasks are created */

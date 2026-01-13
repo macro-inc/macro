@@ -4,7 +4,11 @@ import { markdownBlockErrorSignal } from '@block-md/signal/error';
 import { FindAndReplaceStore } from '@block-md/signal/findAndReplaceStore';
 import { revisionsSignal, rewriteSignal } from '@block-md/signal/rewriteSignal';
 import { useUserId } from '@service-gql/client';
-import { type BlockName, useBlockId } from '@core/block';
+import {
+  type BlockName,
+  useBlockId,
+  useMaybeBlockAliasedName,
+} from '@core/block';
 import { IS_MAC } from '@core/constant/isMac';
 import type { DragEventWithData } from '@core/component/FileList/DraggableItem';
 import { DecoratorRenderer } from '@core/component/LexicalMarkdown/component/core/DecoratorRenderer';
@@ -184,6 +188,8 @@ const EDITOR_PADDING_BOTTOM = 200;
 export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
   const blockData = blockDataSignal.get;
   const blockId = useBlockId();
+  const userId = useUserId();
+  const blockName = useMaybeBlockAliasedName();
 
   const mdDocumentName = useBlockDocumentName('');
 
@@ -540,7 +546,12 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     .use(restoreFocusPlugin())
     .use(markdownPastePlugin())
     .use(normalizeEnterPlugin())
-    .use(checkboxToTaskPlugin())
+    .use(
+      checkboxToTaskPlugin({
+        currentUserId: userId(),
+        parentTaskId: blockName === 'task' ? blockId : undefined,
+      })
+    )
     .use(
       keyboardShortcutsPlugin({
         shortcuts: [
@@ -554,9 +565,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
             handler: (editor) => {
               const userId = useUserId()();
               if (!userId) return;
-              editor.dispatchCommand(CONVERT_CHECKBOXES_TO_TASKS, {
-                currentUserId: userId,
-              });
+              editor.dispatchCommand(CONVERT_CHECKBOXES_TO_TASKS, {});
             },
             priority: 0,
           },

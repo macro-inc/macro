@@ -16,6 +16,7 @@ import { createTask } from '../../../../util/create';
 import type { PropertyInput } from '@service-storage/generated/schemas/propertyInput';
 import type {
   ConvertCheckboxesOptions,
+  ConvertCheckboxesPluginOptions,
   ParsedCheckbox,
   TaskCreationResult,
 } from './types';
@@ -28,31 +29,43 @@ import { $parseCheckboxNodes } from './checkboxParsing';
 export const CONVERT_CHECKBOXES_TO_TASKS: LexicalCommand<ConvertCheckboxesOptions> =
   createCommand('CONVERT_CHECKBOXES_TO_TASKS');
 
+function maybeFallbackToCurrentAssignee(
+  asigneeUserIds: string[],
+  currentUserId?: string
+): string[] {
+  if (asigneeUserIds.length > 0) return asigneeUserIds;
+  if (currentUserId) return [currentUserId];
+  return [];
+}
+
 /**
  * Build PropertyInput array from parsed checkbox data.
  * Auto-assigns to current user when no assignees are extracted.
  */
 function buildPropertyValues(
   checkbox: ParsedCheckbox,
-  currentUserId: string
+  currentUserId?: string,
+  parentTaskId?: string
 ): PropertyInput[] {
   const properties: PropertyInput[] = [];
 
-  const assigneeIds =
-    checkbox.assigneeUserIds.length > 0
-      ? checkbox.assigneeUserIds
-      : [currentUserId];
+  const assigneeIds = maybeFallbackToCurrentAssignee(
+    checkbox.assigneeUserIds,
+    currentUserId
+  );
 
-  properties.push({
-    propertyId: SYSTEM_PROPERTY_IDS.ASSIGNEES,
-    value: {
-      type: 'multi_entity_reference',
-      references: assigneeIds.map((userId) => ({
-        entity_id: userId,
-        entity_type: 'USER' as const,
-      })),
-    },
-  });
+  if (assigneeIds) {
+    properties.push({
+      propertyId: SYSTEM_PROPERTY_IDS.ASSIGNEES,
+      value: {
+        type: 'multi_entity_reference',
+        references: assigneeIds.map((userId) => ({
+          entity_id: userId,
+          entity_type: 'USER' as const,
+        })),
+      },
+    });
+  }
 
   if (checkbox.dueDate) {
     properties.push({
@@ -60,6 +73,19 @@ function buildPropertyValues(
       value: {
         type: 'date',
         value: checkbox.dueDate,
+      },
+    });
+  }
+
+  if (parentTaskId) {
+    properties.push({
+      propertyId: SYSTEM_PROPERTY_IDS.PARENT_TASK,
+      value: {
+        type: 'entity_reference',
+        reference: {
+          entity_id: parentTaskId,
+          entity_type: 'TASK' as const,
+        },
       },
     });
   }
@@ -72,14 +98,19 @@ function buildPropertyValues(
  */
 async function createTaskFromCheckbox(
   checkbox: ParsedCheckbox,
-  currentUserId: string
+  currentUserId?: string,
+  parentTaskId?: string
 ): Promise<TaskCreationResult> {
   if (!checkbox.title.trim()) {
     return err({ tag: 'EmptyCheckbox', nodeKey: checkbox.nodeKey });
   }
 
   try {
-    const propertyValues = buildPropertyValues(checkbox, currentUserId);
+    const propertyValues = buildPropertyValues(
+      checkbox,
+      currentUserId,
+      parentTaskId
+    );
 
     const documentId = await createTask({
       title: checkbox.title,
@@ -134,13 +165,18 @@ function $replaceCheckboxWithMention(
 async function processCheckboxes(
   editor: LexicalEditor,
   checkboxes: ParsedCheckbox[],
-  options: ConvertCheckboxesOptions
+  options: ConvertCheckboxesOptions,
+  pluginOptions?: ConvertCheckboxesPluginOptions
 ): Promise<void> {
-  const { currentUserId, onComplete } = options;
+  const { onComplete } = options;
 
   const results = await Promise.all(
     checkboxes.map((checkbox) =>
-      createTaskFromCheckbox(checkbox, currentUserId)
+      createTaskFromCheckbox(
+        checkbox,
+        pluginOptions?.currentUserId,
+        pluginOptions?.parentTaskId
+      )
     )
   );
 
@@ -164,7 +200,10 @@ async function processCheckboxes(
 /**
  * Register the checkbox-to-task plugin
  */
-function registerCheckboxToTaskPlugin(editor: LexicalEditor) {
+function registerCheckboxToTaskPlugin(
+  editor: LexicalEditor,
+  pluginOptions?: ConvertCheckboxesPluginOptions
+) {
   return editor.registerCommand(
     CONVERT_CHECKBOXES_TO_TASKS,
     (options: ConvertCheckboxesOptions) => {
@@ -181,7 +220,7 @@ function registerCheckboxToTaskPlugin(editor: LexicalEditor) {
         return false;
       }
 
-      processCheckboxes(editor, checkboxes, options);
+      processCheckboxes(editor, checkboxes, options, pluginOptions);
 
       return true;
     },
@@ -193,8 +232,11 @@ function registerCheckboxToTaskPlugin(editor: LexicalEditor) {
  * Plugin factory for checkbox-to-task conversion.
  * Registers the CONVERT_CHECKBOXES_TO_TASKS command.
  */
-export function checkboxToTaskPlugin() {
-  return (editor: LexicalEditor) => registerCheckboxToTaskPlugin(editor);
+export function checkboxToTaskPlugin(
+  pluginOptions?: ConvertCheckboxesPluginOptions
+) {
+  return (editor: LexicalEditor) =>
+    registerCheckboxToTaskPlugin(editor, pluginOptions);
 }
 
 /**

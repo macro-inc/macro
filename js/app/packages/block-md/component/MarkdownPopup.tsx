@@ -345,7 +345,6 @@ export function MarkdownPopup(props: {
 
       setIsConverting(true);
       editor.dispatchCommand(CONVERT_CHECKBOXES_TO_TASKS, {
-        currentUserId: userId,
         selection: currentSelection.lexicalSelection as RangeSelection,
         onComplete: (results) => {
           setIsConverting(false);
