@@ -16,7 +16,8 @@ export function usePropertyOptionsQuery(
   return useQuery(() => {
     const defId = propertyDefinitionId();
     return {
-      queryKey: propertiesKeys.options({ propertyDefinitionId: defId }).queryKey,
+      queryKey: propertiesKeys.options({ propertyDefinitionId: defId })
+        .queryKey,
       queryFn: async () => {
         const result = await throwOnErr(
           async () =>
