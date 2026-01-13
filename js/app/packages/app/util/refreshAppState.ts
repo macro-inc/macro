@@ -17,7 +17,7 @@ export async function refreshAppStateOnResume(): Promise<void> {
 
     // 3. Refresh auth state
     await updateUserAuth();
-  } catch (error) {
+  } catch (_error) {
     // Fallback to full reload if refresh fails
     window.location.reload();
   }
