@@ -76,7 +76,7 @@ pub fn resolve_direct_message_channel_name(
     if let Some(other) = other_participant {
         Ok(id_to_display_name(other.user_id.copied(), name_lookup))
     } else {
-        tracing::info!("{participants:?}");
+        tracing::warn!("{participants:?}");
 
         Err("Unknown".to_string())
     }
