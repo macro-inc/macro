@@ -16,6 +16,7 @@ import {
 import { getInsets, type Insets } from 'tauri-plugin-safe-area-insets';
 import { useTauriNavigationEffect } from './navigation';
 import { MaybePushNotificationRegistration } from './PushNotification';
+import { useAppResumeReload } from './useAppResumeReload';
 
 type NotAndroid = 'not-android';
 
@@ -26,7 +27,15 @@ interface TauriContextValue {
 
 const TauriContext = createContext<TauriContextValue | undefined>(undefined);
 
-function TauriProvider(props: { children: JSX.Element }) {
+function TauriProvider(props: {
+  children: JSX.Element;
+  onAppResume?: () => Promise<void>;
+}) {
+  // Monitor app resume and trigger callback if provided
+  if (props.onAppResume) {
+    useAppResumeReload(props.onAppResume);
+  }
+
   // we only care about this value on android.
   // ios should use the env(safe-area-inset-top) css properties
   // this css is not reliably set on android
@@ -74,10 +83,13 @@ function TauriProvider(props: { children: JSX.Element }) {
   );
 }
 
-export function MaybeTauriProvider(props: { children: JSX.Element }) {
+export function MaybeTauriProvider(props: {
+  children: JSX.Element;
+  onAppResume?: () => Promise<void>;
+}) {
   if (isTauri()) {
     return (
-      <TauriProvider>
+      <TauriProvider onAppResume={props.onAppResume}>
         <MaybePushNotificationRegistration>
           {props.children}
         </MaybePushNotificationRegistration>

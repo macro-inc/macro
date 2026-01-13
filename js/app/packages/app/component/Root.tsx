@@ -1,4 +1,5 @@
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
+import { refreshAppStateOnResume } from '@app/util/refreshAppState';
 import { setHotkeyRoot, useSubscribeToKeypress } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { withAnalytics } from '@coparse/analytics';
@@ -383,7 +384,7 @@ export function Root() {
   };
 
   return (
-    <MaybeTauriProvider>
+    <MaybeTauriProvider onAppResume={refreshAppStateOnResume}>
       <MetaProvider>
         <EntityProvider>
           <ConfiguredGlobalAppStateProvider>
