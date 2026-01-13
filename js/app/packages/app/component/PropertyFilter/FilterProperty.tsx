@@ -1,6 +1,7 @@
-import { listPropertiesFlat } from '@core/component/Properties/utils';
+import { isPropertyDefinition } from '@core/component/Properties/utils';
 import { PropertyDataTypeIcon } from '@core/component/Properties/utils/PropertyDataTypeIcon';
 import MagnifyingGlassIcon from '@phosphor-icons/core/assets/regular/magnifying-glass.svg';
+import { useListPropertiesQuery } from '@queries/properties/definitions';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import type { Component } from 'solid-js';
 import {
@@ -21,9 +22,6 @@ export type FilterPropertySelectProps = {
 export const FilterPropertySelect: Component<FilterPropertySelectProps> = (
   props
 ) => {
-  const [availableProperties, setAvailableProperties] = createSignal<
-    PropertyDefinition[]
-  >([]);
   const [searchQuery, setSearchQuery] = createSignal('');
   const [isDropdownOpen, setIsDropdownOpen] = createSignal(false);
 
@@ -31,10 +29,16 @@ export const FilterPropertySelect: Component<FilterPropertySelectProps> = (
   let dropdownRef!: HTMLDivElement;
   let containerRef!: HTMLDivElement;
 
-  const fetchAvailableProperties = async () => {
-    const properties = await listPropertiesFlat('all');
-    setAvailableProperties(properties);
-  };
+  const propertiesQuery = useListPropertiesQuery(() => ({
+    scope: 'all',
+    includeOptions: false,
+  }));
+
+  const availableProperties = createMemo((): PropertyDefinition[] => {
+    const data = propertiesQuery.data;
+    if (!data) return [];
+    return (Array.isArray(data) ? data : []).filter(isPropertyDefinition);
+  });
 
   // Filter to only filterable properties (exclude COMPANY entity type)
   const filterableProperties = createMemo(() => {
@@ -79,7 +83,6 @@ export const FilterPropertySelect: Component<FilterPropertySelectProps> = (
   };
 
   onMount(() => {
-    fetchAvailableProperties();
     // Autofocus the search input
     searchInputRef?.focus();
     document.addEventListener('mousedown', handleClickOutside);

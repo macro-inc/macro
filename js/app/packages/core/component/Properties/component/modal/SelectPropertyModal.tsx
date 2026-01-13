@@ -6,17 +6,21 @@ import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
 import XIcon from '@icon/regular/x.svg';
 import { useAddEntityPropertyMutation } from '@queries/properties/entity';
-import { createEffect, createSignal, For, Show } from 'solid-js';
+import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { MODAL_DIMENSIONS } from '../../constants';
 import { usePropertiesContext } from '../../context/PropertiesContext';
 import { usePropertySelection } from '../../hooks/usePropertySelection';
 import { PROPERTY_STYLES } from '../../styles';
-import type { PropertySelectorProps } from '../../types';
+import type {
+  PropertyDefinitionFlat,
+  PropertySelectorProps,
+} from '../../types';
 import {
   getPropertyDefinitionTypeDisplay,
   useSearchInputFocus,
 } from '../../utils';
+import { useListPropertiesQuery } from '@queries/properties/definitions';
 
 export function SelectPropertyModal(props: PropertySelectorProps) {
   const blockId = useBlockId();
@@ -27,22 +31,48 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
 
   const addMutation = useAddEntityPropertyMutation();
 
+  const listPropertiesQuery = useListPropertiesQuery(() => ({
+    scope: 'all',
+    includeOptions: true,
+    forEntityType: entityType,
+  }));
+
+  const availableProperties = createMemo((): PropertyDefinitionFlat[] => {
+    if (
+      listPropertiesQuery.isLoading ||
+      listPropertiesQuery.isError ||
+      !listPropertiesQuery.data
+    ) {
+      return [];
+    }
+
+    const data = listPropertiesQuery.data;
+
+    const properties = Array.isArray(data) ? data : [];
+    return properties.map((item) => {
+      if ('definition' in item) {
+        return {
+          ...item.definition,
+          propertyOptions: item.property_options || [],
+        };
+      }
+      return {
+        ...item,
+        propertyOptions: [],
+      };
+    });
+  });
+
   let searchInputRef!: HTMLInputElement;
   let modalRef!: HTMLDivElement;
 
-  const {
-    state,
-    filteredProperties,
-    fetchAvailableProperties,
-    togglePropertySelection,
-  } = usePropertySelection(
-    props.existingPropertyIds,
-    () => searchQuery(),
-    entityType
-  );
+  const { selectedPropertyIds, filteredProperties, togglePropertySelection } =
+    usePropertySelection(props.existingPropertyIds, availableProperties, () =>
+      searchQuery()
+    );
 
   const handleAddProperties = async () => {
-    const selected = state().selectedPropertyIds;
+    const selected = selectedPropertyIds();
     if (selected.size === 0) return;
 
     setIsAdding(true);
@@ -103,12 +133,11 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
 
   useSearchInputFocus(
     () => searchInputRef,
-    () => props.isOpen && state().availableProperties.length > 0
+    () => props.isOpen && availableProperties.length > 0
   );
 
   createEffect(() => {
     if (props.isOpen) {
-      fetchAvailableProperties();
       setSearchQuery('');
     }
   });
@@ -160,7 +189,7 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
             />
           </div>
 
-          <Show when={state().availableProperties.length > 0}>
+          <Show when={availableProperties.length > 0}>
             <div class="px-4 pb-2">
               <div class="relative">
                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none z-10">
@@ -180,7 +209,7 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
 
           <div class="px-4 pb-2 overflow-y-auto max-h-[60vh]">
             <Show
-              when={!state().isLoading}
+              when={!listPropertiesQuery.isLoading}
               fallback={
                 <div class="flex items-center justify-center py-8">
                   <div class="w-5 h-5 animate-spin">
@@ -190,25 +219,9 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
                 </div>
               }
             >
-              <Show
-                when={!state().error}
-                fallback={
-                  <div class="text-center py-6">
-                    <div class="text-failure-ink mb-3 text-sm">
-                      {state().error}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={fetchAvailableProperties}
-                      class="px-3 py-1.5 bg-accent text-accent-ink text-sm hover:bg-accent/90"
-                    >
-                      Retry
-                    </button>
-                  </div>
-                }
-              >
+              <Show when={!listPropertiesQuery.error}>
                 <Show
-                  when={state().availableProperties.length > 0}
+                  when={availableProperties().length > 0}
                   fallback={
                     <div class="text-center py-6">
                       <div class="text-ink-muted text-sm">
@@ -229,7 +242,7 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
                       <For each={filteredProperties()}>
                         {(property) => {
                           const isSelected = () =>
-                            state().selectedPropertyIds.has(property.id);
+                            selectedPropertyIds().has(property.id);
 
                           return (
                             <button
@@ -283,12 +296,12 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
             >
               Cancel
             </button>
-            <Show when={state().selectedPropertyIds.size > 0}>
+            <Show when={selectedPropertyIds().size > 0}>
               <button
                 type="button"
-                class={`${PROPERTY_STYLES.button.base} ${state().selectedPropertyIds.size > 0 && !isAdding() ? PROPERTY_STYLES.button.accent : 'bg-ink-muted text-ink cursor-not-allowed'}`}
+                class={`${PROPERTY_STYLES.button.base} ${selectedPropertyIds().size > 0 && !isAdding() ? PROPERTY_STYLES.button.accent : 'bg-ink-muted text-ink cursor-not-allowed'}`}
                 onClick={handleAddProperties}
-                disabled={state().selectedPropertyIds.size === 0 || isAdding()}
+                disabled={selectedPropertyIds().size === 0 || isAdding()}
               >
                 <Show
                   when={!isAdding()}
@@ -302,13 +315,13 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
                   }
                 >
                   Add{' '}
-                  {state().selectedPropertyIds.size > 0
-                    ? `(${state().selectedPropertyIds.size})`
+                  {selectedPropertyIds().size > 0
+                    ? `(${selectedPropertyIds().size})`
                     : ''}
                 </Show>
               </button>
             </Show>
-            <Show when={state().selectedPropertyIds.size === 0}>
+            <Show when={selectedPropertyIds().size === 0}>
               <div class="flex gap-2">
                 <button
                   type="button"
@@ -317,7 +330,7 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
                     openCreateProperty();
                   }}
                   class={`${PROPERTY_STYLES.button.base} ${PROPERTY_STYLES.button.accent}`}
-                  disabled={state().isLoading}
+                  disabled={false}
                 >
                   Create New Property
                 </button>

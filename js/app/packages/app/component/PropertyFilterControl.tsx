@@ -1,14 +1,8 @@
-import { listPropertiesFlat } from '@core/component/Properties/utils';
+import { isPropertyDefinition } from '@core/component/Properties/utils';
+import { useListPropertiesQuery } from '@queries/properties/definitions';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import type { Accessor, Component } from 'solid-js';
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  For,
-  onMount,
-  Show,
-} from 'solid-js';
+import { createEffect, createMemo, For, Show } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { FilterPropertyPill } from './PropertyFilter';
 import type { PropertyFilter } from './PropertyFilterTypes';
@@ -31,14 +25,16 @@ type PropertyFilterControlProps = {
 export const PropertyFilterControl: Component<PropertyFilterControlProps> = (
   props
 ) => {
-  // Fetch all properties once for looking up saved filters
-  const [allProperties, setAllProperties] = createSignal<PropertyDefinition[]>(
-    []
-  );
+  // Fetch all properties using query
+  const propertiesQuery = useListPropertiesQuery(() => ({
+    scope: 'all',
+    includeOptions: false,
+  }));
 
-  onMount(async () => {
-    const properties = await listPropertiesFlat('all');
-    setAllProperties(properties);
+  const allProperties = createMemo((): PropertyDefinition[] => {
+    const data = propertiesQuery.data;
+    if (!data) return [];
+    return (Array.isArray(data) ? data : []).filter(isPropertyDefinition);
   });
 
   // Look up property definition by ID
