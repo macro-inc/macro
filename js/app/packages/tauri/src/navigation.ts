@@ -8,9 +8,36 @@ type NavigateEvent = {
   notificationId?: string;
 };
 
+// Module-level callback storage for JS-to-JS navigation
+let registeredNavigate: ((path: string) => void) | null = null;
+
+/**
+ * Register a navigate function to be called from outside the router context.
+ * Called by useTauriNavigationEffect when the router is ready.
+ */
+export function registerNavigate(fn: (path: string) => void) {
+  registeredNavigate = fn;
+}
+
+/**
+ * Trigger navigation from outside the router context.
+ * Used by PushNotification to navigate when a notification is tapped.
+ */
+export function triggerNavigation(path: string) {
+  if (registeredNavigate) {
+    registeredNavigate(path);
+  } else {
+    console.warn('Navigation triggered before navigate was registered');
+  }
+}
+
 /// this must be used as a child of router
 export function useTauriNavigationEffect() {
   const navigate = useNavigate();
+
+  // Register the navigate function for JS-to-JS calls
+  registerNavigate(navigate);
+
   createEffect(() => {
     let unsubscribe: () => void | undefined;
 

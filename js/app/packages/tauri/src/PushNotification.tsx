@@ -13,7 +13,6 @@ import {
 } from '@notifications';
 import { notificationServiceClient } from '@service-notification/client';
 import { makePersisted } from '@solid-primitives/storage';
-import { emit } from '@tauri-apps/api/event';
 import {
   type Accessor,
   createContext,
@@ -23,6 +22,7 @@ import {
   type JSX,
   type Setter,
 } from 'solid-js';
+import { triggerNavigation } from './navigation';
 import { createTauriNotificationInterface } from './notification';
 import { useExpectTauri } from './TauriProvider';
 
@@ -137,10 +137,9 @@ export function MaybePushNotificationRegistration(props: {
     if (!tapped) return;
     if (!notificationId) return;
 
-    emit('navigate', {
-      path: `/component/notification?notificationId=${notificationId}`,
-      query: '',
-    });
+    triggerNavigation(
+      `/component/notification?notificationId=${notificationId}`
+    );
   });
 
   // now we compose the standard tauri notif plugin with the push notification plugin
