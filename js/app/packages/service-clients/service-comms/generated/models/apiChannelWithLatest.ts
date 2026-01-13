@@ -4,8 +4,11 @@
  * comms_service
  * OpenAPI spec version: 0.1.0
  */
+
+import type { ApiChannelWithLatestAllOf } from './apiChannelWithLatestAllOf';
 import type { ChannelWithParticipants } from './channelWithParticipants';
 import type { LatestMessage } from './latestMessage';
-import type { ApiChannelWithLatestAllOf } from './apiChannelWithLatestAllOf';
 
-export type ApiChannelWithLatest = ChannelWithParticipants & LatestMessage & ApiChannelWithLatestAllOf;
+export type ApiChannelWithLatest = ChannelWithParticipants &
+  LatestMessage &
+  ApiChannelWithLatestAllOf;

@@ -8,4 +8,6 @@
 /**
  * Removes the default share permission you currently have set
  */
-export type PatchOrganizationSettingsRequestRemoveDefaultSharePermission = boolean | null;
+export type PatchOrganizationSettingsRequestRemoveDefaultSharePermission =
+  | boolean
+  | null;

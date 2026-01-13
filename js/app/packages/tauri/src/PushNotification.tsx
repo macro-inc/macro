@@ -22,6 +22,7 @@ import {
   type JSX,
   type Setter,
 } from 'solid-js';
+import { triggerNavigation } from './navigation';
 import { createTauriNotificationInterface } from './notification';
 import { useExpectTauri } from './TauriProvider';
 
@@ -127,7 +128,19 @@ export function MaybePushNotificationRegistration(props: {
     );
   }
 
-  const push = usePushNotifications(os);
+  const push = usePushNotifications(os, (event) => {
+    const notificationId: string | undefined = event.payload.notificationId;
+
+    const tapped =
+      event.type === 'BACKGROUND_TAP' || event.type === 'FOREGROUND_TAP';
+    // Only navigate on explicit user interaction.
+    if (!tapped) return;
+    if (!notificationId) return;
+
+    triggerNavigation(
+      `/component/notification?notificationId=${notificationId}`
+    );
+  });
 
   // now we compose the standard tauri notif plugin with the push notification plugin
   function curriedTauriPushNotification(
@@ -137,11 +150,19 @@ export function MaybePushNotificationRegistration(props: {
       requestPermission,
       unregisterNotifications,
       getCurrentPermission,
-      showNotification,
+      showNotification: baseShowNotification,
     } = createTauriNotificationInterface(setDisabled);
 
     return {
-      showNotification,
+      showNotification: async (data) => {
+        // If remote push is enabled, the OS will display notifications for us.
+        // Avoid also generating a local notification from websocket events,
+        // which would cause duplicates.
+        if (push.permission() === 'granted') {
+          return 'not-granted';
+        }
+        return baseShowNotification(data);
+      },
       getCurrentPermission: async () => {
         const appNotification = await getCurrentPermission();
         if (appNotification === 'granted' && push.permission() === 'granted') {

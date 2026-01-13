@@ -6,7 +6,9 @@ pub mod read;
 pub mod rewrite;
 pub mod search;
 mod tool_context;
+pub mod web_fetch;
 use search::web::anthropic_web_search::anthropic_web_search_tool;
+use web_fetch::anthropic_web_fetch_tool;
 
 pub use search::search_toolset;
 pub use tool_context::*;
@@ -26,6 +28,7 @@ impl ToolSchemaGenerator for ToolSetWithPrompt {
     }
 }
 
+/// These are actually sent to the AI provider
 pub fn all_tools() -> ToolSetWithPrompt {
     let toolset = AsyncToolSet::new()
         .add_toolset(search_toolset())
@@ -40,9 +43,12 @@ pub fn all_tools() -> ToolSetWithPrompt {
     ToolSetWithPrompt { toolset, prompt }
 }
 
+/// These are used to generate schemas for the frontend
+/// See [ai::tool::types::schema::PhantomTool]
 pub fn all_tool_schemas() -> ToolSchemas {
     all_tools()
         .merge(&*anthropic_web_search_tool)
+        .merge(&*anthropic_web_fetch_tool)
         .generate_schemas()
 }
 

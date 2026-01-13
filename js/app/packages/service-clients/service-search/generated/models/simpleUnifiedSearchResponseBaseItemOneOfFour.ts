@@ -7,4 +7,6 @@
 import type { SimpleChatSearchResponseBaseItemTimestampSeconds } from './simpleChatSearchResponseBaseItemTimestampSeconds';
 import type { SimpleUnifiedSearchResponseBaseItemOneOfFourAllOf } from './simpleUnifiedSearchResponseBaseItemOneOfFourAllOf';
 
-export type SimpleUnifiedSearchResponseBaseItemOneOfFour = SimpleChatSearchResponseBaseItemTimestampSeconds & SimpleUnifiedSearchResponseBaseItemOneOfFourAllOf;
+export type SimpleUnifiedSearchResponseBaseItemOneOfFour =
+  SimpleChatSearchResponseBaseItemTimestampSeconds &
+    SimpleUnifiedSearchResponseBaseItemOneOfFourAllOf;

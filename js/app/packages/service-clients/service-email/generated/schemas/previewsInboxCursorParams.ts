@@ -7,17 +7,17 @@
 import type { ApiSortMethod } from './apiSortMethod';
 
 export type PreviewsInboxCursorParams = {
-/**
- * Limit for pagination. Default is 20. Max is 500.
- * @minimum 0
- */
-limit?: number;
-/**
- * Sort method. Options are viewed_at, created_at, updated_at, viewed_updated. Defaults to viewed_updated.
- */
-sort_method?: ApiSortMethod;
-/**
- * Cursor value. Base64 encoded timestamp and item id, separated by |.
- */
-cursor?: string;
+  /**
+   * Limit for pagination. Default is 20. Max is 500.
+   * @minimum 0
+   */
+  limit?: number;
+  /**
+   * Sort method. Options are viewed_at, created_at, updated_at, viewed_updated. Defaults to viewed_updated.
+   */
+  sort_method?: ApiSortMethod;
+  /**
+   * Cursor value. Base64 encoded timestamp and item id, separated by |.
+   */
+  cursor?: string;
 };

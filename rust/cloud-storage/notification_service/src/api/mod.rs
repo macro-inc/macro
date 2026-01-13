@@ -18,7 +18,7 @@ mod notification;
 mod unsubscribe;
 mod user_notification;
 
-mod swagger;
+pub(crate) mod swagger;
 
 pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
     let port = state.config.port;

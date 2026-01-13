@@ -2,6 +2,7 @@ use anyhow::Context;
 use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode};
 use macro_env::Environment;
 use macro_env_var::{VarNameErr, env_var};
+use macro_user_id::{cowlike::CowLike, lowercased::Lowercase, user_id::MacroUserId};
 use remote_env_var::{LocalOrRemoteSecret, SecretManager};
 use thiserror::Error;
 
@@ -126,6 +127,37 @@ pub fn validate_macro_access_token(
         &args.audience,
         &args.issuer,
     )
+}
+
+/// Decodes a macro access token without validating expiry and the macro user id.
+/// This is useful for extracting the user ID from an expired token
+/// (e.g., for advisory lock acquisition during token refresh).
+/// The signature is still validated.
+pub fn decode_macro_access_token_allow_expired(
+    macro_access_token: &str,
+    args: &JwtValidationArgs,
+) -> Result<MacroUserId<Lowercase<'static>>, MacroAuthError> {
+    let mut validation = Validation::new(Algorithm::HS256);
+    validation.set_audience(&[args.audience.as_ref()]);
+    validation.set_issuer(&[args.issuer.as_ref()]);
+    validation.validate_exp = false;
+
+    let decoded_jwt: MacroAccessToken = decode::<MacroAccessToken>(
+        macro_access_token,
+        &DecodingKey::from_secret(args.jwt_secret.as_ref().as_bytes()),
+        &validation,
+    )
+    .map_err(|e| MacroAuthError::JwtValidationFailed {
+        details: e.to_string(),
+    })?
+    .claims;
+
+    let macro_user_id = MacroUserId::parse_from_str(&decoded_jwt.macro_user_id)
+        .map_err(|_| MacroAuthError::from(anyhow::anyhow!("invalid macro user id in token")))?
+        .lowercase()
+        .into_owned();
+
+    Ok(macro_user_id)
 }
 
 fn validate_macro_access_token_inner(

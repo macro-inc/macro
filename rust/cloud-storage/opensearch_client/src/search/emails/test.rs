@@ -124,42 +124,6 @@ fn test_build_search_request() -> anyhow::Result<()> {
               "minimum_should_match": 1,
               "should": [
                 {
-                  "wildcard": {
-                    "sender": {
-                      "boost": 5000.0,
-                      "case_insensitive": true,
-                      "value": "test*"
-                    }
-                  }
-                },
-                {
-                  "wildcard": {
-                    "cc": {
-                      "boost": 5000.0,
-                      "case_insensitive": true,
-                      "value": "test*"
-                    }
-                  }
-                },
-                {
-                  "wildcard": {
-                    "bcc": {
-                      "boost": 5000.0,
-                      "case_insensitive": true,
-                      "value": "test*"
-                    }
-                  }
-                },
-                {
-                  "wildcard": {
-                    "recipients": {
-                      "boost": 5000.0,
-                      "case_insensitive": true,
-                      "value": "test*"
-                    }
-                  }
-                },
-                {
                   "match_phrase": {
                     "content": "test"
                   }

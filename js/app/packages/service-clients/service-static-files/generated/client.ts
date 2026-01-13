@@ -4,211 +4,216 @@
  * static_file_service
  * OpenAPI spec version: 0.1.0
  */
-import type {
-  FileMetadata,
-  PutFileRequest,
-  PutFileResponse
-} from './schemas';
+import type { FileMetadata, PutFileRequest, PutFileResponse } from './schemas';
 
 export type putPresignedUrlResponse200 = {
-  data: PutFileResponse
-  status: 200
-}
+  data: PutFileResponse;
+  status: 200;
+};
 
 export type putPresignedUrlResponse401 = {
-  data: string
-  status: 401
-}
+  data: string;
+  status: 401;
+};
 
 export type putPresignedUrlResponse500 = {
-  data: string
-  status: 500
-}
-    
-export type putPresignedUrlResponseSuccess = (putPresignedUrlResponse200) & {
+  data: string;
+  status: 500;
+};
+
+export type putPresignedUrlResponseSuccess = putPresignedUrlResponse200 & {
   headers: Headers;
 };
-export type putPresignedUrlResponseError = (putPresignedUrlResponse401 | putPresignedUrlResponse500) & {
+export type putPresignedUrlResponseError = (
+  | putPresignedUrlResponse401
+  | putPresignedUrlResponse500
+) & {
   headers: Headers;
 };
 
-export type putPresignedUrlResponse = (putPresignedUrlResponseSuccess | putPresignedUrlResponseError)
+export type putPresignedUrlResponse =
+  | putPresignedUrlResponseSuccess
+  | putPresignedUrlResponseError;
 
 export const getPutPresignedUrlUrl = () => {
+  return `/api/file`;
+};
 
-
-  
-
-  return `/api/file`
-}
-
-export const putPresignedUrl = async (putFileRequest: PutFileRequest, options?: RequestInit): Promise<putPresignedUrlResponse> => {
-  
-  const res = await fetch(getPutPresignedUrlUrl(),
-  {      
+export const putPresignedUrl = async (
+  putFileRequest: PutFileRequest,
+  options?: RequestInit
+): Promise<putPresignedUrlResponse> => {
+  const res = await fetch(getPutPresignedUrlUrl(), {
     ...options,
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      putFileRequest,)
-  }
-)
+    body: JSON.stringify(putFileRequest),
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: putPresignedUrlResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as putPresignedUrlResponse
-}
 
-
+  const data: putPresignedUrlResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as putPresignedUrlResponse;
+};
 
 export type handleGetMetadataResponse200 = {
-  data: FileMetadata
-  status: 200
-}
+  data: FileMetadata;
+  status: 200;
+};
 
 export type handleGetMetadataResponse404 = {
-  data: string
-  status: 404
-}
+  data: string;
+  status: 404;
+};
 
 export type handleGetMetadataResponse500 = {
-  data: string
-  status: 500
-}
-    
-export type handleGetMetadataResponseSuccess = (handleGetMetadataResponse200) & {
-  headers: Headers;
-};
-export type handleGetMetadataResponseError = (handleGetMetadataResponse404 | handleGetMetadataResponse500) & {
-  headers: Headers;
+  data: string;
+  status: 500;
 };
 
-export type handleGetMetadataResponse = (handleGetMetadataResponseSuccess | handleGetMetadataResponseError)
+export type handleGetMetadataResponseSuccess = handleGetMetadataResponse200 & {
+  headers: Headers;
+};
+export type handleGetMetadataResponseError = (
+  | handleGetMetadataResponse404
+  | handleGetMetadataResponse500
+) & {
+  headers: Headers;
+};
 
-export const getHandleGetMetadataUrl = (fileId: string,) => {
+export type handleGetMetadataResponse =
+  | handleGetMetadataResponseSuccess
+  | handleGetMetadataResponseError;
 
+export const getHandleGetMetadataUrl = (fileId: string) => {
+  return `/api/file/metadata/${fileId}`;
+};
 
-  
-
-  return `/api/file/metadata/${fileId}`
-}
-
-export const handleGetMetadata = async (fileId: string, options?: RequestInit): Promise<handleGetMetadataResponse> => {
-  
-  const res = await fetch(getHandleGetMetadataUrl(fileId),
-  {      
+export const handleGetMetadata = async (
+  fileId: string,
+  options?: RequestInit
+): Promise<handleGetMetadataResponse> => {
+  const res = await fetch(getHandleGetMetadataUrl(fileId), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: handleGetMetadataResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as handleGetMetadataResponse
-}
 
-
+  const data: handleGetMetadataResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as handleGetMetadataResponse;
+};
 
 export type handleDeleteFileResponse200 = {
-  data: string
-  status: 200
-}
+  data: string;
+  status: 200;
+};
 
 export type handleDeleteFileResponse401 = {
-  data: string
-  status: 401
-}
+  data: string;
+  status: 401;
+};
 
 export type handleDeleteFileResponse403 = {
-  data: string
-  status: 403
-}
+  data: string;
+  status: 403;
+};
 
 export type handleDeleteFileResponse404 = {
-  data: string
-  status: 404
-}
-    
-export type handleDeleteFileResponseSuccess = (handleDeleteFileResponse200) & {
-  headers: Headers;
-};
-export type handleDeleteFileResponseError = (handleDeleteFileResponse401 | handleDeleteFileResponse403 | handleDeleteFileResponse404) & {
-  headers: Headers;
+  data: string;
+  status: 404;
 };
 
-export type handleDeleteFileResponse = (handleDeleteFileResponseSuccess | handleDeleteFileResponseError)
+export type handleDeleteFileResponseSuccess = handleDeleteFileResponse200 & {
+  headers: Headers;
+};
+export type handleDeleteFileResponseError = (
+  | handleDeleteFileResponse401
+  | handleDeleteFileResponse403
+  | handleDeleteFileResponse404
+) & {
+  headers: Headers;
+};
 
-export const getHandleDeleteFileUrl = (fileId: string,) => {
+export type handleDeleteFileResponse =
+  | handleDeleteFileResponseSuccess
+  | handleDeleteFileResponseError;
 
+export const getHandleDeleteFileUrl = (fileId: string) => {
+  return `/api/file/${fileId}`;
+};
 
-  
-
-  return `/api/file/${fileId}`
-}
-
-export const handleDeleteFile = async (fileId: string, options?: RequestInit): Promise<handleDeleteFileResponse> => {
-  
-  const res = await fetch(getHandleDeleteFileUrl(fileId),
-  {      
+export const handleDeleteFile = async (
+  fileId: string,
+  options?: RequestInit
+): Promise<handleDeleteFileResponse> => {
+  const res = await fetch(getHandleDeleteFileUrl(fileId), {
     ...options,
-    method: 'DELETE'
-    
-    
-  }
-)
+    method: 'DELETE',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: handleDeleteFileResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as handleDeleteFileResponse
-}
 
-
+  const data: handleDeleteFileResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as handleDeleteFileResponse;
+};
 
 export type getFileDocumentationResponse200 = {
-  data: number[]
-  status: 200
-}
+  data: number[];
+  status: 200;
+};
 
 export type getFileDocumentationResponse404 = {
-  data: void
-  status: 404
-}
-    
-export type getFileDocumentationResponseSuccess = (getFileDocumentationResponse200) & {
-  headers: Headers;
-};
-export type getFileDocumentationResponseError = (getFileDocumentationResponse404) & {
-  headers: Headers;
+  data: void;
+  status: 404;
 };
 
-export type getFileDocumentationResponse = (getFileDocumentationResponseSuccess | getFileDocumentationResponseError)
+export type getFileDocumentationResponseSuccess =
+  getFileDocumentationResponse200 & {
+    headers: Headers;
+  };
+export type getFileDocumentationResponseError =
+  getFileDocumentationResponse404 & {
+    headers: Headers;
+  };
 
-export const getGetFileDocumentationUrl = (fileId: string,) => {
+export type getFileDocumentationResponse =
+  | getFileDocumentationResponseSuccess
+  | getFileDocumentationResponseError;
 
+export const getGetFileDocumentationUrl = (fileId: string) => {
+  return `/file/${fileId}`;
+};
 
-  
-
-  return `/file/${fileId}`
-}
-
-export const getFileDocumentation = async (fileId: string, options?: RequestInit): Promise<getFileDocumentationResponse> => {
-  
-  const res = await fetch(getGetFileDocumentationUrl(fileId),
-  {      
+export const getFileDocumentation = async (
+  fileId: string,
+  options?: RequestInit
+): Promise<getFileDocumentationResponse> => {
+  const res = await fetch(getGetFileDocumentationUrl(fileId), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: getFileDocumentationResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getFileDocumentationResponse
-}
+
+  const data: getFileDocumentationResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getFileDocumentationResponse;
+};

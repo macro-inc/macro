@@ -4,8 +4,9 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { FolderItem } from './folderItem';
+
 import type { FileSystemNodeWithIdsOneOfType } from './fileSystemNodeWithIdsOneOfType';
+import type { FolderItem } from './folderItem';
 
 export type FileSystemNodeWithIdsOneOf = {
   document_id: string;

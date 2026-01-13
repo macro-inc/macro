@@ -3,6 +3,11 @@ import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/S
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
+import {
+  parseEmailContent,
+  processEmailColors,
+  type ThemeColorParams,
+} from '@core/email';
 import DotsThree from '@icon/regular/dots-three.svg';
 import type { MessageWithBodyReplyless } from '@service-email/generated/schemas';
 import { useEmail } from '@service-gql/client';
@@ -16,10 +21,8 @@ import {
   Switch,
   untrack,
 } from 'solid-js';
-// import { selectedTheme } from '@core/signal/theme';
+import { themeReactive } from '../../block-theme/signals/themeReactive';
 import { themeUpdate } from '../../block-theme/signals/themeSignals';
-import { parseEmailContent } from '../util/parseEmailHTML';
-import { processEmailColors } from '../util/transformEmailColors';
 
 interface EmailMessageBodyProps {
   message: MessageWithBodyReplyless;
@@ -165,7 +168,18 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
     if (root) {
       if (isPersonal()) {
         queueMicrotask(() => {
-          untrack(() => processEmailColors(root));
+          untrack(() => {
+            const theme: ThemeColorParams = {
+              inkL: themeReactive.c0.l[0](),
+              inkC: themeReactive.c0.c[0](),
+              inkH: themeReactive.c0.h[0](),
+              panelL: themeReactive.b1.l[0](),
+              accentL: themeReactive.a0.l[0](),
+              accentC: themeReactive.a0.c[0](),
+              accentH: themeReactive.a0.h[0](),
+            };
+            processEmailColors(root, theme);
+          });
         });
       } else if (source()?.hasTable) {
         const contentWrapper = root.querySelector('div');

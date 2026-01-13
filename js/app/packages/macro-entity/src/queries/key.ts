@@ -1,5 +1,5 @@
 import type { PreviewViewStandardLabel } from '@service-email/generated/schemas';
-import type { PaginatedSearchArgs } from '@service-search/client';
+import type { SearchArgs } from '@service-search/client';
 import { hashKey } from '@tanstack/solid-query';
 
 const BASE_AUTH = ['auth'];
@@ -29,7 +29,7 @@ type EmailKeyOptions = InfiniteKeyOptions & {
 };
 type SearchKeyOptions = {
   infinite: true;
-} & PaginatedSearchArgs;
+} & SearchArgs;
 
 export const queryKeys = {
   all: {

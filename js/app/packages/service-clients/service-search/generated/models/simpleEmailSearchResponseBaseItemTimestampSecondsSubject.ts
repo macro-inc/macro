@@ -8,4 +8,6 @@
 /**
  * The subject
  */
-export type SimpleEmailSearchResponseBaseItemTimestampSecondsSubject = string | null;
+export type SimpleEmailSearchResponseBaseItemTimestampSecondsSubject =
+  | string
+  | null;

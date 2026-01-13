@@ -1,6 +1,7 @@
 use crate::domain::models::FrecencySoupItem;
 use crate::domain::ports::MockSoupRepo;
 use chrono::Days;
+use comms::domain::models::GetChannelsRequest;
 use cool_asserts::assert_matches;
 use email::domain::models::{EmailErr, EnrichedEmailThreadPreview, PreviewView};
 use frecency::domain::models::{FrecencyPageRequest, FrecencyPageResponse};
@@ -49,7 +50,7 @@ struct NoopCommsService;
 impl ChannelsService for NoopCommsService {
     async fn get_channels(
         &self,
-        _user: MacroUserIdStr<'_>,
+        req: GetChannelsRequest,
     ) -> Result<Vec<comms::domain::models::channel::ChannelWithLatest>, Report> {
         Ok(Vec::new())
     }

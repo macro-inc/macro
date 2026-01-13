@@ -521,7 +521,7 @@ export function EntityWithEverything(
     }
   });
 
-  const EntityTitle = () => {
+  const EntityTitle = createMemo(() => {
     if (props.entity.type === 'email') {
       const isLikelyEmail = (value?: string) =>
         typeof value === 'string' && value.includes('@');
@@ -763,7 +763,10 @@ export function EntityWithEverything(
                 'w-[20cqw]': !props.showUnrollNotifications,
               }}
             >
-              <Show when={searchHighlightName()} fallback={props.entity.name}>
+              <Show
+                when={isSearch() && searchHighlightName()}
+                fallback={props.entity.name}
+              >
                 {(name) => (
                   <StaticMarkdown
                     markdown={name()}
@@ -817,14 +820,12 @@ export function EntityWithEverything(
         </span>
       </div>
     );
-  };
+  });
 
   const draggable = createDraggable(props.entity.id, props.entity);
   false && draggable;
   const droppable = createDroppable(props.entity.id, props.entity);
   false && droppable;
-
-  const { didCursorMove } = useCursorMove();
 
   // The main click handler for the entity row should navigate to an entity
   // without forcing focus back to the source split until after navigation.
@@ -882,11 +883,9 @@ export function EntityWithEverything(
         'active:bracket active:outline active:outline-accent/20 active:outline-offset-[-1px]':
           isTouchDevice() && !props.checked,
       }}
-      onMouseOver={(e) => {
+      onMouseMove={() => {
         if (isTouchDevice()) return;
-        if (!didCursorMove(e)) {
-          return;
-        }
+
         setHoveredEntityId(props.entity.id);
         props.onMouseOver?.();
       }}
@@ -1359,44 +1358,4 @@ const createFormattedDate = (timestamp: number) => {
     day: 'numeric',
     year: '2-digit',
   });
-};
-
-let lastMouseX: number | null = null;
-let lastMouseY: number | null = null;
-let initialMouseMove: boolean = false;
-let cursorInit = true;
-
-const useCursorMove = () => {
-  const didCursorMove = (event: MouseEvent) => {
-    if (!initialMouseMove) return;
-    const { clientX, clientY } = event;
-    // If the mouse hasn't moved, ignore the event
-    if (clientX === lastMouseX && clientY === lastMouseY) {
-      return false;
-    }
-
-    // Update the last known position
-    lastMouseX = clientX;
-    lastMouseY = clientY;
-
-    return true;
-  };
-
-  const moveEvent = (event: MouseEvent) => {
-    const { clientX, clientY } = event;
-    initialMouseMove = true;
-
-    setTimeout(() => {
-      lastMouseX = clientX;
-      lastMouseY = clientY;
-    });
-  };
-  onMount(() => {
-    if (!cursorInit) {
-      return;
-    }
-    cursorInit = false;
-    document.addEventListener('mousemove', moveEvent, { capture: true });
-  });
-  return { didCursorMove };
 };

@@ -10,4 +10,5 @@ import type { ToWebSocketMessageOneOfAllOf } from './toWebSocketMessageOneOfAllO
 /**
  * Initializes a new message in a chat for streaming
  */
-export type ToWebSocketMessageOneOf = SendChatMessagePayload & ToWebSocketMessageOneOfAllOf;
+export type ToWebSocketMessageOneOf = SendChatMessagePayload &
+  ToWebSocketMessageOneOfAllOf;

@@ -5,7 +5,6 @@ import { createSignal, For, Show } from 'solid-js';
 import { usePropertiesContext } from '../../context/PropertiesContext';
 import type { Property } from '../../types';
 import { getEntityValues } from '../../utils';
-import { ERROR_MESSAGES, handlePropertyError } from '../../utils/errorHandling';
 import { EntityIcon } from './EntityIcon';
 import { AddPropertyValueButton, EmptyValue } from './ValueComponents';
 
@@ -50,20 +49,13 @@ export const EntityValue: Component<EntityValueProps> = (props) => {
           entity.entity_type !== entityToRemove.entity_type
       );
 
-      const result = await saveHandler.saveProperty(props.property, {
+      await saveHandler.saveProperty(props.property, {
         valueType: 'ENTITY',
         refs: newValues.length > 0 ? newValues : null,
       });
-
-      if (
-        handlePropertyError(
-          result,
-          ERROR_MESSAGES.PROPERTY_SAVE,
-          'EntityValue.handleRemoveEntity'
-        )
-      ) {
-        props.onRefresh?.();
-      }
+      props.onRefresh?.();
+    } catch {
+      // Error toast is shown by mutation's onError callback
     } finally {
       setIsSaving(false);
     }

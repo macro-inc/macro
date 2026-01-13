@@ -1,7 +1,7 @@
 import { useBlockId } from '@core/block';
 import LoadingSpinner from '@icon/regular/spinner.svg';
+import { useSaveEntityPropertyMutation } from '@queries/properties/entity';
 import { type Accessor, createMemo, Show } from 'solid-js';
-import { saveEntityProperty } from './api';
 import { Modals } from './component/modal/Modals';
 import { AddPropertyButton } from './component/panel/AddPropertyButton';
 import { PanelContainer } from './component/panel/PanelContainer';
@@ -30,6 +30,8 @@ export function PropertiesView(props: PropertiesPanelProps) {
     true // includeMetadata
   );
 
+  const saveMutation = useSaveEntityPropertyMutation();
+
   const handleRefresh = () => {
     refetch();
     props.onRefresh?.();
@@ -48,20 +50,23 @@ export function PropertiesView(props: PropertiesPanelProps) {
   };
 
   const saveHandler: PropertySaveHandler = {
-    saveProperty: async (property: Property, value: PropertyApiValues) => {
-      return await saveEntityProperty(
-        blockId,
-        props.entityType,
+    saveProperty: (property: Property, value: PropertyApiValues) =>
+      saveMutation.mutateAsync({
+        entityId: blockId,
+        entityType: props.entityType,
         property,
-        value
-      );
-    },
-    saveDate: async (property: Property, date: Date) => {
-      return await saveEntityProperty(blockId, props.entityType, property, {
-        valueType: 'DATE',
-        value: date.toISOString(),
-      });
-    },
+        apiValues: value,
+      }),
+    saveDate: (property: Property, date: Date) =>
+      saveMutation.mutateAsync({
+        entityId: blockId,
+        entityType: props.entityType,
+        property,
+        apiValues: {
+          valueType: 'DATE',
+          value: date.toISOString(),
+        },
+      }),
   };
 
   return (

@@ -10,4 +10,6 @@ import type { AddPropertyOptionRequestOneOfThree } from './addPropertyOptionRequ
 /**
  * Enum for type-safe property option addition requests.
  */
-export type AddPropertyOptionRequest = AddPropertyOptionRequestOneOf | AddPropertyOptionRequestOneOfThree;
+export type AddPropertyOptionRequest =
+  | AddPropertyOptionRequestOneOf
+  | AddPropertyOptionRequestOneOfThree;

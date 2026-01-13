@@ -24,6 +24,7 @@ fn create_test_response(
             content: content.unwrap_or_default(),
             ..Default::default()
         },
+        updated_at: None,
     }
 }
 

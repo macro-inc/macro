@@ -1,63 +1,37 @@
-import { isErr } from '@core/util/maybeResult';
-import { propertiesServiceClient } from '@service-properties/client';
-import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { createMemo, createSignal } from 'solid-js';
+import { type Accessor, createMemo, createSignal } from 'solid-js';
 import type { PropertyDefinitionFlat } from '../types';
-import { ERROR_MESSAGES } from '../utils/errorHandling';
 
-export interface PropertySelectionState {
-  availableProperties: PropertyDefinitionFlat[];
-  selectedPropertyIds: Set<string>;
-  isLoading: boolean;
-  error: string | null;
-}
-
-/**
- * Hook for managing property selection in the "Add Properties" modal
- * Handles fetching available properties, filtering, and tracking selections
- * @param existingPropertyIds - IDs of properties already attached to the entity
- * @param searchQuery - Optional search query for filtering
- * @param entityType - Optional entity type to filter properties applicable to this type
- */
 export function usePropertySelection(
   existingPropertyIds: () => string[],
-  searchQuery?: () => string,
-  entityType?: EntityType
+  availableProperties: Accessor<PropertyDefinitionFlat[]>,
+  searchQuery?: () => string
 ) {
-  const [state, setState] = createSignal<PropertySelectionState>({
-    availableProperties: [],
-    selectedPropertyIds: new Set(),
-    isLoading: false,
-    error: null,
-  });
+  const [selectedPropertyIds, setSelectedPropertyIds] = createSignal<
+    Set<string>
+  >(new Set());
 
-  // Memoize Set creation to avoid recreation on every search keystroke
-  // Reactive to existingPropertyIds changes
   const existingPropertyIdsSet = createMemo(
     () => new Set(existingPropertyIds())
   );
 
   const filteredProperties = createMemo(() => {
-    const currentState = state();
     const query = searchQuery ? searchQuery().toLowerCase().trim() : '';
     const existingIds = existingPropertyIdsSet();
 
-    // First filter out existing properties and hidden entity types
-    const availableProperties = currentState.availableProperties.filter(
+    const filtered = availableProperties().filter(
       (property) =>
         property &&
         property.id &&
         !existingIds.has(property.id) &&
-        // Hide COMPANY entity properties (not yet implemented)
+        // COMPANY entity properties not yet implemented
         property.specific_entity_type !== 'COMPANY'
     );
 
     // Then apply search filter
-    if (!query) return availableProperties;
+    if (!query) return filtered;
 
-    return availableProperties.filter((property) => {
+    return filtered.filter((property) => {
       const name = property.display_name.toLowerCase();
-      // Check name first before doing string concatenation
       if (name.includes(query)) {
         return true;
       }
@@ -73,79 +47,25 @@ export function usePropertySelection(
     });
   });
 
-  const fetchAvailableProperties = async () => {
-    setState((prev) => ({ ...prev, isLoading: true, error: null }));
-
-    try {
-      const result = await propertiesServiceClient.listProperties({
-        scope: 'all',
-        include_options: true,
-        for_entity_type: entityType,
-      });
-
-      if (isErr(result)) {
-        setState((prev) => ({
-          ...prev,
-          error: ERROR_MESSAGES.PROPERTY_FETCH,
-          isLoading: false,
-        }));
-        return;
-      }
-
-      const [, data] = result;
-      const availableProperties = Array.isArray(data) ? data : [];
-
-      // Transform the nested or flat API response to a flat structure
-      const transformedProperties = availableProperties.map((item) => {
-        if ('definition' in item) {
-          return {
-            ...item.definition,
-            propertyOptions: item.property_options || [],
-          };
-        }
-
-        return {
-          ...item,
-          propertyOptions: [],
-        };
-      });
-
-      setState((prev) => ({
-        ...prev,
-        availableProperties: transformedProperties,
-        isLoading: false,
-      }));
-    } catch (_apiError) {
-      setState((prev) => ({
-        ...prev,
-        error: ERROR_MESSAGES.PROPERTY_FETCH,
-        isLoading: false,
-      }));
-    }
-  };
-
   const togglePropertySelection = (propertyId: string) => {
-    setState((prev) => {
-      const newSelected = new Set(prev.selectedPropertyIds);
-
+    setSelectedPropertyIds((prev) => {
+      const newSelected = new Set(prev);
       if (newSelected.has(propertyId)) {
         newSelected.delete(propertyId);
       } else {
         newSelected.add(propertyId);
       }
-
-      return { ...prev, selectedPropertyIds: newSelected };
+      return newSelected;
     });
   };
 
   const clearSelection = () => {
-    setState((prev) => ({ ...prev, selectedPropertyIds: new Set() }));
+    setSelectedPropertyIds(new Set<string>());
   };
 
   return {
-    state,
     filteredProperties,
-    fetchAvailableProperties,
+    selectedPropertyIds,
     togglePropertySelection,
     clearSelection,
   };

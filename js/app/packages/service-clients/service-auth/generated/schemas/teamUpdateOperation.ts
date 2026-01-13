@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type TeamUpdateOperation = typeof TeamUpdateOperation[keyof typeof TeamUpdateOperation];
-
+export type TeamUpdateOperation =
+  (typeof TeamUpdateOperation)[keyof typeof TeamUpdateOperation];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const TeamUpdateOperation = {

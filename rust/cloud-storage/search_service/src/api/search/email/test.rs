@@ -49,6 +49,7 @@ fn test_construct_search_result_single_thread() {
             content: vec!["Test content".to_string()],
             ..Default::default()
         },
+        updated_at: None,
     }];
 
     let mut thread_histories = HashMap::new();
@@ -105,6 +106,7 @@ fn test_sort_stability() {
                 content: vec!["third".to_string()],
                 ..Default::default()
             },
+            updated_at: None,
         },
         opensearch_client::search::model::SearchHit {
             entity_id: thread_ids[1],
@@ -126,6 +128,7 @@ fn test_sort_stability() {
                 content: vec!["first".to_string()],
                 ..Default::default()
             },
+            updated_at: None,
         },
         opensearch_client::search::model::SearchHit {
             entity_id: thread_ids[2],
@@ -147,6 +150,7 @@ fn test_sort_stability() {
                 content: vec!["fifth".to_string()],
                 ..Default::default()
             },
+            updated_at: None,
         },
         opensearch_client::search::model::SearchHit {
             entity_id: thread_ids[3],
@@ -168,6 +172,7 @@ fn test_sort_stability() {
                 content: vec!["second".to_string()],
                 ..Default::default()
             },
+            updated_at: None,
         },
         opensearch_client::search::model::SearchHit {
             entity_id: thread_ids[4],
@@ -189,6 +194,7 @@ fn test_sort_stability() {
                 content: vec!["fourth".to_string()],
                 ..Default::default()
             },
+            updated_at: None,
         },
     ];
 

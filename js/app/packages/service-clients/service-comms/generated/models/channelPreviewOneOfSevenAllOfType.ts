@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ChannelPreviewOneOfSevenAllOfType = typeof ChannelPreviewOneOfSevenAllOfType[keyof typeof ChannelPreviewOneOfSevenAllOfType];
-
+export type ChannelPreviewOneOfSevenAllOfType =
+  (typeof ChannelPreviewOneOfSevenAllOfType)[keyof typeof ChannelPreviewOneOfSevenAllOfType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const ChannelPreviewOneOfSevenAllOfType = {

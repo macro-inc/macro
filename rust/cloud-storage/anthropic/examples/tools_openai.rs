@@ -34,7 +34,7 @@ async fn main() {
         .build()
         .expect("tool");
 
-    let client = Client::dangerously_try_from_env();
+    let client = Client::dangerously_try_from_env(None);
     let request = CreateChatCompletionRequestArgs::default()
         .model("claude-haiku-4-5")
         .max_completion_tokens(1000_u32)

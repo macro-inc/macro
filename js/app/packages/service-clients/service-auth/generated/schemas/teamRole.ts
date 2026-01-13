@@ -8,8 +8,7 @@
 /**
  * Ordered from least to most access top -> bottom
  */
-export type TeamRole = typeof TeamRole[keyof typeof TeamRole];
-
+export type TeamRole = (typeof TeamRole)[keyof typeof TeamRole];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const TeamRole = {

@@ -252,7 +252,7 @@ export function useSearchItems(searchTerm: () => string) {
 
 export function usePaginatedSearchItems(searchTerm: () => string) {
   const [allItems, setAllItems] = createSignal<CommandItemCard[]>([]);
-  const [currentPage, setCurrentPage] = createSignal(0);
+  const [nextCursor, setNextCursor] = createSignal<string | null>(null);
   const [hasMore, setHasMore] = createSignal(true);
   const [isLoading, setIsLoading] = createSignal(false);
   let loadMoreAbortController: AbortController | null = null;
@@ -265,7 +265,7 @@ export function usePaginatedSearchItems(searchTerm: () => string) {
         loadMoreAbortController = null;
       }
       setAllItems([]);
-      setCurrentPage(0);
+      setNextCursor(null);
       setHasMore(true);
     })
   );
@@ -274,16 +274,16 @@ export function usePaginatedSearchItems(searchTerm: () => string) {
   const searchResults = useSearch(searchTerm);
   createEffect(() => {
     const results = searchResults();
-    if (results && currentPage() === 0) {
+    if (results && nextCursor() === null) {
       const items = convertSearchResultsToItems(results);
       setAllItems(items);
-      // Hardcode hasMore to always be true for now
-      setHasMore(true);
+      setNextCursor(results.next_cursor ?? null);
+      setHasMore(!!results.next_cursor);
     }
   });
 
   const loadMore = async () => {
-    if (isLoading()) return;
+    if (isLoading() || !hasMore()) return;
 
     if (loadMoreAbortController) {
       loadMoreAbortController.abort();
@@ -292,8 +292,8 @@ export function usePaginatedSearchItems(searchTerm: () => string) {
 
     setIsLoading(true);
     try {
-      const nextPage = currentPage() + 1;
       const term = searchTerm();
+      const cursor = nextCursor();
 
       if (!ENABLE_SEARCH_SERVICE || term.length < 3) {
         return;
@@ -305,7 +305,7 @@ export function usePaginatedSearchItems(searchTerm: () => string) {
             match_type: 'partial',
             query: term,
           },
-          params: { page: nextPage, page_size: 10 },
+          params: { cursor, page_size: 10 },
         },
         { signal: loadMoreAbortController.signal }
       );
@@ -319,8 +319,8 @@ export function usePaginatedSearchItems(searchTerm: () => string) {
       if (data) {
         const newItems = convertSearchResultsToItems(data);
         setAllItems((prev) => [...prev, ...newItems]);
-        setCurrentPage(nextPage);
-        if (newItems.length === 0) setHasMore(false);
+        setNextCursor(data.next_cursor ?? null);
+        setHasMore(!!data.next_cursor);
       }
     } catch (error) {
       if (loadMoreAbortController.signal.aborted) return;

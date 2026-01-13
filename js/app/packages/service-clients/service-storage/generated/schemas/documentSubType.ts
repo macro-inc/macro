@@ -9,8 +9,8 @@
  * The document sub type enum represents all values of document sub types.
 These values should match the `document_sub_type_value` table in macrodb.
  */
-export type DocumentSubType = typeof DocumentSubType[keyof typeof DocumentSubType];
-
+export type DocumentSubType =
+  (typeof DocumentSubType)[keyof typeof DocumentSubType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const DocumentSubType = {

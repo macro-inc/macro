@@ -7,6 +7,8 @@
 import type { PushNotificationDataAllOfSenderId } from './pushNotificationDataAllOfSenderId';
 
 export type PushNotificationDataAllOf = {
+  /** The id of the notification record (UserNotification.id) */
+  notificationId: string;
   /** The route to open the notification in the app
 example: /channel/{channel_id} */
   openRoute: string;

@@ -9,4 +9,6 @@ import type { ContactInfoWithInteraction } from './contactInfoWithInteraction';
 /**
  * the thread, with messages inside
  */
-export type ListContactsResponseContacts = {[key: string]: ContactInfoWithInteraction[]};
+export type ListContactsResponseContacts = {
+  [key: string]: ContactInfoWithInteraction[];
+};

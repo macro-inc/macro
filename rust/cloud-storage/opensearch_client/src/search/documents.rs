@@ -80,6 +80,7 @@ pub(crate) struct DocumentIndex {
     pub content: String,
     pub owner_id: String,
     pub file_type: String,
+    pub updated_at_seconds: Option<i64>,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -184,6 +185,7 @@ pub(crate) async fn search_documents(
                     score: hit.score,
                     highlight,
                     goto: None,
+                    updated_at: None,
                 },
                 DocumentNameIndex::Document(a) => SearchHit {
                     entity_id: a.entity_id,
@@ -194,6 +196,7 @@ pub(crate) async fn search_documents(
                         node_id: a.node_id,
                         raw_content: a.raw_content,
                     })),
+                    updated_at: None,
                 },
             }
         })

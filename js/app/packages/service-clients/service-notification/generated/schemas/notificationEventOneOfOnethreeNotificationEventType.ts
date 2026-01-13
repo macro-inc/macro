@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type NotificationEventOneOfOnethreeNotificationEventType = typeof NotificationEventOneOfOnethreeNotificationEventType[keyof typeof NotificationEventOneOfOnethreeNotificationEventType];
-
+export type NotificationEventOneOfOnethreeNotificationEventType =
+  (typeof NotificationEventOneOfOnethreeNotificationEventType)[keyof typeof NotificationEventOneOfOnethreeNotificationEventType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const NotificationEventOneOfOnethreeNotificationEventType = {

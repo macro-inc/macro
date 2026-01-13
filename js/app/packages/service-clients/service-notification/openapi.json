@@ -4,7 +4,9 @@
     "title": "notification_service",
     "description": "",
     "termsOfService": "https://macro.com/terms",
-    "license": { "name": "" },
+    "license": {
+      "name": ""
+    },
     "version": "0.1.0"
   },
   "paths": {
@@ -16,7 +18,9 @@
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/DeviceRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/DeviceRequest"
+              }
             }
           },
           "required": true
@@ -26,7 +30,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           },
@@ -34,7 +40,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -42,7 +50,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -50,7 +60,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -65,7 +77,9 @@
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/DeviceRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/DeviceRequest"
+              }
             }
           },
           "required": true
@@ -75,7 +89,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           },
@@ -83,7 +99,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -91,7 +109,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -99,7 +119,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -116,7 +138,9 @@
             "description": "health",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           }
@@ -131,7 +155,9 @@
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CreateNotification" }
+              "schema": {
+                "$ref": "#/components/schemas/CreateNotification"
+              }
             }
           },
           "required": true
@@ -141,7 +167,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/Notification" }
+                "schema": {
+                  "$ref": "#/components/schemas/Notification"
+                }
               }
             }
           }
@@ -160,7 +188,9 @@
               "application/json": {
                 "schema": {
                   "type": "array",
-                  "items": { "$ref": "#/components/schemas/UserUnsubscribe" }
+                  "items": {
+                    "$ref": "#/components/schemas/UserUnsubscribe"
+                  }
                 }
               }
             }
@@ -169,7 +199,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -177,7 +209,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -194,7 +228,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           },
@@ -202,7 +238,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -210,7 +248,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -227,7 +267,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           },
@@ -235,7 +277,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -243,7 +287,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -258,7 +304,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           },
@@ -266,7 +314,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -274,7 +324,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -291,7 +343,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           },
@@ -299,7 +353,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -307,7 +363,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -322,7 +380,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           },
@@ -330,7 +390,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -338,7 +400,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -356,14 +420,19 @@
             "in": "query",
             "description": "Size limit per page. Default 20, max 500.",
             "required": true,
-            "schema": { "type": "integer", "format": "int64" }
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
           },
           {
             "name": "cursor",
             "in": "query",
             "description": "Base 64 encoded cursor",
             "required": false,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -381,7 +450,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -389,7 +460,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -397,7 +470,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -424,7 +499,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           }
@@ -451,7 +528,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           }
@@ -478,7 +557,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           }
@@ -505,7 +586,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           }
@@ -525,14 +608,20 @@
             "in": "query",
             "description": "Size limit per page. Default 20, max 500.",
             "required": true,
-            "schema": { "type": "integer", "format": "int32", "minimum": 0 }
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
           },
           {
             "name": "cursor",
             "in": "query",
             "description": "Cursor value. Base64 encoded timestamp and item id, separated by |.",
             "required": false,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -560,7 +649,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -568,7 +659,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -576,7 +669,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -594,21 +689,28 @@
             "in": "path",
             "description": "The event item id",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "limit",
             "in": "query",
             "description": "Size limit per page. Default 20, max 500.",
             "required": true,
-            "schema": { "type": "integer", "format": "int64" }
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
           },
           {
             "name": "cursor",
             "in": "query",
             "description": "Cursor value. Base64 encoded timestamp and item id, separated by |.",
             "required": false,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -626,7 +728,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -634,7 +738,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -642,7 +748,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -662,7 +770,9 @@
             "in": "path",
             "description": "ID of the event item",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -670,7 +780,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           }
@@ -690,7 +802,9 @@
             "in": "path",
             "description": "ID of the event item",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -698,7 +812,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           }
@@ -706,6 +822,74 @@
       }
     },
     "/user_notifications/{notification_id}": {
+      "get": {
+        "tags": ["user_notification::get_user_notification_by_id"],
+        "summary": "Gets a single user notification by id.",
+        "operationId": "get_user_notification_by_id",
+        "parameters": [
+          {
+            "name": "notification_id",
+            "in": "path",
+            "description": "ID of the notification",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserNotification"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
       "delete": {
         "tags": ["user_notification::delete_user_notification"],
         "summary": "Marks the user's notification as deleted.",
@@ -716,7 +900,9 @@
             "in": "path",
             "description": "ID of the notification",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -724,7 +910,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           }
@@ -738,23 +926,36 @@
         "type": "object",
         "required": ["eventItemIds"],
         "properties": {
-          "eventItemIds": { "type": "array", "items": { "type": "string" } }
+          "eventItemIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
         }
       },
       "ChannelInviteMetadata": {
         "allOf": [
-          { "$ref": "#/components/schemas/CommonChannelMetadata" },
+          {
+            "$ref": "#/components/schemas/CommonChannelMetadata"
+          },
           {
             "type": "object",
             "required": ["invitedBy"],
-            "properties": { "invitedBy": { "type": "string" } }
+            "properties": {
+              "invitedBy": {
+                "type": "string"
+              }
+            }
           }
         ],
         "description": "Metadata for when a user is invited to a channel"
       },
       "ChannelMentionMetadata": {
         "allOf": [
-          { "$ref": "#/components/schemas/CommonChannelMetadata" },
+          {
+            "$ref": "#/components/schemas/CommonChannelMetadata"
+          },
           {
             "type": "object",
             "required": ["messageId", "messageContent"],
@@ -780,7 +981,9 @@
       },
       "ChannelMessageSendMetadata": {
         "allOf": [
-          { "$ref": "#/components/schemas/CommonChannelMetadata" },
+          {
+            "$ref": "#/components/schemas/CommonChannelMetadata"
+          },
           {
             "type": "object",
             "required": ["sender", "messageId"],
@@ -803,7 +1006,9 @@
       },
       "ChannelReplyMetadata": {
         "allOf": [
-          { "$ref": "#/components/schemas/CommonChannelMetadata" },
+          {
+            "$ref": "#/components/schemas/CommonChannelMetadata"
+          },
           {
             "type": "object",
             "required": ["threadId", "messageId", "userId", "messageContent"],
@@ -837,8 +1042,12 @@
         "description": "Common metadata for notifications on channels",
         "required": ["channelType"],
         "properties": {
-          "channelName": { "type": "string" },
-          "channelType": { "$ref": "#/components/schemas/ChannelType" }
+          "channelName": {
+            "type": "string"
+          },
+          "channelType": {
+            "$ref": "#/components/schemas/ChannelType"
+          }
         }
       },
       "CreateNotification": {
@@ -870,11 +1079,18 @@
         "type": "object",
         "required": ["deviceType", "token"],
         "properties": {
-          "deviceType": { "$ref": "#/components/schemas/DeviceType" },
-          "token": { "type": "string" }
+          "deviceType": {
+            "$ref": "#/components/schemas/DeviceType"
+          },
+          "token": {
+            "type": "string"
+          }
         }
       },
-      "DeviceType": { "type": "string", "enum": ["ios", "android"] },
+      "DeviceType": {
+        "type": "string",
+        "enum": ["ios", "android"]
+      },
       "DocumentMentionMetadata": {
         "allOf": [
           {},
@@ -948,9 +1164,13 @@
         "properties": {
           "items": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/UserNotification" }
+            "items": {
+              "$ref": "#/components/schemas/UserNotification"
+            }
           },
-          "next_cursor": { "type": ["string", "null"] }
+          "next_cursor": {
+            "type": ["string", "null"]
+          }
         }
       },
       "InviteToTeamMetadata": {
@@ -996,10 +1216,14 @@
             "type": ["string", "null"],
             "description": "Permission level granted (read, write, admin, etc.)"
           },
-          "sharedBy": { "type": "string" },
+          "sharedBy": {
+            "type": "string"
+          },
           "userIds": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "List of user IDs that the item is shared with"
           }
         }
@@ -1023,7 +1247,9 @@
           },
           "orgUserIds": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "List of user IDs that the item is shared with"
           },
           "permissionLevel": {
@@ -1040,25 +1266,48 @@
         "type": "object",
         "required": ["toEmail", "threadId", "subject", "snippet"],
         "properties": {
-          "sender": { "type": ["string", "null"] },
-          "snippet": { "type": "string" },
-          "subject": { "type": "string" },
-          "threadId": { "type": "string" },
-          "toEmail": { "type": "string" }
+          "sender": {
+            "type": ["string", "null"]
+          },
+          "snippet": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "threadId": {
+            "type": "string"
+          },
+          "toEmail": {
+            "type": "string"
+          }
         }
       },
       "Notification": {
         "allOf": [
-          { "$ref": "#/components/schemas/Entity" },
-          { "$ref": "#/components/schemas/NotificationTemporalData" },
-          { "$ref": "#/components/schemas/NotificationEvent" },
+          {
+            "$ref": "#/components/schemas/Entity"
+          },
+          {
+            "$ref": "#/components/schemas/NotificationTemporalData"
+          },
+          {
+            "$ref": "#/components/schemas/NotificationEvent"
+          },
           {
             "type": "object",
             "required": ["id", "serviceSender"],
             "properties": {
-              "id": { "type": "string", "format": "uuid" },
-              "senderId": { "type": ["string", "null"] },
-              "serviceSender": { "type": "string" }
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "senderId": {
+                "type": ["string", "null"]
+              },
+              "serviceSender": {
+                "type": "string"
+              }
             }
           }
         ]
@@ -1069,7 +1318,10 @@
         "properties": {
           "notificationIds": {
             "type": "array",
-            "items": { "type": "string", "format": "uuid" },
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
             "description": "The ids of the notifications to handle"
           }
         }
@@ -1252,7 +1504,8 @@
               }
             }
           }
-        ]
+        ],
+        "description": "The types of events that the notification system is aware of"
       },
       "NotificationEventType": {
         "type": "string",
@@ -1272,24 +1525,46 @@
           "task_assigned"
         ]
       },
-      "NotificationServiceApiVersion": { "type": "string", "enum": ["v1"] },
+      "NotificationServiceApiVersion": {
+        "type": "string",
+        "enum": ["v1"]
+      },
       "NotificationTemporalData": {
         "type": "object",
         "required": ["createdAt", "viewedAt", "updatedAt", "deletedAt"],
         "properties": {
-          "createdAt": { "type": "integer", "format": "int64" },
-          "deletedAt": { "type": ["integer", "null"], "format": "int64" },
-          "updatedAt": { "type": ["integer", "null"], "format": "int64" },
-          "viewedAt": { "type": ["integer", "null"], "format": "int64" }
+          "createdAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "deletedAt": {
+            "type": ["integer", "null"],
+            "format": "int64"
+          },
+          "updatedAt": {
+            "type": ["integer", "null"],
+            "format": "int64"
+          },
+          "viewedAt": {
+            "type": ["integer", "null"],
+            "format": "int64"
+          }
         }
       },
       "PushNotificationData": {
         "allOf": [
-          { "$ref": "#/components/schemas/Entity" },
+          {
+            "$ref": "#/components/schemas/Entity"
+          },
           {
             "type": "object",
-            "required": ["openRoute"],
+            "required": ["notificationId", "openRoute"],
             "properties": {
+              "notificationId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The id of the notification record (UserNotification.id)"
+              },
               "openRoute": {
                 "type": "string",
                 "description": "The route to open the notification in the app\nexample: /channel/{channel_id}"
@@ -1325,15 +1600,25 @@
         "type": "object",
         "required": ["item_type", "item_id"],
         "properties": {
-          "item_id": { "type": "string" },
-          "item_type": { "type": "string" }
+          "item_id": {
+            "type": "string"
+          },
+          "item_type": {
+            "type": "string"
+          }
         }
       },
       "UserNotification": {
         "allOf": [
-          { "$ref": "#/components/schemas/Entity" },
-          { "$ref": "#/components/schemas/NotificationTemporalData" },
-          { "$ref": "#/components/schemas/NotificationEvent" },
+          {
+            "$ref": "#/components/schemas/Entity"
+          },
+          {
+            "$ref": "#/components/schemas/NotificationTemporalData"
+          },
+          {
+            "$ref": "#/components/schemas/NotificationEvent"
+          },
           {
             "type": "object",
             "required": ["id", "sent", "done"],
@@ -1363,8 +1648,14 @@
         "type": "object",
         "required": ["item_id", "item_type"],
         "properties": {
-          "item_id": { "type": "string", "description": "The item id" },
-          "item_type": { "type": "string", "description": "The item type" }
+          "item_id": {
+            "type": "string",
+            "description": "The item id"
+          },
+          "item_type": {
+            "type": "string",
+            "description": "The item type"
+          }
         }
       }
     }

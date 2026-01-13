@@ -1,0 +1,5 @@
+{
+  "name": "nested-quotes",
+  "description": "Email thread with nested blockquotes",
+  "body_html_sanitized": "<p>Thanks for the update!</p><blockquote style=\"border-left: 2px solid #ccc; margin: 10px 0; padding-left: 10px; color: #666;\"><p>On Monday, John wrote:</p><blockquote style=\"border-left: 2px solid #ccc; margin: 10px 0; padding-left: 10px; color: #888;\"><p>Original message here with some longer content that might wrap to multiple lines.</p></blockquote><p>My reply to the original.</p></blockquote><p>And here's my final response.</p>"
+}

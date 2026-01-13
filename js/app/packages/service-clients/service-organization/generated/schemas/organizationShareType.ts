@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type OrganizationShareType = typeof OrganizationShareType[keyof typeof OrganizationShareType];
-
+export type OrganizationShareType =
+  (typeof OrganizationShareType)[keyof typeof OrganizationShareType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const OrganizationShareType = {

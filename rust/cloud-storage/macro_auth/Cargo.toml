@@ -15,6 +15,7 @@ cookie = { workspace = true }
 jsonwebtoken = { workspace = true }
 macro_env = { path = "../macro_env" }
 macro_env_var = { path = "../macro_env_var" }
+macro_user_id = { path = "../macro_user_id" }
 rand = { workspace = true }
 remote_env_var = { path = "../remote_env_var" }
 serde = { workspace = true }

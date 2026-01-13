@@ -4,9 +4,10 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
-import type { EmailSearchResult } from './emailSearchResult';
+
 import type { EmailSearchResponseItemName } from './emailSearchResponseItemName';
 import type { EmailSearchResponseItemSubject } from './emailSearchResponseItemSubject';
+import type { EmailSearchResult } from './emailSearchResult';
 
 /**
  * A single response item, part of the EmailSearchResponse object

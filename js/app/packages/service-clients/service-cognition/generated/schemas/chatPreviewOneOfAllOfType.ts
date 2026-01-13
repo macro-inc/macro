@@ -5,8 +5,8 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type ChatPreviewOneOfAllOfType = typeof ChatPreviewOneOfAllOfType[keyof typeof ChatPreviewOneOfAllOfType];
-
+export type ChatPreviewOneOfAllOfType =
+  (typeof ChatPreviewOneOfAllOfType)[keyof typeof ChatPreviewOneOfAllOfType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const ChatPreviewOneOfAllOfType = {
