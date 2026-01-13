@@ -145,23 +145,20 @@ where
         stream_parts: Vec<PartOrExt<I::ResponseExtension>>,
         request_context: R,
     ) -> ProcessedStream {
-        // list of all tool calls
-        let mut tool_calls = vec![];
-        // list of all tool responses as openai items
-        let mut tool_responses = vec![];
-        // list of tool responses as openai items that are not returned / yielded
-        let mut non_yielding_responses = vec![];
-        // aggregated response string
-        let mut response = String::new();
-        // list of tool responses as stream parts (send these to frontend)
-        let mut tool_stream_parts = vec![];
+        let mut messages: Vec<ChatCompletionRequestMessage> = vec![];
+        let mut tool_stream_parts: Vec<ToolResponse> = vec![];
+
+        // Current assistant segment being built
+        let mut content = String::new();
+        let mut tool_calls: Vec<ChatCompletionMessageToolCall> = vec![];
+        let mut pending_tool_messages: Vec<ChatCompletionRequestMessage> = vec![];
+
         for item in stream_parts {
             match item {
                 PartOrExt::Ext(ext) => {
-                    if let Some(item) = self.client.handle_extension_item(ext) {
-                        match item {
+                    if let Some(stream_part) = self.client.handle_extension_item(ext) {
+                        match stream_part {
                             StreamPart::ToolCall(call) => {
-                                // Store the tool call ID -> name mapping for later use in message conversion
                                 self.tool_call_id_name_mapping
                                     .insert(call.id.clone(), call.name.clone());
                                 tool_calls.push(ChatCompletionMessageToolCall {
@@ -173,35 +170,44 @@ where
                                     },
                                 });
                             }
-                            StreamPart::Content(text) => response.push_str(text.as_str()),
-                            StreamPart::Usage { .. } => (),
-                            StreamPart::ToolResponse(response) => {
-                                if let ToolResponse::Json { id, json, .. } = response {
-                                    let content_text = serde_json::to_string_pretty(&json)
-                                        .unwrap_or_else(|_| "internal error parsing".into());
-                                    let content = async_openai::types::ChatCompletionRequestToolMessageContent::Text(
-                                                       content_text,
-                                                   );
-                                    non_yielding_responses.push(
-                                        ChatCompletionRequestMessage::Tool(
-                                            ChatCompletionRequestToolMessage {
-                                                content,
-                                                tool_call_id: id,
-                                            },
-                                        ),
+                            StreamPart::Content(text) => content.push_str(text.as_str()),
+                            StreamPart::ToolResponse(ToolResponse::Json { id, json, .. }) => {
+                                // Server-side tool response - flush current assistant and start new segment
+                                if !content.is_empty() || !tool_calls.is_empty() {
+                                    messages.push(
+                                        self.make_assistant_message(&mut content, &mut tool_calls),
                                     );
+                                    messages.append(&mut pending_tool_messages);
                                 }
+                                let content_text = serde_json::to_string_pretty(&json)
+                                    .unwrap_or_else(|_| "internal error parsing".into());
+                                messages.push(ChatCompletionRequestMessage::Tool(
+                                    ChatCompletionRequestToolMessage {
+                                        content: async_openai::types::ChatCompletionRequestToolMessageContent::Text(
+                                            content_text,
+                                        ),
+                                        tool_call_id: id,
+                                    },
+                                ));
                             }
+                            StreamPart::Usage { .. } | StreamPart::ToolResponse(_) => {}
                         }
                     }
                 }
                 PartOrExt::Part(part) => match part {
                     StreamPart::ToolCall(call) => {
-                        // Store the tool call ID -> name mapping for later use in message conversion
                         self.tool_call_id_name_mapping
                             .insert(call.id.clone(), call.name.clone());
+                        tool_calls.push(ChatCompletionMessageToolCall {
+                            id: call.id.clone(),
+                            r#type: async_openai::types::ChatCompletionToolType::Function,
+                            function: FunctionCall {
+                                arguments: call.json.to_string(),
+                                name: call.name.clone(),
+                            },
+                        });
 
-                        match self
+                        let tool_response = match self
                             .toolset
                             .try_tool_call(
                                 self.context.clone(),
@@ -211,109 +217,83 @@ where
                             )
                             .await
                         {
-                            Ok(response) => {
-                                tool_calls.push(ChatCompletionMessageToolCall {
+                            Ok(ToolResult::Ok(output)) => {
+                                let content_text = serde_json::to_string_pretty(&output)
+                                    .unwrap_or_else(|_| {
+                                        "internal error formatting response".to_string()
+                                    });
+                                tool_stream_parts.push(ToolResponse::Json {
                                     id: call.id.clone(),
-                                    r#type: async_openai::types::ChatCompletionToolType::Function,
-                                    function: FunctionCall {
-                                        arguments: call.json.to_string(),
-                                        name: call.name.clone(),
-                                    },
+                                    json: output,
+                                    name: call.name.clone(),
                                 });
-                                if let ToolResult::Ok(tool_output) = response {
-                                    let content_text = serde_json::to_string_pretty(&tool_output)
-                                        .unwrap_or_else(|_| {
-                                            "internal error formatting response".to_string()
-                                        });
-                                    tool_stream_parts.push(ToolResponse::Json {
-                                        id: call.id.clone(),
-                                        json: tool_output,
-                                        name: call.name.clone(),
-                                    });
-                                    let content =
-                                    async_openai::types::ChatCompletionRequestToolMessageContent::Text(
-                                        content_text,
-                                    );
-                                    tool_responses.push(ChatCompletionRequestMessage::Tool(
-                                        ChatCompletionRequestToolMessage {
-                                            content,
-                                            tool_call_id: call.id,
-                                        },
-                                    ));
-                                } else {
-                                    let fail = response.unwrap_err();
-                                    tool_stream_parts.push(ToolResponse::Err {
-                                        id: call.id.clone(),
-                                        description: fail.description.clone(),
-                                        name: call.name.clone(),
-                                    });
-                                    tool_responses.push(ChatCompletionRequestMessage::Tool(
-                                    ChatCompletionRequestToolMessage {
-                                      content: async_openai::types::ChatCompletionRequestToolMessageContent::Text(
-                                          fail.description
-                                      ),
-                                      tool_call_id: call.id
-                                    },
-                                ));
-                                }
+                                content_text
+                            }
+                            Ok(ToolResult::Err(fail)) => {
+                                tool_stream_parts.push(ToolResponse::Err {
+                                    id: call.id.clone(),
+                                    description: fail.description.clone(),
+                                    name: call.name.clone(),
+                                });
+                                fail.description
                             }
                             Err(err) => {
                                 tracing::error!(error=?err, "error calling tool");
-                                // Still add the tool call so the LLM knows we tried
-                                tool_calls.push(ChatCompletionMessageToolCall {
-                                    id: call.id.clone(),
-                                    r#type: async_openai::types::ChatCompletionToolType::Function,
-                                    function: FunctionCall {
-                                        arguments: call.json.to_string(),
-                                        name: call.name.clone(),
-                                    },
-                                });
-                                // Send error response to both frontend and LLM
-                                let error_description = format!("Error calling tool: {}", err);
+                                let desc = format!("Error calling tool: {}", err);
                                 tool_stream_parts.push(ToolResponse::Err {
                                     id: call.id.clone(),
-                                    description: error_description.clone(),
+                                    description: desc.clone(),
                                     name: call.name.clone(),
                                 });
-                                tool_responses.push(ChatCompletionRequestMessage::Tool(
-                                ChatCompletionRequestToolMessage {
-                                    content: async_openai::types::ChatCompletionRequestToolMessageContent::Text(
-                                        error_description
-                                    ),
-                                    tool_call_id: call.id
-                                },
-                            ));
+                                desc
                             }
-                        }
+                        };
+
+                        pending_tool_messages.push(ChatCompletionRequestMessage::Tool(
+                            ChatCompletionRequestToolMessage {
+                                content: async_openai::types::ChatCompletionRequestToolMessageContent::Text(
+                                    tool_response,
+                                ),
+                                tool_call_id: call.id,
+                            },
+                        ));
                     }
-                    StreamPart::Content(text) => response.push_str(text.as_str()),
-                    StreamPart::Usage { .. } => (),
-                    StreamPart::ToolResponse(_) => (),
+                    StreamPart::Content(text) => content.push_str(text.as_str()),
+                    StreamPart::Usage { .. } | StreamPart::ToolResponse(_) => {}
                 },
             }
         }
 
-        let assistant_response =
-            ChatCompletionRequestMessage::Assistant(ChatCompletionRequestAssistantMessage {
-                content: if response.is_empty() {
-                    None
-                } else {
-                    Some(ChatCompletionRequestAssistantMessageContent::Text(response))
-                },
-                tool_calls: if tool_calls.is_empty() {
-                    None
-                } else {
-                    Some(tool_calls)
-                },
-                ..Default::default()
-            });
-        let mut messages = vec![assistant_response];
-        messages.append(&mut tool_responses);
-        messages.append(&mut non_yielding_responses);
+        // Flush remaining assistant content
+        messages.push(self.make_assistant_message(&mut content, &mut tool_calls));
+        messages.append(&mut pending_tool_messages);
+
         ProcessedStream {
             new_messages: messages,
             tool_responses: tool_stream_parts,
         }
+    }
+
+    fn make_assistant_message(
+        &self,
+        content: &mut String,
+        tool_calls: &mut Vec<ChatCompletionMessageToolCall>,
+    ) -> ChatCompletionRequestMessage {
+        ChatCompletionRequestMessage::Assistant(ChatCompletionRequestAssistantMessage {
+            content: if content.is_empty() {
+                None
+            } else {
+                Some(ChatCompletionRequestAssistantMessageContent::Text(
+                    std::mem::take(content),
+                ))
+            },
+            tool_calls: if tool_calls.is_empty() {
+                None
+            } else {
+                Some(std::mem::take(tool_calls))
+            },
+            ..Default::default()
+        })
     }
 
     fn map_stream<'a>(
