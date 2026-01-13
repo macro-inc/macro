@@ -118,22 +118,24 @@ impl MacroNavigationPlugin {
         if let Ok(AuthCallbackQuery {
             original_url: Some(cb),
             remaining,
-        }) = dbg!(serde_qs::from_str(query)).log_err()
+        }) = serde_qs::from_str(query).log_err()
         {
             let Ok(macro_scheme) = MacroScheme::from_url(&cb) else {
                 return url;
             };
 
-            url.set_query(Some(dbg!(
+            url.set_query(Some(
                 serde_qs::to_string(&MacroCallbackQuery {
                     original_url: macro_scheme,
                     remaining,
                 })
                 .expect("serialization should not fail")
-                .as_str()
-            )));
+                .as_str(),
+            ));
         }
-        url.query_pairs_mut().append_pair("is_mobile", "true");
+        if let None = url.query_pairs().find(|(k, _v)| k.as_ref() == "is_mobile") {
+            url.query_pairs_mut().append_pair("is_mobile", "true");
+        }
         url
     }
 }
