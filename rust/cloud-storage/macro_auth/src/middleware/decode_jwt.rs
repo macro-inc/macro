@@ -128,6 +128,32 @@ pub fn validate_macro_access_token(
     )
 }
 
+/// Decodes a macro access token without validating expiry.
+/// This is useful for extracting the user ID from an expired token
+/// (e.g., for advisory lock acquisition during token refresh).
+/// The signature is still validated.
+pub fn decode_macro_access_token_allow_expired(
+    macro_access_token: &str,
+    args: &JwtValidationArgs,
+) -> Result<MacroAccessToken, MacroAuthError> {
+    let mut validation = Validation::new(Algorithm::HS256);
+    validation.set_audience(&[args.audience.as_ref()]);
+    validation.set_issuer(&[args.issuer.as_ref()]);
+    validation.validate_exp = false;
+
+    let decoded_jwt: MacroAccessToken = decode::<MacroAccessToken>(
+        macro_access_token,
+        &DecodingKey::from_secret(args.jwt_secret.as_ref().as_bytes()),
+        &validation,
+    )
+    .map_err(|e| MacroAuthError::JwtValidationFailed {
+        details: e.to_string(),
+    })?
+    .claims;
+
+    Ok(decoded_jwt)
+}
+
 fn validate_macro_access_token_inner(
     macro_access_token: &str,
     jwt_secret: &LocalOrRemoteSecret<JwtSecretKey>,
