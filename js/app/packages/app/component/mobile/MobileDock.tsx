@@ -43,12 +43,6 @@ export function MobileDock() {
     });
   };
 
-  const ensureUnifiedList = () => {
-    const content = splitContext.handle.content();
-    if (content.type === 'component' && content.id === 'unified-list') return;
-    splitContext.handle.replace({ type: 'component', id: 'unified-list' });
-  };
-
   const focusSearchInput = (viewId: string) => {
     setTimeout(() => {
       const el = document.getElementById(
