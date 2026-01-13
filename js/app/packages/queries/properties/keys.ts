@@ -9,4 +9,7 @@ export const propertiesKeys = createQueryKeys('properties', {
   bulk: (params: { entityType: EntityType; entityIds: readonly string[] }) => ({
     queryKey: ['bulk', params.entityType, [...params.entityIds].sort()],
   }),
+  options: (params: { propertyDefinitionId: string }) => ({
+    queryKey: ['options', params.propertyDefinitionId],
+  }),
 });

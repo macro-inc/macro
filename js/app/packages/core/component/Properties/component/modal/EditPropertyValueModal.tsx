@@ -48,7 +48,11 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
   );
 
   const {
-    state: editorState,
+    options,
+    isLoading,
+    error,
+    selectedOptions,
+    hasChanges,
     fetchOptions,
     initializeSelectedOptions,
     toggleOption,
@@ -56,7 +60,7 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
   } = usePropertyEditor(props.property);
 
   const saveChanges = async () => {
-    const selectedArray = Array.from(editorState().selectedOptions);
+    const selectedArray = Array.from(selectedOptions());
 
     let apiValues: PropertyApiValues;
 
@@ -124,8 +128,8 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
 
   const handleClose = async () => {
     // All properties that reach this modal (select and entity types) should auto-save
-    const hasChanges = editorState().hasChanges || hasEntityChanges();
-    if (hasChanges) {
+    const hasUnsavedChanges = hasChanges() || hasEntityChanges();
+    if (hasUnsavedChanges) {
       await saveChanges();
     } else {
       props.onClose();
@@ -257,10 +261,10 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
               >
                 <PropertyOptionSelector
                   property={props.property}
-                  options={editorState().options}
-                  isLoading={editorState().isLoading}
-                  error={editorState().error}
-                  selectedOptions={() => editorState().selectedOptions}
+                  options={options()}
+                  isLoading={isLoading()}
+                  error={error()}
+                  selectedOptions={selectedOptions}
                   onToggleOption={toggleOption}
                   onRetry={fetchOptions}
                   onAddOption={
