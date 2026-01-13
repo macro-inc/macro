@@ -4,7 +4,6 @@ import { MacroSignatureButton } from '@block-email/component/MacroSignatureButto
 import { MAX_ATTACHMENTS_BYTES_SIZE } from '@block-email/constants';
 import { useHasPaidAccess } from '@core/auth';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import {
@@ -14,7 +13,6 @@ import {
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { handleFileFolderDrop } from '@core/util/upload';
 import TextAa from '@icon/regular/text-aa.svg';
-import XIcon from '@icon/regular/x.svg';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import ArrowFatLineUp from '@phosphor-icons/core/fill/arrow-fat-line-up-fill.svg?component-solid';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
@@ -32,7 +30,7 @@ import {
   type LexicalEditor,
   type TextFormatType,
 } from 'lexical';
-import { createSignal, onMount, Show } from 'solid-js';
+import { createSignal, For, Match, onMount, Show, Switch } from 'solid-js';
 import { type FocusableElement, tabbable } from 'tabbable';
 import { makeAttachmentPublic } from '../util/makeAttachmentPublic';
 import { Button } from '@ui/components/Button';
@@ -40,17 +38,19 @@ import { fileSelector } from '@core/directive/fileSelector';
 import { toast } from '@core/component/Toast/Toast';
 import { plural } from '@core/util/string';
 import type { DraftFormAttachment } from '@block-email/component/createEmailFormState';
+import { EmailAttachmentPill } from '@block-email/component/AttachmentPill';
 
 false && fileFolderDrop;
 
 type ComposeEmailInputProps = {
   inputRef?: (el: HTMLDivElement) => void;
-  captureEditor: (editor: LexicalEditor) => void;
+  captureEditor?: (editor: LexicalEditor) => void;
   onSubmit: () => void;
   disabled?: boolean;
   isSubmitting?: boolean;
   attachments?: DraftFormAttachment[];
   onAddAttachments?: (attachments: DraftFormAttachment[]) => void;
+  onRemoveAttachment?: (attachment: DraftFormAttachment) => void;
   onContentChange?: (content: string) => void;
 };
 
@@ -170,6 +170,45 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
     displayPriority: 10,
   });
 
+  const handleAddAttachments = (files: File[]) => {
+    const currentAttachments = props.attachments ?? [];
+
+    const attachmentsToAddByteSize = files.reduce((sum, f) => sum + f.size, 0);
+
+    if (attachmentsToAddByteSize >= MAX_ATTACHMENTS_BYTES_SIZE) {
+      toast.failure(`${plural('Attachment', files.length)} exceed 18MB`);
+      return;
+    }
+
+    const currentAttachmentsByteSize = currentAttachments.reduce(
+      (sum, a) => sum + (a.type === 'local' ? a.file.size : a.fileSize),
+      0
+    );
+
+    if (
+      currentAttachmentsByteSize + attachmentsToAddByteSize >=
+      MAX_ATTACHMENTS_BYTES_SIZE
+    ) {
+      toast.failure(
+        "Can't add more attachments",
+        'Total attachments exceed 18MB limit'
+      );
+      return;
+    }
+
+    props.onAddAttachments?.(
+      files.map((file) => ({
+        type: 'local',
+        file,
+      }))
+    );
+  };
+
+  const captureEditor = (editor: LexicalEditor) => {
+    setEditor(editor);
+    props.captureEditor?.(editor);
+  };
+
   return (
     <div
       ref={setComposeContainerRef}
@@ -206,7 +245,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
           </div>
           <MarkdownTextarea
             domRef={props.inputRef}
-            captureEditor={setEditor}
+            captureEditor={captureEditor}
             class="text-sm break-words text-ink"
             editable={() => !props.disabled}
             placeholder="Use `@` to reference files"
@@ -223,6 +262,43 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
             portalScope="local"
             onPasteFilesAndDirs={onAddFilesAndDirs}
           />
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <For each={props.attachments}>
+            {(attachment) => {
+              const handleRemoveAttachment = () => {
+                props.onRemoveAttachment?.(attachment);
+              };
+              return (
+                <Switch>
+                  <Match when={attachment.type === 'local' && attachment}>
+                    {(attachment) => (
+                      <EmailAttachmentPill
+                        attachment={{
+                          fileName: attachment().file.name,
+                          mimeType: attachment().file.type,
+                        }}
+                        removable
+                        onRemove={handleRemoveAttachment}
+                      />
+                    )}
+                  </Match>
+                  <Match when={attachment.type === 'remote' && attachment}>
+                    {(attachment) => (
+                      <EmailAttachmentPill
+                        attachment={{
+                          fileName: attachment().fileName,
+                          mimeType: attachment().contentType,
+                        }}
+                        removable
+                        onRemove={handleRemoveAttachment}
+                      />
+                    )}
+                  </Match>
+                </Switch>
+              );
+            }}
+          </For>
         </div>
       </div>
       <div class="flex flex-row w-full h-8 justify-between items-center space-x-2 allow-css-brackets mt-2">

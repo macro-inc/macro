@@ -52,7 +52,10 @@ import {
   deleteEmailDraft,
   saveEmailDraft,
 } from '@block-email/signal/emailDraft';
-import { useUploadDraftAttachmentsMutation } from '@queries/email/attachment';
+import {
+  useRemoveDraftAttachmentMutation,
+  useUploadDraftAttachmentsMutation,
+} from '@queries/email/attachment';
 import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
 
 const DRAFT_DEBOUNCE_MS = 1000;
@@ -233,6 +236,25 @@ export function EmailCompose() {
       form.attachments.add(attachment);
     }
     scheduleDraftSave();
+  };
+
+  const removeAttachmentMutation = useRemoveDraftAttachmentMutation();
+
+  const handleRemoveAttachment = (attachment: DraftFormAttachment) => {
+    if (attachment.type === 'local') {
+      form.attachments.removeByFile(attachment.file);
+    } else {
+      form.attachments.removeByID(attachment.attachmentID);
+    }
+
+    const savedDraftID = currentDraftID();
+
+    if (!savedDraftID || !attachment.attachmentID) return;
+
+    removeAttachmentMutation.mutate({
+      draftID: savedDraftID,
+      attachmentID: attachment.attachmentID,
+    });
   };
 
   // We are consuming the first change, because it is the initial value
@@ -693,9 +715,15 @@ export function EmailCompose() {
                   inputRef={registerRef('messageInput')}
                   onContentChange={onContentChange}
                   onAddAttachments={onAddAttachments}
+                  onRemoveAttachment={handleRemoveAttachment}
+                  attachments={form.attachments.list()}
                   onSubmit={onSubmit}
                   isSubmitting={sendMutation.isPending}
-                  disabled={hasLinkError()}
+                  disabled={
+                    hasLinkError() ||
+                    uploadAttachmentMutation.isPending ||
+                    sendMutation.isPending
+                  }
                 />
                 <Show when={withValidationError('no_message')}>
                   {(err) => (
