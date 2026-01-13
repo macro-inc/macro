@@ -251,7 +251,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     entityListRefSignal: [, setEntityListRef],
     entitiesSignal: [entities_, setEntities],
     emailViewSignal: [emailView],
-    activeContextSignal: [activeSoupContext],
+    activeContextSignal: [activeSoupContext, setActiveSoupContext],
   } = soupContext;
 
   // Properties for task entities
@@ -1750,7 +1750,15 @@ export function UnifiedListView(props: UnifiedListViewProps) {
           });
         }}
       >
-        <ContextMenu.Trigger class="@container/uList size-full unified-list-root">
+        <ContextMenu.Trigger
+          class="@container/uList size-full unified-list-root"
+          onPointerDown={() => {
+            setActiveSoupContext(soupContext);
+          }}
+          onKeyUp={() => {
+            setActiveSoupContext(soupContext);
+          }}
+        >
           <EntityRowProvider
             container={localEntityListRef}
             canSwipeLeft={(entityId) => {
