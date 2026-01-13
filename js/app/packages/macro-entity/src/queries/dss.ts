@@ -278,12 +278,29 @@ const selectData: (
 
           if (item.tag === 'channel') {
             const out: ChannelEntity = {
-              ...item.data.channel,
-              channelType: item.data.channel.channel_type,
               type: 'channel',
               id: item.data.channel.id,
-              name: item.data.channel.name || 'New Channel',
+              name: item.data.channel.name || 'Unknown Channel',
+              channelType: item.data.channel.channel_type,
               ownerId: item.data.channel.owner_id,
+              frecencyScore: item.frecency_score ?? 0,
+              updatedAt: Date.parse(item.data.channel.updated_at),
+              createdAt: Date.parse(item.data.channel.created_at),
+              participantIds: item.data.participants.map((p) => p.user_id),
+              viewedAt: item.data.viewed_at
+                ? Date.parse(item.data.viewed_at)
+                : item.data.interacted_at
+                  ? Date.parse(item.data.interacted_at)
+                  : undefined,
+              latestMessage: item.data.latest_non_thread_message
+                ? {
+                    content: item.data.latest_non_thread_message.content,
+                    senderId: item.data.latest_non_thread_message.sender_id,
+                    createdAt: Date.parse(
+                      item.data.latest_non_thread_message.created_at
+                    ),
+                  }
+                : undefined,
             };
             return out;
           }
