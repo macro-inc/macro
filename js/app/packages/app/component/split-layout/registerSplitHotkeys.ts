@@ -32,7 +32,6 @@ export function registerSplitHotkeys(args: {
 }) {
   const {
     splitHotkeyScope,
-    closeSplit,
     toggleSpotlight,
     canGoBack,
     goBack,
@@ -44,17 +43,6 @@ export function registerSplitHotkeys(args: {
     isNotUnifiedList,
   } = args;
   const splitManager = globalSplitManager();
-  registerHotkey({
-    scopeId: splitHotkeyScope,
-    hotkey: 'cmd+escape',
-    condition: () => getSplitCount() > 1,
-    description: `Close split`,
-    keyDownHandler: () => {
-      closeSplit();
-      return true;
-    },
-    hotkeyToken: TOKENS.split.close,
-  });
 
   // Spotlight (maximize split) - legacy binding.
   registerHotkey({

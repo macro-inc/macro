@@ -48,8 +48,6 @@ const shortcutSections: ShortcutSection[] = [
     title: 'Splits & Navigation',
     items: [
       { keys: ['\\'], description: 'Create a split' },
-      { keys: ['escape'], description: 'Return to the list, or close split if already on list' },
-      { keys: ['cmd+escape'], description: 'Close the split' },
       { keys: ['arrowleft'], description: 'Focus split to the left' },
       { keys: ['arrowright'], description: 'Focus split to the right' },
     ],
