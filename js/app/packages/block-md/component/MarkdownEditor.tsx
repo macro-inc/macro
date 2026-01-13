@@ -60,6 +60,7 @@ import {
   wordcountPlugin,
 } from '@core/component/LexicalMarkdown/plugins';
 import { actionsPlugin } from '@core/component/LexicalMarkdown/plugins/actions/actionsPlugin';
+import { checkboxToTaskPlugin } from '@core/component/LexicalMarkdown/plugins/checkbox-to-task';
 import { codePlugin } from '@core/component/LexicalMarkdown/plugins/code/codePlugin';
 import { emojisPlugin } from '@core/component/LexicalMarkdown/plugins/emojis/emojisPlugin';
 import {
@@ -534,6 +535,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     .use(restoreFocusPlugin())
     .use(markdownPastePlugin())
     .use(normalizeEnterPlugin())
+    .use(checkboxToTaskPlugin())
     .use(
       keyboardShortcutsPlugin({
         shortcuts: DefaultShortcuts,

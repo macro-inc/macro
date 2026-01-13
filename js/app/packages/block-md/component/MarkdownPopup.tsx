@@ -26,6 +26,11 @@ import {
   RECOMPUTE_SELECTION_RECT,
   REMOVE_HIGHLIGHT_SELECTED_NODES,
 } from '@core/component/LexicalMarkdown/plugins/popup/popupPlugin';
+import {
+  $canConvertCheckboxesToTasks,
+  CONVERT_CHECKBOXES_TO_TASKS,
+} from '@core/component/LexicalMarkdown/plugins/checkbox-to-task';
+import { toast } from '@core/component/Toast/Toast';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
@@ -44,6 +49,7 @@ import LoadingIcon from '@phosphor-icons/core/bold/spinner-gap-bold.svg?componen
 import PaperPlaneRight from '@phosphor-icons/core/fill/paper-plane-right-fill.svg?component-solid';
 import LinkIcon from '@phosphor-icons/core/regular/link.svg?component-solid';
 import PencilIcon from '@phosphor-icons/core/regular/pencil.svg?component-solid';
+import CheckSquareIcon from '@phosphor-icons/core/regular/check-square.svg?component-solid';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import { createCallback } from '@solid-primitives/rootless';
 import { GlitchText } from '@ui/components/GlitchText';
@@ -113,6 +119,8 @@ export function MarkdownPopup(props: {
   const [copied, setCopied] = createSignal(false);
   const [locationCopied, setLocationCopied] = createSignal(false);
   const [isLoading, setIsLoading] = createSignal<boolean>(false);
+  const [isConverting, setIsConverting] = createSignal(false);
+  const [hasCheckboxes, setHasCheckboxes] = createSignal(false);
   const { replaceOrInsertSplit } = useSplitLayout();
   let markdownRootRef!: HTMLDivElement;
 
@@ -134,10 +142,14 @@ export function MarkdownPopup(props: {
   const selectedNodesText = () => selection()?.nodeText ?? undefined;
   const selectionType = () => selection()?.type ?? undefined;
 
-  // Reset location copied state on selection change.
+  // Reset state and check for checkboxes on selection change.
   createEffect(
     on([selection], () => {
       setLocationCopied(false);
+      // Check if selection contains checkboxes
+      editor.read(() => {
+        setHasCheckboxes($canConvertCheckboxesToTasks());
+      });
     })
   );
 
@@ -323,6 +335,29 @@ export function MarkdownPopup(props: {
       setIsLoading(false);
     });
 
+    const handleConvertToTasks = () => {
+      const currentSelection = selection();
+      if (!currentSelection?.lexicalSelection) {
+        return;
+      }
+
+      setIsConverting(true);
+      editor.dispatchCommand(CONVERT_CHECKBOXES_TO_TASKS, {
+        selection:
+          currentSelection.lexicalSelection as import('lexical').RangeSelection,
+        onComplete: (results) => {
+          setIsConverting(false);
+          const successCount = results.filter((r) => r.success).length;
+          if (successCount > 0) {
+            toast.success(
+              `Created ${successCount} task${successCount > 1 ? 's' : ''}`
+            );
+          }
+          setPopupVisible(false);
+        },
+      });
+    };
+
     const contentSize = () => {
       let charCount = 0;
       editor.getEditorState().read(() => {
@@ -408,6 +443,16 @@ export function MarkdownPopup(props: {
             }
           >
             <FormatTools withinPopup />
+          </Show>
+          <Show when={hasCheckboxes() && canEdit()}>
+            <DeprecatedTextButton
+              width={'w-12'}
+              theme="clear"
+              icon={isConverting() ? LoadingIcon : CheckSquareIcon}
+              text={isConverting() ? 'Converting...' : 'Tasks'}
+              onClick={handleConvertToTasks}
+              disabled={isConverting()}
+            />
           </Show>
           <DeprecatedTextButton
             width={'w-12'}
