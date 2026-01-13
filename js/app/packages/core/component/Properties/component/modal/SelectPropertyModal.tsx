@@ -1,14 +1,13 @@
 import { useBlockId } from '@core/block';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
-import { toast } from '@core/component/Toast/Toast';
 import { MODAL_VIEWPORT_CLASSES } from '@core/util/modalUtils';
 import CheckIcon from '@icon/bold/check-bold.svg';
 import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
 import XIcon from '@icon/regular/x.svg';
+import { useAddEntityPropertyMutation } from '@queries/properties/entity';
 import { createEffect, createSignal, For, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { addEntityProperty } from '../../api';
 import { MODAL_DIMENSIONS } from '../../constants';
 import { usePropertiesContext } from '../../context/PropertiesContext';
 import { usePropertySelection } from '../../hooks/usePropertySelection';
@@ -18,13 +17,15 @@ import {
   getPropertyDefinitionTypeDisplay,
   useSearchInputFocus,
 } from '../../utils';
-import { ERROR_MESSAGES, handlePropertyError } from '../../utils/errorHandling';
+
 export function SelectPropertyModal(props: PropertySelectorProps) {
   const blockId = useBlockId();
   const { entityType, onPropertyAdded, openCreateProperty } =
     usePropertiesContext();
   const [isAdding, setIsAdding] = createSignal(false);
   const [searchQuery, setSearchQuery] = createSignal('');
+
+  const addMutation = useAddEntityPropertyMutation();
 
   let searchInputRef!: HTMLInputElement;
   let modalRef!: HTMLDivElement;
@@ -49,38 +50,28 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
     try {
       const addPromises = Array.from(selected).map(
         async (propertyDefinitionId) => {
-          const result = await addEntityProperty(
-            blockId,
-            entityType,
-            propertyDefinitionId
-          );
-
-          return handlePropertyError(
-            result,
-            ERROR_MESSAGES.PROPERTY_ADD,
-            'SelectPropertyModal.handleAddProperties'
-          );
+          try {
+            await addMutation.mutateAsync({
+              entityId: blockId,
+              entityType,
+              propertyDefinitionId,
+            });
+            return true;
+          } catch {
+            // Error toast is shown by mutation's onError callback
+            return false;
+          }
         }
       );
 
       const results = await Promise.all(addPromises);
-      const failures = results.filter((success) => !success);
+      const allSucceeded = results.every(Boolean);
 
-      // Close modal regardless of success/failure (toasts already shown)
       props.onClose();
 
-      if (failures.length === 0) {
+      if (allSucceeded) {
         onPropertyAdded();
       }
-    } catch (error) {
-      // Handle unexpected exceptions (e.g., Promise.all rejection)
-      console.error(
-        'SelectPropertyModal.handleAddProperties:',
-        error,
-        ERROR_MESSAGES.PROPERTY_ADD
-      );
-      toast.failure(ERROR_MESSAGES.PROPERTY_ADD);
-      props.onClose();
     } finally {
       setIsAdding(false);
     }

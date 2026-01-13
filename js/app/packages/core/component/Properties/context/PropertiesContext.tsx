@@ -7,7 +7,7 @@ import {
   type ParentProps,
   useContext,
 } from 'solid-js';
-import type { Property, PropertyApiValues, Result } from '../types';
+import type { Property, PropertyApiValues } from '../types';
 
 // Specific modal state types with proper typing
 export interface PropertySelectorModalState {
@@ -29,11 +29,8 @@ export interface CreatePropertyModalState {
 }
 
 export interface PropertySaveHandler {
-  saveProperty: (
-    property: Property,
-    value: PropertyApiValues
-  ) => Promise<Result<void>>;
-  saveDate: (property: Property, date: Date) => Promise<Result<void>>;
+  saveProperty: (property: Property, value: PropertyApiValues) => Promise<void>;
+  saveDate: (property: Property, date: Date) => Promise<void>;
 }
 
 export interface PropertiesContextValue {

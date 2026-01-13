@@ -5,7 +5,6 @@ import {
   dispatchInternalLayoutShift,
   REMOVE_PINNED_PROPERTY_COMMAND,
 } from '@core/component/LexicalMarkdown/plugins';
-import { saveEntityProperty } from '@core/component/Properties/api';
 import { Modals } from '@core/component/Properties/component/modal';
 import { PanelContainer } from '@core/component/Properties/component/panel';
 import { getDefaultPinnedProperties } from '@core/component/Properties/constants';
@@ -18,6 +17,7 @@ import type {
   Property,
   PropertyApiValues,
 } from '@core/component/Properties/types';
+import { useSaveEntityPropertyMutation } from '@queries/properties/entity';
 import CaretDown from '@icon/bold/caret-down-bold.svg';
 import CaretRight from '@icon/bold/caret-right-bold.svg';
 import EyeSlash from '@icon/bold/eye-slash-bold.svg';
@@ -141,30 +141,27 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
   const height = () => containerSize.height;
   createEffect(on(height, layoutShift));
 
+  const saveMutation = useSaveEntityPropertyMutation();
+
   // Network-based save handler for FrontMatter properties
   const saveHandler: PropertySaveHandler = {
-    saveProperty: async (property: Property, value: PropertyApiValues) => {
-      const result = await saveEntityProperty(
-        blockId,
+    saveProperty: (property: Property, value: PropertyApiValues) =>
+      saveMutation.mutateAsync({
+        entityId: blockId,
         entityType,
         property,
-        value
-      );
-      if (result.ok) {
-        refetch();
-      }
-      return result;
-    },
-    saveDate: async (property: Property, date: Date) => {
-      const result = await saveEntityProperty(blockId, entityType, property, {
-        valueType: 'DATE',
-        value: date.toISOString(),
-      });
-      if (result.ok) {
-        refetch();
-      }
-      return result;
-    },
+        apiValues: value,
+      }),
+    saveDate: (property: Property, date: Date) =>
+      saveMutation.mutateAsync({
+        entityId: blockId,
+        entityType,
+        property,
+        apiValues: {
+          valueType: 'DATE',
+          value: date.toISOString(),
+        },
+      }),
   };
 
   return (
