@@ -152,7 +152,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
             >
               {/* Header with tabs */}
               <div class="relative isolate shrink-0 border-b border-edge-muted">
-                <div class="flex items-center px-2 h-[2.5rem]">
+                <div class="flex items-center px-2">
                   <Show when={!isTouchDevice() || !isMobileWidth()}>
                     <DeprecatedIconButton
                       icon={CloseIcon}
@@ -175,7 +175,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
                   />
 
                   <Tabs.List
-                    class="flex flex-row suppress-css-brackets h-10 bg-panel overflow-x-scroll overscroll-none scrollbar-hidden scroll-shadows-x relative"
+                    class="flex flex-row suppress-css-brackets h-[calc(2.5rem-1px)] bg-panel overflow-x-scroll overscroll-none scrollbar-hidden scroll-shadows-x relative"
                     as="div"
                     ref={(el) => {
                       scrollRef = el;
