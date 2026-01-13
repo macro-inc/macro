@@ -1,5 +1,5 @@
 import { throwOnErr } from '@core/util/maybeResult';
-import { QueryKey, useQuery } from '@tanstack/solid-query';
+import { type QueryKey, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { entityPropertyFromApi } from '../../core/component/Properties/api/converters';
 import { propertiesServiceClient } from '../../service-clients/service-properties/client';
@@ -42,7 +42,9 @@ function bulkIncludesEntityPredicate(queryKey: QueryKey, entityId: string) {
   return (
     queryKey.includes('properties') &&
     queryKey.includes('bulk') &&
-    queryKey.some((subKey: string) => subKey.includes(entityId))
+    queryKey.some(
+      (subKey) => typeof subKey === 'string' && subKey.includes(entityId)
+    )
   );
 }
 

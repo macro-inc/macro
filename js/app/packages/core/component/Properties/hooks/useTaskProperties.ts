@@ -38,7 +38,5 @@ export function useTaskProperties(
     TASK_PROPERTY_DEFINITION_IDS
   );
 
-  // Use createMemo to establish proper Solid.js reactive tracking
-  // This ensures consumers re-render when query.data changes
   return createMemo(() => query.data ?? {});
 }

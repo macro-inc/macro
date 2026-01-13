@@ -151,7 +151,7 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
         value
       );
       if (result.ok) {
-        refetch(); // Uses the hook's refetch which handles both local and bulk query invalidation
+        refetch();
       }
       return result;
     },
@@ -161,7 +161,7 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
         value: date.toISOString(),
       });
       if (result.ok) {
-        refetch(); // Uses the hook's refetch which handles both local and bulk query invalidation
+        refetch();
       }
       return result;
     },
@@ -211,7 +211,6 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
                 </div>
               </Show>
 
-              {/* Shouldn't really go in here, but leaving it here as fail safe */}
               <Show when={error()}>
                 <div class="text-failure-ink text-center py-4">{error()}</div>
               </Show>

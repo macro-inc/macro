@@ -56,7 +56,7 @@ export function PropertiesView(props: PropertiesPanelProps) {
         value
       );
       if (result.ok) {
-        refetch(); // Uses the hook's refetch which handles both local and bulk query invalidation
+        refetch();
       }
       return result;
     },
@@ -71,7 +71,7 @@ export function PropertiesView(props: PropertiesPanelProps) {
         }
       );
       if (result.ok) {
-        refetch(); // Uses the hook's refetch which handles both local and bulk query invalidation
+        refetch();
       }
       return result;
     },
