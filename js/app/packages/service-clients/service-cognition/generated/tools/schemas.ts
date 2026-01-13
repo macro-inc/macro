@@ -219,6 +219,43 @@ export const SearchToolResponse = z.object({
   ),
 });
 
+export const ListChannels = z
+  .object({ unused: z.null().default(null) })
+  .strict();
+
+export const ListChannelsResponse = z.object({
+  channels: z.array(
+    z.object({
+      channelType: z.any().superRefine((x, ctx) => {
+        const schemas = [
+          z.literal('public'),
+          z.literal('organization'),
+          z.literal('private'),
+          z.literal('direct_message'),
+        ];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+      id: z.string().uuid(),
+      name: z.union([z.string(), z.null()]).optional(),
+    })
+  ),
+  total: z.number().int().gte(0),
+});
+
 export const ListDocuments = z
   .object({
     exhaustiveSearch: z.boolean().default(false),
