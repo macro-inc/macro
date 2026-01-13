@@ -1,6 +1,7 @@
 use ai_format::insight_context_log::InsightContextLog;
 use ai_format::util::Indent;
 use anyhow::Error;
+use comms_service_client::channels::ApiChannelWithLatest;
 use comms_service_client::CommsServiceClient;
 use models_comms::channel::ChannelMetadata;
 use std::fmt::Debug;
@@ -16,6 +17,21 @@ impl ChannelClient {
     pub fn new(client: Arc<CommsServiceClient>) -> Self {
         Self { inner: client }
     }
+
+    /// List all channels the user has access to
+    #[tracing::instrument(skip(self, jwt_token), err)]
+    pub async fn list_channels(
+        &self,
+        jwt_token: &str,
+    ) -> Result<Vec<ApiChannelWithLatest>, Error> {
+        let channels = self
+            .inner
+            .get_channels_external(jwt_token)
+            .await
+            .map_err(Error::from)?;
+        Ok(channels)
+    }
+
     /// Get channel metadata (name and type) by channel ID
     /// Uses external authenticated endpoint if jwt_token is provided, otherwise uses internal endpoint
     #[tracing::instrument(skip(self, jwt_token), err)]

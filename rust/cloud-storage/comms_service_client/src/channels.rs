@@ -17,8 +17,110 @@ pub struct ChannelTranscriptResponse {
     pub transcript: String,
 }
 
+/// Channel type from API response
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ApiChannelType {
+    Public,
+    Organization,
+    Private,
+    DirectMessage,
+}
+
+/// Participant role from API response
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ApiParticipantRole {
+    Owner,
+    Admin,
+    Member,
+}
+
+/// Channel participant from API response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApiChannelParticipant {
+    pub channel_id: Uuid,
+    pub user_id: String,
+    pub role: ApiParticipantRole,
+    pub joined_at: chrono::DateTime<chrono::Utc>,
+    pub left_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+/// Channel message from API response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApiChannelMessage {
+    pub message_id: Uuid,
+    pub thread_id: Option<Uuid>,
+    pub sender_id: String,
+    pub content: String,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+    pub deleted_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub mentions: Vec<String>,
+}
+
+/// Channel with latest message from GET /channels response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApiChannelWithLatest {
+    /// Channel ID
+    pub id: Uuid,
+    /// Channel name (may be None for DMs)
+    pub name: Option<String>,
+    /// Channel type
+    pub channel_type: ApiChannelType,
+    /// Organization ID if applicable
+    pub org_id: Option<u32>,
+    /// When the channel was created
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    /// When the channel was last updated
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+    /// Owner user ID
+    pub owner_id: String,
+    /// Channel participants
+    pub participants: Vec<ApiChannelParticipant>,
+    /// Latest message in the channel
+    pub latest_message: Option<ApiChannelMessage>,
+    /// Latest non-thread message
+    pub latest_non_thread_message: Option<ApiChannelMessage>,
+    /// When the user last viewed the channel
+    pub viewed_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// When the user last interacted with the channel
+    pub interacted_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// Frecency score for sorting
+    pub frecency_score: Option<f64>,
+}
+
 impl CommsServiceClient {
     // External routes - require JWT authentication and perform permission checks
+
+    /// Get all channels the user has access to using external authenticated endpoint
+    #[tracing::instrument(skip(self, jwt_token))]
+    pub async fn get_channels_external(
+        &self,
+        jwt_token: &str,
+    ) -> Result<Vec<ApiChannelWithLatest>, ClientError> {
+        let url = format!("{}/channels", self.url);
+        let response = self
+            .client
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", jwt_token))
+            .send()
+            .await
+            .map_client_error()
+            .await?;
+
+        let result = response
+            .json::<Vec<ApiChannelWithLatest>>()
+            .await
+            .map_err(|e| {
+                ClientError::Generic(anyhow::anyhow!(
+                    "unable to parse response from get_channels_external: {}",
+                    e.to_string()
+                ))
+            })?;
+
+        Ok(result)
+    }
 
     /// Get channel metadata using external authenticated endpoint
     #[tracing::instrument(skip(self, jwt_token))]
