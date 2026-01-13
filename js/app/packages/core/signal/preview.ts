@@ -106,7 +106,9 @@ const [previewFetchQueue, setPreviewFetchQueue] = createSignal<ItemEntity[]>(
 
 /** Adds items to fetch queue and schedules processing */
 function queueItemsForFetch(items: ItemEntity[]) {
-  setPreviewFetchQueue((prev) => [...prev, ...items]);
+  const validItems = items.filter((i) => !!i.id);
+  if (validItems.length === 0) return;
+  setPreviewFetchQueue((prev) => [...prev, ...validItems]);
 }
 
 function defaultNameTransform(item: PreviewItem): PreviewItem {

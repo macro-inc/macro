@@ -60,6 +60,10 @@ registerComponent('loading', () => <LoadingBlock />);
 registerComponent('channel-compose', () => <ChannelCompose />);
 registerComponent('email-compose', () => <EmailCompose />);
 registerComponent('task-compose', () => <ComposeTask />);
+registerComponent(
+  'import-linear',
+  lazy(() => import('@app/component/import-linear/ImportLinear'))
+);
 registerComponent('settings', () => <SettingsPanel />);
 registerComponent('notification', () => <NotificationRoute />);
 

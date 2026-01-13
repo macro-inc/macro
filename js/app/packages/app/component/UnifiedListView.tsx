@@ -159,6 +159,7 @@ import {
   type ViewConfigBase,
   type ViewData,
 } from './ViewConfig';
+import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 
 const SEARCH_SERVICE_DEBOUNCE_MS = 300;
 const LOCAL_FUZZY_SEARCH_DEBOUNCE_MS = 20;
@@ -267,7 +268,20 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     return map;
   });
 
+  const { isKeypressActive } = useIsKeyPressActive();
+
   const setSelectedEntity = (entity: EntityData | undefined) => {
+    setViewDataStore(
+      selectedView(),
+      produce((state) => {
+        if (!state) return;
+        state.selectedEntity = entity;
+      })
+    );
+  };
+  const setSelectedEntityFromMouse = (entity: EntityData | undefined) => {
+    if (isKeypressActive()) return;
+
     setViewDataStore(
       selectedView(),
       produce((state) => {
@@ -1826,7 +1840,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                           'hasUserInteractedEntity',
                           true
                         );
-                        setSelectedEntity(innerProps.entity);
+                        setSelectedEntityFromMouse(innerProps.entity);
                       }}
                       onMouseLeave={() => {}}
                       onFocusIn={() => {

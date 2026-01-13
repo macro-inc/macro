@@ -73,6 +73,7 @@ import {
   handleUserMention,
   type UserMentionRecord,
 } from '../../utils/mentionsUtils';
+import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 
 false && clickOutside;
 false && floatWithSelection;
@@ -382,7 +383,7 @@ export function MentionsMenuItem(props: {
         props.setOpen(false);
         e.stopPropagation();
       }}
-      on:mouseover={() => props.setIndex(props.index)}
+      on:mousemove={() => props.setIndex(props.index)}
       class="group flex items-center p-1.5 mx-1.5"
       classList={{ 'bg-active bracket': props.selected }}
     >
@@ -602,6 +603,11 @@ function MentionsMenuInner(props: {
 
   const [selectedIndex, setSelectedIndex] = createSignal(0);
   const [viewAllMode, setViewAllMode] = createSignal<ViewAllMode>(null);
+  const { isKeypressActive } = useIsKeyPressActive();
+  const setSelectedIndexFromMouse = (index: number) => {
+    if (isKeypressActive()) return;
+    setSelectedIndex(index);
+  };
 
   let menuRef!: HTMLDivElement;
 
@@ -1040,7 +1046,7 @@ function MentionsMenuInner(props: {
                     index={i()}
                     selected={i() === selectedIndex()}
                     itemAction={itemAction}
-                    setIndex={setSelectedIndex}
+                    setIndex={setSelectedIndexFromMouse}
                     setOpen={setMenuOpen}
                   />
                 )}
@@ -1091,7 +1097,7 @@ function MentionsMenuInner(props: {
                   index={i()}
                   selected={i() === selectedIndex()}
                   itemAction={itemAction}
-                  setIndex={setSelectedIndex}
+                  setIndex={setSelectedIndexFromMouse}
                   setOpen={setMenuOpen}
                 />
               )}
@@ -1117,7 +1123,7 @@ function MentionsMenuInner(props: {
                   index={users.length + i()}
                   selected={users.length + i() === selectedIndex()}
                   itemAction={itemAction}
-                  setIndex={setSelectedIndex}
+                  setIndex={setSelectedIndexFromMouse}
                   setOpen={setMenuOpen}
                 />
               )}
@@ -1145,7 +1151,7 @@ function MentionsMenuInner(props: {
                     users.length + docs.length + i() === selectedIndex()
                   }
                   itemAction={itemAction}
-                  setIndex={setSelectedIndex}
+                  setIndex={setSelectedIndexFromMouse}
                   setOpen={setMenuOpen}
                 />
               )}
@@ -1175,7 +1181,7 @@ function MentionsMenuInner(props: {
                     selectedIndex()
                   }
                   itemAction={itemAction}
-                  setIndex={setSelectedIndex}
+                  setIndex={setSelectedIndexFromMouse}
                   setOpen={setMenuOpen}
                 />
               )}

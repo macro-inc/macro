@@ -89,22 +89,39 @@ fn build_chat_filter(ast: Option<&Expr<ChatLiteral>>) -> String {
     let Some(expr) = ast else {
         return String::new();
     };
-    let formatting = expr.collapse_frames(|frame| match frame {
-        filter_ast::ExprFrame::And(a, b) => format!("({a} AND {b})"),
-        filter_ast::ExprFrame::Or(a, b) => format!("({a} OR {b})"),
-        filter_ast::ExprFrame::Not(a) => format!("(NOT {a})"),
-        filter_ast::ExprFrame::Literal(ChatLiteral::ProjectId(p)) => {
-            format!(r#"entity_id IN (SELECT id FROM "Chat" WHERE "projectId" = '{p}' AND "deletedAt" IS NULL)"#)
-        }
-        filter_ast::ExprFrame::Literal(ChatLiteral::Role(_r)) => {
-            // Chat role filtering doesn't apply to frecency aggregates
-            String::new()
-        }
-        filter_ast::ExprFrame::Literal(ChatLiteral::ChatId(i)) => format!("entity_id = '{i}'"),
-        filter_ast::ExprFrame::Literal(ChatLiteral::Owner(o)) => {
-            format!(r#"entity_id IN (SELECT id FROM "Chat" WHERE "userId" = '{o}' AND "deletedAt" IS NULL)"#)
-        }
-    });
+    let formatting =
+        expr.collapse_frames(|frame: filter_ast::ExprFrame<String, _>| match frame {
+            filter_ast::ExprFrame::And(a, b) => match (a.is_empty(), b.is_empty()) {
+                (true, true) => String::new(),
+                (true, false) => b,
+                (false, true) => a,
+                (false, false) => format!("({a} AND {b})"),
+            },
+            filter_ast::ExprFrame::Or(a, b) => match (a.is_empty(), b.is_empty()) {
+                (true, true) => String::new(),
+                (true, false) => b,
+                (false, true) => a,
+                (false, false) => format!("({a} OR {b})"),
+            },
+            filter_ast::ExprFrame::Not(a) => {
+                if a.is_empty() {
+                    String::new()
+                } else {
+                    format!("(NOT {a})")
+                }
+            }
+            filter_ast::ExprFrame::Literal(ChatLiteral::ProjectId(p)) => {
+                format!(r#"entity_id IN (SELECT id FROM "Chat" WHERE "projectId" = '{p}' AND "deletedAt" IS NULL)"#)
+            }
+            filter_ast::ExprFrame::Literal(ChatLiteral::Role(_r)) => {
+                // Chat role filtering doesn't apply to frecency aggregates
+                String::new()
+            }
+            filter_ast::ExprFrame::Literal(ChatLiteral::ChatId(i)) => format!("entity_id = '{i}'"),
+            filter_ast::ExprFrame::Literal(ChatLiteral::Owner(o)) => {
+                format!(r#"entity_id IN (SELECT id FROM "Chat" WHERE "userId" = '{o}' AND "deletedAt" IS NULL)"#)
+            }
+        });
     if formatting.is_empty() {
         String::new()
     } else {
