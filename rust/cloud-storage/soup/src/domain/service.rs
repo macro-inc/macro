@@ -8,7 +8,10 @@ use crate::domain::{
 use comms::domain::{models::GetChannelsRequest, ports::ChannelsService};
 use doppleganger::Mirror;
 use either::Either;
-use email::domain::{models::GetEmailsRequest, ports::EmailService};
+use email::domain::{
+    models::{EnrichedEmailThreadPreview, GetEmailsRequest},
+    ports::EmailService,
+};
 use frecency::domain::{
     models::{AggregateId, FrecencyPageRequest, JoinFrecency},
     ports::FrecencyQueryService,
@@ -20,7 +23,12 @@ use models_pagination::{
     Cursor, CursorVal, Frecency, FrecencyValue, PaginateOn, Query, SimpleSortMethod,
 };
 use models_soup::{
-    comms::SoupChannel, email_thread::SoupEnrichedEmailThreadPreview, item::SoupItem,
+    comms::SoupChannel,
+    email_thread::{
+        SoupAttachment, SoupContact, SoupEmailThreadPreview, SoupEmailThreadPreviewMetadata,
+        SoupEnrichedEmailThreadPreview, SoupLabel, SoupMacroAttachment,
+    },
+    item::SoupItem,
 };
 use std::cmp::Ordering;
 use uuid::Uuid;
@@ -259,14 +267,33 @@ where
             .await?
             .items
             .into_iter()
-            .map(|mut f| {
-                let frecency_score = f.frecency_score.take();
-                let soup_email = SoupEnrichedEmailThreadPreview::mirror(f);
-                FrecencySoupItem {
-                    item: SoupItem::EmailThread(soup_email),
-                    frecency_score,
-                }
-            });
+            .map(
+                |EnrichedEmailThreadPreview {
+                     thread,
+                     attachments,
+                     attachments_macro,
+                     labels,
+                     metadata,
+                     mut frecency_score,
+                     participants,
+                     ..
+                 }| {
+                    let soup_email = SoupEnrichedEmailThreadPreview {
+                        thread: SoupEmailThreadPreview::mirror(thread),
+                        attachments: Vec::<SoupAttachment>::mirror(attachments),
+                        attachments_macro: Vec::<SoupMacroAttachment>::mirror(attachments_macro),
+                        participants: Vec::<SoupContact>::mirror(participants),
+                        metadata: SoupEmailThreadPreviewMetadata::mirror(metadata),
+                        labels: Vec::<SoupLabel>::mirror(labels),
+                        properties: None,
+                    };
+                    let frecency_score = frecency_score.take();
+                    FrecencySoupItem {
+                        item: SoupItem::EmailThread(soup_email),
+                        frecency_score,
+                    }
+                },
+            );
         Ok(Either::Right(emails))
     }
 

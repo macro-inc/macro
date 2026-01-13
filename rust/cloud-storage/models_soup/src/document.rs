@@ -1,6 +1,7 @@
 use chrono::Utc;
 use document_sub_type::DocumentSubType;
 use macro_user_id::user_id::MacroUserIdStr;
+use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use uuid::Uuid;
 
 /// Sub type of a document with associated properties encoded in each variant.
@@ -101,4 +102,7 @@ pub struct SoupDocument {
     /// Task-related properties are encoded within the variant.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sub_type: Option<SoupDocumentSubType>,
+
+    /// Properties
+    pub properties: Option<Vec<EntityPropertyWithDefinition>>,
 }

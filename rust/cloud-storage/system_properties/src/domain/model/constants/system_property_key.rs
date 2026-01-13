@@ -49,6 +49,25 @@ impl SystemPropertyKey {
     pub const RECIPIENTS_UUID: Uuid = Uuid::from_u128(0x00000001_0000_0000_0000_00000000000e);
     pub const SUBJECT_UUID: Uuid = Uuid::from_u128(0x00000001_0000_0000_0000_00000000000f);
 
+    pub const fn all_system_propperty_keys() -> &'static [Uuid] {
+        &[
+            Self::ASSIGNEES_UUID,
+            Self::STATUS_UUID,
+            Self::PRIORITY_UUID,
+            Self::DUE_DATE_UUID,
+            Self::PARENT_TASK_UUID,
+            Self::SUBTASKS_UUID,
+            Self::DEPENDS_ON_UUID,
+            Self::EFFORT_UUID,
+            Self::STORY_POINTS_UUID,
+            Self::RELEVANT_DOCUMENTS_UUID,
+            Self::SOURCE_UUID,
+            Self::COMPANIES_UUID,
+            Self::SENDER_UUID,
+            Self::RECIPIENTS_UUID,
+            Self::SUBJECT_UUID,
+        ]
+    }
     /// Get the UUID for this system property.
     pub const fn uuid(&self) -> Uuid {
         match self {

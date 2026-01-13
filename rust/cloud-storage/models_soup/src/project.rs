@@ -1,5 +1,6 @@
 use chrono::Utc;
 use macro_user_id::user_id::MacroUserIdStr;
+use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -36,4 +37,7 @@ pub struct SoupProject {
     #[serde(with = "chrono::serde::ts_milliseconds_option")]
     #[cfg_attr(feature = "schema", schema(value_type = i64, nullable = true))]
     pub viewed_at: Option<chrono::DateTime<Utc>>,
+
+    /// Properties
+    pub properties: Option<Vec<EntityPropertyWithDefinition>>,
 }

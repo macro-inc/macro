@@ -23,6 +23,7 @@ use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
 
 use crate::outbound::pg_soup_repo::type_err;
+use models_properties::{EntityReference, EntityType};
 
 static PREFIX: &str = r#"
     WITH RECURSIVE ProjectHierarchy AS (
@@ -428,6 +429,7 @@ impl SoupRow {
                 updated_at,
                 viewed_at,
                 sub_type: SoupDocumentSubType::from_db(sub_type, is_completed),
+                properties: None,
             }),
             SoupRow::Chat(ChatRow {
                 id,
@@ -476,6 +478,7 @@ impl SoupRow {
                 created_at,
                 updated_at,
                 viewed_at,
+                properties: None,
             }),
         })
     }
@@ -512,7 +515,7 @@ pub(crate) async fn expanded_dynamic_cursor_soup(
     let status_property_id = SystemPropertyKey::STATUS_UUID;
     let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
 
-    build_query(cursor.filter(), exclude_frecency)
+    let mut items = build_query(cursor.filter(), exclude_frecency)
         .build()
         .bind(user_id.as_ref())
         .bind(sort_method_str)
@@ -523,5 +526,54 @@ pub(crate) async fn expanded_dynamic_cursor_soup(
         .bind(status_property_id)
         .try_map(|row| SoupRow::from_row(&row)?.into_soup_item())
         .fetch_all(db)
+        .await?;
+
+    // Collect entity references for items that have properties (Documents and Projects)
+    let entity_refs: Vec<EntityReference> = items
+        .iter()
+        .filter_map(|item| match item {
+            SoupItem::Document(doc) => Some(EntityReference::new(
+                doc.id.to_string(),
+                EntityType::Document,
+            )),
+            SoupItem::Project(proj) => Some(EntityReference::new(
+                proj.id.to_string(),
+                EntityType::Project,
+            )),
+            SoupItem::EmailThread(email) => Some(EntityReference::new(
+                email.thread.id.to_string(),
+                EntityType::Thread,
+            )),
+            _ => None,
+        })
+        .collect();
+
+    // Fetch properties in bulk for all relevant entities, filtered to system properties only
+    let property_ids = SystemPropertyKey::all_system_propperty_keys().to_vec();
+    let properties_map =
+        properties_db_client::entity_properties::get::get_bulk_entity_properties_values_filtered(
+            db,
+            &entity_refs,
+            property_ids,
+        )
         .await
+        .map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
+
+    // Assign properties to each item that supports them
+    for item in &mut items {
+        match item {
+            SoupItem::Document(x) => {
+                x.properties = properties_map.get(&x.id.to_string()).cloned();
+            }
+            SoupItem::Project(x) => {
+                x.properties = properties_map.get(&x.id.to_string()).cloned();
+            }
+            SoupItem::EmailThread(x) => {
+                x.properties = properties_map.get(&x.thread.id.to_string()).cloned();
+            }
+            _ => {}
+        }
+    }
+
+    Ok(items)
 }
