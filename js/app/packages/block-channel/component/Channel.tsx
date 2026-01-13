@@ -51,7 +51,6 @@ import {
   onCleanup,
   onMount,
   Suspense,
-  untrack,
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { type FocusableElement, tabbable } from 'tabbable';
