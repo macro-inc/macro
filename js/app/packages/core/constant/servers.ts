@@ -1,6 +1,5 @@
 const serverHostLocal: Servers = {
   'auth-service': 'http://localhost:8084',
-  'docx-service': 'http://localhost:34512',
   'pdf-service': 'http://localhost:4567',
   'document-storage-service': 'http://localhost:8083',
   'organization-service': 'todo',
@@ -15,7 +14,6 @@ const serverHostLocal: Servers = {
   'unfurl-service': 'http://localhost:8080',
   contacts: 'http://localhost:8092',
   'email-service': 'http://localhost:8094',
-  'insight-service': `http://localhost:8080`,
   'search-service': 'http://localhost:8091',
   'properties-service': `http://localhost:8095`,
 } as const;
@@ -24,7 +22,6 @@ const devServerSuffix = import.meta.env.MODE === 'development' ? '-dev' : '';
 
 const serverHostRemote = {
   'auth-service': `https://auth-service${devServerSuffix}.macro.com`,
-  'docx-service': `https://docx-service${devServerSuffix}.macro.com`,
   'pdf-service': `https://pdf-service${devServerSuffix}.macro.com`,
   'document-storage-service': `https://cloud-storage${devServerSuffix}.macro.com`,
   'websocket-service': `wss://services${devServerSuffix}.macro.com`,
@@ -38,7 +35,6 @@ const serverHostRemote = {
   'unfurl-service': `https://unfurl-service${devServerSuffix}.macro.com`,
   contacts: `https://contacts${devServerSuffix}.macro.com`,
   'email-service': `https://email-service${devServerSuffix}.macro.com`,
-  'insight-service': `https://insight-service${devServerSuffix}.macro.com`,
   'search-service': `https://search-service${devServerSuffix}.macro.com`,
   'properties-service': `https://properties-service${devServerSuffix}.macro.com`,
 } as const;

@@ -2,8 +2,9 @@
 //! This is used to construct a strictly typed ast for the input filters, allowing consumers to have a logical represenation of the required operations
 
 use crate::{
-    ChatFilters, DocumentFilters, EmailFilters, EntityFilters, ProjectFilters,
+    ChannelFilters, ChatFilters, DocumentFilters, EmailFilters, EntityFilters, ProjectFilters,
     ast::{
+        channel::ChannelLiteral,
         chat::{ChatLiteral, ChatRole},
         email::EmailLiteral,
         project::ProjectLiteral,
@@ -75,6 +76,9 @@ pub struct EntityFilterAst {
     /// the filters that should be applied to the email entity
     #[serde(default, rename = "ef")]
     pub email_filter: LiteralTree<EmailLiteral>,
+    /// the filters taht should be applied to the channel entity
+    #[serde(default, rename = "chanf")]
+    pub channel_filter: LiteralTree<ChannelLiteral>,
 }
 
 impl EntityFilterAst {
@@ -90,6 +94,8 @@ impl EntityFilterAst {
                 .map(Arc::new),
             chat_filter: ChatFilters::expand_ast(entity_filter.chat_filters)?.map(Arc::new),
             email_filter: EmailFilters::expand_ast(entity_filter.email_filters)?.map(Arc::new),
+            channel_filter: ChannelFilters::expand_ast(entity_filter.channel_filters)?
+                .map(Arc::new),
         }))
     }
 
@@ -101,6 +107,7 @@ impl EntityFilterAst {
             project_filter: None,
             chat_filter: None,
             email_filter: None,
+            channel_filter: None,
         }
     }
 }
@@ -112,10 +119,12 @@ impl IsEmpty for EntityFilterAst {
             project_filter,
             chat_filter,
             email_filter,
+            channel_filter,
         } = self;
         document_filter.is_none()
             && project_filter.is_none()
             && chat_filter.is_none()
             && email_filter.is_none()
+            && channel_filter.is_none()
     }
 }

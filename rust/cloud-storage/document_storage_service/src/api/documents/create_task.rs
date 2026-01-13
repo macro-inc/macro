@@ -150,10 +150,5 @@ pub(in crate::api) async fn create_task_handler(
         }
     }
 
-    utils::notify_search_service_of_document_name_update(
-        state.sqs_client.clone(),
-        document_id.clone(),
-    );
-
     Ok(Json(CreateTaskResponse { document_id }))
 }

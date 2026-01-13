@@ -5,6 +5,7 @@ use model_entity::{Entity, EntityType};
 use models_soup::item::SoupItem;
 use sqlx::PgPool;
 use std::str::FromStr;
+use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
 
 /// Returns objects that a user has EXPLICIT and IMPLICIT access to by their IDs, excluding project items.
@@ -32,6 +33,9 @@ pub async fn expanded_soup_by_ids<'a>(
     if document_ids.is_empty() && chat_ids.is_empty() {
         return Ok(Vec::new());
     }
+
+    let status_property_id = SystemPropertyKey::STATUS_UUID;
+    let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
 
     let items: Vec<SoupItem> = sqlx::query!(
         r#"
@@ -93,9 +97,22 @@ pub async fn expanded_soup_by_ids<'a>(
                 NULL as "is_persistent",
                 di.sha as "sha",
                 dt.sub_type as "sub_type?: DocumentSubType",
-                uh."updatedAt"::timestamptz as "viewed_at"
+                uh."updatedAt"::timestamptz as "viewed_at",
+                CASE 
+                    WHEN dt.sub_type = 'task' 
+                        AND ep_status.values->'value' ? $4
+                    THEN true 
+                    WHEN dt.sub_type = 'task'
+                    THEN false
+                    ELSE NULL 
+                END as "is_completed"
             FROM "Document" d
             LEFT JOIN document_sub_type dt ON dt.document_id = d.id
+            LEFT JOIN entity_properties ep_status 
+                ON dt.sub_type = 'task'
+                AND ep_status.entity_id = d.id 
+                AND ep_status.entity_type = 'TASK'
+                AND ep_status.property_definition_id = $5
             INNER JOIN UserAccessibleItems uai 
                 ON uai.item_id = d.id 
                 AND uai.item_type = 'document'
@@ -138,7 +155,8 @@ pub async fn expanded_soup_by_ids<'a>(
                 c."isPersistent" as "is_persistent",
                 NULL as "sha",
                 NULL as "sub_type",
-                uh."updatedAt"::timestamptz as "viewed_at"
+                uh."updatedAt"::timestamptz as "viewed_at",
+                NULL as "is_completed"
             FROM "Chat" c
             INNER JOIN UserAccessibleItems uai 
                 ON uai.item_id = c.id 
@@ -156,6 +174,8 @@ pub async fn expanded_soup_by_ids<'a>(
         user_id.as_ref(),        // $1
         document_ids.as_slice(), // $2
         chat_ids.as_slice(),     // $3
+        completed_option_id,     // $4
+        status_property_id,      // $5
     )
     .try_map(map_soup_type!())
     .fetch_all(db)

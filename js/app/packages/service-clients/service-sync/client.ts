@@ -11,12 +11,18 @@ import {
   type ObjectLike,
   ok,
 } from '@core/util/maybeResult';
+import { isTauri } from '@core/util/platform';
 import { platformFetch } from '@core/util/platformFetch';
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import type { SerializedEditorState } from 'lexical';
 import { InitializeFromSnapshotRequest } from './generated/schema';
 
 const SYNC_SERVICE_WORKER_URL = `${SYNC_SERVICE_HOSTS['worker']}`;
+
+const SYNC_ORIGIN =
+  import.meta.env.MODE === 'development'
+    ? 'https://dev.macro.com'
+    : 'https://macro.com';
 
 const WAKEUP_TTL = 55 * 1000; // 55 seconds - cloudflare ttl is 60
 
@@ -37,7 +43,13 @@ export function syncFetch<T extends ObjectLike = never>(
 ):
   | Promise<MaybeResult<FetchWithTokenErrorCode, T>>
   | Promise<MaybeError<FetchWithTokenErrorCode>> {
-  return fetchWithToken<T>(`${SYNC_SERVICE_WORKER_URL}${url}`, init);
+  return fetchWithToken<T>(`${SYNC_SERVICE_WORKER_URL}${url}`, {
+    ...init,
+    headers: {
+      ...init?.headers,
+      ...(isTauri() && { Origin: SYNC_ORIGIN }),
+    },
+  });
 }
 
 type MetadataResponse = {

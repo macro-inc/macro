@@ -29,6 +29,10 @@ path = "src/bin/backfill_sfs_attachments/backfill_sfs_attachments.rs"
 name = "pubsub_workers"
 path = "src/bin/pubsub_workers/pubsub_workers.rs"
 
+[[bin]]
+name = "email_service_openapi"
+path = "src/openapi.rs"
+
 [features]
 attachment_upload = []
 connection_gateway = []
@@ -69,7 +73,6 @@ gmail_client = { path = "../gmail_client" }
 html-escape = "0.2"
 http-body-util = { workspace = true }
 infer = "0.19.0"
-insight_service_client = { path = "../insight_service_client" }
 lol_html = "2.4.0"
 macro_auth = { path = "../macro_auth" }
 macro_cors = { path = "../macro_cors" }
@@ -85,6 +88,7 @@ macro_uuid = { path = "../macro_uuid" }
 mime_guess = "2.0.5"
 model = { path = "../model" }
 model-entity = { path = "../model-entity" }
+model_file_type = { path = "../model_file_type" }
 model_notifications = { path = "../model_notifications" }
 models_email = { path = "../models_email" }
 models_opensearch = { path = "../models_opensearch" }
@@ -109,8 +113,8 @@ sqs_client = { path = "../sqs_client", default-features = false, features = [
   "contacts",
   "email",
   "gmail",
-  "insight_context",
   "search",
+  "sfs_uploader"
 ] }
 sqs_worker = { path = "../sqs_worker" }
 static_file_service_client = { path = "../static_file_service_client" }

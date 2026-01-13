@@ -1,0 +1,69 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                d.id as \"document_id!\",\n                d.name as \"document_name!\",\n                d.\"fileType\" as file_type,\n                d.owner as \"owner!\",\n                d.\"updatedAt\"::timestamptz as \"updated_at\",\n                dt.sub_type as \"sub_type?: DocumentSubType\",\n                CASE \n                    WHEN dt.sub_type = 'task' \n                        AND ep_status.values->'value' ? $2\n                    THEN true \n                    WHEN dt.sub_type = 'task'\n                    THEN false\n                    ELSE NULL \n                END as \"is_completed\"\n            FROM \"Document\" d\n            LEFT JOIN document_sub_type dt ON dt.document_id = d.id\n            LEFT JOIN entity_properties ep_status \n                ON dt.sub_type = 'task'\n                AND ep_status.entity_id = d.id \n                AND ep_status.entity_type = 'TASK'\n                AND ep_status.property_definition_id = $3\n            WHERE\n                d.\"id\" = ANY($1)\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "document_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "document_name!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "file_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "owner!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "sub_type?: DocumentSubType",
+        "type_info": {
+          "Custom": {
+            "name": "document_sub_type_value",
+            "kind": {
+              "Enum": [
+                "task"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "is_completed",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      true,
+      true,
+      null,
+      false,
+      null
+    ]
+  },
+  "hash": "cfbec090ff3b62415ec0c215aa52bdafe162fb8c8fd217a8fcaf613e39525b0f"
+}

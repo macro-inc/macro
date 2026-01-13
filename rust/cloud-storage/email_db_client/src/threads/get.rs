@@ -1,4 +1,5 @@
 use crate::parse::db_to_service;
+use crate::parse::db_to_service::map_attachmentless_db_message_to_service;
 use crate::{attachments, contacts, labels, messages};
 use anyhow::{Context, anyhow};
 use futures::future::try_join_all;
@@ -44,11 +45,9 @@ pub async fn fetch_thread_with_messages_paginated(
     thread_db_id: Uuid,
     offset: i64,
     limit: i64,
-) -> anyhow::Result<thread::Thread> {
+) -> anyhow::Result<Option<thread::Thread>> {
     if offset < 0 || limit <= 0 {
-        return Err(anyhow!(
-            "Offset must be non-negative and limit must be positive"
-        ));
+        anyhow::bail!("Offset must be non-negative and limit must be positive");
     }
 
     let db_thread = sqlx::query_as!(
@@ -64,8 +63,11 @@ pub async fn fetch_thread_with_messages_paginated(
     )
     .fetch_optional(pool)
     .await
-    .with_context(|| format!("Failed to fetch thread with DB ID {}", thread_db_id))?
-    .ok_or_else(|| anyhow!("Thread with ID {} not found", thread_db_id,))?;
+    .with_context(|| format!("Failed to fetch thread with DB ID {}", thread_db_id))?;
+
+    let Some(db_thread) = db_thread else {
+        return Ok(None);
+    };
 
     let db_messages = sqlx::query_as!(
         db::message::Message,
@@ -129,6 +131,7 @@ pub async fn fetch_thread_with_messages_paginated(
                 labels_res,
                 attachments_res,
                 macro_attachments_res,
+                draft_attachments_res,
             ) = tokio::try_join!(
                 contacts::get::get_sender_by_message_id(&pool_clone, db_message.id),
                 contacts::get::fetch_db_recipients(&pool_clone, db_message.id),
@@ -144,18 +147,32 @@ pub async fn fetch_thread_with_messages_paginated(
                 },
                 async {
                     attachments::marco::fetch_db_macro_attachments(&pool_clone, db_message.id).await
-                }
+                },
+                async {
+                    // only need to check if the message is a draft created in Macro
+                    if db_message.is_draft && db_message.provider_id.is_none() {
+                        attachments::draft::fetch_db_draft_attachments(&pool_clone, db_message.id)
+                            .await
+                    } else {
+                        Ok(Vec::new())
+                    }
+                },
             )?;
 
-            // parse db-layer structs into service-layer message struct
-            db_to_service::map_db_message_to_service(
+            let service_message = map_attachmentless_db_message_to_service(
                 db_message,
                 sender_res,
                 recipients_res,
                 scheduled_res,
                 labels_res,
+            );
+
+            // parse db-layer structs into service-layer message struct
+            db_to_service::map_db_message_attachments_to_service(
+                service_message,
                 attachments_res,
                 macro_attachments_res,
+                draft_attachments_res,
             )
         });
     }
@@ -167,7 +184,7 @@ pub async fn fetch_thread_with_messages_paginated(
 
     let full_thread = db_to_service::map_db_thread_to_service(db_thread, processed_messages);
 
-    Ok(full_thread)
+    Ok(Some(full_thread))
 }
 
 /// get the ids of the latest-updated threads for the user.

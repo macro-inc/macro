@@ -86,8 +86,9 @@ fn test_resolve_direct_message_channel_name() {
             &direct_message_channel.id.0,
             MacroUserIdStr::parse_from_str("macro|user1@macro.com").unwrap(),
             &Default::default()
-        ),
-        "user2"
+        )
+        .as_deref(),
+        Ok("user2")
     );
 }
 
@@ -113,8 +114,9 @@ fn test_resolve_direct_message_channel_name_for_other() {
             &direct_message_channel.id.0,
             MacroUserIdStr::parse_from_str("macro|user3@macro.com").unwrap(),
             &Default::default()
-        ),
-        "user1, user2"
+        )
+        .as_deref(),
+        Ok("user1, user2")
     );
 }
 

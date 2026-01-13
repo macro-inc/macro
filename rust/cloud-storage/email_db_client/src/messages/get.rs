@@ -418,3 +418,27 @@ pub async fn get_message_to_send(
         },
     ))
 }
+
+/// Returns `true` if a message with `is_draft = true` exists for the given (link_id, id).
+#[tracing::instrument(skip(pool), err)]
+pub async fn draft_exists_with_id(
+    pool: &PgPool,
+    link_id: Uuid,
+    db_id: Uuid,
+) -> anyhow::Result<bool> {
+    let exists: bool = sqlx::query_scalar!(
+        r#"
+            SELECT EXISTS(
+                SELECT 1
+                FROM email_messages
+                WHERE id = $1 AND link_id = $2 AND is_draft = true
+            ) as "exists!"
+            "#,
+        db_id,
+        link_id
+    )
+    .fetch_one(pool)
+    .await?;
+
+    Ok(exists)
+}

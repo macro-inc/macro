@@ -105,8 +105,6 @@ export const documentStorageServiceUrl: pulumi.Output<string> =
     .getOutput('cloudStorageServiceUrl')
     .apply((cloudStorageServiceUrl) => cloudStorageServiceUrl as string);
 
-export const meteringServiceUrl = `https://metering${stack === 'prod' ? '' : `-${stack}`}.macro.com`;
-
 const documentTextExtractorStack = new pulumi.StackReference(
   'document-text-extractor',
   {
@@ -148,23 +146,6 @@ export const deleteChatQueueName: pulumi.Output<string> =
 
 const { notificationQueueName, notificationQueueArn } = getMacroNotify();
 
-// import the insight-service-block
-const insightServiceStack = new pulumi.StackReference('insight-service-stack', {
-  name: `macro-inc/insight-service/${stack}`,
-});
-
-const insightContextQueueArn: pulumi.Output<string> = insightServiceStack
-  .getOutput('contextQueueArn')
-  .apply((arn) => arn as string);
-
-const insightContextQueueName: pulumi.Output<string> = insightServiceStack
-  .getOutput('contextQueueName')
-  .apply((name) => name as string)
-  .apply((name) => {
-    pulumi.log.info(`INSIGHT QUEUE NAME, ${name}`);
-    return name;
-  });
-
 const { searchEventQueueName, searchEventQueueArn } = getSearchEventQueue();
 
 const searchServiceStack = new pulumi.StackReference('search-service-stack', {
@@ -199,7 +180,6 @@ const documentCognitionService = new DocumentCognitionService(
       documentTextExtractorQueueArn,
       deleteChatQueueArn,
       searchEventQueueArn,
-      insightContextQueueArn,
       notificationQueueArn,
     ],
     containerEnvVars: [
@@ -275,10 +255,6 @@ const documentCognitionService = new DocumentCognitionService(
         }.macro.com`,
       },
       {
-        name: 'INSIGHT_CONTEXT_QUEUE',
-        value: pulumi.interpolate`${insightContextQueueName}`,
-      },
-      {
         name: 'COMMS_SERVICE_URL',
         value: `https://comms-service${
           stack === 'prod' ? '' : `-${stack}`
@@ -297,10 +273,6 @@ const documentCognitionService = new DocumentCognitionService(
       {
         name: 'SYNC_SERVICE_AUTH_KEY',
         value: pulumi.interpolate`${SYNC_SERVICE_AUTH_KEY}`,
-      },
-      {
-        name: 'METERING_SERVICE_URL',
-        value: pulumi.interpolate`${meteringServiceUrl}`,
       },
       {
         name: 'SYNC_SERVICE_URL',

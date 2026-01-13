@@ -14,8 +14,8 @@ import { listDocumentsHandler } from './ListDocuments';
 import { listEmailsHandler } from './ListEmails';
 import { rewriteHandler } from './MarkdownRewrite';
 import { readHandler } from './Read';
+import { contentSearchHandler, nameSearchHandler } from './Search';
 import type { RenderContext } from './ToolRenderer';
-import { unifiedSearchHandler } from './UnifiedSearch';
 import { webSearchHandler } from './WebSearch';
 
 const [renderStore, setRenderStore] = createStore<
@@ -23,7 +23,8 @@ const [renderStore, setRenderStore] = createStore<
 >({});
 
 const toolHandlers: ToolHandlerMap<RenderContext> = {
-  UnifiedSearch: unifiedSearchHandler,
+  ContentSearch: contentSearchHandler,
+  NameSearch: nameSearchHandler,
   web_search: webSearchHandler,
   MarkdownRewrite: rewriteHandler,
   Read: readHandler,

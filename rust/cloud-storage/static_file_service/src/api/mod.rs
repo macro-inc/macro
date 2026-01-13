@@ -2,7 +2,7 @@ pub mod context;
 mod event;
 pub mod file;
 mod health;
-mod swagger;
+pub(crate) mod swagger;
 
 use super::config::Config;
 use super::service::dynamodb::client::DynamodbClient;

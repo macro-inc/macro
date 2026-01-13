@@ -6,24 +6,24 @@
  */
 
 export type SsoLoginParams = {
-/**
- * The name of the identity provider to use for login. e.g Google
- */
-idp_name: string;
-/**
- * **OPTIONAL**. The idp id of the identity provider to use for login.
- */
-idp_id: string;
-/**
- * **OPTIONAL**. The user's email.
- */
-login_hint: string;
-/**
- * **OPTIONAL**. The original url you came from.
- */
-original_url: string;
-/**
- * **OPTIONAL**. If the authentication request is from a mobile device.
- */
-is_mobile: string;
+  /**
+   * The name of the identity provider to use for login. e.g Google
+   */
+  idp_name: string;
+  /**
+   * **OPTIONAL**. The idp id of the identity provider to use for login.
+   */
+  idp_id: string;
+  /**
+   * **OPTIONAL**. The user's email.
+   */
+  login_hint: string;
+  /**
+   * **OPTIONAL**. The original url you came from.
+   */
+  original_url: string;
+  /**
+   * **OPTIONAL**. If the authentication request is from a mobile device.
+   */
+  is_mobile: string;
 };

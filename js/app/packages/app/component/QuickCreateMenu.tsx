@@ -205,10 +205,13 @@ export function QuickCreateMenuInner(props: QuickCreateMenuProps) {
     }
 
     if (goToNote && documentId) {
-      replaceOrInsertSplit({
-        type: 'md',
-        id: documentId,
-      });
+      replaceOrInsertSplit(
+        {
+          type: 'md',
+          id: documentId,
+        },
+        'launcher'
+      );
       return true;
     }
 
@@ -296,10 +299,13 @@ export function QuickCreateMenuInner(props: QuickCreateMenuProps) {
     }
 
     if (goTo) {
-      replaceOrInsertSplit({
-        type: 'email',
-        id: 'new',
-      });
+      replaceOrInsertSplit(
+        {
+          type: 'email',
+          id: 'new',
+        },
+        'launcher'
+      );
     }
 
     return true;

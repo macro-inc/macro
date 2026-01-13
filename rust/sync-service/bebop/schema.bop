@@ -1,0 +1,52 @@
+union FromPeer {
+  1 -> struct PeerUpdate {
+    byte[] update;
+  }
+  2 -> struct PeerAwareness {
+    byte[] awareness;
+  }
+  3 -> struct PeerRequestSince {
+    byte[] frontiers;
+  }
+  4 -> struct PeerRequestSnapshot {}
+  5 -> struct PeerRegisterId {
+    uint64 peerid;
+  }
+}
+
+union FromRemote {
+  1 -> struct RemoteInitialSync {
+    byte[] snapshot;
+    byte[] awareness;
+  }
+  2 -> struct RemoteUpdate {
+    byte[] update;
+  }
+  3 -> struct RemoteAwareness {
+    byte[] awareness;
+  }
+  4 -> struct RemoteSnapshot {
+    byte[] snapshot;
+  }
+  5 -> struct RemoteUpdateAck {
+    byte[] update;
+  }
+  6 -> struct RemoteUpdateSince {
+    byte[] update;
+    byte[] frontiers;
+  }
+}
+
+struct Operation {
+  byte[] update;
+  date timestamp;
+}
+
+struct OperationLog {
+  Operation[] operations;
+}
+
+struct InitializeFromSnapshotRequest {
+  byte[] snapshot;
+}
+

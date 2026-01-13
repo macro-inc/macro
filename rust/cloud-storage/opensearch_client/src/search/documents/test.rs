@@ -54,15 +54,6 @@ fn test_build_search_request() -> anyhow::Result<()> {
                "minimum_should_match": 1,
                "should": [
                  {
-                   "wildcard": {
-                     "owner_id": {
-                       "boost": 5000.0,
-                       "case_insensitive": true,
-                       "value": "macro|test*"
-                     }
-                   }
-                 },
-                 {
                    "match_phrase": {
                      "content": "test"
                    }

@@ -1,6 +1,9 @@
 use crate::pubsub::scheduled::context::ScheduledContext;
-use crate::pubsub::util::{fetch_access_token_for_link, fetch_link};
-use crate::util::gmail::send::generate_email_threading_headers;
+use crate::pubsub::util::fetch_link;
+use crate::util::gmail::auth::fetch_gmail_access_token_from_link;
+use crate::util::gmail::send::{
+    cleanup_draft_attachments, fetch_and_attach_draft_attachments, generate_email_threading_headers,
+};
 use anyhow::Context;
 use email_db_client::messages::scheduled::get_scheduled_message;
 use models_email::service::message::MessageToSend;
@@ -17,7 +20,8 @@ pub async fn process_message(
 
     let link = fetch_link(&ctx.db, data.link_id).await?;
     let gmail_access_token =
-        fetch_access_token_for_link(&ctx.redis_client, &ctx.auth_service_client, &link).await?;
+        fetch_gmail_access_token_from_link(&link, &ctx.redis_client, &ctx.auth_service_client)
+            .await?;
 
     // Get scheduled message from database
     let scheduled_message =
@@ -59,6 +63,16 @@ pub async fn process_message(
             generate_email_threading_headers(&ctx.db, message_to_send.replying_to_id, data.link_id)
                 .await;
 
+        // Include attachments for message
+        let db_attachments = fetch_and_attach_draft_attachments(
+            &ctx.db,
+            &ctx.s3_client,
+            ctx.attachment_bucket.as_str(),
+            &link,
+            &mut message_to_send,
+        )
+        .await?;
+
         // send message to gmail api
         ctx.gmail_client
             .send_message(
@@ -89,6 +103,26 @@ pub async fn process_message(
                     .commit()
                     .await
                     .context("Failed to commit transaction")?;
+
+                // Cleanup attachments in the background after successful send
+                if let (Some(draft_id), Some(attachments)) = (message_to_send.db_id, db_attachments)
+                {
+                    let db = ctx.db.clone();
+                    let s3_client = ctx.s3_client.clone();
+                    let bucket = ctx.attachment_bucket.clone();
+                    let link_id = link.id;
+                    tokio::spawn(async move {
+                        cleanup_draft_attachments(
+                            db,
+                            &s3_client,
+                            bucket,
+                            link_id,
+                            draft_id,
+                            attachments,
+                        )
+                        .await;
+                    });
+                }
             }
             Err(e) => {
                 if let Err(rollback_err) = tx.as_mut().rollback().await {

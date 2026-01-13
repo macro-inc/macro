@@ -12,6 +12,8 @@ pub async fn run_worker(
     gmail_client: gmail_client::GmailClient,
     auth_service_client: AuthServiceClient,
     redis_client: RedisClient,
+    s3_client: s3_client::S3,
+    attachment_bucket: String,
 ) {
     let ctx = ScheduledContext {
         db,
@@ -19,6 +21,8 @@ pub async fn run_worker(
         gmail_client,
         auth_service_client,
         redis_client,
+        s3_client,
+        attachment_bucket,
     };
     loop {
         let worker_result = tokio::spawn({

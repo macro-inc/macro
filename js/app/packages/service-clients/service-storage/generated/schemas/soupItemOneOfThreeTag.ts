@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type SoupItemOneOfThreeTag = typeof SoupItemOneOfThreeTag[keyof typeof SoupItemOneOfThreeTag];
-
+export type SoupItemOneOfThreeTag =
+  (typeof SoupItemOneOfThreeTag)[keyof typeof SoupItemOneOfThreeTag];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const SoupItemOneOfThreeTag = {

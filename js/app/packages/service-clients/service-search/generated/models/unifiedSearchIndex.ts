@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type UnifiedSearchIndex = typeof UnifiedSearchIndex[keyof typeof UnifiedSearchIndex];
-
+export type UnifiedSearchIndex =
+  (typeof UnifiedSearchIndex)[keyof typeof UnifiedSearchIndex];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const UnifiedSearchIndex = {

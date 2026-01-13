@@ -3,7 +3,6 @@ import { MacroSignatureButton } from '@block-email/component/MacroSignatureButto
 import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
 import { useHasPaidAccess } from '@core/auth';
 import { useBlockId } from '@core/block';
-import { BrightJoins } from '@core/component/BrightJoins';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import {
@@ -49,6 +48,7 @@ import type {
 import { useEmail, useUserId } from '@service-gql/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import type { Item } from '@service-storage/generated/schemas/item';
+import { BrightJoins } from '@ui/components/BrightJoins';
 import { Button } from '@ui/components/Button';
 import {
   defaultSelectionData,
@@ -589,6 +589,34 @@ export function BaseInput(props: {
         runWithInputFocused: true,
         hotkeyToken: TOKENS.email.sendAndMarkDone,
         displayPriority: 10,
+      });
+
+      registerHotkey({
+        hotkey: 'escape',
+        scopeId: composeHotkeyScope,
+        description: 'Close reply',
+        keyDownHandler: () => {
+          const draft = collectDraft();
+          const isEmpty = draft === null;
+
+          if (isEmpty) {
+            // Delete draft and close reply
+            deleteDraftAndReset();
+          } else {
+            // Move focus back to the message
+            const focusedId = ctx.messages.focusedID();
+            if (focusedId) {
+              const messageEl = document.querySelector(
+                `[data-message-body-id="${focusedId}"]`
+              ) as HTMLElement | null;
+              messageEl?.focus();
+            }
+          }
+          return true;
+        },
+        runWithInputFocused: true,
+        hotkeyToken: TOKENS.email.cancelReply,
+        displayPriority: 8,
       });
     }
   });

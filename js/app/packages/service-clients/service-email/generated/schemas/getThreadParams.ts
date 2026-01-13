@@ -6,12 +6,12 @@
  */
 
 export type GetThreadParams = {
-/**
- * Offset for message pagination. Default is 0.
- */
-offset: number;
-/**
- * Limit for message pagination. Default is 5.
- */
-limit: number;
+  /**
+   * Offset for message pagination. Default is 0.
+   */
+  offset: number;
+  /**
+   * Limit for message pagination. Default is 5.
+   */
+  limit: number;
 };

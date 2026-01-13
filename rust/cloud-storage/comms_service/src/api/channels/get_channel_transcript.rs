@@ -2,7 +2,8 @@ use crate::api::{
     context::AppState,
     extractors::{ChannelId, ChannelMember},
 };
-use ai_format::{Indent, InsightContextLog};
+use ai_format::insight_context_log::InsightContextLog;
+use ai_format::util::Indent;
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
@@ -54,7 +55,7 @@ pub async fn get_channel_transcript(
     let formatted_text = InsightContextLog {
         name: "conversation".to_string(),
         metadata: vec![],
-        content: Indent(formatted_messages, 4),
+        content: Indent(4, formatted_messages),
     }
     .to_string();
 

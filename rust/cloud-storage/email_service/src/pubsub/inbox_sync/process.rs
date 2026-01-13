@@ -6,8 +6,6 @@ use crate::pubsub::inbox_sync::operations::update_labels::update_labels;
 use crate::pubsub::inbox_sync::operations::upsert_message::upsert_message;
 use crate::util::redis::rate_limit::RateLimitArgs;
 use anyhow::{Context, Result, anyhow};
-use models_email::email::service::cache;
-use models_email::email::service::link::UserProvider;
 use models_email::gmail::inbox_sync::{InboxSyncOperation, InboxSyncPubsubMessage};
 use models_email::gmail::operations::GmailApiOperation;
 use models_email::service::link::Link;
@@ -131,16 +129,11 @@ pub async fn fetch_pubsub_gmail_token(
     ctx: &PubSubContext,
     link: &Link,
 ) -> result::Result<String, ProcessingError> {
-    let cache_key = cache::TokenCacheKey::new(
-        &link.fusionauth_user_id,
-        link.macro_id.0.as_ref(),
-        UserProvider::Gmail,
-    );
-
-    let gmail_access_token = crate::util::gmail::auth::fetch_gmail_access_token(
-        &cache_key,
+    let gmail_access_token = crate::util::gmail::auth::fetch_token_or_delete_on_revocation(
+        link,
         &ctx.redis_client,
         &ctx.auth_service_client,
+        &ctx.sqs_client,
     )
     .await
     .map_err(|e| {

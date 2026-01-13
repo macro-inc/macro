@@ -68,13 +68,13 @@ export function useSendMessageToPeople() {
     refetchContacts();
 
     const navigateToChannel = async () => {
-      replaceSplit(
-        {
+      replaceSplit({
+        content: {
           type: 'channel',
           id: channelId,
         },
-        navigate?.mergeHistory
-      );
+        mergeHistory: navigate?.mergeHistory,
+      });
       const handle = await orchestrator.getBlockHandle(channelId);
       await handle?.goToLocationFromParams({
         message_id: messageResponse.id,

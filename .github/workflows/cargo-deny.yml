@@ -3,6 +3,7 @@ name: cargo deny check
 on:
   pull_request:
     branches: ['main']
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - 'rust/cloud-storage/Cargo.toml'
       - 'rust/cloud-storage/**/Cargo.toml'

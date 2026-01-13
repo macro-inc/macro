@@ -7,4 +7,5 @@
 import type { AnchorId } from './anchorId';
 import type { DeleteUnthreadedAnchorResponseAllOf } from './deleteUnthreadedAnchorResponseAllOf';
 
-export type DeleteUnthreadedAnchorResponse = AnchorId & DeleteUnthreadedAnchorResponseAllOf;
+export type DeleteUnthreadedAnchorResponse = AnchorId &
+  DeleteUnthreadedAnchorResponseAllOf;

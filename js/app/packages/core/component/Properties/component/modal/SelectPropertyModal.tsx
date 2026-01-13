@@ -141,7 +141,7 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
   return (
     <Portal>
       <div
-        class="fixed inset-0 bg-overlay z-modal-overlay"
+        class="fixed inset-0 z-modal-overlay"
         onClick={() => props.onClose()}
         onKeyDown={(e) => e.key === 'Escape' && props.onClose()}
         role="dialog"

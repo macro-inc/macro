@@ -89,14 +89,6 @@ export const services: Service[] = [
     orvalKey: "emailService",
   },
   {
-    name: "insight-service",
-    dev: "https://insight-service-dev.macro.com/api-doc/openapi.json",
-    prod: "https://insight-service.macro.com/api-doc/openapi.json",
-    local: "http://localhost:8080/api-doc/openapi.json",
-    output: "../packages/service-clients/service-insight/",
-    orvalKey: "insightsService",
-  },
-  {
     name: "search-service",
     dev: "https://search-service-dev.macro.com/api-doc/openapi.json",
     prod: "https://search-service.macro.com/api-doc/openapi.json",

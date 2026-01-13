@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type UpdateOperation = typeof UpdateOperation[keyof typeof UpdateOperation];
-
+export type UpdateOperation =
+  (typeof UpdateOperation)[keyof typeof UpdateOperation];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const UpdateOperation = {

@@ -1,8 +1,8 @@
-import { BrightJoins } from '@core/component/BrightJoins';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { TOKENS } from '@core/hotkey/tokens';
 import CloseIcon from '@icon/regular/x.svg';
+import { BrightJoins } from '@ui/components/BrightJoins';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import { type JSX, type ParentProps, Show } from 'solid-js';
 import { useSplitPanel } from '../layoutUtils';
@@ -90,9 +90,9 @@ export function SplitDrawer(
     const constrainedSize = getConstrainedSize();
 
     if (isHorizontal()) {
-      return { width: constrainedSize, top: `${contentOffsetTop() + 1}px` };
+      return { width: constrainedSize, top: `${contentOffsetTop()}px` };
     } else {
-      return { height: constrainedSize, top: `${contentOffsetTop() + 1}px` };
+      return { height: constrainedSize, top: `${contentOffsetTop()}px` };
     }
   };
 

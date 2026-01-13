@@ -16,7 +16,7 @@ pub(crate) mod context;
 pub(crate) mod gmail;
 mod internal;
 mod middleware;
-mod swagger;
+pub(crate) mod swagger;
 
 pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
     let env = state.config.environment;

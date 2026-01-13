@@ -7,6 +7,7 @@ import { type JSXElement, lazy } from 'solid-js';
 import { EmailCompose } from '../../../block-email/component/Compose';
 import { Soup } from '../Soup';
 import { SettingsPanel } from '../settings/Settings';
+import NotificationRoute from '@notifications/components/NotificationRoute';
 
 export type ComponentFactory = (params?: Record<string, any>) => JSXElement;
 
@@ -59,7 +60,12 @@ registerComponent('loading', () => <LoadingBlock />);
 registerComponent('channel-compose', () => <ChannelCompose />);
 registerComponent('email-compose', () => <EmailCompose />);
 registerComponent('task-compose', () => <ComposeTask />);
+registerComponent(
+  'import-linear',
+  lazy(() => import('@app/component/import-linear/ImportLinear'))
+);
 registerComponent('settings', () => <SettingsPanel />);
+registerComponent('notification', () => <NotificationRoute />);
 
 if (LOCAL_ONLY) {
   registerComponent(
@@ -125,6 +131,11 @@ if (LOCAL_ONLY) {
         default: m.NotificationsPlayground,
       }))
     )
+  );
+
+  registerComponent(
+    'properties-debug',
+    lazy(() => import('@core/component/Properties/debug/PropertiesDebug'))
   );
 }
 

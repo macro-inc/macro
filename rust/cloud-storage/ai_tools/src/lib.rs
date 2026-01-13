@@ -6,7 +6,7 @@ pub mod read;
 pub mod rewrite;
 pub mod search;
 mod tool_context;
-use search::anthropic_web_search::anthropic_web_search_tool;
+use search::web::anthropic_web_search::anthropic_web_search_tool;
 
 pub use search::search_toolset;
 pub use tool_context::*;

@@ -1,9 +1,8 @@
 use crate::types::{ChatCompletionRequest, response::ChatStreamCompletionResponse};
 use anyhow::Context;
 use async_openai::types::{
-    ChatCompletionRequestMessage, ChatCompletionRequestMessageContentPartText,
-    ChatCompletionRequestSystemMessage, ChatCompletionRequestSystemMessageContent,
-    ChatCompletionRequestSystemMessageContentPart, CreateChatCompletionRequest,
+    ChatCompletionRequestMessage, ChatCompletionRequestSystemMessage,
+    ChatCompletionRequestSystemMessageContent, CreateChatCompletionRequest,
     CreateChatCompletionRequestArgs, CreateChatCompletionStreamResponse,
     FinishReason as OpenAIFinishReason, ReasoningEffort,
 };
@@ -15,21 +14,12 @@ impl TryFrom<ChatCompletionRequest> for CreateChatCompletionRequest {
     fn try_from(value: ChatCompletionRequest) -> anyhow::Result<Self> {
         let mut all_messages: Vec<ChatCompletionRequestMessage> = vec![];
         // text parts are used for anthropic caching and have no effect on other models
-        let system_message_parts = value
-            .system_prompt
-            .clone()
-            .format_for_caching(4)
-            .into_iter()
-            .map(|part| {
-                ChatCompletionRequestSystemMessageContentPart::Text(
-                    ChatCompletionRequestMessageContentPartText { text: part },
-                )
-            })
-            .collect::<Vec<_>>();
 
         let system_message =
             ChatCompletionRequestMessage::System(ChatCompletionRequestSystemMessage {
-                content: ChatCompletionRequestSystemMessageContent::Array(system_message_parts),
+                content: ChatCompletionRequestSystemMessageContent::Text(
+                    value.system_prompt.to_string(),
+                ),
                 name: None,
             });
 

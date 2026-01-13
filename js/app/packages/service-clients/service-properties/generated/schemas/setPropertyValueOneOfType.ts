@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type SetPropertyValueOneOfType = typeof SetPropertyValueOneOfType[keyof typeof SetPropertyValueOneOfType];
-
+export type SetPropertyValueOneOfType =
+  (typeof SetPropertyValueOneOfType)[keyof typeof SetPropertyValueOneOfType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const SetPropertyValueOneOfType = {

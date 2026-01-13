@@ -10,4 +10,5 @@ import type { ToWebSocketMessageOneOfOnenineAllOf } from './toWebSocketMessageOn
 /**
  * stream a simple completion
  */
-export type ToWebSocketMessageOneOfOnenine = GetSimpleCompletionStreamPayload & ToWebSocketMessageOneOfOnenineAllOf;
+export type ToWebSocketMessageOneOfOnenine = GetSimpleCompletionStreamPayload &
+  ToWebSocketMessageOneOfOnenineAllOf;

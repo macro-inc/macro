@@ -1,7 +1,5 @@
 use crate::pubsub::context::PubSubContext;
-use crate::util::backfill::backfill_insights::backfill_email_insights;
 use model::contacts::ConnectionsMessage;
-use model::insight_context::email_insights::BackfillEmailInsightsFilter;
 use models_email::db::address::EmailRecipientType;
 use models_email::service::attachment::{
     AttachmentUploadArgs, AttachmentUploadDestination, AttachmentUploadMetadata,
@@ -91,25 +89,6 @@ async fn handle_job_completed(
         ProcessingError::NonRetryable(DetailedError {
             reason: FailureReason::DatabaseQueryFailed,
             source: e.context("Failed to update thread status to complete"),
-        })
-    })?;
-
-    tracing::info!("Backfilling email insights for user {}", link.macro_id);
-    let backfill_email_insights_filter = BackfillEmailInsightsFilter {
-        user_ids: Some(vec![link.macro_id.to_string()]),
-        user_thread_limit: None,
-    };
-
-    backfill_email_insights(
-        ctx.sqs_client.clone(),
-        &ctx.db,
-        backfill_email_insights_filter,
-    )
-    .await
-    .map_err(|e| {
-        ProcessingError::NonRetryable(DetailedError {
-            reason: FailureReason::DatabaseQueryFailed,
-            source: e.context("Failed to backfill email insights"),
         })
     })?;
 

@@ -23,7 +23,7 @@ function EmptyStateHelpDrawer(props: {
   showDropZone?: boolean;
 }) {
   const {
-    unifiedListContext: { setShowHelpDrawer },
+    soupContext: { setShowHelpDrawer },
   } = useSplitPanelOrThrow();
 
   let timeoutId: ReturnType<typeof setTimeout> | undefined;

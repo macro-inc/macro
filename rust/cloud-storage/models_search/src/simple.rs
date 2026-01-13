@@ -97,6 +97,7 @@ impl From<opensearch_client::search::model::SearchGotoContent> for SearchGotoCon
 /// Simple response item to mimic what we get back from opensearch
 #[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema, JsonSchema)]
 pub struct SimpleSearchResponseItem {
+    /// ID of the chat, channel, email, or document
     pub entity_id: uuid::Uuid,
     pub entity_type: String,
     pub score: Option<f64>,

@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "jsx": "preserve",
+    "jsxImportSource": "solid-js",
+    "composite": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "moduleResolution": "bundler"
+  }
+}

@@ -5,8 +5,11 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { Entity } from './entity';
-import type { NotificationTemporalData } from './notificationTemporalData';
-import type { NotificationEvent } from './notificationEvent';
 import type { NotificationAllOf } from './notificationAllOf';
+import type { NotificationEvent } from './notificationEvent';
+import type { NotificationTemporalData } from './notificationTemporalData';
 
-export type Notification = Entity & NotificationTemporalData & NotificationEvent & NotificationAllOf;
+export type Notification = Entity &
+  NotificationTemporalData &
+  NotificationEvent &
+  NotificationAllOf;

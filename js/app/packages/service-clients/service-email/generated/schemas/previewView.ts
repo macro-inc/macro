@@ -8,4 +8,12 @@
 /**
  * View type. Supported values include standard labels and a custom user label user:<label>
  */
-export type PreviewView = 'inbox' | 'sent' | 'drafts' | 'starred' | 'all' | 'important' | 'other' | string;
+export type PreviewView =
+  | 'inbox'
+  | 'sent'
+  | 'drafts'
+  | 'starred'
+  | 'all'
+  | 'important'
+  | 'other'
+  | string;

@@ -4,12 +4,13 @@
  * email_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ApiAttachment } from './apiAttachment';
-import type { ApiContact } from './apiContact';
-import type { ApiThreadPreviewCursorAllOfFrecencyScore } from './apiThreadPreviewCursorAllOfFrecencyScore';
-import type { ApiLabel } from './apiLabel';
-import type { ApiAttachmentMacro } from './apiAttachmentMacro';
+
 import type { APIEmailThreadPreviewMetadata } from './aPIEmailThreadPreviewMetadata';
+import type { ApiAttachment } from './apiAttachment';
+import type { ApiAttachmentMacro } from './apiAttachmentMacro';
+import type { ApiContact } from './apiContact';
+import type { ApiLabel } from './apiLabel';
+import type { ApiThreadPreviewCursorAllOfFrecencyScore } from './apiThreadPreviewCursorAllOfFrecencyScore';
 
 export type ApiThreadPreviewCursorAllOf = {
   attachments: ApiAttachment[];

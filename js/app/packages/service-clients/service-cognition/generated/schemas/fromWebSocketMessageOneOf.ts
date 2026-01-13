@@ -4,10 +4,12 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
-import type { WebSocketError } from './webSocketError';
+
 import type { FromWebSocketMessageOneOfAllOf } from './fromWebSocketMessageOneOfAllOf';
+import type { WebSocketError } from './webSocketError';
 
 /**
  * Misc error
  */
-export type FromWebSocketMessageOneOf = WebSocketError & FromWebSocketMessageOneOfAllOf;
+export type FromWebSocketMessageOneOf = WebSocketError &
+  FromWebSocketMessageOneOfAllOf;

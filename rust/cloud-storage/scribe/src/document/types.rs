@@ -1,9 +1,10 @@
-use crate::compress_image::make_compressed_base64_webp;
-use anyhow::Error;
+use ai::types::ImageData;
+use anyhow::{Error, bail};
 use bytes::Bytes;
 use lexical_client::types::CognitionResponseData;
 use model::document::response::LocationResponseV3;
 use model::document::{DocumentBasic, FileType, FileTypeExt};
+use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 
 #[derive(Debug, Clone)]
 pub struct DocumentContent {
@@ -11,6 +12,7 @@ pub struct DocumentContent {
     pub document_id: String,
     pub file_type: FileType,
     pub location: LocationResponseV3,
+    pub properties: Option<Vec<EntityPropertyWithDefinition>>,
 }
 
 #[derive(Clone)]
@@ -18,6 +20,19 @@ pub enum Data {
     Text(String),
     Binary(Bytes),
     Markdown(CognitionResponseData),
+}
+
+impl TryFrom<DocumentContent> for ImageData {
+    type Error = anyhow::Error;
+    fn try_from(value: DocumentContent) -> Result<Self, Self::Error> {
+        if value.file_type.is_image()
+            && let Data::Binary(bytes) = value.data
+        {
+            ImageData::try_from_bytes(bytes.into())
+        } else {
+            bail!("No conversion to image")
+        }
+    }
 }
 
 impl std::fmt::Debug for Data {
@@ -42,18 +57,7 @@ impl DocumentContent {
         if self.file_type.is_text_content() {
             Ok(self.data.to_string())
         } else {
-            Err(anyhow::anyhow!("Document is not text"))
-        }
-    }
-
-    #[tracing::instrument(err)]
-    pub fn base64_compressed_webp(self) -> Result<String, Error> {
-        if self.file_type.is_image()
-            && let Some(bytes) = self.data.binary_data()
-        {
-            make_compressed_base64_webp(&bytes)
-        } else {
-            Err(anyhow::anyhow!("Data is not in image format"))
+            bail!("Document is not text")
         }
     }
 }

@@ -4,6 +4,14 @@ name = "unfurl_service"
 publish = false
 version = "0.1.0"
 
+[[bin]]
+name = "unfurl_service"
+path = "src/main.rs"
+
+[[bin]]
+name = "unfurl_service_openapi"
+path = "src/openapi.rs"
+
 [features]
 mock = []
 

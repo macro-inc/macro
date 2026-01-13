@@ -5,10 +5,8 @@ use axum::{
     response::{IntoResponse, Redirect, Response},
 };
 
-use crate::{
-    api::{context::ApiContext, utils::default_redirect_url},
-    service::user::create_user::create_user_profile,
-};
+use crate::api::{context::ApiContext, utils::default_redirect_url};
+use authentication_service::service::user::create_user::create_user_profile;
 
 use model::{
     response::{EmptyResponse, ErrorResponse},

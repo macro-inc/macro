@@ -1,3 +1,7 @@
+use std::time::Duration;
+
+use tokio::time::error::Elapsed;
+
 mod comms_utils;
 pub mod context;
 mod create;
@@ -11,61 +15,35 @@ mod user_ids;
 /// Runs the notification worker in a loop to handle restarting should it fail.
 pub async fn run_notification_worker(queue_worker_context: context::QueueWorkerContext) {
     use futures::StreamExt;
+    tracing::info!("notification worker started");
     loop {
-        let worker_result = tokio::spawn({
-            let queue_worker_context = queue_worker_context.clone();
-            async move {
-                tracing::info!("notification worker started");
-                loop {
-                    match queue_worker_context.worker.receive_messages().await {
-                        Ok(messages) => {
-                            if messages.is_empty() {
-                                continue;
-                            }
-
-                            futures::stream::iter(messages.iter())
-                                .then(|message| {
-                                    let queue_worker_context = queue_worker_context.clone();
-                                    async move {
-                                        let processing_future = process::process_message(queue_worker_context,message);
-                                        let result = tokio::time::timeout(std::time::Duration::from_secs(30), processing_future).await;
-
-                                        match result {
-                                            Ok(Ok(_)) => {}
-                                            Ok(Err(e)) => {
-                                                tracing::error!(message_id=?message.message_id, error=?e, "error processing message");
-                                            }
-                                            Err(e) => {
-                                                tracing::error!(message_id=?message.message_id, error=?e, "timeout processing message");
-                                            }
-                                        }
-                                        Ok(())
-                                    }
-                                })
-                                .collect::<Vec<anyhow::Result<()>>>()
-                                .await;
-                        }
-                        Err(e) => {
-                            tracing::error!(error=?e, "error receiving messages");
-                        }
-                    }
+        match queue_worker_context.worker.receive_messages().await {
+            Ok(messages) => {
+                if messages.is_empty() {
+                    continue;
                 }
-            }
-        })
-        .await;
 
-        match worker_result {
-            Ok(_) => {
-                // This should never be hit
-                tracing::error!("notification worker exited successfully?");
+                futures::stream::iter(messages)
+                    .map(|message| {
+                        let ctx = queue_worker_context.clone();
+                        async move {
+                            let processing_future = process::process_message(ctx, &message);
+                            let _ = with_timeout(Duration::from_secs(30), processing_future).await;
+                            Ok::<(), anyhow::Error>(())
+                        }
+                    })
+                    .buffer_unordered(10)
+                    .collect::<Vec<anyhow::Result<()>>>()
+                    .await;
             }
             Err(e) => {
-                tracing::error!(error=?e, "notification worker crashed with error");
+                tracing::error!(error=?e, "error receiving messages");
             }
         }
-
-        // Add a delay before restarting to avoid rapid restart loops
-        tracing::info!("NOTIFICATION WORKER RESTARTING...");
-        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
     }
+}
+
+#[tracing::instrument(err, skip(fut))]
+async fn with_timeout<F: Future>(duration: Duration, fut: F) -> Result<F::Output, Elapsed> {
+    tokio::time::timeout(duration, fut).await
 }

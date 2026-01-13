@@ -83,7 +83,7 @@ pub async fn handler(
 
     ctx.auth_client
         .create_user(
-            crate::service::fusionauth_client::user::create::User {
+            authentication_service::service::fusionauth_client::user::create::User {
                 email: email.into(),
                 password: req.password.into(),
                 username: Some(req.username.into()),

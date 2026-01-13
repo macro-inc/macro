@@ -1,3 +1,3 @@
-pub trait AiFormat {
-    fn ai_format(self) -> impl std::fmt::Display;
-}
+pub trait TextAttachment: std::fmt::Display + std::fmt::Debug + Send + Sync {}
+
+impl TextAttachment for Box<dyn TextAttachment> {}

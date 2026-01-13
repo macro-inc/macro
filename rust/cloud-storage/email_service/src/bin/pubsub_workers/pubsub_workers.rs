@@ -22,6 +22,8 @@ async fn main() -> anyhow::Result<()> {
         .load()
         .await;
 
+    let s3_client = s3_client::S3::new(aws_sdk_s3::Client::new(&aws_config));
+
     let secretsmanager_client = secretsmanager_client::SecretsManager::new(
         aws_sdk_secretsmanager::Client::new(&aws_config),
     );
@@ -88,11 +90,11 @@ async fn main() -> anyhow::Result<()> {
         .gmail_inbox_sync_queue(&config.gmail_inbox_sync_queue)
         .gmail_inbox_sync_retry_queue(&config.gmail_inbox_sync_retry_queue)
         .search_event_queue(&config.search_event_queue)
-        .insight_context_queue(&config.insight_context_queue)
         .email_backfill_queue(&config.backfill_queue)
         .email_scheduled_queue(&config.email_scheduled_queue)
         .sfs_uploader_queue(&config.sfs_uploader_queue)
-        .contacts_queue(&config.contacts_queue);
+        .contacts_queue(&config.contacts_queue)
+        .email_link_manager_queue(&config.link_manager_queue);
 
     let macro_notify_client = macro_notify::MacroNotify::new(
         config.notification_queue.clone(),
@@ -334,6 +336,8 @@ async fn main() -> anyhow::Result<()> {
     let gmail_client_scheduled = gmail_client.clone();
     let auth_service_client_scheduled = auth_service_client.clone();
     let redis_client_scheduled = redis_client.clone();
+    let s3_client_scheduled = s3_client.clone();
+    let attachment_bucket_scheduled = config.attachment_bucket.clone();
     // send scheduled emails
     tokio::spawn(async move {
         email_service::pubsub::scheduled::worker::run_worker(
@@ -342,6 +346,8 @@ async fn main() -> anyhow::Result<()> {
             gmail_client_scheduled,
             auth_service_client_scheduled,
             redis_client_scheduled,
+            s3_client_scheduled,
+            attachment_bucket_scheduled,
         )
         .await;
     });

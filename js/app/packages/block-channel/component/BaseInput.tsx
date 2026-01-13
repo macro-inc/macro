@@ -4,8 +4,11 @@ import {
 } from '@block-channel/signal/attachment';
 import type { SendMessageArgs } from '@block-channel/signal/channel';
 import { handleFileUpload } from '@block-channel/utils/inputAttachments';
+import {
+  expandGroupParticipants,
+  toSimpleMention,
+} from '@block-channel/utils/mentionExpansion';
 import { isInBlock } from '@core/block';
-import { BrightJoins } from '@core/component/BrightJoins';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { setEditorStateFromMarkdown } from '@core/component/LexicalMarkdown/utils';
@@ -33,6 +36,7 @@ import type { SimpleMention } from '@service-comms/generated/models/simpleMentio
 import { staticFileClient } from '@service-static-files/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { leading, throttle } from '@solid-primitives/scheduled';
+import { BrightJoins } from '@ui/components/BrightJoins';
 import { activeElement } from 'app/signal/focus';
 import { toast } from 'core/component/Toast/Toast';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
@@ -199,11 +203,22 @@ export function BaseInput(props: BaseInputProps) {
     if (currentRef) props.domRef?.(currentRef);
   });
 
-  const allMentions: Accessor<SimpleMention[]> = () =>
-    mentions().map((m) => ({
-      entity_type: m.itemType,
-      entity_id: m.itemId,
-    }));
+  const allMentions: Accessor<SimpleMention[]> = () => {
+    const result: SimpleMention[] = [];
+    const seenUserIds = new Set<string>();
+    const channelUserIds = props.channelUsers?.().map((u) => u.id) ?? [];
+
+    for (const m of mentions()) {
+      if (m.itemType === 'group') {
+        result.push(...expandGroupParticipants(channelUserIds, seenUserIds));
+      } else {
+        const mention = toSimpleMention(m, seenUserIds);
+        if (mention) result.push(mention);
+      }
+    }
+
+    return result;
+  };
 
   const [attachFn, scopeId] = useHotkeyDOMScope('channel.baseInput');
 

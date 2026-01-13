@@ -332,16 +332,31 @@ export function FloatingLinkMenu(props: { closePopup?: () => void }) {
     return data.data;
   });
 
+  const floatWithElementProps = () =>
+    linkInfo()?.linkRef
+      ? {
+          element: () => linkInfo()?.linkRef,
+          useBlockBoundary: true,
+        }
+      : undefined;
+
+  const floatWithSelectionProps = () =>
+    !linkInfo()?.linkRef && linkInfo()?.selection
+      ? {
+          selection: linkInfo()?.selection,
+          reactiveOnContainer: editor.getRootElement(),
+          useBlockBoundary: true,
+        }
+      : undefined;
+
   const MenuWrapper = (props: ParentProps) => {
     return (
-      <Switch fallback={<div class="display-none">{props.children}</div>}>
-        <Match when={linkInfo()?.linkRef !== undefined}>
+      <Show when={linkInfo()?.linkRef || linkInfo()?.selection}>
+        <ScopedPortal scope="block">
           <div
-            class="p-2 fixed bg-menu top-0 left-0 text-sm z-action-menu ring ring-edge min-w-100"
-            use:floatWithElement={{
-              element: () => linkInfo()?.linkRef,
-              useBlockBoundary: true,
-            }}
+            class="p-2 fixed bg-menu top-0 left-0 text-sm z-modal-content ring ring-edge rounded-md shadow-lg min-w-80"
+            use:floatWithElement={floatWithElementProps()}
+            use:floatWithSelection={floatWithSelectionProps()}
             use:clickOutside={() => {
               setMenuOpen(false);
               setIsEditing(false);
@@ -350,24 +365,8 @@ export function FloatingLinkMenu(props: { closePopup?: () => void }) {
           >
             {props.children}
           </div>
-        </Match>
-        <Match when={linkInfo()?.selection}>
-          <div
-            class="p-2 fixed bg-menu top-0 left-0 text-sm z-action-menu ring ring-edge rounded-md shadow-lg min-w-80"
-            use:floatWithSelection={{
-              selection: linkInfo()?.selection,
-              useBlockBoundary: true,
-            }}
-            use:clickOutside={() => {
-              setMenuOpen(false);
-              setIsEditing(false);
-            }}
-            ref={menuRef}
-          >
-            {props.children}
-          </div>
-        </Match>
-      </Switch>
+        </ScopedPortal>
+      </Show>
     );
   };
 

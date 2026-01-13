@@ -3,11 +3,9 @@ use axum::Extension;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
+use email_service::util::gmail::send::cleanup_draft_attachments;
 use model::response::{EmptyResponse, ErrorResponse};
 use models_email::service::link::Link;
-use models_opensearch::SearchEntityType;
-use sqs_client::search::SearchQueueMessage;
-use sqs_client::search::name::EntityName;
 use strum_macros::AsRefStr;
 use thiserror::Error;
 use uuid::Uuid;
@@ -84,6 +82,13 @@ pub async fn handler(
         return Err(DeleteDraftError::NotADraft(draft_id));
     }
 
+    // Fetch draft attachments before deletion so we can clean up S3
+    let draft_attachments =
+        email_db_client::attachments::draft::fetch_draft_attachments_by_draft_id(
+            &ctx.db, link.id, draft_id,
+        )
+        .await?;
+
     let mut tx = ctx.db.begin().await?;
 
     let result = email_db_client::messages::delete::delete_message_with_tx(
@@ -94,23 +99,25 @@ pub async fn handler(
     .await;
 
     match result {
-        Ok(deleted_thread) => {
+        Ok(_deleted_thread) => {
             tx.commit().await?;
 
-            if let Some(thread_id) = deleted_thread {
+            // cleanup attachments in the background
+            if !draft_attachments.is_empty() {
+                let db = ctx.db.clone();
+                let s3_client = ctx.s3_client.clone();
+                let bucket = ctx.config.attachment_bucket.clone();
+                let link_id = link.id;
                 tokio::spawn(async move {
-                    let _ = ctx
-                        .sqs_client
-                        .send_message_to_search_event_queue(SearchQueueMessage::RemoveEntityName(
-                            EntityName {
-                                entity_id: thread_id,
-                                entity_type: SearchEntityType::Emails,
-                            },
-                        ))
-                        .await
-                        .inspect_err(|e| {
-                            tracing::error!(error=?e, "failed to send message to search extractor queue");
-                        });
+                    cleanup_draft_attachments(
+                        db,
+                        &s3_client,
+                        bucket,
+                        link_id,
+                        draft_id,
+                        draft_attachments,
+                    )
+                    .await;
                 });
             }
 

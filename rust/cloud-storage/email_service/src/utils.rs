@@ -1,6 +1,5 @@
 use axum::Json;
 use axum::http::StatusCode;
-use axum::response::{IntoResponse, Response};
 use model::response::ErrorResponse;
 
 /// User IDs are expected to be in the format "macro|email@example.com"
@@ -24,7 +23,9 @@ pub fn email_from_user_id(user_id: &str) -> anyhow::Result<String> {
 /// This is a helper function to avoid repeating the same error handling pattern
 /// when extracting an email from a user ID in request handlers.
 #[tracing::instrument(level = "debug")]
-pub fn extract_email_with_response(user_id: &str) -> Result<String, Response> {
+pub fn extract_email_with_response(
+    user_id: &str,
+) -> Result<String, (StatusCode, Json<ErrorResponse<'static>>)> {
     email_from_user_id(user_id).map_err(|e| {
         tracing::error!(error=?e, "unable to get email from user id");
         (
@@ -33,6 +34,5 @@ pub fn extract_email_with_response(user_id: &str) -> Result<String, Response> {
                 message: "unable to get email from user id",
             }),
         )
-            .into_response()
     })
 }

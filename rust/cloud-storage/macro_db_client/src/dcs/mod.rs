@@ -2,7 +2,6 @@
 // These queries were migrated from document_cognition_service/src/service/db/
 
 // Chat queries
-pub mod add_attachment;
 pub mod append_attachment_to_chat;
 pub mod copy_messages;
 pub mod create_chat_message;

@@ -385,9 +385,12 @@ export function PopupPreview(props: {
     const splitManager = globalSplitManager();
     if (splitManager) {
       splitManager.createNewSplit({
-        type: props.documentInfo.type,
-        id: props.documentInfo.id,
-        params: props.documentInfo.params,
+        content: {
+          type: props.documentInfo.type,
+          id: props.documentInfo.id,
+          params: props.documentInfo.params,
+        },
+        referredFrom: null,
       });
     }
   });
@@ -579,7 +582,7 @@ export function PopupPreview(props: {
                             <EntityIcon
                               targetType={
                                 type === 'document'
-                                  ? (subType ?? fileType)
+                                  ? (subType?.type ?? fileType)
                                   : type
                               }
                               size="md"

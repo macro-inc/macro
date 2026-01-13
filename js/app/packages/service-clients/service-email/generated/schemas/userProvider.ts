@@ -5,8 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type UserProvider = typeof UserProvider[keyof typeof UserProvider];
-
+export type UserProvider = (typeof UserProvider)[keyof typeof UserProvider];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const UserProvider = {

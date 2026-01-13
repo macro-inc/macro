@@ -1,5 +1,5 @@
 use crate::api::context::AppState;
-use crate::api::extractors::{ChannelAdmin, ChannelId, ChannelTypeExtractor};
+use crate::api::extractors::{ChannelId, ChannelMember, ChannelTypeExtractor};
 use anyhow::Result;
 use axum::extract::Json;
 use axum::{extract::State, http::StatusCode};
@@ -21,7 +21,7 @@ pub struct RemoveParticipantsRequest {
     delete,
     tag = "channels",
     operation_id = "remove_participants",
-    description = "removes a list of participants to the channel, user must be an owner or an admin",
+    description = "removes a list of participants from the channel, user must be a participant",
     path = "/channels/{channel_id}/participants",
     params(
         ("channel_id" = String, Path, description = "channel id"),
@@ -36,7 +36,7 @@ pub struct RemoveParticipantsRequest {
 #[tracing::instrument(skip(ctx))]
 pub async fn handler(
     State(ctx): State<AppState>,
-    ChannelAdmin(_channel_admin): ChannelAdmin,
+    ChannelMember(_channel_member): ChannelMember,
     Cached(ChannelTypeExtractor(channel_type)): Cached<ChannelTypeExtractor>,
     Cached(ChannelId(channel_id)): Cached<ChannelId>,
     req: Json<RemoveParticipantsRequest>,

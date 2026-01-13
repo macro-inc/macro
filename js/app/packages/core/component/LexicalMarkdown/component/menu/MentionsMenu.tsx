@@ -20,15 +20,16 @@ import { getDateSuggestions } from '@core/util/dateParser';
 import { createFreshSearch } from '@core/util/freshSort';
 import ClockIcon from '@icon/regular/clock.svg';
 import EmailIcon from '@icon/regular/envelope.svg';
+import UsersIcon from '@icon/regular/users.svg';
 import type { EntityData, WithSearch } from '@macro-entity';
 import {
   createUnifiedSearchInfiniteQuery,
   type EmailEntity,
   useEmails,
 } from '@macro-entity';
-import type { PaginatedSearchArgs } from '@service-search/client';
+import { useHistoryQuery } from '@queries/history/history';
+import type { SearchArgs } from '@service-search/client';
 import type { Item } from '@service-storage/generated/schemas/item';
-import { useHistory } from '@service-storage/history';
 import { debounce } from '@solid-primitives/scheduled';
 import { globalSplitManager } from 'app/signal/splitLayout';
 import type { LexicalEditor } from 'lexical';
@@ -44,8 +45,10 @@ import {
   onMount,
   type ParentProps,
   Show,
+  Suspense,
   untrack,
 } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { floatWithElement } from '../../directive/floatWithElement';
 import { floatWithSelection } from '../../directive/floatWithSelection';
 import {
@@ -55,6 +58,7 @@ import {
 import type { MenuOperations } from '../../shared/inlineMenu';
 import {
   type CombinedEntity,
+  createGroupAlias,
   type Entity,
   type EntityMap,
   entityMapper,
@@ -65,6 +69,7 @@ import {
   handleChannelMention,
   handleDateMention,
   handleEmailMention,
+  handleGroupMention,
   handleUserMention,
   type UserMentionRecord,
 } from '../../utils/mentionsUtils';
@@ -99,6 +104,8 @@ const getItemSearchText = (item: CombinedEntity): string => {
       return item.data.displayFormat;
     case 'email':
       return item.data.name ?? 'No Subject';
+    case 'group':
+      return item.data.groupAlias;
   }
 };
 
@@ -146,6 +153,8 @@ function createItemHandler(dependencies: HandlerDependencies) {
         return await handleChannelMention(item.data, dependencies);
       case 'email':
         return await handleEmailMention(item.data, dependencies);
+      case 'group':
+        return await handleGroupMention(item.data, dependencies);
     }
   };
 }
@@ -325,6 +334,9 @@ export function MentionsMenuItem(props: {
       case 'user':
         return <UserIcon id={props.item.id} size="sm" isDeleted={false} />;
 
+      case 'group':
+        return <UsersIcon class="size-4 text-ink-muted" />;
+
       case 'date':
         return <ClockIcon class="size-4 text-ink-muted" />;
 
@@ -385,7 +397,15 @@ export function MentionsMenuItem(props: {
   );
 }
 
-export function MentionsMenu(props: {
+export function MentionsMenu(props: Parameters<typeof MentionsMenuInner>[0]) {
+  return (
+    <Suspense>
+      <MentionsMenuInner {...props} />
+    </Suspense>
+  );
+}
+
+function MentionsMenuInner(props: {
   editor: LexicalEditor;
   menu: MenuOperations;
   /** pass in custom history list if necessary */
@@ -409,9 +429,12 @@ export function MentionsMenu(props: {
   const [searchTerm, setSearchTerm] = createSignal<string>(
     props.menu.searchTerm()
   );
-  const historyAccessor = props.history ?? useHistory();
+  const historyQuery = useHistoryQuery();
   const history = createMemo(() => {
-    return historyAccessor().map(entityMapper('item'));
+    if (props.history) {
+      return props.history().map(entityMapper('item'));
+    }
+    return historyQuery.data?.map(entityMapper('item')) ?? [];
   });
 
   let emails: Accessor<Entity<'email'>[]>;
@@ -453,11 +476,10 @@ export function MentionsMenu(props: {
     });
   }
 
-  const args = createMemo((): PaginatedSearchArgs => {
+  const args = createMemo((): SearchArgs => {
     return {
       params: {
-        page: 0,
-        // small -> fast!
+        cursor: null,
         page_size: 10,
       },
       request: {
@@ -624,10 +646,30 @@ export function MentionsMenu(props: {
     { timeWeight: 0, brevityWeight: 0.3 },
     getItemSearchText
   );
+
+  // Group aliases available in channel context
+  const specialGroups = createMemo((): Entity<'group'>[] => {
+    if (props.block !== 'channel') return [];
+    if (!useMaybeBlockId()) return [];
+
+    const term = searchTerm().toLowerCase();
+
+    const availableGroups = [
+      { alias: 'here', match: (t: string) => t === '' || 'here'.startsWith(t) },
+    ];
+
+    return availableGroups
+      .filter((g) => g.match(term))
+      .map((g) => createGroupAlias(g.alias));
+  });
+
   const filteredUsers = createMemo(() => {
-    return userSearch(users(), searchTerm()).map((result) => {
+    const searchedUsers = userSearch(users(), searchTerm()).map((result) => {
       return result.item;
     });
+    return [...specialGroups(), ...searchedUsers] as CombinedEntity<
+      'user' | 'group'
+    >[];
   });
 
   const emailSearch = createFreshSearch<Entity<'email'>>(
@@ -1030,7 +1072,7 @@ export function MentionsMenu(props: {
       dates.length +
       emailList.length;
 
-    const renderOptions = createMemo(() => {
+    const RenderOptions = () => {
       const options = [];
       if (users.length > 0) {
         options.push(
@@ -1152,14 +1194,16 @@ export function MentionsMenu(props: {
           </>
         )
       );
-    });
+    };
 
     return (
       <Show
         when={totalLength() > 0}
         fallback={<div class="px-2 text-ink-extra-muted">No results</div>}
       >
-        <div>{renderOptions()}</div>
+        <div>
+          <Dynamic component={RenderOptions} />
+        </div>
       </Show>
     );
   });

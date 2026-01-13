@@ -6,7 +6,6 @@ publish = false
 version = "0.1.0"
 
 [dev-dependencies]
-chrono = { workspace = true }
 macro_entrypoint = { path = "../macro_entrypoint" }
 tokio = { workspace = true }
 uuid = { workspace = true }
@@ -14,7 +13,9 @@ uuid = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true }
+chrono = { workspace = true }
 models_opensearch = { path = "../models_opensearch" }
+models_search_cursor = { path = "../models_search_cursor" }
 opensearch = { version = "2.3.0" }
 opensearch_query_builder = { version = "0.2.8", default-features = false }
 serde = { workspace = true }

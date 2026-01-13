@@ -20,6 +20,7 @@ import { ContactMentionNode } from './nodes/ContactMentionNode';
 import { CustomCodeNode } from './nodes/CustomCodeNode';
 import { DateMentionNode } from './nodes/DateMentionNode';
 import { DiffDeleteNode } from './nodes/DiffDeleteNode';
+import { GroupMentionNode } from './nodes/GroupMentionNode';
 import { DiffInsertNode } from './nodes/DiffInsertNode';
 import { DiffNode } from './nodes/DiffNode';
 import { DocumentCardNode } from './nodes/DocumentCardNode';
@@ -68,6 +69,7 @@ export const SupportedNodeTypes = [
   UserMentionNode,
   ContactMentionNode,
   DateMentionNode,
+  GroupMentionNode,
   InlineSearchNode,
   UnlinkedTextNode,
   CodeHighlightNode,

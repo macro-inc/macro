@@ -7,4 +7,5 @@
 import type { ContactInfoLegacy } from './contactInfoLegacy';
 import type { ContactInfoWithInteractionAllOf } from './contactInfoWithInteractionAllOf';
 
-export type ContactInfoWithInteraction = ContactInfoLegacy & ContactInfoWithInteractionAllOf;
+export type ContactInfoWithInteraction = ContactInfoLegacy &
+  ContactInfoWithInteractionAllOf;

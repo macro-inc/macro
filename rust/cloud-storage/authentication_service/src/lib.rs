@@ -1,6 +1,6 @@
 pub mod fetch_and_checksum;
 mod generate_password;
-mod service;
+pub mod service;
 
 /// expose auth client to be used in bin
 pub use service::fusionauth_client::FusionAuthClient;

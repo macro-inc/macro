@@ -4,7 +4,9 @@
     "title": "authentication_service",
     "description": "",
     "termsOfService": "https://macro.com/terms",
-    "license": { "name": "" },
+    "license": {
+      "name": ""
+    },
     "version": "0.1.0"
   },
   "paths": {
@@ -19,7 +21,9 @@
             "in": "path",
             "description": "The verification id",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -27,7 +31,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           },
@@ -35,7 +41,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -62,7 +70,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           },
@@ -70,7 +80,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -97,7 +109,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           },
@@ -105,7 +119,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -113,7 +129,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -131,7 +149,9 @@
             "in": "path",
             "description": "The verification id",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -139,7 +159,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           },
@@ -147,7 +169,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -164,7 +188,9 @@
             "description": "health",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           }
@@ -182,7 +208,9 @@
             "in": "query",
             "description": "The email to generate the macro-api-token for. If not provided, we use your default profile.",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -198,11 +226,23 @@
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -217,21 +257,41 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/UserTokensResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/UserTokensResponse"
+                }
               }
             }
           },
           "400": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -256,7 +316,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -264,7 +326,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -272,7 +336,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -280,7 +346,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -295,7 +363,9 @@
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/AppleLoginRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/AppleLoginRequest"
+              }
             }
           },
           "required": true
@@ -305,7 +375,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           },
@@ -313,7 +385,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -321,7 +395,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -329,7 +405,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -344,7 +422,9 @@
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/PasswordRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/PasswordRequest"
+              }
             }
           },
           "required": true
@@ -354,7 +434,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/UserTokensResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/UserTokensResponse"
+                }
               }
             }
           },
@@ -362,7 +444,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -370,7 +454,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -378,7 +464,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -393,7 +481,9 @@
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/PasswordlessRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/PasswordlessRequest"
+              }
             }
           },
           "required": true
@@ -403,7 +493,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           },
@@ -411,21 +503,41 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/SsoRequiredResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/SsoRequiredResponse"
+                }
               }
             }
           },
           "400": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "403": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -441,44 +553,58 @@
             "in": "query",
             "description": "The name of the identity provider to use for login. e.g Google",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "idp_id",
             "in": "query",
             "description": "**OPTIONAL**. The idp id of the identity provider to use for login.",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "login_hint",
             "in": "query",
             "description": "**OPTIONAL**. The user's email.",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "original_url",
             "in": "query",
             "description": "**OPTIONAL**. The original url you came from.",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "is_mobile",
             "in": "query",
             "description": "**OPTIONAL**. If the authentication request is from a mobile device.",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
-          "200": { "description": "" },
+          "200": {
+            "description": ""
+          },
           "400": {
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -486,7 +612,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -503,7 +631,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           }
@@ -530,7 +660,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           },
@@ -538,7 +670,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -546,19 +680,29 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
           "429": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -576,7 +720,9 @@
             "in": "path",
             "description": "The code",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -584,7 +730,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           },
@@ -592,7 +740,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -600,7 +750,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -618,14 +770,18 @@
             "in": "path",
             "description": "Code",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "email",
             "in": "query",
             "description": "Email",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -633,21 +789,41 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/UserTokensResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/UserTokensResponse"
+                }
               }
             }
           },
           "400": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -658,18 +834,38 @@
         "summary": "Handles oauth redirect",
         "operationId": "oauth_redirect",
         "responses": {
-          "200": { "description": "" },
+          "200": {
+            "description": ""
+          },
           "400": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -685,25 +881,35 @@
             "in": "path",
             "description": "The provider to use",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
-          "200": { "description": "" },
+          "200": {
+            "description": ""
+          },
           "304": {
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
-          "307": { "description": "" },
+          "307": {
+            "description": ""
+          },
           "400": {
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -711,7 +917,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -719,7 +927,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -738,18 +948,32 @@
               "application/json": {
                 "schema": {
                   "type": "array",
-                  "items": { "$ref": "#/components/schemas/Permission" }
+                  "items": {
+                    "$ref": "#/components/schemas/Permission"
+                  }
                 }
               }
             }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -764,17 +988,34 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "type": "array", "items": { "type": "string" } }
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
               }
             }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -789,19 +1030,29 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           },
           "400": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -819,7 +1070,9 @@
             "in": "path",
             "description": "The session code",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -827,7 +1080,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/UserTokensResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/UserTokensResponse"
+                }
               }
             }
           },
@@ -835,7 +1090,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -843,7 +1100,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -851,7 +1110,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -866,7 +1127,9 @@
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CreateTeamRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/CreateTeamRequest"
+              }
             }
           },
           "required": true
@@ -876,7 +1139,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/Team" }
+                "schema": {
+                  "$ref": "#/components/schemas/Team"
+                }
               }
             }
           },
@@ -884,7 +1149,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -892,7 +1159,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -910,7 +1179,9 @@
             "in": "path",
             "description": "The team invite id",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -918,7 +1189,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           },
@@ -926,7 +1199,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -934,7 +1209,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -942,7 +1219,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -958,7 +1237,9 @@
             "in": "path",
             "description": "The team invite id",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -966,7 +1247,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           },
@@ -974,7 +1257,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -982,7 +1267,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -990,7 +1277,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -1009,7 +1298,9 @@
               "application/json": {
                 "schema": {
                   "type": "array",
-                  "items": { "$ref": "#/components/schemas/Team" }
+                  "items": {
+                    "$ref": "#/components/schemas/Team"
+                  }
                 }
               }
             }
@@ -1018,7 +1309,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -1026,7 +1319,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -1034,7 +1329,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -1051,7 +1348,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/TeamInvitesResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/TeamInvitesResponse"
+                }
               }
             }
           },
@@ -1059,7 +1358,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -1067,7 +1368,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -1075,7 +1378,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -1093,7 +1398,9 @@
             "in": "path",
             "description": "The ID of the team to retrieve",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -1101,7 +1408,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/TeamWithUsers" }
+                "schema": {
+                  "$ref": "#/components/schemas/TeamWithUsers"
+                }
               }
             }
           },
@@ -1109,7 +1418,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -1117,7 +1428,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -1125,7 +1438,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -1133,7 +1448,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -1149,7 +1466,9 @@
             "in": "path",
             "description": "The ID of the team to delete",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -1157,7 +1476,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           },
@@ -1165,7 +1486,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -1173,7 +1496,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -1181,7 +1506,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -1197,13 +1524,17 @@
             "in": "path",
             "description": "The ID of the team to update",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/PatchTeamRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/PatchTeamRequest"
+              }
             }
           },
           "required": true
@@ -1213,7 +1544,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           },
@@ -1221,7 +1554,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -1229,7 +1564,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -1237,7 +1574,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -1245,7 +1584,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -1263,25 +1604,35 @@
             "in": "path",
             "description": "The ID of the team to invite to",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/InviteToTeamRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/InviteToTeamRequest"
+              }
             }
           },
           "required": true
         },
         "responses": {
-          "201": { "description": "" },
-          "304": { "description": "" },
+          "201": {
+            "description": ""
+          },
+          "304": {
+            "description": ""
+          },
           "400": {
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -1289,7 +1640,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -1297,7 +1650,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -1305,7 +1660,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -1323,7 +1680,9 @@
             "in": "path",
             "description": "The ID of the team to get invites for",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -1331,7 +1690,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/TeamInvitesResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/TeamInvitesResponse"
+                }
               }
             }
           },
@@ -1339,7 +1700,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -1347,7 +1710,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -1355,7 +1720,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -1373,14 +1740,18 @@
             "in": "path",
             "description": "The ID of the team to invite to",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "team_invite_id",
             "in": "path",
             "description": "The ID of the team invite to reinvite",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -1388,7 +1759,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           },
@@ -1396,7 +1769,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -1404,7 +1779,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -1412,7 +1789,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -1420,7 +1799,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -1438,14 +1819,18 @@
             "in": "path",
             "description": "The ID of the team to invite to",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "remove_user_id",
             "in": "path",
             "description": "The ID of the user to remove",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -1453,7 +1838,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           },
@@ -1461,7 +1848,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -1469,7 +1858,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -1477,7 +1868,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -1485,7 +1878,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -1500,7 +1895,9 @@
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CreateUserRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/CreateUserRequest"
+              }
             }
           },
           "required": true
@@ -1510,7 +1907,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           },
@@ -1518,7 +1917,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -1526,7 +1927,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -1553,19 +1956,29 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/UserNames" }
+                "schema": {
+                  "$ref": "#/components/schemas/UserNames"
+                }
               }
             }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -1592,23 +2005,39 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/UserNames" }
+                "schema": {
+                  "$ref": "#/components/schemas/UserNames"
+                }
               }
             }
           },
           "400": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -1623,7 +2052,9 @@
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/PatchUserGroupRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/PatchUserGroupRequest"
+              }
             }
           },
           "required": true
@@ -1633,23 +2064,39 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -1674,13 +2121,21 @@
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -1698,14 +2153,18 @@
             "in": "query",
             "description": "The idp name to lookup. If not provided, the idp_id must be provided.",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "idp_id",
             "in": "query",
             "description": "The idp id to lookup. If not provided, the idp_name must be provided.",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -1713,7 +2172,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/UserLinkResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/UserLinkResponse"
+                }
               }
             }
           },
@@ -1721,19 +2182,29 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -1750,19 +2221,29 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/GetUserInfo" }
+                "schema": {
+                  "$ref": "#/components/schemas/GetUserInfo"
+                }
               }
             }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -1787,7 +2268,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -1795,7 +2278,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -1812,19 +2297,29 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/UserName" }
+                "schema": {
+                  "$ref": "#/components/schemas/UserName"
+                }
               }
             }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -1840,14 +2335,18 @@
             "in": "query",
             "description": "First Name of user",
             "required": false,
-            "schema": { "type": ["string", "null"] }
+            "schema": {
+              "type": ["string", "null"]
+            }
           },
           {
             "name": "last_name",
             "in": "query",
             "description": "Last Name of user",
             "required": false,
-            "schema": { "type": ["string", "null"] }
+            "schema": {
+              "type": ["string", "null"]
+            }
           }
         ],
         "responses": {
@@ -1855,19 +2354,29 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -1894,23 +2403,39 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -1933,16 +2458,26 @@
               }
             }
           },
-          "204": { "description": "" },
+          "204": {
+            "description": ""
+          },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -1960,7 +2495,9 @@
             "in": "query",
             "description": "profile picture URL",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -1968,19 +2505,29 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -2007,19 +2554,29 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ProfilePictures" }
+                "schema": {
+                  "$ref": "#/components/schemas/ProfilePictures"
+                }
               }
             }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -2036,20 +2593,32 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/UserQuota" }
+                "schema": {
+                  "$ref": "#/components/schemas/UserQuota"
+                }
               }
             }
           },
-          "204": { "description": "" },
+          "204": {
+            "description": ""
+          },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -2076,23 +2645,39 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -2102,13 +2687,20 @@
   },
   "components": {
     "schemas": {
-      "ABGroup": { "type": "string", "enum": ["A", "B"] },
+      "ABGroup": {
+        "type": "string",
+        "enum": ["A", "B"]
+      },
       "AppleLoginRequest": {
         "type": "object",
         "required": ["id_token", "code"],
         "properties": {
-          "code": { "type": "string" },
-          "id_token": { "type": "string" }
+          "code": {
+            "type": "string"
+          },
+          "id_token": {
+            "type": "string"
+          }
         }
       },
       "CreateAccountMergeRequest": {
@@ -2125,7 +2717,10 @@
         "type": "object",
         "required": ["link_id"],
         "properties": {
-          "link_id": { "type": "string", "description": "The link id" }
+          "link_id": {
+            "type": "string",
+            "description": "The link id"
+          }
         }
       },
       "CreateTeamRequest": {
@@ -2133,7 +2728,10 @@
         "description": "The request body to create a new team",
         "required": ["name"],
         "properties": {
-          "name": { "type": "string", "description": "The name of the team" }
+          "name": {
+            "type": "string",
+            "description": "The name of the team"
+          }
         }
       },
       "CreateUserRequest": {
@@ -2202,10 +2800,15 @@
           "hasTrialed"
         ],
         "properties": {
-          "email": { "type": "string", "description": "The user's email" },
+          "email": {
+            "type": "string",
+            "description": "The user's email"
+          },
           "group": {
             "oneOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "$ref": "#/components/schemas/ABGroup",
                 "description": "The user's group"
@@ -2230,28 +2833,43 @@
           },
           "permissions": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "The permissions the user has"
           },
           "tutorialComplete": {
             "type": "boolean",
             "description": "Whether the user has completed the tutorial"
           },
-          "userId": { "type": "string", "description": "The user id" }
+          "userId": {
+            "type": "string",
+            "description": "The user id"
+          }
         }
       },
       "GetNamesWithEmailRequestBody": {
         "type": "object",
         "required": ["user_ids"],
         "properties": {
-          "user_ids": { "type": "array", "items": { "type": "string" } }
+          "user_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
         }
       },
       "GetProfilePicturesRequestBody": {
         "type": "object",
         "required": ["user_id_list"],
         "properties": {
-          "user_id_list": { "type": "array", "items": { "type": "string" } }
+          "user_id_list": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
         }
       },
       "GetUserInfo": {
@@ -2265,10 +2883,15 @@
           },
           "permissions": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "The user's permissions"
           },
-          "user_id": { "type": "string", "description": "The user id" }
+          "user_id": {
+            "type": "string",
+            "description": "The user id"
+          }
         }
       },
       "InviteToTeamRequest": {
@@ -2278,7 +2901,9 @@
         "properties": {
           "emails": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "The emails of the users you want to invite to the team"
           }
         }
@@ -2301,7 +2926,9 @@
             "type": "string",
             "description": "The email to login with"
           },
-          "password": { "type": "string" }
+          "password": {
+            "type": "string"
+          }
         }
       },
       "PasswordlessRequest": {
@@ -2354,7 +2981,10 @@
             "type": "string",
             "description": "The last name of the user"
           },
-          "title": { "type": "string", "description": "The title of the user" }
+          "title": {
+            "type": "string",
+            "description": "The title of the user"
+          }
         }
       },
       "PatchUserTutorialRequest": {
@@ -2375,20 +3005,32 @@
             "type": "string",
             "description": "The description of the permission"
           },
-          "id": { "type": "string", "description": "The permission" }
+          "id": {
+            "type": "string",
+            "description": "The permission"
+          }
         }
       },
       "PostGetNamesRequestBody": {
         "type": "object",
         "required": ["user_ids"],
         "properties": {
-          "user_ids": { "type": "array", "items": { "type": "string" } }
+          "user_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
         }
       },
       "ProfilePictureQueryParams": {
         "type": "object",
         "required": ["url"],
-        "properties": { "url": { "type": "string" } }
+        "properties": {
+          "url": {
+            "type": "string"
+          }
+        }
       },
       "ProfilePictures": {
         "type": "object",
@@ -2396,7 +3038,9 @@
         "properties": {
           "pictures": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/UserProfilePicture" }
+            "items": {
+              "$ref": "#/components/schemas/UserProfilePicture"
+            }
           }
         }
       },
@@ -2437,9 +3081,16 @@
         "type": "object",
         "required": ["id", "name", "owner_id"],
         "properties": {
-          "id": { "type": "string", "format": "uuid" },
-          "name": { "type": "string" },
-          "owner_id": { "type": "string" }
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "owner_id": {
+            "type": "string"
+          }
         }
       },
       "TeamInvite": {
@@ -2454,13 +3105,31 @@
           "last_sent_at"
         ],
         "properties": {
-          "created_at": { "type": "string", "format": "date-time" },
-          "email": { "type": "string" },
-          "id": { "type": "string", "format": "uuid" },
-          "invited_by": { "type": "string" },
-          "last_sent_at": { "type": "string", "format": "date-time" },
-          "team_id": { "type": "string", "format": "uuid" },
-          "team_role": { "$ref": "#/components/schemas/TeamRole" }
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "email": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "invited_by": {
+            "type": "string"
+          },
+          "last_sent_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "team_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "team_role": {
+            "$ref": "#/components/schemas/TeamRole"
+          }
         }
       },
       "TeamInviteUpdate": {
@@ -2478,7 +3147,9 @@
           },
           "team_role": {
             "oneOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "$ref": "#/components/schemas/TeamRole",
                 "description": "The role to assign to the invited user\nThis is only used for `Update` operation"
@@ -2493,7 +3164,9 @@
         "properties": {
           "invites": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/TeamInvite" }
+            "items": {
+              "$ref": "#/components/schemas/TeamInvite"
+            }
           }
         }
       },
@@ -2502,14 +3175,24 @@
         "description": "Ordered from least to most access top -> bottom",
         "enum": ["member", "admin", "owner"]
       },
-      "TeamUpdateOperation": { "type": "string", "enum": ["update", "remove"] },
+      "TeamUpdateOperation": {
+        "type": "string",
+        "enum": ["update", "remove"]
+      },
       "TeamUser": {
         "type": "object",
         "required": ["user_id", "team_id", "team_role"],
         "properties": {
-          "team_id": { "type": "string", "format": "uuid" },
-          "team_role": { "$ref": "#/components/schemas/TeamRole" },
-          "user_id": { "type": "string" }
+          "team_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "team_role": {
+            "$ref": "#/components/schemas/TeamRole"
+          },
+          "user_id": {
+            "type": "string"
+          }
         }
       },
       "TeamUserUpdate": {
@@ -2522,7 +3205,9 @@
           },
           "team_role": {
             "oneOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "$ref": "#/components/schemas/TeamRole",
                 "description": "The new role for the user if the operation is `Update`"
@@ -2539,10 +3224,14 @@
         "type": "object",
         "required": ["team", "users"],
         "properties": {
-          "team": { "$ref": "#/components/schemas/Team" },
+          "team": {
+            "$ref": "#/components/schemas/Team"
+          },
           "users": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/TeamUser" }
+            "items": {
+              "$ref": "#/components/schemas/TeamUser"
+            }
           }
         }
       },
@@ -2560,9 +3249,15 @@
         "type": "object",
         "required": ["id"],
         "properties": {
-          "first_name": { "type": ["string", "null"] },
-          "id": { "type": "string" },
-          "last_name": { "type": ["string", "null"] }
+          "first_name": {
+            "type": ["string", "null"]
+          },
+          "id": {
+            "type": "string"
+          },
+          "last_name": {
+            "type": ["string", "null"]
+          }
         }
       },
       "UserNames": {
@@ -2571,7 +3266,9 @@
         "properties": {
           "names": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/UserName" }
+            "items": {
+              "$ref": "#/components/schemas/UserName"
+            }
           }
         }
       },
@@ -2594,9 +3291,15 @@
         "type": "object",
         "required": ["id", "url"],
         "properties": {
-          "checksum": { "type": ["string", "null"] },
-          "id": { "type": "string" },
-          "url": { "type": "string" }
+          "checksum": {
+            "type": ["string", "null"]
+          },
+          "id": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
         }
       },
       "UserQuota": {
@@ -2650,6 +3353,9 @@
     }
   },
   "tags": [
-    { "name": "auth service", "description": "Macro Authentication Service" }
+    {
+      "name": "auth service",
+      "description": "Macro Authentication Service"
+    }
   ]
 }

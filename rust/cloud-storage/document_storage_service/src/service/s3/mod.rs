@@ -3,7 +3,6 @@ mod delete;
 mod exists;
 mod get;
 mod get_folder;
-mod get_presigned_url;
 mod put_presigned_url;
 mod upload_document;
 

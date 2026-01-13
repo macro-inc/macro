@@ -17,6 +17,7 @@ import {
   DEFAULT_LANGUAGE,
   type DocumentMentionNode,
   type EquationNode,
+  type GroupMentionNode,
   type HorizontalRuleNode,
   type ImageNode,
   isSupportedLanguage,
@@ -62,6 +63,7 @@ import { StaticCodeBoxAccessory } from '../accessory/CodeBoxAccessory';
 import { ContactMention as ContactMentionDecorator } from '../decorator/ContactMention';
 import { DateMention as DateMentionDecorator } from '../decorator/DateMention';
 import { DocumentMention as DocumentMentionDecorator } from '../decorator/DocumentMention';
+import { GroupMention as GroupMentionDecorator } from '../decorator/GroupMention';
 import { Equation as EquationDecorator } from '../decorator/Equation';
 import { MarkdownImage as ImageDecorator } from '../decorator/MarkdownImage';
 import { MarkdownVideo as VideoDecorator } from '../decorator/MarkdownVideo';
@@ -302,6 +304,20 @@ const DateMention: RenderableEntity<DateMentionNode> = {
   render: (props) => (
     <span class={getTextClassName(props.node, props.theme)}>
       {DateMentionDecorator({
+        ...props.node.exportComponentProps(),
+        key: props.node.getKey(),
+        theme: props.theme,
+      })}
+    </span>
+  ),
+};
+
+const GroupMention: RenderableEntity<GroupMentionNode> = {
+  guard: (node: LexicalNode): node is GroupMentionNode =>
+    node.__type === 'group-mention',
+  render: (props) => (
+    <span>
+      {GroupMentionDecorator({
         ...props.node.exportComponentProps(),
         key: props.node.getKey(),
         theme: props.theme,
@@ -596,6 +612,7 @@ const InlineEntities: Array<RenderableEntity> = [
   DocumentMention,
   ContactMention,
   DateMention,
+  GroupMention,
   Image,
   Video,
   HorizontalRule,

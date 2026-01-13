@@ -1,7 +1,12 @@
 use document_sub_type::DocumentSubType;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
-use model::{activity::Activity, chat::Chat, document::BasicDocument};
+use model::{
+    activity::Activity,
+    chat::Chat,
+    document::{BasicDocument, BasicDocumentSubType},
+};
 use sqlx::{Pool, Postgres, Row};
+use system_properties::{StatusOption, SystemPropertyKey};
 
 #[tracing::instrument(skip(db))]
 pub async fn get_recent_activities(
@@ -41,6 +46,9 @@ pub async fn get_recent_activities(
         return Ok((vec![], 0));
     }
 
+    let status_property_id = SystemPropertyKey::STATUS_UUID;
+    let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
+
     let query = r#"
         SELECT
             'document' as type,
@@ -57,10 +65,23 @@ pub async fn get_recent_activities(
             d."projectId" as "project_id",
             NULL as "is_persistent",
             di.sha as "sha",
-            dt.sub_type as "sub_type"
+            dt.sub_type as "sub_type",
+            CASE 
+                WHEN dt.sub_type = 'task' 
+                    AND ep_status.values->'value' ? $4
+                THEN true 
+                WHEN dt.sub_type = 'task'
+                THEN false
+                ELSE NULL 
+            END as "is_completed"
         FROM
             "Document" d
         LEFT JOIN document_sub_type dt ON dt.document_id = d.id
+        LEFT JOIN entity_properties ep_status 
+            ON dt.sub_type = 'task'
+            AND ep_status.entity_id = d.id 
+            AND ep_status.entity_type = 'TASK'
+            AND ep_status.property_definition_id = $5
         LEFT JOIN LATERAL (
             SELECT
                 b.id
@@ -105,7 +126,8 @@ pub async fn get_recent_activities(
             c."projectId" as "project_id",
             c."isPersistent" as "is_persistent",
             NULL as "sha",
-            NULL as "sub_type"
+            NULL as "sub_type",
+            NULL as "is_completed"
         FROM "Chat" c
         WHERE c."userId" = $1 AND c."deletedAt" IS NULL
         ORDER BY updated_at DESC
@@ -116,6 +138,8 @@ pub async fn get_recent_activities(
         .bind(user_id)
         .bind(limit)
         .bind(offset)
+        .bind(&completed_option_id)
+        .bind(status_property_id)
         .fetch_all(&mut *transaction)
         .await?;
 
@@ -134,6 +158,7 @@ pub async fn get_recent_activities(
             match row_type.as_ref() {
                 "document" => {
                     let document_version_id: String = r.get("document_version_id");
+                    let is_completed: Option<bool> = r.get("is_completed");
                     Some(Activity::Document(BasicDocument {
                         document_id: id,
                         owner: MacroUserIdStr::parse_from_str(&user_id).ok()?.into_owned(),
@@ -148,7 +173,7 @@ pub async fn get_recent_activities(
                         branched_from_id: r.get("branched_from_id"),
                         branched_from_version_id: r.get("branched_from_version_id"),
                         project_id,
-                        sub_type,
+                        sub_type: BasicDocumentSubType::from_db(sub_type, is_completed),
                     }))
                 }
                 "chat" => Some(Activity::Chat(Chat {

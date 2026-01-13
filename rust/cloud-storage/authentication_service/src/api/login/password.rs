@@ -1,10 +1,8 @@
-use crate::{
-    api::{
-        context::ApiContext,
-        utils::{create_access_token_cookie, create_refresh_token_cookie},
-    },
-    service::fusionauth_client::error::FusionAuthClientError,
+use crate::api::{
+    context::ApiContext,
+    utils::{create_access_token_cookie, create_refresh_token_cookie},
 };
+use authentication_service::service::fusionauth_client::error::FusionAuthClientError;
 use axum::{
     Extension, Json,
     extract::{self, State},

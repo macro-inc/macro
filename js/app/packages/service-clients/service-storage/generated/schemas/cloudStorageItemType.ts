@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type CloudStorageItemType = typeof CloudStorageItemType[keyof typeof CloudStorageItemType];
-
+export type CloudStorageItemType =
+  (typeof CloudStorageItemType)[keyof typeof CloudStorageItemType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const CloudStorageItemType = {

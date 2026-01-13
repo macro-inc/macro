@@ -1,4 +1,5 @@
-use ai_format::{Indent, InsightContextLog};
+use ai_format::insight_context_log::InsightContextLog;
+use ai_format::util::Indent;
 use anyhow::Error;
 use comms_service_client::CommsServiceClient;
 use models_comms::channel::ChannelMetadata;
@@ -124,7 +125,7 @@ impl ChannelClient {
         let formatted_text = InsightContextLog {
             name: "conversation".to_string(),
             metadata: vec![],
-            content: Indent(formatted_messages, 4),
+            content: Indent(4, formatted_messages),
         }
         .to_string();
 

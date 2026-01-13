@@ -10,18 +10,16 @@ use model::response::ErrorResponse;
 use reqwest::StatusCode;
 use tower_cookies::Cookies;
 
-use crate::{
-    api::{
-        context::ApiContext,
-        oauth2::{
-            OAuthState, format_redirect_uri,
-            login::{self},
-        },
+use crate::api::{
+    context::ApiContext,
+    oauth2::{
+        OAuthState, format_redirect_uri,
+        login::{self},
     },
-    service::{
-        fusionauth_client::identity_provider::{IdentityProviderLink, LinkUserRequest},
-        user::create_user::create_user_profile,
-    },
+};
+use authentication_service::service::{
+    fusionauth_client::identity_provider::{IdentityProviderLink, LinkUserRequest},
+    user::create_user::create_user_profile,
 };
 
 async fn link_user(

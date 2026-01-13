@@ -33,7 +33,15 @@ function MobileDockButton(props: MobileDockButtonProps) {
 
 export function MobileDock() {
   const splitContext = useSplitPanelOrThrow();
-  const { selectedView, setSelectedView } = splitContext.unifiedListContext;
+  const { selectedView, setSelectedView } = splitContext.soupContext;
+
+  const ensureUnifiedList = () => {
+    const content = splitContext.handle.content();
+    if (content.type === 'component' && content.id === 'unified-list') return;
+    splitContext.handle.replace({
+      next: { type: 'component', id: 'unified-list' },
+    });
+  };
 
   const ensureUnifiedList = () => {
     const content = splitContext.handle.content();

@@ -313,7 +313,7 @@ pub async fn get_document(
             ORDER BY
                 i."createdAt" DESC
             LIMIT 1
-        ) di ON d."fileType" IS DISTINCT FROM 'docx'
+        ) di ON true
         LEFT JOIN LATERAL (
             SELECT
                 b.id,
@@ -427,7 +427,7 @@ pub async fn get_document_version(
                 i."documentId" = d.id
             AND
                 i.id = $2
-        ) di ON d."fileType" IS DISTINCT FROM 'docx'
+        ) di ON true
         LEFT JOIN LATERAL (
             SELECT
                 b.id,

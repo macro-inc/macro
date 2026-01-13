@@ -10,4 +10,5 @@ import type { ToWebSocketMessageOneOfSevenAllOf } from './toWebSocketMessageOneO
 /**
  * Stop streaming for a given message
  */
-export type ToWebSocketMessageOneOfSeven = StopChatMessagePayload & ToWebSocketMessageOneOfSevenAllOf;
+export type ToWebSocketMessageOneOfSeven = StopChatMessagePayload &
+  ToWebSocketMessageOneOfSevenAllOf;

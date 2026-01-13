@@ -20,7 +20,7 @@ import {
 } from '@core/hotkey/getCommands';
 import { pressedKeys } from '@core/hotkey/state';
 import type { HotkeyCommand } from '@core/hotkey/types';
-import { runCommand } from '@core/hotkey/utils';
+import { hasValidHotkey, runCommand } from '@core/hotkey/utils';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import { type ChannelWithParticipants, idToDisplayName } from '@core/user';
 import PushPin from '@phosphor-icons/core/regular/push-pin.svg?component-solid';
@@ -28,7 +28,7 @@ import Terminal from '@phosphor-icons/core/regular/terminal.svg?component-solid'
 import type { Channel } from '@service-comms/generated/models/channel';
 import type { Attachment } from '@service-email/generated/schemas';
 import { useUserId } from '@service-gql/client';
-import type { BasicDocumentSubType } from '@service-storage/generated/schemas';
+import type { BasicDocumentSubTypeProperty } from '@service-storage/generated/schemas';
 import type { BasicDocumentFileType } from '@service-storage/generated/schemas/basicDocumentFileType';
 import type { Item } from '@service-storage/generated/schemas/item';
 import { syncServiceClient } from '@service-sync/client';
@@ -47,6 +47,7 @@ import {
   onCleanup,
   onMount,
   type Setter,
+  Show,
   Switch,
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
@@ -263,7 +264,7 @@ type ItemPreview = {
   id: string;
   name: string;
   fileType?: BasicDocumentFileType;
-  subType?: BasicDocumentSubType;
+  subType?: BasicDocumentSubTypeProperty;
   itemType: Item['type'];
 };
 
@@ -374,10 +375,16 @@ export function useCommandItemAction(args: {
     if (!item) return;
     const blockName = getCommandItemBlockName(item);
     const id = item.data.id;
-    const split = action === 'new-split' ? insertSplit : replaceSplit;
 
     if (blockName) {
-      split({ type: blockName, id });
+      if (action === 'new-split') {
+        insertSplit({ type: blockName, id }, 'kommand-menu');
+      } else {
+        replaceSplit({
+          content: { type: blockName, id },
+          referredFrom: 'kommand-menu',
+        });
+      }
       if (item.snippet) {
         gotoSnippetLocation(blockOrchestrator, id, item.snippet, cleanQuery());
       }
@@ -438,7 +445,7 @@ function getCommandItemBlockName(
 ): BlockName | BlockAlias | undefined {
   if (item.type === 'item') {
     if (item.data.itemType === 'document') {
-      if (item.data.subType === 'task') {
+      if (item.data.subType && item.data.subType.type === 'task') {
         return 'task';
       }
       if (item.data.fileType) {
@@ -506,14 +513,16 @@ export function filterItemByCategory(item: CommandItemCard) {
       return (
         item.type === 'item' &&
         item.data.itemType === 'document' &&
-        item.data.subType !== 'task' &&
+        (!item.data.subType || item.data.subType.type !== 'task') &&
         fileTypeToBlockName(item.data.fileType) === 'md'
       );
     case 'Tasks':
       return (
         item.type === 'item' &&
         item.data.itemType === 'document' &&
-        item.data.subType === 'task'
+        item.data.subType !== null &&
+        item.data.subType !== undefined &&
+        item.data.subType.type === 'task'
       );
     case 'Chats':
       return item.type === 'item' && item.data.itemType === 'chat';
@@ -623,17 +632,19 @@ export function CommandItemCard(props: CommandItemProps) {
   };
 
   const CommandItemHotkey = () => {
-    if (props.item.type !== 'command') return null;
-    if (props.item.data.command.hotkeys?.length === 0) return null;
+    const token = () => {
+      if (props.item.type !== 'command') return;
+      return props.item.data.command.hotkeyToken;
+    };
+    const validToken = () => hasValidHotkey(token());
     return (
-      <div class="pr-2 flex items-center justify-center text-[0.75rem] font-medium text-ink-extra-muted">
-        <div class="p-2 py-0.5 border border-edge-muted/50 rounded-xs">
-          <Hotkey
-            shortcut={props.item.data.command.hotkeys?.at(0)}
-            class="flex gap-1 items-center"
-          />
+      <Show when={validToken()}>
+        <div class="pr-2 flex items-center justify-center text-[0.75rem] font-medium text-ink-extra-muted">
+          <div class="p-2 py-0.5 border border-edge-muted/50 rounded-xs">
+            <Hotkey token={token()} class="flex gap-1 items-center" />
+          </div>
         </div>
-      </div>
+      </Show>
     );
   };
 

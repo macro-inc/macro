@@ -32,9 +32,37 @@ export default defineConfig({
         },
       },
       {
+        // @ui package Storybook component tests
+        extends: './packages/ui/.storybook/vitest.config.ts',
+        test: {
+          name: 'storybook',
+        },
+      },
+      {
         test: {
           include: ['scripts/**/*.{test,spec}.{ts,tsx}'],
           name: 'scripts',
+        },
+      },
+      {
+        extends: './packages/lexical-core/vitest.config.ts',
+        test: {
+          include: ['packages/lexical-core/**/*.{test,spec}.{ts,tsx}'],
+          name: 'lexical-core',
+        },
+      },
+      {
+        extends: './packages/core/vitest.config.ts',
+        test: {
+          include: ['packages/block-channel/**/*.{test,spec}.{ts,tsx}'],
+          name: 'block-channel',
+        },
+      },
+      {
+        extends: './packages/notifications/vitest.config.ts',
+        test: {
+          include: ['packages/notifications/**/*.{test,spec}.{ts,tsx}'],
+          name: 'notifications',
         },
       },
     ],

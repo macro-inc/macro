@@ -19,7 +19,7 @@ pub(in crate::service::s3) async fn put_presigned_url(
     if cfg!(feature = "local") {
         return Ok("fake".to_string());
     }
-    // Allows the app 2 minutes to grab the document
+    // Allows the app 2 minutes to upload the document
     let expiry_duration = Duration::from_secs(2 * 60);
 
     // Convert the hex SHA256 hash to binary

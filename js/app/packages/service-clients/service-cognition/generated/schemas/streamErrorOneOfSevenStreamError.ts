@@ -5,8 +5,8 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type StreamErrorOneOfSevenStreamError = typeof StreamErrorOneOfSevenStreamError[keyof typeof StreamErrorOneOfSevenStreamError];
-
+export type StreamErrorOneOfSevenStreamError =
+  (typeof StreamErrorOneOfSevenStreamError)[keyof typeof StreamErrorOneOfSevenStreamError];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const StreamErrorOneOfSevenStreamError = {

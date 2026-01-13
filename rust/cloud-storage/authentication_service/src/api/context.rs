@@ -20,7 +20,7 @@ use teams::{
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
     pub db: PgPool,
-    pub auth_client: Arc<crate::service::fusionauth_client::FusionAuthClient>,
+    pub auth_client: Arc<authentication_service::service::fusionauth_client::FusionAuthClient>,
     pub macro_cache_client: Arc<MacroCache>,
     pub stripe_client: Arc<stripe::Client>,
     pub comms_client: Arc<comms_service_client::CommsServiceClient>,

@@ -1,10 +1,6 @@
 use chrono::{DateTime, Utc};
 use std::fmt::Display;
 
-pub fn format_date(date: DateTime<Utc>) -> String {
-    date.format("%Y-%m-%d").to_string()
-}
-
 pub fn truncate<T: Display>(v: T, limit: usize) -> String {
     let content = v.to_string();
     content
@@ -14,12 +10,14 @@ pub fn truncate<T: Display>(v: T, limit: usize) -> String {
         .unwrap_or(content)
 }
 
-pub struct Indent<T: Sized>(pub T, pub usize);
-pub struct Truncate<T: Sized>(pub T, pub usize);
-pub struct InsightContextLog<T: Display> {
-    pub name: String,
-    pub metadata: Vec<(String, String)>,
-    pub content: T,
+pub struct Date(pub DateTime<Utc>);
+pub struct Indent<T: Sized>(pub usize, pub T);
+pub struct Truncate<T: Sized>(pub usize, pub T);
+
+impl Display for Date {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0.to_rfc2822())
+    }
 }
 
 impl<T> Display for Indent<T>
@@ -27,13 +25,13 @@ where
     T: Display + Sized,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let text = self.0.to_string();
+        let text = self.1.to_string();
         let mut iter = text.lines().peekable();
         while let Some(line) = iter.next() {
             if iter.peek().is_some() {
-                writeln!(f, "{:indent$}{}", "", line, indent = self.1)?;
+                writeln!(f, "{:indent$}{}", "", line, indent = self.0)?;
             } else {
-                write!(f, "{:indent$}{}", "", line, indent = self.1)?;
+                write!(f, "{:indent$}{}", "", line, indent = self.0)?;
             }
         }
         Ok(())
@@ -45,40 +43,21 @@ where
     T: Display + Sized,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", truncate(&self.0, self.1))
-    }
-}
-
-impl<T> Display for InsightContextLog<T>
-where
-    T: Display + Sized,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let metadata = self
-            .metadata
-            .iter()
-            .map(|(k, v)| format!("{}: {}", k, v))
-            .collect::<Vec<_>>()
-            .join(", ");
-        writeln!(f, "[{}]", self.name)?;
-        if !metadata.is_empty() {
-            writeln!(f, "{}", metadata)?;
-        }
-        writeln!(f, "{}", self.content)?;
-        writeln!(f, "[END {}]", self.name)
+        write!(f, "{}", truncate(&self.1, self.0))
     }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::insight_context_log::InsightContextLog;
 
     #[test]
     fn test_truncate() {
-        let truncated = Truncate("123456789", 3).to_string();
+        let truncated = Truncate(3, "123456789").to_string();
         assert_eq!(truncated.as_str(), "123...");
         assert_eq!(
-            Truncate("hello world", 5).to_string(),
+            Truncate(5, "hello world").to_string(),
             "hello...".to_string()
         );
     }
@@ -86,7 +65,7 @@ mod test {
     #[test]
     fn test_indent() {
         let text = "this is text";
-        assert_eq!("    this is text".to_string(), Indent(text, 4).to_string());
+        assert_eq!("    this is text".to_string(), Indent(4, text).to_string());
         let text = r#"multi
 line
 text
@@ -97,7 +76,7 @@ text
     text
         here"#
                 .to_string(),
-            Indent(text, 4).to_string()
+            Indent(4, text).to_string()
         );
     }
 
@@ -119,7 +98,7 @@ content
         );
 
         let log = InsightContextLog {
-            content: Truncate("content that is too long to be useful to ai", 7),
+            content: Truncate(7, "content that is too long to be useful to ai"),
             metadata: vec![],
             name: "long test".to_string(),
         };
@@ -133,7 +112,7 @@ content...
         );
 
         let nested_log = InsightContextLog {
-            content: Indent(log, 4),
+            content: Indent(4, log),
             metadata: vec![("swag".to_string(), "true".to_string())],
             name: "nested test".to_string(),
         };

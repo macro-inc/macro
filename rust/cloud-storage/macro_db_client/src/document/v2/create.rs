@@ -220,11 +220,11 @@ pub async fn create_document_txn(
     )
     .await?;
 
-    if email_attachment_id.is_some() {
+    if let Some(attachment) = email_attachment_id {
         crate::document::document_email::create_document_email_record(
             transaction,
             &document_id,
-            email_attachment_id.unwrap(),
+            attachment,
         )
         .await?;
     }

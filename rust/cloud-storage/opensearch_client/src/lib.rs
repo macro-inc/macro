@@ -4,6 +4,7 @@ pub mod error;
 pub mod name;
 pub mod search;
 pub mod search_on;
+pub mod unified;
 pub mod upsert;
 
 pub use search_on::SearchOn;
@@ -12,7 +13,6 @@ pub mod channel_message;
 pub mod chat;
 pub mod document;
 pub mod email;
-pub mod project;
 
 pub type Result<T> = std::result::Result<T, error::OpensearchClientError>;
 

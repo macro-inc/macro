@@ -1,14 +1,23 @@
-import CheckIcon from '@icon/bold/check-bold.svg';
+import { Hotkey } from '@core/component/Hotkey';
 import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import PlusIcon from '@icon/regular/plus.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
 import type * as schemas from '@service-properties/generated/zod';
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  onCleanup,
+  onMount,
+  Show,
+} from 'solid-js';
 import type { z } from 'zod';
-import { PROPERTY_STYLES } from '../../../styles/styles';
 import type { Property } from '../../../types';
 import { formatOptionValue, useSearchInputFocus } from '../../../utils';
 import { ERROR_MESSAGES } from '../../../utils/errorHandling';
+import { PropertyValueIcon } from '../../propertyValue';
+import { OptionCheckBox } from './OptionCheckBox';
 
 type PropertyOption = z.infer<typeof schemas.getPropertyOptionsResponseItem>;
 
@@ -21,14 +30,15 @@ type SelectOptionsProps = {
   onToggleOption: (value: string) => void;
   onRetry: () => void;
   onAddOption?: (value: string) => Promise<void>;
+  onClose?: () => void;
 };
-
-const ADD_OPTION_BASE_CLASSES =
-  'flex flex-row w-full justify-between items-center gap-4 cursor-pointer p-2 border border-dashed border-accent/50 hover:border-accent hover:bg-accent/5 text-accent';
 
 export const PropertyOptionSelector = (props: SelectOptionsProps) => {
   const [searchQuery, setSearchQuery] = createSignal('');
   const [isAddingOption, setIsAddingOption] = createSignal(false);
+  const [selectedIndex, setSelectedIndex] = createSignal(0);
+  const [keyboardNavigationTimeout, setKeyboardNavigationTimeout] =
+    createSignal<number | null>(null);
 
   let searchInputRef!: HTMLInputElement;
 
@@ -118,29 +128,125 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
     return allOptions;
   });
 
+  // Get selectable items (filtered options + add option if available)
+  const selectableItems = createMemo(() => {
+    const options = filteredOptions();
+    const items: Array<{ type: 'option' | 'add'; option?: PropertyOption }> =
+      [];
+
+    options.forEach((option) => {
+      items.push({ type: 'option', option });
+    });
+
+    if (isValidNewOption() && props.onAddOption) {
+      items.push({ type: 'add' });
+    }
+
+    return items;
+  });
+
+  // Reset selected index when filteredOptions change
+  createEffect(() => {
+    const items = selectableItems();
+    if (items.length === 0) {
+      setSelectedIndex(0);
+    } else {
+      setSelectedIndex(Math.min(selectedIndex(), items.length - 1));
+    }
+  });
+
+  const isKeyboardNavigating = () => {
+    const timeout = keyboardNavigationTimeout();
+    return timeout !== null && Date.now() - timeout < 150;
+  };
+
+  const shouldShowHotkeys = createMemo(() => {
+    return !searchQuery().trim() && selectableItems().length <= 9;
+  });
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    const items = selectableItems();
+    if (items.length === 0) return;
+
+    // Handle number keys (1-9) when no search term and 9 or fewer options
+    if (shouldShowHotkeys() && /^[1-9]$/.test(e.key)) {
+      e.preventDefault();
+      const index = parseInt(e.key) - 1;
+      if (index < items.length) {
+        const selectedItem = items[index];
+        if (selectedItem?.type === 'add') {
+          handleAddOption();
+        } else if (selectedItem?.type === 'option' && selectedItem.option) {
+          props.onToggleOption(selectedItem.option.id);
+
+          // If not multi-select, close the modal after selection
+          if (!props.property.isMultiSelect && props.onClose) {
+            props.onClose();
+          }
+        }
+      }
+      return;
+    }
+
+    if (e.key === 'ArrowDown' || (e.ctrlKey && e.key === 'j')) {
+      e.preventDefault();
+      setKeyboardNavigationTimeout(Date.now());
+      setSelectedIndex((prev) => (prev + 1) % items.length);
+    } else if (e.key === 'ArrowUp' || (e.ctrlKey && e.key === 'k')) {
+      e.preventDefault();
+      setKeyboardNavigationTimeout(Date.now());
+      setSelectedIndex((prev) => (prev - 1 + items.length) % items.length);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const selectedItem = items[selectedIndex()];
+
+      if (selectedItem?.type === 'add') {
+        handleAddOption();
+      } else if (selectedItem?.type === 'option' && selectedItem.option) {
+        props.onToggleOption(selectedItem.option.id);
+
+        // If not multi-select, close the modal after selection
+        if (!props.property.isMultiSelect && props.onClose) {
+          props.onClose();
+        }
+      }
+    }
+  };
+
+  onMount(() => {
+    document.addEventListener('keydown', handleKeyDown);
+  });
+
+  onCleanup(() => {
+    document.removeEventListener('keydown', handleKeyDown);
+  });
+
   useSearchInputFocus(
     () => searchInputRef,
     () => !props.isLoading && !props.error
   );
 
-  const AddOptionButton = () => (
+  const AddOptionButton = (props: {
+    isSelected: boolean;
+    hotkeyNumber?: number;
+  }) => (
     <div
-      class={`${ADD_OPTION_BASE_CLASSES} ${
-        isAddingOption() ? 'opacity-50 pointer-events-none' : ''
-      }`}
       onClick={handleAddOption}
+      class={`flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2 ${
+        props.isSelected ? 'bg-hover' : ''
+      }`}
     >
       <div class="flex items-center gap-2 flex-1 text-left">
-        <div class="w-4 h-4 flex-shrink-0">
+        <div class="size-3 flex-shrink-0">
           <Show
             when={!isAddingOption()}
             fallback={
-              <div class="w-4 h-4 animate-spin">
+              <div class="size-3 animate-spin">
                 <LoadingSpinner />
               </div>
             }
           >
-            <PlusIcon class="w-4 h-4" />
+            <PlusIcon class="size-3" />
           </Show>
         </div>
         <p class="text-sm font-medium">Add "{searchQuery().trim()}"</p>
@@ -174,27 +280,32 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
           </div>
         }
       >
-        <div class="space-y-3">
+        <div>
           <div class="relative">
-            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none z-10">
+            <div class="flex w-full items-center py-1 gap-2 px-2 border-b border-edge-muted">
               <SearchIcon class="h-4 w-4 text-ink-muted" />
+              <input
+                class="w-full caret-accent"
+                ref={searchInputRef}
+                type={
+                  props.property.valueType === 'SELECT_NUMBER'
+                    ? 'number'
+                    : 'text'
+                }
+                value={searchQuery()}
+                onInput={(e) => setSearchQuery(e.currentTarget.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (props.onClose) {
+                      props.onClose();
+                    }
+                  }
+                }}
+                placeholder={`${props.property.isMultiSelect ? 'Add' : 'Change'} ${props.property.displayName.toLowerCase()}...`}
+              />
             </div>
-            <input
-              ref={searchInputRef}
-              type={
-                props.property.valueType === 'SELECT_NUMBER' ? 'number' : 'text'
-              }
-              value={searchQuery()}
-              onInput={(e) => setSearchQuery(e.currentTarget.value)}
-              placeholder={
-                props.onAddOption
-                  ? props.property.valueType === 'SELECT_NUMBER'
-                    ? 'Search or add new number...'
-                    : 'Search or add new option...'
-                  : 'Search options...'
-              }
-              class={`${PROPERTY_STYLES.input.search} relative z-0`}
-            />
           </div>
 
           <Show
@@ -209,51 +320,90 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
                     </div>
                   }
                 >
-                  <AddOptionButton />
+                  <div class="p-1">
+                    <AddOptionButton
+                      isSelected={selectedIndex() === filteredOptions().length}
+                    />
+                  </div>
                 </Show>
               </div>
             }
           >
-            <div class="space-y-2 max-h-48 overflow-y-auto">
-              <Show when={isValidNewOption() && props.onAddOption}>
-                <AddOptionButton />
-              </Show>
-
-              <Show
-                when={filteredOptions().length > 0}
-                fallback={
-                  <Show when={!isValidNewOption() || !props.onAddOption}>
+            <div class="p-1">
+              <div class="max-h-[200px] overflow-y-auto overflow-x-hidden scrollbar-hidden">
+                <Show
+                  when={selectableItems().length > 0}
+                  fallback={
                     <div class="text-center py-4 text-ink-muted text-sm">
                       No options match your search
                     </div>
-                  </Show>
-                }
-              >
-                <For each={filteredOptions()}>
-                  {(option) => {
-                    const optionId = option.id;
-                    const displayValue = formatOptionValue(option);
-
-                    return (
-                      <div
-                        class={`flex flex-row w-full justify-between items-center gap-4 cursor-pointer py-1.5 px-2 border ${isOptionSelected(optionId) ? 'bg-active border-accent text-accent-ink' : 'hover:bg-hover border-edge text-ink'}`}
-                        onClick={() => props.onToggleOption(optionId)}
-                      >
-                        <div class="flex-1 text-left">
-                          <p class="text-sm font-medium">{displayValue}</p>
-                        </div>
-                        <div class="flex-shrink-0">
-                          <div class="w-4 h-4 border border-edge bg-transparent flex items-center justify-center">
-                            <Show when={isOptionSelected(optionId)}>
-                              <CheckIcon class="w-3 h-3 text-accent" />
-                            </Show>
+                  }
+                >
+                  <For each={selectableItems()}>
+                    {(item, index) => (
+                      <Show
+                        when={item.type === 'add'}
+                        fallback={
+                          <div
+                            class={`flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2 ${
+                              index() === selectedIndex() ? 'bg-hover' : ''
+                            }`}
+                            onClick={() => {
+                              if (item.option) {
+                                props.onToggleOption(item.option.id);
+                                // If not multi-select, close the modal after selection
+                                if (
+                                  !props.property.isMultiSelect &&
+                                  props.onClose
+                                ) {
+                                  props.onClose();
+                                }
+                              }
+                            }}
+                            onMouseEnter={() => {
+                              if (!isKeyboardNavigating()) {
+                                setSelectedIndex(index());
+                              }
+                            }}
+                          >
+                            <PropertyValueIcon optionId={item.option!.id} />
+                            <div class="flex-1 text-left">
+                              <p class="text-sm font-medium">
+                                {formatOptionValue(item.option!)}
+                              </p>
+                            </div>
+                            <div class="flex items-center gap-2 flex-shrink-0">
+                              <Show when={shouldShowHotkeys() && index() < 9}>
+                                <div class="text-[0.625rem] px-1.5 py-0.5 border border-edge-muted text-ink-muted font-mono rounded-xs">
+                                  <Hotkey shortcut={`${index() + 1}`} />
+                                </div>
+                              </Show>
+                              <Show when={props.property.isMultiSelect}>
+                                <OptionCheckBox
+                                  checked={isOptionSelected(item.option!.id)}
+                                  multiselect={props.property.isMultiSelect}
+                                />
+                              </Show>
+                            </div>
                           </div>
+                        }
+                      >
+                        <div
+                          onMouseEnter={() => {
+                            if (!isKeyboardNavigating()) {
+                              setSelectedIndex(index());
+                            }
+                          }}
+                        >
+                          <AddOptionButton
+                            isSelected={index() === selectedIndex()}
+                          />
                         </div>
-                      </div>
-                    );
-                  }}
-                </For>
-              </Show>
+                      </Show>
+                    )}
+                  </For>
+                </Show>
+              </div>
             </div>
           </Show>
         </div>

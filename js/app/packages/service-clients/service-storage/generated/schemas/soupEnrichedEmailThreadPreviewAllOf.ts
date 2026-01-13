@@ -5,10 +5,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { SoupAttachment } from './soupAttachment';
-import type { SoupMacroAttachment } from './soupMacroAttachment';
-import type { SoupLabel } from './soupLabel';
-import type { SoupEmailThreadPreviewMetadata } from './soupEmailThreadPreviewMetadata';
 import type { SoupContact } from './soupContact';
+import type { SoupEmailThreadPreviewMetadata } from './soupEmailThreadPreviewMetadata';
+import type { SoupLabel } from './soupLabel';
+import type { SoupMacroAttachment } from './soupMacroAttachment';
 
 export type SoupEnrichedEmailThreadPreviewAllOf = {
   attachments: SoupAttachment[];

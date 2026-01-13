@@ -59,27 +59,35 @@ async function fetchAIToolsSchemas(): Promise<AiToolsResponse> {
 }
 
 async function generateSchemasFile(tools: AiToolsResponse) {
-	// Generate all schemas
+	// Generate all schemas, deduplicating by title
+	const generatedSchemas = new Set<string>();
 	const content: Array<string> = [];
+
 	for (const tool of tools) {
 		// jsonSchemaToZod with name option generates a proper export
 		const { resolved: inputSchema } = await resolveRefs(tool.inputSchema);
-		const inputCode = jsonSchemaToZod(inputSchema, {
-			module: "esm",
-			name: inputSchema.title,
-			withoutDescribes: true,
-			noImport: true,
-		});
+		if (!generatedSchemas.has(inputSchema.title)) {
+			const inputCode = jsonSchemaToZod(inputSchema, {
+				module: "esm",
+				name: inputSchema.title,
+				withoutDescribes: true,
+				noImport: true,
+			});
+			content.push(inputCode);
+			generatedSchemas.add(inputSchema.title);
+		}
 
 		const { resolved: outputSchema } = await resolveRefs(tool.outputSchema);
-		const outputCode = jsonSchemaToZod(outputSchema, {
-			module: "esm",
-			name: outputSchema.title,
-			withoutDescribes: true,
-			noImport: true,
-		});
-
-		content.push(`${inputCode}\n\n${outputCode}`);
+		if (!generatedSchemas.has(outputSchema.title)) {
+			const outputCode = jsonSchemaToZod(outputSchema, {
+				module: "esm",
+				name: outputSchema.title,
+				withoutDescribes: true,
+				noImport: true,
+			});
+			content.push(outputCode);
+			generatedSchemas.add(outputSchema.title);
+		}
 	}
 
 	const contents = `${warning}
@@ -92,47 +100,55 @@ ${content.join("\n\n")}
 }
 
 async function generateToolTypesFile(tools: AiToolsResponse) {
-	// Generate all schemas
+	// Generate all schemas, deduplicating by title
+	const generatedTypes = new Set<string>();
 	const content: Array<string> = [];
+
 	for (const tool of tools) {
-		const inputCode = await compile(
-			tool.inputSchema,
-			tool.inputSchema.title,
-			{
-				// override top level name for export
-				customName: (schema) => {
-					if (schema.title) {
-						console.log(`Using schema title: ${schema.title}`);
-						return schema.title;
-					}
+		if (!generatedTypes.has(tool.inputSchema.title)) {
+			const inputCode = await compile(
+				tool.inputSchema,
+				tool.inputSchema.title,
+				{
+					// override top level name for export
+					customName: (schema) => {
+						if (schema.title) {
+							console.log(`Using schema title: ${schema.title}`);
+							return schema.title;
+						}
+					},
+					additionalProperties: false,
+					style: {
+						singleQuote: true,
+					},
 				},
-				additionalProperties: false,
-				style: {
-					singleQuote: true,
-				},
-			},
-		);
+			);
+			content.push(inputCode);
+			generatedTypes.add(tool.inputSchema.title);
+		}
 
-		const outputCode = await compile(
-			tool.outputSchema,
-			tool.outputSchema.title,
-			{
-				// override top level name for export
-				customName: (schema) => {
-					if (schema.title) {
-						console.log(`Using schema title: ${schema.title}`);
-						return schema.title;
-					}
-					return undefined;
+		if (!generatedTypes.has(tool.outputSchema.title)) {
+			const outputCode = await compile(
+				tool.outputSchema,
+				tool.outputSchema.title,
+				{
+					// override top level name for export
+					customName: (schema) => {
+						if (schema.title) {
+							console.log(`Using schema title: ${schema.title}`);
+							return schema.title;
+						}
+						return undefined;
+					},
+					additionalProperties: false,
+					style: {
+						singleQuote: true,
+					},
 				},
-				additionalProperties: false,
-				style: {
-					singleQuote: true,
-				},
-			},
-		);
-
-		content.push(`${inputCode}\n\n${outputCode}`);
+			);
+			content.push(outputCode);
+			generatedTypes.add(tool.outputSchema.title);
+		}
 	}
 
 	const contents = `${warning}

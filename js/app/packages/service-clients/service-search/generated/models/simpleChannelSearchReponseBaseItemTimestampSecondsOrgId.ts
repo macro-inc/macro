@@ -8,4 +8,6 @@
 /**
  * The org id
  */
-export type SimpleChannelSearchReponseBaseItemTimestampSecondsOrgId = number | null;
+export type SimpleChannelSearchReponseBaseItemTimestampSecondsOrgId =
+  | number
+  | null;

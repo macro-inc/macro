@@ -1,4 +1,7 @@
-import { ENABLE_TASKS_TABS } from '@core/constant/featureFlags';
+import {
+  ENABLE_FRECENCY,
+  ENABLE_TASKS_TABS,
+} from '@core/constant/featureFlags';
 import {
   DEFAULT_VIEWS,
   type DefaultView,
@@ -20,7 +23,8 @@ import {
 import { emailClient } from '@service-email/client';
 import stringify from 'json-stable-stringify';
 import { queryClient } from '../../macro-entity/src/queries/client';
-import type { UnifiedListContext } from './SoupContext';
+import type { PropertyFilter } from './PropertyFilterTypes';
+import type { SoupContext } from './SoupContext';
 import { noiseFilter, signalFilter } from './soupFilters';
 
 // for custom views that extend the unified list view
@@ -65,6 +69,7 @@ export type FilterOptions = {
   projectFilter?: string;
   fromFilter?: WithCustomUserInput<'user' | 'contact'>[];
   focusFilters?: ('signal' | 'noise')[];
+  propertyFilters?: PropertyFilter[];
 };
 
 export type SystemSortOption =
@@ -93,7 +98,7 @@ export type HotkeyOptions = {
     entity: WithNotification<EntityData>,
     extra?: {
       notificationSource?: NotificationSource;
-      soupContext?: UnifiedListContext;
+      soupContext?: SoupContext;
     }
   ) => boolean;
 };
@@ -115,7 +120,7 @@ export type ViewConfigEnhanced = {
 } & ViewConfigBase;
 
 export type ClientFilterContext = {
-  soupContext?: UnifiedListContext;
+  soupContext?: SoupContext;
 };
 
 export type ClientFilter = {
@@ -139,6 +144,7 @@ export const VIEWCONFIG_BASE: ViewConfigBase = {
     documentTypeFilter: [],
     projectFilter: undefined,
     fromFilter: [],
+    propertyFilters: [],
   },
   display: {
     layout: 'compact',
@@ -331,7 +337,7 @@ export const VIEWCONFIG_SORT_BY: readonly SystemSortOption[] = [
   'updated_at',
   'created_at',
   'viewed_at',
-  'frecency',
+  ...(ENABLE_FRECENCY ? (['frecency'] as const) : []),
 ] as const;
 export const VIEWCONFIG_SORT_ORDER: readonly SortOptions['sortOrder'][] = [
   'ascending',

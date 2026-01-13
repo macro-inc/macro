@@ -4,7 +4,9 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { CommonChannelMetadata } from './commonChannelMetadata';
-import type { ChannelReplyMetadataAllOf } from './channelReplyMetadataAllOf';
 
-export type ChannelReplyMetadata = CommonChannelMetadata & ChannelReplyMetadataAllOf;
+import type { ChannelReplyMetadataAllOf } from './channelReplyMetadataAllOf';
+import type { CommonChannelMetadata } from './commonChannelMetadata';
+
+export type ChannelReplyMetadata = CommonChannelMetadata &
+  ChannelReplyMetadataAllOf;

@@ -3,12 +3,8 @@ import {
   useGlobalNotificationSource,
 } from '@app/component/GlobalAppState';
 import { noiseFilter, signalFilter } from '@app/component/soupFilters';
-import type { BlockChannelProps } from '@block-channel/component/Block';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { codeFileExtensions } from '@block-code/util/languageSupport';
-import { URL_PARAMS as EMAIL_PARAMS } from '@block-email/constants';
-import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
-import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/signal/location';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { DeprecatedButton } from '@core/component/FormControls/DeprecatedButton';
 import DropdownMenu from '@core/component/FormControls/DropdownMenu';
@@ -19,12 +15,15 @@ import { ContextMenuContent, MenuSeparator } from '@core/component/Menu';
 import { useTaskProperties } from '@core/component/Properties/hooks';
 import { getSuggestedProperties } from '@core/component/Properties/utils';
 import { RecipientSelector } from '@core/component/RecipientSelector';
+import { toast } from '@core/component/Toast/Toast';
 import {
   blockAcceptsFileExtension,
   fileTypeToBlockName,
 } from '@core/constant/allBlocks';
 import {
-  ENABLE_PROPERTY_DISPLAY_CONTROL,
+  ENABLE_FRECENCY,
+  ENABLE_PROPERTY_DISPLAY,
+  ENABLE_PROPERTY_FILTER,
   ENABLE_SOUP_FROM_FILTER,
   ENABLE_TASKS_TABS,
 } from '@core/constant/featureFlags';
@@ -50,7 +49,6 @@ import {
   createSort,
   createUnifiedInfiniteList,
   createUnifiedSearchInfiniteQuery,
-  type DocumentEntity,
   Entity,
   type EntityClickHandler,
   type EntityData,
@@ -59,6 +57,7 @@ import {
   importantFilterFn,
   isTaskEntity,
   notDoneFilterFn,
+  type SearchLocation,
   type SortOption,
   sortByCreatedAt,
   sortByFrecencyScore,
@@ -76,7 +75,7 @@ import {
   type UnifiedNotification,
   useNotificationsForEntity,
 } from '@notifications';
-import type { PaginatedSearchArgs } from '@service-search/client';
+import type { SearchArgs } from '@service-search/client';
 import type {
   ChannelFilters,
   ChatFilters,
@@ -116,6 +115,7 @@ import {
   type SetStoreFunction,
   unwrap,
 } from 'solid-js/store';
+import type { EntityPointerDownHandler } from '../../macro-entity/src/components/Entity';
 import {
   ENTITY_HEIGHT,
   EntityWithEverything,
@@ -136,12 +136,14 @@ import { EntityModal } from './EntityModal/EntityModal';
 import { EntitySelectionToolbarModal } from './EntitySelectionToolbarModal';
 import { EntityRow, EntityRowProvider } from './mobile/EntityRow';
 import { PropertyDisplayControl } from './PropertyDisplayControl';
+import { PropertyFilterControl } from './PropertyFilterControl';
+import type { PropertyFilter } from './PropertyFilterTypes';
 import { useUpsertSavedViewMutation } from './Soup';
+import { openEntityInSplitFromUnifiedList } from './soupContextHelpers';
 import {
   SplitToolbarLeft,
   SplitToolbarRight,
 } from './split-layout/components/SplitToolbar';
-import { useSplitLayout } from './split-layout/layout';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 import {
   type DisplayOptions,
@@ -152,14 +154,13 @@ import {
   type SortOptions,
   type SystemSortOption,
   VIEWCONFIG_BASE,
-  VIEWCONFIG_DEFAULTS_IDS,
   VIEWCONFIG_DEFAULTS_IDS_ENUM,
   VIEWCONFIG_FILTER_DOCUMENT_TYPE_FILTER,
   type ViewConfigBase,
   type ViewData,
 } from './ViewConfig';
 
-const SEARCH_SERVICE_DEBOUNCE_MS = 200;
+const SEARCH_SERVICE_DEBOUNCE_MS = 300;
 const LOCAL_FUZZY_SEARCH_DEBOUNCE_MS = 20;
 
 const NIL_UUID = '00000000-0000-0000-0000-000000000000';
@@ -189,11 +190,15 @@ const sortOptions = [
     label: 'Created',
     sortFn: sortByCreatedAt,
   },
-  {
-    value: 'frecency',
-    label: 'Frecency',
-    sortFn: sortByFrecencyScore,
-  },
+  ...(ENABLE_FRECENCY
+    ? [
+        {
+          value: 'frecency' as const,
+          label: 'Frecency',
+          sortFn: sortByFrecencyScore,
+        },
+      ]
+    : []),
 ] satisfies SortOption<EntityData, SystemSortOption>[];
 
 export type UnifiedListViewProps = {
@@ -235,7 +240,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   );
 
   const splitContext = useSplitPanelOrThrow();
-  const { isPanelActive, unifiedListContext, previewState } = splitContext;
+  const { isPanelActive, soupContext, previewState } = splitContext;
   const [preview] = previewState;
   const {
     viewsDataStore: viewsData,
@@ -245,10 +250,10 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     entityListRefSignal: [, setEntityListRef],
     entitiesSignal: [entities_, setEntities],
     emailViewSignal: [emailView],
-  } = unifiedListContext;
+  } = soupContext;
 
   // Properties for task entities
-  const [taskPropertiesStore] = useTaskProperties(entities_);
+  const taskPropertiesStore = useTaskProperties(entities_);
 
   const view = createMemo(() => viewsData[selectedView()]);
   const selectedEntity = createMemo(() => view()?.selectedEntity);
@@ -402,6 +407,19 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     setViewDataStore(selectedView(), 'filters', 'fromFilter', ...args);
   };
 
+  // Property filters
+  const propertyFilters = createMemo(
+    () => view()?.filters.propertyFilters ?? []
+  );
+  const setPropertyFilters = (filters: PropertyFilter[]) => {
+    setViewDataStore(selectedView(), 'filters', 'propertyFilters', filters);
+  };
+  // Track incomplete property filters for toast warning on save
+  const [hasIncompletePropertyFilters, setHasIncompletePropertyFilters] =
+    createSignal(false);
+  // Store clear handler from PropertyFilterControl
+  let clearPropertyFilters: (() => void) | undefined;
+
   const getSystemSortOption = (
     sort: SortOptions | undefined
   ): SystemSortOption => {
@@ -534,9 +552,12 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     const propertyId = sort?.propertyId ?? null;
     const sortOrder = sort?.sortOrder ?? null;
 
+    // Spread filters with propertyFilters explicitly accessed to ensure reactivity tracking
+    const filters = viewsData[viewKey]?.filters;
+
     return {
       display: viewsData[viewKey]?.display,
-      filters: viewsData[viewKey]?.filters,
+      filters: { ...filters, propertyFilters: filters.propertyFilters },
       sort: {
         type: sortType,
         sortBy,
@@ -843,12 +864,19 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
   const emailActive = useEmailLinksStatus();
 
-  const validSearchTerms = createMemo(() => {
-    return debouncedSearchForService().length >= 3;
+  const validSearchTerms = createMemo(
+    () => debouncedSearchForService().length >= 3
+  );
+  const hasSignalOrNoiseFilter = createMemo(() => {
+    const focusFilters_ = focusFilters();
+    return (
+      focusFilters_?.includes('signal') === true ||
+      focusFilters_?.includes('noise') === true
+    );
   });
-  const isSearchActive = createMemo(() => {
-    return validSearchTerms();
-  });
+  const isSearchActive = createMemo(
+    () => validSearchTerms() && !hasSignalOrNoiseFilter()
+  );
 
   const dssQueryParams = createMemo(
     (): GetItemsSoupParams => ({
@@ -911,9 +939,9 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     })
   );
   const searchUnifiedNameContentQueryParams = createMemo(
-    (): PaginatedSearchArgs => ({
+    (): SearchArgs => ({
       params: {
-        page: 0,
+        cursor: null,
         page_size: 100,
       },
       request: {
@@ -958,15 +986,13 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
   const notificationSource = useGlobalNotificationSource();
   const markEntityAsDone = (entity: EntityData) => {
-    const actions = unifiedListContext.actionRegistry;
+    const actions = soupContext.actionRegistry;
     if (actions.isActionEnabled('mark_as_done', entity)) {
       actions.execute('mark_as_done', entity);
       return true;
     }
     return false;
   };
-
-  const { replaceOrInsertSplit, insertSplit } = useSplitLayout();
 
   const blockOrchestrator = useGlobalBlockOrchestrator();
   const gotoChannelNotification = async (notification: UnifiedNotification) => {
@@ -1102,37 +1128,79 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     });
   });
 
-  const documentEntityClickHandler: EntityClickHandler<
-    DocumentEntity | WithSearch<DocumentEntity>
-  > = async (entity, event, location) => {
-    const { id, fileType, subType } = entity;
-    const blockName = fileTypeToBlockName(subType ?? fileType);
-    const handle = event.altKey
-      ? insertSplit({ type: blockName, id })
-      : replaceOrInsertSplit({ type: blockName, id });
-
-    handle?.activate();
-
-    if (!location) return;
-
-    const blockHandle = await blockOrchestrator.getBlockHandle(id);
-    switch (location.type) {
-      case 'md':
-        await blockHandle?.goToLocationFromParams({
-          [MD_PARAMS.nodeId]: location.nodeId,
-        });
-        break;
-      case 'pdf':
-        await blockHandle?.goToLocationFromParams({
-          [PDF_PARAMS.searchPage]: location.searchPage.toString(),
-          [PDF_PARAMS.searchRawQuery]: location.searchRawQuery,
-          [PDF_PARAMS.searchHighlightTerms]: JSON.stringify(
-            location.highlightTerms
-          ),
-          [PDF_PARAMS.searchSnippet]: location.searchSnippet,
-        });
-        break;
+  const openEntityInNewTab = ({
+    entity,
+    location,
+  }: {
+    entity: EntityData;
+    location?: SearchLocation;
+  }) => {
+    // Build URL for the entity
+    let entityPath: string;
+    if (entity.type === 'document') {
+      const { fileType, subType } = entity;
+      const blockName = fileTypeToBlockName(subType?.type ?? fileType);
+      entityPath = `/app/${blockName}/${entity.id}`;
+    } else {
+      entityPath = `/app/${entity.type}/${entity.id}`;
     }
+
+    // Add location params if present
+    const entityUrl = new URL(entityPath, window.location.origin);
+    if (location) {
+      switch (location.type) {
+        case 'channel':
+          if (location.messageId) {
+            entityUrl.searchParams.set(
+              'channel_message_id',
+              location.messageId
+            );
+          }
+          if (location.threadId) {
+            entityUrl.searchParams.set('thread', location.threadId);
+          }
+          break;
+        case 'email':
+          if (location.messageId) {
+            entityUrl.searchParams.set('email_message_id', location.messageId);
+          }
+
+          break;
+        case 'md':
+          if (location.nodeId) {
+            entityUrl.searchParams.set('node_id', location.nodeId);
+          }
+          break;
+        case 'pdf':
+          if (location.searchPage !== undefined) {
+            entityUrl.searchParams.set(
+              'search_page',
+              location.searchPage.toString()
+            );
+          }
+          if (location.searchRawQuery) {
+            entityUrl.searchParams.set(
+              'search_raw_query',
+              location.searchRawQuery
+            );
+          }
+          if (location.highlightTerms) {
+            entityUrl.searchParams.set(
+              'search_highlight_terms',
+              JSON.stringify(location.highlightTerms)
+            );
+          }
+          if (location.searchSnippet) {
+            entityUrl.searchParams.set(
+              'search_snippet',
+              location.searchSnippet
+            );
+          }
+          break;
+      }
+    }
+
+    window.open(entityUrl.toString(), '_blank', 'noopener');
   };
 
   const entityClickHandler: EntityClickHandler<EntityData> = async (
@@ -1147,44 +1215,32 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       return;
     }
 
-    if (entity.type === 'document')
-      return documentEntityClickHandler(entity, event, location);
+    if (event.metaKey || event.ctrlKey) {
+      openEntityInNewTab({ entity, location });
+      return;
+    }
 
-    const params =
-      entity.type === 'channel' && location?.type === 'channel'
-        ? ({
-            target: {
-              threadId: location.threadId,
-              messageId: location.messageId,
-            },
-          } as BlockChannelProps)
-        : undefined;
+    await openEntityInSplitFromUnifiedList(entity, {
+      openInNewSplit: event.altKey,
+      location,
+      splitHandle: splitContext.handle,
+    });
+  };
 
-    const handle = event.altKey
-      ? insertSplit({ type: entity.type, id: entity.id, params })
-      : replaceOrInsertSplit({ type: entity.type, id: entity.id, params });
+  const entityPointerDownHandler: EntityPointerDownHandler<EntityData> = async (
+    entity,
+    event,
+    location,
+    options
+  ) => {
+    if (preview() && !options?.ignorePreview) {
+      return;
+    }
 
-    handle?.activate();
-
-    if (!location) return;
-
-    switch (location.type) {
-      case 'channel': {
-        // NOTE: this is handled by the channel block params but this can be used to re-flash an open channel
-        const blockHandle = await blockOrchestrator.getBlockHandle(entity.id);
-        await blockHandle?.goToLocationFromParams({
-          [CHANNEL_PARAMS.thread]: location.threadId,
-          [CHANNEL_PARAMS.message]: location.messageId,
-        });
-        break;
-      }
-      case 'email': {
-        const blockHandle = await blockOrchestrator.getBlockHandle(entity.id);
-        await blockHandle?.goToLocationFromParams({
-          [EMAIL_PARAMS.messageId]: location.messageId,
-        });
-        break;
-      }
+    // middle mouse button pressed
+    if (event.button === 1 && event.pointerType === 'mouse') {
+      // TODO: current page should remain focused after opening new tab
+      openEntityInNewTab({ entity, location });
     }
   };
 
@@ -1222,23 +1278,27 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     }
   });
 
-  const onClickSaveViewConfigChanges = () => {
+  const onClickSaveViewConfigChanges = async () => {
     const view_ = view();
     const config = currentViewConfigBase();
     if (!view_ || !config) return;
 
-    saveViewMutation.mutate({
+    // Warn if there are incomplete property filters (they won't be saved)
+    if (hasIncompletePropertyFilters()) {
+      toast.alert('Incomplete property filters were not saved');
+    }
+
+    // Wait for mutation to complete (including query refetch) before updating initialConfig
+    await saveViewMutation.mutateAsync({
       id: view_.id,
       name: view_.view,
       config,
     });
-    // only for default views
-    if (VIEWCONFIG_DEFAULTS_IDS.includes(view_.id as any)) {
-      // Reset initialConfigSignal to current config after save
-      const currentConfig = stringifiedCurrentViewConfigBase();
-      if (currentConfig !== null && currentConfig !== undefined) {
-        setViewDataStore(selectedView(), 'initialConfig', currentConfig);
-      }
+
+    // Reset initialConfig after save + refetch so isViewConfigChanged returns false
+    const currentConfig = stringifiedCurrentViewConfigBase();
+    if (currentConfig !== null && currentConfig !== undefined) {
+      setViewDataStore(selectedView(), 'initialConfig', currentConfig);
     }
   };
 
@@ -1256,6 +1316,8 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       setViewDataStore(selectedView(), 'sort', initialConfigObj.sort);
       setViewDataStore(selectedView(), 'display', initialConfigObj.display);
     });
+    // Clear property filter UI state
+    clearPropertyFilters?.();
   };
 
   // Set initialConfig when it's not present (on load or after save/refetch)
@@ -1278,7 +1340,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     entity: EntityData;
     next: boolean;
   }) => {
-    unifiedListContext.setViewDataStore(
+    soupContext.setViewDataStore(
       selectedView(),
       'multiSelectEntities',
       (prev) => {
@@ -1345,12 +1407,11 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       return;
     }
 
-    const entityList = unifiedListContext.entitiesSignal[0]();
+    const entityList = soupContext.entitiesSignal[0]();
     if (!entityList) return;
 
     const selectedEntitySet = new Set(
-      unifiedListContext.viewsDataStore[unifiedListContext.selectedView()]
-        .multiSelectEntities
+      soupContext.viewsDataStore[soupContext.selectedView()].multiSelectEntities
     );
 
     const anchorIndex = getSelectionAnchorIndex({
@@ -1372,7 +1433,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       targetIndex: params.entityIndex,
     });
 
-    unifiedListContext.setViewDataStore(
+    soupContext.setViewDataStore(
       selectedView(),
       'multiSelectEntities',
       (prev) => prev.concat(newEntitiesForSelection)
@@ -1391,8 +1452,8 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   // reset last clicked on reset multi-selection.
   createEffect(() => {
     if (
-      unifiedListContext.viewsDataStore[selectedView()].multiSelectEntities
-        .length === 0
+      soupContext.viewsDataStore[selectedView()].multiSelectEntities.length ===
+      0
     ) {
       lastClickedEntityId = -1;
     }
@@ -1569,6 +1630,21 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       />
                     </section>
                   </Show>
+                  <Show when={ENABLE_PROPERTY_FILTER}>
+                    <section class="gap-1 grid p-2">
+                      <span class="font-medium text-xs">Property</span>
+                      <PropertyFilterControl
+                        propertyFilters={propertyFilters}
+                        setPropertyFilters={setPropertyFilters}
+                        onIncompleteFiltersChange={
+                          setHasIncompletePropertyFilters
+                        }
+                        registerClearHandler={(fn) => {
+                          clearPropertyFilters = fn;
+                        }}
+                      />
+                    </section>
+                  </Show>
                 </div>
               </div>
             </DropdownMenu>
@@ -1610,7 +1686,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       }}
                     />
                   </section>
-                  <Show when={ENABLE_PROPERTY_DISPLAY_CONTROL}>
+                  <Show when={ENABLE_PROPERTY_DISPLAY}>
                     <section class="p-2">
                       <PropertyDisplayControl
                         selectedPropertyIds={displayProperties}
@@ -1650,7 +1726,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
             canSwipeLeft={(entityId) => {
               const entity = entityById().get(entityId);
               if (!entity) return false;
-              return unifiedListContext.actionRegistry.isActionEnabled(
+              return soupContext.actionRegistry.isActionEnabled(
                 'mark_as_done',
                 entity
               );
@@ -1659,9 +1735,9 @@ export function UnifiedListView(props: UnifiedListViewProps) {
               const entity = entityById().get(entityId);
               if (!entity) return false;
 
-              unifiedListContext.actionRegistry.execute('mark_as_done', entity);
+              soupContext.actionRegistry.execute('mark_as_done', entity);
             }}
-            setCollapseEntity={unifiedListContext.collapseEntitySignal[1]}
+            setCollapseEntity={soupContext.collapseEntitySignal[1]}
           >
             <UnifiedListComponent
               entityListRef={setLocalEntityListRef}
@@ -1689,6 +1765,14 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       return innerProps.entity.updatedAt;
                   }
                 };
+
+                const properties = () => {
+                  if (isTaskEntity(innerProps.entity)) {
+                    return taskPropertiesStore()[innerProps.entity.id] ?? [];
+                  }
+                  return undefined;
+                };
+
                 return (
                   <EntityRow
                     entityId={innerProps.entity.id}
@@ -1711,15 +1795,12 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                         });
                       }}
                       entity={innerProps.entity}
-                      properties={
-                        isTaskEntity(innerProps.entity)
-                          ? taskPropertiesStore[innerProps.entity.id]
-                          : undefined
-                      }
+                      properties={properties()}
                       timestamp={timestamp()}
                       onClick={entityClickHandler}
+                      onPointerDown={entityPointerDownHandler}
                       onClickRowAction={
-                        unifiedListContext.actionRegistry.isActionEnabled(
+                        soupContext.actionRegistry.isActionEnabled(
                           'mark_as_done',
                           innerProps.entity
                         )
@@ -1779,6 +1860,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                           shiftKey: shiftKey ?? false,
                         })
                       }
+                      searchActive={!!searchText()}
                     />
                   </EntityRow>
                 );
@@ -1832,7 +1914,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
           <EntitySelectionToolbarModal
             multiSelectEntities={view()?.multiSelectEntities ?? []}
             onClose={() =>
-              unifiedListContext.setViewDataStore(
+              soupContext.setViewDataStore(
                 selectedView(),
                 'multiSelectEntities',
                 []
@@ -1856,7 +1938,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                 setKonsoleContextInformation({
                   selectedEntities: multiSelectEntities.slice(),
                   clearSelection: () => {
-                    unifiedListContext.setViewDataStore(
+                    soupContext.setViewDataStore(
                       selectedView(),
                       'multiSelectEntities',
                       []
@@ -1922,7 +2004,7 @@ function SearchBar(props: {
     virtualizerHandleSignal: [virtualizerHandle],
     entityListRefSignal: [entityListRef],
     navigateThroughList,
-  } = splitContext.unifiedListContext;
+  } = splitContext.soupContext;
   const viewData = createMemo(() => viewsDataStore[selectedView()]);
   const viewName = createMemo(() => viewData().view);
 
@@ -2029,6 +2111,7 @@ function SearchBar(props: {
                   icon={SearchIcon}
                   theme="clear"
                   tooltip={{ label: 'Search' }}
+                  tabIndex={-1}
                   onClick={() => {
                     inputRef?.focus();
                   }}
@@ -2040,6 +2123,7 @@ function SearchBar(props: {
                 icon={XIcon}
                 theme="clear"
                 tooltip={{ label: 'Clear search' }}
+                tabIndex={-1}
                 onClick={() => {
                   setSearchText('');
                   inputRef?.focus();
@@ -2054,6 +2138,7 @@ function SearchBar(props: {
             theme="clear"
             tooltip={{ label: 'Cancel search' }}
             class="[&_svg]:animate-spin"
+            tabIndex={-1}
             onClick={() => {
               setSearchText('');
               inputRef?.focus();

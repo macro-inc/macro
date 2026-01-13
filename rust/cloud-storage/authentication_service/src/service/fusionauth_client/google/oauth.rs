@@ -83,6 +83,11 @@ pub(in crate::service::fusionauth_client) async fn refresh_google_token(
                 "failed to refresh Google access token"
             );
 
+            // If the user revoked Macro's access to their account, we get an invalid_grant error here
+            if error_text.contains("invalid_grant") {
+                return Err(FusionAuthClientError::InvalidGrant);
+            }
+
             Err(FusionAuthClientError::Generic(GenericErrorResponse {
                 message: format!(
                     "Google token refresh failed with status {}: {}",
