@@ -226,29 +226,12 @@ export const ListChannels = z
 export const ListChannelsResponse = z.object({
   channels: z.array(
     z.object({
-      channelType: z.any().superRefine((x, ctx) => {
-        const schemas = [
-          z.literal('public'),
-          z.literal('organization'),
-          z.literal('private'),
-          z.literal('direct_message'),
-        ];
-        const errors = schemas.reduce<z.ZodError[]>(
-          (errors, schema) =>
-            ((result) => (result.error ? [...errors, result.error] : errors))(
-              schema.safeParse(x)
-            ),
-          []
-        );
-        if (schemas.length - errors.length !== 1) {
-          ctx.addIssue({
-            path: ctx.path,
-            code: 'invalid_union',
-            unionErrors: errors,
-            message: 'Invalid input: Should pass single schema',
-          });
-        }
-      }),
+      channelType: z.enum([
+        'public',
+        'organization',
+        'private',
+        'direct_message',
+      ]),
       id: z.string().uuid(),
       name: z.union([z.string(), z.null()]).optional(),
     })

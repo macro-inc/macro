@@ -1,7 +1,10 @@
 use super::CommsServiceClient;
 use crate::error::{ClientError, ResponseExt};
-use model::comms::ChannelType;
-use model::comms::{GetChannelsHistoryRequest, GetChannelsHistoryResponse};
+use model::comms::{
+    ChannelMessage, ChannelParticipant, ChannelType, GetChannelsHistoryRequest,
+    GetChannelsHistoryResponse,
+};
+use models_comms::channel::{ChannelId, OrganizationId};
 use serde::{Deserialize, Serialize};
 use urlencoding;
 use uuid::Uuid;
@@ -17,59 +20,17 @@ pub struct ChannelTranscriptResponse {
     pub transcript: String,
 }
 
-/// Channel type from API response
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ApiChannelType {
-    Public,
-    Organization,
-    Private,
-    DirectMessage,
-}
-
-/// Participant role from API response
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ApiParticipantRole {
-    Owner,
-    Admin,
-    Member,
-}
-
-/// Channel participant from API response
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ApiChannelParticipant {
-    pub channel_id: Uuid,
-    pub user_id: String,
-    pub role: ApiParticipantRole,
-    pub joined_at: chrono::DateTime<chrono::Utc>,
-    pub left_at: Option<chrono::DateTime<chrono::Utc>>,
-}
-
-/// Channel message from API response
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ApiChannelMessage {
-    pub message_id: Uuid,
-    pub thread_id: Option<Uuid>,
-    pub sender_id: String,
-    pub content: String,
-    pub created_at: chrono::DateTime<chrono::Utc>,
-    pub updated_at: chrono::DateTime<chrono::Utc>,
-    pub deleted_at: Option<chrono::DateTime<chrono::Utc>>,
-    pub mentions: Vec<String>,
-}
-
 /// Channel with latest message from GET /channels response
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiChannelWithLatest {
     /// Channel ID
-    pub id: Uuid,
+    pub id: ChannelId,
     /// Channel name (may be None for DMs)
     pub name: Option<String>,
     /// Channel type
-    pub channel_type: ApiChannelType,
+    pub channel_type: ChannelType,
     /// Organization ID if applicable
-    pub org_id: Option<u32>,
+    pub org_id: Option<OrganizationId>,
     /// When the channel was created
     pub created_at: chrono::DateTime<chrono::Utc>,
     /// When the channel was last updated
@@ -77,11 +38,11 @@ pub struct ApiChannelWithLatest {
     /// Owner user ID
     pub owner_id: String,
     /// Channel participants
-    pub participants: Vec<ApiChannelParticipant>,
+    pub participants: Vec<ChannelParticipant>,
     /// Latest message in the channel
-    pub latest_message: Option<ApiChannelMessage>,
+    pub latest_message: Option<ChannelMessage>,
     /// Latest non-thread message
-    pub latest_non_thread_message: Option<ApiChannelMessage>,
+    pub latest_non_thread_message: Option<ChannelMessage>,
     /// When the user last viewed the channel
     pub viewed_at: Option<chrono::DateTime<chrono::Utc>>,
     /// When the user last interacted with the channel
@@ -94,7 +55,7 @@ impl CommsServiceClient {
     // External routes - require JWT authentication and perform permission checks
 
     /// Get all channels the user has access to using external authenticated endpoint
-    #[tracing::instrument(skip(self, jwt_token))]
+    #[tracing::instrument(skip(self, jwt_token), err)]
     pub async fn get_channels_external(
         &self,
         jwt_token: &str,
@@ -123,7 +84,7 @@ impl CommsServiceClient {
     }
 
     /// Get channel metadata using external authenticated endpoint
-    #[tracing::instrument(skip(self, jwt_token))]
+    #[tracing::instrument(skip(self, jwt_token), err)]
     pub async fn get_channel_metadata_external(
         &self,
         channel_id: &Uuid,
@@ -153,7 +114,7 @@ impl CommsServiceClient {
     }
 
     /// Get channel transcript using external authenticated endpoint
-    #[tracing::instrument(skip(self, jwt_token))]
+    #[tracing::instrument(skip(self, jwt_token), err)]
     pub async fn get_channel_transcript_external(
         &self,
         channel_id: &Uuid,

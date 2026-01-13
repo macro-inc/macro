@@ -89,6 +89,7 @@ pub struct ChannelParticipant {
     Serialize,
     Deserialize,
     sqlx::Type,
+    schemars::JsonSchema,
 )]
 #[strum(serialize_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
