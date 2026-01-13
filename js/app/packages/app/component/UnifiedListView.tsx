@@ -383,6 +383,12 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     () => view()?.filters?.projectFilter ?? defaultFilterOptions.projectFilter
   );
 
+  const channelCategoryFilter = createMemo(
+    () =>
+      view()?.filters?.channelCategoryFilter ??
+      defaultFilterOptions.channelCategoryFilter
+  );
+
   const { all: emailRecipientOptions } = useCombinedRecipients(['user']);
   const fromFilter = createMemo(() => view()?.filters.fromFilter);
   const hasFromFilter = createMemo(() => fromFilter() !== undefined);
@@ -712,6 +718,21 @@ export function UnifiedListView(props: UnifiedListViewProps) {
           return entityTypeFilter().includes('task');
         }
         return entityTypeFilter().includes(entity.type);
+      });
+    }
+
+    const channelCategoryFilter_ = channelCategoryFilter() ?? [];
+    if (channelCategoryFilter_.length > 0) {
+      filterFns.push((entity) => {
+        if (entity.type !== 'channel') return true;
+        const isDm = entity.channelType === 'direct_message';
+        const includePeople = channelCategoryFilter_.includes('people');
+        const includeGroups = channelCategoryFilter_.includes('groups');
+        // Defensive: if both are selected, behave like "no refinement".
+        if (includePeople && includeGroups) return true;
+        if (includePeople) return isDm;
+        if (includeGroups) return !isDm;
+        return true;
       });
     }
 

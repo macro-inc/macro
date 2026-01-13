@@ -70,6 +70,14 @@ export type FilterOptions = {
   fromFilter?: WithCustomUserInput<'user' | 'contact'>[];
   focusFilters?: ('signal' | 'noise')[];
   unreadOnly?: boolean;
+  /**
+   * Further refines `channel` entities:
+   * - `people`: direct messages
+   * - `groups`: non-DM channels (private / organization / public)
+   *
+   * Empty array means "no refinement" (i.e. include all channels).
+   */
+  channelCategoryFilter?: Array<'people' | 'groups'>;
   propertyFilters?: PropertyFilter[];
 };
 
@@ -146,6 +154,7 @@ export const VIEWCONFIG_BASE: ViewConfigBase = {
     projectFilter: undefined,
     fromFilter: [],
     unreadOnly: false,
+    channelCategoryFilter: [],
     propertyFilters: [],
   },
   display: {

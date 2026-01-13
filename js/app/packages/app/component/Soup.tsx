@@ -35,7 +35,6 @@ import {
   useQueryClient as useEntityQueryClient,
 } from '@macro-entity';
 import IconGear from '@macro-icons/macro-gear.svg';
-import NoiseIcon from '@macro-icons/wide/noise.svg';
 import PreviewIcon from '@macro-icons/wide/preview.svg';
 import SignalIcon from '@macro-icons/wide/signal.svg';
 import SortIcon from '@macro-icons/wide/sort.svg';
@@ -86,20 +85,26 @@ false && fileFolderDrop;
 
 // Entity type filter configuration
 const ENTITY_TYPE_FILTERS: {
-  type: ExpandedEntityType;
+  kind: 'entityType' | 'channelCategory' | 'documentPreset';
+  type?: ExpandedEntityType;
+  channelCategory?: 'people' | 'groups';
+  documentTypes?: Array<'md' | 'code' | 'image' | 'canvas' | 'pdf' | 'unknown'>;
   label: string;
   iconType: string;
   enabled: boolean;
   shortcut: string;
 }[] = [
   {
+    kind: 'documentPreset',
     type: 'document',
+    documentTypes: ['md', 'canvas'],
     label: 'Docs',
     iconType: 'md',
     enabled: true,
     shortcut: 'd',
   },
   {
+    kind: 'entityType',
     type: 'chat',
     label: 'Agents',
     iconType: 'chat',
@@ -107,13 +112,23 @@ const ENTITY_TYPE_FILTERS: {
     shortcut: 'a',
   },
   {
-    type: 'channel',
-    label: 'Messages',
+    kind: 'channelCategory',
+    channelCategory: 'people',
+    label: 'People',
     iconType: 'channel',
+    enabled: true,
+    shortcut: 'p',
+  },
+  {
+    kind: 'channelCategory',
+    channelCategory: 'groups',
+    label: 'Teams',
+    iconType: 'directMessage',
     enabled: true,
     shortcut: 'm',
   },
   {
+    kind: 'entityType',
     type: 'task',
     label: 'Tasks',
     iconType: 'task',
@@ -121,6 +136,7 @@ const ENTITY_TYPE_FILTERS: {
     shortcut: 't',
   },
   {
+    kind: 'entityType',
     type: 'email',
     label: 'Mail',
     iconType: 'email',
@@ -128,8 +144,11 @@ const ENTITY_TYPE_FILTERS: {
     shortcut: 'l',
   },
   {
-    type: 'project',
-    label: 'Folders',
+    kind: 'documentPreset',
+    type: 'document',
+    // "Files" = everything except Notes + Canvases
+    documentTypes: ['code', 'image', 'pdf', 'unknown'],
+    label: 'Files',
     iconType: 'project',
     enabled: true,
     shortcut: 'f',
@@ -140,6 +159,14 @@ function EntityTypeIconFilter() {
   const renderShortcutUnderlinedInLabel = (label: string, shortcut: string) => {
     const s = shortcut.trim();
     if (!s) return label;
+    if (s.toLowerCase() === 'space') {
+      return (
+        <>
+          {label}
+          <span class="ml-1 font-mono opacity-70">␣</span>
+        </>
+      );
+    }
 
     const idx = label.toLowerCase().indexOf(s.toLowerCase());
     if (idx === -1) return label;
@@ -313,10 +340,36 @@ function EntityTypeIconFilter() {
   const entityTypeFilter = createMemo(
     () => view()?.filters?.typeFilter ?? VIEWCONFIG_BASE.filters.typeFilter
   );
+  const channelCategoryFilter = createMemo(
+    () =>
+      view()?.filters?.channelCategoryFilter ??
+      VIEWCONFIG_BASE.filters.channelCategoryFilter
+  );
 
   const focusFilters = createMemo(
     () => view()?.filters?.focusFilters ?? VIEWCONFIG_BASE.filters.focusFilters
   );
+
+  const documentTypeFilter = createMemo(
+    () =>
+      view()?.filters?.documentTypeFilter ?? VIEWCONFIG_BASE.filters.documentTypeFilter
+  );
+
+  const sameSet = (a: string[], b: string[]) => {
+    if (a.length !== b.length) return false;
+    const as = new Set(a);
+    for (const item of b) {
+      if (!as.has(item)) return false;
+    }
+    return true;
+  };
+
+  const isDocumentPresetActive = (types: string[]) => {
+    const currentTypes = entityTypeFilter();
+    if (currentTypes.length === 0) return false;
+    if (!currentTypes.includes('document')) return false;
+    return sameSet(documentTypeFilter(), types);
+  };
 
   const toggleEntityTypeFilter = (type: ExpandedEntityType) => {
     setViewDataStore(selectedView(), 'filters', 'typeFilter', (prev) => {
@@ -332,74 +385,98 @@ function EntityTypeIconFilter() {
     }
   };
 
-  // Helper to check if we're in "inbox" mode (both signal and noise visually selected)
-  const isInboxMode = () => {
-    const current = focusFilters() ?? [];
-    const notificationFilter = view()?.filters?.notificationFilter ?? 'all';
-    return current.length === 0 && notificationFilter === 'notDone';
+  const toggleDocumentPreset = (
+    preset: Array<'md' | 'code' | 'image' | 'canvas' | 'pdf' | 'unknown'>
+  ) => {
+    const types = entityTypeFilter();
+    const hasDoc = types.includes('document');
+    const active = isDocumentPresetActive(preset);
+
+    batch(() => {
+      if (active) {
+        // Turning off the active doc preset turns off document filtering entirely.
+        setViewDataStore(
+          selectedView(),
+          'filters',
+          'typeFilter',
+          types.filter((t) => t !== 'document')
+        );
+        setViewDataStore(selectedView(), 'filters', 'documentTypeFilter', []);
+        return;
+      }
+
+      if (!hasDoc) {
+        setViewDataStore(selectedView(), 'filters', 'typeFilter', [
+          ...types,
+          'document',
+        ]);
+      }
+
+      setViewDataStore(selectedView(), 'filters', 'documentTypeFilter', preset);
+    });
   };
 
-  const toggleFocusFilter = (filter: 'signal' | 'noise') => {
-    batch(() => {
-      const current = focusFilters() ?? [];
-      const inInbox = isInboxMode();
-      const isCurrentlyActive = current.includes(filter);
+  const toggleChannelCategoryFilter = (category: 'people' | 'groups') => {
+    const types = entityTypeFilter();
+    const cats = channelCategoryFilter() ?? [];
+    const hasChannel = types.includes('channel');
 
-      if (inInbox) {
-        // In inbox mode (both selected) - clicking one deselects it, leaving the other
-        const other = filter === 'signal' ? 'noise' : 'signal';
-        setViewDataStore(selectedView(), 'filters', 'focusFilters', [other]);
-        // Keep notDone filter
-      } else if (isCurrentlyActive) {
-        // Deselecting this filter
-        const newFilters = current.filter((f) => f !== filter);
-        if (newFilters.length === 0) {
-          // No focus filters left - reset to show all
-          setViewDataStore(selectedView(), 'filters', 'focusFilters', []);
-          setViewDataStore(
-            selectedView(),
-            'filters',
-            'notificationFilter',
-            'all'
-          );
-        } else {
-          // Still have one filter active
-          setViewDataStore(
-            selectedView(),
-            'filters',
-            'focusFilters',
-            newFilters
-          );
-          // Keep notDone filter since we still have a focus filter
-        }
-      } else {
-        // Selecting this filter - add to array
-        const newFilters = [...current, filter];
-        if (newFilters.length === 2) {
-          // Both signal and noise selected = Inbox (notDone without focus filter)
-          setViewDataStore(selectedView(), 'filters', 'focusFilters', []);
-          setViewDataStore(
-            selectedView(),
-            'filters',
-            'notificationFilter',
-            'notDone'
-          );
-        } else {
-          // Only one filter - apply it with notDone
-          setViewDataStore(
-            selectedView(),
-            'filters',
-            'focusFilters',
-            newFilters
-          );
-          setViewDataStore(
-            selectedView(),
-            'filters',
-            'notificationFilter',
-            'notDone'
-          );
-        }
+    let nextTypes = types;
+    let nextCats: Array<'people' | 'groups'> = cats;
+
+    if (!hasChannel) {
+      nextTypes = [...types, 'channel'];
+      nextCats = [category];
+    } else if (cats.length === 0) {
+      // Empty means "all channel categories" (both active).
+      // Clicking one removes it, leaving only the other.
+      nextCats = category === 'people' ? ['groups'] : ['people'];
+    } else if (cats.includes(category)) {
+      nextCats = cats.filter((c) => c !== category);
+      if (nextCats.length === 0) {
+        // Turning off the last category turns off channel filtering entirely.
+        nextTypes = types.filter((t) => t !== 'channel');
       }
+    } else {
+      nextCats = [...cats, category];
+      // Both selected => normalize back to "all".
+      if (nextCats.includes('people') && nextCats.includes('groups')) nextCats = [];
+    }
+
+    batch(() => {
+      setViewDataStore(selectedView(), 'filters', 'typeFilter', nextTypes);
+      setViewDataStore(
+        selectedView(),
+        'filters',
+        'channelCategoryFilter',
+        nextCats
+      );
+    });
+  };
+
+  const isInboxFilterActive = () => {
+    const current = focusFilters() ?? [];
+    return current.includes('signal') && !current.includes('noise');
+  };
+
+  // Simplified UI:
+  // - Inbox ON  => equivalent to the old "Important" filter (signal)
+  // - Inbox OFF => equivalent to no signal/noise filter applied
+  const toggleInboxFilter = () => {
+    batch(() => {
+      if (isInboxFilterActive()) {
+        setViewDataStore(selectedView(), 'filters', 'focusFilters', []);
+        setViewDataStore(selectedView(), 'filters', 'notificationFilter', 'all');
+        return;
+      }
+
+      setViewDataStore(selectedView(), 'filters', 'focusFilters', ['signal']);
+      setViewDataStore(
+        selectedView(),
+        'filters',
+        'notificationFilter',
+        'notDone'
+      );
     });
   };
 
@@ -410,10 +487,14 @@ function EntityTypeIconFilter() {
     return filter.includes(type);
   };
 
-  const isFocusFilterActive = (filter: 'signal' | 'noise') => {
-    // If in inbox mode (both selected), show both as active
-    if (isInboxMode()) return true;
-    return focusFilters()?.includes(filter) === true;
+  const isChannelCategoryActive = (category: 'people' | 'groups') => {
+    const types = entityTypeFilter();
+    if (types.length === 0) return false;
+    if (!types.includes('channel')) return false;
+    const cats = channelCategoryFilter() ?? [];
+    // Empty means "all channel categories"
+    if (cats.length === 0) return true;
+    return cats.includes(category);
   };
 
   const isUnreadFilterActive = () => {
@@ -433,6 +514,7 @@ function EntityTypeIconFilter() {
       setViewDataStore('all', 'filters', 'focusFilters', []);
       setViewDataStore('all', 'filters', 'notificationFilter', 'all');
       setViewDataStore('all', 'filters', 'unreadOnly', false);
+      setViewDataStore('all', 'filters', 'channelCategoryFilter', []);
     });
   };
 
@@ -474,18 +556,23 @@ function EntityTypeIconFilter() {
   }[] = [
     {
       hotkey: 'i',
-      description: 'Filter by Important',
-      handler: () => toggleFocusFilter('signal'),
-    },
-    {
-      hotkey: 'o',
-      description: 'Filter by Other',
-      handler: () => toggleFocusFilter('noise'),
+      description: 'Toggle Inbox',
+      handler: () => toggleInboxFilter(),
     },
     ...ENTITY_TYPE_FILTERS.filter((f) => f.enabled).map((f) => ({
       hotkey: f.shortcut as ValidHotkey,
       description: `Filter by ${f.label}`,
-      handler: () => toggleEntityTypeFilter(f.type),
+      handler: () => {
+        if (f.kind === 'documentPreset') {
+          toggleDocumentPreset(f.documentTypes!);
+          return;
+        }
+        if (f.kind === 'channelCategory') {
+          toggleChannelCategoryFilter(f.channelCategory!);
+          return;
+        }
+        toggleEntityTypeFilter(f.type!);
+      },
     })),
     {
       hotkey: 'u',
@@ -589,66 +676,40 @@ function EntityTypeIconFilter() {
         class="flex items-center h-full gap-0.5 px-1 overflow-x-auto scrollbar-hidden overscroll-none"
         ref={setScrollRef}
       >
-        {/* Important/Other buttons */}
+        {/* Inbox toggle */}
         <div class="flex items-center mr-1 shrink-0">
-          <div class="flex items-center rounded-full border border-edge-muted overflow-hidden">
-          <Tooltip
-            tooltip={
-              <LabelAndHotKey label="Important" shortcut="i" />
-            }
-          >
+          <Tooltip tooltip={<LabelAndHotKey label="Inbox" shortcut="i" />}>
             <button
               type="button"
-              class="flex items-center gap-1.5 h-7 px-2.5 border border-transparent active:border-accent active:bg-accent active:text-panel rounded-l-full"
+              class="flex items-center gap-1.5 h-7 px-2.5 border border-edge-muted active:border-accent active:bg-accent active:text-panel rounded-full"
               classList={{
-                'bg-accent text-panel border-accent':
-                  isFocusFilterActive('signal'),
+                'bg-accent text-panel border-accent': isInboxFilterActive(),
                 'text-ink-muted hover:text-accent hover:bg-accent/20':
-                  !isFocusFilterActive('signal'),
+                  !isInboxFilterActive(),
               }}
-              onClick={() => toggleFocusFilter('signal')}
+              onClick={() => toggleInboxFilter()}
             >
               <SignalIcon />
               <span class="text-xs leading-none">
-                {renderShortcutUnderlinedInLabel('Important', 'i')}
+                {renderShortcutUnderlinedInLabel('Inbox', 'i')}
               </span>
             </button>
           </Tooltip>
-          <Tooltip
-            tooltip={
-              <LabelAndHotKey
-                label="Other"
-                shortcut="o"
-              />
-            }
-          >
-            <button
-              type="button"
-              class="flex items-center gap-1.5 h-7 px-2.5 border border-transparent active:border-accent active:bg-accent active:text-panel rounded-r-full"
-              classList={{
-                'bg-accent text-panel border-accent':
-                  isFocusFilterActive('noise'),
-                'text-ink-muted hover:text-accent hover:bg-accent/20':
-                  !isFocusFilterActive('noise'),
-              }}
-              onClick={() => toggleFocusFilter('noise')}
-            >
-              <NoiseIcon  />
-              <span class="text-xs leading-none">
-                {renderShortcutUnderlinedInLabel('Other', 'o')}
-              </span>
-            </button>
-          </Tooltip>
-          </div>
         </div>
-        {/* Separator */}
-        <div class="h-4 w-px bg-edge-muted mx-1 shrink-0" />
         {/* Entity type icons */}
         <div class="flex items-center rounded-full border border-edge-muted overflow-hidden shrink-0">
           <For each={ENTITY_TYPE_FILTERS.filter((f) => f.enabled)}>
             {(filter) => {
               const iconConfig = () => getIconConfig(filter.iconType);
-              const isActive = () => isFilterActive(filter.type);
+              const isActive = () => {
+                if (filter.kind === 'documentPreset') {
+                  return isDocumentPresetActive(filter.documentTypes!);
+                }
+                if (filter.kind === 'channelCategory') {
+                  return isChannelCategoryActive(filter.channelCategory!);
+                }
+                return isFilterActive(filter.type!);
+              };
 
               return (
                 <Tooltip
@@ -667,7 +728,17 @@ function EntityTypeIconFilter() {
                       'text-ink-muted hover:text-accent hover:bg-accent/20':
                         !isActive(),
                     }}
-                    onClick={() => toggleEntityTypeFilter(filter.type)}
+                    onClick={() => {
+                      if (filter.kind === 'documentPreset') {
+                        toggleDocumentPreset(filter.documentTypes!);
+                        return;
+                      }
+                      if (filter.kind === 'channelCategory') {
+                        toggleChannelCategoryFilter(filter.channelCategory!);
+                        return;
+                      }
+                      toggleEntityTypeFilter(filter.type!);
+                    }}
                   >
                     <Dynamic component={iconConfig().icon} class="size-3.5" />
                     <span class="text-xs leading-none">
@@ -682,8 +753,6 @@ function EntityTypeIconFilter() {
             }}
           </For>
         </div>
-        {/* Separator before unread/preview */}
-        <div class="h-4 w-px bg-edge-muted mx-1 shrink-0" />
         {/* Unread filter */}
         <Tooltip tooltip={<LabelAndHotKey label="Unread Only" shortcut="u" />}>
           <button
@@ -712,7 +781,7 @@ function EntityTypeIconFilter() {
         </Tooltip>
         {/* Preview toggle */}
         <Tooltip
-          tooltip={<LabelAndHotKey label="Toggle Preview" shortcut="p" />}
+          tooltip={<LabelAndHotKey label="Toggle Preview" shortcut="space" />}
         >
           <button
             type="button"
@@ -728,7 +797,7 @@ function EntityTypeIconFilter() {
           >
             <PreviewIcon class="size-3.5" />
             <span class="text-xs leading-none">
-              {renderShortcutUnderlinedInLabel('Preview', 'p')}
+              {renderShortcutUnderlinedInLabel('Preview', 'space')}
             </span>
           </button>
         </Tooltip>
@@ -812,8 +881,6 @@ function EntityTypeIconFilter() {
         </Popover>
         {/* Views dropdown - show if there are custom views or unsaved changes */}
         <Show when={customViews().length > 0 || isViewConfigChanged()}>
-          {/* Separator before views */}
-          <div class="h-4 w-px bg-edge-muted mx-1 shrink-0" />
           {/* Views dropdown */}
           <Popover
             open={viewsDropdownOpen()}
@@ -1042,12 +1109,16 @@ function EntityTypeIconFilter() {
             </Popover.Portal>
           </Popover>
         </Show>
-        {/* Separator before search */}
-        <div class="h-4 w-px bg-edge-muted mx-1 shrink-0" />
         {/* Compact search bar */}
         <div class="flex items-center gap-1 shrink-0">
           <Tooltip tooltip={<LabelAndHotKey label="Search" shortcut="⌘F" />}>
-            <div class="relative flex items-center">
+            <div
+              class="relative flex items-center gap-1.5 h-7 px-2.5 border border-edge-muted rounded-full transition-colors"
+              classList={{
+                'bg-accent text-panel border-accent': !!searchText(),
+                'text-ink-muted hover:text-accent hover:bg-accent/20': !searchText(),
+              }}
+            >
               <input
                 ref={(el) => {
                   searchInputRef = el;
@@ -1066,7 +1137,7 @@ function EntityTypeIconFilter() {
                     e.currentTarget.blur();
                   }
                 }}
-                class="w-24 px-1 py-1 text-xs bg-transparent border-none outline-none ring-0 focus:outline-none focus:ring-0 placeholder:text-ink-muted placeholder:select-none"
+                class="w-24 p-0 text-xs bg-transparent border-none outline-none ring-0 focus:outline-none focus:ring-0 placeholder:text-ink-muted placeholder:select-none"
               />
             </div>
           </Tooltip>
@@ -1090,6 +1161,7 @@ function ClearFiltersButton() {
       setViewDataStore('all', 'filters', 'focusFilters', []);
       setViewDataStore('all', 'filters', 'notificationFilter', 'all');
       setViewDataStore('all', 'filters', 'unreadOnly', false);
+      setViewDataStore('all', 'filters', 'channelCategoryFilter', []);
       setViewDataStore('all', 'searchText', '');
     });
   };
@@ -1098,14 +1170,11 @@ function ClearFiltersButton() {
     <Tooltip tooltip={<LabelAndHotKey label="Clear filters" shortcut="/" />}>
       <button
         type="button"
-        class="relative flex items-center justify-center size-7 text-ink-muted hover:text-accent hover:bg-accent/20 border border-transparent active:border-accent active:bg-accent active:text-panel"
-        style={{ 'clip-path': cornerClip('3px') }}
+        class="flex items-center gap-1.5 h-7 px-2.5 border border-edge-muted rounded-full text-ink-muted hover:text-accent hover:bg-accent/20 active:border-accent active:bg-accent active:text-panel"
         onClick={clearAllFilters}
       >
-        ✕
-        <span class="absolute bottom-0 right-0.5 text-[9px] font-mono font-bold leading-none opacity-60">
-          /
-        </span>
+        <span class="text-sm leading-none">✕</span>
+        <span class="text-xs leading-none">Clear</span>
       </button>
     </Tooltip>
   );
@@ -1333,7 +1402,7 @@ export function Soup() {
 
   hotkeyDisposers.push(
     registerHotkey({
-      hotkey: ['p'],
+      hotkey: ['space'],
       scopeId: splitHotkeyScope,
       description: 'Toggle Preview',
       hotkeyToken: TOKENS.unifiedList.togglePreview,

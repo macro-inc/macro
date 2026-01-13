@@ -32,7 +32,7 @@ const shortcutSections: ShortcutSection[] = [
       { keys: ['x'], description: `Select items (then ${IS_MAC ? '⌘' : 'Ctrl'}+K to bring up actions)` },
       { keys: ['shift+j', 'shift+arrowdown'], description: `Select down` },
       { keys: ['shift+k', 'shift+arrowup'], description: `Select up` },
-      { keys: ['p'], description: 'Preview an item in the side panel' },
+      { keys: ['space'], description: 'Preview an item in the side panel' },
       { keys: ['enter'], description: 'Open an item fullscreen' },
       { keys: [`${cmdOrCtrl}+f`], description: 'Search (uses current filters)' },
     ],
@@ -42,6 +42,9 @@ const shortcutSections: ShortcutSection[] = [
     items: [
       { keys: ['d'], description: 'Filter to docs' },
       { keys: ['l'], description: 'Filter to email' },
+      { keys: ['p'], description: 'Filter to people (direct messages)' },
+      { keys: ['m'], description: 'Filter to teams' },
+      { keys: ['f'], description: 'Filter to files' },
     ],
   },
   {
