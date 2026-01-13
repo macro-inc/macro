@@ -1,14 +1,15 @@
 import type { ListItemNode } from '@lexical/list';
+import {
+  parseContactMentions,
+  parseDocumentMentions,
+  parseGroupMentions,
+} from '@lexical-core/utils/parsers';
 import { $elementNodeToMarkdown } from '../../utils';
 import type { ParsedCheckbox } from './types';
 
-// Regex patterns for mention extraction (matching existing transformers in mentions.ts)
+// Patterns for extracting data from mentions (not for replacement)
 const USER_MENTION_PATTERN = /<m-user-mention>(.*?)<\/m-user-mention>/;
 const DATE_MENTION_PATTERN = /<m-date-mention>(.*?)<\/m-date-mention>/;
-const DOCUMENT_MENTION_PATTERN =
-  /<m-document-mention>(.*?)<\/m-document-mention>/;
-const CONTACT_MENTION_PATTERN = /<m-contact-mention>(.*?)<\/m-contact-mention>/;
-const GROUP_MENTION_PATTERN = /<m-group-mention>(.*?)<\/m-group-mention>/;
 
 /**
  * Extract user IDs from user mention XML tags in markdown text
@@ -50,7 +51,7 @@ export function extractDateMention(markdownText: string): string | null {
 /**
  * Convert markdown text to plain text title.
  * Removes user/date mentions (they become task properties) and converts
- * other mentions to readable text.
+ * other mentions to readable text using existing parsers.
  */
 export function extractTitleFromMarkdown(markdownText: string): string {
   let title = markdownText;
@@ -61,38 +62,10 @@ export function extractTitleFromMarkdown(markdownText: string): string {
   // Remove date mentions entirely (they become due date)
   title = title.replace(new RegExp(DATE_MENTION_PATTERN, 'g'), '');
 
-  // Replace document mentions with document name
-  title = title.replace(
-    new RegExp(DOCUMENT_MENTION_PATTERN, 'g'),
-    (_, json) => {
-      try {
-        const data = JSON.parse(json);
-        return data.documentName || '';
-      } catch {
-        return '';
-      }
-    }
-  );
-
-  // Replace contact mentions with name
-  title = title.replace(new RegExp(CONTACT_MENTION_PATTERN, 'g'), (_, json) => {
-    try {
-      const data = JSON.parse(json);
-      return data.name || data.emailOrDomain || '';
-    } catch {
-      return '';
-    }
-  });
-
-  // Replace group mentions with @alias
-  title = title.replace(new RegExp(GROUP_MENTION_PATTERN, 'g'), (_, json) => {
-    try {
-      const data = JSON.parse(json);
-      return `@${data.groupAlias || ''}`;
-    } catch {
-      return '';
-    }
-  });
+  // Use existing parsers for other mention types
+  title = parseDocumentMentions(title);
+  title = parseContactMentions(title);
+  title = parseGroupMentions(title);
 
   // Remove checkbox prefix if present (e.g., "- [ ] " or "- [x] ")
   title = title.replace(/^-\s*\[[ x]\]\s*/i, '');
