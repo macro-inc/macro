@@ -49,18 +49,31 @@ export function PropertiesView(props: PropertiesPanelProps) {
 
   const saveHandler: PropertySaveHandler = {
     saveProperty: async (property: Property, value: PropertyApiValues) => {
-      return await saveEntityProperty(
+      const result = await saveEntityProperty(
         blockId,
         props.entityType,
         property,
         value
       );
+      if (result.ok) {
+        refetch();
+      }
+      return result;
     },
     saveDate: async (property: Property, date: Date) => {
-      return await saveEntityProperty(blockId, props.entityType, property, {
-        valueType: 'DATE',
-        value: date.toISOString(),
-      });
+      const result = await saveEntityProperty(
+        blockId,
+        props.entityType,
+        property,
+        {
+          valueType: 'DATE',
+          value: date.toISOString(),
+        }
+      );
+      if (result.ok) {
+        refetch();
+      }
+      return result;
     },
   };
 
