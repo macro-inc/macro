@@ -11,7 +11,8 @@ import {
 } from '../util/recipientConversion';
 import type { ReplyType } from '../util/replyType';
 import { getSubjectText } from '../util/subjectText';
-import { type EmailRecipient, useEmailContext } from './EmailContext';
+import type { EmailRecipient } from './EmailContext';
+import type { MessageWithBodyReplyless } from '@service-email/generated/schemas';
 
 export type EmailFormRecipients = {
   to: EmailRecipient[];
@@ -34,17 +35,25 @@ export type DraftFormAttachment =
       fileSize: number;
     };
 
+export interface EmailFormStateOptions {
+  getMessageByID: (id: string) => MessageWithBodyReplyless | undefined;
+  getDraftForMessageReply: (id: string) => MessageWithBodyReplyless | undefined;
+  onRecipientsChange?: (next: EmailRecipient[]) => void;
+}
+
 /**
  * Creates a state object for the email form.
  * @param key - The db_id of the email being replied to.
  * @returns A state object for the email form.
  */
-export function createEmailFormState(key: string) {
-  const emailCtx = useEmailContext();
+export function createEmailFormState(
+  key: string,
+  options: EmailFormStateOptions
+) {
   const userEmail = useEmail();
 
-  const replyingTo = emailCtx.messages.list().find((m) => m.db_id === key);
-  const draft = emailCtx.drafts.getDraftForMessage(key);
+  const replyingTo = options.getMessageByID(key);
+  const draft = options.getDraftForMessageReply(key);
 
   const draftContainsAppendedReply = () => {
     const encoded = draft?.body_html_sanitized;
@@ -122,7 +131,7 @@ export function createEmailFormState(key: string) {
     setRecipientsInner(field, next);
     callDirty();
     const all = [...recipients.to, ...recipients.cc, ...recipients.bcc];
-    emailCtx.onRecipientsChange(all);
+    options.onRecipientsChange?.(all);
   };
 
   const initialSubject =
@@ -205,7 +214,7 @@ export function createEmailFormState(key: string) {
       ...initialRecipients.cc,
       ...initialRecipients.bcc,
     ];
-    emailCtx.onRecipientsChange(all);
+    options.onRecipientsChange?.(all);
 
     // Restore subject and input focus
     setSubjectInner(initialSubject);

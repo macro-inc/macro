@@ -1,6 +1,9 @@
 import { logger } from '@observability/logger';
 import { createContext, type ParentProps, useContext } from 'solid-js';
-import { createEmailFormState } from './createEmailFormState';
+import {
+  createEmailFormState,
+  type EmailFormStateOptions,
+} from './createEmailFormState';
 
 type EmailFormContextValue = ReturnType<typeof createEmailFormState>;
 
@@ -10,7 +13,9 @@ type RegistryApi = {
 
 const EmailFormRegistryCtx = createContext<RegistryApi>();
 
-export function EmailFormContextProvider(props: ParentProps) {
+export function EmailFormContextProvider(
+  props: ParentProps<{ formOptions: EmailFormStateOptions }>
+) {
   const map = new Map<string, EmailFormContextValue>();
 
   const getOrInit: RegistryApi['getOrInit'] = (key) => {
@@ -19,7 +24,7 @@ export function EmailFormContextProvider(props: ParentProps) {
     }
     let existing = map.get(key);
     if (!existing) {
-      existing = createEmailFormState(key);
+      existing = createEmailFormState(key, props.formOptions);
       map.set(key, existing);
     }
     return existing;
