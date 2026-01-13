@@ -38,7 +38,6 @@ function buildPropertyValues(
 ): PropertyInput[] {
   const properties: PropertyInput[] = [];
 
-  // Use extracted assignees or default to current user
   const assigneeIds =
     checkbox.assigneeUserIds.length > 0
       ? checkbox.assigneeUserIds
@@ -149,11 +148,14 @@ async function processCheckboxes(
   const successes = results.flatMap((r) => (r.isOk() ? [r.value] : []));
 
   if (successes.length > 0) {
-    editor.update(() => {
-      for (const { nodeKey, documentId, taskTitle } of successes) {
-        $replaceCheckboxWithMention(nodeKey, documentId, taskTitle);
-      }
-    });
+    editor.update(
+      () => {
+        for (const { nodeKey, documentId, taskTitle } of successes) {
+          $replaceCheckboxWithMention(nodeKey, documentId, taskTitle);
+        }
+      },
+      { discrete: true }
+    );
   }
 
   onComplete?.(results);
@@ -166,25 +168,20 @@ function registerCheckboxToTaskPlugin(editor: LexicalEditor) {
   return editor.registerCommand(
     CONVERT_CHECKBOXES_TO_TASKS,
     (options: ConvertCheckboxesOptions) => {
-      editor.update(
-        () => {
-          const selection = options.selection ?? $getSelection();
-          if (!$isRangeSelection(selection)) {
-            return;
-          }
+      const selection = options.selection ?? $getSelection();
+      if (!$isRangeSelection(selection)) {
+        return false;
+      }
 
-          const nodes = $getSelectedCheckboxes(selection);
-          const checkboxes = $parseCheckboxNodes(nodes);
+      const nodes = $getSelectedCheckboxes(selection);
+      const checkboxes = $parseCheckboxNodes(nodes);
 
-          if (checkboxes.length === 0) {
-            options.onComplete?.([]);
-            return;
-          }
+      if (checkboxes.length === 0) {
+        options.onComplete?.([]);
+        return false;
+      }
 
-          processCheckboxes(editor, checkboxes, options);
-        },
-        { discrete: true }
-      );
+      processCheckboxes(editor, checkboxes, options);
 
       return true;
     },
