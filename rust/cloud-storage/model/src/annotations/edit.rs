@@ -1,3 +1,4 @@
+use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use utoipa::ToSchema;
@@ -54,7 +55,8 @@ pub struct EditCommentResponse {
     pub document_id: String,
     pub document_name: String,
     pub file_type: Option<String>,
-    pub document_owner: String,
+    #[schema(value_type = String)]
+    pub document_owner: MacroUserIdStr<'static>,
     #[serde(flatten)]
     pub comment: Comment,
 }

@@ -1,4 +1,5 @@
 use anyhow::{Result, bail};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model::annotations::{
     Comment,
     edit::{EditCommentRequest, EditCommentResponse},
@@ -64,7 +65,7 @@ pub async fn edit_document_comment(
         document_id,
         document_name,
         file_type,
-        document_owner,
+        document_owner: MacroUserIdStr::parse_from_str(&document_owner)?.into_owned(),
         comment,
     })
 }
@@ -100,7 +101,10 @@ mod tests {
         assert_eq!(document_id, "document-with-comments");
         assert_eq!(document_name, "Document With Comments");
         assert_eq!(file_type, Some("pdf".to_string()));
-        assert_eq!(document_owner, "macro|user@user.com");
+        assert_eq!(
+            document_owner,
+            MacroUserIdStr::parse_from_str("macro|user@user.com").unwrap()
+        );
     }
 
     #[sqlx::test(fixtures(

@@ -17,7 +17,6 @@ use model::{
         AnnotationIncrementalUpdate, Mentions,
         edit::{EditCommentRequest, EditCommentResponse},
     },
-    document::DocumentBasic,
     response::ErrorResponse,
     user::UserContext,
 };
@@ -63,8 +62,8 @@ pub async fn edit_comment_handler(
                     Some(&res.comment),
                     req.thread_id,
                     &users,
-                    res.document_name,
-                    res.document_owner.clone().try_into().ok(),
+                    res.document_name.clone(),
+                    res.document_owner.clone(),
                     res.file_type.clone(),
                     user_id.clone().try_into().ok(),
                     res.document_id.to_string(),
