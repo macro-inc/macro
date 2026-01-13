@@ -1,10 +1,10 @@
-import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { type Accessor, createSignal, onMount } from 'solid-js';
 import {
-  addEntityProperty,
-  deleteEntityProperty,
-  fetchEntityProperties,
-} from '../api';
+  invalidatePropertiesForEntity,
+  useEntityPropertiesQuery,
+} from '@queries/properties/entity';
+import type { EntityType } from '@service-properties/generated/schemas/entityType';
+import type { Accessor } from 'solid-js';
+import { addEntityProperty, deleteEntityProperty } from '../api';
 import type { Property } from '../types';
 import { ERROR_MESSAGES } from '../utils/errorHandling';
 
@@ -34,42 +34,15 @@ export function useEntityProperties(
     propertyId: string
   ) => Promise<{ success: boolean; error?: string }>;
 } {
-  const [properties, setProperties] = createSignal<Property[]>([]);
-  const [isLoading, setIsLoading] = createSignal(false);
-  const [error, setError] = createSignal<string | null>(null);
+  const query = useEntityPropertiesQuery(
+    () => entityType,
+    () => entityId,
+    includeMetadata
+  );
 
-  const handleFetchError = (errorMessage: string) => {
-    setError(errorMessage);
-    // Return error for component to handle UI feedback
-    return { success: false, error: errorMessage };
-  };
-
-  const fetch = async () => {
-    // Don't show loading spinner if we already have properties (background refresh)
-    if (properties().length === 0) {
-      setIsLoading(true);
-    }
-    setError(null);
-
-    try {
-      const result = await fetchEntityProperties(
-        entityId,
-        entityType,
-        includeMetadata
-      );
-
-      if (result.ok) {
-        setProperties(result.value);
-      } else {
-        return handleFetchError(ERROR_MESSAGES.PROPERTY_FETCH);
-      }
-    } catch (_err) {
-      return handleFetchError(ERROR_MESSAGES.PROPERTY_FETCH);
-    } finally {
-      setIsLoading(false);
-    }
-
-    return { success: true };
+  const doRefetch = () => {
+    invalidatePropertiesForEntity(entityType, entityId);
+    void query.refetch();
   };
 
   const addProperty = async (
@@ -82,7 +55,7 @@ export function useEntityProperties(
     );
 
     if (result.ok) {
-      await fetch(); // Refetch to get updated list
+      doRefetch();
       return { success: true };
     } else {
       return { success: false, error: ERROR_MESSAGES.PROPERTY_ADD };
@@ -95,26 +68,18 @@ export function useEntityProperties(
     const result = await deleteEntityProperty(propertyId);
 
     if (result.ok) {
-      await fetch(); // Refetch to get updated list
+      doRefetch();
       return { success: true };
     } else {
       return { success: false, error: ERROR_MESSAGES.PROPERTY_DELETE };
     }
   };
 
-  const refetch = () => {
-    fetch();
-  };
-
-  onMount(() => {
-    fetch();
-  });
-
   return {
-    properties,
-    isLoading,
-    error,
-    refetch,
+    properties: () => query.data ?? [],
+    isLoading: () => query.isLoading,
+    error: () => (query.error ? ERROR_MESSAGES.PROPERTY_FETCH : null),
+    refetch: doRefetch,
     addProperty,
     removeProperty,
   };

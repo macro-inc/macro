@@ -38,7 +38,6 @@ import {
   setFrontMatterPreferenceForDoc,
 } from '../signal/frontMatter';
 import { mdStore } from '../signal/markdownBlockData';
-import { propertiesRefreshSignal } from '../signal/propertiesRefresh';
 
 interface FrontMatterPropertiesProps {
   canEdit: boolean;
@@ -62,17 +61,8 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
   const { properties, isLoading, error, refetch } = useEntityProperties(
     blockId,
     entityType,
-    true // includeMetadata
+    true
   );
-
-  // Watch for property changes from MarkdownPropertiesModal and refetch
-  createEffect(() => {
-    const shouldRefresh = propertiesRefreshSignal.get();
-    if (shouldRefresh) {
-      propertiesRefreshSignal.set(false);
-      refetch();
-    }
-  });
 
   // Track expanded/collapsed state from persisted preference
   const isExpanded = createMemo(() => {
@@ -154,13 +144,26 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
   // Network-based save handler for FrontMatter properties
   const saveHandler: PropertySaveHandler = {
     saveProperty: async (property: Property, value: PropertyApiValues) => {
-      return await saveEntityProperty(blockId, entityType, property, value);
+      const result = await saveEntityProperty(
+        blockId,
+        entityType,
+        property,
+        value
+      );
+      if (result.ok) {
+        refetch(); // Uses the hook's refetch which handles both local and bulk query invalidation
+      }
+      return result;
     },
     saveDate: async (property: Property, date: Date) => {
-      return await saveEntityProperty(blockId, entityType, property, {
+      const result = await saveEntityProperty(blockId, entityType, property, {
         valueType: 'DATE',
         value: date.toISOString(),
       });
+      if (result.ok) {
+        refetch(); // Uses the hook's refetch which handles both local and bulk query invalidation
+      }
+      return result;
     },
   };
 

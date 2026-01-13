@@ -27,19 +27,18 @@ function isTaskEntity(
 export function useTaskProperties(
   entities: () => Entity[] | undefined
 ): () => TaskPropertiesStore {
-  const taskEntityRefs = createMemo(() => {
+  const taskEntityIds = createMemo(() => {
     const allEntities = entities() ?? [];
-    const taskEntities = allEntities.filter(isTaskEntity);
-    return taskEntities.map((e) => ({
-      entity_id: e.id,
-      entity_type: 'TASK' as const,
-    }));
+    return allEntities.filter(isTaskEntity).map((e) => e.id);
   });
 
   const query = useBulkEntityPropertiesQuery(
-    taskEntityRefs,
+    'TASK',
+    taskEntityIds,
     TASK_PROPERTY_DEFINITION_IDS
   );
 
-  return () => query.data ?? {};
+  // Use createMemo to establish proper Solid.js reactive tracking
+  // This ensures consumers re-render when query.data changes
+  return createMemo(() => query.data ?? {});
 }
