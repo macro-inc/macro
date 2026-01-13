@@ -56,13 +56,9 @@ export function extractDateMention(markdownText: string): string | null {
 export function extractTitleFromMarkdown(markdownText: string): string {
   let title = markdownText;
 
-  // Remove user mentions entirely (they become assignees)
   title = title.replace(new RegExp(USER_MENTION_PATTERN, 'g'), '');
-
-  // Remove date mentions entirely (they become due date)
   title = title.replace(new RegExp(DATE_MENTION_PATTERN, 'g'), '');
 
-  // Use existing parsers for other mention types
   title = parseDocumentMentions(title);
   title = parseContactMentions(title);
   title = parseGroupMentions(title);
@@ -70,7 +66,6 @@ export function extractTitleFromMarkdown(markdownText: string): string {
   // Remove checkbox prefix if present (e.g., "- [ ] " or "- [x] ")
   title = title.replace(/^-\s*\[[ x]\]\s*/i, '');
 
-  // Clean up extra whitespace
   return title.trim().replace(/\s+/g, ' ');
 }
 
