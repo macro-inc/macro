@@ -39,7 +39,6 @@ export function useEntityPropertiesQuery(
 }
 
 function bulkIncludesEntityPredicate(queryKey: QueryKey, entityId: string) {
-  console.log(queryKey);
   return (
     queryKey.includes('properties') &&
     queryKey.includes('bulk') &&
@@ -56,7 +55,6 @@ export function invalidatePropertiesForEntity(
   entityType: EntityType,
   entityId: string
 ) {
-  console.log('invalidate');
   queryClient.invalidateQueries({
     queryKey: propertiesKeys.entity({ entityType, entityId }).queryKey,
   });
