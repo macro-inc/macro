@@ -825,8 +825,6 @@ export function EntityWithEverything(
   const droppable = createDroppable(props.entity.id, props.entity);
   false && droppable;
 
-  const { didCursorMove } = useCursorMove();
-
   // The main click handler for the entity row should navigate to an entity
   // without forcing focus back to the source split until after navigation.
   // Certain buttons in the entity need to NOT Navigate AND return focus to
@@ -883,11 +881,9 @@ export function EntityWithEverything(
         'active:bracket active:outline active:outline-accent/20 active:outline-offset-[-1px]':
           isTouchDevice() && !props.checked,
       }}
-      onMouseOver={(e) => {
+      onMouseMove={() => {
         if (isTouchDevice()) return;
-        if (!didCursorMove(e)) {
-          return;
-        }
+
         setHoveredEntityId(props.entity.id);
         props.onMouseOver?.();
       }}
@@ -1353,44 +1349,4 @@ const createFormattedDate = (timestamp: number) => {
     day: 'numeric',
     year: '2-digit',
   });
-};
-
-let lastMouseX: number | null = null;
-let lastMouseY: number | null = null;
-let initialMouseMove: boolean = false;
-let cursorInit = true;
-
-const useCursorMove = () => {
-  const didCursorMove = (event: MouseEvent) => {
-    if (!initialMouseMove) return;
-    const { clientX, clientY } = event;
-    // If the mouse hasn't moved, ignore the event
-    if (clientX === lastMouseX && clientY === lastMouseY) {
-      return false;
-    }
-
-    // Update the last known position
-    lastMouseX = clientX;
-    lastMouseY = clientY;
-
-    return true;
-  };
-
-  const moveEvent = (event: MouseEvent) => {
-    const { clientX, clientY } = event;
-    initialMouseMove = true;
-
-    setTimeout(() => {
-      lastMouseX = clientX;
-      lastMouseY = clientY;
-    });
-  };
-  onMount(() => {
-    if (!cursorInit) {
-      return;
-    }
-    cursorInit = false;
-    document.addEventListener('mousemove', moveEvent, { capture: true });
-  });
-  return { didCursorMove };
 };
