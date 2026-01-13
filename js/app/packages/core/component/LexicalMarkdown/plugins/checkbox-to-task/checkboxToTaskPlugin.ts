@@ -1,6 +1,5 @@
 import { $createDocumentMentionNode } from '@lexical-core';
 import { $isListItemNode } from '@lexical/list';
-import { mergeRegister } from '@lexical/utils';
 import {
   $createParagraphNode,
   $getNodeByKey,
@@ -181,39 +180,32 @@ async function processCheckboxes(
  * Register the checkbox-to-task plugin
  */
 function registerCheckboxToTaskPlugin(editor: LexicalEditor) {
-  return mergeRegister(
-    editor.registerCommand(
-      CONVERT_CHECKBOXES_TO_TASKS,
-      (options: ConvertCheckboxesOptions) => {
-        // Parse checkboxes synchronously within an update
-        let checkboxes: ParsedCheckbox[] = [];
+  return editor.registerCommand(
+    CONVERT_CHECKBOXES_TO_TASKS,
+    (options: ConvertCheckboxesOptions) => {
+      editor.update(
+        () => {
+          const selection = options.selection ?? $getSelection();
+          if (!$isRangeSelection(selection)) {
+            return;
+          }
 
-        editor.update(
-          () => {
-            // Use passed selection (from popup) or fall back to current selection
-            const selection = options.selection ?? $getSelection();
-            if (!$isRangeSelection(selection)) {
-              return;
-            }
+          const nodes = $getSelectedCheckboxes(selection);
+          const checkboxes = $parseCheckboxNodes(nodes);
 
-            const nodes = $getSelectedCheckboxes(selection);
-            checkboxes = $parseCheckboxNodes(nodes);
+          if (checkboxes.length === 0) {
+            options.onComplete?.([]);
+            return;
+          }
 
-            if (checkboxes.length === 0) {
-              options.onComplete?.([]);
-              return;
-            }
+          processCheckboxes(editor, checkboxes, options);
+        },
+        { discrete: true }
+      );
 
-            // Process asynchronously but ensure onComplete is always called
-            processCheckboxes(editor, checkboxes, options);
-          },
-          { discrete: true }
-        );
-
-        return true;
-      },
-      COMMAND_PRIORITY_NORMAL
-    )
+      return true;
+    },
+    COMMAND_PRIORITY_NORMAL
   );
 }
 

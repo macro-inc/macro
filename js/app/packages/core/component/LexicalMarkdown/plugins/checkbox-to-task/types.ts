@@ -38,6 +38,4 @@ export type ConvertCheckboxesOptions = {
   selection?: RangeSelection;
   /** Callback when all tasks are created */
   onComplete?: (results: TaskCreationResult[]) => void;
-  /** Callback for progress updates */
-  onProgress?: (current: number, total: number) => void;
 };

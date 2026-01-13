@@ -3,20 +3,19 @@ import { $elementNodeToMarkdown } from '../../utils';
 import type { ParsedCheckbox } from './types';
 
 // Regex patterns for mention extraction (matching existing transformers in mentions.ts)
-const USER_MENTION_REGEX = /<m-user-mention>(.*?)<\/m-user-mention>/g;
-const DATE_MENTION_REGEX = /<m-date-mention>(.*?)<\/m-date-mention>/g;
-const DOCUMENT_MENTION_REGEX =
-  /<m-document-mention>(.*?)<\/m-document-mention>/g;
-const CONTACT_MENTION_REGEX = /<m-contact-mention>(.*?)<\/m-contact-mention>/g;
-const GROUP_MENTION_REGEX = /<m-group-mention>(.*?)<\/m-group-mention>/g;
+const USER_MENTION_PATTERN = /<m-user-mention>(.*?)<\/m-user-mention>/;
+const DATE_MENTION_PATTERN = /<m-date-mention>(.*?)<\/m-date-mention>/;
+const DOCUMENT_MENTION_PATTERN =
+  /<m-document-mention>(.*?)<\/m-document-mention>/;
+const CONTACT_MENTION_PATTERN = /<m-contact-mention>(.*?)<\/m-contact-mention>/;
+const GROUP_MENTION_PATTERN = /<m-group-mention>(.*?)<\/m-group-mention>/;
 
 /**
  * Extract user IDs from user mention XML tags in markdown text
  */
 export function extractUserMentions(markdownText: string): string[] {
   const userIds: string[] = [];
-  const regex = new RegExp(USER_MENTION_REGEX.source, 'g');
-  const matches = markdownText.matchAll(regex);
+  const matches = markdownText.matchAll(new RegExp(USER_MENTION_PATTERN, 'g'));
 
   for (const match of matches) {
     try {
@@ -37,9 +36,7 @@ export function extractUserMentions(markdownText: string): string[] {
  * Returns ISO date string or null.
  */
 export function extractDateMention(markdownText: string): string | null {
-  const regex = new RegExp(DATE_MENTION_REGEX.source);
-  const match = regex.exec(markdownText);
-
+  const match = DATE_MENTION_PATTERN.exec(markdownText);
   if (!match) return null;
 
   try {
@@ -59,14 +56,14 @@ export function extractTitleFromMarkdown(markdownText: string): string {
   let title = markdownText;
 
   // Remove user mentions entirely (they become assignees)
-  title = title.replace(new RegExp(USER_MENTION_REGEX.source, 'g'), '');
+  title = title.replace(new RegExp(USER_MENTION_PATTERN, 'g'), '');
 
   // Remove date mentions entirely (they become due date)
-  title = title.replace(new RegExp(DATE_MENTION_REGEX.source, 'g'), '');
+  title = title.replace(new RegExp(DATE_MENTION_PATTERN, 'g'), '');
 
   // Replace document mentions with document name
   title = title.replace(
-    new RegExp(DOCUMENT_MENTION_REGEX.source, 'g'),
+    new RegExp(DOCUMENT_MENTION_PATTERN, 'g'),
     (_, json) => {
       try {
         const data = JSON.parse(json);
@@ -78,30 +75,24 @@ export function extractTitleFromMarkdown(markdownText: string): string {
   );
 
   // Replace contact mentions with name
-  title = title.replace(
-    new RegExp(CONTACT_MENTION_REGEX.source, 'g'),
-    (_, json) => {
-      try {
-        const data = JSON.parse(json);
-        return data.name || data.emailOrDomain || '';
-      } catch {
-        return '';
-      }
+  title = title.replace(new RegExp(CONTACT_MENTION_PATTERN, 'g'), (_, json) => {
+    try {
+      const data = JSON.parse(json);
+      return data.name || data.emailOrDomain || '';
+    } catch {
+      return '';
     }
-  );
+  });
 
   // Replace group mentions with @alias
-  title = title.replace(
-    new RegExp(GROUP_MENTION_REGEX.source, 'g'),
-    (_, json) => {
-      try {
-        const data = JSON.parse(json);
-        return `@${data.groupAlias || ''}`;
-      } catch {
-        return '';
-      }
+  title = title.replace(new RegExp(GROUP_MENTION_PATTERN, 'g'), (_, json) => {
+    try {
+      const data = JSON.parse(json);
+      return `@${data.groupAlias || ''}`;
+    } catch {
+      return '';
     }
-  );
+  });
 
   // Remove checkbox prefix if present (e.g., "- [ ] " or "- [x] ")
   title = title.replace(/^-\s*\[[ x]\]\s*/i, '');

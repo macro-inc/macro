@@ -1,11 +1,5 @@
 import { $isListItemNode, type ListItemNode } from '@lexical/list';
-import {
-  $getRoot,
-  $getSelection,
-  $isRangeSelection,
-  type LexicalNode,
-  type RangeSelection,
-} from 'lexical';
+import { $getRoot, type LexicalNode, type RangeSelection } from 'lexical';
 
 /**
  * Check if a ListItemNode is a checkbox (has a checked state).
@@ -43,14 +37,4 @@ export function $getSelectedCheckboxes(
   }
 
   return Array.from(checkboxes);
-}
-
-/**
- * Check if the current selection contains any checkboxes.
- * Must be called within Lexical read/update context.
- */
-export function $selectionContainsCheckboxes(): boolean {
-  const selection = $getSelection();
-  if (!$isRangeSelection(selection)) return false;
-  return $getSelectedCheckboxes(selection).length > 0;
 }
