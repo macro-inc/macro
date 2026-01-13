@@ -26,8 +26,6 @@ use tower_cookies::Cookies;
 pub enum RefreshError {
     #[error("internal server error")]
     InternalServerError,
-    #[error("invalid macro user id")]
-    InvalidMacroUserId,
     #[error("refresh in progress")]
     RefreshInProgress,
     #[error("invalid refresh token")]
@@ -100,16 +98,12 @@ pub async fn handler(
     }
 
     // Decode the JWT (allowing expired) to get the user ID for the advisory lock
-    let decoded_token = decode_macro_access_token_allow_expired(&token_context.access_token, &jwt)
+    let user_id = decode_macro_access_token_allow_expired(&token_context.access_token, &jwt)
         .map_err(|e| {
             // Keeping this log in here to see why we couldn't decode the jwt
             tracing::error!(error=?e, "unable to decode jwt for user id");
             RefreshError::Unauthorized
         })?;
-
-    let user_id = MacroUserId::parse_from_str(&decoded_token.macro_user_id)
-        .map_err(|_| RefreshError::InvalidMacroUserId)?
-        .lowercase();
 
     // Acquire advisory lock to prevent concurrent refresh requests for the same user
     let mut txn = db.begin().await.map_err(|e| {

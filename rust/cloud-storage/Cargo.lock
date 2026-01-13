@@ -4900,6 +4900,7 @@ dependencies = [
  "jsonwebtoken",
  "macro_env",
  "macro_env_var",
+ "macro_user_id",
  "rand 0.9.0",
  "remote_env_var",
  "serde",
