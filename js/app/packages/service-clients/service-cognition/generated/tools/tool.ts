@@ -27,6 +27,7 @@ type ToolParserMap = {
   };
   NameSearch: { call: types.NameSearch; response: types.SearchToolResponse };
   Read: { call: types.Read; response: types.ReadResponse };
+  web_fetch: { call: types.WebFetchToolCall; response: types.WebFetchResponse };
   web_search: {
     call: types.WebSearchToolCall;
     response: types.WebSearchResponse;
@@ -55,6 +56,10 @@ const toolParserMap = {
     response: schemas.SearchToolResponse,
   },
   Read: { call: schemas.Read, response: schemas.ReadResponse },
+  web_fetch: {
+    call: schemas.WebFetchToolCall,
+    response: schemas.WebFetchResponse,
+  },
   web_search: {
     call: schemas.WebSearchToolCall,
     response: schemas.WebSearchResponse,
@@ -88,6 +93,7 @@ type ToolDataMap = {
   };
   NameSearch: { call: types.NameSearch; response: types.SearchToolResponse };
   Read: { call: types.Read; response: types.ReadResponse };
+  web_fetch: { call: types.WebFetchToolCall; response: types.WebFetchResponse };
   web_search: {
     call: types.WebSearchToolCall;
     response: types.WebSearchResponse;
