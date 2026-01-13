@@ -5,8 +5,8 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type FromWebSocketMessageOneOfOnesevenType = typeof FromWebSocketMessageOneOfOnesevenType[keyof typeof FromWebSocketMessageOneOfOnesevenType];
-
+export type FromWebSocketMessageOneOfOnesevenType =
+  (typeof FromWebSocketMessageOneOfOnesevenType)[keyof typeof FromWebSocketMessageOneOfOnesevenType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const FromWebSocketMessageOneOfOnesevenType = {

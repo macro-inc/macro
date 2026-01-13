@@ -6,12 +6,12 @@
  */
 
 export type PutUserNameParams = {
-/**
- * First Name of user
- */
-first_name?: string | null;
-/**
- * Last Name of user
- */
-last_name?: string | null;
+  /**
+   * First Name of user
+   */
+  first_name?: string | null;
+  /**
+   * Last Name of user
+   */
+  last_name?: string | null;
 };

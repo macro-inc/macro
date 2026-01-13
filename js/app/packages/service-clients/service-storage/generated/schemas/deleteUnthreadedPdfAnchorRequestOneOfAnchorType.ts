@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type DeleteUnthreadedPdfAnchorRequestOneOfAnchorType = typeof DeleteUnthreadedPdfAnchorRequestOneOfAnchorType[keyof typeof DeleteUnthreadedPdfAnchorRequestOneOfAnchorType];
-
+export type DeleteUnthreadedPdfAnchorRequestOneOfAnchorType =
+  (typeof DeleteUnthreadedPdfAnchorRequestOneOfAnchorType)[keyof typeof DeleteUnthreadedPdfAnchorRequestOneOfAnchorType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const DeleteUnthreadedPdfAnchorRequestOneOfAnchorType = {

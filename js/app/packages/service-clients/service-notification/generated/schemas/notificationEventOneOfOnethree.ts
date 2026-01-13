@@ -4,8 +4,9 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { NotificationEventOneOfOnethreeNotificationEventType } from './notificationEventOneOfOnethreeNotificationEventType';
+
 import type { ChannelReplyMetadata } from './channelReplyMetadata';
+import type { NotificationEventOneOfOnethreeNotificationEventType } from './notificationEventOneOfOnethreeNotificationEventType';
 
 /**
  * Someone replied to a thread in a channel that the user is part of

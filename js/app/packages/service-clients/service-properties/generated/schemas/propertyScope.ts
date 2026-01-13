@@ -8,8 +8,7 @@
 /**
  * Scope filter for property queries
  */
-export type PropertyScope = typeof PropertyScope[keyof typeof PropertyScope];
-
+export type PropertyScope = (typeof PropertyScope)[keyof typeof PropertyScope];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const PropertyScope = {

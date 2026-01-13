@@ -4,7 +4,9 @@
     "title": "search_service",
     "description": "",
     "termsOfService": "https://macro.com/terms",
-    "license": { "name": "" },
+    "license": {
+      "name": ""
+    },
     "version": "0.1.0"
   },
   "paths": {
@@ -18,7 +20,9 @@
             "description": "health",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
               }
             }
           }
@@ -36,20 +40,27 @@
             "in": "query",
             "description": "The page size. Defaults to 10.",
             "required": true,
-            "schema": { "type": "integer", "format": "int64" }
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
           },
           {
             "name": "cursor",
             "in": "query",
             "description": "Base64 encoded cursor value.",
             "required": false,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/UnifiedSearchRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/UnifiedSearchRequest"
+              }
             }
           },
           "required": true
@@ -69,7 +80,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -77,7 +90,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -85,7 +100,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -103,20 +120,27 @@
             "in": "query",
             "description": "The page size. Defaults to 10.",
             "required": true,
-            "schema": { "type": "integer", "format": "int64" }
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
           },
           {
             "name": "cursor",
             "in": "query",
             "description": "Base64 encoded cursor for pagination.",
             "required": false,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/UnifiedSearchRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/UnifiedSearchRequest"
+              }
             }
           },
           "required": true
@@ -136,7 +160,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -144,7 +170,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -152,7 +180,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -168,12 +198,16 @@
         "properties": {
           "channel_ids": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "Channel IDs to search within. Examples: ['general']. Empty to search all accessible channels."
           },
           "mentions": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "Channel user mentions to search for. Examples: ['@username']. Empty if not filtering by mentions."
           },
           "org_id": {
@@ -183,12 +217,16 @@
           },
           "sender_ids": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "Sender IDs to search within. Examples: ['user1']. Empty to search all accessible senders."
           },
           "thread_ids": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "Channel thread IDs to search within. Examples: ['thread123']. Empty to search all threads."
           }
         }
@@ -198,17 +236,31 @@
         "description": "Metadata for a channel fetched from the database",
         "required": ["created_at", "updated_at"],
         "properties": {
-          "created_at": { "type": "integer", "format": "int64" },
-          "interacted_at": { "type": ["integer", "null"], "format": "int64" },
-          "updated_at": { "type": "integer", "format": "int64" },
-          "viewed_at": { "type": ["integer", "null"], "format": "int64" }
+          "created_at": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "interacted_at": {
+            "type": ["integer", "null"],
+            "format": "int64"
+          },
+          "updated_at": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "viewed_at": {
+            "type": ["integer", "null"],
+            "format": "int64"
+          }
         }
       },
       "ChannelSearchRequest": {
         "allOf": [
           {
             "oneOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "$ref": "#/components/schemas/ChannelFilters",
                 "description": "Search filters for channels"
@@ -241,7 +293,9 @@
               },
               "terms": {
                 "type": ["array", "null"],
-                "items": { "type": "string" },
+                "items": {
+                  "type": "string"
+                },
                 "description": "Multiple terms to search over"
               }
             }
@@ -279,7 +333,9 @@
           },
           "channel_message_search_results": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/ChannelSearchResult" },
+            "items": {
+              "$ref": "#/components/schemas/ChannelSearchResult"
+            },
             "description": "The search results for the channel\nThis may be empty if the search result match was not on content"
           },
           "channel_type": {
@@ -299,13 +355,17 @@
       },
       "ChannelSearchResponseItemWithMetadata": {
         "allOf": [
-          { "$ref": "#/components/schemas/ChannelSearchResponseItem" },
+          {
+            "$ref": "#/components/schemas/ChannelSearchResponseItem"
+          },
           {
             "type": "object",
             "properties": {
               "metadata": {
                 "oneOf": [
-                  { "type": "null" },
+                  {
+                    "type": "null"
+                  },
                   {
                     "$ref": "#/components/schemas/ChannelMetadata",
                     "description": "Metadata from the database. None if the channel doesn't exist in the database."
@@ -363,22 +423,30 @@
         "properties": {
           "chat_ids": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "Chat ids to search over. Examples: ['chat1'], ['chat1', 'chat2']. When provided, chat search will only match results on these chats. Empty to search all accessible chats."
           },
           "owners": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "Filter by chat owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
           },
           "project_ids": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "A list of project ids to search within. Examples: ['project1']. Empty to ignore project filtering."
           },
           "role": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "Chat message roles to search. Examples: ['user'], ['assistant']. Empty to search all roles."
           }
         }
@@ -413,18 +481,34 @@
         "description": "Metadata for a chat fetched from the database",
         "required": ["created_at", "updated_at"],
         "properties": {
-          "created_at": { "type": "integer", "format": "int64" },
-          "deleted_at": { "type": ["integer", "null"], "format": "int64" },
-          "project_id": { "type": ["string", "null"] },
-          "updated_at": { "type": "integer", "format": "int64" },
-          "viewed_at": { "type": ["integer", "null"], "format": "int64" }
+          "created_at": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "deleted_at": {
+            "type": ["integer", "null"],
+            "format": "int64"
+          },
+          "project_id": {
+            "type": ["string", "null"]
+          },
+          "updated_at": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "viewed_at": {
+            "type": ["integer", "null"],
+            "format": "int64"
+          }
         }
       },
       "ChatSearchRequest": {
         "allOf": [
           {
             "oneOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "$ref": "#/components/schemas/ChatFilters",
                 "description": "Search filters for chat"
@@ -457,7 +541,9 @@
               },
               "terms": {
                 "type": ["array", "null"],
-                "items": { "type": "string" },
+                "items": {
+                  "type": "string"
+                },
                 "description": "Multiple terms to search over"
               }
             }
@@ -497,7 +583,9 @@
           },
           "chat_search_results": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/ChatMessageSearchResult" },
+            "items": {
+              "$ref": "#/components/schemas/ChatMessageSearchResult"
+            },
             "description": "The search results for the chat\nThis may be empty if the search result match was on the chat title only"
           },
           "id": {
@@ -505,8 +593,12 @@
             "format": "uuid",
             "description": "Standardized fields that all item types will share.\nThese field names are being aligned across all item types\nfor consistency in our data model."
           },
-          "name": { "type": "string" },
-          "owner_id": { "type": "string" },
+          "name": {
+            "type": "string"
+          },
+          "owner_id": {
+            "type": "string"
+          },
           "user_id": {
             "type": "string",
             "description": "The id of the creator of the chat"
@@ -515,13 +607,17 @@
       },
       "ChatSearchResponseItemWithMetadata": {
         "allOf": [
-          { "$ref": "#/components/schemas/ChatSearchResponseItem" },
+          {
+            "$ref": "#/components/schemas/ChatSearchResponseItem"
+          },
           {
             "type": "object",
             "properties": {
               "metadata": {
                 "oneOf": [
-                  { "type": "null" },
+                  {
+                    "type": "null"
+                  },
                   {
                     "$ref": "#/components/schemas/ChatMetadata",
                     "description": "Metadata from the database. None if the chat doesn't exist in the database."
@@ -539,22 +635,30 @@
         "properties": {
           "document_ids": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "Document ids to search over. Examples: ['doc1'], ['doc1', 'doc2']. Empty to search all accessible documents."
           },
           "file_types": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "Document file types to search. Examples: ['pdf'], ['md', 'txt']. Empty to search all file types."
           },
           "owners": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "Filter by document owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
           },
           "project_ids": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "A list of project ids to search within. Examples: ['project1'].\nfiltering. Empty to ignore project filtering."
           }
         }
@@ -564,18 +668,34 @@
         "description": "Metadata for a document fetched from the database",
         "required": ["created_at", "updated_at"],
         "properties": {
-          "created_at": { "type": "integer", "format": "int64" },
-          "deleted_at": { "type": ["integer", "null"], "format": "int64" },
-          "project_id": { "type": ["string", "null"] },
-          "updated_at": { "type": "integer", "format": "int64" },
-          "viewed_at": { "type": ["integer", "null"], "format": "int64" }
+          "created_at": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "deleted_at": {
+            "type": ["integer", "null"],
+            "format": "int64"
+          },
+          "project_id": {
+            "type": ["string", "null"]
+          },
+          "updated_at": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "viewed_at": {
+            "type": ["integer", "null"],
+            "format": "int64"
+          }
         }
       },
       "DocumentSearchRequest": {
         "allOf": [
           {
             "oneOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "$ref": "#/components/schemas/DocumentFilters",
                 "description": "Search filters for documents"
@@ -608,7 +728,9 @@
               },
               "terms": {
                 "type": ["array", "null"],
-                "items": { "type": "string" },
+                "items": {
+                  "type": "string"
+                },
                 "description": "Multiple terms to search over"
               }
             }
@@ -652,7 +774,9 @@
           },
           "document_search_results": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/DocumentSearchResult" },
+            "items": {
+              "$ref": "#/components/schemas/DocumentSearchResult"
+            },
             "description": "The search results for the document\nThis may be empty if the search result match was on the document name only"
           },
           "file_type": {
@@ -664,11 +788,17 @@
             "format": "uuid",
             "description": "Standardized fields that all item types will share.\nThese field names are being aligned across all item types\nfor consistency in our data model."
           },
-          "name": { "type": "string" },
-          "owner_id": { "type": "string" },
+          "name": {
+            "type": "string"
+          },
+          "owner_id": {
+            "type": "string"
+          },
           "sub_type": {
             "oneOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "$ref": "#/components/schemas/DocumentSubType",
                 "description": "The sub type of the document if present."
@@ -679,13 +809,17 @@
       },
       "DocumentSearchResponseItemWithMetadata": {
         "allOf": [
-          { "$ref": "#/components/schemas/DocumentSearchResponseItem" },
+          {
+            "$ref": "#/components/schemas/DocumentSearchResponseItem"
+          },
           {
             "type": "object",
             "properties": {
               "metadata": {
                 "oneOf": [
-                  { "type": "null" },
+                  {
+                    "type": "null"
+                  },
                   {
                     "$ref": "#/components/schemas/DocumentMetadata",
                     "description": "Metadata from the database. None if the document doesn't exist in the database."
@@ -732,22 +866,30 @@
         "properties": {
           "bcc": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "Email BCC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by BCC."
           },
           "cc": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "Email CC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by CC."
           },
           "recipients": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "Email Recipient addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by Recipient."
           },
           "senders": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "Email sender addresses to filter by. Examples: ['user@example.com']. Empty to search all senders."
           }
         }
@@ -756,7 +898,9 @@
         "allOf": [
           {
             "oneOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "$ref": "#/components/schemas/EmailFilters",
                 "description": "Search filters for email"
@@ -789,7 +933,9 @@
               },
               "terms": {
                 "type": ["array", "null"],
-                "items": { "type": "string" },
+                "items": {
+                  "type": "string"
+                },
                 "description": "Multiple terms to search over"
               }
             }
@@ -823,7 +969,9 @@
         "properties": {
           "email_message_search_results": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/EmailSearchResult" },
+            "items": {
+              "$ref": "#/components/schemas/EmailSearchResult"
+            },
             "description": "The search results for the document\nThis may be empty if the search result match was on the email subject only"
           },
           "id": {
@@ -835,7 +983,9 @@
             "type": ["string", "null"],
             "description": "Subject of the email thread"
           },
-          "owner_id": { "type": "string" },
+          "owner_id": {
+            "type": "string"
+          },
           "subject": {
             "type": ["string", "null"],
             "description": "The subject of the email\nThis is only present if the search result is on the message content"
@@ -853,15 +1003,28 @@
       },
       "EmailSearchResponseItemWithMetadata": {
         "allOf": [
-          { "$ref": "#/components/schemas/EmailSearchResponseItem" },
+          {
+            "$ref": "#/components/schemas/EmailSearchResponseItem"
+          },
           {
             "type": "object",
             "required": ["created_at", "updated_at"],
             "properties": {
-              "created_at": { "type": "integer", "format": "int64" },
-              "snippet": { "type": ["string", "null"] },
-              "updated_at": { "type": "integer", "format": "int64" },
-              "viewed_at": { "type": ["integer", "null"], "format": "int64" }
+              "created_at": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "snippet": {
+                "type": ["string", "null"]
+              },
+              "updated_at": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "viewed_at": {
+                "type": ["integer", "null"],
+                "format": "int64"
+              }
             }
           }
         ],
@@ -882,12 +1045,16 @@
         "properties": {
           "bcc": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "This is only present if the search result is on the message content"
           },
           "cc": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "This is only present if the search result is on the message content"
           },
           "highlight": {
@@ -896,7 +1063,9 @@
           },
           "labels": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "This is only present if the search result is on the message content"
           },
           "message_id": {
@@ -910,7 +1079,9 @@
           },
           "recipients": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "This is only present if the search result is on the message content"
           },
           "score": {
@@ -1382,12 +1553,16 @@
         "properties": {
           "owners": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "Filter by project owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
           },
           "project_ids": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "Project IDs to search within. Examples: ['project1']. Empty to search all accessible projects."
           }
         }
@@ -1397,11 +1572,25 @@
         "description": "Metadata for a project fetched from the database",
         "required": ["created_at", "updated_at"],
         "properties": {
-          "created_at": { "type": "integer", "format": "int64" },
-          "deleted_at": { "type": ["integer", "null"], "format": "int64" },
-          "parent_project_id": { "type": ["string", "null"] },
-          "updated_at": { "type": "integer", "format": "int64" },
-          "viewed_at": { "type": ["integer", "null"], "format": "int64" }
+          "created_at": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "deleted_at": {
+            "type": ["integer", "null"],
+            "format": "int64"
+          },
+          "parent_project_id": {
+            "type": ["string", "null"]
+          },
+          "updated_at": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "viewed_at": {
+            "type": ["integer", "null"],
+            "format": "int64"
+          }
         }
       },
       "ProjectSearchMetadata": {
@@ -1415,18 +1604,33 @@
           "project_name"
         ],
         "properties": {
-          "created_at": { "type": "integer", "format": "int64" },
-          "owner_id": { "type": "string" },
-          "project_id": { "type": "string", "format": "uuid" },
-          "project_name": { "type": "string" },
-          "updated_at": { "type": "integer", "format": "int64" }
+          "created_at": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "owner_id": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "project_name": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "integer",
+            "format": "int64"
+          }
         }
       },
       "ProjectSearchRequest": {
         "allOf": [
           {
             "oneOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "$ref": "#/components/schemas/ProjectFilters",
                 "description": "Search filters for chat"
@@ -1459,7 +1663,9 @@
               },
               "terms": {
                 "type": ["array", "null"],
-                "items": { "type": "string" },
+                "items": {
+                  "type": "string"
+                },
                 "description": "Multiple terms to search over"
               }
             }
@@ -1478,30 +1684,46 @@
           "project_search_results"
         ],
         "properties": {
-          "created_at": { "type": "integer", "format": "int64" },
+          "created_at": {
+            "type": "integer",
+            "format": "int64"
+          },
           "id": {
             "type": "string",
             "format": "uuid",
             "description": "Standardized fields that all item types will share.\nThese field names are being aligned across all item types\nfor consistency in our data model."
           },
-          "name": { "type": "string" },
-          "owner_id": { "type": "string" },
+          "name": {
+            "type": "string"
+          },
+          "owner_id": {
+            "type": "string"
+          },
           "project_search_results": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/ProjectSearchResult" }
+            "items": {
+              "$ref": "#/components/schemas/ProjectSearchResult"
+            }
           },
-          "updated_at": { "type": "integer", "format": "int64" }
+          "updated_at": {
+            "type": "integer",
+            "format": "int64"
+          }
         }
       },
       "ProjectSearchResponseItemWithMetadata": {
         "allOf": [
-          { "$ref": "#/components/schemas/ProjectSearchResponseItem" },
+          {
+            "$ref": "#/components/schemas/ProjectSearchResponseItem"
+          },
           {
             "type": "object",
             "properties": {
               "metadata": {
                 "oneOf": [
-                  { "type": "null" },
+                  {
+                    "type": "null"
+                  },
                   {
                     "$ref": "#/components/schemas/ProjectMetadata",
                     "description": "Metadata from the database. None if the project doesn't exist in the database."
@@ -1517,7 +1739,9 @@
         "type": "object",
         "required": ["highlight"],
         "properties": {
-          "highlight": { "$ref": "#/components/schemas/SearchHighlight" },
+          "highlight": {
+            "$ref": "#/components/schemas/SearchHighlight"
+          },
           "score": {
             "type": ["number", "null"],
             "format": "double",
@@ -1530,17 +1754,23 @@
         "properties": {
           "bcc": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "The highlight match on the bcc (email only)"
           },
           "cc": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "The highlight match on the cc (email only)"
           },
           "content": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "The highlight match on the content field"
           },
           "name": {
@@ -1549,7 +1779,9 @@
           },
           "recipients": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "The highlight match on the recipients (email only)"
           },
           "sender": {
@@ -1592,13 +1824,21 @@
           "highlight"
         ],
         "properties": {
-          "channel_id": { "type": "string", "description": "The channel id" },
+          "channel_id": {
+            "type": "string",
+            "description": "The channel id"
+          },
           "channel_type": {
             "type": "string",
             "description": "The channel type"
           },
           "created_at": {
-            "oneOf": [{ "type": "integer", "format": "int64" }],
+            "oneOf": [
+              {
+                "type": "integer",
+                "format": "int64"
+              }
+            ],
             "description": "The time the channel message was created"
           },
           "highlight": {
@@ -1607,22 +1847,35 @@
           },
           "mentions": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "The mentions"
           },
-          "message_id": { "type": "string", "description": "The message id" },
+          "message_id": {
+            "type": "string",
+            "description": "The message id"
+          },
           "org_id": {
             "type": ["integer", "null"],
             "format": "int64",
             "description": "The org id"
           },
-          "sender_id": { "type": "string", "description": "The sender id" },
+          "sender_id": {
+            "type": "string",
+            "description": "The sender id"
+          },
           "thread_id": {
             "type": ["string", "null"],
             "description": "The thread id"
           },
           "updated_at": {
-            "oneOf": [{ "type": "integer", "format": "int64" }],
+            "oneOf": [
+              {
+                "type": "integer",
+                "format": "int64"
+              }
+            ],
             "description": "The time the channel message was last updated"
           }
         }
@@ -1640,13 +1893,21 @@
           "highlight"
         ],
         "properties": {
-          "channel_id": { "type": "string", "description": "The channel id" },
+          "channel_id": {
+            "type": "string",
+            "description": "The channel id"
+          },
           "channel_type": {
             "type": "string",
             "description": "The channel type"
           },
           "created_at": {
-            "oneOf": [{ "type": "integer", "format": "int64" }],
+            "oneOf": [
+              {
+                "type": "integer",
+                "format": "int64"
+              }
+            ],
             "description": "The time the channel message was created"
           },
           "highlight": {
@@ -1655,22 +1916,35 @@
           },
           "mentions": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "The mentions"
           },
-          "message_id": { "type": "string", "description": "The message id" },
+          "message_id": {
+            "type": "string",
+            "description": "The message id"
+          },
           "org_id": {
             "type": ["integer", "null"],
             "format": "int64",
             "description": "The org id"
           },
-          "sender_id": { "type": "string", "description": "The sender id" },
+          "sender_id": {
+            "type": "string",
+            "description": "The sender id"
+          },
           "thread_id": {
             "type": ["string", "null"],
             "description": "The thread id"
           },
           "updated_at": {
-            "oneOf": [{ "type": "integer", "format": "int64" }],
+            "oneOf": [
+              {
+                "type": "integer",
+                "format": "int64"
+              }
+            ],
             "description": "The time the channel message was last updated"
           }
         }
@@ -1713,7 +1987,10 @@
           "highlight"
         ],
         "properties": {
-          "chat_id": { "type": "string", "description": "The chat id" },
+          "chat_id": {
+            "type": "string",
+            "description": "The chat id"
+          },
           "chat_message_id": {
             "type": "string",
             "description": "The chat message id"
@@ -1722,13 +1999,27 @@
             "$ref": "#/components/schemas/SearchHighlight",
             "description": "The highlights on the chat"
           },
-          "role": { "type": "string", "description": "The role" },
-          "title": { "type": "string", "description": "The title" },
+          "role": {
+            "type": "string",
+            "description": "The role"
+          },
+          "title": {
+            "type": "string",
+            "description": "The title"
+          },
           "updated_at": {
-            "oneOf": [{ "type": "integer", "format": "int64" }],
+            "oneOf": [
+              {
+                "type": "integer",
+                "format": "int64"
+              }
+            ],
             "description": "The time the chat was last updated"
           },
-          "user_id": { "type": "string", "description": "The user id" }
+          "user_id": {
+            "type": "string",
+            "description": "The user id"
+          }
         }
       },
       "SimpleChatSearchResponseBaseItem_TimestampSeconds": {
@@ -1743,7 +2034,10 @@
           "highlight"
         ],
         "properties": {
-          "chat_id": { "type": "string", "description": "The chat id" },
+          "chat_id": {
+            "type": "string",
+            "description": "The chat id"
+          },
           "chat_message_id": {
             "type": "string",
             "description": "The chat message id"
@@ -1752,13 +2046,27 @@
             "$ref": "#/components/schemas/SearchHighlight",
             "description": "The highlights on the chat"
           },
-          "role": { "type": "string", "description": "The role" },
-          "title": { "type": "string", "description": "The title" },
+          "role": {
+            "type": "string",
+            "description": "The role"
+          },
+          "title": {
+            "type": "string",
+            "description": "The title"
+          },
           "updated_at": {
-            "oneOf": [{ "type": "integer", "format": "int64" }],
+            "oneOf": [
+              {
+                "type": "integer",
+                "format": "int64"
+              }
+            ],
             "description": "The time the chat was last updated"
           },
-          "user_id": { "type": "string", "description": "The user id" }
+          "user_id": {
+            "type": "string",
+            "description": "The user id"
+          }
         }
       },
       "SimpleDocumentSearchResponse": {
@@ -1786,24 +2094,41 @@
           "highlight"
         ],
         "properties": {
-          "document_id": { "type": "string", "description": "The document id" },
+          "document_id": {
+            "type": "string",
+            "description": "The document id"
+          },
           "document_name": {
             "type": "string",
             "description": "The document name"
           },
-          "file_type": { "type": "string", "description": "The file type" },
+          "file_type": {
+            "type": "string",
+            "description": "The file type"
+          },
           "highlight": {
             "$ref": "#/components/schemas/SearchHighlight",
             "description": "The highlights on the document"
           },
-          "node_id": { "type": "string", "description": "The node id" },
-          "owner_id": { "type": "string", "description": "The owner id" },
+          "node_id": {
+            "type": "string",
+            "description": "The node id"
+          },
+          "owner_id": {
+            "type": "string",
+            "description": "The owner id"
+          },
           "raw_content": {
             "type": ["string", "null"],
             "description": "The raw content of the document"
           },
           "updated_at": {
-            "oneOf": [{ "type": "integer", "format": "int64" }],
+            "oneOf": [
+              {
+                "type": "integer",
+                "format": "int64"
+              }
+            ],
             "description": "The time the document was last updated"
           }
         }
@@ -1820,24 +2145,41 @@
           "highlight"
         ],
         "properties": {
-          "document_id": { "type": "string", "description": "The document id" },
+          "document_id": {
+            "type": "string",
+            "description": "The document id"
+          },
           "document_name": {
             "type": "string",
             "description": "The document name"
           },
-          "file_type": { "type": "string", "description": "The file type" },
+          "file_type": {
+            "type": "string",
+            "description": "The file type"
+          },
           "highlight": {
             "$ref": "#/components/schemas/SearchHighlight",
             "description": "The highlights on the document"
           },
-          "node_id": { "type": "string", "description": "The node id" },
-          "owner_id": { "type": "string", "description": "The owner id" },
+          "node_id": {
+            "type": "string",
+            "description": "The node id"
+          },
+          "owner_id": {
+            "type": "string",
+            "description": "The owner id"
+          },
           "raw_content": {
             "type": ["string", "null"],
             "description": "The raw content of the document"
           },
           "updated_at": {
-            "oneOf": [{ "type": "integer", "format": "int64" }],
+            "oneOf": [
+              {
+                "type": "integer",
+                "format": "int64"
+              }
+            ],
             "description": "The time the document was last updated"
           }
         }
@@ -1873,12 +2215,16 @@
         "properties": {
           "bcc": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "The bcc"
           },
           "cc": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "The cc"
           },
           "highlight": {
@@ -1887,21 +2233,39 @@
           },
           "labels": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "The labels"
           },
-          "link_id": { "type": "string", "description": "The link id" },
-          "message_id": { "type": "string", "description": "The message id" },
+          "link_id": {
+            "type": "string",
+            "description": "The link id"
+          },
+          "message_id": {
+            "type": "string",
+            "description": "The message id"
+          },
           "recipients": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "The recipients"
           },
-          "sender": { "type": "string", "description": "The sender" },
+          "sender": {
+            "type": "string",
+            "description": "The sender"
+          },
           "sent_at": {
             "oneOf": [
-              { "type": "null" },
-              { "type": "integer", "format": "int64" }
+              {
+                "type": "null"
+              },
+              {
+                "type": "integer",
+                "format": "int64"
+              }
             ],
             "description": "The time the email was sent"
           },
@@ -1909,12 +2273,23 @@
             "type": ["string", "null"],
             "description": "The subject"
           },
-          "thread_id": { "type": "string", "description": "The thread id" },
+          "thread_id": {
+            "type": "string",
+            "description": "The thread id"
+          },
           "updated_at": {
-            "oneOf": [{ "type": "integer", "format": "int64" }],
+            "oneOf": [
+              {
+                "type": "integer",
+                "format": "int64"
+              }
+            ],
             "description": "The time the email was last updated"
           },
-          "user_id": { "type": "string", "description": "The user id" }
+          "user_id": {
+            "type": "string",
+            "description": "The user id"
+          }
         }
       },
       "SimpleEmailSearchResponseBaseItem_TimestampSeconds": {
@@ -1935,12 +2310,16 @@
         "properties": {
           "bcc": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "The bcc"
           },
           "cc": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "The cc"
           },
           "highlight": {
@@ -1949,21 +2328,39 @@
           },
           "labels": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "The labels"
           },
-          "link_id": { "type": "string", "description": "The link id" },
-          "message_id": { "type": "string", "description": "The message id" },
+          "link_id": {
+            "type": "string",
+            "description": "The link id"
+          },
+          "message_id": {
+            "type": "string",
+            "description": "The message id"
+          },
           "recipients": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "The recipients"
           },
-          "sender": { "type": "string", "description": "The sender" },
+          "sender": {
+            "type": "string",
+            "description": "The sender"
+          },
           "sent_at": {
             "oneOf": [
-              { "type": "null" },
-              { "type": "integer", "format": "int64" }
+              {
+                "type": "null"
+              },
+              {
+                "type": "integer",
+                "format": "int64"
+              }
             ],
             "description": "The time the email was sent"
           },
@@ -1971,12 +2368,23 @@
             "type": ["string", "null"],
             "description": "The subject"
           },
-          "thread_id": { "type": "string", "description": "The thread id" },
+          "thread_id": {
+            "type": "string",
+            "description": "The thread id"
+          },
           "updated_at": {
-            "oneOf": [{ "type": "integer", "format": "int64" }],
+            "oneOf": [
+              {
+                "type": "integer",
+                "format": "int64"
+              }
+            ],
             "description": "The time the email was last updated"
           },
-          "user_id": { "type": "string", "description": "The user id" }
+          "user_id": {
+            "type": "string",
+            "description": "The user id"
+          }
         }
       },
       "SimpleProjectSearchResponse": {
@@ -2004,20 +2412,33 @@
         ],
         "properties": {
           "created_at": {
-            "oneOf": [{ "type": "integer", "format": "int64" }],
+            "oneOf": [
+              {
+                "type": "integer",
+                "format": "int64"
+              }
+            ],
             "description": "The time the project was created"
           },
           "highlight": {
             "$ref": "#/components/schemas/SearchHighlight",
             "description": "The highlights on the project"
           },
-          "project_id": { "type": "string", "description": "The project id" },
+          "project_id": {
+            "type": "string",
+            "description": "The project id"
+          },
           "project_name": {
             "type": "string",
             "description": "The project name"
           },
           "updated_at": {
-            "oneOf": [{ "type": "integer", "format": "int64" }],
+            "oneOf": [
+              {
+                "type": "integer",
+                "format": "int64"
+              }
+            ],
             "description": "The time the project was last updated"
           },
           "user_id": {
@@ -2038,20 +2459,33 @@
         ],
         "properties": {
           "created_at": {
-            "oneOf": [{ "type": "integer", "format": "int64" }],
+            "oneOf": [
+              {
+                "type": "integer",
+                "format": "int64"
+              }
+            ],
             "description": "The time the project was created"
           },
           "highlight": {
             "$ref": "#/components/schemas/SearchHighlight",
             "description": "The highlights on the project"
           },
-          "project_id": { "type": "string", "description": "The project id" },
+          "project_id": {
+            "type": "string",
+            "description": "The project id"
+          },
           "project_name": {
             "type": "string",
             "description": "The project name"
           },
           "updated_at": {
-            "oneOf": [{ "type": "integer", "format": "int64" }],
+            "oneOf": [
+              {
+                "type": "integer",
+                "format": "int64"
+              }
+            ],
             "description": "The time the project was last updated"
           },
           "user_id": {
@@ -2083,7 +2517,10 @@
                 "type": "object",
                 "required": ["type"],
                 "properties": {
-                  "type": { "type": "string", "enum": ["document"] }
+                  "type": {
+                    "type": "string",
+                    "enum": ["document"]
+                  }
                 }
               }
             ]
@@ -2096,7 +2533,12 @@
               {
                 "type": "object",
                 "required": ["type"],
-                "properties": { "type": { "type": "string", "enum": ["chat"] } }
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["chat"]
+                  }
+                }
               }
             ]
           },
@@ -2109,7 +2551,10 @@
                 "type": "object",
                 "required": ["type"],
                 "properties": {
-                  "type": { "type": "string", "enum": ["email"] }
+                  "type": {
+                    "type": "string",
+                    "enum": ["email"]
+                  }
                 }
               }
             ]
@@ -2123,7 +2568,10 @@
                 "type": "object",
                 "required": ["type"],
                 "properties": {
-                  "type": { "type": "string", "enum": ["channel"] }
+                  "type": {
+                    "type": "string",
+                    "enum": ["channel"]
+                  }
                 }
               }
             ]
@@ -2137,7 +2585,10 @@
                 "type": "object",
                 "required": ["type"],
                 "properties": {
-                  "type": { "type": "string", "enum": ["project"] }
+                  "type": {
+                    "type": "string",
+                    "enum": ["project"]
+                  }
                 }
               }
             ]
@@ -2155,7 +2606,10 @@
                 "type": "object",
                 "required": ["type"],
                 "properties": {
-                  "type": { "type": "string", "enum": ["document"] }
+                  "type": {
+                    "type": "string",
+                    "enum": ["document"]
+                  }
                 }
               }
             ]
@@ -2168,7 +2622,12 @@
               {
                 "type": "object",
                 "required": ["type"],
-                "properties": { "type": { "type": "string", "enum": ["chat"] } }
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["chat"]
+                  }
+                }
               }
             ]
           },
@@ -2181,7 +2640,10 @@
                 "type": "object",
                 "required": ["type"],
                 "properties": {
-                  "type": { "type": "string", "enum": ["email"] }
+                  "type": {
+                    "type": "string",
+                    "enum": ["email"]
+                  }
                 }
               }
             ]
@@ -2195,7 +2657,10 @@
                 "type": "object",
                 "required": ["type"],
                 "properties": {
-                  "type": { "type": "string", "enum": ["channel"] }
+                  "type": {
+                    "type": "string",
+                    "enum": ["channel"]
+                  }
                 }
               }
             ]
@@ -2209,7 +2674,10 @@
                 "type": "object",
                 "required": ["type"],
                 "properties": {
-                  "type": { "type": "string", "enum": ["project"] }
+                  "type": {
+                    "type": "string",
+                    "enum": ["project"]
+                  }
                 }
               }
             ]
@@ -2221,7 +2689,9 @@
         "properties": {
           "channel": {
             "oneOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "$ref": "#/components/schemas/ChannelFilters",
                 "description": "Channel filters. `null` to not filter channels searched over."
@@ -2230,7 +2700,9 @@
           },
           "chat": {
             "oneOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "$ref": "#/components/schemas/ChatFilters",
                 "description": "Chat filters. `null` to not filter chats searched over."
@@ -2239,7 +2711,9 @@
           },
           "document": {
             "oneOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "$ref": "#/components/schemas/DocumentFilters",
                 "description": "Document filters. `null` to not filter documents searched over."
@@ -2248,7 +2722,9 @@
           },
           "email": {
             "oneOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "$ref": "#/components/schemas/EmailFilters",
                 "description": "Email filters. `null` to not filter emails searched over."
@@ -2257,7 +2733,9 @@
           },
           "project": {
             "oneOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "$ref": "#/components/schemas/ProjectFilters",
                 "description": "Project filters. `null` to not filter projects searched over."
@@ -2274,14 +2752,18 @@
         "type": "object",
         "required": ["match_type"],
         "properties": {
-          "collapse": { "type": ["boolean", "null"] },
+          "collapse": {
+            "type": ["boolean", "null"]
+          },
           "disable_recency": {
             "type": "boolean",
             "description": "If search_on is set to NameContent, you can disable the recency filter\nby setting to true."
           },
           "filters": {
             "oneOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "$ref": "#/components/schemas/UnifiedSearchFilters",
                 "description": "Search filters for various kinds of items. Set the entire filters property as `null` if you do not have specific filters for a given type, e.g. bcc for email filters."
@@ -2290,21 +2772,27 @@
           },
           "include": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/UnifiedSearchIndex" },
+            "items": {
+              "$ref": "#/components/schemas/UnifiedSearchIndex"
+            },
             "description": "Include specific entity types from search. If empty, all entity types will be searched over. If you are unsure which types to search, use an empty array to search all."
           },
           "match_type": {
             "$ref": "#/components/schemas/MatchType",
             "description": "How to match the search terms. 'exact' for precise case-sensitive phrase matches, 'partial' for prefix/partial matches. REQUIRED field."
           },
-          "query": { "type": ["string", "null"] },
+          "query": {
+            "type": ["string", "null"]
+          },
           "search_on": {
             "$ref": "#/components/schemas/SearchOn",
             "description": "Fields to search on (Name, Content, NameContent). Defaults to Content"
           },
           "terms": {
             "type": ["array", "null"],
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "Multiple distinct search terms as separate strings. Use this for keyword-based searches where you want to find content containing any of these terms. Each term must be at least 3 characters (shorter terms are automatically filtered out). Examples: ['machine', 'learning', 'algorithms'], ['project', 'status', 'update']. `null` this field if searching without text terms to search all. This field matches query string against both name and content."
           }
         }
@@ -2337,7 +2825,10 @@
                 "type": "object",
                 "required": ["type"],
                 "properties": {
-                  "type": { "type": "string", "enum": ["document"] }
+                  "type": {
+                    "type": "string",
+                    "enum": ["document"]
+                  }
                 }
               }
             ]
@@ -2350,7 +2841,12 @@
               {
                 "type": "object",
                 "required": ["type"],
-                "properties": { "type": { "type": "string", "enum": ["chat"] } }
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["chat"]
+                  }
+                }
               }
             ]
           },
@@ -2363,7 +2859,10 @@
                 "type": "object",
                 "required": ["type"],
                 "properties": {
-                  "type": { "type": "string", "enum": ["email"] }
+                  "type": {
+                    "type": "string",
+                    "enum": ["email"]
+                  }
                 }
               }
             ]
@@ -2377,7 +2876,10 @@
                 "type": "object",
                 "required": ["type"],
                 "properties": {
-                  "type": { "type": "string", "enum": ["channel"] }
+                  "type": {
+                    "type": "string",
+                    "enum": ["channel"]
+                  }
                 }
               }
             ]
@@ -2391,7 +2893,10 @@
                 "type": "object",
                 "required": ["type"],
                 "properties": {
-                  "type": { "type": "string", "enum": ["project"] }
+                  "type": {
+                    "type": "string",
+                    "enum": ["project"]
+                  }
                 }
               }
             ]
@@ -2400,5 +2905,10 @@
       }
     }
   },
-  "tags": [{ "name": "search service", "description": "Macro Search Service" }]
+  "tags": [
+    {
+      "name": "search service",
+      "description": "Macro Search Service"
+    }
+  ]
 }

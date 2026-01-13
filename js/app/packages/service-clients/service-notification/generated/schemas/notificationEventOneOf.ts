@@ -4,8 +4,9 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { NotificationEventOneOfNotificationEventType } from './notificationEventOneOfNotificationEventType';
+
 import type { ItemSharedMetadata } from './itemSharedMetadata';
+import type { NotificationEventOneOfNotificationEventType } from './notificationEventOneOfNotificationEventType';
 
 /**
  * An Item was shared with a specific user

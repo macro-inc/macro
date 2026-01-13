@@ -11,182 +11,199 @@ import type {
   SimpleUnifiedSearchParams,
   UnifiedSearchParams,
   UnifiedSearchRequest,
-  UnifiedSearchResponse
+  UnifiedSearchResponse,
 } from './models';
 
 /**
  * @summary Health check
  */
 export type healthHandlerResponse200 = {
-  data: EmptyResponse
-  status: 200
-}
-    
-export type healthHandlerResponseSuccess = (healthHandlerResponse200) & {
+  data: EmptyResponse;
+  status: 200;
+};
+
+export type healthHandlerResponseSuccess = healthHandlerResponse200 & {
   headers: Headers;
 };
-;
 
-export type healthHandlerResponse = (healthHandlerResponseSuccess)
+export type healthHandlerResponse = healthHandlerResponseSuccess;
 
 export const getHealthHandlerUrl = () => {
+  return `/health`;
+};
 
-
-  
-
-  return `/health`
-}
-
-export const healthHandler = async ( options?: RequestInit): Promise<healthHandlerResponse> => {
-  
-  const res = await fetch(getHealthHandlerUrl(),
-  {      
+export const healthHandler = async (
+  options?: RequestInit
+): Promise<healthHandlerResponse> => {
+  const res = await fetch(getHealthHandlerUrl(), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: healthHandlerResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as healthHandlerResponse
-}
 
-
+  const data: healthHandlerResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as healthHandlerResponse;
+};
 
 /**
  * @summary Perform a search through all items
  */
 export type unifiedSearchResponse200 = {
-  data: UnifiedSearchResponse
-  status: 200
-}
+  data: UnifiedSearchResponse;
+  status: 200;
+};
 
 export type unifiedSearchResponse400 = {
-  data: ErrorResponse
-  status: 400
-}
+  data: ErrorResponse;
+  status: 400;
+};
 
 export type unifiedSearchResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type unifiedSearchResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type unifiedSearchResponseSuccess = (unifiedSearchResponse200) & {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type unifiedSearchResponseSuccess = unifiedSearchResponse200 & {
   headers: Headers;
 };
-export type unifiedSearchResponseError = (unifiedSearchResponse400 | unifiedSearchResponse401 | unifiedSearchResponse500) & {
+export type unifiedSearchResponseError = (
+  | unifiedSearchResponse400
+  | unifiedSearchResponse401
+  | unifiedSearchResponse500
+) & {
   headers: Headers;
 };
 
-export type unifiedSearchResponse = (unifiedSearchResponseSuccess | unifiedSearchResponseError)
+export type unifiedSearchResponse =
+  | unifiedSearchResponseSuccess
+  | unifiedSearchResponseError;
 
-export const getUnifiedSearchUrl = (params: UnifiedSearchParams,) => {
+export const getUnifiedSearchUrl = (params: UnifiedSearchParams) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
-    
     if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
     }
   });
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/search?${stringifiedParams}` : `/search`
-}
+  return stringifiedParams.length > 0
+    ? `/search?${stringifiedParams}`
+    : `/search`;
+};
 
-export const unifiedSearch = async (unifiedSearchRequest: UnifiedSearchRequest,
-    params: UnifiedSearchParams, options?: RequestInit): Promise<unifiedSearchResponse> => {
-  
-  const res = await fetch(getUnifiedSearchUrl(params),
-  {      
+export const unifiedSearch = async (
+  unifiedSearchRequest: UnifiedSearchRequest,
+  params: UnifiedSearchParams,
+  options?: RequestInit
+): Promise<unifiedSearchResponse> => {
+  const res = await fetch(getUnifiedSearchUrl(params), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      unifiedSearchRequest,)
-  }
-)
+    body: JSON.stringify(unifiedSearchRequest),
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: unifiedSearchResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as unifiedSearchResponse
-}
 
-
+  const data: unifiedSearchResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as unifiedSearchResponse;
+};
 
 /**
  * @summary Perform a search through all items.
 This is a simple search where we do not group your results by entity id.
  */
 export type simpleUnifiedSearchResponse200 = {
-  data: SimpleUnifiedSearchBaseResponse
-  status: 200
-}
+  data: SimpleUnifiedSearchBaseResponse;
+  status: 200;
+};
 
 export type simpleUnifiedSearchResponse400 = {
-  data: ErrorResponse
-  status: 400
-}
+  data: ErrorResponse;
+  status: 400;
+};
 
 export type simpleUnifiedSearchResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type simpleUnifiedSearchResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type simpleUnifiedSearchResponseSuccess = (simpleUnifiedSearchResponse200) & {
-  headers: Headers;
+  data: ErrorResponse;
+  status: 500;
 };
-export type simpleUnifiedSearchResponseError = (simpleUnifiedSearchResponse400 | simpleUnifiedSearchResponse401 | simpleUnifiedSearchResponse500) & {
+
+export type simpleUnifiedSearchResponseSuccess =
+  simpleUnifiedSearchResponse200 & {
+    headers: Headers;
+  };
+export type simpleUnifiedSearchResponseError = (
+  | simpleUnifiedSearchResponse400
+  | simpleUnifiedSearchResponse401
+  | simpleUnifiedSearchResponse500
+) & {
   headers: Headers;
 };
 
-export type simpleUnifiedSearchResponse = (simpleUnifiedSearchResponseSuccess | simpleUnifiedSearchResponseError)
+export type simpleUnifiedSearchResponse =
+  | simpleUnifiedSearchResponseSuccess
+  | simpleUnifiedSearchResponseError;
 
-export const getSimpleUnifiedSearchUrl = (params: SimpleUnifiedSearchParams,) => {
+export const getSimpleUnifiedSearchUrl = (
+  params: SimpleUnifiedSearchParams
+) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
-    
     if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
     }
   });
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/search/simple?${stringifiedParams}` : `/search/simple`
-}
+  return stringifiedParams.length > 0
+    ? `/search/simple?${stringifiedParams}`
+    : `/search/simple`;
+};
 
-export const simpleUnifiedSearch = async (unifiedSearchRequest: UnifiedSearchRequest,
-    params: SimpleUnifiedSearchParams, options?: RequestInit): Promise<simpleUnifiedSearchResponse> => {
-  
-  const res = await fetch(getSimpleUnifiedSearchUrl(params),
-  {      
+export const simpleUnifiedSearch = async (
+  unifiedSearchRequest: UnifiedSearchRequest,
+  params: SimpleUnifiedSearchParams,
+  options?: RequestInit
+): Promise<simpleUnifiedSearchResponse> => {
+  const res = await fetch(getSimpleUnifiedSearchUrl(params), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      unifiedSearchRequest,)
-  }
-)
+    body: JSON.stringify(unifiedSearchRequest),
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: simpleUnifiedSearchResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as simpleUnifiedSearchResponse
-}
+
+  const data: simpleUnifiedSearchResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as simpleUnifiedSearchResponse;
+};

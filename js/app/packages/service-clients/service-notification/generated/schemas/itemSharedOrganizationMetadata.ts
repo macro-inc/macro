@@ -4,8 +4,9 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ItemSharedOrganizationMetadataItemName } from './itemSharedOrganizationMetadataItemName';
+
 import type { EntityType } from './entityType';
+import type { ItemSharedOrganizationMetadataItemName } from './itemSharedOrganizationMetadataItemName';
 import type { ItemSharedOrganizationMetadataPermissionLevel } from './itemSharedOrganizationMetadataPermissionLevel';
 
 /**

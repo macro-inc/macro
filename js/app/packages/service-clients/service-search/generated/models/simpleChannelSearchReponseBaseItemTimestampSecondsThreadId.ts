@@ -8,4 +8,6 @@
 /**
  * The thread id
  */
-export type SimpleChannelSearchReponseBaseItemTimestampSecondsThreadId = string | null;
+export type SimpleChannelSearchReponseBaseItemTimestampSecondsThreadId =
+  | string
+  | null;

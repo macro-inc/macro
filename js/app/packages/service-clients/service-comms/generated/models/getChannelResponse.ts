@@ -4,13 +4,14 @@
  * comms_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ParticipantAccess } from './participantAccess';
-import type { GetChannelResponseActivity } from './getChannelResponseActivity';
+
 import type { Attachment } from './attachment';
 import type { Channel } from './channel';
-import type { Message } from './message';
 import type { ChannelParticipant } from './channelParticipant';
+import type { GetChannelResponseActivity } from './getChannelResponseActivity';
 import type { GetChannelResponseReactions } from './getChannelResponseReactions';
+import type { Message } from './message';
+import type { ParticipantAccess } from './participantAccess';
 
 export interface GetChannelResponse {
   /** What kind of access the user has to the channel

@@ -5,6 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type {
+  AddDraftAttachmentRequest,
+  AddDraftAttachmentResponse,
   ApiPaginatedThreadCursor,
   ArchiveThreadRequest,
   CancelBackfillParams,
@@ -24,6 +26,7 @@ import type {
   InitResponse,
   ListContactsResponse,
   ListLabelsResponse,
+  ListLinksParams,
   ListLinksResponse,
   ParsedMessage,
   PatchSettingsRequest,
@@ -32,1597 +35,1840 @@ import type {
   SendMessageRequest,
   SendMessageResponse,
   UpdateLabelBatchRequest,
-  UpdateLabelBatchResponse
+  UpdateLabelBatchResponse,
 } from './schemas';
 
 /**
  * @summary Get an attachment by ID.
  */
 export type getAttachmentResponse200 = {
-  data: GetAttachmentResponse
-  status: 200
-}
+  data: GetAttachmentResponse;
+  status: 200;
+};
 
 export type getAttachmentResponse400 = {
-  data: ErrorResponse
-  status: 400
-}
+  data: ErrorResponse;
+  status: 400;
+};
 
 export type getAttachmentResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type getAttachmentResponse404 = {
-  data: ErrorResponse
-  status: 404
-}
+  data: ErrorResponse;
+  status: 404;
+};
 
 export type getAttachmentResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type getAttachmentResponseSuccess = (getAttachmentResponse200) & {
-  headers: Headers;
-};
-export type getAttachmentResponseError = (getAttachmentResponse400 | getAttachmentResponse401 | getAttachmentResponse404 | getAttachmentResponse500) & {
-  headers: Headers;
+  data: ErrorResponse;
+  status: 500;
 };
 
-export type getAttachmentResponse = (getAttachmentResponseSuccess | getAttachmentResponseError)
+export type getAttachmentResponseSuccess = getAttachmentResponse200 & {
+  headers: Headers;
+};
+export type getAttachmentResponseError = (
+  | getAttachmentResponse400
+  | getAttachmentResponse401
+  | getAttachmentResponse404
+  | getAttachmentResponse500
+) & {
+  headers: Headers;
+};
 
-export const getGetAttachmentUrl = (id: string,) => {
+export type getAttachmentResponse =
+  | getAttachmentResponseSuccess
+  | getAttachmentResponseError;
 
+export const getGetAttachmentUrl = (id: string) => {
+  return `/email/attachments/${id}`;
+};
 
-  
-
-  return `/email/attachments/${id}`
-}
-
-export const getAttachment = async (id: string, options?: RequestInit): Promise<getAttachmentResponse> => {
-  
-  const res = await fetch(getGetAttachmentUrl(id),
-  {      
+export const getAttachment = async (
+  id: string,
+  options?: RequestInit
+): Promise<getAttachmentResponse> => {
+  const res = await fetch(getGetAttachmentUrl(id), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: getAttachmentResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getAttachmentResponse
-}
 
-
+  const data: getAttachmentResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getAttachmentResponse;
+};
 
 /**
  * @summary Get the Macro document id for an email attachment, uploading it if it doesn't already exist.
  */
 export type getAttachmentDocumentIdResponse200 = {
-  data: GetAttachmentDocumentIDResponse
-  status: 200
-}
+  data: GetAttachmentDocumentIDResponse;
+  status: 200;
+};
 
 export type getAttachmentDocumentIdResponse400 = {
-  data: ErrorResponse
-  status: 400
-}
+  data: ErrorResponse;
+  status: 400;
+};
 
 export type getAttachmentDocumentIdResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type getAttachmentDocumentIdResponse404 = {
-  data: ErrorResponse
-  status: 404
-}
+  data: ErrorResponse;
+  status: 404;
+};
 
 export type getAttachmentDocumentIdResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type getAttachmentDocumentIdResponseSuccess = (getAttachmentDocumentIdResponse200) & {
-  headers: Headers;
-};
-export type getAttachmentDocumentIdResponseError = (getAttachmentDocumentIdResponse400 | getAttachmentDocumentIdResponse401 | getAttachmentDocumentIdResponse404 | getAttachmentDocumentIdResponse500) & {
-  headers: Headers;
+  data: ErrorResponse;
+  status: 500;
 };
 
-export type getAttachmentDocumentIdResponse = (getAttachmentDocumentIdResponseSuccess | getAttachmentDocumentIdResponseError)
+export type getAttachmentDocumentIdResponseSuccess =
+  getAttachmentDocumentIdResponse200 & {
+    headers: Headers;
+  };
+export type getAttachmentDocumentIdResponseError = (
+  | getAttachmentDocumentIdResponse400
+  | getAttachmentDocumentIdResponse401
+  | getAttachmentDocumentIdResponse404
+  | getAttachmentDocumentIdResponse500
+) & {
+  headers: Headers;
+};
 
-export const getGetAttachmentDocumentIdUrl = (id: string,) => {
+export type getAttachmentDocumentIdResponse =
+  | getAttachmentDocumentIdResponseSuccess
+  | getAttachmentDocumentIdResponseError;
 
+export const getGetAttachmentDocumentIdUrl = (id: string) => {
+  return `/email/attachments/${id}/document_id`;
+};
 
-  
-
-  return `/email/attachments/${id}/document_id`
-}
-
-export const getAttachmentDocumentId = async (id: string, options?: RequestInit): Promise<getAttachmentDocumentIdResponse> => {
-  
-  const res = await fetch(getGetAttachmentDocumentIdUrl(id),
-  {      
+export const getAttachmentDocumentId = async (
+  id: string,
+  options?: RequestInit
+): Promise<getAttachmentDocumentIdResponse> => {
+  const res = await fetch(getGetAttachmentDocumentIdUrl(id), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: getAttachmentDocumentIdResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getAttachmentDocumentIdResponse
-}
 
-
+  const data: getAttachmentDocumentIdResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getAttachmentDocumentIdResponse;
+};
 
 /**
  * @summary Cancel a backfill job.
  */
 export type cancelBackfillGmailResponse201 = {
-  data: EmptyResponse
-  status: 201
-}
+  data: EmptyResponse;
+  status: 201;
+};
 
 export type cancelBackfillGmailResponse404 = {
-  data: ErrorResponse
-  status: 404
-}
+  data: ErrorResponse;
+  status: 404;
+};
 
 export type cancelBackfillGmailResponse429 = {
-  data: ErrorResponse
-  status: 429
-}
+  data: ErrorResponse;
+  status: 429;
+};
 
 export type cancelBackfillGmailResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type cancelBackfillGmailResponseSuccess = (cancelBackfillGmailResponse201) & {
-  headers: Headers;
+  data: ErrorResponse;
+  status: 500;
 };
-export type cancelBackfillGmailResponseError = (cancelBackfillGmailResponse404 | cancelBackfillGmailResponse429 | cancelBackfillGmailResponse500) & {
+
+export type cancelBackfillGmailResponseSuccess =
+  cancelBackfillGmailResponse201 & {
+    headers: Headers;
+  };
+export type cancelBackfillGmailResponseError = (
+  | cancelBackfillGmailResponse404
+  | cancelBackfillGmailResponse429
+  | cancelBackfillGmailResponse500
+) & {
   headers: Headers;
 };
 
-export type cancelBackfillGmailResponse = (cancelBackfillGmailResponseSuccess | cancelBackfillGmailResponseError)
+export type cancelBackfillGmailResponse =
+  | cancelBackfillGmailResponseSuccess
+  | cancelBackfillGmailResponseError;
 
 export const getCancelBackfillGmailUrl = () => {
+  return `/email/backfill/gmail`;
+};
 
-
-  
-
-  return `/email/backfill/gmail`
-}
-
-export const cancelBackfillGmail = async (cancelBackfillParams: CancelBackfillParams, options?: RequestInit): Promise<cancelBackfillGmailResponse> => {
-  
-  const res = await fetch(getCancelBackfillGmailUrl(),
-  {      
+export const cancelBackfillGmail = async (
+  cancelBackfillParams: CancelBackfillParams,
+  options?: RequestInit
+): Promise<cancelBackfillGmailResponse> => {
+  const res = await fetch(getCancelBackfillGmailUrl(), {
     ...options,
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      cancelBackfillParams,)
-  }
-)
+    body: JSON.stringify(cancelBackfillParams),
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: cancelBackfillGmailResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as cancelBackfillGmailResponse
-}
 
-
+  const data: cancelBackfillGmailResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as cancelBackfillGmailResponse;
+};
 
 /**
  * @summary Get any active backfill job for the user.
  */
 export type getBackfillGmailActiveResponse200 = {
-  data: GetActiveBackfillJobResponse
-  status: 200
-}
+  data: GetActiveBackfillJobResponse;
+  status: 200;
+};
 
 export type getBackfillGmailActiveResponse204 = {
-  data: EmptyResponse
-  status: 204
-}
+  data: EmptyResponse;
+  status: 204;
+};
 
 export type getBackfillGmailActiveResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type getBackfillGmailActiveResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type getBackfillGmailActiveResponseSuccess = (getBackfillGmailActiveResponse200 | getBackfillGmailActiveResponse204) & {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getBackfillGmailActiveResponseSuccess = (
+  | getBackfillGmailActiveResponse200
+  | getBackfillGmailActiveResponse204
+) & {
   headers: Headers;
 };
-export type getBackfillGmailActiveResponseError = (getBackfillGmailActiveResponse401 | getBackfillGmailActiveResponse500) & {
+export type getBackfillGmailActiveResponseError = (
+  | getBackfillGmailActiveResponse401
+  | getBackfillGmailActiveResponse500
+) & {
   headers: Headers;
 };
 
-export type getBackfillGmailActiveResponse = (getBackfillGmailActiveResponseSuccess | getBackfillGmailActiveResponseError)
+export type getBackfillGmailActiveResponse =
+  | getBackfillGmailActiveResponseSuccess
+  | getBackfillGmailActiveResponseError;
 
 export const getGetBackfillGmailActiveUrl = () => {
+  return `/email/backfill/gmail/active`;
+};
 
-
-  
-
-  return `/email/backfill/gmail/active`
-}
-
-export const getBackfillGmailActive = async ( options?: RequestInit): Promise<getBackfillGmailActiveResponse> => {
-  
-  const res = await fetch(getGetBackfillGmailActiveUrl(),
-  {      
+export const getBackfillGmailActive = async (
+  options?: RequestInit
+): Promise<getBackfillGmailActiveResponse> => {
+  const res = await fetch(getGetBackfillGmailActiveUrl(), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: getBackfillGmailActiveResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getBackfillGmailActiveResponse
-}
 
-
+  const data: getBackfillGmailActiveResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getBackfillGmailActiveResponse;
+};
 
 /**
  * @summary Get a backfill job.
  */
 export type getBackfillGmailResponse200 = {
-  data: GetBackfillJobResponse
-  status: 200
-}
+  data: GetBackfillJobResponse;
+  status: 200;
+};
 
 export type getBackfillGmailResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type getBackfillGmailResponse404 = {
-  data: ErrorResponse
-  status: 404
-}
+  data: ErrorResponse;
+  status: 404;
+};
 
 export type getBackfillGmailResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type getBackfillGmailResponseSuccess = (getBackfillGmailResponse200) & {
-  headers: Headers;
-};
-export type getBackfillGmailResponseError = (getBackfillGmailResponse401 | getBackfillGmailResponse404 | getBackfillGmailResponse500) & {
-  headers: Headers;
+  data: ErrorResponse;
+  status: 500;
 };
 
-export type getBackfillGmailResponse = (getBackfillGmailResponseSuccess | getBackfillGmailResponseError)
+export type getBackfillGmailResponseSuccess = getBackfillGmailResponse200 & {
+  headers: Headers;
+};
+export type getBackfillGmailResponseError = (
+  | getBackfillGmailResponse401
+  | getBackfillGmailResponse404
+  | getBackfillGmailResponse500
+) & {
+  headers: Headers;
+};
 
-export const getGetBackfillGmailUrl = (id: string,) => {
+export type getBackfillGmailResponse =
+  | getBackfillGmailResponseSuccess
+  | getBackfillGmailResponseError;
 
+export const getGetBackfillGmailUrl = (id: string) => {
+  return `/email/backfill/gmail/${id}`;
+};
 
-  
-
-  return `/email/backfill/gmail/${id}`
-}
-
-export const getBackfillGmail = async (id: string, options?: RequestInit): Promise<getBackfillGmailResponse> => {
-  
-  const res = await fetch(getGetBackfillGmailUrl(id),
-  {      
+export const getBackfillGmail = async (
+  id: string,
+  options?: RequestInit
+): Promise<getBackfillGmailResponse> => {
+  const res = await fetch(getGetBackfillGmailUrl(id), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: getBackfillGmailResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getBackfillGmailResponse
-}
 
-
+  const data: getBackfillGmailResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getBackfillGmailResponse;
+};
 
 /**
  * @summary List all contacts belonging to the user, grouped by link.
  */
 export type listContactsResponse200 = {
-  data: ListContactsResponse
-  status: 200
-}
+  data: ListContactsResponse;
+  status: 200;
+};
 
 export type listContactsResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type listContactsResponse404 = {
-  data: ErrorResponse
-  status: 404
-}
+  data: ErrorResponse;
+  status: 404;
+};
 
 export type listContactsResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type listContactsResponseSuccess = (listContactsResponse200) & {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type listContactsResponseSuccess = listContactsResponse200 & {
   headers: Headers;
 };
-export type listContactsResponseError = (listContactsResponse401 | listContactsResponse404 | listContactsResponse500) & {
+export type listContactsResponseError = (
+  | listContactsResponse401
+  | listContactsResponse404
+  | listContactsResponse500
+) & {
   headers: Headers;
 };
 
-export type listContactsResponse = (listContactsResponseSuccess | listContactsResponseError)
+export type listContactsResponse =
+  | listContactsResponseSuccess
+  | listContactsResponseError;
 
 export const getListContactsUrl = () => {
+  return `/email/contacts`;
+};
 
-
-  
-
-  return `/email/contacts`
-}
-
-export const listContacts = async ( options?: RequestInit): Promise<listContactsResponse> => {
-  
-  const res = await fetch(getListContactsUrl(),
-  {      
+export const listContacts = async (
+  options?: RequestInit
+): Promise<listContactsResponse> => {
+  const res = await fetch(getListContactsUrl(), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: listContactsResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as listContactsResponse
-}
 
-
+  const data: listContactsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listContactsResponse;
+};
 
 /**
  * @summary Create a draft.
  */
 export type createDraftResponse201 = {
-  data: CreateDraftResponse
-  status: 201
-}
+  data: CreateDraftResponse;
+  status: 201;
+};
 
 export type createDraftResponse400 = {
-  data: ErrorResponse
-  status: 400
-}
+  data: ErrorResponse;
+  status: 400;
+};
 
 export type createDraftResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type createDraftResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type createDraftResponseSuccess = (createDraftResponse201) & {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type createDraftResponseSuccess = createDraftResponse201 & {
   headers: Headers;
 };
-export type createDraftResponseError = (createDraftResponse400 | createDraftResponse401 | createDraftResponse500) & {
+export type createDraftResponseError = (
+  | createDraftResponse400
+  | createDraftResponse401
+  | createDraftResponse500
+) & {
   headers: Headers;
 };
 
-export type createDraftResponse = (createDraftResponseSuccess | createDraftResponseError)
+export type createDraftResponse =
+  | createDraftResponseSuccess
+  | createDraftResponseError;
 
 export const getCreateDraftUrl = () => {
+  return `/email/drafts`;
+};
 
-
-  
-
-  return `/email/drafts`
-}
-
-export const createDraft = async (createDraftRequest: CreateDraftRequest, options?: RequestInit): Promise<createDraftResponse> => {
-  
-  const res = await fetch(getCreateDraftUrl(),
-  {      
+export const createDraft = async (
+  createDraftRequest: CreateDraftRequest,
+  options?: RequestInit
+): Promise<createDraftResponse> => {
+  const res = await fetch(getCreateDraftUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      createDraftRequest,)
-  }
-)
+    body: JSON.stringify(createDraftRequest),
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: createDraftResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as createDraftResponse
-}
 
-
+  const data: createDraftResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as createDraftResponse;
+};
 
 /**
  * @summary Delete a draft.
  */
 export type deleteDraftResponse204 = {
-  data: EmptyResponse
-  status: 204
-}
+  data: EmptyResponse;
+  status: 204;
+};
 
 export type deleteDraftResponse400 = {
-  data: ErrorResponse
-  status: 400
-}
+  data: ErrorResponse;
+  status: 400;
+};
 
 export type deleteDraftResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type deleteDraftResponse404 = {
-  data: ErrorResponse
-  status: 404
-}
+  data: ErrorResponse;
+  status: 404;
+};
 
 export type deleteDraftResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type deleteDraftResponseSuccess = (deleteDraftResponse204) & {
-  headers: Headers;
-};
-export type deleteDraftResponseError = (deleteDraftResponse400 | deleteDraftResponse401 | deleteDraftResponse404 | deleteDraftResponse500) & {
-  headers: Headers;
+  data: ErrorResponse;
+  status: 500;
 };
 
-export type deleteDraftResponse = (deleteDraftResponseSuccess | deleteDraftResponseError)
+export type deleteDraftResponseSuccess = deleteDraftResponse204 & {
+  headers: Headers;
+};
+export type deleteDraftResponseError = (
+  | deleteDraftResponse400
+  | deleteDraftResponse401
+  | deleteDraftResponse404
+  | deleteDraftResponse500
+) & {
+  headers: Headers;
+};
 
-export const getDeleteDraftUrl = (id: string,) => {
+export type deleteDraftResponse =
+  | deleteDraftResponseSuccess
+  | deleteDraftResponseError;
 
+export const getDeleteDraftUrl = (id: string) => {
+  return `/email/drafts/${id}`;
+};
 
-  
-
-  return `/email/drafts/${id}`
-}
-
-export const deleteDraft = async (id: string, options?: RequestInit): Promise<deleteDraftResponse> => {
-  
-  const res = await fetch(getDeleteDraftUrl(id),
-  {      
+export const deleteDraft = async (
+  id: string,
+  options?: RequestInit
+): Promise<deleteDraftResponse> => {
+  const res = await fetch(getDeleteDraftUrl(id), {
     ...options,
-    method: 'DELETE'
-    
-    
-  }
-)
+    method: 'DELETE',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: deleteDraftResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as deleteDraftResponse
-}
 
+  const data: deleteDraftResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as deleteDraftResponse;
+};
 
+/**
+ * @summary Add an attachment to a draft.
+ */
+export type addDraftAttachmentResponse201 = {
+  data: AddDraftAttachmentResponse;
+  status: 201;
+};
+
+export type addDraftAttachmentResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type addDraftAttachmentResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type addDraftAttachmentResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type addDraftAttachmentResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type addDraftAttachmentResponseSuccess =
+  addDraftAttachmentResponse201 & {
+    headers: Headers;
+  };
+export type addDraftAttachmentResponseError = (
+  | addDraftAttachmentResponse400
+  | addDraftAttachmentResponse401
+  | addDraftAttachmentResponse404
+  | addDraftAttachmentResponse500
+) & {
+  headers: Headers;
+};
+
+export type addDraftAttachmentResponse =
+  | addDraftAttachmentResponseSuccess
+  | addDraftAttachmentResponseError;
+
+export const getAddDraftAttachmentUrl = (id: string) => {
+  return `/email/drafts/${id}/attachments`;
+};
+
+export const addDraftAttachment = async (
+  id: string,
+  addDraftAttachmentRequest: AddDraftAttachmentRequest,
+  options?: RequestInit
+): Promise<addDraftAttachmentResponse> => {
+  const res = await fetch(getAddDraftAttachmentUrl(id), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(addDraftAttachmentRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: addDraftAttachmentResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as addDraftAttachmentResponse;
+};
+
+/**
+ * @summary Remove an attachment from a draft.
+ */
+export type removeDraftAttachmentResponse201 = {
+  data: EmptyResponse;
+  status: 201;
+};
+
+export type removeDraftAttachmentResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type removeDraftAttachmentResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type removeDraftAttachmentResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type removeDraftAttachmentResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type removeDraftAttachmentResponseSuccess =
+  removeDraftAttachmentResponse201 & {
+    headers: Headers;
+  };
+export type removeDraftAttachmentResponseError = (
+  | removeDraftAttachmentResponse400
+  | removeDraftAttachmentResponse401
+  | removeDraftAttachmentResponse404
+  | removeDraftAttachmentResponse500
+) & {
+  headers: Headers;
+};
+
+export type removeDraftAttachmentResponse =
+  | removeDraftAttachmentResponseSuccess
+  | removeDraftAttachmentResponseError;
+
+export const getRemoveDraftAttachmentUrl = (
+  id: string,
+  attachmentId: string
+) => {
+  return `/email/drafts/${id}/attachments/${attachmentId}`;
+};
+
+export const removeDraftAttachment = async (
+  id: string,
+  attachmentId: string,
+  options?: RequestInit
+): Promise<removeDraftAttachmentResponse> => {
+  const res = await fetch(getRemoveDraftAttachmentUrl(id, attachmentId), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: removeDraftAttachmentResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as removeDraftAttachmentResponse;
+};
 
 /**
  * @summary Initialize email functionality for the user. Populates initial threads and enables inbox syncing.
  */
 export type initUserResponse200 = {
-  data: InitResponse
-  status: 200
-}
+  data: InitResponse;
+  status: 200;
+};
 
 export type initUserResponse400 = {
-  data: ErrorResponse
-  status: 400
-}
+  data: ErrorResponse;
+  status: 400;
+};
 
 export type initUserResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type initUserResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type initUserResponseSuccess = (initUserResponse200) & {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type initUserResponseSuccess = initUserResponse200 & {
   headers: Headers;
 };
-export type initUserResponseError = (initUserResponse400 | initUserResponse401 | initUserResponse500) & {
+export type initUserResponseError = (
+  | initUserResponse400
+  | initUserResponse401
+  | initUserResponse500
+) & {
   headers: Headers;
 };
 
-export type initUserResponse = (initUserResponseSuccess | initUserResponseError)
+export type initUserResponse = initUserResponseSuccess | initUserResponseError;
 
 export const getInitUserUrl = () => {
+  return `/email/init`;
+};
 
-
-  
-
-  return `/email/init`
-}
-
-export const initUser = async ( options?: RequestInit): Promise<initUserResponse> => {
-  
-  const res = await fetch(getInitUserUrl(),
-  {      
+export const initUser = async (
+  options?: RequestInit
+): Promise<initUserResponse> => {
+  const res = await fetch(getInitUserUrl(), {
     ...options,
-    method: 'POST'
-    
-    
-  }
-)
+    method: 'POST',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: initUserResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as initUserResponse
-}
 
-
+  const data: initUserResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as initUserResponse;
+};
 
 /**
  * @summary List user labels.
  */
 export type listLabelsResponse200 = {
-  data: ListLabelsResponse
-  status: 200
-}
+  data: ListLabelsResponse;
+  status: 200;
+};
 
 export type listLabelsResponse400 = {
-  data: ErrorResponse
-  status: 400
-}
+  data: ErrorResponse;
+  status: 400;
+};
 
 export type listLabelsResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type listLabelsResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type listLabelsResponseSuccess = (listLabelsResponse200) & {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type listLabelsResponseSuccess = listLabelsResponse200 & {
   headers: Headers;
 };
-export type listLabelsResponseError = (listLabelsResponse400 | listLabelsResponse401 | listLabelsResponse500) & {
+export type listLabelsResponseError = (
+  | listLabelsResponse400
+  | listLabelsResponse401
+  | listLabelsResponse500
+) & {
   headers: Headers;
 };
 
-export type listLabelsResponse = (listLabelsResponseSuccess | listLabelsResponseError)
+export type listLabelsResponse =
+  | listLabelsResponseSuccess
+  | listLabelsResponseError;
 
 export const getListLabelsUrl = () => {
+  return `/email/labels`;
+};
 
-
-  
-
-  return `/email/labels`
-}
-
-export const listLabels = async ( options?: RequestInit): Promise<listLabelsResponse> => {
-  
-  const res = await fetch(getListLabelsUrl(),
-  {      
+export const listLabels = async (
+  options?: RequestInit
+): Promise<listLabelsResponse> => {
+  const res = await fetch(getListLabelsUrl(), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: listLabelsResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as listLabelsResponse
-}
 
-
+  const data: listLabelsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listLabelsResponse;
+};
 
 /**
  * @summary Create a label.
  */
 export type createLabelResponse201 = {
-  data: CreateLabelResponse
-  status: 201
-}
+  data: CreateLabelResponse;
+  status: 201;
+};
 
 export type createLabelResponse400 = {
-  data: ErrorResponse
-  status: 400
-}
+  data: ErrorResponse;
+  status: 400;
+};
 
 export type createLabelResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type createLabelResponse409 = {
-  data: ErrorResponse
-  status: 409
-}
+  data: ErrorResponse;
+  status: 409;
+};
 
 export type createLabelResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type createLabelResponseSuccess = (createLabelResponse201) & {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type createLabelResponseSuccess = createLabelResponse201 & {
   headers: Headers;
 };
-export type createLabelResponseError = (createLabelResponse400 | createLabelResponse401 | createLabelResponse409 | createLabelResponse500) & {
+export type createLabelResponseError = (
+  | createLabelResponse400
+  | createLabelResponse401
+  | createLabelResponse409
+  | createLabelResponse500
+) & {
   headers: Headers;
 };
 
-export type createLabelResponse = (createLabelResponseSuccess | createLabelResponseError)
+export type createLabelResponse =
+  | createLabelResponseSuccess
+  | createLabelResponseError;
 
 export const getCreateLabelUrl = () => {
+  return `/email/labels`;
+};
 
-
-  
-
-  return `/email/labels`
-}
-
-export const createLabel = async (createLabelRequest: CreateLabelRequest, options?: RequestInit): Promise<createLabelResponse> => {
-  
-  const res = await fetch(getCreateLabelUrl(),
-  {      
+export const createLabel = async (
+  createLabelRequest: CreateLabelRequest,
+  options?: RequestInit
+): Promise<createLabelResponse> => {
+  const res = await fetch(getCreateLabelUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      createLabelRequest,)
-  }
-)
+    body: JSON.stringify(createLabelRequest),
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: createLabelResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as createLabelResponse
-}
 
-
+  const data: createLabelResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as createLabelResponse;
+};
 
 /**
  * @summary Delete a label.
  */
 export type deleteLabelResponse204 = {
-  data: EmptyResponse
-  status: 204
-}
+  data: EmptyResponse;
+  status: 204;
+};
 
 export type deleteLabelResponse400 = {
-  data: ErrorResponse
-  status: 400
-}
+  data: ErrorResponse;
+  status: 400;
+};
 
 export type deleteLabelResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type deleteLabelResponse404 = {
-  data: ErrorResponse
-  status: 404
-}
+  data: ErrorResponse;
+  status: 404;
+};
 
 export type deleteLabelResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type deleteLabelResponseSuccess = (deleteLabelResponse204) & {
-  headers: Headers;
-};
-export type deleteLabelResponseError = (deleteLabelResponse400 | deleteLabelResponse401 | deleteLabelResponse404 | deleteLabelResponse500) & {
-  headers: Headers;
+  data: ErrorResponse;
+  status: 500;
 };
 
-export type deleteLabelResponse = (deleteLabelResponseSuccess | deleteLabelResponseError)
+export type deleteLabelResponseSuccess = deleteLabelResponse204 & {
+  headers: Headers;
+};
+export type deleteLabelResponseError = (
+  | deleteLabelResponse400
+  | deleteLabelResponse401
+  | deleteLabelResponse404
+  | deleteLabelResponse500
+) & {
+  headers: Headers;
+};
 
-export const getDeleteLabelUrl = (id: string,) => {
+export type deleteLabelResponse =
+  | deleteLabelResponseSuccess
+  | deleteLabelResponseError;
 
+export const getDeleteLabelUrl = (id: string) => {
+  return `/email/labels/${id}`;
+};
 
-  
-
-  return `/email/labels/${id}`
-}
-
-export const deleteLabel = async (id: string, options?: RequestInit): Promise<deleteLabelResponse> => {
-  
-  const res = await fetch(getDeleteLabelUrl(id),
-  {      
+export const deleteLabel = async (
+  id: string,
+  options?: RequestInit
+): Promise<deleteLabelResponse> => {
+  const res = await fetch(getDeleteLabelUrl(id), {
     ...options,
-    method: 'DELETE'
-    
-    
-  }
-)
+    method: 'DELETE',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: deleteLabelResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as deleteLabelResponse
-}
 
-
+  const data: deleteLabelResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as deleteLabelResponse;
+};
 
 /**
  * @summary List all links belonging to the user.
  */
 export type listLinksResponse200 = {
-  data: ListLinksResponse
-  status: 200
-}
+  data: ListLinksResponse;
+  status: 200;
+};
 
 export type listLinksResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type listLinksResponse404 = {
-  data: ErrorResponse
-  status: 404
-}
+  data: ErrorResponse;
+  status: 404;
+};
 
 export type listLinksResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type listLinksResponseSuccess = (listLinksResponse200) & {
-  headers: Headers;
-};
-export type listLinksResponseError = (listLinksResponse401 | listLinksResponse404 | listLinksResponse500) & {
-  headers: Headers;
+  data: ErrorResponse;
+  status: 500;
 };
 
-export type listLinksResponse = (listLinksResponseSuccess | listLinksResponseError)
+export type listLinksResponseSuccess = listLinksResponse200 & {
+  headers: Headers;
+};
+export type listLinksResponseError = (
+  | listLinksResponse401
+  | listLinksResponse404
+  | listLinksResponse500
+) & {
+  headers: Headers;
+};
 
-export const getListLinksUrl = () => {
+export type listLinksResponse =
+  | listLinksResponseSuccess
+  | listLinksResponseError;
 
+export const getListLinksUrl = (params?: ListLinksParams) => {
+  const normalizedParams = new URLSearchParams();
 
-  
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
 
-  return `/email/links`
-}
+  const stringifiedParams = normalizedParams.toString();
 
-export const listLinks = async ( options?: RequestInit): Promise<listLinksResponse> => {
-  
-  const res = await fetch(getListLinksUrl(),
-  {      
+  return stringifiedParams.length > 0
+    ? `/email/links?${stringifiedParams}`
+    : `/email/links`;
+};
+
+export const listLinks = async (
+  params?: ListLinksParams,
+  options?: RequestInit
+): Promise<listLinksResponse> => {
+  const res = await fetch(getListLinksUrl(params), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: listLinksResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as listLinksResponse
-}
 
-
+  const data: listLinksResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listLinksResponse;
+};
 
 /**
  * @summary Send an email message.
  */
 export type sendMessageResponse201 = {
-  data: SendMessageResponse
-  status: 201
-}
+  data: SendMessageResponse;
+  status: 201;
+};
 
 export type sendMessageResponse400 = {
-  data: ErrorResponse
-  status: 400
-}
+  data: ErrorResponse;
+  status: 400;
+};
 
 export type sendMessageResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type sendMessageResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type sendMessageResponseSuccess = (sendMessageResponse201) & {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type sendMessageResponseSuccess = sendMessageResponse201 & {
   headers: Headers;
 };
-export type sendMessageResponseError = (sendMessageResponse400 | sendMessageResponse401 | sendMessageResponse500) & {
+export type sendMessageResponseError = (
+  | sendMessageResponse400
+  | sendMessageResponse401
+  | sendMessageResponse500
+) & {
   headers: Headers;
 };
 
-export type sendMessageResponse = (sendMessageResponseSuccess | sendMessageResponseError)
+export type sendMessageResponse =
+  | sendMessageResponseSuccess
+  | sendMessageResponseError;
 
 export const getSendMessageUrl = () => {
+  return `/email/messages`;
+};
 
-
-  
-
-  return `/email/messages`
-}
-
-export const sendMessage = async (sendMessageRequest: SendMessageRequest, options?: RequestInit): Promise<sendMessageResponse> => {
-  
-  const res = await fetch(getSendMessageUrl(),
-  {      
+export const sendMessage = async (
+  sendMessageRequest: SendMessageRequest,
+  options?: RequestInit
+): Promise<sendMessageResponse> => {
+  const res = await fetch(getSendMessageUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      sendMessageRequest,)
-  }
-)
+    body: JSON.stringify(sendMessageRequest),
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: sendMessageResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as sendMessageResponse
-}
 
-
+  const data: sendMessageResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as sendMessageResponse;
+};
 
 export type getMessagesBatchResponse200 = {
-  data: ParsedMessage[]
-  status: 200
-}
+  data: ParsedMessage[];
+  status: 200;
+};
 
 export type getMessagesBatchResponse400 = {
-  data: ErrorResponse
-  status: 400
-}
+  data: ErrorResponse;
+  status: 400;
+};
 
 export type getMessagesBatchResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type getMessagesBatchResponse404 = {
-  data: ErrorResponse
-  status: 404
-}
+  data: ErrorResponse;
+  status: 404;
+};
 
 export type getMessagesBatchResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type getMessagesBatchResponseSuccess = (getMessagesBatchResponse200) & {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getMessagesBatchResponseSuccess = getMessagesBatchResponse200 & {
   headers: Headers;
 };
-export type getMessagesBatchResponseError = (getMessagesBatchResponse400 | getMessagesBatchResponse401 | getMessagesBatchResponse404 | getMessagesBatchResponse500) & {
+export type getMessagesBatchResponseError = (
+  | getMessagesBatchResponse400
+  | getMessagesBatchResponse401
+  | getMessagesBatchResponse404
+  | getMessagesBatchResponse500
+) & {
   headers: Headers;
 };
 
-export type getMessagesBatchResponse = (getMessagesBatchResponseSuccess | getMessagesBatchResponseError)
+export type getMessagesBatchResponse =
+  | getMessagesBatchResponseSuccess
+  | getMessagesBatchResponseError;
 
 export const getGetMessagesBatchUrl = () => {
+  return `/email/messages/batch`;
+};
 
-
-  
-
-  return `/email/messages/batch`
-}
-
-export const getMessagesBatch = async (getMessagesBatchBody: string[], options?: RequestInit): Promise<getMessagesBatchResponse> => {
-  
-  const res = await fetch(getGetMessagesBatchUrl(),
-  {      
+export const getMessagesBatch = async (
+  getMessagesBatchBody: string[],
+  options?: RequestInit
+): Promise<getMessagesBatchResponse> => {
+  const res = await fetch(getGetMessagesBatchUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      getMessagesBatchBody,)
-  }
-)
+    body: JSON.stringify(getMessagesBatchBody),
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: getMessagesBatchResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getMessagesBatchResponse
-}
 
-
+  const data: getMessagesBatchResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getMessagesBatchResponse;
+};
 
 /**
  * @summary Add or remove a label from a batch of messages
  */
 export type addRemoveLabelResponse200 = {
-  data: UpdateLabelBatchResponse
-  status: 200
-}
+  data: UpdateLabelBatchResponse;
+  status: 200;
+};
 
 export type addRemoveLabelResponse400 = {
-  data: ErrorResponse
-  status: 400
-}
+  data: ErrorResponse;
+  status: 400;
+};
 
 export type addRemoveLabelResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type addRemoveLabelResponse404 = {
-  data: ErrorResponse
-  status: 404
-}
+  data: ErrorResponse;
+  status: 404;
+};
 
 export type addRemoveLabelResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type addRemoveLabelResponseSuccess = (addRemoveLabelResponse200) & {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type addRemoveLabelResponseSuccess = addRemoveLabelResponse200 & {
   headers: Headers;
 };
-export type addRemoveLabelResponseError = (addRemoveLabelResponse400 | addRemoveLabelResponse401 | addRemoveLabelResponse404 | addRemoveLabelResponse500) & {
+export type addRemoveLabelResponseError = (
+  | addRemoveLabelResponse400
+  | addRemoveLabelResponse401
+  | addRemoveLabelResponse404
+  | addRemoveLabelResponse500
+) & {
   headers: Headers;
 };
 
-export type addRemoveLabelResponse = (addRemoveLabelResponseSuccess | addRemoveLabelResponseError)
+export type addRemoveLabelResponse =
+  | addRemoveLabelResponseSuccess
+  | addRemoveLabelResponseError;
 
 export const getAddRemoveLabelUrl = () => {
+  return `/email/messages/labels`;
+};
 
-
-  
-
-  return `/email/messages/labels`
-}
-
-export const addRemoveLabel = async (updateLabelBatchRequest: UpdateLabelBatchRequest, options?: RequestInit): Promise<addRemoveLabelResponse> => {
-  
-  const res = await fetch(getAddRemoveLabelUrl(),
-  {      
+export const addRemoveLabel = async (
+  updateLabelBatchRequest: UpdateLabelBatchRequest,
+  options?: RequestInit
+): Promise<addRemoveLabelResponse> => {
+  const res = await fetch(getAddRemoveLabelUrl(), {
     ...options,
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      updateLabelBatchRequest,)
-  }
-)
+    body: JSON.stringify(updateLabelBatchRequest),
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: addRemoveLabelResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as addRemoveLabelResponse
-}
 
-
+  const data: addRemoveLabelResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as addRemoveLabelResponse;
+};
 
 export type getMessageResponse200 = {
-  data: ParsedMessage
-  status: 200
-}
+  data: ParsedMessage;
+  status: 200;
+};
 
 export type getMessageResponse400 = {
-  data: ErrorResponse
-  status: 400
-}
+  data: ErrorResponse;
+  status: 400;
+};
 
 export type getMessageResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type getMessageResponse404 = {
-  data: ErrorResponse
-  status: 404
-}
+  data: ErrorResponse;
+  status: 404;
+};
 
 export type getMessageResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type getMessageResponseSuccess = (getMessageResponse200) & {
-  headers: Headers;
-};
-export type getMessageResponseError = (getMessageResponse400 | getMessageResponse401 | getMessageResponse404 | getMessageResponse500) & {
-  headers: Headers;
+  data: ErrorResponse;
+  status: 500;
 };
 
-export type getMessageResponse = (getMessageResponseSuccess | getMessageResponseError)
+export type getMessageResponseSuccess = getMessageResponse200 & {
+  headers: Headers;
+};
+export type getMessageResponseError = (
+  | getMessageResponse400
+  | getMessageResponse401
+  | getMessageResponse404
+  | getMessageResponse500
+) & {
+  headers: Headers;
+};
 
-export const getGetMessageUrl = (id: string,) => {
+export type getMessageResponse =
+  | getMessageResponseSuccess
+  | getMessageResponseError;
 
+export const getGetMessageUrl = (id: string) => {
+  return `/email/messages/${id}`;
+};
 
-  
-
-  return `/email/messages/${id}`
-}
-
-export const getMessage = async (id: string, options?: RequestInit): Promise<getMessageResponse> => {
-  
-  const res = await fetch(getGetMessageUrl(id),
-  {      
+export const getMessage = async (
+  id: string,
+  options?: RequestInit
+): Promise<getMessageResponse> => {
+  const res = await fetch(getGetMessageUrl(id), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: getMessageResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getMessageResponse
-}
 
-
+  const data: getMessageResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getMessageResponse;
+};
 
 /**
  * @summary Patch user settings.
  */
 export type patchSettingsResponse200 = {
-  data: PatchSettingsResponse
-  status: 200
-}
+  data: PatchSettingsResponse;
+  status: 200;
+};
 
 export type patchSettingsResponse400 = {
-  data: ErrorResponse
-  status: 400
-}
+  data: ErrorResponse;
+  status: 400;
+};
 
 export type patchSettingsResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type patchSettingsResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type patchSettingsResponseSuccess = (patchSettingsResponse200) & {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type patchSettingsResponseSuccess = patchSettingsResponse200 & {
   headers: Headers;
 };
-export type patchSettingsResponseError = (patchSettingsResponse400 | patchSettingsResponse401 | patchSettingsResponse500) & {
+export type patchSettingsResponseError = (
+  | patchSettingsResponse400
+  | patchSettingsResponse401
+  | patchSettingsResponse500
+) & {
   headers: Headers;
 };
 
-export type patchSettingsResponse = (patchSettingsResponseSuccess | patchSettingsResponseError)
+export type patchSettingsResponse =
+  | patchSettingsResponseSuccess
+  | patchSettingsResponseError;
 
 export const getPatchSettingsUrl = () => {
+  return `/email/settings`;
+};
 
-
-  
-
-  return `/email/settings`
-}
-
-export const patchSettings = async (patchSettingsRequest: PatchSettingsRequest, options?: RequestInit): Promise<patchSettingsResponse> => {
-  
-  const res = await fetch(getPatchSettingsUrl(),
-  {      
+export const patchSettings = async (
+  patchSettingsRequest: PatchSettingsRequest,
+  options?: RequestInit
+): Promise<patchSettingsResponse> => {
+  const res = await fetch(getPatchSettingsUrl(), {
     ...options,
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      patchSettingsRequest,)
-  }
-)
+    body: JSON.stringify(patchSettingsRequest),
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: patchSettingsResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as patchSettingsResponse
-}
 
-
+  const data: patchSettingsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as patchSettingsResponse;
+};
 
 /**
  * @summary Enables inbox syncing for user.
  */
 export type enableSyncResponse201 = {
-  data: EmptyResponse
-  status: 201
-}
+  data: EmptyResponse;
+  status: 201;
+};
 
 export type enableSyncResponse400 = {
-  data: ErrorResponse
-  status: 400
-}
+  data: ErrorResponse;
+  status: 400;
+};
 
 export type enableSyncResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type enableSyncResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type enableSyncResponseSuccess = (enableSyncResponse201) & {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type enableSyncResponseSuccess = enableSyncResponse201 & {
   headers: Headers;
 };
-export type enableSyncResponseError = (enableSyncResponse400 | enableSyncResponse401 | enableSyncResponse500) & {
+export type enableSyncResponseError = (
+  | enableSyncResponse400
+  | enableSyncResponse401
+  | enableSyncResponse500
+) & {
   headers: Headers;
 };
 
-export type enableSyncResponse = (enableSyncResponseSuccess | enableSyncResponseError)
+export type enableSyncResponse =
+  | enableSyncResponseSuccess
+  | enableSyncResponseError;
 
 export const getEnableSyncUrl = () => {
+  return `/email/sync`;
+};
 
-
-  
-
-  return `/email/sync`
-}
-
-export const enableSync = async ( options?: RequestInit): Promise<enableSyncResponse> => {
-  
-  const res = await fetch(getEnableSyncUrl(),
-  {      
+export const enableSync = async (
+  options?: RequestInit
+): Promise<enableSyncResponse> => {
+  const res = await fetch(getEnableSyncUrl(), {
     ...options,
-    method: 'POST'
-    
-    
-  }
-)
+    method: 'POST',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: enableSyncResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as enableSyncResponse
-}
 
-
+  const data: enableSyncResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as enableSyncResponse;
+};
 
 /**
  * @summary Disables inbox syncing for user.
  */
 export type disableSyncResponse204 = {
-  data: EmptyResponse
-  status: 204
-}
+  data: EmptyResponse;
+  status: 204;
+};
 
 export type disableSyncResponse400 = {
-  data: ErrorResponse
-  status: 400
-}
+  data: ErrorResponse;
+  status: 400;
+};
 
 export type disableSyncResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type disableSyncResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type disableSyncResponseSuccess = (disableSyncResponse204) & {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type disableSyncResponseSuccess = disableSyncResponse204 & {
   headers: Headers;
 };
-export type disableSyncResponseError = (disableSyncResponse400 | disableSyncResponse401 | disableSyncResponse500) & {
+export type disableSyncResponseError = (
+  | disableSyncResponse400
+  | disableSyncResponse401
+  | disableSyncResponse500
+) & {
   headers: Headers;
 };
 
-export type disableSyncResponse = (disableSyncResponseSuccess | disableSyncResponseError)
+export type disableSyncResponse =
+  | disableSyncResponseSuccess
+  | disableSyncResponseError;
 
 export const getDisableSyncUrl = () => {
+  return `/email/sync`;
+};
 
-
-  
-
-  return `/email/sync`
-}
-
-export const disableSync = async ( options?: RequestInit): Promise<disableSyncResponse> => {
-  
-  const res = await fetch(getDisableSyncUrl(),
-  {      
+export const disableSync = async (
+  options?: RequestInit
+): Promise<disableSyncResponse> => {
+  const res = await fetch(getDisableSyncUrl(), {
     ...options,
-    method: 'DELETE'
-    
-    
-  }
-)
+    method: 'DELETE',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: disableSyncResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as disableSyncResponse
-}
 
-
+  const data: disableSyncResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as disableSyncResponse;
+};
 
 /**
  * @summary Get paginated thread previews with cursor-based pagination.
  */
 export type previewsInboxCursorResponse200 = {
-  data: ApiPaginatedThreadCursor
-  status: 200
-}
+  data: ApiPaginatedThreadCursor;
+  status: 200;
+};
 
 export type previewsInboxCursorResponse400 = {
-  data: ErrorResponse
-  status: 400
-}
+  data: ErrorResponse;
+  status: 400;
+};
 
 export type previewsInboxCursorResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type previewsInboxCursorResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type previewsInboxCursorResponseSuccess = (previewsInboxCursorResponse200) & {
-  headers: Headers;
+  data: ErrorResponse;
+  status: 500;
 };
-export type previewsInboxCursorResponseError = (previewsInboxCursorResponse400 | previewsInboxCursorResponse401 | previewsInboxCursorResponse500) & {
+
+export type previewsInboxCursorResponseSuccess =
+  previewsInboxCursorResponse200 & {
+    headers: Headers;
+  };
+export type previewsInboxCursorResponseError = (
+  | previewsInboxCursorResponse400
+  | previewsInboxCursorResponse401
+  | previewsInboxCursorResponse500
+) & {
   headers: Headers;
 };
 
-export type previewsInboxCursorResponse = (previewsInboxCursorResponseSuccess | previewsInboxCursorResponseError)
+export type previewsInboxCursorResponse =
+  | previewsInboxCursorResponseSuccess
+  | previewsInboxCursorResponseError;
 
-export const getPreviewsInboxCursorUrl = (view: string,
-    params?: PreviewsInboxCursorParams,) => {
+export const getPreviewsInboxCursorUrl = (
+  view: string,
+  params?: PreviewsInboxCursorParams
+) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
-    
     if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
     }
   });
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/email/threads/previews/cursor/${view}?${stringifiedParams}` : `/email/threads/previews/cursor/${view}`
-}
+  return stringifiedParams.length > 0
+    ? `/email/threads/previews/cursor/${view}?${stringifiedParams}`
+    : `/email/threads/previews/cursor/${view}`;
+};
 
-export const previewsInboxCursor = async (view: string,
-    params?: PreviewsInboxCursorParams, options?: RequestInit): Promise<previewsInboxCursorResponse> => {
-  
-  const res = await fetch(getPreviewsInboxCursorUrl(view,params),
-  {      
+export const previewsInboxCursor = async (
+  view: string,
+  params?: PreviewsInboxCursorParams,
+  options?: RequestInit
+): Promise<previewsInboxCursorResponse> => {
+  const res = await fetch(getPreviewsInboxCursorUrl(view, params), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: previewsInboxCursorResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as previewsInboxCursorResponse
-}
 
-
+  const data: previewsInboxCursorResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as previewsInboxCursorResponse;
+};
 
 /**
  * @summary Get a thread with a paginated number of messages.
  */
 export type getThreadResponse200 = {
-  data: GetThreadResponse
-  status: 200
-}
+  data: GetThreadResponse;
+  status: 200;
+};
 
 export type getThreadResponse400 = {
-  data: ErrorResponse
-  status: 400
-}
+  data: ErrorResponse;
+  status: 400;
+};
 
 export type getThreadResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type getThreadResponse404 = {
-  data: ErrorResponse
-  status: 404
-}
+  data: ErrorResponse;
+  status: 404;
+};
 
 export type getThreadResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type getThreadResponseSuccess = (getThreadResponse200) & {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getThreadResponseSuccess = getThreadResponse200 & {
   headers: Headers;
 };
-export type getThreadResponseError = (getThreadResponse400 | getThreadResponse401 | getThreadResponse404 | getThreadResponse500) & {
+export type getThreadResponseError = (
+  | getThreadResponse400
+  | getThreadResponse401
+  | getThreadResponse404
+  | getThreadResponse500
+) & {
   headers: Headers;
 };
 
-export type getThreadResponse = (getThreadResponseSuccess | getThreadResponseError)
+export type getThreadResponse =
+  | getThreadResponseSuccess
+  | getThreadResponseError;
 
-export const getGetThreadUrl = (id: string,
-    params: GetThreadParams,) => {
+export const getGetThreadUrl = (id: string, params: GetThreadParams) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
-    
     if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
     }
   });
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/email/threads/${id}?${stringifiedParams}` : `/email/threads/${id}`
-}
+  return stringifiedParams.length > 0
+    ? `/email/threads/${id}?${stringifiedParams}`
+    : `/email/threads/${id}`;
+};
 
-export const getThread = async (id: string,
-    params: GetThreadParams, options?: RequestInit): Promise<getThreadResponse> => {
-  
-  const res = await fetch(getGetThreadUrl(id,params),
-  {      
+export const getThread = async (
+  id: string,
+  params: GetThreadParams,
+  options?: RequestInit
+): Promise<getThreadResponse> => {
+  const res = await fetch(getGetThreadUrl(id, params), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: getThreadResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getThreadResponse
-}
 
-
+  const data: getThreadResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getThreadResponse;
+};
 
 /**
  * @summary Change the archived status of a thread.
  */
 export type archiveThreadResponse200 = {
-  data: EmptyResponse
-  status: 200
-}
+  data: EmptyResponse;
+  status: 200;
+};
 
 export type archiveThreadResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type archiveThreadResponse404 = {
-  data: ErrorResponse
-  status: 404
-}
+  data: ErrorResponse;
+  status: 404;
+};
 
 export type archiveThreadResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type archiveThreadResponseSuccess = (archiveThreadResponse200) & {
-  headers: Headers;
-};
-export type archiveThreadResponseError = (archiveThreadResponse401 | archiveThreadResponse404 | archiveThreadResponse500) & {
-  headers: Headers;
+  data: ErrorResponse;
+  status: 500;
 };
 
-export type archiveThreadResponse = (archiveThreadResponseSuccess | archiveThreadResponseError)
+export type archiveThreadResponseSuccess = archiveThreadResponse200 & {
+  headers: Headers;
+};
+export type archiveThreadResponseError = (
+  | archiveThreadResponse401
+  | archiveThreadResponse404
+  | archiveThreadResponse500
+) & {
+  headers: Headers;
+};
 
-export const getArchiveThreadUrl = (id: string,) => {
+export type archiveThreadResponse =
+  | archiveThreadResponseSuccess
+  | archiveThreadResponseError;
 
+export const getArchiveThreadUrl = (id: string) => {
+  return `/email/threads/${id}/archived`;
+};
 
-  
-
-  return `/email/threads/${id}/archived`
-}
-
-export const archiveThread = async (id: string,
-    archiveThreadRequest: ArchiveThreadRequest, options?: RequestInit): Promise<archiveThreadResponse> => {
-  
-  const res = await fetch(getArchiveThreadUrl(id),
-  {      
+export const archiveThread = async (
+  id: string,
+  archiveThreadRequest: ArchiveThreadRequest,
+  options?: RequestInit
+): Promise<archiveThreadResponse> => {
+  const res = await fetch(getArchiveThreadUrl(id), {
     ...options,
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      archiveThreadRequest,)
-  }
-)
+    body: JSON.stringify(archiveThreadRequest),
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: archiveThreadResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as archiveThreadResponse
-}
 
-
+  const data: archiveThreadResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as archiveThreadResponse;
+};
 
 export type getThreadMessagesHandlerResponse200 = {
-  data: ParsedMessage[]
-  status: 200
-}
+  data: ParsedMessage[];
+  status: 200;
+};
 
 export type getThreadMessagesHandlerResponse400 = {
-  data: ErrorResponse
-  status: 400
-}
+  data: ErrorResponse;
+  status: 400;
+};
 
 export type getThreadMessagesHandlerResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type getThreadMessagesHandlerResponse404 = {
-  data: ErrorResponse
-  status: 404
-}
+  data: ErrorResponse;
+  status: 404;
+};
 
 export type getThreadMessagesHandlerResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type getThreadMessagesHandlerResponseSuccess = (getThreadMessagesHandlerResponse200) & {
-  headers: Headers;
+  data: ErrorResponse;
+  status: 500;
 };
-export type getThreadMessagesHandlerResponseError = (getThreadMessagesHandlerResponse400 | getThreadMessagesHandlerResponse401 | getThreadMessagesHandlerResponse404 | getThreadMessagesHandlerResponse500) & {
+
+export type getThreadMessagesHandlerResponseSuccess =
+  getThreadMessagesHandlerResponse200 & {
+    headers: Headers;
+  };
+export type getThreadMessagesHandlerResponseError = (
+  | getThreadMessagesHandlerResponse400
+  | getThreadMessagesHandlerResponse401
+  | getThreadMessagesHandlerResponse404
+  | getThreadMessagesHandlerResponse500
+) & {
   headers: Headers;
 };
 
-export type getThreadMessagesHandlerResponse = (getThreadMessagesHandlerResponseSuccess | getThreadMessagesHandlerResponseError)
+export type getThreadMessagesHandlerResponse =
+  | getThreadMessagesHandlerResponseSuccess
+  | getThreadMessagesHandlerResponseError;
 
-export const getGetThreadMessagesHandlerUrl = (id: string,
-    params?: GetThreadMessagesHandlerParams,) => {
+export const getGetThreadMessagesHandlerUrl = (
+  id: string,
+  params?: GetThreadMessagesHandlerParams
+) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
-    
     if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
     }
   });
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/email/threads/${id}/messages?${stringifiedParams}` : `/email/threads/${id}/messages`
-}
+  return stringifiedParams.length > 0
+    ? `/email/threads/${id}/messages?${stringifiedParams}`
+    : `/email/threads/${id}/messages`;
+};
 
-export const getThreadMessagesHandler = async (id: string,
-    params?: GetThreadMessagesHandlerParams, options?: RequestInit): Promise<getThreadMessagesHandlerResponse> => {
-  
-  const res = await fetch(getGetThreadMessagesHandlerUrl(id,params),
-  {      
+export const getThreadMessagesHandler = async (
+  id: string,
+  params?: GetThreadMessagesHandlerParams,
+  options?: RequestInit
+): Promise<getThreadMessagesHandlerResponse> => {
+  const res = await fetch(getGetThreadMessagesHandlerUrl(id, params), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: getThreadMessagesHandlerResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getThreadMessagesHandlerResponse
-}
 
-
+  const data: getThreadMessagesHandlerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getThreadMessagesHandlerResponse;
+};
 
 /**
  * @summary Called by FE when the user has seen a thread.
  */
 export type threadSeenResponse200 = {
-  data: EmptyResponse
-  status: 200
-}
+  data: EmptyResponse;
+  status: 200;
+};
 
 export type threadSeenResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type threadSeenResponse404 = {
-  data: ErrorResponse
-  status: 404
-}
+  data: ErrorResponse;
+  status: 404;
+};
 
 export type threadSeenResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type threadSeenResponseSuccess = (threadSeenResponse200) & {
-  headers: Headers;
-};
-export type threadSeenResponseError = (threadSeenResponse401 | threadSeenResponse404 | threadSeenResponse500) & {
-  headers: Headers;
+  data: ErrorResponse;
+  status: 500;
 };
 
-export type threadSeenResponse = (threadSeenResponseSuccess | threadSeenResponseError)
+export type threadSeenResponseSuccess = threadSeenResponse200 & {
+  headers: Headers;
+};
+export type threadSeenResponseError = (
+  | threadSeenResponse401
+  | threadSeenResponse404
+  | threadSeenResponse500
+) & {
+  headers: Headers;
+};
 
-export const getThreadSeenUrl = (id: string,) => {
+export type threadSeenResponse =
+  | threadSeenResponseSuccess
+  | threadSeenResponseError;
 
+export const getThreadSeenUrl = (id: string) => {
+  return `/email/threads/${id}/seen`;
+};
 
-  
-
-  return `/email/threads/${id}/seen`
-}
-
-export const threadSeen = async (id: string, options?: RequestInit): Promise<threadSeenResponse> => {
-  
-  const res = await fetch(getThreadSeenUrl(id),
-  {      
+export const threadSeen = async (
+  id: string,
+  options?: RequestInit
+): Promise<threadSeenResponse> => {
+  const res = await fetch(getThreadSeenUrl(id), {
     ...options,
-    method: 'POST'
-    
-    
-  }
-)
+    method: 'POST',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: threadSeenResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as threadSeenResponse
-}
 
-
+  const data: threadSeenResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as threadSeenResponse;
+};
 
 /**
  * @summary Health check
  */
 export type healthHandlerResponse200 = {
-  data: EmptyResponse
-  status: 200
-}
-    
-export type healthHandlerResponseSuccess = (healthHandlerResponse200) & {
+  data: EmptyResponse;
+  status: 200;
+};
+
+export type healthHandlerResponseSuccess = healthHandlerResponse200 & {
   headers: Headers;
 };
-;
 
-export type healthHandlerResponse = (healthHandlerResponseSuccess)
+export type healthHandlerResponse = healthHandlerResponseSuccess;
 
 export const getHealthHandlerUrl = () => {
+  return `/health`;
+};
 
-
-  
-
-  return `/health`
-}
-
-export const healthHandler = async ( options?: RequestInit): Promise<healthHandlerResponse> => {
-  
-  const res = await fetch(getHealthHandlerUrl(),
-  {      
+export const healthHandler = async (
+  options?: RequestInit
+): Promise<healthHandlerResponse> => {
+  const res = await fetch(getHealthHandlerUrl(), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: healthHandlerResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as healthHandlerResponse
-}
+
+  const data: healthHandlerResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as healthHandlerResponse;
+};

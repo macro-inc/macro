@@ -6,12 +6,12 @@
  */
 
 export type GetChannelParams = {
-/**
- * ISO8601 timestamp to fetch messages since
- */
-since?: string;
-/**
- * Maximum number of messages to fetch
- */
-limit?: number;
+  /**
+   * ISO8601 timestamp to fetch messages since
+   */
+  since?: string;
+  /**
+   * Maximum number of messages to fetch
+   */
+  limit?: number;
 };

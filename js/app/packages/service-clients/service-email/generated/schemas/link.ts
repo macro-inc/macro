@@ -4,9 +4,10 @@
  * email_service
  * OpenAPI spec version: 0.1.0
  */
-import type { UserProvider } from './userProvider';
-import type { Settings } from './settings';
+
 import type { LinkSignature } from './linkSignature';
+import type { Settings } from './settings';
+import type { UserProvider } from './userProvider';
 
 export interface Link {
   created_at: string;

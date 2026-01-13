@@ -7,163 +7,177 @@
 import type {
   BatchSendMessageBody,
   SendMessageBody,
-  SendMessageResponse
+  SendMessageResponse,
 } from './schemas';
 
 export type batchSendMessageHandlerResponse200 = {
-  data: SendMessageResponse
-  status: 200
-}
+  data: SendMessageResponse;
+  status: 200;
+};
 
 export type batchSendMessageHandlerResponse500 = {
-  data: string
-  status: 500
-}
-    
-export type batchSendMessageHandlerResponseSuccess = (batchSendMessageHandlerResponse200) & {
-  headers: Headers;
-};
-export type batchSendMessageHandlerResponseError = (batchSendMessageHandlerResponse500) & {
-  headers: Headers;
+  data: string;
+  status: 500;
 };
 
-export type batchSendMessageHandlerResponse = (batchSendMessageHandlerResponseSuccess | batchSendMessageHandlerResponseError)
+export type batchSendMessageHandlerResponseSuccess =
+  batchSendMessageHandlerResponse200 & {
+    headers: Headers;
+  };
+export type batchSendMessageHandlerResponseError =
+  batchSendMessageHandlerResponse500 & {
+    headers: Headers;
+  };
+
+export type batchSendMessageHandlerResponse =
+  | batchSendMessageHandlerResponseSuccess
+  | batchSendMessageHandlerResponseError;
 
 export const getBatchSendMessageHandlerUrl = () => {
+  return `/batch_send`;
+};
 
-
-  
-
-  return `/batch_send`
-}
-
-export const batchSendMessageHandler = async (batchSendMessageBody: BatchSendMessageBody, options?: RequestInit): Promise<batchSendMessageHandlerResponse> => {
-  
-  const res = await fetch(getBatchSendMessageHandlerUrl(),
-  {      
+export const batchSendMessageHandler = async (
+  batchSendMessageBody: BatchSendMessageBody,
+  options?: RequestInit
+): Promise<batchSendMessageHandlerResponse> => {
+  const res = await fetch(getBatchSendMessageHandlerUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      batchSendMessageBody,)
-  }
-)
+    body: JSON.stringify(batchSendMessageBody),
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: batchSendMessageHandlerResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as batchSendMessageHandlerResponse
-}
 
-
+  const data: batchSendMessageHandlerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as batchSendMessageHandlerResponse;
+};
 
 export type sendMessageHandlerResponse201 = {
-  data: SendMessageResponse
-  status: 201
-}
+  data: SendMessageResponse;
+  status: 201;
+};
 
 export type sendMessageHandlerResponse401 = {
-  data: string
-  status: 401
-}
+  data: string;
+  status: 401;
+};
 
 export type sendMessageHandlerResponse404 = {
-  data: string
-  status: 404
-}
+  data: string;
+  status: 404;
+};
 
 export type sendMessageHandlerResponse500 = {
-  data: string
-  status: 500
-}
-    
-export type sendMessageHandlerResponseSuccess = (sendMessageHandlerResponse201) & {
-  headers: Headers;
-};
-export type sendMessageHandlerResponseError = (sendMessageHandlerResponse401 | sendMessageHandlerResponse404 | sendMessageHandlerResponse500) & {
-  headers: Headers;
+  data: string;
+  status: 500;
 };
 
-export type sendMessageHandlerResponse = (sendMessageHandlerResponseSuccess | sendMessageHandlerResponseError)
+export type sendMessageHandlerResponseSuccess =
+  sendMessageHandlerResponse201 & {
+    headers: Headers;
+  };
+export type sendMessageHandlerResponseError = (
+  | sendMessageHandlerResponse401
+  | sendMessageHandlerResponse404
+  | sendMessageHandlerResponse500
+) & {
+  headers: Headers;
+};
 
-export const getSendMessageHandlerUrl = (entityType: string,
-    entityId: string,) => {
+export type sendMessageHandlerResponse =
+  | sendMessageHandlerResponseSuccess
+  | sendMessageHandlerResponseError;
 
+export const getSendMessageHandlerUrl = (
+  entityType: string,
+  entityId: string
+) => {
+  return `/message/send/${entityType}/${entityId}`;
+};
 
-  
-
-  return `/message/send/${entityType}/${entityId}`
-}
-
-export const sendMessageHandler = async (entityType: string,
-    entityId: string,
-    sendMessageBody: SendMessageBody, options?: RequestInit): Promise<sendMessageHandlerResponse> => {
-  
-  const res = await fetch(getSendMessageHandlerUrl(entityType,entityId),
-  {      
+export const sendMessageHandler = async (
+  entityType: string,
+  entityId: string,
+  sendMessageBody: SendMessageBody,
+  options?: RequestInit
+): Promise<sendMessageHandlerResponse> => {
+  const res = await fetch(getSendMessageHandlerUrl(entityType, entityId), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      sendMessageBody,)
-  }
-)
+    body: JSON.stringify(sendMessageBody),
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: sendMessageHandlerResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as sendMessageHandlerResponse
-}
 
-
+  const data: sendMessageHandlerResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as sendMessageHandlerResponse;
+};
 
 export type getEntityHandlerResponse200 = {
-  data: string[]
-  status: 200
-}
+  data: string[];
+  status: 200;
+};
 
 export type getEntityHandlerResponse401 = {
-  data: string
-  status: 401
-}
+  data: string;
+  status: 401;
+};
 
 export type getEntityHandlerResponse500 = {
-  data: string
-  status: 500
-}
-    
-export type getEntityHandlerResponseSuccess = (getEntityHandlerResponse200) & {
-  headers: Headers;
-};
-export type getEntityHandlerResponseError = (getEntityHandlerResponse401 | getEntityHandlerResponse500) & {
-  headers: Headers;
+  data: string;
+  status: 500;
 };
 
-export type getEntityHandlerResponse = (getEntityHandlerResponseSuccess | getEntityHandlerResponseError)
+export type getEntityHandlerResponseSuccess = getEntityHandlerResponse200 & {
+  headers: Headers;
+};
+export type getEntityHandlerResponseError = (
+  | getEntityHandlerResponse401
+  | getEntityHandlerResponse500
+) & {
+  headers: Headers;
+};
 
-export const getGetEntityHandlerUrl = (entityType: string,
-    entityId: string,) => {
+export type getEntityHandlerResponse =
+  | getEntityHandlerResponseSuccess
+  | getEntityHandlerResponseError;
 
+export const getGetEntityHandlerUrl = (
+  entityType: string,
+  entityId: string
+) => {
+  return `/track/${entityType}/${entityId}`;
+};
 
-  
-
-  return `/track/${entityType}/${entityId}`
-}
-
-export const getEntityHandler = async (entityType: string,
-    entityId: string, options?: RequestInit): Promise<getEntityHandlerResponse> => {
-  
-  const res = await fetch(getGetEntityHandlerUrl(entityType,entityId),
-  {      
+export const getEntityHandler = async (
+  entityType: string,
+  entityId: string,
+  options?: RequestInit
+): Promise<getEntityHandlerResponse> => {
+  const res = await fetch(getGetEntityHandlerUrl(entityType, entityId), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: getEntityHandlerResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getEntityHandlerResponse
-}
+
+  const data: getEntityHandlerResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getEntityHandlerResponse;
+};

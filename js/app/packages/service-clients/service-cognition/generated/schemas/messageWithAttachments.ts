@@ -4,10 +4,9 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
-import type { Summary } from './summary';
 
-export interface MessageWithAttachmentSummary {
-  attachment_summaries: Summary[];
+export interface MessageWithAttachments {
+  attachmentIds: string[];
   content: string;
   date: string;
 }

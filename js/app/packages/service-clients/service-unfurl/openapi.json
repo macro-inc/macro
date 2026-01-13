@@ -4,7 +4,9 @@
     "title": "unfurl_service",
     "description": "",
     "termsOfService": "https://macro.com/terms",
-    "license": { "name": "" },
+    "license": {
+      "name": ""
+    },
     "version": "0.1.0"
   },
   "paths": {
@@ -18,7 +20,9 @@
             "in": "query",
             "description": "The url to proxy from",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {}
@@ -34,7 +38,9 @@
             "in": "query",
             "description": "URL to unfold",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -42,21 +48,41 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/GetUnfurlResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/GetUnfurlResponse"
+                }
               }
             }
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -69,7 +95,9 @@
           "description": "JSON list of URLs",
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/GetUnfurlBulkBody" }
+              "schema": {
+                "$ref": "#/components/schemas/GetUnfurlBulkBody"
+              }
             }
           },
           "required": true
@@ -87,15 +115,33 @@
           },
           "401": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -107,49 +153,88 @@
         "type": "object",
         "required": ["url_list"],
         "properties": {
-          "url_list": { "type": "array", "items": { "type": "string" } }
+          "url_list": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
         }
       },
       "GetUnfurlBulkResponse": {
         "type": "object",
         "required": ["responses"],
-        "properties": { "responses": { "$ref": "#/components/schemas/Vec" } }
+        "properties": {
+          "responses": {
+            "$ref": "#/components/schemas/Vec"
+          }
+        }
       },
       "GetUnfurlQueryParams": {
         "type": "object",
         "required": ["url"],
-        "properties": { "url": { "type": "string" } }
+        "properties": {
+          "url": {
+            "type": "string"
+          }
+        }
       },
       "GetUnfurlResponse": {
         "type": "object",
         "required": ["url", "title"],
         "properties": {
-          "description": { "type": ["string", "null"] },
-          "favicon_url": { "type": ["string", "null"] },
-          "image_url": { "type": ["string", "null"] },
-          "title": { "type": "string" },
-          "url": { "type": "string" }
+          "description": {
+            "type": ["string", "null"]
+          },
+          "favicon_url": {
+            "type": ["string", "null"]
+          },
+          "image_url": {
+            "type": ["string", "null"]
+          },
+          "title": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
         }
       },
       "ProxyParams": {
         "type": "object",
         "required": ["url"],
-        "properties": { "url": { "type": "string" } }
+        "properties": {
+          "url": {
+            "type": "string"
+          }
+        }
       },
       "Vec": {
         "type": "array",
         "items": {
           "oneOf": [
-            { "type": "null" },
+            {
+              "type": "null"
+            },
             {
               "type": "object",
               "required": ["url", "title"],
               "properties": {
-                "description": { "type": ["string", "null"] },
-                "favicon_url": { "type": ["string", "null"] },
-                "image_url": { "type": ["string", "null"] },
-                "title": { "type": "string" },
-                "url": { "type": "string" }
+                "description": {
+                  "type": ["string", "null"]
+                },
+                "favicon_url": {
+                  "type": ["string", "null"]
+                },
+                "image_url": {
+                  "type": ["string", "null"]
+                },
+                "title": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                }
               }
             }
           ]
@@ -157,5 +242,10 @@
       }
     }
   },
-  "tags": [{ "name": "macro unfurl service", "description": "Unfurl Service" }]
+  "tags": [
+    {
+      "name": "macro unfurl service",
+      "description": "Unfurl Service"
+    }
+  ]
 }

@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type OrganizationUserRole = typeof OrganizationUserRole[keyof typeof OrganizationUserRole];
-
+export type OrganizationUserRole =
+  (typeof OrganizationUserRole)[keyof typeof OrganizationUserRole];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const OrganizationUserRole = {

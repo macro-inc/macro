@@ -4,5 +4,8 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
+import type { ToolSchema } from './toolSchema';
 
-export type DocumentSummaryId = string | null;
+export interface ToolSchemas {
+  schemas: ToolSchema[];
+}

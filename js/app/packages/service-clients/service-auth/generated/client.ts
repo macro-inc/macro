@@ -22,9 +22,9 @@ import type {
   InviteToTeamRequest,
   MacroApiTokenParams,
   MacroApiTokenResponse,
-  PasswordRequest,
   PasswordlessCallbackParams,
   PasswordlessRequest,
+  PasswordRequest,
   PatchTeamRequest,
   PatchUserGroupRequest,
   PatchUserOnboardingRequest,
@@ -45,253 +45,252 @@ import type {
   UserNames,
   UserOrganizationResponse,
   UserQuota,
-  UserTokensResponse
+  UserTokensResponse,
 } from './schemas';
 
 /**
  * @summary Verifies the user's primary email for FusionAuth
  */
 export type verifyFusionauthUserEmailResponse200 = {
-  data: EmptyResponse
-  status: 200
-}
+  data: EmptyResponse;
+  status: 200;
+};
 
 export type verifyFusionauthUserEmailResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type verifyFusionauthUserEmailResponseSuccess = (verifyFusionauthUserEmailResponse200) & {
-  headers: Headers;
-};
-export type verifyFusionauthUserEmailResponseError = (verifyFusionauthUserEmailResponse500) & {
-  headers: Headers;
+  data: ErrorResponse;
+  status: 500;
 };
 
-export type verifyFusionauthUserEmailResponse = (verifyFusionauthUserEmailResponseSuccess | verifyFusionauthUserEmailResponseError)
+export type verifyFusionauthUserEmailResponseSuccess =
+  verifyFusionauthUserEmailResponse200 & {
+    headers: Headers;
+  };
+export type verifyFusionauthUserEmailResponseError =
+  verifyFusionauthUserEmailResponse500 & {
+    headers: Headers;
+  };
 
-export const getVerifyFusionauthUserEmailUrl = (verificationId: string,) => {
+export type verifyFusionauthUserEmailResponse =
+  | verifyFusionauthUserEmailResponseSuccess
+  | verifyFusionauthUserEmailResponseError;
 
+export const getVerifyFusionauthUserEmailUrl = (verificationId: string) => {
+  return `/email/fusionauth/verify/${verificationId}`;
+};
 
-  
-
-  return `/email/fusionauth/verify/${verificationId}`
-}
-
-export const verifyFusionauthUserEmail = async (verificationId: string, options?: RequestInit): Promise<verifyFusionauthUserEmailResponse> => {
-  
-  const res = await fetch(getVerifyFusionauthUserEmailUrl(verificationId),
-  {      
+export const verifyFusionauthUserEmail = async (
+  verificationId: string,
+  options?: RequestInit
+): Promise<verifyFusionauthUserEmailResponse> => {
+  const res = await fetch(getVerifyFusionauthUserEmailUrl(verificationId), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: verifyFusionauthUserEmailResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as verifyFusionauthUserEmailResponse
-}
 
-
+  const data: verifyFusionauthUserEmailResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as verifyFusionauthUserEmailResponse;
+};
 
 /**
  * @summary Resend the user's primary email verification for FusionAuth
  */
 export type resendFusionauthVerifyUserEmailResponse200 = {
-  data: EmptyResponse
-  status: 200
-}
+  data: EmptyResponse;
+  status: 200;
+};
 
 export type resendFusionauthVerifyUserEmailResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type resendFusionauthVerifyUserEmailResponseSuccess = (resendFusionauthVerifyUserEmailResponse200) & {
-  headers: Headers;
-};
-export type resendFusionauthVerifyUserEmailResponseError = (resendFusionauthVerifyUserEmailResponse500) & {
-  headers: Headers;
+  data: ErrorResponse;
+  status: 500;
 };
 
-export type resendFusionauthVerifyUserEmailResponse = (resendFusionauthVerifyUserEmailResponseSuccess | resendFusionauthVerifyUserEmailResponseError)
+export type resendFusionauthVerifyUserEmailResponseSuccess =
+  resendFusionauthVerifyUserEmailResponse200 & {
+    headers: Headers;
+  };
+export type resendFusionauthVerifyUserEmailResponseError =
+  resendFusionauthVerifyUserEmailResponse500 & {
+    headers: Headers;
+  };
+
+export type resendFusionauthVerifyUserEmailResponse =
+  | resendFusionauthVerifyUserEmailResponseSuccess
+  | resendFusionauthVerifyUserEmailResponseError;
 
 export const getResendFusionauthVerifyUserEmailUrl = () => {
+  return `/email/fusionauth_resend`;
+};
 
-
-  
-
-  return `/email/fusionauth_resend`
-}
-
-export const resendFusionauthVerifyUserEmail = async (resendFusionauthVerifyUserEmailRequest: ResendFusionauthVerifyUserEmailRequest, options?: RequestInit): Promise<resendFusionauthVerifyUserEmailResponse> => {
-  
-  const res = await fetch(getResendFusionauthVerifyUserEmailUrl(),
-  {      
+export const resendFusionauthVerifyUserEmail = async (
+  resendFusionauthVerifyUserEmailRequest: ResendFusionauthVerifyUserEmailRequest,
+  options?: RequestInit
+): Promise<resendFusionauthVerifyUserEmailResponse> => {
+  const res = await fetch(getResendFusionauthVerifyUserEmailUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      resendFusionauthVerifyUserEmailRequest,)
-  }
-)
+    body: JSON.stringify(resendFusionauthVerifyUserEmailRequest),
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: resendFusionauthVerifyUserEmailResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as resendFusionauthVerifyUserEmailResponse
-}
 
-
+  const data: resendFusionauthVerifyUserEmailResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as resendFusionauthVerifyUserEmailResponse;
+};
 
 /**
  * @summary Generates an email link for the user to verify their email address.
  */
 export type generateEmailLinkResponse200 = {
-  data: EmptyResponse
-  status: 200
-}
+  data: EmptyResponse;
+  status: 200;
+};
 
 export type generateEmailLinkResponse400 = {
-  data: ErrorResponse
-  status: 400
-}
+  data: ErrorResponse;
+  status: 400;
+};
 
 export type generateEmailLinkResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type generateEmailLinkResponseSuccess = (generateEmailLinkResponse200) & {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type generateEmailLinkResponseSuccess = generateEmailLinkResponse200 & {
   headers: Headers;
 };
-export type generateEmailLinkResponseError = (generateEmailLinkResponse400 | generateEmailLinkResponse500) & {
+export type generateEmailLinkResponseError = (
+  | generateEmailLinkResponse400
+  | generateEmailLinkResponse500
+) & {
   headers: Headers;
 };
 
-export type generateEmailLinkResponse = (generateEmailLinkResponseSuccess | generateEmailLinkResponseError)
+export type generateEmailLinkResponse =
+  | generateEmailLinkResponseSuccess
+  | generateEmailLinkResponseError;
 
 export const getGenerateEmailLinkUrl = () => {
+  return `/email/generate/link`;
+};
 
-
-  
-
-  return `/email/generate/link`
-}
-
-export const generateEmailLink = async (generateEmailLinkRequest: GenerateEmailLinkRequest, options?: RequestInit): Promise<generateEmailLinkResponse> => {
-  
-  const res = await fetch(getGenerateEmailLinkUrl(),
-  {      
+export const generateEmailLink = async (
+  generateEmailLinkRequest: GenerateEmailLinkRequest,
+  options?: RequestInit
+): Promise<generateEmailLinkResponse> => {
+  const res = await fetch(getGenerateEmailLinkUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      generateEmailLinkRequest,)
-  }
-)
+    body: JSON.stringify(generateEmailLinkRequest),
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: generateEmailLinkResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as generateEmailLinkResponse
-}
 
-
+  const data: generateEmailLinkResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as generateEmailLinkResponse;
+};
 
 /**
  * @summary Verifies the user's email for a user profile
  */
 export type verifyEmailLinkResponse200 = {
-  data: EmptyResponse
-  status: 200
-}
+  data: EmptyResponse;
+  status: 200;
+};
 
 export type verifyEmailLinkResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type verifyEmailLinkResponseSuccess = (verifyEmailLinkResponse200) & {
-  headers: Headers;
-};
-export type verifyEmailLinkResponseError = (verifyEmailLinkResponse500) & {
-  headers: Headers;
+  data: ErrorResponse;
+  status: 500;
 };
 
-export type verifyEmailLinkResponse = (verifyEmailLinkResponseSuccess | verifyEmailLinkResponseError)
+export type verifyEmailLinkResponseSuccess = verifyEmailLinkResponse200 & {
+  headers: Headers;
+};
+export type verifyEmailLinkResponseError = verifyEmailLinkResponse500 & {
+  headers: Headers;
+};
 
-export const getVerifyEmailLinkUrl = (verificationId: string,) => {
+export type verifyEmailLinkResponse =
+  | verifyEmailLinkResponseSuccess
+  | verifyEmailLinkResponseError;
 
+export const getVerifyEmailLinkUrl = (verificationId: string) => {
+  return `/email/verify/${verificationId}`;
+};
 
-  
-
-  return `/email/verify/${verificationId}`
-}
-
-export const verifyEmailLink = async (verificationId: string, options?: RequestInit): Promise<verifyEmailLinkResponse> => {
-  
-  const res = await fetch(getVerifyEmailLinkUrl(verificationId),
-  {      
+export const verifyEmailLink = async (
+  verificationId: string,
+  options?: RequestInit
+): Promise<verifyEmailLinkResponse> => {
+  const res = await fetch(getVerifyEmailLinkUrl(verificationId), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: verifyEmailLinkResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as verifyEmailLinkResponse
-}
 
-
+  const data: verifyEmailLinkResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as verifyEmailLinkResponse;
+};
 
 /**
  * @summary Health check
  */
 export type healthHandlerResponse200 = {
-  data: EmptyResponse
-  status: 200
-}
-    
-export type healthHandlerResponseSuccess = (healthHandlerResponse200) & {
+  data: EmptyResponse;
+  status: 200;
+};
+
+export type healthHandlerResponseSuccess = healthHandlerResponse200 & {
   headers: Headers;
 };
-;
 
-export type healthHandlerResponse = (healthHandlerResponseSuccess)
+export type healthHandlerResponse = healthHandlerResponseSuccess;
 
 export const getHealthHandlerUrl = () => {
+  return `/health`;
+};
 
-
-  
-
-  return `/health`
-}
-
-export const healthHandler = async ( options?: RequestInit): Promise<healthHandlerResponse> => {
-  
-  const res = await fetch(getHealthHandlerUrl(),
-  {      
+export const healthHandler = async (
+  options?: RequestInit
+): Promise<healthHandlerResponse> => {
+  const res = await fetch(getHealthHandlerUrl(), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: healthHandlerResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as healthHandlerResponse
-}
 
-
+  const data: healthHandlerResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as healthHandlerResponse;
+};
 
 /**
  * @summary Generates a macro-api-token using the user's macro-access-token
@@ -301,62 +300,68 @@ Authorization: Bearer <access_token>
 This returns a new macro-api-token
  */
 export type macroApiTokenResponse200 = {
-  data: MacroApiTokenResponse
-  status: 200
-}
+  data: MacroApiTokenResponse;
+  status: 200;
+};
 
 export type macroApiTokenResponse401 = {
-  data: string
-  status: 401
-}
+  data: string;
+  status: 401;
+};
 
 export type macroApiTokenResponse500 = {
-  data: string
-  status: 500
-}
-    
-export type macroApiTokenResponseSuccess = (macroApiTokenResponse200) & {
+  data: string;
+  status: 500;
+};
+
+export type macroApiTokenResponseSuccess = macroApiTokenResponse200 & {
   headers: Headers;
 };
-export type macroApiTokenResponseError = (macroApiTokenResponse401 | macroApiTokenResponse500) & {
+export type macroApiTokenResponseError = (
+  | macroApiTokenResponse401
+  | macroApiTokenResponse500
+) & {
   headers: Headers;
 };
 
-export type macroApiTokenResponse = (macroApiTokenResponseSuccess | macroApiTokenResponseError)
+export type macroApiTokenResponse =
+  | macroApiTokenResponseSuccess
+  | macroApiTokenResponseError;
 
-export const getMacroApiTokenUrl = (params: MacroApiTokenParams,) => {
+export const getMacroApiTokenUrl = (params: MacroApiTokenParams) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
-    
     if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
     }
   });
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/jwt/macro_api_token?${stringifiedParams}` : `/jwt/macro_api_token`
-}
+  return stringifiedParams.length > 0
+    ? `/jwt/macro_api_token?${stringifiedParams}`
+    : `/jwt/macro_api_token`;
+};
 
-export const macroApiToken = async (params: MacroApiTokenParams, options?: RequestInit): Promise<macroApiTokenResponse> => {
-  
-  const res = await fetch(getMacroApiTokenUrl(params),
-  {      
+export const macroApiToken = async (
+  params: MacroApiTokenParams,
+  options?: RequestInit
+): Promise<macroApiTokenResponse> => {
+  const res = await fetch(getMacroApiTokenUrl(params), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: macroApiTokenResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as macroApiTokenResponse
-}
 
-
+  const data: macroApiTokenResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as macroApiTokenResponse;
+};
 
 /**
  * @summary Refreshes a JWT token
@@ -367,412 +372,414 @@ x-macro-refresh-token: <refresh_token>
 This returns the cookies with the new access and refresh token
  */
 export type refreshResponse200 = {
-  data: UserTokensResponse
-  status: 200
-}
+  data: UserTokensResponse;
+  status: 200;
+};
 
 export type refreshResponse400 = {
-  data: string
-  status: 400
-}
+  data: string;
+  status: 400;
+};
 
 export type refreshResponse401 = {
-  data: string
-  status: 401
-}
+  data: string;
+  status: 401;
+};
 
 export type refreshResponse500 = {
-  data: string
-  status: 500
-}
-    
-export type refreshResponseSuccess = (refreshResponse200) & {
+  data: string;
+  status: 500;
+};
+
+export type refreshResponseSuccess = refreshResponse200 & {
   headers: Headers;
 };
-export type refreshResponseError = (refreshResponse400 | refreshResponse401 | refreshResponse500) & {
+export type refreshResponseError = (
+  | refreshResponse400
+  | refreshResponse401
+  | refreshResponse500
+) & {
   headers: Headers;
 };
 
-export type refreshResponse = (refreshResponseSuccess | refreshResponseError)
+export type refreshResponse = refreshResponseSuccess | refreshResponseError;
 
 export const getRefreshUrl = () => {
+  return `/jwt/refresh`;
+};
 
-
-  
-
-  return `/jwt/refresh`
-}
-
-export const refresh = async ( options?: RequestInit): Promise<refreshResponse> => {
-  
-  const res = await fetch(getRefreshUrl(),
-  {      
+export const refresh = async (
+  options?: RequestInit
+): Promise<refreshResponse> => {
+  const res = await fetch(getRefreshUrl(), {
     ...options,
-    method: 'POST'
-    
-    
-  }
-)
+    method: 'POST',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: refreshResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as refreshResponse
-}
 
-
+  const data: refreshResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as refreshResponse;
+};
 
 /**
  * @summary Initiates a link for a user
  */
 export type createInProgressLinkResponse200 = {
-  data: CreateInProgressLinkResponse
-  status: 200
-}
+  data: CreateInProgressLinkResponse;
+  status: 200;
+};
 
 export type createInProgressLinkResponse400 = {
-  data: ErrorResponse
-  status: 400
-}
+  data: ErrorResponse;
+  status: 400;
+};
 
 export type createInProgressLinkResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type createInProgressLinkResponse429 = {
-  data: ErrorResponse
-  status: 429
-}
+  data: ErrorResponse;
+  status: 429;
+};
 
 export type createInProgressLinkResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type createInProgressLinkResponseSuccess = (createInProgressLinkResponse200) & {
-  headers: Headers;
+  data: ErrorResponse;
+  status: 500;
 };
-export type createInProgressLinkResponseError = (createInProgressLinkResponse400 | createInProgressLinkResponse401 | createInProgressLinkResponse429 | createInProgressLinkResponse500) & {
+
+export type createInProgressLinkResponseSuccess =
+  createInProgressLinkResponse200 & {
+    headers: Headers;
+  };
+export type createInProgressLinkResponseError = (
+  | createInProgressLinkResponse400
+  | createInProgressLinkResponse401
+  | createInProgressLinkResponse429
+  | createInProgressLinkResponse500
+) & {
   headers: Headers;
 };
 
-export type createInProgressLinkResponse = (createInProgressLinkResponseSuccess | createInProgressLinkResponseError)
+export type createInProgressLinkResponse =
+  | createInProgressLinkResponseSuccess
+  | createInProgressLinkResponseError;
 
 export const getCreateInProgressLinkUrl = () => {
+  return `/link`;
+};
 
-
-  
-
-  return `/link`
-}
-
-export const createInProgressLink = async ( options?: RequestInit): Promise<createInProgressLinkResponse> => {
-  
-  const res = await fetch(getCreateInProgressLinkUrl(),
-  {      
+export const createInProgressLink = async (
+  options?: RequestInit
+): Promise<createInProgressLinkResponse> => {
+  const res = await fetch(getCreateInProgressLinkUrl(), {
     ...options,
-    method: 'POST'
-    
-    
-  }
-)
+    method: 'POST',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: createInProgressLinkResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as createInProgressLinkResponse
-}
 
-
+  const data: createInProgressLinkResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as createInProgressLinkResponse;
+};
 
 /**
  * @summary Completes the apple login flow
  */
 export type appleLoginResponse200 = {
-  data: EmptyResponse
-  status: 200
-}
+  data: EmptyResponse;
+  status: 200;
+};
 
 export type appleLoginResponse400 = {
-  data: ErrorResponse
-  status: 400
-}
+  data: ErrorResponse;
+  status: 400;
+};
 
 export type appleLoginResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type appleLoginResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type appleLoginResponseSuccess = (appleLoginResponse200) & {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type appleLoginResponseSuccess = appleLoginResponse200 & {
   headers: Headers;
 };
-export type appleLoginResponseError = (appleLoginResponse400 | appleLoginResponse401 | appleLoginResponse500) & {
+export type appleLoginResponseError = (
+  | appleLoginResponse400
+  | appleLoginResponse401
+  | appleLoginResponse500
+) & {
   headers: Headers;
 };
 
-export type appleLoginResponse = (appleLoginResponseSuccess | appleLoginResponseError)
+export type appleLoginResponse =
+  | appleLoginResponseSuccess
+  | appleLoginResponseError;
 
 export const getAppleLoginUrl = () => {
+  return `/login/apple`;
+};
 
-
-  
-
-  return `/login/apple`
-}
-
-export const appleLogin = async (appleLoginRequest: AppleLoginRequest, options?: RequestInit): Promise<appleLoginResponse> => {
-  
-  const res = await fetch(getAppleLoginUrl(),
-  {      
+export const appleLogin = async (
+  appleLoginRequest: AppleLoginRequest,
+  options?: RequestInit
+): Promise<appleLoginResponse> => {
+  const res = await fetch(getAppleLoginUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      appleLoginRequest,)
-  }
-)
+    body: JSON.stringify(appleLoginRequest),
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: appleLoginResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as appleLoginResponse
-}
 
-
+  const data: appleLoginResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as appleLoginResponse;
+};
 
 /**
  * @summary Performs a password login
  */
 export type passwordLoginResponse200 = {
-  data: UserTokensResponse
-  status: 200
-}
+  data: UserTokensResponse;
+  status: 200;
+};
 
 export type passwordLoginResponse400 = {
-  data: ErrorResponse
-  status: 400
-}
+  data: ErrorResponse;
+  status: 400;
+};
 
 export type passwordLoginResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type passwordLoginResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type passwordLoginResponseSuccess = (passwordLoginResponse200) & {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type passwordLoginResponseSuccess = passwordLoginResponse200 & {
   headers: Headers;
 };
-export type passwordLoginResponseError = (passwordLoginResponse400 | passwordLoginResponse401 | passwordLoginResponse500) & {
+export type passwordLoginResponseError = (
+  | passwordLoginResponse400
+  | passwordLoginResponse401
+  | passwordLoginResponse500
+) & {
   headers: Headers;
 };
 
-export type passwordLoginResponse = (passwordLoginResponseSuccess | passwordLoginResponseError)
+export type passwordLoginResponse =
+  | passwordLoginResponseSuccess
+  | passwordLoginResponseError;
 
 export const getPasswordLoginUrl = () => {
+  return `/login/password`;
+};
 
-
-  
-
-  return `/login/password`
-}
-
-export const passwordLogin = async (passwordRequest: PasswordRequest, options?: RequestInit): Promise<passwordLoginResponse> => {
-  
-  const res = await fetch(getPasswordLoginUrl(),
-  {      
+export const passwordLogin = async (
+  passwordRequest: PasswordRequest,
+  options?: RequestInit
+): Promise<passwordLoginResponse> => {
+  const res = await fetch(getPasswordLoginUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      passwordRequest,)
-  }
-)
+    body: JSON.stringify(passwordRequest),
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: passwordLoginResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as passwordLoginResponse
-}
 
-
+  const data: passwordLoginResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as passwordLoginResponse;
+};
 
 /**
  * @summary Initiates a passwordless login
  */
 export type passwordlessLoginResponse200 = {
-  data: EmptyResponse
-  status: 200
-}
+  data: EmptyResponse;
+  status: 200;
+};
 
 export type passwordlessLoginResponse202 = {
-  data: SsoRequiredResponse
-  status: 202
-}
+  data: SsoRequiredResponse;
+  status: 202;
+};
 
 export type passwordlessLoginResponse400 = {
-  data: string
-  status: 400
-}
+  data: string;
+  status: 400;
+};
 
 export type passwordlessLoginResponse403 = {
-  data: string
-  status: 403
-}
+  data: string;
+  status: 403;
+};
 
 export type passwordlessLoginResponse500 = {
-  data: string
-  status: 500
-}
-    
-export type passwordlessLoginResponseSuccess = (passwordlessLoginResponse200 | passwordlessLoginResponse202) & {
+  data: string;
+  status: 500;
+};
+
+export type passwordlessLoginResponseSuccess = (
+  | passwordlessLoginResponse200
+  | passwordlessLoginResponse202
+) & {
   headers: Headers;
 };
-export type passwordlessLoginResponseError = (passwordlessLoginResponse400 | passwordlessLoginResponse403 | passwordlessLoginResponse500) & {
+export type passwordlessLoginResponseError = (
+  | passwordlessLoginResponse400
+  | passwordlessLoginResponse403
+  | passwordlessLoginResponse500
+) & {
   headers: Headers;
 };
 
-export type passwordlessLoginResponse = (passwordlessLoginResponseSuccess | passwordlessLoginResponseError)
+export type passwordlessLoginResponse =
+  | passwordlessLoginResponseSuccess
+  | passwordlessLoginResponseError;
 
 export const getPasswordlessLoginUrl = () => {
+  return `/login/passwordless`;
+};
 
-
-  
-
-  return `/login/passwordless`
-}
-
-export const passwordlessLogin = async (passwordlessRequest: PasswordlessRequest, options?: RequestInit): Promise<passwordlessLoginResponse> => {
-  
-  const res = await fetch(getPasswordlessLoginUrl(),
-  {      
+export const passwordlessLogin = async (
+  passwordlessRequest: PasswordlessRequest,
+  options?: RequestInit
+): Promise<passwordlessLoginResponse> => {
+  const res = await fetch(getPasswordlessLoginUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      passwordlessRequest,)
-  }
-)
+    body: JSON.stringify(passwordlessRequest),
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: passwordlessLoginResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as passwordlessLoginResponse
-}
 
-
+  const data: passwordlessLoginResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as passwordlessLoginResponse;
+};
 
 /**
  * @summary Initiates an SSO login
  */
 export type ssoLoginResponse200 = {
-  data: void
-  status: 200
-}
+  data: void;
+  status: 200;
+};
 
 export type ssoLoginResponse400 = {
-  data: ErrorResponse
-  status: 400
-}
+  data: ErrorResponse;
+  status: 400;
+};
 
 export type ssoLoginResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type ssoLoginResponseSuccess = (ssoLoginResponse200) & {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type ssoLoginResponseSuccess = ssoLoginResponse200 & {
   headers: Headers;
 };
-export type ssoLoginResponseError = (ssoLoginResponse400 | ssoLoginResponse500) & {
+export type ssoLoginResponseError = (
+  | ssoLoginResponse400
+  | ssoLoginResponse500
+) & {
   headers: Headers;
 };
 
-export type ssoLoginResponse = (ssoLoginResponseSuccess | ssoLoginResponseError)
+export type ssoLoginResponse = ssoLoginResponseSuccess | ssoLoginResponseError;
 
-export const getSsoLoginUrl = (params: SsoLoginParams,) => {
+export const getSsoLoginUrl = (params: SsoLoginParams) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
-    
     if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
     }
   });
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/login/sso?${stringifiedParams}` : `/login/sso`
-}
+  return stringifiedParams.length > 0
+    ? `/login/sso?${stringifiedParams}`
+    : `/login/sso`;
+};
 
-export const ssoLogin = async (params: SsoLoginParams, options?: RequestInit): Promise<ssoLoginResponse> => {
-  
-  const res = await fetch(getSsoLoginUrl(params),
-  {      
+export const ssoLogin = async (
+  params: SsoLoginParams,
+  options?: RequestInit
+): Promise<ssoLoginResponse> => {
+  const res = await fetch(getSsoLoginUrl(params), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: ssoLoginResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as ssoLoginResponse
-}
 
-
+  const data: ssoLoginResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as ssoLoginResponse;
+};
 
 /**
  * @summary Initiates a passwordless login
  */
 export type logoutResponse200 = {
-  data: EmptyResponse
-  status: 200
-}
-    
-export type logoutResponseSuccess = (logoutResponse200) & {
+  data: EmptyResponse;
+  status: 200;
+};
+
+export type logoutResponseSuccess = logoutResponse200 & {
   headers: Headers;
 };
-;
 
-export type logoutResponse = (logoutResponseSuccess)
+export type logoutResponse = logoutResponseSuccess;
 
 export const getLogoutUrl = () => {
+  return `/logout`;
+};
 
-
-  
-
-  return `/logout`
-}
-
-export const logout = async ( options?: RequestInit): Promise<logoutResponse> => {
-  
-  const res = await fetch(getLogoutUrl(),
-  {      
+export const logout = async (
+  options?: RequestInit
+): Promise<logoutResponse> => {
+  const res = await fetch(getLogoutUrl(), {
     ...options,
-    method: 'POST'
-    
-    
-  }
-)
+    method: 'POST',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: logoutResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as logoutResponse
-}
 
-
+  const data: logoutResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as logoutResponse;
+};
 
 /**
  * @summary Creates a merge request used to verify the user's email address in order to merge their
@@ -781,892 +788,918 @@ This is different than generate_email_link which is used to verify a new email a
 new profile to a user's account.
  */
 export type createMergeRequestResponse200 = {
-  data: EmptyResponse
-  status: 200
-}
+  data: EmptyResponse;
+  status: 200;
+};
 
 export type createMergeRequestResponse400 = {
-  data: ErrorResponse
-  status: 400
-}
+  data: ErrorResponse;
+  status: 400;
+};
 
 export type createMergeRequestResponse404 = {
-  data: ErrorResponse
-  status: 404
-}
+  data: ErrorResponse;
+  status: 404;
+};
 
 export type createMergeRequestResponse429 = {
-  data: string
-  status: 429
-}
+  data: string;
+  status: 429;
+};
 
 export type createMergeRequestResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type createMergeRequestResponseSuccess = (createMergeRequestResponse200) & {
-  headers: Headers;
+  data: ErrorResponse;
+  status: 500;
 };
-export type createMergeRequestResponseError = (createMergeRequestResponse400 | createMergeRequestResponse404 | createMergeRequestResponse429 | createMergeRequestResponse500) & {
+
+export type createMergeRequestResponseSuccess =
+  createMergeRequestResponse200 & {
+    headers: Headers;
+  };
+export type createMergeRequestResponseError = (
+  | createMergeRequestResponse400
+  | createMergeRequestResponse404
+  | createMergeRequestResponse429
+  | createMergeRequestResponse500
+) & {
   headers: Headers;
 };
 
-export type createMergeRequestResponse = (createMergeRequestResponseSuccess | createMergeRequestResponseError)
+export type createMergeRequestResponse =
+  | createMergeRequestResponseSuccess
+  | createMergeRequestResponseError;
 
 export const getCreateMergeRequestUrl = () => {
+  return `/merge`;
+};
 
-
-  
-
-  return `/merge`
-}
-
-export const createMergeRequest = async (createAccountMergeRequest: CreateAccountMergeRequest, options?: RequestInit): Promise<createMergeRequestResponse> => {
-  
-  const res = await fetch(getCreateMergeRequestUrl(),
-  {      
+export const createMergeRequest = async (
+  createAccountMergeRequest: CreateAccountMergeRequest,
+  options?: RequestInit
+): Promise<createMergeRequestResponse> => {
+  const res = await fetch(getCreateMergeRequestUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      createAccountMergeRequest,)
-  }
-)
+    body: JSON.stringify(createAccountMergeRequest),
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: createMergeRequestResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as createMergeRequestResponse
-}
 
-
+  const data: createMergeRequestResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as createMergeRequestResponse;
+};
 
 /**
  * @summary Verifies the merge request
  */
 export type verifyMergeRequestResponse200 = {
-  data: EmptyResponse
-  status: 200
-}
+  data: EmptyResponse;
+  status: 200;
+};
 
 export type verifyMergeRequestResponse404 = {
-  data: ErrorResponse
-  status: 404
-}
+  data: ErrorResponse;
+  status: 404;
+};
 
 export type verifyMergeRequestResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type verifyMergeRequestResponseSuccess = (verifyMergeRequestResponse200) & {
-  headers: Headers;
-};
-export type verifyMergeRequestResponseError = (verifyMergeRequestResponse404 | verifyMergeRequestResponse500) & {
-  headers: Headers;
+  data: ErrorResponse;
+  status: 500;
 };
 
-export type verifyMergeRequestResponse = (verifyMergeRequestResponseSuccess | verifyMergeRequestResponseError)
+export type verifyMergeRequestResponseSuccess =
+  verifyMergeRequestResponse200 & {
+    headers: Headers;
+  };
+export type verifyMergeRequestResponseError = (
+  | verifyMergeRequestResponse404
+  | verifyMergeRequestResponse500
+) & {
+  headers: Headers;
+};
 
-export const getVerifyMergeRequestUrl = (code: string,) => {
+export type verifyMergeRequestResponse =
+  | verifyMergeRequestResponseSuccess
+  | verifyMergeRequestResponseError;
 
+export const getVerifyMergeRequestUrl = (code: string) => {
+  return `/merge/verify/${code}`;
+};
 
-  
-
-  return `/merge/verify/${code}`
-}
-
-export const verifyMergeRequest = async (code: string, options?: RequestInit): Promise<verifyMergeRequestResponse> => {
-  
-  const res = await fetch(getVerifyMergeRequestUrl(code),
-  {      
+export const verifyMergeRequest = async (
+  code: string,
+  options?: RequestInit
+): Promise<verifyMergeRequestResponse> => {
+  const res = await fetch(getVerifyMergeRequestUrl(code), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: verifyMergeRequestResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as verifyMergeRequestResponse
-}
 
-
+  const data: verifyMergeRequestResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as verifyMergeRequestResponse;
+};
 
 /**
  * @summary Handles oauth redirect
  */
 export type passwordlessCallbackResponse200 = {
-  data: UserTokensResponse
-  status: 200
-}
+  data: UserTokensResponse;
+  status: 200;
+};
 
 export type passwordlessCallbackResponse400 = {
-  data: string
-  status: 400
-}
+  data: string;
+  status: 400;
+};
 
 export type passwordlessCallbackResponse401 = {
-  data: string
-  status: 401
-}
+  data: string;
+  status: 401;
+};
 
 export type passwordlessCallbackResponse500 = {
-  data: string
-  status: 500
-}
-    
-export type passwordlessCallbackResponseSuccess = (passwordlessCallbackResponse200) & {
-  headers: Headers;
+  data: string;
+  status: 500;
 };
-export type passwordlessCallbackResponseError = (passwordlessCallbackResponse400 | passwordlessCallbackResponse401 | passwordlessCallbackResponse500) & {
+
+export type passwordlessCallbackResponseSuccess =
+  passwordlessCallbackResponse200 & {
+    headers: Headers;
+  };
+export type passwordlessCallbackResponseError = (
+  | passwordlessCallbackResponse400
+  | passwordlessCallbackResponse401
+  | passwordlessCallbackResponse500
+) & {
   headers: Headers;
 };
 
-export type passwordlessCallbackResponse = (passwordlessCallbackResponseSuccess | passwordlessCallbackResponseError)
+export type passwordlessCallbackResponse =
+  | passwordlessCallbackResponseSuccess
+  | passwordlessCallbackResponseError;
 
-export const getPasswordlessCallbackUrl = (code: string,
-    params: PasswordlessCallbackParams,) => {
+export const getPasswordlessCallbackUrl = (
+  code: string,
+  params: PasswordlessCallbackParams
+) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
-    
     if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
     }
   });
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/oauth/passwordless/${code}?${stringifiedParams}` : `/oauth/passwordless/${code}`
-}
+  return stringifiedParams.length > 0
+    ? `/oauth/passwordless/${code}?${stringifiedParams}`
+    : `/oauth/passwordless/${code}`;
+};
 
-export const passwordlessCallback = async (code: string,
-    params: PasswordlessCallbackParams, options?: RequestInit): Promise<passwordlessCallbackResponse> => {
-  
-  const res = await fetch(getPasswordlessCallbackUrl(code,params),
-  {      
+export const passwordlessCallback = async (
+  code: string,
+  params: PasswordlessCallbackParams,
+  options?: RequestInit
+): Promise<passwordlessCallbackResponse> => {
+  const res = await fetch(getPasswordlessCallbackUrl(code, params), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: passwordlessCallbackResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as passwordlessCallbackResponse
-}
 
-
+  const data: passwordlessCallbackResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as passwordlessCallbackResponse;
+};
 
 /**
  * @summary Handles oauth redirect
  */
 export type oauthRedirectResponse200 = {
-  data: void
-  status: 200
-}
+  data: void;
+  status: 200;
+};
 
 export type oauthRedirectResponse400 = {
-  data: string
-  status: 400
-}
+  data: string;
+  status: 400;
+};
 
 export type oauthRedirectResponse401 = {
-  data: string
-  status: 401
-}
+  data: string;
+  status: 401;
+};
 
 export type oauthRedirectResponse500 = {
-  data: string
-  status: 500
-}
-    
-export type oauthRedirectResponseSuccess = (oauthRedirectResponse200) & {
+  data: string;
+  status: 500;
+};
+
+export type oauthRedirectResponseSuccess = oauthRedirectResponse200 & {
   headers: Headers;
 };
-export type oauthRedirectResponseError = (oauthRedirectResponse400 | oauthRedirectResponse401 | oauthRedirectResponse500) & {
+export type oauthRedirectResponseError = (
+  | oauthRedirectResponse400
+  | oauthRedirectResponse401
+  | oauthRedirectResponse500
+) & {
   headers: Headers;
 };
 
-export type oauthRedirectResponse = (oauthRedirectResponseSuccess | oauthRedirectResponseError)
+export type oauthRedirectResponse =
+  | oauthRedirectResponseSuccess
+  | oauthRedirectResponseError;
 
 export const getOauthRedirectUrl = () => {
+  return `/oauth/redirect`;
+};
 
-
-  
-
-  return `/oauth/redirect`
-}
-
-export const oauthRedirect = async ( options?: RequestInit): Promise<oauthRedirectResponse> => {
-  
-  const res = await fetch(getOauthRedirectUrl(),
-  {      
+export const oauthRedirect = async (
+  options?: RequestInit
+): Promise<oauthRedirectResponse> => {
+  const res = await fetch(getOauthRedirectUrl(), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: oauthRedirectResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as oauthRedirectResponse
-}
 
-
+  const data: oauthRedirectResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as oauthRedirectResponse;
+};
 
 /**
  * @summary Custom OAuth2 callback
  */
 export type oauth2CallbackResponse200 = {
-  data: void
-  status: 200
-}
+  data: void;
+  status: 200;
+};
 
 export type oauth2CallbackResponse304 = {
-  data: ErrorResponse
-  status: 304
-}
+  data: ErrorResponse;
+  status: 304;
+};
 
 export type oauth2CallbackResponse307 = {
-  data: void
-  status: 307
-}
+  data: void;
+  status: 307;
+};
 
 export type oauth2CallbackResponse400 = {
-  data: ErrorResponse
-  status: 400
-}
+  data: ErrorResponse;
+  status: 400;
+};
 
 export type oauth2CallbackResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type oauth2CallbackResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type oauth2CallbackResponseSuccess = (oauth2CallbackResponse200) & {
-  headers: Headers;
-};
-export type oauth2CallbackResponseError = (oauth2CallbackResponse304 | oauth2CallbackResponse307 | oauth2CallbackResponse400 | oauth2CallbackResponse401 | oauth2CallbackResponse500) & {
-  headers: Headers;
+  data: ErrorResponse;
+  status: 500;
 };
 
-export type oauth2CallbackResponse = (oauth2CallbackResponseSuccess | oauth2CallbackResponseError)
+export type oauth2CallbackResponseSuccess = oauth2CallbackResponse200 & {
+  headers: Headers;
+};
+export type oauth2CallbackResponseError = (
+  | oauth2CallbackResponse304
+  | oauth2CallbackResponse307
+  | oauth2CallbackResponse400
+  | oauth2CallbackResponse401
+  | oauth2CallbackResponse500
+) & {
+  headers: Headers;
+};
 
-export const getOauth2CallbackUrl = (provider: string,) => {
+export type oauth2CallbackResponse =
+  | oauth2CallbackResponseSuccess
+  | oauth2CallbackResponseError;
 
+export const getOauth2CallbackUrl = (provider: string) => {
+  return `/oauth2/${provider}/callback`;
+};
 
-  
-
-  return `/oauth2/${provider}/callback`
-}
-
-export const oauth2Callback = async (provider: string, options?: RequestInit): Promise<oauth2CallbackResponse> => {
-  
-  const res = await fetch(getOauth2CallbackUrl(provider),
-  {      
+export const oauth2Callback = async (
+  provider: string,
+  options?: RequestInit
+): Promise<oauth2CallbackResponse> => {
+  const res = await fetch(getOauth2CallbackUrl(provider), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: oauth2CallbackResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as oauth2CallbackResponse
-}
 
-
+  const data: oauth2CallbackResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as oauth2CallbackResponse;
+};
 
 /**
  * @summary Gets all permissions
  */
 export type getPermissionsResponse200 = {
-  data: Permission[]
-  status: 200
-}
+  data: Permission[];
+  status: 200;
+};
 
 export type getPermissionsResponse401 = {
-  data: string
-  status: 401
-}
+  data: string;
+  status: 401;
+};
 
 export type getPermissionsResponse500 = {
-  data: string
-  status: 500
-}
-    
-export type getPermissionsResponseSuccess = (getPermissionsResponse200) & {
+  data: string;
+  status: 500;
+};
+
+export type getPermissionsResponseSuccess = getPermissionsResponse200 & {
   headers: Headers;
 };
-export type getPermissionsResponseError = (getPermissionsResponse401 | getPermissionsResponse500) & {
+export type getPermissionsResponseError = (
+  | getPermissionsResponse401
+  | getPermissionsResponse500
+) & {
   headers: Headers;
 };
 
-export type getPermissionsResponse = (getPermissionsResponseSuccess | getPermissionsResponseError)
+export type getPermissionsResponse =
+  | getPermissionsResponseSuccess
+  | getPermissionsResponseError;
 
 export const getGetPermissionsUrl = () => {
+  return `/permissions`;
+};
 
-
-  
-
-  return `/permissions`
-}
-
-export const getPermissions = async ( options?: RequestInit): Promise<getPermissionsResponse> => {
-  
-  const res = await fetch(getGetPermissionsUrl(),
-  {      
+export const getPermissions = async (
+  options?: RequestInit
+): Promise<getPermissionsResponse> => {
+  const res = await fetch(getGetPermissionsUrl(), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: getPermissionsResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getPermissionsResponse
-}
 
-
+  const data: getPermissionsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getPermissionsResponse;
+};
 
 /**
  * @summary Gets a list of the users permissions
  */
 export type getUserPermissionsResponse200 = {
-  data: string[]
-  status: 200
-}
+  data: string[];
+  status: 200;
+};
 
 export type getUserPermissionsResponse401 = {
-  data: string
-  status: 401
-}
+  data: string;
+  status: 401;
+};
 
 export type getUserPermissionsResponse500 = {
-  data: string
-  status: 500
-}
-    
-export type getUserPermissionsResponseSuccess = (getUserPermissionsResponse200) & {
-  headers: Headers;
+  data: string;
+  status: 500;
 };
-export type getUserPermissionsResponseError = (getUserPermissionsResponse401 | getUserPermissionsResponse500) & {
+
+export type getUserPermissionsResponseSuccess =
+  getUserPermissionsResponse200 & {
+    headers: Headers;
+  };
+export type getUserPermissionsResponseError = (
+  | getUserPermissionsResponse401
+  | getUserPermissionsResponse500
+) & {
   headers: Headers;
 };
 
-export type getUserPermissionsResponse = (getUserPermissionsResponseSuccess | getUserPermissionsResponseError)
+export type getUserPermissionsResponse =
+  | getUserPermissionsResponseSuccess
+  | getUserPermissionsResponseError;
 
 export const getGetUserPermissionsUrl = () => {
+  return `/permissions/me`;
+};
 
-
-  
-
-  return `/permissions/me`
-}
-
-export const getUserPermissions = async ( options?: RequestInit): Promise<getUserPermissionsResponse> => {
-  
-  const res = await fetch(getGetUserPermissionsUrl(),
-  {      
+export const getUserPermissions = async (
+  options?: RequestInit
+): Promise<getUserPermissionsResponse> => {
+  const res = await fetch(getGetUserPermissionsUrl(), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: getUserPermissionsResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getUserPermissionsResponse
-}
 
-
+  const data: getUserPermissionsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getUserPermissionsResponse;
+};
 
 /**
  * @summary Refreshes a JWT token
  */
 export type sessionCreationResponse200 = {
-  data: EmptyResponse
-  status: 200
-}
+  data: EmptyResponse;
+  status: 200;
+};
 
 export type sessionCreationResponse400 = {
-  data: string
-  status: 400
-}
+  data: string;
+  status: 400;
+};
 
 export type sessionCreationResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type sessionCreationResponseSuccess = (sessionCreationResponse200) & {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type sessionCreationResponseSuccess = sessionCreationResponse200 & {
   headers: Headers;
 };
-export type sessionCreationResponseError = (sessionCreationResponse400 | sessionCreationResponse500) & {
+export type sessionCreationResponseError = (
+  | sessionCreationResponse400
+  | sessionCreationResponse500
+) & {
   headers: Headers;
 };
 
-export type sessionCreationResponse = (sessionCreationResponseSuccess | sessionCreationResponseError)
+export type sessionCreationResponse =
+  | sessionCreationResponseSuccess
+  | sessionCreationResponseError;
 
 export const getSessionCreationUrl = () => {
+  return `/session`;
+};
 
-
-  
-
-  return `/session`
-}
-
-export const sessionCreation = async ( options?: RequestInit): Promise<sessionCreationResponse> => {
-  
-  const res = await fetch(getSessionCreationUrl(),
-  {      
+export const sessionCreation = async (
+  options?: RequestInit
+): Promise<sessionCreationResponse> => {
+  const res = await fetch(getSessionCreationUrl(), {
     ...options,
-    method: 'POST'
-    
-    
-  }
-)
+    method: 'POST',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: sessionCreationResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as sessionCreationResponse
-}
 
-
+  const data: sessionCreationResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as sessionCreationResponse;
+};
 
 /**
  * @summary Performs a login via session code
  */
 export type sessionLoginResponse200 = {
-  data: UserTokensResponse
-  status: 200
-}
+  data: UserTokensResponse;
+  status: 200;
+};
 
 export type sessionLoginResponse400 = {
-  data: ErrorResponse
-  status: 400
-}
+  data: ErrorResponse;
+  status: 400;
+};
 
 export type sessionLoginResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type sessionLoginResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type sessionLoginResponseSuccess = (sessionLoginResponse200) & {
-  headers: Headers;
-};
-export type sessionLoginResponseError = (sessionLoginResponse400 | sessionLoginResponse401 | sessionLoginResponse500) & {
-  headers: Headers;
+  data: ErrorResponse;
+  status: 500;
 };
 
-export type sessionLoginResponse = (sessionLoginResponseSuccess | sessionLoginResponseError)
+export type sessionLoginResponseSuccess = sessionLoginResponse200 & {
+  headers: Headers;
+};
+export type sessionLoginResponseError = (
+  | sessionLoginResponse400
+  | sessionLoginResponse401
+  | sessionLoginResponse500
+) & {
+  headers: Headers;
+};
 
-export const getSessionLoginUrl = (sessionCode: string,) => {
+export type sessionLoginResponse =
+  | sessionLoginResponseSuccess
+  | sessionLoginResponseError;
 
+export const getSessionLoginUrl = (sessionCode: string) => {
+  return `/session/login/${sessionCode}`;
+};
 
-  
-
-  return `/session/login/${sessionCode}`
-}
-
-export const sessionLogin = async (sessionCode: string, options?: RequestInit): Promise<sessionLoginResponse> => {
-  
-  const res = await fetch(getSessionLoginUrl(sessionCode),
-  {      
+export const sessionLogin = async (
+  sessionCode: string,
+  options?: RequestInit
+): Promise<sessionLoginResponse> => {
+  const res = await fetch(getSessionLoginUrl(sessionCode), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: sessionLoginResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as sessionLoginResponse
-}
 
-
+  const data: sessionLoginResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as sessionLoginResponse;
+};
 
 /**
  * @summary Creates a new team.
  */
 export type createTeamResponse200 = {
-  data: Team
-  status: 200
-}
+  data: Team;
+  status: 200;
+};
 
 export type createTeamResponse400 = {
-  data: ErrorResponse
-  status: 400
-}
+  data: ErrorResponse;
+  status: 400;
+};
 
 export type createTeamResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type createTeamResponseSuccess = (createTeamResponse200) & {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type createTeamResponseSuccess = createTeamResponse200 & {
   headers: Headers;
 };
-export type createTeamResponseError = (createTeamResponse400 | createTeamResponse500) & {
+export type createTeamResponseError = (
+  | createTeamResponse400
+  | createTeamResponse500
+) & {
   headers: Headers;
 };
 
-export type createTeamResponse = (createTeamResponseSuccess | createTeamResponseError)
+export type createTeamResponse =
+  | createTeamResponseSuccess
+  | createTeamResponseError;
 
 export const getCreateTeamUrl = () => {
+  return `/team`;
+};
 
-
-  
-
-  return `/team`
-}
-
-export const createTeam = async (createTeamRequest: CreateTeamRequest, options?: RequestInit): Promise<createTeamResponse> => {
-  
-  const res = await fetch(getCreateTeamUrl(),
-  {      
+export const createTeam = async (
+  createTeamRequest: CreateTeamRequest,
+  options?: RequestInit
+): Promise<createTeamResponse> => {
+  const res = await fetch(getCreateTeamUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      createTeamRequest,)
-  }
-)
+    body: JSON.stringify(createTeamRequest),
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: createTeamResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as createTeamResponse
-}
 
-
+  const data: createTeamResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as createTeamResponse;
+};
 
 /**
  * @summary Joins a team by accepting an invite.
  */
 export type joinTeamResponse200 = {
-  data: EmptyResponse
-  status: 200
-}
+  data: EmptyResponse;
+  status: 200;
+};
 
 export type joinTeamResponse400 = {
-  data: ErrorResponse
-  status: 400
-}
+  data: ErrorResponse;
+  status: 400;
+};
 
 export type joinTeamResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type joinTeamResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type joinTeamResponseSuccess = (joinTeamResponse200) & {
-  headers: Headers;
-};
-export type joinTeamResponseError = (joinTeamResponse400 | joinTeamResponse401 | joinTeamResponse500) & {
-  headers: Headers;
+  data: ErrorResponse;
+  status: 500;
 };
 
-export type joinTeamResponse = (joinTeamResponseSuccess | joinTeamResponseError)
+export type joinTeamResponseSuccess = joinTeamResponse200 & {
+  headers: Headers;
+};
+export type joinTeamResponseError = (
+  | joinTeamResponse400
+  | joinTeamResponse401
+  | joinTeamResponse500
+) & {
+  headers: Headers;
+};
 
-export const getJoinTeamUrl = (teamInviteId: string,) => {
+export type joinTeamResponse = joinTeamResponseSuccess | joinTeamResponseError;
 
+export const getJoinTeamUrl = (teamInviteId: string) => {
+  return `/team/join/${teamInviteId}`;
+};
 
-  
-
-  return `/team/join/${teamInviteId}`
-}
-
-export const joinTeam = async (teamInviteId: string, options?: RequestInit): Promise<joinTeamResponse> => {
-  
-  const res = await fetch(getJoinTeamUrl(teamInviteId),
-  {      
+export const joinTeam = async (
+  teamInviteId: string,
+  options?: RequestInit
+): Promise<joinTeamResponse> => {
+  const res = await fetch(getJoinTeamUrl(teamInviteId), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: joinTeamResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as joinTeamResponse
-}
 
-
+  const data: joinTeamResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as joinTeamResponse;
+};
 
 /**
  * @summary Rejects an invitation to join a team.
  */
 export type rejectInvitationResponse200 = {
-  data: EmptyResponse
-  status: 200
-}
+  data: EmptyResponse;
+  status: 200;
+};
 
 export type rejectInvitationResponse400 = {
-  data: ErrorResponse
-  status: 400
-}
+  data: ErrorResponse;
+  status: 400;
+};
 
 export type rejectInvitationResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type rejectInvitationResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type rejectInvitationResponseSuccess = (rejectInvitationResponse200) & {
-  headers: Headers;
-};
-export type rejectInvitationResponseError = (rejectInvitationResponse400 | rejectInvitationResponse401 | rejectInvitationResponse500) & {
-  headers: Headers;
+  data: ErrorResponse;
+  status: 500;
 };
 
-export type rejectInvitationResponse = (rejectInvitationResponseSuccess | rejectInvitationResponseError)
+export type rejectInvitationResponseSuccess = rejectInvitationResponse200 & {
+  headers: Headers;
+};
+export type rejectInvitationResponseError = (
+  | rejectInvitationResponse400
+  | rejectInvitationResponse401
+  | rejectInvitationResponse500
+) & {
+  headers: Headers;
+};
 
-export const getRejectInvitationUrl = (teamInviteId: string,) => {
+export type rejectInvitationResponse =
+  | rejectInvitationResponseSuccess
+  | rejectInvitationResponseError;
 
+export const getRejectInvitationUrl = (teamInviteId: string) => {
+  return `/team/join/${teamInviteId}`;
+};
 
-  
-
-  return `/team/join/${teamInviteId}`
-}
-
-export const rejectInvitation = async (teamInviteId: string, options?: RequestInit): Promise<rejectInvitationResponse> => {
-  
-  const res = await fetch(getRejectInvitationUrl(teamInviteId),
-  {      
+export const rejectInvitation = async (
+  teamInviteId: string,
+  options?: RequestInit
+): Promise<rejectInvitationResponse> => {
+  const res = await fetch(getRejectInvitationUrl(teamInviteId), {
     ...options,
-    method: 'DELETE'
-    
-    
-  }
-)
+    method: 'DELETE',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: rejectInvitationResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as rejectInvitationResponse
-}
 
-
+  const data: rejectInvitationResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as rejectInvitationResponse;
+};
 
 /**
  * @summary Gets all teams for the authenticated user.
  */
 export type getUserTeamsResponse200 = {
-  data: Team[]
-  status: 200
-}
+  data: Team[];
+  status: 200;
+};
 
 export type getUserTeamsResponse400 = {
-  data: ErrorResponse
-  status: 400
-}
+  data: ErrorResponse;
+  status: 400;
+};
 
 export type getUserTeamsResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type getUserTeamsResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type getUserTeamsResponseSuccess = (getUserTeamsResponse200) & {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getUserTeamsResponseSuccess = getUserTeamsResponse200 & {
   headers: Headers;
 };
-export type getUserTeamsResponseError = (getUserTeamsResponse400 | getUserTeamsResponse401 | getUserTeamsResponse500) & {
+export type getUserTeamsResponseError = (
+  | getUserTeamsResponse400
+  | getUserTeamsResponse401
+  | getUserTeamsResponse500
+) & {
   headers: Headers;
 };
 
-export type getUserTeamsResponse = (getUserTeamsResponseSuccess | getUserTeamsResponseError)
+export type getUserTeamsResponse =
+  | getUserTeamsResponseSuccess
+  | getUserTeamsResponseError;
 
 export const getGetUserTeamsUrl = () => {
+  return `/team/user`;
+};
 
-
-  
-
-  return `/team/user`
-}
-
-export const getUserTeams = async ( options?: RequestInit): Promise<getUserTeamsResponse> => {
-  
-  const res = await fetch(getGetUserTeamsUrl(),
-  {      
+export const getUserTeams = async (
+  options?: RequestInit
+): Promise<getUserTeamsResponse> => {
+  const res = await fetch(getGetUserTeamsUrl(), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: getUserTeamsResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getUserTeamsResponse
-}
 
-
+  const data: getUserTeamsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getUserTeamsResponse;
+};
 
 /**
  * @summary Gets all of a user's invitations.
  */
 export type getUserInvitesResponse200 = {
-  data: TeamInvitesResponse
-  status: 200
-}
+  data: TeamInvitesResponse;
+  status: 200;
+};
 
 export type getUserInvitesResponse400 = {
-  data: ErrorResponse
-  status: 400
-}
+  data: ErrorResponse;
+  status: 400;
+};
 
 export type getUserInvitesResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type getUserInvitesResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type getUserInvitesResponseSuccess = (getUserInvitesResponse200) & {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getUserInvitesResponseSuccess = getUserInvitesResponse200 & {
   headers: Headers;
 };
-export type getUserInvitesResponseError = (getUserInvitesResponse400 | getUserInvitesResponse401 | getUserInvitesResponse500) & {
+export type getUserInvitesResponseError = (
+  | getUserInvitesResponse400
+  | getUserInvitesResponse401
+  | getUserInvitesResponse500
+) & {
   headers: Headers;
 };
 
-export type getUserInvitesResponse = (getUserInvitesResponseSuccess | getUserInvitesResponseError)
+export type getUserInvitesResponse =
+  | getUserInvitesResponseSuccess
+  | getUserInvitesResponseError;
 
 export const getGetUserInvitesUrl = () => {
+  return `/team/user/invites`;
+};
 
-
-  
-
-  return `/team/user/invites`
-}
-
-export const getUserInvites = async ( options?: RequestInit): Promise<getUserInvitesResponse> => {
-  
-  const res = await fetch(getGetUserInvitesUrl(),
-  {      
+export const getUserInvites = async (
+  options?: RequestInit
+): Promise<getUserInvitesResponse> => {
+  const res = await fetch(getGetUserInvitesUrl(), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: getUserInvitesResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getUserInvitesResponse
-}
 
-
+  const data: getUserInvitesResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getUserInvitesResponse;
+};
 
 /**
  * @summary Gets a team by ID.
  */
 export type getTeamResponse200 = {
-  data: TeamWithUsers
-  status: 200
-}
+  data: TeamWithUsers;
+  status: 200;
+};
 
 export type getTeamResponse400 = {
-  data: ErrorResponse
-  status: 400
-}
+  data: ErrorResponse;
+  status: 400;
+};
 
 export type getTeamResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type getTeamResponse404 = {
-  data: ErrorResponse
-  status: 404
-}
+  data: ErrorResponse;
+  status: 404;
+};
 
 export type getTeamResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type getTeamResponseSuccess = (getTeamResponse200) & {
-  headers: Headers;
-};
-export type getTeamResponseError = (getTeamResponse400 | getTeamResponse401 | getTeamResponse404 | getTeamResponse500) & {
-  headers: Headers;
+  data: ErrorResponse;
+  status: 500;
 };
 
-export type getTeamResponse = (getTeamResponseSuccess | getTeamResponseError)
+export type getTeamResponseSuccess = getTeamResponse200 & {
+  headers: Headers;
+};
+export type getTeamResponseError = (
+  | getTeamResponse400
+  | getTeamResponse401
+  | getTeamResponse404
+  | getTeamResponse500
+) & {
+  headers: Headers;
+};
 
-export const getGetTeamUrl = (teamId: string,) => {
+export type getTeamResponse = getTeamResponseSuccess | getTeamResponseError;
 
+export const getGetTeamUrl = (teamId: string) => {
+  return `/team/${teamId}`;
+};
 
-  
-
-  return `/team/${teamId}`
-}
-
-export const getTeam = async (teamId: string, options?: RequestInit): Promise<getTeamResponse> => {
-  
-  const res = await fetch(getGetTeamUrl(teamId),
-  {      
+export const getTeam = async (
+  teamId: string,
+  options?: RequestInit
+): Promise<getTeamResponse> => {
+  const res = await fetch(getGetTeamUrl(teamId), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: getTeamResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getTeamResponse
-}
 
-
+  const data: getTeamResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as getTeamResponse;
+};
 
 /**
  * @summary Deletes a team.
@@ -1674,618 +1707,652 @@ This will update all team members roles and cancel your subscription for the tea
 This action is **irreversible** and you will not be able to recover the team afterwards.
  */
 export type deleteTeamResponse200 = {
-  data: EmptyResponse
-  status: 200
-}
+  data: EmptyResponse;
+  status: 200;
+};
 
 export type deleteTeamResponse400 = {
-  data: ErrorResponse
-  status: 400
-}
+  data: ErrorResponse;
+  status: 400;
+};
 
 export type deleteTeamResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type deleteTeamResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type deleteTeamResponseSuccess = (deleteTeamResponse200) & {
-  headers: Headers;
-};
-export type deleteTeamResponseError = (deleteTeamResponse400 | deleteTeamResponse401 | deleteTeamResponse500) & {
-  headers: Headers;
+  data: ErrorResponse;
+  status: 500;
 };
 
-export type deleteTeamResponse = (deleteTeamResponseSuccess | deleteTeamResponseError)
+export type deleteTeamResponseSuccess = deleteTeamResponse200 & {
+  headers: Headers;
+};
+export type deleteTeamResponseError = (
+  | deleteTeamResponse400
+  | deleteTeamResponse401
+  | deleteTeamResponse500
+) & {
+  headers: Headers;
+};
 
-export const getDeleteTeamUrl = (teamId: string,) => {
+export type deleteTeamResponse =
+  | deleteTeamResponseSuccess
+  | deleteTeamResponseError;
 
+export const getDeleteTeamUrl = (teamId: string) => {
+  return `/team/${teamId}`;
+};
 
-  
-
-  return `/team/${teamId}`
-}
-
-export const deleteTeam = async (teamId: string, options?: RequestInit): Promise<deleteTeamResponse> => {
-  
-  const res = await fetch(getDeleteTeamUrl(teamId),
-  {      
+export const deleteTeam = async (
+  teamId: string,
+  options?: RequestInit
+): Promise<deleteTeamResponse> => {
+  const res = await fetch(getDeleteTeamUrl(teamId), {
     ...options,
-    method: 'DELETE'
-    
-    
-  }
-)
+    method: 'DELETE',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: deleteTeamResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as deleteTeamResponse
-}
 
-
+  const data: deleteTeamResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as deleteTeamResponse;
+};
 
 /**
  * @summary Updates a team.
  */
 export type patchTeamResponse200 = {
-  data: EmptyResponse
-  status: 200
-}
+  data: EmptyResponse;
+  status: 200;
+};
 
 export type patchTeamResponse400 = {
-  data: ErrorResponse
-  status: 400
-}
+  data: ErrorResponse;
+  status: 400;
+};
 
 export type patchTeamResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type patchTeamResponse404 = {
-  data: ErrorResponse
-  status: 404
-}
+  data: ErrorResponse;
+  status: 404;
+};
 
 export type patchTeamResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type patchTeamResponseSuccess = (patchTeamResponse200) & {
-  headers: Headers;
-};
-export type patchTeamResponseError = (patchTeamResponse400 | patchTeamResponse401 | patchTeamResponse404 | patchTeamResponse500) & {
-  headers: Headers;
+  data: ErrorResponse;
+  status: 500;
 };
 
-export type patchTeamResponse = (patchTeamResponseSuccess | patchTeamResponseError)
+export type patchTeamResponseSuccess = patchTeamResponse200 & {
+  headers: Headers;
+};
+export type patchTeamResponseError = (
+  | patchTeamResponse400
+  | patchTeamResponse401
+  | patchTeamResponse404
+  | patchTeamResponse500
+) & {
+  headers: Headers;
+};
 
-export const getPatchTeamUrl = (teamId: string,) => {
+export type patchTeamResponse =
+  | patchTeamResponseSuccess
+  | patchTeamResponseError;
 
+export const getPatchTeamUrl = (teamId: string) => {
+  return `/team/${teamId}`;
+};
 
-  
-
-  return `/team/${teamId}`
-}
-
-export const patchTeam = async (teamId: string,
-    patchTeamRequest: PatchTeamRequest, options?: RequestInit): Promise<patchTeamResponse> => {
-  
-  const res = await fetch(getPatchTeamUrl(teamId),
-  {      
+export const patchTeam = async (
+  teamId: string,
+  patchTeamRequest: PatchTeamRequest,
+  options?: RequestInit
+): Promise<patchTeamResponse> => {
+  const res = await fetch(getPatchTeamUrl(teamId), {
     ...options,
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      patchTeamRequest,)
-  }
-)
+    body: JSON.stringify(patchTeamRequest),
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: patchTeamResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as patchTeamResponse
-}
 
-
+  const data: patchTeamResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as patchTeamResponse;
+};
 
 /**
  * @summary Invites a user to a team.
  */
 export type inviteToTeamResponse201 = {
-  data: void
-  status: 201
-}
+  data: void;
+  status: 201;
+};
 
 export type inviteToTeamResponse304 = {
-  data: void
-  status: 304
-}
+  data: void;
+  status: 304;
+};
 
 export type inviteToTeamResponse400 = {
-  data: ErrorResponse
-  status: 400
-}
+  data: ErrorResponse;
+  status: 400;
+};
 
 export type inviteToTeamResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type inviteToTeamResponse404 = {
-  data: ErrorResponse
-  status: 404
-}
+  data: ErrorResponse;
+  status: 404;
+};
 
 export type inviteToTeamResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type inviteToTeamResponseSuccess = (inviteToTeamResponse201) & {
-  headers: Headers;
-};
-export type inviteToTeamResponseError = (inviteToTeamResponse304 | inviteToTeamResponse400 | inviteToTeamResponse401 | inviteToTeamResponse404 | inviteToTeamResponse500) & {
-  headers: Headers;
+  data: ErrorResponse;
+  status: 500;
 };
 
-export type inviteToTeamResponse = (inviteToTeamResponseSuccess | inviteToTeamResponseError)
+export type inviteToTeamResponseSuccess = inviteToTeamResponse201 & {
+  headers: Headers;
+};
+export type inviteToTeamResponseError = (
+  | inviteToTeamResponse304
+  | inviteToTeamResponse400
+  | inviteToTeamResponse401
+  | inviteToTeamResponse404
+  | inviteToTeamResponse500
+) & {
+  headers: Headers;
+};
 
-export const getInviteToTeamUrl = (teamId: string,) => {
+export type inviteToTeamResponse =
+  | inviteToTeamResponseSuccess
+  | inviteToTeamResponseError;
 
+export const getInviteToTeamUrl = (teamId: string) => {
+  return `/team/${teamId}/invite`;
+};
 
-  
-
-  return `/team/${teamId}/invite`
-}
-
-export const inviteToTeam = async (teamId: string,
-    inviteToTeamRequest: InviteToTeamRequest, options?: RequestInit): Promise<inviteToTeamResponse> => {
-  
-  const res = await fetch(getInviteToTeamUrl(teamId),
-  {      
+export const inviteToTeam = async (
+  teamId: string,
+  inviteToTeamRequest: InviteToTeamRequest,
+  options?: RequestInit
+): Promise<inviteToTeamResponse> => {
+  const res = await fetch(getInviteToTeamUrl(teamId), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      inviteToTeamRequest,)
-  }
-)
+    body: JSON.stringify(inviteToTeamRequest),
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: inviteToTeamResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as inviteToTeamResponse
-}
 
-
+  const data: inviteToTeamResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as inviteToTeamResponse;
+};
 
 /**
  * @summary Gets all invites for a team.
  */
 export type getTeamInvitesResponse200 = {
-  data: TeamInvitesResponse
-  status: 200
-}
+  data: TeamInvitesResponse;
+  status: 200;
+};
 
 export type getTeamInvitesResponse400 = {
-  data: ErrorResponse
-  status: 400
-}
+  data: ErrorResponse;
+  status: 400;
+};
 
 export type getTeamInvitesResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type getTeamInvitesResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type getTeamInvitesResponseSuccess = (getTeamInvitesResponse200) & {
-  headers: Headers;
-};
-export type getTeamInvitesResponseError = (getTeamInvitesResponse400 | getTeamInvitesResponse401 | getTeamInvitesResponse500) & {
-  headers: Headers;
+  data: ErrorResponse;
+  status: 500;
 };
 
-export type getTeamInvitesResponse = (getTeamInvitesResponseSuccess | getTeamInvitesResponseError)
+export type getTeamInvitesResponseSuccess = getTeamInvitesResponse200 & {
+  headers: Headers;
+};
+export type getTeamInvitesResponseError = (
+  | getTeamInvitesResponse400
+  | getTeamInvitesResponse401
+  | getTeamInvitesResponse500
+) & {
+  headers: Headers;
+};
 
-export const getGetTeamInvitesUrl = (teamId: string,) => {
+export type getTeamInvitesResponse =
+  | getTeamInvitesResponseSuccess
+  | getTeamInvitesResponseError;
 
+export const getGetTeamInvitesUrl = (teamId: string) => {
+  return `/team/${teamId}/invites`;
+};
 
-  
-
-  return `/team/${teamId}/invites`
-}
-
-export const getTeamInvites = async (teamId: string, options?: RequestInit): Promise<getTeamInvitesResponse> => {
-  
-  const res = await fetch(getGetTeamInvitesUrl(teamId),
-  {      
+export const getTeamInvites = async (
+  teamId: string,
+  options?: RequestInit
+): Promise<getTeamInvitesResponse> => {
+  const res = await fetch(getGetTeamInvitesUrl(teamId), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: getTeamInvitesResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getTeamInvitesResponse
-}
 
-
+  const data: getTeamInvitesResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getTeamInvitesResponse;
+};
 
 /**
  * @summary Regenerates a team invite notifying the user again.
  */
 export type reinviteToTeamResponse200 = {
-  data: EmptyResponse
-  status: 200
-}
+  data: EmptyResponse;
+  status: 200;
+};
 
 export type reinviteToTeamResponse400 = {
-  data: ErrorResponse
-  status: 400
-}
+  data: ErrorResponse;
+  status: 400;
+};
 
 export type reinviteToTeamResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type reinviteToTeamResponse429 = {
-  data: ErrorResponse
-  status: 429
-}
+  data: ErrorResponse;
+  status: 429;
+};
 
 export type reinviteToTeamResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type reinviteToTeamResponseSuccess = (reinviteToTeamResponse200) & {
-  headers: Headers;
-};
-export type reinviteToTeamResponseError = (reinviteToTeamResponse400 | reinviteToTeamResponse401 | reinviteToTeamResponse429 | reinviteToTeamResponse500) & {
-  headers: Headers;
+  data: ErrorResponse;
+  status: 500;
 };
 
-export type reinviteToTeamResponse = (reinviteToTeamResponseSuccess | reinviteToTeamResponseError)
+export type reinviteToTeamResponseSuccess = reinviteToTeamResponse200 & {
+  headers: Headers;
+};
+export type reinviteToTeamResponseError = (
+  | reinviteToTeamResponse400
+  | reinviteToTeamResponse401
+  | reinviteToTeamResponse429
+  | reinviteToTeamResponse500
+) & {
+  headers: Headers;
+};
 
-export const getReinviteToTeamUrl = (teamId: string,
-    teamInviteId: string,) => {
+export type reinviteToTeamResponse =
+  | reinviteToTeamResponseSuccess
+  | reinviteToTeamResponseError;
 
+export const getReinviteToTeamUrl = (teamId: string, teamInviteId: string) => {
+  return `/team/${teamId}/reinvite/${teamInviteId}`;
+};
 
-  
-
-  return `/team/${teamId}/reinvite/${teamInviteId}`
-}
-
-export const reinviteToTeam = async (teamId: string,
-    teamInviteId: string, options?: RequestInit): Promise<reinviteToTeamResponse> => {
-  
-  const res = await fetch(getReinviteToTeamUrl(teamId,teamInviteId),
-  {      
+export const reinviteToTeam = async (
+  teamId: string,
+  teamInviteId: string,
+  options?: RequestInit
+): Promise<reinviteToTeamResponse> => {
+  const res = await fetch(getReinviteToTeamUrl(teamId, teamInviteId), {
     ...options,
-    method: 'POST'
-    
-    
-  }
-)
+    method: 'POST',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: reinviteToTeamResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as reinviteToTeamResponse
-}
 
-
+  const data: reinviteToTeamResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as reinviteToTeamResponse;
+};
 
 /**
  * @summary Removes a user from a team.
  */
 export type removeUserFromTeamResponse200 = {
-  data: EmptyResponse
-  status: 200
-}
+  data: EmptyResponse;
+  status: 200;
+};
 
 export type removeUserFromTeamResponse400 = {
-  data: ErrorResponse
-  status: 400
-}
+  data: ErrorResponse;
+  status: 400;
+};
 
 export type removeUserFromTeamResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type removeUserFromTeamResponse429 = {
-  data: ErrorResponse
-  status: 429
-}
+  data: ErrorResponse;
+  status: 429;
+};
 
 export type removeUserFromTeamResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type removeUserFromTeamResponseSuccess = (removeUserFromTeamResponse200) & {
-  headers: Headers;
-};
-export type removeUserFromTeamResponseError = (removeUserFromTeamResponse400 | removeUserFromTeamResponse401 | removeUserFromTeamResponse429 | removeUserFromTeamResponse500) & {
-  headers: Headers;
+  data: ErrorResponse;
+  status: 500;
 };
 
-export type removeUserFromTeamResponse = (removeUserFromTeamResponseSuccess | removeUserFromTeamResponseError)
+export type removeUserFromTeamResponseSuccess =
+  removeUserFromTeamResponse200 & {
+    headers: Headers;
+  };
+export type removeUserFromTeamResponseError = (
+  | removeUserFromTeamResponse400
+  | removeUserFromTeamResponse401
+  | removeUserFromTeamResponse429
+  | removeUserFromTeamResponse500
+) & {
+  headers: Headers;
+};
 
-export const getRemoveUserFromTeamUrl = (teamId: string,
-    removeUserId: string,) => {
+export type removeUserFromTeamResponse =
+  | removeUserFromTeamResponseSuccess
+  | removeUserFromTeamResponseError;
 
+export const getRemoveUserFromTeamUrl = (
+  teamId: string,
+  removeUserId: string
+) => {
+  return `/team/${teamId}/remove/${removeUserId}`;
+};
 
-  
-
-  return `/team/${teamId}/remove/${removeUserId}`
-}
-
-export const removeUserFromTeam = async (teamId: string,
-    removeUserId: string, options?: RequestInit): Promise<removeUserFromTeamResponse> => {
-  
-  const res = await fetch(getRemoveUserFromTeamUrl(teamId,removeUserId),
-  {      
+export const removeUserFromTeam = async (
+  teamId: string,
+  removeUserId: string,
+  options?: RequestInit
+): Promise<removeUserFromTeamResponse> => {
+  const res = await fetch(getRemoveUserFromTeamUrl(teamId, removeUserId), {
     ...options,
-    method: 'DELETE'
-    
-    
-  }
-)
+    method: 'DELETE',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: removeUserFromTeamResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as removeUserFromTeamResponse
-}
 
-
+  const data: removeUserFromTeamResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as removeUserFromTeamResponse;
+};
 
 /**
  * @summary Creates a new user.
  */
 export type createUserResponse200 = {
-  data: EmptyResponse
-  status: 200
-}
+  data: EmptyResponse;
+  status: 200;
+};
 
 export type createUserResponse400 = {
-  data: ErrorResponse
-  status: 400
-}
+  data: ErrorResponse;
+  status: 400;
+};
 
 export type createUserResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type createUserResponseSuccess = (createUserResponse200) & {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type createUserResponseSuccess = createUserResponse200 & {
   headers: Headers;
 };
-export type createUserResponseError = (createUserResponse400 | createUserResponse500) & {
+export type createUserResponseError = (
+  | createUserResponse400
+  | createUserResponse500
+) & {
   headers: Headers;
 };
 
-export type createUserResponse = (createUserResponseSuccess | createUserResponseError)
+export type createUserResponse =
+  | createUserResponseSuccess
+  | createUserResponseError;
 
 export const getCreateUserUrl = () => {
+  return `/user`;
+};
 
-
-  
-
-  return `/user`
-}
-
-export const createUser = async (createUserRequest: CreateUserRequest, options?: RequestInit): Promise<createUserResponse> => {
-  
-  const res = await fetch(getCreateUserUrl(),
-  {      
+export const createUser = async (
+  createUserRequest: CreateUserRequest,
+  options?: RequestInit
+): Promise<createUserResponse> => {
+  const res = await fetch(getCreateUserUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      createUserRequest,)
-  }
-)
+    body: JSON.stringify(createUserRequest),
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: createUserResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as createUserResponse
-}
 
-
+  const data: createUserResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as createUserResponse;
+};
 
 /**
  * @summary Retrieves user names in bulk
  */
 export type getUserNamesResponse200 = {
-  data: UserNames
-  status: 200
-}
+  data: UserNames;
+  status: 200;
+};
 
 export type getUserNamesResponse401 = {
-  data: string
-  status: 401
-}
+  data: string;
+  status: 401;
+};
 
 export type getUserNamesResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type getUserNamesResponseSuccess = (getUserNamesResponse200) & {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getUserNamesResponseSuccess = getUserNamesResponse200 & {
   headers: Headers;
 };
-export type getUserNamesResponseError = (getUserNamesResponse401 | getUserNamesResponse500) & {
+export type getUserNamesResponseError = (
+  | getUserNamesResponse401
+  | getUserNamesResponse500
+) & {
   headers: Headers;
 };
 
-export type getUserNamesResponse = (getUserNamesResponseSuccess | getUserNamesResponseError)
+export type getUserNamesResponse =
+  | getUserNamesResponseSuccess
+  | getUserNamesResponseError;
 
 export const getGetUserNamesUrl = () => {
+  return `/user/get_names`;
+};
 
-
-  
-
-  return `/user/get_names`
-}
-
-export const getUserNames = async (postGetNamesRequestBody: PostGetNamesRequestBody, options?: RequestInit): Promise<getUserNamesResponse> => {
-  
-  const res = await fetch(getGetUserNamesUrl(),
-  {      
+export const getUserNames = async (
+  postGetNamesRequestBody: PostGetNamesRequestBody,
+  options?: RequestInit
+): Promise<getUserNamesResponse> => {
+  const res = await fetch(getGetUserNamesUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      postGetNamesRequestBody,)
-  }
-)
+    body: JSON.stringify(postGetNamesRequestBody),
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: getUserNamesResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getUserNamesResponse
-}
 
-
+  const data: getUserNamesResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getUserNamesResponse;
+};
 
 /**
  * @summary Gets names for passed user profile ids, falling back to the requesting user's email contact names
  */
 export type getUserNamesWithEmailResponse200 = {
-  data: UserNames
-  status: 200
-}
+  data: UserNames;
+  status: 200;
+};
 
 export type getUserNamesWithEmailResponse400 = {
-  data: string
-  status: 400
-}
+  data: string;
+  status: 400;
+};
 
 export type getUserNamesWithEmailResponse401 = {
-  data: string
-  status: 401
-}
+  data: string;
+  status: 401;
+};
 
 export type getUserNamesWithEmailResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type getUserNamesWithEmailResponseSuccess = (getUserNamesWithEmailResponse200) & {
-  headers: Headers;
+  data: ErrorResponse;
+  status: 500;
 };
-export type getUserNamesWithEmailResponseError = (getUserNamesWithEmailResponse400 | getUserNamesWithEmailResponse401 | getUserNamesWithEmailResponse500) & {
+
+export type getUserNamesWithEmailResponseSuccess =
+  getUserNamesWithEmailResponse200 & {
+    headers: Headers;
+  };
+export type getUserNamesWithEmailResponseError = (
+  | getUserNamesWithEmailResponse400
+  | getUserNamesWithEmailResponse401
+  | getUserNamesWithEmailResponse500
+) & {
   headers: Headers;
 };
 
-export type getUserNamesWithEmailResponse = (getUserNamesWithEmailResponseSuccess | getUserNamesWithEmailResponseError)
+export type getUserNamesWithEmailResponse =
+  | getUserNamesWithEmailResponseSuccess
+  | getUserNamesWithEmailResponseError;
 
 export const getGetUserNamesWithEmailUrl = () => {
+  return `/user/get_names_with_email`;
+};
 
-
-  
-
-  return `/user/get_names_with_email`
-}
-
-export const getUserNamesWithEmail = async (getNamesWithEmailRequestBody: GetNamesWithEmailRequestBody, options?: RequestInit): Promise<getUserNamesWithEmailResponse> => {
-  
-  const res = await fetch(getGetUserNamesWithEmailUrl(),
-  {      
+export const getUserNamesWithEmail = async (
+  getNamesWithEmailRequestBody: GetNamesWithEmailRequestBody,
+  options?: RequestInit
+): Promise<getUserNamesWithEmailResponse> => {
+  const res = await fetch(getGetUserNamesWithEmailUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      getNamesWithEmailRequestBody,)
-  }
-)
+    body: JSON.stringify(getNamesWithEmailRequestBody),
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: getUserNamesWithEmailResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getUserNamesWithEmailResponse
-}
 
-
+  const data: getUserNamesWithEmailResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getUserNamesWithEmailResponse;
+};
 
 /**
  * @summary Updates the user's group.
  */
 export type patchUserGroupResponse200 = {
-  data: EmptyResponse
-  status: 200
-}
+  data: EmptyResponse;
+  status: 200;
+};
 
 export type patchUserGroupResponse401 = {
-  data: string
-  status: 401
-}
+  data: string;
+  status: 401;
+};
 
 export type patchUserGroupResponse404 = {
-  data: string
-  status: 404
-}
+  data: string;
+  status: 404;
+};
 
 export type patchUserGroupResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type patchUserGroupResponseSuccess = (patchUserGroupResponse200) & {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type patchUserGroupResponseSuccess = patchUserGroupResponse200 & {
   headers: Headers;
 };
-export type patchUserGroupResponseError = (patchUserGroupResponse401 | patchUserGroupResponse404 | patchUserGroupResponse500) & {
+export type patchUserGroupResponseError = (
+  | patchUserGroupResponse401
+  | patchUserGroupResponse404
+  | patchUserGroupResponse500
+) & {
   headers: Headers;
 };
 
-export type patchUserGroupResponse = (patchUserGroupResponseSuccess | patchUserGroupResponseError)
+export type patchUserGroupResponse =
+  | patchUserGroupResponseSuccess
+  | patchUserGroupResponseError;
 
 export const getPatchUserGroupUrl = () => {
+  return `/user/group`;
+};
 
-
-  
-
-  return `/user/group`
-}
-
-export const patchUserGroup = async (patchUserGroupRequest: PatchUserGroupRequest, options?: RequestInit): Promise<patchUserGroupResponse> => {
-  
-  const res = await fetch(getPatchUserGroupUrl(),
-  {      
+export const patchUserGroup = async (
+  patchUserGroupRequest: PatchUserGroupRequest,
+  options?: RequestInit
+): Promise<patchUserGroupResponse> => {
+  const res = await fetch(getPatchUserGroupUrl(), {
     ...options,
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      patchUserGroupRequest,)
-  }
-)
+    body: JSON.stringify(patchUserGroupRequest),
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: patchUserGroupResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as patchUserGroupResponse
-}
 
-
+  const data: patchUserGroupResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as patchUserGroupResponse;
+};
 
 /**
  * @summary Gets the calling user's info which matches what was given in the **deprecated**
@@ -2294,695 +2361,741 @@ This will eventually be removed and optimized to use smaller calls that grab
 what is needed for various parts of the UI.
  */
 export type getLegacyUserPermissionsResponse200 = {
-  data: GetLegacyUserPermissionsResponse
-  status: 200
-}
+  data: GetLegacyUserPermissionsResponse;
+  status: 200;
+};
 
 export type getLegacyUserPermissionsResponse401 = {
-  data: string
-  status: 401
-}
+  data: string;
+  status: 401;
+};
 
 export type getLegacyUserPermissionsResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type getLegacyUserPermissionsResponseSuccess = (getLegacyUserPermissionsResponse200) & {
-  headers: Headers;
+  data: ErrorResponse;
+  status: 500;
 };
-export type getLegacyUserPermissionsResponseError = (getLegacyUserPermissionsResponse401 | getLegacyUserPermissionsResponse500) & {
+
+export type getLegacyUserPermissionsResponseSuccess =
+  getLegacyUserPermissionsResponse200 & {
+    headers: Headers;
+  };
+export type getLegacyUserPermissionsResponseError = (
+  | getLegacyUserPermissionsResponse401
+  | getLegacyUserPermissionsResponse500
+) & {
   headers: Headers;
 };
 
-export type getLegacyUserPermissionsResponse = (getLegacyUserPermissionsResponseSuccess | getLegacyUserPermissionsResponseError)
+export type getLegacyUserPermissionsResponse =
+  | getLegacyUserPermissionsResponseSuccess
+  | getLegacyUserPermissionsResponseError;
 
 export const getGetLegacyUserPermissionsUrl = () => {
+  return `/user/legacy_user_permissions`;
+};
 
-
-  
-
-  return `/user/legacy_user_permissions`
-}
-
-export const getLegacyUserPermissions = async ( options?: RequestInit): Promise<getLegacyUserPermissionsResponse> => {
-  
-  const res = await fetch(getGetLegacyUserPermissionsUrl(),
-  {      
+export const getLegacyUserPermissions = async (
+  options?: RequestInit
+): Promise<getLegacyUserPermissionsResponse> => {
+  const res = await fetch(getGetLegacyUserPermissionsUrl(), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: getLegacyUserPermissionsResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getLegacyUserPermissionsResponse
-}
 
-
+  const data: getLegacyUserPermissionsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getLegacyUserPermissionsResponse;
+};
 
 /**
  * @summary Returns whether or not a given idp link exists for a user
  */
 export type getUserLinkExistsResponse200 = {
-  data: UserLinkResponse
-  status: 200
-}
+  data: UserLinkResponse;
+  status: 200;
+};
 
 export type getUserLinkExistsResponse400 = {
-  data: ErrorResponse
-  status: 400
-}
+  data: ErrorResponse;
+  status: 400;
+};
 
 export type getUserLinkExistsResponse401 = {
-  data: string
-  status: 401
-}
+  data: string;
+  status: 401;
+};
 
 export type getUserLinkExistsResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type getUserLinkExistsResponseSuccess = (getUserLinkExistsResponse200) & {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getUserLinkExistsResponseSuccess = getUserLinkExistsResponse200 & {
   headers: Headers;
 };
-export type getUserLinkExistsResponseError = (getUserLinkExistsResponse400 | getUserLinkExistsResponse401 | getUserLinkExistsResponse500) & {
+export type getUserLinkExistsResponseError = (
+  | getUserLinkExistsResponse400
+  | getUserLinkExistsResponse401
+  | getUserLinkExistsResponse500
+) & {
   headers: Headers;
 };
 
-export type getUserLinkExistsResponse = (getUserLinkExistsResponseSuccess | getUserLinkExistsResponseError)
+export type getUserLinkExistsResponse =
+  | getUserLinkExistsResponseSuccess
+  | getUserLinkExistsResponseError;
 
-export const getGetUserLinkExistsUrl = (params: GetUserLinkExistsParams,) => {
+export const getGetUserLinkExistsUrl = (params: GetUserLinkExistsParams) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
-    
     if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
     }
   });
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/user/link_exists?${stringifiedParams}` : `/user/link_exists`
-}
+  return stringifiedParams.length > 0
+    ? `/user/link_exists?${stringifiedParams}`
+    : `/user/link_exists`;
+};
 
-export const getUserLinkExists = async (params: GetUserLinkExistsParams, options?: RequestInit): Promise<getUserLinkExistsResponse> => {
-  
-  const res = await fetch(getGetUserLinkExistsUrl(params),
-  {      
+export const getUserLinkExists = async (
+  params: GetUserLinkExistsParams,
+  options?: RequestInit
+): Promise<getUserLinkExistsResponse> => {
+  const res = await fetch(getGetUserLinkExistsUrl(params), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: getUserLinkExistsResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getUserLinkExistsResponse
-}
 
-
+  const data: getUserLinkExistsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getUserLinkExistsResponse;
+};
 
 /**
  * @summary Gets the calling user's info
  */
 export type getUserInfoResponse200 = {
-  data: GetUserInfo
-  status: 200
-}
+  data: GetUserInfo;
+  status: 200;
+};
 
 export type getUserInfoResponse401 = {
-  data: string
-  status: 401
-}
+  data: string;
+  status: 401;
+};
 
 export type getUserInfoResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type getUserInfoResponseSuccess = (getUserInfoResponse200) & {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getUserInfoResponseSuccess = getUserInfoResponse200 & {
   headers: Headers;
 };
-export type getUserInfoResponseError = (getUserInfoResponse401 | getUserInfoResponse500) & {
+export type getUserInfoResponseError = (
+  | getUserInfoResponse401
+  | getUserInfoResponse500
+) & {
   headers: Headers;
 };
 
-export type getUserInfoResponse = (getUserInfoResponseSuccess | getUserInfoResponseError)
+export type getUserInfoResponse =
+  | getUserInfoResponseSuccess
+  | getUserInfoResponseError;
 
 export const getGetUserInfoUrl = () => {
+  return `/user/me`;
+};
 
-
-  
-
-  return `/user/me`
-}
-
-export const getUserInfo = async ( options?: RequestInit): Promise<getUserInfoResponse> => {
-  
-  const res = await fetch(getGetUserInfoUrl(),
-  {      
+export const getUserInfo = async (
+  options?: RequestInit
+): Promise<getUserInfoResponse> => {
+  const res = await fetch(getGetUserInfoUrl(), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: getUserInfoResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getUserInfoResponse
-}
 
-
+  const data: getUserInfoResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getUserInfoResponse;
+};
 
 /**
  * @summary Deletes the user who calls this endpoint
  */
 export type deleteUserResponse200 = {
-  data: GenericSuccessResponse
-  status: 200
-}
+  data: GenericSuccessResponse;
+  status: 200;
+};
 
 export type deleteUserResponse401 = {
-  data: ErrorResponse
-  status: 401
-}
+  data: ErrorResponse;
+  status: 401;
+};
 
 export type deleteUserResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type deleteUserResponseSuccess = (deleteUserResponse200) & {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type deleteUserResponseSuccess = deleteUserResponse200 & {
   headers: Headers;
 };
-export type deleteUserResponseError = (deleteUserResponse401 | deleteUserResponse500) & {
+export type deleteUserResponseError = (
+  | deleteUserResponse401
+  | deleteUserResponse500
+) & {
   headers: Headers;
 };
 
-export type deleteUserResponse = (deleteUserResponseSuccess | deleteUserResponseError)
+export type deleteUserResponse =
+  | deleteUserResponseSuccess
+  | deleteUserResponseError;
 
 export const getDeleteUserUrl = () => {
+  return `/user/me`;
+};
 
-
-  
-
-  return `/user/me`
-}
-
-export const deleteUser = async ( options?: RequestInit): Promise<deleteUserResponse> => {
-  
-  const res = await fetch(getDeleteUserUrl(),
-  {      
+export const deleteUser = async (
+  options?: RequestInit
+): Promise<deleteUserResponse> => {
+  const res = await fetch(getDeleteUserUrl(), {
     ...options,
-    method: 'DELETE'
-    
-    
-  }
-)
+    method: 'DELETE',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: deleteUserResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as deleteUserResponse
-}
 
-
+  const data: deleteUserResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as deleteUserResponse;
+};
 
 /**
  * @summary Retrieves the name of a particular user.
  */
 export type getUserNameResponse200 = {
-  data: UserName
-  status: 200
-}
+  data: UserName;
+  status: 200;
+};
 
 export type getUserNameResponse401 = {
-  data: string
-  status: 401
-}
+  data: string;
+  status: 401;
+};
 
 export type getUserNameResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type getUserNameResponseSuccess = (getUserNameResponse200) & {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getUserNameResponseSuccess = getUserNameResponse200 & {
   headers: Headers;
 };
-export type getUserNameResponseError = (getUserNameResponse401 | getUserNameResponse500) & {
+export type getUserNameResponseError = (
+  | getUserNameResponse401
+  | getUserNameResponse500
+) & {
   headers: Headers;
 };
 
-export type getUserNameResponse = (getUserNameResponseSuccess | getUserNameResponseError)
+export type getUserNameResponse =
+  | getUserNameResponseSuccess
+  | getUserNameResponseError;
 
 export const getGetUserNameUrl = () => {
+  return `/user/name`;
+};
 
-
-  
-
-  return `/user/name`
-}
-
-export const getUserName = async ( options?: RequestInit): Promise<getUserNameResponse> => {
-  
-  const res = await fetch(getGetUserNameUrl(),
-  {      
+export const getUserName = async (
+  options?: RequestInit
+): Promise<getUserNameResponse> => {
+  const res = await fetch(getGetUserNameUrl(), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: getUserNameResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getUserNameResponse
-}
 
-
+  const data: getUserNameResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getUserNameResponse;
+};
 
 /**
  * @summary Sets the name of a particular user
  */
 export type putUserNameResponse200 = {
-  data: EmptyResponse
-  status: 200
-}
+  data: EmptyResponse;
+  status: 200;
+};
 
 export type putUserNameResponse401 = {
-  data: string
-  status: 401
-}
+  data: string;
+  status: 401;
+};
 
 export type putUserNameResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type putUserNameResponseSuccess = (putUserNameResponse200) & {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type putUserNameResponseSuccess = putUserNameResponse200 & {
   headers: Headers;
 };
-export type putUserNameResponseError = (putUserNameResponse401 | putUserNameResponse500) & {
+export type putUserNameResponseError = (
+  | putUserNameResponse401
+  | putUserNameResponse500
+) & {
   headers: Headers;
 };
 
-export type putUserNameResponse = (putUserNameResponseSuccess | putUserNameResponseError)
+export type putUserNameResponse =
+  | putUserNameResponseSuccess
+  | putUserNameResponseError;
 
-export const getPutUserNameUrl = (params?: PutUserNameParams,) => {
+export const getPutUserNameUrl = (params?: PutUserNameParams) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
-    
     if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
     }
   });
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/user/name?${stringifiedParams}` : `/user/name`
-}
+  return stringifiedParams.length > 0
+    ? `/user/name?${stringifiedParams}`
+    : `/user/name`;
+};
 
-export const putUserName = async (params?: PutUserNameParams, options?: RequestInit): Promise<putUserNameResponse> => {
-  
-  const res = await fetch(getPutUserNameUrl(params),
-  {      
+export const putUserName = async (
+  params?: PutUserNameParams,
+  options?: RequestInit
+): Promise<putUserNameResponse> => {
+  const res = await fetch(getPutUserNameUrl(params), {
     ...options,
-    method: 'PUT'
-    
-    
-  }
-)
+    method: 'PUT',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: putUserNameResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as putUserNameResponse
-}
 
-
+  const data: putUserNameResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as putUserNameResponse;
+};
 
 /**
  * @summary Updates the user's onboarding.
  */
 export type patchUserOnboardingResponse200 = {
-  data: EmptyResponse
-  status: 200
-}
+  data: EmptyResponse;
+  status: 200;
+};
 
 export type patchUserOnboardingResponse401 = {
-  data: string
-  status: 401
-}
+  data: string;
+  status: 401;
+};
 
 export type patchUserOnboardingResponse404 = {
-  data: string
-  status: 404
-}
+  data: string;
+  status: 404;
+};
 
 export type patchUserOnboardingResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type patchUserOnboardingResponseSuccess = (patchUserOnboardingResponse200) & {
-  headers: Headers;
+  data: ErrorResponse;
+  status: 500;
 };
-export type patchUserOnboardingResponseError = (patchUserOnboardingResponse401 | patchUserOnboardingResponse404 | patchUserOnboardingResponse500) & {
+
+export type patchUserOnboardingResponseSuccess =
+  patchUserOnboardingResponse200 & {
+    headers: Headers;
+  };
+export type patchUserOnboardingResponseError = (
+  | patchUserOnboardingResponse401
+  | patchUserOnboardingResponse404
+  | patchUserOnboardingResponse500
+) & {
   headers: Headers;
 };
 
-export type patchUserOnboardingResponse = (patchUserOnboardingResponseSuccess | patchUserOnboardingResponseError)
+export type patchUserOnboardingResponse =
+  | patchUserOnboardingResponseSuccess
+  | patchUserOnboardingResponseError;
 
 export const getPatchUserOnboardingUrl = () => {
+  return `/user/onboarding`;
+};
 
-
-  
-
-  return `/user/onboarding`
-}
-
-export const patchUserOnboarding = async (patchUserOnboardingRequest: PatchUserOnboardingRequest, options?: RequestInit): Promise<patchUserOnboardingResponse> => {
-  
-  const res = await fetch(getPatchUserOnboardingUrl(),
-  {      
+export const patchUserOnboarding = async (
+  patchUserOnboardingRequest: PatchUserOnboardingRequest,
+  options?: RequestInit
+): Promise<patchUserOnboardingResponse> => {
+  const res = await fetch(getPatchUserOnboardingUrl(), {
     ...options,
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      patchUserOnboardingRequest,)
-  }
-)
+    body: JSON.stringify(patchUserOnboardingRequest),
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: patchUserOnboardingResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as patchUserOnboardingResponse
-}
 
-
+  const data: patchUserOnboardingResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as patchUserOnboardingResponse;
+};
 
 /**
  * @summary Retrieves the users organization if present.
 Returns NO_CONTENT if the user is a not part of an organization.
  */
 export type getUserOrganizationResponse200 = {
-  data: UserOrganizationResponse
-  status: 200
-}
+  data: UserOrganizationResponse;
+  status: 200;
+};
 
 export type getUserOrganizationResponse204 = {
-  data: void
-  status: 204
-}
+  data: void;
+  status: 204;
+};
 
 export type getUserOrganizationResponse401 = {
-  data: string
-  status: 401
-}
+  data: string;
+  status: 401;
+};
 
 export type getUserOrganizationResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type getUserOrganizationResponseSuccess = (getUserOrganizationResponse200 | getUserOrganizationResponse204) & {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getUserOrganizationResponseSuccess = (
+  | getUserOrganizationResponse200
+  | getUserOrganizationResponse204
+) & {
   headers: Headers;
 };
-export type getUserOrganizationResponseError = (getUserOrganizationResponse401 | getUserOrganizationResponse500) & {
+export type getUserOrganizationResponseError = (
+  | getUserOrganizationResponse401
+  | getUserOrganizationResponse500
+) & {
   headers: Headers;
 };
 
-export type getUserOrganizationResponse = (getUserOrganizationResponseSuccess | getUserOrganizationResponseError)
+export type getUserOrganizationResponse =
+  | getUserOrganizationResponseSuccess
+  | getUserOrganizationResponseError;
 
 export const getGetUserOrganizationUrl = () => {
+  return `/user/organization`;
+};
 
-
-  
-
-  return `/user/organization`
-}
-
-export const getUserOrganization = async ( options?: RequestInit): Promise<getUserOrganizationResponse> => {
-  
-  const res = await fetch(getGetUserOrganizationUrl(),
-  {      
+export const getUserOrganization = async (
+  options?: RequestInit
+): Promise<getUserOrganizationResponse> => {
+  const res = await fetch(getGetUserOrganizationUrl(), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: getUserOrganizationResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getUserOrganizationResponse
-}
 
-
+  const data: getUserOrganizationResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getUserOrganizationResponse;
+};
 
 /**
  * @summary Sets the profile picture URL for a particular user
  */
 export type putProfilePictureResponse200 = {
-  data: EmptyResponse
-  status: 200
-}
+  data: EmptyResponse;
+  status: 200;
+};
 
 export type putProfilePictureResponse401 = {
-  data: string
-  status: 401
-}
+  data: string;
+  status: 401;
+};
 
 export type putProfilePictureResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type putProfilePictureResponseSuccess = (putProfilePictureResponse200) & {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type putProfilePictureResponseSuccess = putProfilePictureResponse200 & {
   headers: Headers;
 };
-export type putProfilePictureResponseError = (putProfilePictureResponse401 | putProfilePictureResponse500) & {
+export type putProfilePictureResponseError = (
+  | putProfilePictureResponse401
+  | putProfilePictureResponse500
+) & {
   headers: Headers;
 };
 
-export type putProfilePictureResponse = (putProfilePictureResponseSuccess | putProfilePictureResponseError)
+export type putProfilePictureResponse =
+  | putProfilePictureResponseSuccess
+  | putProfilePictureResponseError;
 
-export const getPutProfilePictureUrl = (params: PutProfilePictureParams,) => {
+export const getPutProfilePictureUrl = (params: PutProfilePictureParams) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
-    
     if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
     }
   });
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/user/profile_picture?${stringifiedParams}` : `/user/profile_picture`
-}
+  return stringifiedParams.length > 0
+    ? `/user/profile_picture?${stringifiedParams}`
+    : `/user/profile_picture`;
+};
 
-export const putProfilePicture = async (params: PutProfilePictureParams, options?: RequestInit): Promise<putProfilePictureResponse> => {
-  
-  const res = await fetch(getPutProfilePictureUrl(params),
-  {      
+export const putProfilePicture = async (
+  params: PutProfilePictureParams,
+  options?: RequestInit
+): Promise<putProfilePictureResponse> => {
+  const res = await fetch(getPutProfilePictureUrl(params), {
     ...options,
-    method: 'PUT'
-    
-    
-  }
-)
+    method: 'PUT',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: putProfilePictureResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as putProfilePictureResponse
-}
 
-
+  const data: putProfilePictureResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as putProfilePictureResponse;
+};
 
 /**
  * @summary Retrieves profile picture URLs for a list of users
  */
 export type postProfilePicturesResponse200 = {
-  data: ProfilePictures
-  status: 200
-}
+  data: ProfilePictures;
+  status: 200;
+};
 
 export type postProfilePicturesResponse401 = {
-  data: string
-  status: 401
-}
+  data: string;
+  status: 401;
+};
 
 export type postProfilePicturesResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type postProfilePicturesResponseSuccess = (postProfilePicturesResponse200) & {
-  headers: Headers;
+  data: ErrorResponse;
+  status: 500;
 };
-export type postProfilePicturesResponseError = (postProfilePicturesResponse401 | postProfilePicturesResponse500) & {
+
+export type postProfilePicturesResponseSuccess =
+  postProfilePicturesResponse200 & {
+    headers: Headers;
+  };
+export type postProfilePicturesResponseError = (
+  | postProfilePicturesResponse401
+  | postProfilePicturesResponse500
+) & {
   headers: Headers;
 };
 
-export type postProfilePicturesResponse = (postProfilePicturesResponseSuccess | postProfilePicturesResponseError)
+export type postProfilePicturesResponse =
+  | postProfilePicturesResponseSuccess
+  | postProfilePicturesResponseError;
 
 export const getPostProfilePicturesUrl = () => {
+  return `/user/profile_pictures`;
+};
 
-
-  
-
-  return `/user/profile_pictures`
-}
-
-export const postProfilePictures = async (getProfilePicturesRequestBody: GetProfilePicturesRequestBody, options?: RequestInit): Promise<postProfilePicturesResponse> => {
-  
-  const res = await fetch(getPostProfilePicturesUrl(),
-  {      
+export const postProfilePictures = async (
+  getProfilePicturesRequestBody: GetProfilePicturesRequestBody,
+  options?: RequestInit
+): Promise<postProfilePicturesResponse> => {
+  const res = await fetch(getPostProfilePicturesUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      getProfilePicturesRequestBody,)
-  }
-)
+    body: JSON.stringify(getProfilePicturesRequestBody),
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: postProfilePicturesResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as postProfilePicturesResponse
-}
 
-
+  const data: postProfilePicturesResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as postProfilePicturesResponse;
+};
 
 /**
  * @summary Retrieves the users quota.
 Returns NO_CONTENT if the user is a premium user with no quota.
  */
 export type getUserQuotaResponse200 = {
-  data: UserQuota
-  status: 200
-}
+  data: UserQuota;
+  status: 200;
+};
 
 export type getUserQuotaResponse204 = {
-  data: void
-  status: 204
-}
+  data: void;
+  status: 204;
+};
 
 export type getUserQuotaResponse401 = {
-  data: string
-  status: 401
-}
+  data: string;
+  status: 401;
+};
 
 export type getUserQuotaResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type getUserQuotaResponseSuccess = (getUserQuotaResponse200 | getUserQuotaResponse204) & {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getUserQuotaResponseSuccess = (
+  | getUserQuotaResponse200
+  | getUserQuotaResponse204
+) & {
   headers: Headers;
 };
-export type getUserQuotaResponseError = (getUserQuotaResponse401 | getUserQuotaResponse500) & {
+export type getUserQuotaResponseError = (
+  | getUserQuotaResponse401
+  | getUserQuotaResponse500
+) & {
   headers: Headers;
 };
 
-export type getUserQuotaResponse = (getUserQuotaResponseSuccess | getUserQuotaResponseError)
+export type getUserQuotaResponse =
+  | getUserQuotaResponseSuccess
+  | getUserQuotaResponseError;
 
 export const getGetUserQuotaUrl = () => {
+  return `/user/quota`;
+};
 
-
-  
-
-  return `/user/quota`
-}
-
-export const getUserQuota = async ( options?: RequestInit): Promise<getUserQuotaResponse> => {
-  
-  const res = await fetch(getGetUserQuotaUrl(),
-  {      
+export const getUserQuota = async (
+  options?: RequestInit
+): Promise<getUserQuotaResponse> => {
+  const res = await fetch(getGetUserQuotaUrl(), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: getUserQuotaResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getUserQuotaResponse
-}
 
-
+  const data: getUserQuotaResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getUserQuotaResponse;
+};
 
 /**
  * @summary Updates the user's tutorialComplete flag.
  */
 export type patchUserTutorialResponse200 = {
-  data: EmptyResponse
-  status: 200
-}
+  data: EmptyResponse;
+  status: 200;
+};
 
 export type patchUserTutorialResponse401 = {
-  data: string
-  status: 401
-}
+  data: string;
+  status: 401;
+};
 
 export type patchUserTutorialResponse404 = {
-  data: string
-  status: 404
-}
+  data: string;
+  status: 404;
+};
 
 export type patchUserTutorialResponse500 = {
-  data: ErrorResponse
-  status: 500
-}
-    
-export type patchUserTutorialResponseSuccess = (patchUserTutorialResponse200) & {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type patchUserTutorialResponseSuccess = patchUserTutorialResponse200 & {
   headers: Headers;
 };
-export type patchUserTutorialResponseError = (patchUserTutorialResponse401 | patchUserTutorialResponse404 | patchUserTutorialResponse500) & {
+export type patchUserTutorialResponseError = (
+  | patchUserTutorialResponse401
+  | patchUserTutorialResponse404
+  | patchUserTutorialResponse500
+) & {
   headers: Headers;
 };
 
-export type patchUserTutorialResponse = (patchUserTutorialResponseSuccess | patchUserTutorialResponseError)
+export type patchUserTutorialResponse =
+  | patchUserTutorialResponseSuccess
+  | patchUserTutorialResponseError;
 
 export const getPatchUserTutorialUrl = () => {
+  return `/user/tutorial`;
+};
 
-
-  
-
-  return `/user/tutorial`
-}
-
-export const patchUserTutorial = async (patchUserTutorialRequest: PatchUserTutorialRequest, options?: RequestInit): Promise<patchUserTutorialResponse> => {
-  
-  const res = await fetch(getPatchUserTutorialUrl(),
-  {      
+export const patchUserTutorial = async (
+  patchUserTutorialRequest: PatchUserTutorialRequest,
+  options?: RequestInit
+): Promise<patchUserTutorialResponse> => {
+  const res = await fetch(getPatchUserTutorialUrl(), {
     ...options,
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      patchUserTutorialRequest,)
-  }
-)
+    body: JSON.stringify(patchUserTutorialRequest),
+  });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: patchUserTutorialResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as patchUserTutorialResponse
-}
+
+  const data: patchUserTutorialResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as patchUserTutorialResponse;
+};

@@ -4,7 +4,8 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { S3ObjectInfo } from './s3ObjectInfo';
+
 import type { HashMapOneOfFourAllOf } from './hashMapOneOfFourAllOf';
+import type { S3ObjectInfo } from './s3ObjectInfo';
 
 export type HashMapOneOfFour = S3ObjectInfo & HashMapOneOfFourAllOf;
