@@ -433,7 +433,7 @@ pub async fn get_bulk_entity_properties_values(
 pub async fn get_bulk_entity_properties_values_filtered(
     db: &Pool<Postgres>,
     entity_refs: &[EntityReference],
-    property_ids: Vec<Uuid>,
+    property_ids: &[Uuid],
 ) -> Result<HashMap<String, Vec<EntityPropertyWithDefinition>>> {
     if entity_refs.is_empty() || property_ids.is_empty() {
         // If no property_ids specified, return empty map for each entity

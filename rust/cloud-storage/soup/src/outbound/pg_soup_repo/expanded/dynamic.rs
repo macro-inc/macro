@@ -549,7 +549,7 @@ pub(crate) async fn expanded_dynamic_cursor_soup(
         .collect();
 
     // Fetch properties in bulk for all relevant entities, filtered to system properties only
-    let property_ids = SystemPropertyKey::all_system_propperty_keys().to_vec();
+    let property_ids = SystemPropertyKey::all_system_propperty_keys();
     let properties_map =
         properties_db_client::entity_properties::get::get_bulk_entity_properties_values_filtered(
             db,
