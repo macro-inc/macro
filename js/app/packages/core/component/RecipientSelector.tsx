@@ -37,7 +37,6 @@ import {
   type JSX,
   Match,
   onMount,
-  type Setter,
   Switch,
 } from 'solid-js';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
