@@ -26,10 +26,10 @@ export const FUSIONAUTH_CLIENT_SECRET =
   stack === 'local'
     ? undefined
     : aws.secretsmanager
-      .getSecretVersionOutput({
-        secretId: config.require('fusionauth-client-secret-key'),
-      })
-      .apply((secret) => secret.secretString);
+        .getSecretVersionOutput({
+          secretId: config.require('fusionauth-client-secret-key'),
+        })
+        .apply((secret) => secret.secretString);
 
 // The auth service url
 export const AUTHENTICATION_SERVICE_DOMAIN = config.require(
@@ -47,10 +47,10 @@ export const AUTHENTICATION_SERVICE_INTERNAL_SECRET = config.get(
   'authentication-service-internal-secret-key'
 )
   ? aws.secretsmanager
-    .getSecretVersionOutput({
-      secretId: config.require('authentication-service-internal-secret-key'),
-    })
-    .apply((secret) => secret.secretString)
+      .getSecretVersionOutput({
+        secretId: config.require('authentication-service-internal-secret-key'),
+      })
+      .apply((secret) => secret.secretString)
   : 'local';
 
 // Fusionauth license key grabbed from aws secrets manager
