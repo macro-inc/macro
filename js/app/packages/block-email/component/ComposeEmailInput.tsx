@@ -6,10 +6,7 @@ import { useHasPaidAccess } from '@core/auth';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
-import {
-  createFilesReadyHandler,
-  getDragDropPosition,
-} from '@core/component/LexicalMarkdown/utils/fileUploadUtils';
+import { createFilesReadyHandler } from '@core/component/LexicalMarkdown/utils/fileUploadUtils';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { handleFileFolderDrop } from '@core/util/upload';
 import TextAa from '@icon/regular/text-aa.svg';
@@ -107,15 +104,10 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
 
   const onAddFilesAndDirs = (
     files: FileSystemFileEntry[],
-    directories: FileSystemDirectoryEntry[],
-    dropEvent?: DragEvent
+    directories: FileSystemDirectoryEntry[]
   ) => {
     const editor_ = editor();
     if (!editor_) return;
-
-    const getPositionCallback = dropEvent
-      ? () => getDragDropPosition(editor_, dropEvent, true)
-      : undefined;
 
     handleFileFolderDrop(
       files,
@@ -124,7 +116,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
         editor_,
         undefined,
         undefined,
-        getPositionCallback,
+        undefined,
         (uploadedItemIds) => {
           uploadedItemIds.forEach((itemId) => {
             makeAttachmentPublic(itemId);
@@ -215,7 +207,11 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
           use:fileFolderDrop={{
             onDragStart: () => setIsDragging(true),
             onDragEnd: () => setIsDragging(false),
-            onDrop: onAddFilesAndDirs,
+            onDrop: (files, dirs) => {
+              handleFileFolderDrop(files, dirs, (u) =>
+                handleAddAttachments(u.map((f) => f.file))
+              );
+            },
           }}
         >
           <div class={`${!isDragging() && 'hidden'} absolute inset-0`}>
