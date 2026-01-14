@@ -1,3 +1,7 @@
+import type {
+  CreateCommentRequest,
+  EditCommentRequest,
+} from '@service-storage/generated/schemas';
 import type { Comment } from '@service-storage/generated/schemas/comment';
 import type { CreateCommentResponse } from '@service-storage/generated/schemas/createCommentResponse';
 
@@ -29,16 +33,6 @@ export type Root = ThreadedComment & {
 
 export type Reply = ThreadedComment & {};
 
-export type CreateCommentInfo = {
-  threadId: number;
-  text: string;
-};
-
-export type UpdateCommentInfo = {
-  commentId: number;
-  text: string;
-};
-
 export type DeleteCommentInfo = {
   commentId: number;
   removeAnchorThreadOnly?: boolean;
@@ -50,10 +44,13 @@ export type Layout = {
 
 export type CommentOperations = {
   createComment: (
-    info: CreateCommentInfo
+    info: CreateCommentRequest
   ) => Promise<CreateCommentResponse | null>;
   deleteComment: (info: DeleteCommentInfo) => Promise<boolean> | undefined;
-  updateComment: (info: UpdateCommentInfo) => Promise<boolean>;
+  updateComment: (
+    commentId: number,
+    info: EditCommentRequest
+  ) => Promise<boolean>;
 };
 
 export function isRoot(comment: Root | Reply): comment is Root {

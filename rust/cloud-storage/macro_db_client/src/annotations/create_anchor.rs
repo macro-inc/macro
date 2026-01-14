@@ -45,10 +45,10 @@ pub async fn create_comment_anchor(
     transaction: &mut Transaction<'_, Postgres>,
     owner: &str,
     document_id: &str,
-    req: AnchorRequest,
+    req: &AnchorRequest,
     thread_id: i64,
 ) -> Result<Anchor> {
-    match req {
+    match &req {
         AnchorRequest::Pdf(anchor) => match anchor {
             PdfAnchorRequest::Attachment(attachment) => match attachment {
                 UnthreadedPdfUuidRequest::Highlight(uuid) => {
@@ -63,7 +63,7 @@ pub async fn create_comment_anchor(
                 attach_anchor_to_thread(
                     transaction,
                     thread_id,
-                    anchor.uuid,
+                    &anchor.uuid,
                     AnchorTableName::PdfPlaceableCommentAnchor,
                 )
                 .await?;
@@ -81,7 +81,7 @@ pub async fn create_comment_anchor(
                 attach_anchor_to_thread(
                     transaction,
                     thread_id,
-                    anchor.uuid,
+                    &anchor.uuid,
                     AnchorTableName::PdfHighlightAnchor,
                 )
                 .await?;
@@ -94,7 +94,7 @@ pub async fn create_comment_anchor(
 pub async fn attach_pdf_highlight_anchor(
     transaction: &mut Transaction<'_, Postgres>,
     thread_id: i64,
-    uuid: Uuid,
+    uuid: &Uuid,
 ) -> Result<PdfHighlightAnchor> {
     validate_thread_exists(transaction.as_mut(), thread_id).await?;
 
@@ -154,7 +154,7 @@ pub async fn attach_pdf_highlight_anchor(
 async fn attach_anchor_to_thread(
     transaction: &mut Transaction<'_, Postgres>,
     thread_id: i64,
-    anchor_id: Uuid,
+    anchor_id: &Uuid,
     anchor_table_name: AnchorTableName,
 ) -> Result<()> {
     println!("{:?} {:?}", thread_id, anchor_id);
@@ -183,9 +183,14 @@ pub async fn create_unthreaded_anchor(
     match req {
         CreateUnthreadedAnchorRequest::Pdf(anchor) => match anchor {
             CreateUnthreadedPdfAnchorRequest::Highlight(anchor) => {
-                let anchor =
-                    create_pdf_highlight_anchor(&mut transaction, owner, document_id, None, anchor)
-                        .await?;
+                let anchor = create_pdf_highlight_anchor(
+                    &mut transaction,
+                    owner,
+                    document_id,
+                    None,
+                    &anchor,
+                )
+                .await?;
                 transaction.commit().await?;
                 Ok(CreateUnthreadedAnchorResponse {
                     document_id: document_id.to_string(),
@@ -201,7 +206,7 @@ async fn create_pdf_placeable_anchor(
     owner: &str,
     document_id: &str,
     thread_id: i64,
-    anchor: PdfPlaceableCommentAnchorRequest,
+    anchor: &PdfPlaceableCommentAnchorRequest,
 ) -> Result<PdfPlaceableCommentAnchor> {
     validate_thread_exists(transaction.as_mut(), thread_id).await?;
 
@@ -259,7 +264,7 @@ async fn create_pdf_highlight_anchor(
     owner: &str,
     document_id: &str,
     thread_id: Option<i64>,
-    anchor: PdfHighlightAnchorRequest,
+    anchor: &PdfHighlightAnchorRequest,
 ) -> Result<PdfHighlightAnchor> {
     if let Some(thread_id) = thread_id {
         validate_thread_exists(transaction.as_mut(), thread_id).await?;
@@ -393,9 +398,14 @@ mod create_comment_anchor_tests {
             should_lock_on_save: true,
         };
 
-        let result =
-            create_pdf_placeable_anchor(&mut transaction, owner, document_id, 1001, anchor_request)
-                .await;
+        let result = create_pdf_placeable_anchor(
+            &mut transaction,
+            owner,
+            document_id,
+            1001,
+            &anchor_request,
+        )
+        .await;
         let anchor = result.unwrap();
 
         assert_eq!(anchor.owner, "macro|user@user.com");
@@ -454,7 +464,7 @@ mod create_comment_anchor_tests {
             owner,
             document_id,
             Some(1001),
-            highlight_anchor_request,
+            &highlight_anchor_request,
         )
         .await;
         assert!(result.is_ok(), "Failed to create highlight anchor");
@@ -488,7 +498,8 @@ mod create_comment_anchor_tests {
         ));
 
         let result =
-            create_comment_anchor(&mut transaction, owner, document_id, anchor_request, 9849).await;
+            create_comment_anchor(&mut transaction, owner, document_id, &anchor_request, 9849)
+                .await;
 
         assert!(result.is_err(), "Should fail when thread IDs do not match");
     }
@@ -525,7 +536,7 @@ mod create_comment_anchor_tests {
             &mut transaction,
             owner,
             document_id,
-            anchor_request,
+            &anchor_request,
             deleted_thread_id,
         )
         .await;
@@ -562,7 +573,8 @@ mod create_comment_anchor_tests {
             }));
 
         let result =
-            create_comment_anchor(&mut transaction, owner, document_id, anchor_request, 9849).await;
+            create_comment_anchor(&mut transaction, owner, document_id, &anchor_request, 9849)
+                .await;
 
         assert!(
             result.is_err(),
@@ -604,7 +616,7 @@ mod create_comment_anchor_tests {
             &mut transaction,
             owner,
             document_id,
-            anchor_request,
+            &anchor_request,
             deleted_thread_id,
         )
         .await;
@@ -692,7 +704,7 @@ mod create_comment_anchor_tests {
         }
 
         let mut transaction = pool.begin().await.unwrap();
-        let result = attach_pdf_highlight_anchor(&mut transaction, 1005, uuid).await;
+        let result = attach_pdf_highlight_anchor(&mut transaction, 1005, &uuid).await;
         transaction.commit().await.unwrap();
 
         let highlight_anchor = result.unwrap();
@@ -751,7 +763,7 @@ mod create_comment_anchor_tests {
         }
 
         let mut transaction = pool.begin().await.unwrap();
-        let result = attach_pdf_highlight_anchor(&mut transaction, 1001, uuid).await;
+        let result = attach_pdf_highlight_anchor(&mut transaction, 1001, &uuid).await;
         transaction.commit().await.unwrap();
 
         assert!(result.is_err());
@@ -796,7 +808,7 @@ mod create_comment_anchor_tests {
         }
 
         let mut transaction = pool.begin().await.unwrap();
-        let result = attach_pdf_highlight_anchor(&mut transaction, 1001, Uuid::new_v4()).await;
+        let result = attach_pdf_highlight_anchor(&mut transaction, 1001, &Uuid::new_v4()).await;
         transaction.commit().await.unwrap();
 
         // TODO: this should fail because the uuid is different?

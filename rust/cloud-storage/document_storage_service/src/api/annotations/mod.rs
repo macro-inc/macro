@@ -6,6 +6,8 @@ pub mod edit_anchor;
 pub mod edit_comment;
 pub mod get;
 
+use std::fmt::Display;
+
 use super::context::ApiContext;
 use axum::{
     Json, Router,
@@ -14,8 +16,13 @@ use axum::{
     routing::{delete, get, patch, post},
 };
 use macro_db_client::annotations::CommentError;
-use model::response::ErrorResponse;
+use macro_user_id::user_id::MacroUserIdStr;
+use model::{annotations::Comment, response::ErrorResponse};
+use model_entity::EntityType;
+use model_notifications::{DocumentMentionMetadata, NotificationQueueMessage};
+use serde::Serialize;
 use tower::ServiceBuilder;
+use utoipa::ToSchema;
 
 pub fn router(state: ApiContext) -> Router<ApiContext> {
     Router::new()
@@ -113,5 +120,124 @@ pub fn comment_error_response(e: anyhow::Error, default_msg: &str) -> Result<Res
             )
                 .into_response())
         }
+    }
+}
+
+#[derive(ToSchema)]
+pub enum NotifLocationType {
+    CreateComment,
+    EditComment,
+}
+impl Serialize for NotifLocationType {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.collect_str(self)
+    }
+}
+
+// NB: We ulse this Display impl for `impl Serialize for NotifLocationType`.
+impl Display for NotifLocationType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                NotifLocationType::CreateComment => "create-comment",
+                NotifLocationType::EditComment => "edit-comment",
+            }
+        )
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Location {
+    r#type: NotifLocationType,
+    comment_id: Option<i64>,
+    thread_id: i64,
+    text: String,
+}
+
+// TODO: This is consumed in the frontend. It should be shared.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Metadata {
+    mention_id: String,
+    location: Location,
+}
+
+#[expect(clippy::too_many_arguments)]
+fn build_mention_notif(
+    notif_location_type: NotifLocationType,
+    text: String,
+    comment: Option<&Comment>,
+    thread_id: i64,
+    mentions: &[String],
+    document_name: String,
+    owner: MacroUserIdStr<'static>,
+    file_type: Option<String>,
+    sender_id: Option<MacroUserIdStr<'static>>,
+    document_id: String,
+    mention_id: &str,
+) -> NotificationQueueMessage {
+    let metadata = DocumentMentionMetadata {
+        document_name,
+        owner,
+        file_type,
+        metadata: Some(
+            serde_json::to_value(Metadata {
+                mention_id: mention_id.to_string(),
+                location: Location {
+                    r#type: notif_location_type,
+                    comment_id: comment.map(|c| c.comment_id),
+                    thread_id,
+                    text,
+                },
+            })
+            .expect("always works"),
+        ),
+    };
+
+    NotificationQueueMessage {
+        notification_entity: EntityType::Document.with_entity_string(document_id),
+        notification_event: metadata.into(),
+        sender_id,
+        recipient_ids: Some(mentions.to_vec()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn check_ser_notif_type() -> Result<(), Box<dyn std::error::Error>> {
+        let a = NotifLocationType::CreateComment;
+        let res = serde_json::json!({
+            r#"type"#: a,
+        })
+        .to_string();
+        assert_eq!(res, r#"{"type":"create-comment"}"#);
+        Ok(())
+    }
+    #[test]
+    fn check_ser_meta() -> Result<(), Box<dyn std::error::Error>> {
+        let m = Metadata {
+            mention_id: "xxx".to_string(),
+            location: Location {
+                r#type: NotifLocationType::EditComment,
+                thread_id: 42,
+                comment_id: Some(99),
+                text: "yy".to_string(),
+            },
+        };
+        let res = serde_json::to_string(&m).unwrap();
+        assert!(res.contains(r#"mentionId":"xxx""#));
+        assert!(res.contains(r#"threadId":42"#));
+        assert!(res.contains(r#"commentId":99"#));
+        assert!(res.contains(r#""type":"edit-comment""#));
+        Ok(())
     }
 }

@@ -47,19 +47,10 @@ pub struct GetChannelsRequest {
 
 impl GetChannelsRequest {
     pub fn into_params(self) -> GetChannelsParams {
-        let GetChannelsRequest {
-            macro_id,
-            limit,
-            query,
-        } = self;
-
-        // make sure the limit for page size exists within a reasonable range
-        let limit = limit.unwrap_or(20).clamp(20, 100);
-
         GetChannelsParams {
-            macro_id,
-            limit,
-            query,
+            macro_id: self.macro_id,
+            limit: self.limit,
+            query: self.query,
         }
     }
 }
@@ -67,7 +58,7 @@ impl GetChannelsRequest {
 #[derive(Debug)]
 pub struct GetChannelsParams {
     macro_id: MacroUserIdStr<'static>,
-    limit: u32,
+    limit: Option<u32>,
     query: Query<Uuid, SimpleSortMethod, LiteralTree<ChannelLiteral>>,
 }
 
@@ -76,7 +67,7 @@ impl GetChannelsParams {
         &self.macro_id
     }
 
-    pub fn limit(&self) -> u32 {
+    pub fn limit(&self) -> Option<u32> {
         self.limit
     }
 

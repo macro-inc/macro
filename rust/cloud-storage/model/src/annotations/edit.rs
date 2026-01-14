@@ -1,7 +1,10 @@
+use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use utoipa::ToSchema;
 use uuid::Uuid;
+
+use crate::annotations::Mentions;
 
 use super::{Anchor, Comment};
 
@@ -10,6 +13,8 @@ use super::{Anchor, Comment};
 pub struct EditCommentRequest {
     pub text: Option<String>,
     pub metadata: Option<Value>,
+    pub mentions: Option<Mentions>,
+    pub thread_id: i64,
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -48,6 +53,10 @@ pub enum EditAnchorRequest {
 #[serde(rename_all = "camelCase")]
 pub struct EditCommentResponse {
     pub document_id: String,
+    pub document_name: String,
+    pub file_type: Option<String>,
+    #[schema(value_type = String)]
+    pub document_owner: MacroUserIdStr<'static>,
     #[serde(flatten)]
     pub comment: Comment,
 }

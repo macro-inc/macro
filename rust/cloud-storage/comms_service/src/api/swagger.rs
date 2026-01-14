@@ -13,14 +13,13 @@ use crate::api::{
         post_typing::PostTypingRequest,
         remove_participants::RemoveParticipantsRequest,
     },
+    extractors::ParticipantAccess,
     mentions::{
         CreateEntityMentionRequest, CreateEntityMentionResponse, DeleteEntityMentionRequest,
         DeleteEntityMentionResponse,
     },
     preview::get_batch_preview::{GetBatchChannelPreviewRequest, GetBatchChannelPreviewResponse},
 };
-
-use crate::api::extractors::ParticipantAccess;
 use comms::inbound::{ApiActivity, ApiChannelWithLatest};
 use comms_db_client::channels::patch_channel::PatchChannelOptions;
 use comms_db_client::model::{

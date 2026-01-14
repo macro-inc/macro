@@ -527,8 +527,18 @@ export const editCommentParams = zod.object({
 });
 
 export const editCommentBody = zod.object({
+  mentions: zod
+    .union([
+      zod.null(),
+      zod.object({
+        mentionId: zod.string(),
+        users: zod.array(zod.string()),
+      }),
+    ])
+    .optional(),
   metadata: zod.any().optional(),
   text: zod.string().nullish(),
+  threadId: zod.number(),
 });
 
 export const editCommentResponse = zod
@@ -547,6 +557,9 @@ export const editCommentResponse = zod
   .and(
     zod.object({
       documentId: zod.string(),
+      documentName: zod.string(),
+      documentOwner: zod.string(),
+      fileType: zod.string().nullish(),
     })
   );
 
@@ -631,6 +644,15 @@ export const createCommentBody = zod.object({
             fileType: zod.enum(['pdf']),
           })
         ),
+    ])
+    .optional(),
+  mentions: zod
+    .union([
+      zod.null(),
+      zod.object({
+        mentionId: zod.string(),
+        users: zod.array(zod.string()),
+      }),
     ])
     .optional(),
   metadata: zod.any().optional(),
@@ -3099,26 +3121,6 @@ export const postItemsSoupResponse = zod.object({
   ),
   next_cursor: zod.string().nullish(),
 });
-
-export const upsertUserMentionsParams = zod.object({
-  document_id: zod.string().describe('Document ID'),
-});
-
-export const upsertUserMentionsBody = zod.object({
-  mentions: zod
-    .array(zod.string())
-    .describe('List of user ids that are mentioned for this notification'),
-  metadata: zod
-    .any()
-    .optional()
-    .describe('Custom metadata that may be needed for the notification'),
-});
-
-export const upsertUserMentionsResponse = zod
-  .object({})
-  .describe(
-    'Empty response is required due to custom fetch forcing `response.json()`'
-  );
 
 /**
  * @summary Gets the users pinned items

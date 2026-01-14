@@ -136,6 +136,6 @@ export const ENABLE_CUSTOM_CURSOR_TEXT_GLYPH_DETECTION = true;
 export const ENABLE_CREATE_TASK = true;
 export const ENABLE_TASKS_TABS = true;
 
-export const ENABLE_EMAIL_SHARING = false;
+export const ENABLE_EMAIL_SHARING = true;
 
 export const ENABLE_FRECENCY = false;

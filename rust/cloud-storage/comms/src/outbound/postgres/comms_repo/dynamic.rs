@@ -169,7 +169,7 @@ pub async fn get_user_channels_dynamic(
     params: &GetChannelsParams,
 ) -> Result<Vec<ChannelWithParticipants>, sqlx::Error> {
     let user_id = params.user();
-    let query_limit = params.limit() as i64;
+    let query_limit = params.limit().map(|l| l as i64);
     let cursor = params.query();
     let sort_method_str = cursor.sort_method().to_string();
     let (cursor_id, cursor_timestamp) = cursor.vals();
