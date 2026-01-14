@@ -125,35 +125,25 @@ export function AttachMenu(props: AttachMenuProps) {
               onSelect: async (files) => {
                 if (props.setIsPending) {
                   await handleFileUpload(files, props.setIsPending, (items) => {
-                    console.log(
-                      'AttachMenu: File upload completed, items:',
-                      items
-                    );
                     // Use direct DocumentMentionInfo if callback exists
                     if (props.onAttachDocuments) {
-                      console.log(
-                        'AttachMenu: Using onAttachDocuments callback'
-                      );
                       props.onAttachDocuments(items);
-                    } else {
-                      console.log('AttachMenu: Using legacy onAttach callback');
-                      // Fallback to Item conversion for backward compatibility
-                      const itemsToAttach = items.map((item) => ({
-                        id: item.documentId,
-                        name: item.documentName,
-                        type:
-                          item.blockName === 'project' ? 'project' : 'document',
-                        fileType:
-                          item.blockName !== 'project'
-                            ? item.blockName
-                            : undefined,
-                      })) as Item[];
-                      console.log(
-                        'AttachMenu: Converted items:',
-                        itemsToAttach
-                      );
-                      props.onAttach(itemsToAttach);
+                      return;
                     }
+
+                    // Fallback to Item conversion for backward compatibility
+                    const itemsToAttach = items.map((item) => ({
+                      id: item.documentId,
+                      name: item.documentName,
+                      type:
+                        item.blockName === 'project' ? 'project' : 'document',
+                      fileType:
+                        item.blockName !== 'project'
+                          ? item.blockName
+                          : undefined,
+                    })) as Item[];
+
+                    props.onAttach(itemsToAttach);
                   });
                 }
                 props.onClose?.();
