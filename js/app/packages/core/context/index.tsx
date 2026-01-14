@@ -1,3 +1,5 @@
+// Adapted from opencode (https://github.com/anthropics/opencode)
+// MIT License - Copyright (c) 2025 opencode
 import {
   createContext,
   createMemo,
