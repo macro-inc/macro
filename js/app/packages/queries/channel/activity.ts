@@ -3,7 +3,10 @@ import { channelKeys } from './keys';
 import { throwOnErr } from '@core/util/maybeResult';
 import { commsServiceClient } from '@service-comms/client';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
-import type { ActivityType } from '@service-comms/generated/models';
+import type {
+  ActivityType,
+  ApiActivity as ChannelsActivity,
+} from '@service-comms/generated/models';
 import { queryClient } from '@queries/client';
 
 export function useChannelsActivityQuery() {
@@ -19,7 +22,11 @@ type UpdateChannelActivityMutationVars = {
 };
 
 export function useUpdateChannelsActivityMutation(
-  callbacks?: MutationCallbacks<any, any, any>
+  callbacks?: MutationCallbacks<
+    ChannelsActivity,
+    Error,
+    UpdateChannelActivityMutationVars
+  >
 ) {
   return useMutation(() => ({
     mutationFn: async (vars: UpdateChannelActivityMutationVars) =>
@@ -30,7 +37,11 @@ export function useUpdateChannelsActivityMutation(
             activity_type: vars.activityType,
           })
       ),
-    ...withCallbacks<any, any, any>(
+    ...withCallbacks<
+      ChannelsActivity,
+      Error,
+      UpdateChannelActivityMutationVars
+    >(
       {
         onError(error) {
           console.error('failed to update activity for channel', error);
