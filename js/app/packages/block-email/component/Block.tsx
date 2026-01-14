@@ -15,7 +15,9 @@ export default function BlockEmail() {
 
   const threadId = createMemo(() => blockData()?.thread?.db_id ?? '');
 
-  const threadQuery = useThreadQuery(threadId);
+  const threadQuery = useThreadQuery(threadId, () => ({
+    enabled: !!threadId(),
+  }));
 
   const title = () => {
     const data = threadQuery.data;
