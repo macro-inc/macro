@@ -1,4 +1,4 @@
-import { useChannelsContext } from '@core/component/ChannelsProvider';
+import { useChannelsContext } from '@core/context/channels';
 import {
   type CombinedRecipientItem,
   recipientEntityMapper,
@@ -43,8 +43,7 @@ const useCombinedRecipientsRoot = () => {
   const channelsWithParticipants = createMemo<
     CombinedRecipientItem<'channel'>[]
   >(() =>
-    channelsContext
-      .channels()
+    channelsContext.channels
       .filter((channel) => channel.participants.length > 2)
       .map(recipientEntityMapper('channel'))
   );

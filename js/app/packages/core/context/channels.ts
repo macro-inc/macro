@@ -63,9 +63,9 @@ export const { use: useChannelsContext, provider: ChannelsContextProvider } =
     },
   });
 
-export function useChannelName(channelId: string) {
+export function useChannelName(channelId: string, fallback?: string) {
   const { channelsById } = useChannelsContext();
-  return createMemo(() => channelsById[channelId].name);
+  return createMemo(() => channelsById[channelId]?.name ?? fallback);
 }
 
 export function useChannelActivity(channelId: string) {

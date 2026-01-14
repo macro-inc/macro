@@ -1,4 +1,4 @@
-import { useChannelName } from '@core/component/ChannelsProvider';
+import { useChannelName } from '@core/context/channels';
 import { EntityIcon as CoreEntityIcon } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';

@@ -1,5 +1,5 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { useChannelsContext } from '@core/component/ChannelsProvider';
+import { useChannelsContext } from '@core/context/channels';
 import { toast } from '@core/component/Toast/Toast';
 import { HotkeyTags } from '@core/hotkey/constants';
 import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
@@ -695,9 +695,9 @@ export function createNavigationEntityListShortcut({
           // Check if user is an admin by looking up channel participant data
           try {
             const channelsContext = useChannelsContext();
-            const channel = channelsContext
-              .channels()
-              .find((c) => c.id === entity.id);
+            const channel = channelsContext.channels.find(
+              (c) => c.id === entity.id
+            );
             if (channel) {
               const participant = channel.participants.find(
                 (p) => p.user_id === currentUserId
