@@ -39,6 +39,9 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
   );
   let scopedSplitPanelContextType: SplitPanelContextType = {} as any;
   const splitPanelContext = useSplitPanelOrThrow();
+  const scopedLayoutRefs: SplitPanelContextType['layoutRefs'] = {
+    ...props.splitPanelContext.layoutRefs,
+  };
 
   if (props.selectedEntity.type === 'project') {
     const { getSplitCount } = useSplitLayout();
@@ -113,7 +116,7 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
 
   return (
     <div
-      class="size-full"
+      class="flex flex-col size-full"
       onFocusIn={(event) => {
         if (interactedWith()) return;
         const relatedTarget = event.relatedTarget;
@@ -137,23 +140,40 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
       tabIndex={-1}
       ref={setContainerRef}
     >
-      <SplitPanelContext.Provider
-        value={{
-          ...props.splitPanelContext,
-          ...scopedSplitPanelContextType,
-          layoutRefs: {
-            ...props.splitPanelContext.layoutRefs,
-            headerLeft: undefined,
-            headerRight: undefined,
-          },
-          halfSplitState: () => ({
-            side: 'right',
-            percentage: 30,
-          }),
-        }}
-      >
-        <Dynamic component={blockInstance().element} />
-      </SplitPanelContext.Provider>
+      {/* Preview-specific header slots so blocks can render their topbars (via SplitHeaderLeft/Right) */}
+      <div class="isolate relative w-full h-10 overflow-clip text-ink shrink-0 border-b border-edge-muted/50 bg-panel">
+        <div class="absolute inset-0 flex items-center">
+          <div
+            class="relative w-fit min-w-0 h-full shrink pl-2 flex items-center"
+            ref={(ref) => {
+              scopedLayoutRefs.headerLeft = ref;
+            }}
+          />
+          <div class="h-full grow-1" />
+          <div
+            class="min-w-4 h-full shrink-0 pr-2 flex items-center justify-end"
+            ref={(ref) => {
+              scopedLayoutRefs.headerRight = ref;
+            }}
+          />
+        </div>
+      </div>
+
+      <div class="flex-1 min-h-0">
+        <SplitPanelContext.Provider
+          value={{
+            ...props.splitPanelContext,
+            ...scopedSplitPanelContextType,
+            layoutRefs: scopedLayoutRefs,
+            halfSplitState: () => ({
+              side: 'right',
+              percentage: 30,
+            }),
+          }}
+        >
+          <Dynamic component={blockInstance().element} />
+        </SplitPanelContext.Provider>
+      </div>
     </div>
   );
 };
