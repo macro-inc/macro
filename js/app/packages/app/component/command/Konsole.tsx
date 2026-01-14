@@ -26,7 +26,6 @@ import {
   COMMAND_ITEM_MARGIN,
   COMMAND_ITEM_PADDING,
   CommandItemCard,
-  createChannelLookup,
   filterItemByCategory,
   hydrateChannel,
   setCommandCategoryIndex,

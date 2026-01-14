@@ -74,47 +74,10 @@ function createChannelsContext(
   channelsQuery: UseQueryResult<ChannelWithLatest[], Error>,
   activityQuery: UseQueryResult<ChannelActivity[], Error>
 ): ChannelsContext {
-  const [channels, setChannels] = createSignal<ChannelWithLatest[]>([]);
-  const [activity, setActivity] = createSignal<ChannelActivity[]>([]);
-
-  createEffect(() => {
-    if (!channelsQuery.isSuccess) return;
-    setChannels(channelsQuery.data ?? []);
-  });
-
-  createEffect(() => {
-    if (!activityQuery.isSuccess) return;
-    setActivity(activityQuery.data ?? []);
-  });
-
-  const updateActivityForChannel = async (
-    channelId: string,
-    activityType: ActivityType
-  ) => {
-    await commsServiceClient.postActivity({
-      activity_type: activityType,
-      channel_id: channelId,
-    });
-    activityQuery.refetch();
-  };
-
-  const refetchChannels = async () => {
-    await channelsQuery.refetch();
-  };
-
-  const refetchActivity = async () => {
-    await activityQuery.refetch();
-  };
-
   return {
-    channels,
-    activity,
     isLoading: () => channelsQuery.isLoading || activityQuery.isLoading,
     _channelsQuery: channelsQuery,
     _activityQuery: activityQuery,
-    updateActivityForChannel,
-    refetchChannels,
-    refetchActivity,
   };
 }
 

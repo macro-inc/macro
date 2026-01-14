@@ -152,7 +152,7 @@ export const commsServiceClient = {
       (result) => result
     );
   },
-  async postActivity(args: PostActivityRequest & WithChannelId) {
+  async postActivity(args: PostActivityRequest) {
     const { activity_type, channel_id } = args;
     return mapOk(
       await commsFetch<Activity>(`/activity`, {
