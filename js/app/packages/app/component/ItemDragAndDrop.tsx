@@ -8,7 +8,29 @@ import {
   useDragDropContext,
 } from '@thisbeyond/solid-dnd';
 import { EntityIcon } from 'core/component/EntityIcon';
-import { createMemo, type JSXElement } from 'solid-js';
+import {
+  createContext,
+  createMemo,
+  createSignal,
+  type JSXElement,
+  onCleanup,
+  useContext,
+  type Accessor,
+} from 'solid-js';
+
+type DragOperationContextValue = {
+  isAltKey: Accessor<boolean>;
+};
+
+const DragOperationContext = createContext<DragOperationContextValue>();
+
+export function useDragOperation() {
+  const context = useContext(DragOperationContext);
+  if (!context) {
+    throw new Error('useDragOperation must be used within ItemDndProvider');
+  }
+  return context;
+}
 
 export function ItemDragOverlay() {
   const [state] = useDragDropContext() ?? [];
@@ -59,13 +81,37 @@ export function ItemDragOverlay() {
 }
 
 export function ItemDndProvider(props: { children: JSXElement }) {
+  const [isAltPressed, setIsAltPressed] = createSignal(false);
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.altKey && !isAltPressed()) {
+      setIsAltPressed(true);
+    }
+  };
+
+  const handleKeyUp = (e: KeyboardEvent) => {
+    if (!e.altKey && isAltPressed()) {
+      setIsAltPressed(false);
+    }
+  };
+
+  window.addEventListener('keydown', handleKeyDown);
+  window.addEventListener('keyup', handleKeyUp);
+
+  onCleanup(() => {
+    window.removeEventListener('keydown', handleKeyDown);
+    window.removeEventListener('keyup', handleKeyUp);
+  });
+
   return (
-    <DragDropProvider collisionDetector={mostIntersecting}>
-      <DragDropSensors />
-      {props.children}
-      <DragOverlay class="z-drag">
-        <ItemDragOverlay />
-      </DragOverlay>
-    </DragDropProvider>
+    <DragOperationContext.Provider value={{ isAltKey: isAltPressed }}>
+      <DragDropProvider collisionDetector={mostIntersecting}>
+        <DragDropSensors />
+        {props.children}
+        <DragOverlay class="z-drag">
+          <ItemDragOverlay />
+        </DragOverlay>
+      </DragDropProvider>
+    </DragOperationContext.Provider>
   );
 }

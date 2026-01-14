@@ -10,7 +10,6 @@ import { debounce } from '@solid-primitives/scheduled';
 import { createVirtualizer, type Virtualizer } from '@tanstack/solid-virtual';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
 import { StaticMarkdownContext } from 'core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { extractSplitId } from '../utils/draggableId';
 import {
   type Accessor,
   createComputed,
@@ -46,7 +45,11 @@ import type {
 } from '../types/entity';
 import type { WithSearch } from '../types/search';
 import { Entity } from './Entity';
-import { altKeyPressed } from '@app/signal/altKey';
+import type { EntityDragData, EntityDragEvent } from '../types/drag';
+import {
+  createCopyDssEntityMutation,
+  createMoveToProjectDssEntityMutation,
+} from '../queries/dss';
 
 const DEBOUNCE_FETCH_MORE_MS = 50;
 
@@ -60,6 +63,11 @@ const cacheMap = new Map<
     cache?: any; // TBD
   }
 >();
+
+export type ProjectDropData = {
+  dropType: 'project';
+  id: string;
+};
 
 /**
  * Merges search data from two entities, preferring service source with local as fallback.
@@ -464,25 +472,32 @@ export function createUnifiedInfiniteList<T extends EntityData>({
     const [scrollParentRef, setScrollParentRef] =
       createSignal<HTMLDivElement>();
 
-    // Track drag state for soup entries
-    const [state] = useDragDropContext() ?? [];
+    const [state, { onDragEnd }] = useDragDropContext() ?? [
+      undefined,
+      {
+        onDragEnd: () => {},
+      },
+    ];
 
-    const isDraggingSoupEntry = createMemo(() => {
+    const moveMutation = createMoveToProjectDssEntityMutation();
+    const copyMutation = createCopyDssEntityMutation();
+
+    const entityDragData = createMemo((): EntityDragData | undefined => {
       const draggable = state?.active.draggable;
-      if (!draggable) return false;
-      return draggable.data.type !== undefined;
+      if (!draggable) return;
+      if (draggable.data.dragType !== 'entity') return;
+      return draggable.data as EntityDragData;
     });
 
     const showProjectOverlay = createMemo(() => {
-      if (!isDraggingSoupEntry()) return false;
       if (props.viewType !== 'project') return false;
       if (!props.viewId) return false;
 
-      const draggable = state?.active.draggable;
-      if (!draggable) return false;
+      const dragData = entityDragData();
+      if (!dragData) return false;
 
       // Only show overlay for entity types that can be added to projects
-      const entityType = draggable.data?.type;
+      const entityType = dragData.type;
       if (
         entityType !== 'document' &&
         entityType !== 'chat' &&
@@ -492,43 +507,26 @@ export function createUnifiedInfiniteList<T extends EntityData>({
       }
 
       // Don't show overlay if dragging within the same split
-      const draggableId = draggable.id;
-      if (props.splitId && typeof draggableId === 'string') {
-        const draggableSplitId = extractSplitId(draggableId);
-        if (draggableSplitId === props.splitId) {
-          return false;
-        }
-      }
+      if (props.splitId && entityDragData()?.splitId === props.splitId)
+        return false;
 
       const activeDroppable = state?.active.droppable;
-      if (!activeDroppable) return false;
+      if (!activeDroppable || activeDroppable.data.dropType !== 'project')
+        return false;
 
       // Show overlay if dropping on this project or an entity within it
       if (activeDroppable.id === props.viewId) return true;
-      if (
-        activeDroppable.data &&
-        typeof activeDroppable.data === 'object' &&
-        'projectId' in activeDroppable.data &&
-        activeDroppable.data.projectId === props.viewId
-      ) {
-        return true;
-      }
 
       return false;
     });
 
-    const draggedEntitySupportsCopy = createMemo(() => {
-      const draggable = state?.active.draggable;
-      if (!draggable) return false;
-      const entityType = draggable.data?.type;
-      return entityType === 'document' || entityType === 'chat';
-    });
-
     const dropActionText = createMemo(() => {
-      if (altKeyPressed() && draggedEntitySupportsCopy()) {
-        return 'Copy';
+      switch (entityDragData()?.operation?.()) {
+        case 'copy':
+          return 'Copy';
+        case 'move':
+          return 'Move';
       }
-      return 'Move';
     });
 
     // Estimate items per viewport and derive overscan and page size
@@ -711,13 +709,79 @@ export function createUnifiedInfiniteList<T extends EntityData>({
         </Match>
         <Match when={true}>
           <div class="flex size-full relative" ref={setListRef}>
-            <Show when={props.viewType === 'project' && props.viewId}>
-              {(viewId) => {
-                const droppable = createDroppable(viewId(), {
-                  type: 'project',
-                  id: viewId(),
-                });
+            <Show when={props.viewType === 'project' && props.viewId} keyed>
+              {(id) => {
+                const data: ProjectDropData = {
+                  dropType: 'project',
+                  id,
+                };
+                const droppable = createDroppable(id, data);
                 false && droppable;
+
+                onDragEnd((event: EntityDragEvent) => {
+                  const droppable = event.droppable;
+                  if (
+                    !droppable ||
+                    droppable.id !== id ||
+                    droppable.data?.dropType !== 'project'
+                  )
+                    return;
+
+                  const dropData = droppable.data as ProjectDropData;
+
+                  const targetProjectId = dropData.id;
+
+                  const draggable = event.draggable;
+                  if (!draggable?.data) return;
+
+                  const entityData = draggable.data;
+
+                  // ignore drag and drop within same split
+                  if (entityData.splitId === props.splitId) return;
+
+                  switch (entityData.operation()) {
+                    case 'copy':
+                      if (
+                        entityData.type !== 'document' &&
+                        entityData.type !== 'chat'
+                      ) {
+                        console.error(
+                          'copy only supported for document and chat'
+                        );
+                        return;
+                      }
+                      copyMutation.mutate(
+                        {
+                          entity: entityData,
+                        },
+                        {
+                          onSuccess: (id: string) => {
+                            // TODO: add project id as an argument to backend copy endpoint
+                            // so we don't need multiple calls to copy and move
+                            moveMutation.mutate({
+                              entity: {
+                                ...entityData,
+                                id,
+                              },
+                              project: {
+                                id: targetProjectId,
+                              },
+                            });
+                          },
+                        }
+                      );
+                      break;
+                    case 'move':
+                      moveMutation.mutate({
+                        entity: entityData,
+                        project: {
+                          id: targetProjectId,
+                        },
+                      });
+                      break;
+                  }
+                });
+
                 return (
                   <div
                     use:droppable

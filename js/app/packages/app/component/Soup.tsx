@@ -2,7 +2,6 @@ import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
 } from '@app/component/GlobalAppState';
-import { altKeyPressed, resetAltKeyPressed } from '@app/signal/altKey';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
 import { playSound } from '@app/util/sound';
 import { useIsAuthenticated } from '@core/auth';
@@ -32,16 +31,12 @@ import {
   isTaskEntity,
   queryKeys,
   useQueryClient as useEntityQueryClient,
-  type EntityDragEvent,
-  createMoveToProjectDssEntityMutation,
-  createCopyDssEntityMutation,
 } from '@macro-entity';
 import { createEffectOnEntityTypeNotification } from '@notifications';
 import { invalidateEntityNotifications } from '@queries/notification/user-notifications';
 import { storageServiceClient } from '@service-storage/client';
 import { Navigate } from '@solidjs/router';
 import { useMutation, useQueryClient } from '@tanstack/solid-query';
-import { useDragDropContext } from '@thisbeyond/solid-dnd';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import {
   type Component,
@@ -297,62 +292,6 @@ export function Soup() {
 
   const [isDragging, setIsDragging] = createSignal(false);
   const [isValidDrag, setIsValidDrag] = createSignal(true);
-
-  const moveMutation = createMoveToProjectDssEntityMutation();
-  const copyMutation = createCopyDssEntityMutation();
-
-  useDragDropContext()?.[1].onDragEnd((event: EntityDragEvent) => {
-    const droppable = event.droppable;
-    const targetProjectId = droppable?.data?.id;
-    if (!droppable || droppable.data?.type !== 'project' || !targetProjectId)
-      return;
-
-    const draggable = event.draggable;
-    if (!draggable?.data) return;
-
-    const entityData = draggable.data;
-
-    const isCopyOperation = altKeyPressed();
-
-    if (
-      entityData.type === 'document' ||
-      entityData.type === 'chat' ||
-      entityData.type === 'project'
-    ) {
-      if (isCopyOperation && entityData.type !== 'project') {
-        copyMutation.mutate(
-          {
-            entity: entityData,
-          },
-          {
-            onSuccess: (id: string) => {
-              // TODO: add project id as an argument to backend copy endpoint
-              // so we don't need multiple calls to copy and move
-              moveMutation.mutate({
-                entity: {
-                  ...entityData,
-                  id,
-                },
-                project: {
-                  id: targetProjectId,
-                },
-              });
-            },
-          }
-        );
-      } else {
-        moveMutation.mutate({
-          entity: entityData,
-          project: {
-            id: targetProjectId,
-          },
-        });
-      }
-    }
-
-    // Reset Alt key state after drop
-    resetAltKeyPressed();
-  });
 
   const handleFileUpload = useHandleFileUpload();
 

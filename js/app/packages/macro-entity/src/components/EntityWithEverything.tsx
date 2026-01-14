@@ -11,9 +11,9 @@ import { useEmail, useUserId } from '@service-gql/client';
 import { syncServiceClient } from '@service-sync/client';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createDraggable } from '@thisbeyond/solid-dnd';
+import { useDragOperation } from '@app/component/ItemDragAndDrop';
 import { getIconConfig } from 'core/component/EntityIcon';
 import { StaticMarkdown } from 'core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { createDraggableId } from '../utils/draggableId';
 import { unifiedListMarkdownTheme } from 'core/component/LexicalMarkdown/theme';
 import { UserIcon } from 'core/component/UserIcon';
 import { emailToMacroId, tryMacroId, useDisplayName } from 'core/user';
@@ -23,6 +23,7 @@ import {
   createEffect,
   createMemo,
   createSignal,
+  createUniqueId,
   For,
   Match,
   onCleanup,
@@ -53,6 +54,7 @@ import type {
 } from '../types/search';
 import type { EntityClickEvent, EntityClickHandler } from './Entity';
 import { KeyPropertiesGrid, PropertyPills } from './PropertyPills';
+import type { EntityDragData } from '@macro-entity';
 
 export const ENTITY_HEIGHT = 40;
 
@@ -832,8 +834,25 @@ export function EntityWithEverything(
     );
   });
 
-  const draggableId = createDraggableId(props.entity.id, props.splitId);
-  const draggable = createDraggable(draggableId, { ...props.entity });
+  const { isAltKey } = useDragOperation();
+  const operation = createMemo(() => {
+    switch (props.entity.type) {
+      case 'document':
+        return isAltKey() ? 'copy' : 'move';
+      case 'chat':
+        return isAltKey() ? 'copy' : 'move';
+      default:
+        return 'move';
+    }
+  });
+  const draggableId = `${props.entity.id}-${props.splitId ?? createUniqueId()}`;
+  const dragData: EntityDragData = {
+    dragType: 'entity',
+    splitId: props.splitId,
+    ...props.entity,
+    operation,
+  };
+  const draggable = createDraggable(draggableId, dragData);
   false && draggable;
 
   // The main click handler for the entity row should navigate to an entity

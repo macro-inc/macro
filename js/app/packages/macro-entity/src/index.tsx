@@ -30,6 +30,5 @@ export type * from './types/drag';
 export * from './types/entity';
 export * from './types/notification';
 export * from './types/search';
-export * from './utils/draggableId';
 export * from './utils/filter';
 export { composeFilters, createFilterComposer } from './utils/filter';
