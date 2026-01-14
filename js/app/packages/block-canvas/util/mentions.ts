@@ -46,7 +46,7 @@ export async function untrackMentionsInTextNode(
   nodeId: string
 ) {
   const getTextNodeEditor = useTextNodeEditors().getEditor;
-  if (isFileNode(node) && !node.isChat && !node.isRss) {
+  if (isFileNode(node) && node.entityType === 'document') {
     if (node.mentionUuid) {
       await untrackMention(blockId, node.mentionUuid);
     }

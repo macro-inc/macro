@@ -91,7 +91,12 @@ export const useFile = sharedInstance((): Operator => {
         {
           type: 'file',
           file: id,
-          isChat: type === 'chat',
+          entityType: type as
+            | 'document'
+            | 'chat'
+            | 'project'
+            | 'channel'
+            | 'email',
           x: mousePos.x - fileWidth / 2,
           y: mousePos.y - fileHeight / 2,
           width: fileWidth,
@@ -123,7 +128,7 @@ export const useFile = sharedInstance((): Operator => {
 
       // Track document mention and store the UUID
       let mentionUuid: string | undefined;
-      if (blockId && op.node.file && !op.node.isChat && !op.node.isRss) {
+      if (blockId && op.node.file && op.node.entityType === 'document') {
         mentionUuid = await trackMention(blockId, 'document', op.node.file);
       }
 

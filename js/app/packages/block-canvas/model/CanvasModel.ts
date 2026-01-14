@@ -139,16 +139,33 @@ export const TextNodeSchema = BaseNodeSchema.extend({
   followTextWidth: z.boolean().optional(),
 });
 
-// File node schema
-export const FileNodeSchema = BaseNodeSchema.extend({
-  type: z.literal('file'),
-  isChat: z.boolean().optional(),
-  isRss: z.boolean().optional(),
-  isProject: z.boolean().optional(),
-  file: z.string(),
-  subpath: z.string().optional(),
-  mentionUuid: z.string().optional(),
-});
+// File node schema with backward compatibility for old isChat/isProject/isRss fields
+export const FileNodeSchema = z.preprocess(
+  (data: any) => {
+    // Migrate old schema to new schema
+    if (data && typeof data === 'object' && !data.entityType) {
+      if (data.isChat) {
+        data.entityType = 'chat';
+      } else if (data.isProject) {
+        data.entityType = 'project';
+      } else {
+        data.entityType = 'document';
+      }
+      // Remove old fields
+      delete data.isChat;
+      delete data.isRss;
+      delete data.isProject;
+    }
+    return data;
+  },
+  BaseNodeSchema.extend({
+    type: z.literal('file'),
+    entityType: z.enum(['document', 'chat', 'project', 'channel', 'email']),
+    file: z.string(),
+    subpath: z.string().optional(),
+    mentionUuid: z.string().optional(),
+  })
+);
 
 // Link node schema
 export const LinkNodeSchema = BaseNodeSchema.extend({

@@ -891,16 +891,14 @@ export function CanvasController(props: ParentProps) {
   const attachFileOnDrag = async (
     event: DragEventWithData,
     id: string,
-    isChat = false,
-    isRss = false,
-    isProject = false
+    entityType: 'document' | 'chat' | 'project' | 'channel' | 'email'
   ) => {
     if (!event.droppable) return;
     track(TrackingEvents.BLOCKCANVAS.FILES.SIDEBARDND);
 
     // Track document mention and get UUID
     let mentionUuid: string | undefined;
-    if (blockId && !isChat && !isRss) {
+    if (blockId && entityType === 'document') {
       mentionUuid = await trackMention(blockId, 'document', id);
     }
 
@@ -908,9 +906,7 @@ export function CanvasController(props: ParentProps) {
       {
         type: 'file',
         file: id,
-        isChat,
-        isRss,
-        isProject,
+        entityType,
         mentionUuid,
         x: (dragPosition()?.x ?? centerVec().x) - fileWidth / 2,
         y: (dragPosition()?.y ?? centerVec().y) - fileHeight / 2,
@@ -949,16 +945,20 @@ export function CanvasController(props: ParentProps) {
     if (res.blockName === undefined) return;
     if (!position) return;
 
+    const entityType = res.item.type;
+
     if (res.blockName === 'image') {
       attachImageOnDrag(event);
     } else if (res.blockName === 'video' && ENABLE_CANVAS_VIDEO) {
       attachVideoOnDrag(event);
-    } else if (res.blockName === 'chat') {
-      attachFileOnDrag(event, res.id, true, false);
-    } else if (res.blockName === 'project') {
-      attachFileOnDrag(event, res.id, false, false, true);
-    } else {
-      attachFileOnDrag(event, res.id, false, false);
+    } else if (
+      entityType === 'document' ||
+      entityType === 'chat' ||
+      entityType === 'project' ||
+      entityType === 'channel' ||
+      entityType === 'email'
+    ) {
+      attachFileOnDrag(event, res.id, entityType);
     }
   };
 
