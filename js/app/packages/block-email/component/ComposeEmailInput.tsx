@@ -7,7 +7,6 @@ import {
 } from '@block-email/constants';
 import { useHasPaidAccess } from '@core/auth';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import {
@@ -17,7 +16,6 @@ import {
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { handleFileFolderDrop } from '@core/util/upload';
 import TextAa from '@icon/regular/text-aa.svg';
-import XIcon from '@icon/regular/x.svg';
 import { $appendWatermarkNodeToLast } from '@lexical-core';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import ArrowFatLineUp from '@phosphor-icons/core/fill/arrow-fat-line-up-fill.svg?component-solid';
@@ -285,18 +283,6 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
             portalScope="local"
             onPasteFilesAndDirs={onAddFilesAndDirs}
           />
-        </div>
-        <div class="flex flex-wrap items-center gap-2">
-          <DeprecatedTextButton
-            class="w-fit"
-            icon={PaperclipIcon}
-            secondaryIcon={XIcon}
-            secondaryTooltip={{ label: 'Remove attachment' }}
-            onOptionClick={() => {}}
-            theme="base"
-          >
-            Test attachment.pdf
-          </DeprecatedTextButton>
         </div>
       </div>
       <div class="flex flex-row w-full h-8 justify-between items-center space-x-2 allow-css-brackets mt-2">
