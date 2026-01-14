@@ -103,7 +103,7 @@ async fn upsert_message_contacts(
 
     let contacts: Vec<_> = contacts
         .into_iter()
-        .map(|c| normalize::normalize_contact(c))
+        .map(normalize::normalize_contact)
         .collect();
 
     let link_id = contacts[0].link_id;
