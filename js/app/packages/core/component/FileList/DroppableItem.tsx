@@ -1,3 +1,4 @@
+import { createDraggableId } from '@macro-entity';
 import type { ItemType } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
@@ -32,7 +33,7 @@ export function DroppableItem(props: ParentProps<DroppapleItemProps>) {
     type: props.type,
     id: props.id,
   };
-  const droppableId = props.context ? `${props.id}-${props.context}` : props.id;
+  const droppableId = createDraggableId(props.id, props.context);
   const droppable = createDroppable(droppableId, data);
   const [state] = useDragDropContext() ?? [];
 

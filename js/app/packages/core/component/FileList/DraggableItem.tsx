@@ -1,3 +1,4 @@
+import { createDraggableId } from '@macro-entity';
 import type { ItemType } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import type { Item } from '@service-storage/generated/schemas/item';
@@ -61,7 +62,7 @@ export function DraggableItem(props: ParentProps<DraggableItemProps>) {
       }) as DraggableData
   );
 
-  const draggableId = props.context ? `${props.id}-${props.context}` : props.id;
+  const draggableId = createDraggableId(props.id, props.context);
 
   let draggableRef: HTMLDivElement | undefined;
   const [draggable, setDraggable] = createSignal(
