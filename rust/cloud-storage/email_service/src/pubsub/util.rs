@@ -91,19 +91,3 @@ pub async fn cg_refresh_email(client: &ConnectionGatewayClient, macro_id: &str, 
             .inspect_err(|e| tracing::error!(macro_id = %macro_id, "Failed to refresh email: {e}"));
     }
 }
-
-/// Fetches the Link details from the database using the link_id from the notification.
-pub async fn fetch_link(db: &PgPool, link_id: Uuid) -> anyhow::Result<Link> {
-    email_db_client::links::get::fetch_link_by_id(db, link_id)
-        .await
-        .map_err(|e| {
-            let error_message = "Unable to fetch link from DB";
-            tracing::error!(error = ?e, link_id = %link_id, error_message);
-            anyhow!(error_message)
-        })?
-        .ok_or_else(|| {
-            let error_message = "Link not found";
-            tracing::error!(link_id = %link_id, error_message);
-            anyhow!(error_message)
-        })
-}

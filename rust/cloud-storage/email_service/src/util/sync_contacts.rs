@@ -107,7 +107,7 @@ async fn fetch_new_contacts_from_google(
             );
         }
         Err(e) => {
-            tracing::error!(error = ?e, link_id = %link.id, "Failed to get primary contacts");
+            tracing::debug!(error = ?e, link_id = %link.id, "Failed to get primary contacts");
         }
     };
 
@@ -132,7 +132,7 @@ async fn fetch_new_contacts_from_google(
             );
         }
         Err(e) => {
-            tracing::error!(error = ?e, link_id = %link.id, "Failed to get other contacts");
+            tracing::debug!(error = ?e, link_id = %link.id, "Failed to get other contacts");
         }
     };
 
