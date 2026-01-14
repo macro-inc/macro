@@ -85,7 +85,7 @@ export function registerSplitHotkeys(args: {
       });
       return true;
     },
-    addHandler: 'add',
+    registrationType: 'add',
     hotkeyToken: TOKENS.split.goHome,
     displayPriority: 8,
   });
@@ -159,7 +159,7 @@ export function registerSplitHotkeys(args: {
       focusAdjacentSplit('right');
       return true;
     },
-    addHandler: 'add',
+    registrationType: 'add',
   });
 
   registerHotkey({
@@ -172,7 +172,7 @@ export function registerSplitHotkeys(args: {
       focusAdjacentSplit('left');
       return true;
     },
-    addHandler: 'add',
+    registrationType: 'add',
   });
 
   return {};

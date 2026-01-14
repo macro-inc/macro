@@ -130,7 +130,7 @@ export interface HotkeyRegistrationOptions {
    * - 'add': Add this handler to the list of handlers for this hotkey
    * @default 'override'
    */
-  addHandler?: 'add' | 'override';
+  registrationType?: 'add' | 'override';
 
   /**
    * If true, hotkey command can be hidden from the UI. It will still run, but may not be displayed.

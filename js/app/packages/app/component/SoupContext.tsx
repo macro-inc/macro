@@ -1317,7 +1317,7 @@ export function createNavigationEntityListShortcut({
   });
 
   registerEntityHotkey({
-    hotkey: ['h'],
+    hotkey: ['h', 'arrowleft'],
     scopeId: splitHotkeyScope,
     description: 'Navigate to parent context',
     hotkeyToken: TOKENS.unifiedList.navigation.parent,
@@ -1327,41 +1327,11 @@ export function createNavigationEntityListShortcut({
       if (!parentContext) {
         return false;
       }
-      setActiveContext(parentContext);
 
       const parentDomRef = parentContext.domRef();
-
-      if (parentDomRef) {
-        parentDomRef.focus();
+      if (parentContext === activeContext()) {
         return { stopPropagation: true, stopRunningHandlers: true };
       }
-
-      return false;
-    },
-    canExecuteKeyDownHandler: () => {
-      return isViewingList();
-    },
-    addHandler: 'add',
-    handlerPriority: 10,
-    hide: true,
-  });
-
-  registerEntityHotkey({
-    hotkey: ['arrowleft'],
-    scopeId: splitHotkeyScope,
-    description: 'Navigate to parent context',
-    hotkeyToken: TOKENS.unifiedList.navigation.parent,
-    keyDownHandler: () => {
-      const parentContext = getParentContext();
-
-      if (!parentContext) {
-        return false;
-      }
-      if (parentContext === activeContext()) {
-        return false;
-      }
-
-      const parentDomRef = parentContext.domRef();
 
       if (parentDomRef) {
         setActiveContext(parentContext);
@@ -1374,13 +1344,13 @@ export function createNavigationEntityListShortcut({
     canExecuteKeyDownHandler: () => {
       return isViewingList();
     },
-    addHandler: 'add',
+    registrationType: 'add',
     handlerPriority: 10,
     hide: true,
   });
 
   registerEntityHotkey({
-    hotkey: ['arrowright'],
+    hotkey: ['l', 'arrowright'],
     scopeId: splitHotkeyScope,
     description: 'Navigate to child context',
     hotkeyToken: TOKENS.unifiedList.navigation.child,
@@ -1409,7 +1379,7 @@ export function createNavigationEntityListShortcut({
     canExecuteKeyDownHandler: () => {
       return isViewingList() && getChildContext() !== undefined;
     },
-    addHandler: 'add',
+    registrationType: 'add',
     handlerPriority: 10,
     hide: true,
   });
@@ -1507,7 +1477,7 @@ export function createNavigationEntityListShortcut({
       return true;
     },
     displayPriority: 4,
-    addHandler: 'add',
+    registrationType: 'add',
   });
 
   registerEntityHotkey({
@@ -1763,7 +1733,7 @@ function registerEntityHotkey(
     hotkeyToken: undefined,
     tags: undefined,
     condition: undefined,
-    addHandler: undefined,
+    registrationType: undefined,
     handlerPriority: undefined,
     keyDownHandler: (event) => {
       globalKeyboardEvent = event;
@@ -1797,6 +1767,7 @@ function registerEntityHotkey(
         if (!splitScope || !(splitScope instanceof HTMLElement)) return;
         const scopeId = splitScope.dataset.hotkeyScope;
         if (!scopeId || !opts.hotkey) return undefined;
+
         return getHotkeyCommand(
           scopeId,
           // @ts-expect-error

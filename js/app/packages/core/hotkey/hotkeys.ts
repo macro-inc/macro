@@ -115,7 +115,7 @@ export function registerHotkey(
     hotkeyToken,
     displayPriority,
     handlerPriority,
-    addHandler = 'override',
+    registrationType = 'override',
     hide,
     icon,
     tags,
@@ -199,7 +199,7 @@ export function registerHotkey(
   };
 
   // Check for existing hotkeys in the scope and warn if overriding
-  if (addHandler === 'override') {
+  if (registrationType === 'override') {
     hotkeys?.forEach((h) => {
       const existingHandlers = scopeNode.hotkeyCommands.get(h);
       if (existingHandlers && existingHandlers.length > 0) {
@@ -229,7 +229,7 @@ export function registerHotkey(
       hotkeys.forEach((h) => {
         // Add to existing handlers array
         const existingHandlers = scopeNode.hotkeyCommands.get(h) || [];
-        if (addHandler === 'add') {
+        if (registrationType === 'add') {
           scopeNode.hotkeyCommands.set(h, [...existingHandlers, command]);
         } else {
           // Override: replace with single-element array
