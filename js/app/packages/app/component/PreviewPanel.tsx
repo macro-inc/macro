@@ -141,7 +141,10 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
       ref={setContainerRef}
     >
       {/* Preview-specific header slots so blocks can render their topbars (via SplitHeaderLeft/Right) */}
-      <div class="isolate relative w-full h-10 overflow-clip text-ink shrink-0 border-b border-edge-muted/50 bg-panel">
+      <div
+        class="isolate relative w-full h-10 overflow-clip text-ink shrink-0 border-b border-edge-muted/50 bg-panel"
+        data-preview-split-header
+      >
         <div class="absolute inset-0 flex items-center">
           <div
             class="relative w-fit min-w-0 h-full shrink pl-2 flex items-center"
@@ -160,7 +163,10 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
       </div>
 
       {/* Preview-specific toolbar slots so blocks can render the "share" bar (via SplitToolbarLeft/Right) */}
-      <div class="relative w-full flex items-center justify-between shrink-0 h-10 px-1 border-b border-edge-muted/50 bg-panel">
+      <div
+        class="relative w-full flex items-center justify-between shrink-0 h-10 px-1 border-b border-edge-muted/50 bg-panel"
+        data-preview-split-toolbar
+      >
         <div
           class="flex h-full items-center flex-1"
           ref={(ref) => {
