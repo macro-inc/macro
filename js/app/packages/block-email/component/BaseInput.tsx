@@ -187,7 +187,6 @@ export function BaseInput(props: {
   const [expandedRecipientsRef, setExpandedRecipientsRef] =
     createSignal<HTMLDivElement>();
   const [editor, setEditor] = createSignal<LexicalEditor>();
-  const [showSubject, _] = createSignal(props.newMessage ?? false);
   const [showExpandedRecipients, setShowExpandedRecipients] =
     createSignal<boolean>(false);
   const [isDragging, setIsDragging] = createSignal<boolean>();
@@ -914,7 +913,9 @@ export function BaseInput(props: {
           </div>
         </Show>
       </div>
-      <div class={`${showSubject() ? 'flex' : 'hidden'} flex-row items-center`}>
+      <div
+        class={`${props.newMessage ? 'flex' : 'hidden'} flex-row items-center`}
+      >
         <div class="text-sm min-w-16 pl-4">Subject</div>
         <input
           type="text"
