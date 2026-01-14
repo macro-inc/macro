@@ -718,7 +718,7 @@ export function createUnifiedInfiniteList<T extends EntityData>({
                   Move to {props.name ?? 'folder'}
                 </h3>
                 <p class="text-sm text-ink-muted">
-                  Drop here to move items to this project
+                  Drop here to move items to this folder
                 </p>
               </div>
             </Show>
