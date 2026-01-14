@@ -259,7 +259,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
           <RecipientSelector<'user' | 'contact' | 'channel'>
             placeholder="To: Email Or Group"
             setSelectedOptions={setSelectedOptions}
-            selectedOptions={selectedOptions}
+            selectedOptions={selectedOptions()}
             triedToSubmit={triedToSubmit}
             options={destinationOptions}
             triggerMode="input"
