@@ -185,60 +185,6 @@ export async function removeHistoryItem(
   return false;
 }
 
-export async function optimisticUpdateParent(
-  itemType: ItemType,
-  itemId: string,
-  parentId: string
-) {
-  const [resource, { mutate }] = historyResource();
-  const result = resource.latest;
-  if (resource.error || isErr(result)) return false;
-
-  const currentHistory = result[1].data;
-
-  // Create new history array with the item moved
-  const newHistory = [...currentHistory].map((item) => {
-    const currentId = item.id;
-    if (currentId === itemId) {
-      return {
-        ...item,
-      };
-    }
-    return item;
-  });
-
-  // Optimistically update the UI
-  mutate(
-    ok({
-      data: newHistory,
-    })
-  );
-
-  // And then check the Server
-
-  let maybeUpdated;
-  if (itemType === 'document') {
-    maybeUpdated = await storageServiceClient.editDocument({
-      documentId: itemId,
-      projectId: parentId,
-    });
-  } else if (itemType === 'chat') {
-    maybeUpdated = await cognitionApiServiceClient.editChatProject({
-      chat_id: itemId,
-      project_id: parentId,
-    });
-  } else {
-    maybeUpdated = await storageServiceClient.projects.edit({
-      id: itemId,
-      projectParentId: parentId,
-    });
-  }
-
-  refetchResources();
-  if (isErr(maybeUpdated)) return false;
-  return maybeUpdated[1]?.success;
-}
-
 export async function postNewHistoryItem(
   itemType: CloudStorageItemType,
   itemId: string
