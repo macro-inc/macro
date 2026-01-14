@@ -23,7 +23,13 @@ pub async fn handler(
     _event: LambdaEvent<EventBridgeEvent>,
 ) -> Result<(), Error> {
     if matches!(ctx.config.environment, Environment::Production) {
-        tokio::try_join!(send_refresh_messages(&ctx), send_delete_messages(&ctx))?;
+        // only send delete messages once daily, during the night
+        let current_hour = chrono::Utc::now().hour();
+        if current_hour == 5 {
+            tokio::try_join!(send_refresh_messages(&ctx), send_delete_messages(&ctx))?;
+        } else {
+            send_refresh_messages(&ctx).await?;
+        }
     } else {
         send_refresh_messages(&ctx).await?;
     }
