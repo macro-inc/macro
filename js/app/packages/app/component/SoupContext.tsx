@@ -253,6 +253,7 @@ export function createNavigationEntityListShortcut({
   splitHotkeyScope,
   soupContext,
   previewState,
+  getSplitCount,
 }: {
   splitHandle: SplitHandle;
   splitHotkeyScope: string;
@@ -1409,6 +1410,60 @@ export function createNavigationEntityListShortcut({
     },
     canExecuteKeyDownHandler: () => isViewingList(),
     displayPriority: 10,
+  });
+
+  const clearMultiCondition: () => boolean = () =>
+    isViewingList() && viewData().multiSelectEntities.length > 0;
+  const closeSpotlightCondition = () => splitHandle.isSpotLight();
+  const goHomeCondition = () => !splitIsUnifiedList();
+  const closeSplitCondition = () => splitIsUnifiedList() && getSplitCount() > 1;
+  const escapeDescription = () => {
+    if (clearMultiCondition()) {
+      return 'Clear multi selection';
+    }
+    if (closeSpotlightCondition()) {
+      return 'Close spotlight';
+    }
+    if (closeSplitCondition()) {
+      return 'Close split';
+    }
+    if (goHomeCondition()) {
+      return 'Go home';
+    }
+    return '';
+  };
+  registerHotkey({
+    hotkey: ['escape'],
+    scopeId: splitHotkeyScope,
+    description: escapeDescription,
+    condition: () =>
+      clearMultiCondition() ||
+      closeSpotlightCondition() ||
+      closeSplitCondition() ||
+      goHomeCondition(),
+    keyDownHandler: () => {
+      if (clearMultiCondition()) {
+        const length = viewData().multiSelectEntities.length;
+        setViewDataStore(selectedView(), 'multiSelectEntities', []);
+        return length > 1;
+      }
+      if (closeSpotlightCondition()) {
+        splitHandle.toggleSpotlight();
+        return true;
+      }
+      if (closeSplitCondition()) {
+        splitHandle.close();
+        return true;
+      }
+      if (goHomeCondition()) {
+        splitHandle.replace({
+          next: { type: 'component', id: 'unified-list' },
+          referredFrom: 'unified-list',
+        });
+        return true;
+      }
+      return false;
+    },
   });
 }
 
