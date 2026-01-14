@@ -11,9 +11,6 @@ type DragAndDropWrapperProps = {
   fileType?: FileType;
   id: string;
   name: string;
-  isOwner: boolean;
-  parentId?: string;
-  lastEdited: string;
   depth?: number;
   context?: string;
   isEditing?: boolean;
@@ -33,8 +30,6 @@ export function DragAndDropWrapper(
         type={props.itemType}
         fileType={props.fileType}
         name={props.name}
-        isOwner={props.isOwner}
-        parentId={props.parentId}
         depth={props.depth}
         context={props.context}
         isEditing={props.isEditing}
@@ -50,9 +45,6 @@ export function DragAndDropWrapper(
       id={props.id}
       fileType={props.fileType}
       name={props.name}
-      isOwner={props.isOwner}
-      parentId={props.parentId}
-      lastEdited={props.lastEdited}
       context={props.context}
       isEditing={props.isEditing}
       selectedItems={props.selectedItems}
@@ -65,8 +57,6 @@ export function DragAndDropWrapper(
         type={props.itemType}
         fileType={props.fileType}
         name={props.name}
-        isOwner={props.isOwner}
-        parentId={props.parentId}
         depth={props.depth}
         context={props.context}
         isEditing={props.isEditing}

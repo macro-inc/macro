@@ -29,11 +29,6 @@ export type DraggableItemProps = {
   id: string;
   fileType?: FileType;
   name: string;
-  isOwner: boolean;
-  parentId?: string;
-  small?: boolean;
-  lastEdited?: string | number;
-  depth?: number;
   selectedItems: Accessor<Item[]>;
   setSelectedItems: Setter<Item[]>;
   size?: FileListSize;
@@ -51,22 +46,10 @@ export type DraggableData = {
   id: string;
   type: ItemType;
   fileType?: FileType;
-  isOwner?: boolean;
-  parentId?: string;
-  lastEdited?: string | number;
-  depth?: number;
-  small?: boolean;
-  isBulkMove?: boolean;
-  selectedItems?: Item[];
-  setSelectedItems?: Setter<Item[]>;
   size?: FileListSize;
 };
 
 export function DraggableItem(props: ParentProps<DraggableItemProps>) {
-  const isSelected = createMemo(() => {
-    return props.selectedItems().some((item) => item.id === props.id);
-  });
-
   const draggableData = createMemo(
     () =>
       ({
@@ -74,14 +57,6 @@ export function DraggableItem(props: ParentProps<DraggableItemProps>) {
         name: props.name,
         type: props.type,
         fileType: props.fileType,
-        isOwner: props.isOwner,
-        parentId: props.parentId,
-        lastEdited: props.lastEdited,
-        depth: props.depth,
-        small: props.small,
-        isBulkMove: isSelected() && props.selectedItems().length > 1,
-        selectedItems: props.selectedItems(),
-        setSelectedItems: props.setSelectedItems,
         size: props.size,
       }) as DraggableData
   );

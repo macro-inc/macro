@@ -10,10 +10,6 @@ export type DroppapleItemProps = {
   id: string;
   fileType?: FileType;
   name: string;
-  isOwner: boolean;
-  parentId?: string;
-  small?: boolean;
-  lastEdited?: string | number;
   depth?: number;
   deactivated?: boolean;
 };
@@ -28,22 +24,13 @@ declare module 'solid-js' {
 
 export type DroppableData = {
   type: ItemType | 'explorer-base';
-  name: string;
   id: string;
-  context?: string;
-  isOwner?: boolean;
-  parentId?: string;
-  depth?: number;
 };
 
 export function DroppableItem(props: ParentProps<DroppapleItemProps>) {
   const data: DroppableData = {
     type: props.type,
-    name: props.name,
     id: props.id,
-    isOwner: props.isOwner,
-    parentId: props.parentId ?? undefined,
-    depth: props.depth,
   };
   const droppableId = props.context ? `${props.id}-${props.context}` : props.id;
   const droppable = createDroppable(droppableId, data);
