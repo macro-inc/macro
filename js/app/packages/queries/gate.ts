@@ -8,5 +8,5 @@ export function queryReadyGate<T>(
 ): query is
   | (UseQueryResult<T, never> & { data: T })
   | (UseInfiniteQueryResult<T, never> & { data: T }) {
-  return !query.isLoading && !query.error && query.data !== undefined;
+  return !query.isLoading && query.data !== undefined;
 }
