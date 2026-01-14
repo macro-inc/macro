@@ -486,6 +486,18 @@ export function createUnifiedInfiniteList<T extends EntityData>({
       if (props.viewType !== 'project') return false;
       if (!props.projectId) return false;
 
+      const draggable = state?.active.draggable;
+      if (!draggable) return false;
+
+      // Don't show overlay if dragging within the same split
+      const draggableId = draggable.id;
+      if (props.splitId && typeof draggableId === 'string') {
+        const draggableSplitId = draggableId.split('-').pop();
+        if (draggableSplitId === props.splitId) {
+          return false;
+        }
+      }
+
       const activeDroppable = state?.active.droppable;
       if (!activeDroppable) return false;
 
