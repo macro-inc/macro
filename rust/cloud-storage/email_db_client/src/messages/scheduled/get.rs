@@ -14,7 +14,8 @@ pub async fn get_scheduled_message<'e, E>(
 where
     E: sqlx::Executor<'e, Database = sqlx::Postgres>,
 {
-    let record = sqlx::query!(
+    let record = sqlx::query_as!(
+        service::message::ScheduledMessage,
         r#"
         SELECT link_id, message_id, send_time, sent
         FROM email_scheduled_messages
@@ -26,13 +27,7 @@ where
     .fetch_optional(db)
     .await?;
 
-    // Convert the database record to a ScheduledMessage struct if found
-    Ok(record.map(|r| service::message::ScheduledMessage {
-        link_id: r.link_id,
-        message_id: r.message_id,
-        send_time: r.send_time,
-        sent: r.sent,
-    }))
+    Ok(record)
 }
 
 /// Retrieves scheduled messages for drafts that have not been sent yet. used for populating
@@ -51,8 +46,8 @@ pub async fn get_scheduled_message_no_auth(
         "#,
         message_id,
     )
-        .fetch_optional(db)
-        .await?;
+    .fetch_optional(db)
+    .await?;
 
     Ok(record)
 }
