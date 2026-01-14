@@ -1489,6 +1489,18 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     }
   });
 
+  createEffect(
+    on(splitContext.isPanelActive, () => {
+      if (splitContext.isPanelActive()) {
+        if (activeSoupContext() !== soupContext) return;
+        const domEl = activeSoupContext()?.domRef();
+        setTimeout(() => {
+          domEl?.focus();
+        });
+      }
+    })
+  );
+
   return (
     <>
       <Show when={!props.hideToolbar}>
