@@ -39,5 +39,5 @@ pub struct SoupProject {
     pub viewed_at: Option<chrono::DateTime<Utc>>,
 
     /// Properties
-    pub properties: Option<Vec<EntityPropertyWithDefinition>>,
+    pub properties: Vec<EntityPropertyWithDefinition>,
 }

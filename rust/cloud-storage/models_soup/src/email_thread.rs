@@ -157,5 +157,5 @@ pub struct SoupEnrichedEmailThreadPreview {
     pub participants: Vec<SoupContact>,
     pub metadata: SoupEmailThreadPreviewMetadata,
     pub labels: Vec<SoupLabel>,
-    pub properties: Option<Vec<EntityPropertyWithDefinition>>,
+    pub properties: Vec<EntityPropertyWithDefinition>,
 }

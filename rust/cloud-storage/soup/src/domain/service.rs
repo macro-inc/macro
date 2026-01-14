@@ -285,7 +285,7 @@ where
                         participants: Vec::<SoupContact>::mirror(participants),
                         metadata: SoupEmailThreadPreviewMetadata::mirror(metadata),
                         labels: Vec::<SoupLabel>::mirror(labels),
-                        properties: None,
+                        properties: Default::default(),
                     };
                     let frecency_score = frecency_score.take();
                     FrecencySoupItem {

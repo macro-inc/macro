@@ -104,5 +104,5 @@ pub struct SoupDocument {
     pub sub_type: Option<SoupDocumentSubType>,
 
     /// Properties
-    pub properties: Option<Vec<EntityPropertyWithDefinition>>,
+    pub properties: Vec<EntityPropertyWithDefinition>,
 }

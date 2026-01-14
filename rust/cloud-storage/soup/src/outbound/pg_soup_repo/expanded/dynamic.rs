@@ -429,7 +429,7 @@ impl SoupRow {
                 updated_at,
                 viewed_at,
                 sub_type: SoupDocumentSubType::from_db(sub_type, is_completed),
-                properties: None,
+                properties: Default::default(),
             }),
             SoupRow::Chat(ChatRow {
                 id,
@@ -478,7 +478,7 @@ impl SoupRow {
                 created_at,
                 updated_at,
                 viewed_at,
-                properties: None,
+                properties: Default::default(),
             }),
         })
     }
@@ -563,13 +563,22 @@ pub(crate) async fn expanded_dynamic_cursor_soup(
     for item in &mut items {
         match item {
             SoupItem::Document(x) => {
-                x.properties = properties_map.get(&x.id.to_string()).cloned();
+                x.properties = properties_map
+                    .get(&x.id.to_string())
+                    .cloned()
+                    .unwrap_or_default();
             }
             SoupItem::Project(x) => {
-                x.properties = properties_map.get(&x.id.to_string()).cloned();
+                x.properties = properties_map
+                    .get(&x.id.to_string())
+                    .cloned()
+                    .unwrap_or_default();
             }
             SoupItem::EmailThread(x) => {
-                x.properties = properties_map.get(&x.thread.id.to_string()).cloned();
+                x.properties = properties_map
+                    .get(&x.thread.id.to_string())
+                    .cloned()
+                    .unwrap_or_default();
             }
             _ => {}
         }

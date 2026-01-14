@@ -171,7 +171,7 @@ macro_rules! map_soup_type {
                         r.sub_type,
                         r.is_completed,
                     ),
-                    properties: None,
+                    properties: Default::default(),
                 },
             )),
             "chat" => Ok(::models_soup::item::SoupItem::Chat(
@@ -209,7 +209,7 @@ macro_rules! map_soup_type {
                     created_at: r.created_at,
                     updated_at: r.updated_at,
                     viewed_at: r.viewed_at,
-                    properties: None,
+                    properties: Default::default(),
                 },
             )),
             _ => Err(sqlx::Error::TypeNotFound {
