@@ -90,7 +90,6 @@ impl From<AccessError> for ExtractorError {
             }
             AccessError::BadRequest(msg) => ExtractorError::BadRequest(msg),
             AccessError::DatabaseError(_) => ExtractorError::Database,
-            AccessError::ExternalServiceError(_) => ExtractorError::Internal,
             AccessError::Internal => ExtractorError::Internal,
         }
     }

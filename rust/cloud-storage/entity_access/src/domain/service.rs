@@ -1,6 +1,8 @@
+//! Entity access service implementation.
+
 use crate::domain::{
-    models::{AccessError, AccessLevel, EntityType, SharePermissionInfo},
-    ports::{AccessRepo, EntityAccessService},
+    models::{AccessError, AccessLevel, EntityType},
+    ports::{AccessRepository, EntityAccessService},
 };
 use std::str::FromStr;
 use uuid::Uuid;
@@ -8,23 +10,23 @@ use uuid::Uuid;
 /// Implementation of the [`EntityAccessService`].
 ///
 /// This service orchestrates access checks by:
-/// 1. Delegating to [`AccessRepo`] for database queries
-/// 2. Using [`ChannelMembershipService`] for channel-based permissions
-/// 3. Applying business rules (owner always has access, etc.)
+/// 1. Delegating to [`AccessRepository`] for database queries
+/// 2. Applying business rules (owner always has access, etc.)
+#[derive(Clone)]
 pub struct EntityAccessServiceImpl<R> {
-    access_repo: R,
+    repo: R,
 }
 
-impl<R, C> EntityAccessServiceImpl<R>
+impl<R> EntityAccessServiceImpl<R>
 where
-    R: AccessRepo,
+    R: AccessRepository,
 {
     /// Create a new entity access service.
-    pub fn new(access_repo: R) -> Self {
-        Self { access_repo }
+    pub fn new(repo: R) -> Self {
+        Self { repo }
     }
 
-    /// Internal method to get access level for optimized entity types.
+    /// Get access level for optimized entity types (document, chat, project, thread).
     ///
     /// These use the UserItemAccess table for efficient lookups.
     async fn get_optimized_access(
@@ -33,28 +35,18 @@ where
         user_id: &str,
         entity_type: EntityType,
     ) -> Result<Option<AccessLevel>, AccessError> {
-        let result = match entity_type {
-            EntityType::Document => {
-                self.access_repo
-                    .get_document_access(entity_id, user_id)
-                    .await
-            }
-            EntityType::Chat => self.access_repo.get_chat_access(entity_id, user_id).await,
-            EntityType::Project => {
-                self.access_repo
-                    .get_project_access(entity_id, user_id)
-                    .await
-            }
-            EntityType::Thread => self.access_repo.get_thread_access(entity_id, user_id).await,
+        match entity_type {
+            EntityType::Document => self.repo.get_document_access(entity_id, user_id).await,
+            EntityType::Chat => self.repo.get_chat_access(entity_id, user_id).await,
+            EntityType::Project => self.repo.get_project_access(entity_id, user_id).await,
+            EntityType::Thread => self.repo.get_thread_access(entity_id, user_id).await,
             _ => unreachable!("Only optimized types should call this method"),
-        };
-
-        result.map_err(|e| AccessError::DatabaseError(e.into()))
+        }
     }
 
-    /// Internal method to get access level for channel entity type.
+    /// Get access level for a channel.
     ///
-    /// Simply checks channel membership - members get View access.
+    /// Channel access is binary - members get View access, non-members get None.
     async fn get_channel_access(
         &self,
         channel_id: &str,
@@ -64,10 +56,9 @@ where
             .map_err(|_| AccessError::BadRequest("Invalid channel ID format"))?;
 
         let user_channels = self
-            .channel_service
-            .check_user_channels(user_id, &[channel_uuid])
-            .await
-            .map_err(AccessError::ExternalServiceError)?;
+            .repo
+            .check_user_channel_membership(user_id, &[channel_uuid])
+            .await?;
 
         if user_channels.contains(&channel_uuid) {
             Ok(Some(AccessLevel::View))
@@ -75,56 +66,11 @@ where
             Ok(None)
         }
     }
-
-    /// Calculate access level from a SharePermission record.
-    ///
-    /// Checks: ownership, public access, channel-based access.
-    async fn calculate_access_from_permission(
-        &self,
-        user_id: &str,
-        permission: &SharePermissionInfo,
-    ) -> Result<Option<AccessLevel>, AccessError> {
-        // Owner always has Owner access
-        if permission.owner_id == user_id {
-            return Ok(Some(AccessLevel::Owner));
-        }
-
-        let mut access_levels = Vec::new();
-
-        // Check public access
-        if permission.is_public {
-            access_levels.push(permission.public_access_level.unwrap_or(AccessLevel::View));
-        }
-
-        // Check channel-based access
-        if !permission.channel_permissions.is_empty() {
-            let channel_ids: Vec<_> = permission
-                .channel_permissions
-                .iter()
-                .map(|cp| cp.channel_id)
-                .collect();
-
-            let user_channels = self
-                .channel_service
-                .check_user_channels(user_id, &channel_ids)
-                .await
-                .map_err(AccessError::ExternalServiceError)?;
-
-            for cp in &permission.channel_permissions {
-                if user_channels.contains(&cp.channel_id) {
-                    access_levels.push(cp.access_level);
-                }
-            }
-        }
-
-        // Return the highest access level found
-        Ok(access_levels.into_iter().max())
-    }
 }
 
-impl<R, C> EntityAccessService for EntityAccessServiceImpl<R>
+impl<R> EntityAccessService for EntityAccessServiceImpl<R>
 where
-    R: AccessRepo,
+    R: AccessRepository,
 {
     #[tracing::instrument(err, skip(self))]
     async fn get_access_level(
@@ -139,7 +85,30 @@ where
                     .await
             }
             EntityType::Channel => self.get_channel_access(entity_id, user_id).await,
-            _ => unimplemented!("what the fuck"),
+            // These entity types don't have access checks implemented
+            EntityType::Company | EntityType::Task | EntityType::User => Ok(None),
+        }
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn check_access(
+        &self,
+        user_id: &str,
+        entity_id: &str,
+        entity_type: EntityType,
+        required_level: AccessLevel,
+    ) -> Result<AccessLevel, AccessError> {
+        let access_level = self
+            .get_access_level(user_id, entity_id, entity_type)
+            .await?;
+
+        match access_level {
+            Some(level) if level >= required_level => Ok(level),
+            Some(_) => Err(AccessError::Unauthorized),
+            None => Err(AccessError::Unauthorized),
         }
     }
 }
+
+#[cfg(test)]
+mod test;
