@@ -7,7 +7,7 @@ import { useRenderMermaid } from '@block-canvas/util/mermaid';
 import { withAnalytics } from '@coparse/analytics';
 import { type BlockName, useBlockId, useIsNestedBlock } from '@core/block';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
-import type { DragEventWithData } from '@macro-entity';
+import type { EntityDragEvent } from '@macro-entity';
 import { BasicHotkey } from '@core/component/Hotkey';
 import { OldMenu, OldMenuItem } from '@core/component/OldMenu';
 import {
@@ -816,7 +816,7 @@ export function CanvasController(props: ParentProps) {
     },
   ];
 
-  const wrapDndEvent = (event: DragEventWithData) => {
+  const wrapDndEvent = (event: EntityDragEvent) => {
     const currentPos = dragDropState?.active.sensor?.coordinates?.current;
     if (!currentPos) return;
     const mousePos = {
@@ -834,7 +834,7 @@ export function CanvasController(props: ParentProps) {
     };
   };
 
-  const attachImageOnDrag = (event: DragEventWithData) => {
+  const attachImageOnDrag = (event: EntityDragEvent) => {
     if (!event.droppable) return;
     track(TrackingEvents.BLOCKCANVAS.IMAGES.DSSIMAGE, {
       method: 'drag from sidebar',
@@ -860,7 +860,7 @@ export function CanvasController(props: ParentProps) {
     setSelectedTool(Tools.Select);
   };
 
-  const attachVideoOnDrag = (event: DragEventWithData) => {
+  const attachVideoOnDrag = (event: EntityDragEvent) => {
     if (!event.droppable) return;
     track(TrackingEvents.BLOCKCANVAS.VIDEOS.DSSVIDEO, {
       method: 'drag from sidebar',
@@ -889,7 +889,7 @@ export function CanvasController(props: ParentProps) {
   };
 
   const attachFileOnDrag = async (
-    event: DragEventWithData,
+    event: EntityDragEvent,
     id: string,
     entityType: 'document' | 'chat' | 'project' | 'channel' | 'email'
   ) => {
@@ -923,7 +923,7 @@ export function CanvasController(props: ParentProps) {
     setSelectedTool(Tools.Select);
   };
 
-  const dndDragMove = throttle((event: DragEventWithData) => {
+  const dndDragMove = throttle((event: EntityDragEvent) => {
     if (!droppable.isActiveDroppable) {
       setDragPosition();
       return;
@@ -934,7 +934,7 @@ export function CanvasController(props: ParentProps) {
     setDragPosition(clientToCanvas(mousePos));
   }, 60);
 
-  const dndDragEnd = (event: DragEventWithData) => {
+  const dndDragEnd = (event: EntityDragEvent) => {
     if (!dragPosition()) return;
     if (!canEdit()) return;
 
@@ -964,11 +964,11 @@ export function CanvasController(props: ParentProps) {
 
   onDragEnd((event) => {
     if (event.droppable?.id !== 'canvas-input-' + _id) return;
-    dndDragEnd(event as DragEventWithData);
+    dndDragEnd(event as EntityDragEvent);
   });
 
   onDragMove((event) => {
-    dndDragMove(event as DragEventWithData);
+    dndDragMove(event as EntityDragEvent);
   });
 
   const [_mouseDownPos, setMouseDownPos] = mouseDownPositionSignal;

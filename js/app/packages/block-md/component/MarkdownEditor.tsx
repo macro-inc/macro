@@ -4,7 +4,7 @@ import { markdownBlockErrorSignal } from '@block-md/signal/error';
 import { FindAndReplaceStore } from '@block-md/signal/findAndReplaceStore';
 import { revisionsSignal, rewriteSignal } from '@block-md/signal/rewriteSignal';
 import { type BlockName, useBlockId } from '@core/block';
-import type { DragEventWithData } from '@macro-entity';
+import type { EntityDragEvent } from '@macro-entity';
 import { DecoratorRenderer } from '@core/component/LexicalMarkdown/component/core/DecoratorRenderer';
 import { FocusClickTarget } from '@core/component/LexicalMarkdown/component/core/FocusClickTarget';
 import {
@@ -288,7 +288,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
   ];
 
   // turn the solid dnd events into something we can use.
-  const wrapDndEvent = (event: DragEventWithData) => {
+  const wrapDndEvent = (event: EntityDragEvent) => {
     const currentPos = dragDropState?.active.sensor?.coordinates?.current;
     if (!currentPos) return;
     const mousePos = {
@@ -306,7 +306,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     };
   };
 
-  const dndDragEnd = async (event: DragEventWithData) => {
+  const dndDragEnd = async (event: EntityDragEvent) => {
     if (!dragInsertStore.visible) return;
     setDragInsertStore({ visible: false });
     if (!canEdit()) return;
@@ -346,7 +346,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     });
   };
 
-  const dndDragMove = throttle((event: DragEventWithData) => {
+  const dndDragMove = throttle((event: EntityDragEvent) => {
     if (!droppable.isActiveDroppable) {
       return setDragInsertStore({ visible: false });
     }
@@ -359,11 +359,11 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     }
   }, 60);
 
-  onDragEnd((event: DragEventWithData) => {
+  onDragEnd((event: EntityDragEvent) => {
     dndDragEnd(event);
   });
 
-  onDragMove((event: DragEventWithData) => {
+  onDragMove((event: EntityDragEvent) => {
     dndDragMove(event);
   });
 
