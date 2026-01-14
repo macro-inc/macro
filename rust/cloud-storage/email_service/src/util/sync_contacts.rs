@@ -86,13 +86,11 @@ async fn fetch_new_contacts_from_google(
         }
     };
 
-    let primary_start = Instant::now();
     match gmail_client
         .get_contacts(gmail_access_token, link.id, contacts_sync_token.as_deref())
         .await
     {
         Ok(response) => {
-            let length = response.contacts.len();
             new_contacts_token = Some(response.next_sync_token);
             all_new_contacts.extend(response.contacts);
         }
@@ -101,7 +99,6 @@ async fn fetch_new_contacts_from_google(
         }
     };
 
-    let other_start = Instant::now();
     match gmail_client
         .get_other_contacts(
             gmail_access_token,
@@ -111,7 +108,6 @@ async fn fetch_new_contacts_from_google(
         .await
     {
         Ok(response) => {
-            let length = response.contacts.len();
             new_other_contacts_token = Some(response.next_sync_token);
             all_new_contacts.extend(response.contacts);
         }
