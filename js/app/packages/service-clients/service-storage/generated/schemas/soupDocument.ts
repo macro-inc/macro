@@ -4,6 +4,8 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+
+import type { EntityPropertyWithDefinition } from './entityPropertyWithDefinition';
 import type { SoupDocumentBranchedFromId } from './soupDocumentBranchedFromId';
 import type { SoupDocumentBranchedFromVersionId } from './soupDocumentBranchedFromVersionId';
 import type { SoupDocumentDocumentFamilyId } from './soupDocumentDocumentFamilyId';
@@ -36,6 +38,8 @@ This could be the document_instance_id or document_bom_id depending on the file 
   ownerId: string;
   /** The id of the project that this document belongs to */
   projectId?: SoupDocumentProjectId;
+  /** Properties */
+  properties: EntityPropertyWithDefinition[];
   /** If the document is a PDF, this is the SHA of the pdf
 If the document is a DOCX, this will not be present */
   sha?: SoupDocumentSha;

@@ -4,6 +4,8 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+
+import type { EntityPropertyWithDefinition } from './entityPropertyWithDefinition';
 import type { SoupAttachment } from './soupAttachment';
 import type { SoupContact } from './soupContact';
 import type { SoupEmailThreadPreviewMetadata } from './soupEmailThreadPreviewMetadata';
@@ -16,4 +18,5 @@ export type SoupEnrichedEmailThreadPreviewAllOf = {
   labels: SoupLabel[];
   metadata: SoupEmailThreadPreviewMetadata;
   participants: SoupContact[];
+  properties: EntityPropertyWithDefinition[];
 };
