@@ -145,7 +145,7 @@ function RecipientList(props: {
 }
 
 export function BaseInput(props: {
-  replyingTo: Accessor<MessageWithBodyReplyless>;
+  replyingTo: Accessor<MessageWithBodyReplyless | undefined>;
   newMessage?: boolean;
   draft?: MessageWithBodyReplyless;
   preloadedBody?: string;
@@ -158,7 +158,7 @@ export function BaseInput(props: {
 }) {
   const ctx = useEmailContext();
   const form = createMemo(() =>
-    getOrInitEmailFormContext(props.replyingTo().db_id!)
+    getOrInitEmailFormContext(props.replyingTo()?.db_id ?? undefined)
   );
   const blockId = useBlockId();
   const emailLinksQuery = useEmailLinksQuery();
@@ -481,10 +481,17 @@ export function BaseInput(props: {
       !hasPaidAccess() ? MACRO_EMAIL_SIGNATURE : undefined
     );
 
-    const prepared = prepareEmailBody(currentEditor, {
-      replyType: effectiveReplyType(),
-      replyingTo: props.replyingTo(),
-    });
+    const replyingTo = props.replyingTo();
+
+    const prepared = prepareEmailBody(
+      currentEditor,
+      replyingTo
+        ? {
+            replyType: effectiveReplyType(),
+            replyingTo,
+          }
+        : undefined
+    );
     if (!prepared) {
       return;
     }

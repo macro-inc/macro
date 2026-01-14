@@ -1,4 +1,3 @@
-import { logger } from '@observability/logger';
 import { createContext, type ParentProps, useContext } from 'solid-js';
 import {
   createEmailFormState,
@@ -8,7 +7,7 @@ import {
 type EmailFormContextValue = ReturnType<typeof createEmailFormState>;
 
 type RegistryApi = {
-  getOrInit: (key: string) => EmailFormContextValue;
+  getOrInit: (key?: string) => EmailFormContextValue;
 };
 
 const EmailFormRegistryCtx = createContext<RegistryApi>();
@@ -20,7 +19,7 @@ export function EmailFormContextProvider(
 
   const getOrInit: RegistryApi['getOrInit'] = (key) => {
     if (!key) {
-      logger.error('Key is required');
+      return createEmailFormState();
     }
     let existing = map.get(key);
     if (!existing) {
@@ -47,7 +46,7 @@ export function getEmailFormRegistry(): RegistryApi {
   return ctx;
 }
 
-export function getOrInitEmailFormContext(key: string): EmailFormContextValue {
+export function getOrInitEmailFormContext(key?: string): EmailFormContextValue {
   const ctx = useContext(EmailFormRegistryCtx);
   if (!ctx)
     throw new Error(
