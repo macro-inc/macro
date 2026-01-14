@@ -171,7 +171,6 @@ export function EmailCompose() {
       const draftID = currentDraftID();
       if (draftID) {
         await deleteEmailDraft(draftID);
-        // refetchThreadMessages();
       }
       setCurrentDraftID(undefined);
       return;
@@ -719,11 +718,7 @@ export function EmailCompose() {
                   attachments={form.attachments.list()}
                   onSubmit={onSubmit}
                   isSubmitting={sendMutation.isPending}
-                  disabled={
-                    hasLinkError() ||
-                    uploadAttachmentMutation.isPending ||
-                    sendMutation.isPending
-                  }
+                  disabled={hasLinkError() || sendMutation.isPending}
                 />
                 <Show when={withValidationError('no_message')}>
                   {(err) => (
