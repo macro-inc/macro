@@ -181,8 +181,6 @@ async fn process_and_store_contacts(
 
     tokio::spawn(async move {
         const MAX_CONCURRENT_ENQUEUES: usize = 50;
-        let mut successful_enqueues = 0;
-        let mut failed_enqueues = 0;
 
         let mut stream = stream::iter(contacts_for_sqs)
             // only enqueue contacts that have a photo_url
@@ -201,12 +199,7 @@ async fn process_and_store_contacts(
             })
             .buffer_unordered(MAX_CONCURRENT_ENQUEUES);
 
-        while let Some(result) = stream.next().await {
-            match result {
-                Ok(_) => successful_enqueues += 1,
-                Err(_) => failed_enqueues += 1,
-            }
-        }
+            while stream.next().await.is_some() {}
     });
 
     Ok(())
