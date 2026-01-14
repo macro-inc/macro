@@ -9,7 +9,6 @@ import { getIconConfig } from '@core/component/EntityIcon';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
-import { ENABLE_TASKS_TABS } from '@core/constant/featureFlags';
 import { IS_MAC } from '@core/constant/isMac';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
@@ -22,9 +21,7 @@ import {
   type ViewLabel,
 } from '@core/types/view';
 import { handleFileFolderDrop } from '@core/util/upload';
-import { Popover } from '@kobalte/core/popover';
 import { Tabs } from '@kobalte/core/tabs';
-import type { ExpandedEntityType } from '@macro-entity';
 import {
   queryKeys,
   useQueryClient as useEntityQueryClient,
@@ -34,7 +31,6 @@ import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
 import PreviewIcon from '@macro-icons/wide/preview.svg';
 import NoiseIcon from '@macro-icons/wide/noise.svg';
 import SignalIcon from '@macro-icons/wide/signal.svg';
-import SortIcon from '@macro-icons/wide/sort.svg';
 import { createEffectOnEntityTypeNotification } from '@notifications';
 import { invalidateEntityNotifications } from '@queries/notification/user-notifications';
 import { storageServiceClient } from '@service-storage/client';
@@ -58,7 +54,6 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
 import { PreviewPanel } from './PreviewPanel';
 import { SuspenseContextComp } from './SuspenseContext';
 import {
@@ -76,120 +71,18 @@ import {
   VIEWCONFIG_DEFAULTS_IDS,
   type ViewConfigBase,
 } from './ViewConfig';
+import { ENTITY_TYPE_FILTERS } from './Soup/utils/filterConfigs';
+import { useFilterActions } from './Soup/hooks/useFilterActions';
+import {
+  FilterButton,
+  FilterDivider,
+  renderShortcutUnderlinedInLabel,
+} from './Soup/components/FilterButton';
+import { SortDropdown } from './Soup/components/SortDropdown';
 
 false && fileFolderDrop;
 
-// Entity type filter configuration
-const ENTITY_TYPE_FILTERS: {
-  kind: 'entityType' | 'channelCategory' | 'documentPreset';
-  type?: ExpandedEntityType;
-  channelCategory?: 'people' | 'groups';
-  documentTypes?: Array<'md' | 'code' | 'image' | 'canvas' | 'pdf' | 'unknown'>;
-  label: string;
-  iconType: string;
-  enabled: boolean;
-  shortcut: string;
-}[] = [
-  {
-    kind: 'documentPreset',
-    type: 'document',
-    documentTypes: ['md', 'canvas'],
-    label: 'Docs',
-    iconType: 'md',
-    enabled: true,
-    shortcut: 'd',
-  },
-  {
-    kind: 'entityType',
-    type: 'chat',
-    label: 'Agents',
-    iconType: 'chat',
-    enabled: true,
-    shortcut: 'a',
-  },
-  {
-    kind: 'channelCategory',
-    channelCategory: 'people',
-    label: 'People',
-    iconType: 'channel',
-    enabled: true,
-    shortcut: 'p',
-  },
-  {
-    kind: 'channelCategory',
-    channelCategory: 'groups',
-    label: 'Teams',
-    iconType: 'directMessage',
-    enabled: true,
-    shortcut: 'm',
-  },
-  {
-    kind: 'entityType',
-    type: 'task',
-    label: 'Tasks',
-    iconType: 'task',
-    enabled: ENABLE_TASKS_TABS,
-    shortcut: 't',
-  },
-  {
-    kind: 'entityType',
-    type: 'email',
-    label: 'Mail',
-    iconType: 'email',
-    enabled: true,
-    shortcut: 'l',
-  },
-  {
-    kind: 'documentPreset',
-    type: 'document',
-    // "Files" = everything except Notes + Canvases
-    documentTypes: ['code', 'image', 'pdf', 'unknown'],
-    label: 'Files',
-    iconType: 'project',
-    enabled: true,
-    shortcut: 'f',
-  },
-];
-
 function EntityTypeIconFilter() {
-  const renderShortcutUnderlinedInLabel = (label: string, shortcut: string) => {
-    const s = shortcut.trim();
-    if (!s) return label;
-    if (s.toLowerCase() === 'space') {
-      return (
-        <>
-          {label}
-          <span class="ml-1 font-mono opacity-70">␣</span>
-        </>
-      );
-    }
-    if (s === '/') {
-      return (
-        <>
-          {label}
-          <span class="ml-1 font-mono opacity-70">/</span>
-        </>
-      );
-    }
-
-    const idx = label.toLowerCase().indexOf(s.toLowerCase());
-    if (idx === -1) return label;
-
-    const before = label.slice(0, idx);
-    const match = label.slice(idx, idx + s.length);
-    const after = label.slice(idx + s.length);
-
-    return (
-      <>
-        {before}
-        <span class="underline underline-offset-2 decoration-current/60">
-          {match}
-        </span>
-        {after}
-      </>
-    );
-  };
-
   const splitContext = useSplitPanelOrThrow();
   const {
     splitHotkeyScope,
@@ -213,6 +106,7 @@ function EntityTypeIconFilter() {
     setViewDataStore(selectedView(), 'searchText', text);
   };
 
+  // Memoized filter accessors
   const entityTypeFilter = createMemo(
     () => view()?.filters?.typeFilter ?? VIEWCONFIG_BASE.filters.typeFilter
   );
@@ -221,7 +115,6 @@ function EntityTypeIconFilter() {
       view()?.filters?.channelCategoryFilter ??
       VIEWCONFIG_BASE.filters.channelCategoryFilter
   );
-
   const focusFilters = createMemo(
     () => view()?.filters?.focusFilters ?? VIEWCONFIG_BASE.filters.focusFilters
   );
@@ -235,164 +128,21 @@ function EntityTypeIconFilter() {
       view()?.display?.unrollNotifications ??
       VIEWCONFIG_BASE.display.unrollNotifications
   );
-
   const documentTypeFilter = createMemo(
     () =>
       view()?.filters?.documentTypeFilter ??
       VIEWCONFIG_BASE.filters.documentTypeFilter
   );
 
-  const sameSet = (a: string[], b: string[]) => {
-    if (a.length !== b.length) return false;
-    const as = new Set(a);
-    for (const item of b) {
-      if (!as.has(item)) return false;
-    }
-    return true;
-  };
-
-  const isDocumentPresetActive = (types: string[]) => {
-    const currentTypes = entityTypeFilter();
-    if (currentTypes.length === 0) return false;
-    if (!currentTypes.includes('document')) return false;
-    return sameSet(documentTypeFilter(), types);
-  };
-
-  // Topbar filter behavior: only one of the ENTITY_TYPE_FILTERS can be active at a time.
-  // (Inbox/unread are separate and can still be combined with the selected type filter.)
-  const clearTopbarTypeFilters = () => {
-    setViewDataStore(selectedView(), 'filters', 'typeFilter', []);
-    setViewDataStore(selectedView(), 'filters', 'documentTypeFilter', []);
-    setViewDataStore(selectedView(), 'filters', 'channelCategoryFilter', []);
-  };
-
-  const setExclusiveEntityTypeFilter = (type: ExpandedEntityType) => {
-    const current = entityTypeFilter();
-    const isActive = current.length === 1 && current[0] === type;
-
-    batch(() => {
-      if (isActive) {
-        clearTopbarTypeFilters();
-        return;
-      }
-      setViewDataStore(selectedView(), 'filters', 'typeFilter', [type]);
-      setViewDataStore(selectedView(), 'filters', 'documentTypeFilter', []);
-      setViewDataStore(selectedView(), 'filters', 'channelCategoryFilter', []);
-    });
-  };
-
-  const toggleDocumentPreset = (
-    preset: Array<'md' | 'code' | 'image' | 'canvas' | 'pdf' | 'unknown'>
-  ) => {
-    const active =
-      entityTypeFilter().length === 1 && isDocumentPresetActive(preset);
-    batch(() => {
-      if (active) {
-        clearTopbarTypeFilters();
-        return;
-      }
-      setViewDataStore(selectedView(), 'filters', 'typeFilter', ['document']);
-      setViewDataStore(selectedView(), 'filters', 'documentTypeFilter', preset);
-      setViewDataStore(selectedView(), 'filters', 'channelCategoryFilter', []);
-    });
-  };
-
-  const toggleChannelCategoryFilter = (category: 'people' | 'groups') => {
-    batch(() => {
-      const currentTypes = entityTypeFilter();
-      const currentCats = channelCategoryFilter() ?? [];
-      const isActive =
-        currentTypes.length === 1 &&
-        currentTypes[0] === 'channel' &&
-        currentCats.length === 1 &&
-        currentCats[0] === category;
-
-      if (isActive) {
-        clearTopbarTypeFilters();
-        return;
-      }
-
-      setViewDataStore(selectedView(), 'filters', 'typeFilter', ['channel']);
-      setViewDataStore(selectedView(), 'filters', 'channelCategoryFilter', [
-        category,
-      ]);
-      setViewDataStore(selectedView(), 'filters', 'documentTypeFilter', []);
-    });
-  };
-
-  const isInboxFilterActive = () => {
-    const current = focusFilters() ?? [];
-    return current.includes('signal') && !current.includes('noise');
-  };
-
-  const isOtherFilterActive = () => {
-    const current = focusFilters() ?? [];
-    return current.includes('noise') && !current.includes('signal');
-  };
-
-  // Simplified UI:
-  // - Inbox ON  => equivalent to the old "Important" filter (signal)
-  // - Inbox OFF => equivalent to no signal/noise filter applied
-  // - Only one of Inbox/Other can be active at a time
-  const toggleInboxFilter = () => {
-    batch(() => {
-      if (isInboxFilterActive()) {
-        setViewDataStore(selectedView(), 'filters', 'focusFilters', []);
-        setViewDataStore(
-          selectedView(),
-          'filters',
-          'notificationFilter',
-          'all'
-        );
-        setViewDataStore(
-          selectedView(),
-          'display',
-          'unrollNotifications',
-          false
-        );
-        return;
-      }
-
-      setViewDataStore(selectedView(), 'filters', 'focusFilters', ['signal']);
-      setViewDataStore(
-        selectedView(),
-        'filters',
-        'notificationFilter',
-        'notDone'
-      );
-      setViewDataStore(selectedView(), 'display', 'unrollNotifications', true);
-    });
-  };
-
-  const toggleOtherFilter = () => {
-    batch(() => {
-      if (isOtherFilterActive()) {
-        setViewDataStore(selectedView(), 'filters', 'focusFilters', []);
-        setViewDataStore(
-          selectedView(),
-          'filters',
-          'notificationFilter',
-          'all'
-        );
-        setViewDataStore(
-          selectedView(),
-          'display',
-          'unrollNotifications',
-          false
-        );
-        return;
-      }
-
-      setViewDataStore(selectedView(), 'filters', 'focusFilters', ['noise']);
-      setViewDataStore(
-        selectedView(),
-        'filters',
-        'notificationFilter',
-        'notDone'
-      );
-      setViewDataStore(selectedView(), 'display', 'unrollNotifications', true);
-    });
-  };
+  // Use the extracted filter actions hook
+  const filterActions = useFilterActions({
+    selectedView,
+    setViewDataStore,
+    entityTypeFilter,
+    documentTypeFilter,
+    channelCategoryFilter,
+    focusFilters,
+  });
 
   // Ensure state consistency when switching views (not continuous watching)
   createEffect(
@@ -420,26 +170,7 @@ function EntityTypeIconFilter() {
     )
   );
 
-  const isFilterActive = (type: ExpandedEntityType) => {
-    const filter = entityTypeFilter();
-    // If no filters are active, all types are shown (nothing is "active")
-    if (filter.length === 0) return false;
-    return filter.includes(type);
-  };
-
-  const isChannelCategoryActive = (category: 'people' | 'groups') => {
-    const types = entityTypeFilter();
-    if (types.length === 0) return false;
-    if (!types.includes('channel')) return false;
-    const cats = channelCategoryFilter() ?? [];
-    // For the topbar we keep this exclusive: empty doesn't light up either option.
-    if (cats.length === 0) return false;
-    return cats.includes(category);
-  };
-
-  const isUnreadFilterActive = () => {
-    return view()?.filters?.unreadOnly === true;
-  };
+  const isUnreadFilterActive = () => view()?.filters?.unreadOnly === true;
 
   const toggleUnreadFilter = () => {
     const current = view()?.filters?.unreadOnly ?? false;
@@ -458,13 +189,7 @@ function EntityTypeIconFilter() {
     });
   };
 
-  // Sort functionality
-  const SORT_OPTIONS: { value: SystemSortOption; label: string }[] = [
-    { value: 'viewed_at', label: 'Viewed' },
-    { value: 'updated_at', label: 'Updated' },
-    { value: 'created_at', label: 'Created' },
-  ];
-
+  // Sort functionality (uses imported SORT_OPTIONS from SortDropdown)
   const sortType = createMemo(() => {
     const sort = view()?.sort;
     if (sort?.type === 'systemSortOption') {
@@ -483,7 +208,6 @@ function EntityTypeIconFilter() {
   };
 
   const [sortDropdownOpen, setSortDropdownOpen] = createSignal(false);
-  const [sortFocusedIndex, setSortFocusedIndex] = createSignal(0);
 
   // Register all hotkeys
   const hotkeyConfigs: {
@@ -494,27 +218,17 @@ function EntityTypeIconFilter() {
     {
       hotkey: 'i',
       description: 'Toggle Inbox',
-      handler: () => toggleInboxFilter(),
+      handler: () => filterActions.toggleFocusFilter('signal'),
     },
     {
       hotkey: 'o',
       description: 'Toggle Other',
-      handler: () => toggleOtherFilter(),
+      handler: () => filterActions.toggleFocusFilter('noise'),
     },
     ...ENTITY_TYPE_FILTERS.filter((f) => f.enabled).map((f) => ({
       hotkey: f.shortcut as ValidHotkey,
       description: `Filter by ${f.label}`,
-      handler: () => {
-        if (f.kind === 'documentPreset') {
-          toggleDocumentPreset(f.documentTypes!);
-          return;
-        }
-        if (f.kind === 'channelCategory') {
-          toggleChannelCategoryFilter(f.channelCategory!);
-          return;
-        }
-        setExclusiveEntityTypeFilter(f.type!);
-      },
+      handler: filterActions.getFilterHandler(f),
     })),
     {
       hotkey: 'u',
@@ -614,46 +328,22 @@ function EntityTypeIconFilter() {
         ref={setScrollRef}
       >
         {/* Inbox toggle */}
-        <div class="flex items-center mr-0.5 shrink-0">
-          <Tooltip tooltip={<LabelAndHotKey label="Inbox" shortcut="i" />}>
-            <button
-              type="button"
-              class="flex items-center gap-1 h-[22px] pl-2 pr-2.5 active:bg-accent active:text-panel rounded-full"
-              classList={{
-                'bg-accent text-panel': isInboxFilterActive(),
-                'text-ink-muted hover:text-accent hover:bg-accent/20':
-                  !isInboxFilterActive(),
-              }}
-              onClick={() => toggleInboxFilter()}
-            >
-              <SignalIcon class="size-4.5" />
-              <span class="text-xs leading-none">
-                {renderShortcutUnderlinedInLabel('Inbox', 'i')}
-              </span>
-            </button>
-          </Tooltip>
-        </div>
+        <FilterButton
+          icon={SignalIcon}
+          label="Inbox"
+          shortcut="i"
+          isActive={filterActions.isInboxActive}
+          onClick={() => filterActions.toggleFocusFilter('signal')}
+        />
         {/* Other toggle */}
-        <div class="flex items-center mr-0.5 shrink-0">
-          <Tooltip tooltip={<LabelAndHotKey label="Other" shortcut="o" />}>
-            <button
-              type="button"
-              class="flex items-center gap-1 h-[22px] pl-2 pr-2.5 active:bg-accent active:text-panel rounded-full"
-              classList={{
-                'bg-accent text-panel': isOtherFilterActive(),
-                'text-ink-muted hover:text-accent hover:bg-accent/20':
-                  !isOtherFilterActive(),
-              }}
-              onClick={() => toggleOtherFilter()}
-            >
-              <NoiseIcon class="size-4.5" />
-              <span class="text-xs leading-none">
-                {renderShortcutUnderlinedInLabel('Other', 'o')}
-              </span>
-            </button>
-          </Tooltip>
-        </div>
-        <div class="mx-0.5 w-px h-5 bg-edge-muted/50 shrink-0" />
+        <FilterButton
+          icon={NoiseIcon}
+          label="Other"
+          shortcut="o"
+          isActive={filterActions.isOtherActive}
+          onClick={() => filterActions.toggleFocusFilter('noise')}
+        />
+        <FilterDivider />
         {/* Unread filter */}
         <div class="flex items-center mr-0.5 shrink-0">
           <Tooltip
@@ -690,54 +380,15 @@ function EntityTypeIconFilter() {
           <For each={ENTITY_TYPE_FILTERS.filter((f) => f.enabled)}>
             {(filter) => {
               const iconConfig = () => getIconConfig(filter.iconType);
-              const isActive = () => {
-                if (filter.kind === 'documentPreset') {
-                  return isDocumentPresetActive(filter.documentTypes!);
-                }
-                if (filter.kind === 'channelCategory') {
-                  return isChannelCategoryActive(filter.channelCategory!);
-                }
-                return isFilterActive(filter.type!);
-              };
-
               return (
-                <Tooltip
-                  tooltip={
-                    <LabelAndHotKey
-                      label={filter.label}
-                      shortcut={filter.shortcut}
-                    />
-                  }
-                >
-                  <button
-                    type="button"
-                    class="flex items-center gap-1.5 h-[22px] px-2.5 active:bg-accent active:text-panel rounded-full"
-                    classList={{
-                      'bg-accent text-panel': isActive(),
-                      'text-ink-muted hover:text-accent hover:bg-accent/20':
-                        !isActive(),
-                    }}
-                    onClick={() => {
-                      if (filter.kind === 'documentPreset') {
-                        toggleDocumentPreset(filter.documentTypes!);
-                        return;
-                      }
-                      if (filter.kind === 'channelCategory') {
-                        toggleChannelCategoryFilter(filter.channelCategory!);
-                        return;
-                      }
-                      setExclusiveEntityTypeFilter(filter.type!);
-                    }}
-                  >
-                    <Dynamic component={iconConfig().icon} class="size-3.5" />
-                    <span class="text-xs leading-none">
-                      {renderShortcutUnderlinedInLabel(
-                        filter.label,
-                        filter.shortcut
-                      )}
-                    </span>
-                  </button>
-                </Tooltip>
+                <FilterButton
+                  icon={iconConfig().icon}
+                  label={filter.label}
+                  shortcut={filter.shortcut}
+                  isActive={() => filterActions.isFilterConfigActive(filter)}
+                  onClick={filterActions.getFilterHandler(filter)}
+                  paddingClass="px-2.5"
+                />
               );
             }}
           </For>
@@ -765,86 +416,15 @@ function EntityTypeIconFilter() {
             </span>
           </button>
         </Tooltip>
-        <div class="mx-0.5 w-px h-5 bg-edge-muted/50 shrink-0" />
+        <FilterDivider />
         {/* Sort dropdown */}
-        <Popover
-          open={sortDropdownOpen()}
-          onOpenChange={(open) => {
-            setSortDropdownOpen(open);
-            if (open) setSortFocusedIndex(0);
-          }}
-          placement="bottom-start"
-          gutter={4}
-        >
-          <Popover.Trigger
-            as="button"
-            type="button"
-            class="flex items-center gap-1.5 h-[22px] px-2.5 shrink-0 rounded-full active:bg-accent active:text-panel"
-            classList={{
-              'bg-accent text-panel': sortDropdownOpen(),
-              'text-ink-muted hover:text-accent hover:bg-accent/20':
-                !sortDropdownOpen(),
-            }}
-          >
-            <SortIcon class="size-3.5" />
-            <span class="text-xs leading-none">
-              {renderShortcutUnderlinedInLabel('Sort', 's')}
-            </span>
-          </Popover.Trigger>
-          <Popover.Portal>
-            <Popover.Content
-              class="z-50 bg-panel border border-edge-muted shadow-lg"
-              tabIndex={0}
-              ref={(el) => setTimeout(() => el?.focus(), 0)}
-              onKeyDown={(e: KeyboardEvent) => {
-                const totalItems = SORT_OPTIONS.length;
-                if (e.key === 'ArrowDown') {
-                  e.preventDefault();
-                  setSortFocusedIndex((prev) => (prev + 1) % totalItems);
-                } else if (e.key === 'ArrowUp') {
-                  e.preventDefault();
-                  setSortFocusedIndex(
-                    (prev) => (prev - 1 + totalItems) % totalItems
-                  );
-                } else if (e.key === 'Enter') {
-                  e.preventDefault();
-                  setSortType(SORT_OPTIONS[sortFocusedIndex()].value);
-                  setSortDropdownOpen(false);
-                } else if (e.key === 'Escape') {
-                  e.preventDefault();
-                  setSortDropdownOpen(false);
-                }
-              }}
-            >
-              <div class="flex flex-col gap-1 p-2 min-w-[140px]">
-                <For each={SORT_OPTIONS}>
-                  {(option, index) => (
-                    <button
-                      type="button"
-                      class="flex items-center justify-between px-2 py-1.5 text-sm hover:bg-hover"
-                      classList={{
-                        'bg-hover text-ink': sortType() === option.value,
-                        'text-ink': sortType() !== option.value,
-                        'bg-hover': sortFocusedIndex() === index(),
-                      }}
-                      onClick={() => {
-                        setSortType(option.value);
-                        setSortDropdownOpen(false);
-                      }}
-                      onMouseEnter={() => setSortFocusedIndex(index())}
-                    >
-                      <span>{option.label}</span>
-                      <Show when={sortType() === option.value}>
-                        <span class="text-ink">✓</span>
-                      </Show>
-                    </button>
-                  )}
-                </For>
-              </div>
-            </Popover.Content>
-          </Popover.Portal>
-        </Popover>
-        <div class="mx-0.5 w-px h-5 bg-edge-muted/50 shrink-0" />
+        <SortDropdown
+          value={sortType}
+          onChange={setSortType}
+          open={sortDropdownOpen}
+          onOpenChange={setSortDropdownOpen}
+        />
+        <FilterDivider />
         {/* Filter search bar */}
         <div class="flex items-center shrink-0">
           <Tooltip tooltip={<LabelAndHotKey label="Filter" shortcut="⌘F" />}>
