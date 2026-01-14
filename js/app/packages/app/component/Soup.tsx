@@ -390,14 +390,11 @@ function EntityTypeIconFilter() {
   });
 
   const setSortType = (sortBy: SystemSortOption) => {
-    batch(() => {
-      (setViewDataStore as any)(
-        selectedView(),
-        'sort',
-        'type',
-        'systemSortOption'
-      );
-      (setViewDataStore as any)(selectedView(), 'sort', 'sortBy', sortBy);
+    const currentSort = view()?.sort;
+    setViewDataStore(selectedView(), 'sort', {
+      type: 'systemSortOption',
+      sortBy,
+      sortOrder: currentSort?.sortOrder ?? 'ascending',
     });
   };
 
@@ -540,7 +537,7 @@ function EntityTypeIconFilter() {
               }}
               onClick={() => toggleInboxFilter()}
             >
-              <SignalIcon />
+              <SignalIcon class="size-4" />
               <span class="text-xs leading-none">
                 {renderShortcutUnderlinedInLabel('Inbox', 'i')}
               </span>
