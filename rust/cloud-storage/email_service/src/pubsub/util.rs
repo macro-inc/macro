@@ -1,12 +1,9 @@
 use crate::util::redis::RedisClient;
 use crate::util::redis::rate_limit::RateLimitArgs;
-use anyhow::anyhow;
 use connection_gateway_client::client::ConnectionGatewayClient;
 /// shared utils across different pubsub workers
 use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use models_email::gmail::operations::GmailApiOperation;
-use models_email::service::link::Link;
-use sqlx::PgPool;
 use uuid::Uuid;
 
 /// Arguments for checking Gmail API rate limits
