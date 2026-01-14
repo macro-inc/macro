@@ -504,21 +504,13 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     setViewDataStore(selectedView(), 'sort', 'sortOrder', order);
   };
 
-  const showUnrollNotifications = createMemo(
-    () =>
-      view()?.display?.unrollNotifications ??
-      defaultDisplayOptions.unrollNotifications
-  );
-  const setShowUnrollNotifications = (
-    showUnrollNotifications: DisplayOptions['unrollNotifications']
-  ) => {
-    setViewDataStore(
-      selectedView(),
-      'display',
-      'unrollNotifications',
-      showUnrollNotifications
-    );
-  };
+  // Inbox + notification unrolling are coupled:
+  // - inbox=true  => unroll=true
+  // - inbox=false => unroll=false
+  const showUnrollNotifications = createMemo(() => {
+    const focusFilters = view()?.filters?.focusFilters ?? [];
+    return focusFilters.includes('signal') && !focusFilters.includes('noise');
+  });
 
   const showUnreadIndicator = createMemo(() => {
     // When the toolbar is hidden, the user has no in-view way to toggle this.
@@ -1726,12 +1718,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                     />
                   </section>
                   <section class="gap-1 grid p-2">
-                    <ToggleSwitch
-                      size="SM"
-                      label="Unroll Notifications"
-                      checked={showUnrollNotifications()}
-                      onChange={setShowUnrollNotifications}
-                    />
                     <ToggleSwitch
                       size="SM"
                       label="Indicate Unread"

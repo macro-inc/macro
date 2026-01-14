@@ -221,6 +221,16 @@ function EntityTypeIconFilter() {
   const focusFilters = createMemo(
     () => view()?.filters?.focusFilters ?? VIEWCONFIG_BASE.filters.focusFilters
   );
+  const notificationFilter = createMemo(
+    () =>
+      view()?.filters?.notificationFilter ??
+      VIEWCONFIG_BASE.filters.notificationFilter
+  );
+  const unrollNotifications = createMemo(
+    () =>
+      view()?.display?.unrollNotifications ??
+      VIEWCONFIG_BASE.display.unrollNotifications
+  );
 
   const documentTypeFilter = createMemo(
     () =>
@@ -318,6 +328,12 @@ function EntityTypeIconFilter() {
       if (isInboxFilterActive()) {
         setViewDataStore(selectedView(), 'filters', 'focusFilters', []);
         setViewDataStore(selectedView(), 'filters', 'notificationFilter', 'all');
+        setViewDataStore(
+          selectedView(),
+          'display',
+          'unrollNotifications',
+          false
+        );
         return;
       }
 
@@ -328,8 +344,36 @@ function EntityTypeIconFilter() {
         'notificationFilter',
         'notDone'
       );
+      setViewDataStore(
+        selectedView(),
+        'display',
+        'unrollNotifications',
+        true
+      );
     });
   };
+
+  // Keep Inbox + unrollNotifications coupled, including on first load / hydration.
+  // If Inbox is active, ensure the underlying filters are actually applied.
+  createEffect(() => {
+    if (!view()) return;
+
+    const inboxActive = isInboxFilterActive();
+
+    if (inboxActive) {
+      if (notificationFilter() !== 'notDone') {
+        setViewDataStore(selectedView(), 'filters', 'notificationFilter', 'notDone');
+      }
+      if (unrollNotifications() !== true) {
+        setViewDataStore(selectedView(), 'display', 'unrollNotifications', true);
+      }
+      return;
+    }
+
+    if (unrollNotifications() !== false) {
+      setViewDataStore(selectedView(), 'display', 'unrollNotifications', false);
+    }
+  });
 
   const isFilterActive = (type: ExpandedEntityType) => {
     const filter = entityTypeFilter();
@@ -532,7 +576,7 @@ function EntityTypeIconFilter() {
               }}
               onClick={() => toggleInboxFilter()}
             >
-              <SignalIcon class="size-4" />
+              <SignalIcon class="size-4.5" />
               <span class="text-xs leading-none">
                 {renderShortcutUnderlinedInLabel('Inbox', 'i')}
               </span>
@@ -545,7 +589,7 @@ function EntityTypeIconFilter() {
           <Tooltip tooltip={<LabelAndHotKey label="Unread Only" shortcut="u" />}>
             <button
               type="button"
-              class="flex items-center gap-1.5 h-[22px] px-2.5 active:bg-accent active:text-panel rounded-full"
+              class="flex items-center gap-1 h-[22px] pr-2 pl-1 active:bg-accent active:text-panel rounded-full"
               classList={{
                 'bg-accent text-panel': isUnreadFilterActive(),
                 'text-ink-muted hover:text-accent hover:bg-accent/20':
@@ -554,7 +598,7 @@ function EntityTypeIconFilter() {
               onClick={() => toggleUnreadFilter()}
             >
               <svg
-                class="size-3.5"
+                class="size-4"
                 viewBox="0 0 24 24"
                 fill="currentColor"
                 stroke="none"
