@@ -32,7 +32,7 @@ const SCROLL_ANIMATION_MS = 1000;
 const SCROLL_AFTER_SEND_DELAY_MS = 100;
 
 type EmailViewProps = {
-  title: Accessor<string>;
+  title: string;
   threadId: Accessor<string>;
 };
 
@@ -426,14 +426,14 @@ function EmailContent(props: EmailViewProps) {
       }}
     >
       <div class="w-full h-full bg-panel select-none overscroll-none overflow-hidden flex flex-col">
-        <TopBar id={props.threadId()} title={props.title()} />
+        <TopBar id={props.threadId()} title={props.title} />
         <div
           class="w-full flex-1 flex flex-col items-center overflow-hidden"
           ref={context.registerMessagesContainer}
         >
           <MessageList
             initialLoadComplete={context.initialLoadComplete()}
-            title={props.title()}
+            title={props.title}
           />
         </div>
         <Show
