@@ -1,15 +1,20 @@
-import { UserIcon } from '@core/component/UserIcon';
 import type { PotentialTask } from '@core/util/taskExtraction';
-import CircleDashed from '@icon/regular/circle-dashed.svg';
-import { For, Show } from 'solid-js';
+import { For } from 'solid-js';
+import { TaskPreviewRow } from './TaskPreviewRow';
 
 type TaskPreviewPanelProps = {
   tasks: PotentialTask[];
+  onUpdateTaskProperty: (
+    lineIndex: number,
+    property: 'statusOptionId' | 'priorityOptionId' | 'dueDate',
+    value: string | null
+  ) => void;
+  onUpdateTaskAssignees: (lineIndex: number, assigneeUserIds: string[]) => void;
 };
 
 /**
  * Preview panel displaying tasks that will be created when sending a message
- * with Task Mode enabled. Shows task titles with assignee avatars.
+ * with Task Mode enabled. Shows task titles with editable property pills.
  */
 export function TaskPreviewPanel(props: TaskPreviewPanelProps) {
   return (
@@ -20,31 +25,18 @@ export function TaskPreviewPanel(props: TaskPreviewPanelProps) {
           {props.tasks.length}
         </span>
       </div>
-      <div class="flex flex-col gap-1.5 max-h-32 overflow-y-auto">
+      <div class="flex flex-col gap-0.5 max-h-32 overflow-y-auto">
         <For each={props.tasks}>
           {(task) => (
-            <div class="flex items-center gap-2 text-sm py-0.5">
-              <CircleDashed class="size-4 text-ink-placeholder flex-shrink-0" />
-              <span class="truncate flex-1 text-ink">
-                {task.title || '(empty)'}
-              </span>
-              <Show when={task.assigneeUserIds.length > 0}>
-                <div class="flex items-center -space-x-1.5">
-                  <For each={task.assigneeUserIds.slice(0, 3)}>
-                    {(userId) => (
-                      <div class="bg-surface rounded-full p-[1px]">
-                        <UserIcon id={userId} size="xs" suppressClick />
-                      </div>
-                    )}
-                  </For>
-                  <Show when={task.assigneeUserIds.length > 3}>
-                    <span class="text-xs text-ink-muted pl-1">
-                      +{task.assigneeUserIds.length - 3}
-                    </span>
-                  </Show>
-                </div>
-              </Show>
-            </div>
+            <TaskPreviewRow
+              task={task}
+              onUpdateProperty={(prop, value) =>
+                props.onUpdateTaskProperty(task.lineIndex, prop, value)
+              }
+              onUpdateAssignees={(assigneeUserIds) =>
+                props.onUpdateTaskAssignees(task.lineIndex, assigneeUserIds)
+              }
+            />
           )}
         </For>
       </div>

@@ -4,8 +4,17 @@ import {
 } from '@core/util/taskExtraction';
 import { debounce } from '@solid-primitives/scheduled';
 import { type Accessor, createMemo, createSignal } from 'solid-js';
+import { createStore, reconcile } from 'solid-js/store';
 
 const DEBOUNCE_MS = 300;
+
+/** Local property edits for a task */
+type TaskPropertyEdits = {
+  statusOptionId?: string | null;
+  priorityOptionId?: string | null;
+  dueDate?: string | null;
+  assigneeUserIds?: string[];
+};
 
 type UseTaskModeReturn = {
   /** Whether task mode is currently enabled */
@@ -18,6 +27,14 @@ type UseTaskModeReturn = {
   potentialTasks: Accessor<PotentialTask[]>;
   /** Whether there are tasks to create */
   hasTasksToCreate: Accessor<boolean>;
+  /** Update a property on a specific task */
+  updateTaskProperty: (
+    lineIndex: number,
+    property: 'statusOptionId' | 'priorityOptionId' | 'dueDate',
+    value: string | null
+  ) => void;
+  /** Update assignees on a specific task */
+  updateTaskAssignees: (lineIndex: number, assigneeUserIds: string[]) => void;
 };
 
 /**
@@ -34,6 +51,11 @@ export function useTaskMode(
   const [taskModeEnabled, setTaskModeEnabled] = createSignal(false);
   const [debouncedMarkdown, setDebouncedMarkdown] = createSignal('');
 
+  // Store for local property edits (keyed by lineIndex)
+  const [taskEdits, setTaskEdits] = createStore<
+    Record<number, TaskPropertyEdits>
+  >({});
+
   // Debounce the markdown state updates
   const updateDebouncedMarkdown = debounce(
     (content: string) => setDebouncedMarkdown(content),
@@ -47,12 +69,19 @@ export function useTaskMode(
     }
   });
 
-  // Extract potential tasks from debounced markdown
+  // Extract potential tasks from debounced markdown, merged with local edits
   const potentialTasks = createMemo<PotentialTask[]>(() => {
     if (!taskModeEnabled()) return [];
     const markdown = debouncedMarkdown();
     if (!markdown) return [];
-    return extractCheckboxesFromMarkdown(markdown);
+
+    const extracted = extractCheckboxesFromMarkdown(markdown);
+
+    // Merge extracted tasks with any local property edits
+    return extracted.map((task) => ({
+      ...task,
+      ...taskEdits[task.lineIndex],
+    }));
   });
 
   const hasTasksToCreate = createMemo(() => potentialTasks().length > 0);
@@ -63,7 +92,33 @@ export function useTaskMode(
     // When enabling, immediately update with current content
     if (newState) {
       setDebouncedMarkdown(markdownState());
+    } else {
+      // Clear edits when disabling task mode
+      setTaskEdits(reconcile({}));
     }
+  };
+
+  // Update a property on a specific task
+  const updateTaskProperty = (
+    lineIndex: number,
+    property: 'statusOptionId' | 'priorityOptionId' | 'dueDate',
+    value: string | null
+  ) => {
+    setTaskEdits(lineIndex, (prev) => ({
+      ...prev,
+      [property]: value,
+    }));
+  };
+
+  // Update assignees on a specific task
+  const updateTaskAssignees = (
+    lineIndex: number,
+    assigneeUserIds: string[]
+  ) => {
+    setTaskEdits(lineIndex, (prev) => ({
+      ...prev,
+      assigneeUserIds,
+    }));
   };
 
   return {
@@ -72,5 +127,7 @@ export function useTaskMode(
     setTaskModeEnabled,
     potentialTasks,
     hasTasksToCreate,
+    updateTaskProperty,
+    updateTaskAssignees,
   };
 }

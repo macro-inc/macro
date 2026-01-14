@@ -210,8 +210,13 @@ export function BaseInput(props: BaseInputProps) {
   } = useChannelMarkdownArea();
 
   // Task mode state
-  const { taskModeEnabled, toggleTaskMode, potentialTasks } =
-    useTaskMode(markdownState);
+  const {
+    taskModeEnabled,
+    toggleTaskMode,
+    potentialTasks,
+    updateTaskProperty,
+    updateTaskAssignees,
+  } = useTaskMode(markdownState);
 
   createRenderEffect(() => {
     const currentRef = ref();
@@ -574,7 +579,11 @@ export function BaseInput(props: BaseInputProps) {
         </div>
       </Show>
       <Show when={taskModeEnabled() && potentialTasks().length > 0}>
-        <TaskPreviewPanel tasks={potentialTasks()} />
+        <TaskPreviewPanel
+          tasks={potentialTasks()}
+          onUpdateTaskProperty={updateTaskProperty}
+          onUpdateTaskAssignees={updateTaskAssignees}
+        />
       </Show>
       <div class="flex flex-row w-full h-8 justify-between items-center p-2 mb-2 space-x-2 allow-css-brackets">
         <Show when={showAttachMenu()}>

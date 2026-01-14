@@ -1,14 +1,10 @@
-import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
-import { createTask } from '@core/util/create';
 import type { PotentialTask } from '@core/util/taskExtraction';
-import type { PropertyInput } from '@service-storage/generated/schemas/propertyInput';
+import {
+  createTaskFromData,
+  type TaskCreationOptions,
+} from '@core/util/taskCreation';
 
-export type TaskConversionOptions = {
-  /** Current user ID for auto-assignment when no assignees specified */
-  currentUserId?: string;
-  /** Parent task ID to associate created tasks with */
-  parentTaskId?: string;
-};
+export type { TaskCreationOptions as TaskConversionOptions };
 
 export type TaskCreationSuccess = {
   lineIndex: number;
@@ -27,98 +23,23 @@ export type TaskCreationResults = {
 };
 
 /**
- * If no assignees specified in the task, fall back to current user
- */
-function maybeFallbackToCurrentAssignee(
-  assigneeUserIds: string[],
-  currentUserId?: string
-): string[] {
-  if (assigneeUserIds.length > 0) return assigneeUserIds;
-  if (currentUserId) return [currentUserId];
-  return [];
-}
-
-/**
- * Build PropertyInput array from a potential task
- */
-function buildPropertyValues(
-  task: PotentialTask,
-  options: TaskConversionOptions
-): PropertyInput[] {
-  const properties: PropertyInput[] = [];
-
-  const assigneeIds = maybeFallbackToCurrentAssignee(
-    task.assigneeUserIds,
-    options.currentUserId
-  );
-
-  if (assigneeIds.length > 0) {
-    properties.push({
-      propertyId: SYSTEM_PROPERTY_IDS.ASSIGNEES,
-      value: {
-        type: 'multi_entity_reference',
-        references: assigneeIds.map((userId) => ({
-          entity_id: userId,
-          entity_type: 'USER' as const,
-        })),
-      },
-    });
-  }
-
-  if (task.dueDate) {
-    properties.push({
-      propertyId: SYSTEM_PROPERTY_IDS.DUE_DATE,
-      value: {
-        type: 'date',
-        value: task.dueDate,
-      },
-    });
-  }
-
-  if (options.parentTaskId) {
-    properties.push({
-      propertyId: SYSTEM_PROPERTY_IDS.PARENT_TASK,
-      value: {
-        type: 'entity_reference',
-        reference: {
-          entity_id: options.parentTaskId,
-          entity_type: 'TASK' as const,
-        },
-      },
-    });
-  }
-
-  return properties;
-}
-
-/**
  * Create a single task from a potential task
  */
 async function createTaskFromPotential(
   task: PotentialTask,
-  options: TaskConversionOptions
+  options: TaskCreationOptions
 ): Promise<TaskCreationSuccess | TaskCreationError> {
-  if (!task.title.trim()) {
-    return { lineIndex: task.lineIndex, error: 'Empty task title' };
-  }
-
   try {
-    const propertyValues = buildPropertyValues(task, options);
+    const result = await createTaskFromData(task, options);
 
-    const documentId = await createTask({
-      title: task.title,
-      content: '',
-      propertyValues,
-    });
-
-    if (!documentId) {
-      return { lineIndex: task.lineIndex, error: 'No document ID returned' };
+    if (!result) {
+      return { lineIndex: task.lineIndex, error: 'Empty task title' };
     }
 
     return {
       lineIndex: task.lineIndex,
-      documentId,
-      title: task.title,
+      documentId: result.documentId,
+      title: result.title,
     };
   } catch (error) {
     return {
@@ -139,7 +60,7 @@ function isSuccess(
  */
 export async function createTasksFromPotential(
   tasks: PotentialTask[],
-  options: TaskConversionOptions
+  options: TaskCreationOptions
 ): Promise<TaskCreationResults> {
   const results = await Promise.all(
     tasks.map((task) => createTaskFromPotential(task, options))
