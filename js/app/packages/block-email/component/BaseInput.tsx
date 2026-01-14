@@ -146,7 +146,9 @@ function RecipientList(props: {
 
 export function BaseInput(props: {
   replyingTo: Accessor<MessageWithBodyReplyless | undefined>;
+  // TODO: Remove `newMessage` props. It's not used...
   newMessage?: boolean;
+  isEditingExisting?: boolean;
   draft?: MessageWithBodyReplyless;
   preloadedBody?: string;
   preloadedHtml?: string;
@@ -914,7 +916,7 @@ export function BaseInput(props: {
         </Show>
       </div>
       <div
-        class={`${props.newMessage ? 'flex' : 'hidden'} flex-row items-center`}
+        class={`${props.isEditingExisting || props.newMessage ? 'flex' : 'hidden'} flex-row items-center`}
       >
         <div class="text-sm min-w-16 pl-4">Subject</div>
         <input
