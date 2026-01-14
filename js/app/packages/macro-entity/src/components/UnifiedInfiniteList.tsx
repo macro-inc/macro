@@ -9,6 +9,7 @@ import { debounce } from '@solid-primitives/scheduled';
 import { createVirtualizer, type Virtualizer } from '@tanstack/solid-virtual';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
 import { StaticMarkdownContext } from 'core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { extractSplitId } from '../utils/draggableId';
 import {
   type Accessor,
   createComputed,
@@ -490,7 +491,7 @@ export function createUnifiedInfiniteList<T extends EntityData>({
       // Don't show overlay if dragging within the same split
       const draggableId = draggable.id;
       if (props.splitId && typeof draggableId === 'string') {
-        const draggableSplitId = draggableId.split('-').pop();
+        const draggableSplitId = extractSplitId(draggableId);
         if (draggableSplitId === props.splitId) {
           return false;
         }

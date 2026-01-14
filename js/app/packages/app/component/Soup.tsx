@@ -28,6 +28,7 @@ import { ContextMenu } from '@kobalte/core/context-menu';
 import { Tabs } from '@kobalte/core/tabs';
 import type { EntityData } from '@macro-entity';
 import {
+  extractEntityId,
   isTaskEntity,
   queryKeys,
   useQueryClient as useEntityQueryClient,
@@ -317,8 +318,7 @@ export function Soup() {
 
       if (typeof draggableId !== 'string') return;
 
-      // Extract entity ID by removing split ID suffix (format: entityId-splitId)
-      const entityId = draggableId.split('-').slice(0, -1).join('-');
+      const entityId = extractEntityId(draggableId);
 
       if (droppable.data?.type === 'project' && droppable.data?.id) {
         const targetProjectId = droppable.data.id;

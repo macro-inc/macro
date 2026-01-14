@@ -12,6 +12,7 @@ import { mergeRefs } from '@solid-primitives/refs';
 import { createDraggable } from '@thisbeyond/solid-dnd';
 import { getIconConfig } from 'core/component/EntityIcon';
 import { StaticMarkdown } from 'core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { createDraggableId } from '../utils/draggableId';
 import { unifiedListMarkdownTheme } from 'core/component/LexicalMarkdown/theme';
 import { UserIcon } from 'core/component/UserIcon';
 import { emailToMacroId, tryMacroId, useDisplayName } from 'core/user';
@@ -830,9 +831,7 @@ export function EntityWithEverything(
     );
   });
 
-  const draggableId = props.splitId
-    ? `${props.entity.id}-${props.splitId}`
-    : props.entity.id;
+  const draggableId = createDraggableId(props.entity.id, props.splitId);
   const draggable = createDraggable(draggableId, props.entity);
   false && draggable;
 
