@@ -2,11 +2,13 @@ import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
 } from '@app/component/GlobalAppState';
+import { altKeyPressed, resetAltKeyPressed } from '@app/signal/altKey';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
 import { playSound } from '@app/util/sound';
 import { useIsAuthenticated } from '@core/auth';
 import type { BlockAliasContext } from '@core/block';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
+import { createCopyName } from '@core/util/copyName';
 import { DeprecatedButton } from '@core/component/FormControls/DeprecatedButton';
 import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { ContextMenuContent, MenuItem } from '@core/component/Menu';
@@ -40,6 +42,8 @@ import { Navigate } from '@solidjs/router';
 import { useMutation, useQueryClient } from '@tanstack/solid-query';
 import { useDragDropContext } from '@thisbeyond/solid-dnd';
 import {
+  useCopyChatMutation,
+  useCopyDocumentMutation,
   useMoveChatMutation,
   useMoveDocumentMutation,
   useMoveProjectMutation,
@@ -303,45 +307,65 @@ export function Soup() {
   const moveDocumentMutation = useMoveDocumentMutation();
   const moveProjectMutation = useMoveProjectMutation();
   const moveChatMutation = useMoveChatMutation();
+  const copyDocumentMutation = useCopyDocumentMutation();
+  const copyChatMutation = useCopyChatMutation();
 
-  const dragDropContext = useDragDropContext();
-  if (dragDropContext) {
-    dragDropContext[1].onDragEnd((event) => {
-      const droppable = event.droppable;
-      if (!droppable) return;
+  useDragDropContext()?.[1].onDragEnd((event) => {
+    const droppable = event.droppable;
+    if (!droppable) return;
 
-      const draggable = event.draggable;
-      if (!draggable?.data) return;
+    const draggable = event.draggable;
+    if (!draggable?.data) return;
 
-      const entityData = draggable.data;
-      const draggableId = draggable.id;
+    const entityData = draggable.data;
+    const draggableId = draggable.id;
 
-      if (typeof draggableId !== 'string') return;
+    if (typeof draggableId !== 'string') return;
 
-      const entityId = extractEntityId(draggableId);
+    const entityId = extractEntityId(draggableId);
+    const isCopyOperation = altKeyPressed();
 
-      if (droppable.data?.type === 'project' && droppable.data?.id) {
-        const targetProjectId = droppable.data.id;
+    if (droppable.data?.type === 'project' && droppable.data?.id) {
+      const targetProjectId = droppable.data.id;
 
-        if (entityData.type === 'document') {
+      if (entityData.type === 'document') {
+        if (isCopyOperation) {
+          copyDocumentMutation.mutate({
+            documentId: entityId,
+            documentName: createCopyName(entityData.name),
+            projectId: targetProjectId,
+          });
+        } else {
           moveDocumentMutation.mutate({
             documentId: entityId,
             projectId: targetProjectId,
           });
-        } else if (entityData.type === 'project') {
-          moveProjectMutation.mutate({
-            projectId: entityId,
-            parentProjectId: targetProjectId,
+        }
+      } else if (entityData.type === 'project') {
+        // Projects don't have a copy API, so always move
+        moveProjectMutation.mutate({
+          projectId: entityId,
+          parentProjectId: targetProjectId,
+        });
+      } else if (entityData.type === 'chat') {
+        if (isCopyOperation) {
+          copyChatMutation.mutate({
+            chatId: entityId,
+            chatName: createCopyName(entityData.name),
+            projectId: targetProjectId,
           });
-        } else if (entityData.type === 'chat') {
+        } else {
           moveChatMutation.mutate({
             chatId: entityId,
             projectId: targetProjectId,
           });
         }
       }
-    });
-  }
+    }
+
+    // Reset Alt key state after drop
+    resetAltKeyPressed();
+  });
 
   const handleFileUpload = useHandleFileUpload();
 

@@ -1,3 +1,4 @@
+import { mountGlobalAltKeyListener } from '@app/signal/altKey';
 import { mountGlobalFocusListener } from '@app/signal/focus';
 import { useIsAuthenticated } from '@core/auth';
 import { Resize } from '@core/component/Resize';
@@ -105,6 +106,7 @@ export function Layout(props: RouteSectionProps) {
   }, isAuthenticated());
 
   mountGlobalFocusListener();
+  mountGlobalAltKeyListener();
 
   useABTest();
 

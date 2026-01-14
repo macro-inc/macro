@@ -45,6 +45,7 @@ import type {
 } from '../types/entity';
 import type { WithSearch } from '../types/search';
 import { Entity } from './Entity';
+import { altKeyPressed } from '@app/signal/altKey';
 
 const DEBOUNCE_FETCH_MORE_MS = 50;
 
@@ -464,6 +465,7 @@ export function createUnifiedInfiniteList<T extends EntityData>({
 
     // Track drag state for soup entries
     const [state] = useDragDropContext() ?? [];
+
     const isDraggingSoupEntry = createMemo(() => {
       const draggable = state?.active.draggable;
       if (!draggable) return false;
@@ -512,6 +514,20 @@ export function createUnifiedInfiniteList<T extends EntityData>({
       }
 
       return false;
+    });
+
+    const draggedEntitySupportsCopy = createMemo(() => {
+      const draggable = state?.active.draggable;
+      if (!draggable) return false;
+      const entityType = draggable.data?.type;
+      return entityType === 'document' || entityType === 'chat';
+    });
+
+    const dropActionText = createMemo(() => {
+      if (altKeyPressed() && draggedEntitySupportsCopy()) {
+        return 'Copy';
+      }
+      return 'Move';
     });
 
     // Estimate items per viewport and derive overscan and page size
@@ -716,10 +732,10 @@ export function createUnifiedInfiniteList<T extends EntityData>({
               <div class="flex flex-col absolute top-0 left-0 w-full h-full backdrop-blur-sm bg-accent/10 items-center justify-center space-y-3 z-50 pointer-events-none">
                 <FolderOpen class="w-[80px] h-[80px] text-ink" />
                 <h3 class="text-2xl font-semibold text-ink">
-                  Move to {props.name ?? 'folder'}
+                  {dropActionText()} to {props.name ?? 'folder'}
                 </h3>
                 <p class="text-sm text-ink-muted">
-                  Drop here to move items to this folder
+                  Drop here to add items to this folder
                 </p>
               </div>
             </Show>

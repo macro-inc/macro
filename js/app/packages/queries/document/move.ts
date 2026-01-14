@@ -20,6 +20,18 @@ interface MoveChatParams {
   projectId: string;
 }
 
+interface CopyDocumentParams {
+  documentId: string;
+  documentName: string;
+  projectId: string;
+}
+
+interface CopyChatParams {
+  chatId: string;
+  chatName: string;
+  projectId: string;
+}
+
 export function useMoveDocumentMutation() {
   return useMutation(
     () => ({
@@ -86,6 +98,92 @@ export function useMoveChatMutation() {
       },
       onError: () => {
         toast.failure('Failed to move chat');
+      },
+    }),
+    () => queryClient
+  );
+}
+
+export function useCopyDocumentMutation() {
+  return useMutation(
+    () => ({
+      mutationFn: async ({
+        documentId,
+        documentName,
+        projectId,
+      }: CopyDocumentParams) => {
+        // First copy the document
+        const copyResult = await throwOnErr(
+          async () =>
+            await storageServiceClient.copyDocument({
+              documentId,
+              documentName,
+            })
+        );
+
+        if (!copyResult?.documentId) {
+          throw new Error('Failed to copy document');
+        }
+
+        // Then move the copy to the target project
+        const newDocumentId = copyResult.documentId;
+        await throwOnErr(
+          async () =>
+            await storageServiceClient.editDocument({
+              documentId: newDocumentId,
+              projectId,
+            })
+        );
+
+        return copyResult;
+      },
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ['entity'] });
+        queryClient.invalidateQueries({ queryKey: ['dss'] });
+      },
+      onError: () => {
+        toast.failure('Failed to copy document');
+      },
+    }),
+    () => queryClient
+  );
+}
+
+export function useCopyChatMutation() {
+  return useMutation(
+    () => ({
+      mutationFn: async ({ chatId, chatName, projectId }: CopyChatParams) => {
+        // First copy the chat
+        const copyResult = await throwOnErr(
+          async () =>
+            await cognitionApiServiceClient.copyChat({
+              chat_id: chatId,
+              name: chatName,
+            })
+        );
+
+        if (!copyResult?.id) {
+          throw new Error('Failed to copy chat');
+        }
+
+        // Then move the copy to the target project
+        const newChatId = copyResult.id;
+        await throwOnErr(
+          async () =>
+            await cognitionApiServiceClient.editChatProject({
+              chat_id: newChatId,
+              project_id: projectId,
+            })
+        );
+
+        return copyResult;
+      },
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ['entity'] });
+        queryClient.invalidateQueries({ queryKey: ['chat'] });
+      },
+      onError: () => {
+        toast.failure('Failed to copy chat');
       },
     }),
     () => queryClient

@@ -1,4 +1,5 @@
 import { usePaywallState } from '@core/constant/PaywallState';
+import { createCopyName } from '@core/util/copyName';
 import { isPaymentError } from '@core/util/handlePaymentError';
 import { isErr, isOk } from '@core/util/maybeResult';
 import { cognitionApiServiceClient } from '@service-cognition/client';
@@ -333,7 +334,7 @@ export async function copyItem(args: {
     case 'document': {
       const result = await storageServiceClient.copyDocument({
         documentId: id,
-        documentName: `${name} copy`,
+        documentName: createCopyName(name),
       });
       if (isErr(result)) return null;
       newId = result[1].documentId;
@@ -342,7 +343,7 @@ export async function copyItem(args: {
     case 'chat': {
       const result = await cognitionApiServiceClient.copyChat({
         chat_id: id,
-        name,
+        name: createCopyName(name),
       });
       if (isPaymentError(result)) {
         showPaywall();
