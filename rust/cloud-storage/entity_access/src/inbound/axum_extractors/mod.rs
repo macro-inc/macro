@@ -6,14 +6,12 @@
 mod chat;
 mod document;
 mod history;
-mod pin;
 mod project;
 mod thread;
 
 pub use chat::ChatAccessLevelExtractor;
 pub use document::DocumentAccessExtractor;
 pub use history::HistoryAccessExtractor;
-pub use pin::PinAccessLevelExtractor;
 pub use project::{ProjectAccessLevelExtractor, ProjectBodyAccessLevelExtractor};
 pub use thread::ThreadAccessLevelExtractor;
 
