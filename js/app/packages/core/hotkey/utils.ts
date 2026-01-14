@@ -27,6 +27,75 @@ import type {
   ValidHotkey,
 } from './types';
 
+type GetHotkeyCommandOptions = {
+  /**
+   * The property to sort by. Defaults to 'handlerPriority'.
+   */
+  sortBy?: 'displayPriority' | 'handlerPriority';
+  /**
+   * Sort direction. Defaults to 'desc' (higher values first).
+   */
+  sortDirection?: 'asc' | 'desc';
+};
+
+/**
+ * Get hotkey commands from a scope, sorted by the specified property.
+ *
+ * @param scopeOrId - Either a ScopeNode or a scope ID string
+ * @param hotkey - The hotkey to look up
+ * @param options - Sorting options
+ * @returns Array of commands sorted by the specified property, or empty array if not found
+ *
+ * @example
+ * // Get commands sorted by handlerPriority (default)
+ * const commands = getHotkeyCommands(scopeNode, 'h');
+ *
+ * // Get the highest priority command
+ * const topCommand = getHotkeyCommands(scopeNode, 'h')[0];
+ *
+ * // Sort by displayPriority instead
+ * const commands = getHotkeyCommands(scopeNode, 'h', { sortBy: 'displayPriority' });
+ */
+export function getHotkeyCommands(
+  scopeOrId: ScopeNode | string,
+  hotkey: ValidHotkey,
+  options: GetHotkeyCommandOptions = {}
+): HotkeyCommand[] {
+  const { sortBy = 'handlerPriority', sortDirection = 'desc' } = options;
+
+  const scopeNode =
+    typeof scopeOrId === 'string' ? hotkeyScopeTree.get(scopeOrId) : scopeOrId;
+
+  if (!scopeNode) return [];
+
+  const commands = scopeNode.hotkeyCommands.get(hotkey);
+  if (!commands || commands.length === 0) return [];
+
+  // Sort by the specified property
+  return [...commands].sort((a, b) => {
+    const aVal = a[sortBy] ?? 0;
+    const bVal = b[sortBy] ?? 0;
+    return sortDirection === 'desc' ? bVal - aVal : aVal - bVal;
+  });
+}
+
+/**
+ * Get the first (highest priority by default) hotkey command from a scope.
+ * Convenience wrapper around getHotkeyCommands.
+ *
+ * @param scopeOrId - Either a ScopeNode or a scope ID string
+ * @param hotkey - The hotkey to look up
+ * @param options - Sorting options
+ * @returns The first command after sorting, or undefined if not found
+ */
+export function getHotkeyCommand(
+  scopeOrId: ScopeNode | string,
+  hotkey: ValidHotkey,
+  options: GetHotkeyCommandOptions = {}
+): HotkeyCommand | undefined {
+  return getHotkeyCommands(scopeOrId, hotkey, options)[0];
+}
+
 let scopeCounter = 0;
 export function getScopeId(prefix: string = 'scope'): string {
   const scopeId = `${prefix}_${scopeCounter++}`;
@@ -245,10 +314,10 @@ export function getActiveCommandByToken(
         while (currentAncestor) {
           const activationKey = currentCommandScope.activationKeys?.at(0);
           if (activationKey) {
-            // Get the first (highest priority) command for this activation key
-            const activationCommands =
-              originalParentScope.hotkeyCommands.get(activationKey);
-            const activationCommand = activationCommands?.[0];
+            const activationCommand = getHotkeyCommand(
+              originalParentScope,
+              activationKey
+            );
             if (activationCommand) {
               reverseActivationCommands.push(activationCommand);
             } else break;
