@@ -18,7 +18,7 @@ import {
   type VideoNode,
 } from '../model/CanvasModel';
 import { Line } from './edges/Line';
-import { File } from './nodes/DSSFile';
+import { File } from './nodes/EntityMention';
 import { DSSMedia } from './nodes/DSSMedia';
 import { Pencil } from './nodes/Pencil';
 import { Shape } from './nodes/Shape';

@@ -21,7 +21,7 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import { useSplitLayout } from '../../../app/component/split-layout/layout';
+import { useSplitLayout } from 'app/component/split-layout/layout';
 import { DRAG_THRESHOLD, type RenderMode, Tools } from '../../constants';
 import type { FileNode } from '../../model/CanvasModel';
 import { fileWidth } from '../../operation/file';
