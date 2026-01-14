@@ -57,11 +57,11 @@ pub async fn get_scheduled_message_no_auth(
 pub async fn get_scheduled_messages_by_link_id(
     pool: &PgPool,
     link_id: Uuid,
-    offset: i64,
-    limit: i64,
+    offset: u32,
+    limit: u32,
 ) -> anyhow::Result<Vec<service::message::Message>> {
-    if offset < 0 || limit <= 0 {
-        anyhow::bail!("Offset must be non-negative and limit must be positive");
+    if limit == 0 {
+        anyhow::bail!("limit must be positive");
     }
 
     let db_messages = get_scheduled_db_messages_by_link_id(pool, link_id, offset, limit).await?;
@@ -73,8 +73,8 @@ pub async fn get_scheduled_messages_by_link_id(
 pub async fn get_scheduled_db_messages_by_link_id(
     pool: &PgPool,
     link_id: Uuid,
-    offset: i64,
-    limit: i64,
+    offset: u32,
+    limit: u32,
 ) -> anyhow::Result<Vec<db::message::Message>> {
     let db_messages = sqlx::query_as!(
         db::message::Message,
@@ -113,8 +113,8 @@ pub async fn get_scheduled_db_messages_by_link_id(
         LIMIT $2 OFFSET $3
         "#,
         link_id,
-        limit,
-        offset
+        limit as i64,
+        offset as i64
     )
     .fetch_all(pool)
     .await?;

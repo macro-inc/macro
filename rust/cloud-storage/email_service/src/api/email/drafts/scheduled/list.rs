@@ -10,8 +10,8 @@ use strum_macros::AsRefStr;
 use thiserror::Error;
 use utoipa::{IntoParams, ToSchema};
 
-const DEFAULT_LIMIT: i64 = 100;
-const MAX_LIMIT: i64 = 1000;
+const DEFAULT_LIMIT: u32 = 100;
+const MAX_LIMIT: u32 = 1000;
 
 #[derive(Debug, Error, AsRefStr)]
 pub enum GetScheduledError {
@@ -43,20 +43,15 @@ impl IntoResponse for GetScheduledError {
 pub struct GetScheduledQueryParams {
     /// The number of scheduled messages to skip.
     #[serde(default)]
-    pub offset: i64,
+    pub offset: u32,
     /// The maximum number of scheduled messages to return.
     #[serde(default = "default_limit")]
-    pub limit: i64,
+    pub limit: u32,
 }
 
 impl GetScheduledQueryParams {
     fn validate(&self) -> Result<(), GetScheduledError> {
-        if self.offset < 0 {
-            return Err(GetScheduledError::Validation(
-                "Offset must be non-negative".to_string(),
-            ));
-        }
-        if self.limit <= 0 {
+        if self.limit == 0 {
             return Err(GetScheduledError::Validation(
                 "Limit must be positive".to_string(),
             ));
@@ -71,7 +66,7 @@ impl GetScheduledQueryParams {
     }
 }
 
-fn default_limit() -> i64 {
+fn default_limit() -> u32 {
     DEFAULT_LIMIT
 }
 
