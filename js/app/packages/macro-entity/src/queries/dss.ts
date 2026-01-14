@@ -5,6 +5,7 @@ import {
   renameItem,
 } from '@core/component/FileList/itemOperations';
 import { itemToSafeName } from '@core/constant/allBlocks';
+import { toast } from '@core/component/Toast/Toast';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import type { UnifiedSearchResponseItem } from '@service-search/generated/models';
 import type { ItemType } from '@service-storage/client';
@@ -387,8 +388,10 @@ export function createDeleteDssItemMutation() {
       );
     },
     onSettled: (data, error, entity) => {
-      if (data?.success === false || error)
+      if (data?.success === false || error) {
         console.error(`Failed to delete dss item ${entity}`, data, error);
+        toast.failure('Failed to delete item');
+      }
 
       queryClient.invalidateQueries({
         queryKey: queryKeys.all.dss,
@@ -502,6 +505,7 @@ export function createBulkDeleteDssItemsMutation() {
     },
     onError: (error, entities, _context) => {
       console.error(`Failed to delete dss items`, entities, error);
+      toast.failure('Failed to delete items');
       // Rollback on error - restore the deleted items
       queryClient.invalidateQueries({
         queryKey: queryKeys.all.dss,
@@ -589,8 +593,10 @@ export function createRenameDssEntityMutation(
           );
         },
         onSettled: (data, error, { entity: { id } }) => {
-          if (data?.success === false || error)
+          if (data?.success === false || error) {
             console.error(`Failed to rename dss item ${id}`, data, error);
+            toast.failure('Failed to rename item');
+          }
 
           queryClient.invalidateQueries({
             queryKey: queryKeys.all.dss,
@@ -665,6 +671,7 @@ export function createBulkRenameDssEntityMutation() {
     onSettled: (data, error, { entities }) => {
       if (error) {
         console.error(`Failed bulk rename`, entities, data, error);
+        toast.failure('Failed to rename items');
       }
 
       queryClient.invalidateQueries({
@@ -692,7 +699,11 @@ function createMoveOptimisticUpdate(entityIds: string[], projectId: string) {
   };
 }
 
-function invalidateAfterMove(hasProjects: boolean) {
+function invalidateAfterMove(hasProjects: boolean, failed?: boolean) {
+  if (failed) {
+    toast.failure('Failed to move item');
+  }
+
   queryClient.invalidateQueries({
     queryKey: queryKeys.all.dss,
   });
@@ -743,10 +754,12 @@ export function createMoveToProjectDssEntityMutation() {
       }
     },
     onSettled: (data, error, { entity: { id, type } }) => {
-      if (data?.success === false || error)
+      const failed = data?.success === false || !!error;
+      if (failed) {
         console.error(`Failed to move dss item ${id}`, data, error);
+      }
 
-      invalidateAfterMove(type === 'project');
+      invalidateAfterMove(type === 'project', failed);
     },
   }));
 }
@@ -778,7 +791,10 @@ export function createCopyDssEntityMutation() {
       // The new item will be added when the mutation completes and queries are invalidated
     },
     onSettled: (data, error, { entity: { id } }) => {
-      if (error) console.error(`Failed to copy dss item ${id}`, data, error);
+      if (error) {
+        console.error(`Failed to copy dss item ${id}`, data, error);
+        toast.failure('Failed to copy item');
+      }
       queryClient.invalidateQueries({
         queryKey: queryKeys.all.dss,
       });
@@ -833,6 +849,7 @@ export function createBulkCopyDssEntityMutation() {
     onSettled: (data, error, { entities }) => {
       if (error) {
         console.error(`Failed bulk copy`, entities, data, error);
+        toast.failure('Failed to copy items');
       }
 
       // Trigger refetch so new items appear
@@ -905,10 +922,15 @@ export function createBulkMoveToProjectDssEntityMutation() {
     },
 
     onSettled: (data, error, { entities }) => {
-      if (data?.success === false || error)
+      const failed = data?.success === false || !!error;
+      if (failed) {
         console.error(`Failed to bulk move dss items`, entities, data, error);
+      }
 
-      invalidateAfterMove(entities.some((e) => e.type === 'project'));
+      invalidateAfterMove(
+        entities.some((e) => e.type === 'project'),
+        failed
+      );
     },
   }));
 }
