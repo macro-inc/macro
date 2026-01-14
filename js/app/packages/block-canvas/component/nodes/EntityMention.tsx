@@ -23,7 +23,7 @@ import {
 } from 'solid-js';
 import { useSplitLayout } from 'app/component/split-layout/layout';
 import { DRAG_THRESHOLD, type RenderMode, Tools } from '../../constants';
-import type { FileNode } from '../../model/CanvasModel';
+import type { EntityMentionNode } from '../../model/CanvasModel';
 import { fileWidth } from '../../operation/file';
 import { type Vector2, vec2 } from '../../util/vector2';
 import { BaseCanvasRectangle } from './BaseCanvasRectangle';
@@ -33,7 +33,7 @@ false && floatWithElement;
 const { track, TrackingEvents } = withAnalytics();
 
 function ErrorMessage(props: {
-  node: FileNode;
+  node: EntityMentionNode;
   error: 'UNAUTHORIZED' | 'MISSING' | 'INVALID' | 'LOADING' | undefined;
 }) {
   const { currentScale } = useRenderState();
@@ -89,7 +89,7 @@ function ErrorMessage(props: {
   );
 }
 
-export function File(props: { node: FileNode; mode: RenderMode }) {
+export function File(props: { node: EntityMentionNode; mode: RenderMode }) {
   let fileRef!: HTMLDivElement;
 
   const [error, setError] = createSignal<

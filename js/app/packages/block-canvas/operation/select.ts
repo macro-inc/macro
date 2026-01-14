@@ -59,7 +59,7 @@ export const useSelect = sharedInstance((): Operator => {
         node.type === 'image' ||
         node.type === 'video' ||
         node.type === 'text' ||
-        node.type === 'file'
+        node.type === 'entitymention'
       ) {
         if (rect.intersects(nodeRect)) {
           acc.push(node.id);

@@ -99,7 +99,7 @@ const ValidPropsByEntity: Partial<Record<CanvasEntity, Set<string>>> = {
   edge: new Set(['strokeColor', 'strokeWidth', 'opacity']),
   text: new Set(['textSize', 'strokeColor']),
   image: new Set(['strokeColor', 'strokeWidth', 'opacity', 'cornerRadius']),
-  file: new Set([]),
+  entitymention: new Set([]),
 };
 
 export function SwatchColorPicker(props: {
@@ -458,7 +458,7 @@ export function FloatingMenu() {
     const nodesLength = nodes.length;
     if (
       nodesLength > 1 &&
-      nodes.some((node) => node.type === 'file') &&
+      nodes.some((node) => node.type === 'entitymention') &&
       edges.length < 1
     ) {
       return true;

@@ -902,7 +902,7 @@ export function CanvasController(props: ParentProps) {
 
     nodes.createNode(
       {
-        type: 'file',
+        type: 'entitymention',
         file: id,
         entityType,
         mentionUuid,

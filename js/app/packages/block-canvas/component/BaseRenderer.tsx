@@ -4,9 +4,9 @@ import type { RenderMode } from '../constants';
 import {
   type CanvasEdge,
   type CanvasNode,
-  type FileNode,
+  type EntityMentionNode,
   type ImageNode,
-  isFileNode,
+  isEntityMentionNode,
   isImageNode,
   isPencilNode,
   isShapeNode,
@@ -47,8 +47,8 @@ export function NodeRenderer(props: { node: CanvasNode; mode: RenderMode }) {
       <Match when={isTextNode(props.node)}>
         <TextBox node={props.node as TextNode} mode={props.mode} />
       </Match>
-      <Match when={isFileNode(props.node)}>
-        <File node={props.node as FileNode} mode={props.mode} />
+      <Match when={isEntityMentionNode(props.node)}>
+        <File node={props.node as EntityMentionNode} mode={props.mode} />
       </Match>
     </Switch>
   );
