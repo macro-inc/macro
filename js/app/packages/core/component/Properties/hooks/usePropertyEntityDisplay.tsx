@@ -10,15 +10,7 @@ import {
 } from '@core/signal/preview';
 import { tryMacroId, useDisplayName } from '@core/user';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import {
-  type Accessor,
-  createEffect,
-  createMemo,
-  createRoot,
-  createSignal,
-  type JSX,
-  onCleanup,
-} from 'solid-js';
+import { type Accessor, createMemo, type JSX } from 'solid-js';
 import { entityTypeToItemType } from '../utils';
 import { match } from 'ts-pattern';
 
@@ -33,8 +25,12 @@ const PREVIEWABLE_ENTITY_TYPES: EntityType[] = [
 
 type PreviewableEntityType = (typeof PREVIEWABLE_ENTITY_TYPES)[number];
 
-const isPreviewable = (type: EntityType): type is PreviewableEntityType =>
-  PREVIEWABLE_ENTITY_TYPES.includes(type);
+const isPreviewable = (
+  type: EntityType | undefined
+): type is PreviewableEntityType => {
+  if (!type) return false;
+  return PREVIEWABLE_ENTITY_TYPES.includes(type);
+};
 
 type PropertyEntityDisplayResult = {
   /** Resolved display name for the entity */
@@ -57,48 +53,6 @@ const checkPreviewItem = (item?: PreviewItem): item is PreviewItemAccess => {
 };
 
 /**
- * Creates a reactive hook manager that properly disposes and recreates hooks
- * when dependencies change. This solves the problem of hooks that take plain
- * values (not accessors) needing to react to changes.
- * @param deps - Accessor that returns dependencies to track
- * @param shouldCreate - Predicate to determine if hook should be created
- * @param createHook - Factory function that creates the hook and returns its value
- * @param defaultValue - Default value when hook is not created
- * @returns Accessor to the current hook value
- */
-function useReactiveHook<TDeps, TValue>(
-  deps: Accessor<TDeps>,
-  shouldCreate: (deps: TDeps) => boolean,
-  createHook: (deps: TDeps) => TValue,
-  defaultValue: TValue
-): Accessor<TValue> {
-  const [value, setValue] = createSignal<TValue>(defaultValue);
-  let dispose: (() => void) | undefined;
-
-  createEffect(() => {
-    const currentDeps = deps();
-
-    // Clean up previous hook instance
-    dispose?.();
-    dispose = undefined;
-
-    if (shouldCreate(currentDeps)) {
-      createRoot((d) => {
-        dispose = d;
-        const hookValue = createHook(currentDeps);
-        setValue(() => hookValue);
-      });
-    } else {
-      setValue(() => defaultValue);
-    }
-  });
-
-  onCleanup(() => dispose?.());
-
-  return value;
-}
-
-/**
  * Hook to resolve entity display information (name, icon) for property entity values.
  * Handles preview fetching, channel name resolution, and user display names.
  *
@@ -119,41 +73,33 @@ export function usePropertyEntityDisplay(
 ): PropertyEntityDisplayResult {
   const previewType = () => entityTypeToItemType(entityType());
 
-  const previewAccessor = useReactiveHook(
-    () => ({ id: entityId(), type: entityType(), previewType: previewType() }),
-    (deps) => isPreviewable(deps.type),
-    (deps) => {
-      const [preview] = useItemPreview({
-        id: deps.id,
-        type: deps.previewType,
-      });
-      return preview;
-    },
-    () => undefined as PreviewItem | undefined
-  );
+  const previewWrapper = () => {
+    const eType = entityType();
+    const pType = previewType();
+    if (isPreviewable(eType)) {
+      return useItemPreview({
+        id: entityId(),
+        type: pType,
+      })[0];
+    }
+  };
+  const preview = createMemo(() => previewWrapper()?.());
 
-  const preview = () => previewAccessor()();
+  const channelNameWrapper = () => {
+    const eType = entityType();
+    if (eType === 'CHANNEL') {
+      return useChannelName(entityId());
+    }
+  };
+  const channelName = createMemo(() => channelNameWrapper()?.());
 
-  const channelNameAccessor = useReactiveHook(
-    () => ({ id: entityId(), type: previewType() }),
-    (deps) => deps.type === 'channel',
-    (deps) => useChannelName(deps.id),
-    () => ''
-  );
-
-  const channelName = () => channelNameAccessor()();
-
-  const userNameAccessor = useReactiveHook(
-    () => ({ id: entityId(), type: entityType() }),
-    (deps) => deps.type === 'USER',
-    (deps) => {
-      const [displayName] = useDisplayName(tryMacroId(deps.id));
-      return displayName;
-    },
-    () => ''
-  );
-
-  const userName = () => userNameAccessor()();
+  const userNameWrapper = () => {
+    const eType = entityType();
+    if (eType === 'USER') {
+      return useDisplayName(tryMacroId(entityId()))[0];
+    }
+  };
+  const userName = createMemo(() => userNameWrapper()?.() ?? '');
 
   const isLoading = createMemo(() => {
     if (!isPreviewable(entityType())) return false;
