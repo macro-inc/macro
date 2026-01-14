@@ -7,7 +7,7 @@ import { useRenderMermaid } from '@block-canvas/util/mermaid';
 import { withAnalytics } from '@coparse/analytics';
 import { type BlockName, useBlockId, useIsNestedBlock } from '@core/block';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
-import type { DragEventWithData } from '@core/component/FileList/DraggableItem';
+import type { DragEventWithData } from '@macro-entity';
 import { BasicHotkey } from '@core/component/Hotkey';
 import { OldMenu, OldMenuItem } from '@core/component/OldMenu';
 import {

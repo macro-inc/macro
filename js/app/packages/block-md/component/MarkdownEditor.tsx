@@ -4,7 +4,7 @@ import { markdownBlockErrorSignal } from '@block-md/signal/error';
 import { FindAndReplaceStore } from '@block-md/signal/findAndReplaceStore';
 import { revisionsSignal, rewriteSignal } from '@block-md/signal/rewriteSignal';
 import { type BlockName, useBlockId } from '@core/block';
-import type { DragEventWithData } from '@core/component/FileList/DraggableItem';
+import type { DragEventWithData } from '@macro-entity';
 import { DecoratorRenderer } from '@core/component/LexicalMarkdown/component/core/DecoratorRenderer';
 import { FocusClickTarget } from '@core/component/LexicalMarkdown/component/core/FocusClickTarget';
 import {
@@ -359,12 +359,12 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     }
   }, 60);
 
-  onDragEnd((event) => {
-    dndDragEnd(event as DragEventWithData);
+  onDragEnd((event: DragEventWithData) => {
+    dndDragEnd(event);
   });
 
-  onDragMove((event) => {
-    dndDragMove(event as DragEventWithData);
+  onDragMove((event: DragEventWithData) => {
+    dndDragMove(event);
   });
 
   // handler for the find and replace directive

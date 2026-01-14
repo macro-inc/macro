@@ -1,4 +1,3 @@
-import type { FileListSize } from '@core/component/FileList/constants';
 import { TruncatedText } from '@core/component/FileList/TruncatedText';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import {
@@ -16,7 +15,6 @@ export function ItemDragOverlay() {
   const activeDraggable = createMemo(() => {
     return state?.active.draggable;
   });
-  const size: FileListSize = activeDraggable()?.data.size;
 
   const getEntityIconType = () => {
     const data = activeDraggable()?.data;
@@ -47,12 +45,10 @@ export function ItemDragOverlay() {
   return (
     <div class="w-auto max-w-[300px] flex flex-col gap-2 bg-active p-2 rounded-md z-drag shadow-sm pointer-events-none">
       <div class="flex flex-row items-center gap-2">
-        <EntityIcon size={size ?? 'sm'} targetType={getEntityIconType()} />
-        <TruncatedText size={size ?? 'sm'}>
-          {activeDraggable()?.data.name}
-        </TruncatedText>
+        <EntityIcon size="sm" targetType={getEntityIconType()} />
+        <TruncatedText size="sm">{activeDraggable()?.data.name}</TruncatedText>
       </div>
-      {/* TODO post- multiselect exists */}
+      {/* TODO: when multiselect exists */}
       {/* <Show when={activeDraggable()?.data.selectedItems.length > 1}>
         <div class={`${TEXT_SIZE_CLASSES[size ?? 'sm']} text-ink-muted pl-2`}>
           + {activeDraggable()?.data.selectedItems.length - 1} items

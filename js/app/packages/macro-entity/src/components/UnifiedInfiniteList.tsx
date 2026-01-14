@@ -2,6 +2,7 @@ import { useSuspenseContext } from '@app/component/SuspenseContext';
 import { EmptyState } from '@app/component/UnifiedListEmptyState';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { toast } from '@core/component/Toast/Toast';
+import '@core/directive/dnd';
 import type { ViewId } from '@core/types/view';
 import FolderOpen from '@phosphor-icons/core/duotone/folder-open-duotone.svg?component-solid';
 import { onElementConnect } from '@solid-primitives/lifecycle';

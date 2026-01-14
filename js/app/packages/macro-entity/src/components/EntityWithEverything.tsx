@@ -1,6 +1,7 @@
 import { EntityIcon } from '@core/component/EntityIcon';
 import type { Property } from '@core/component/Properties/types';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
+import '@core/directive/dnd';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { matches } from '@core/util/match';
@@ -832,7 +833,7 @@ export function EntityWithEverything(
   });
 
   const draggableId = createDraggableId(props.entity.id, props.splitId);
-  const draggable = createDraggable(draggableId, props.entity);
+  const draggable = createDraggable(draggableId, { ...props.entity });
   false && draggable;
 
   // The main click handler for the entity row should navigate to an entity
