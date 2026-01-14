@@ -1317,7 +1317,7 @@ export function createNavigationEntityListShortcut({
   });
 
   registerEntityHotkey({
-    hotkey: ['h', 'arrowleft'],
+    hotkey: ['h'],
     scopeId: splitHotkeyScope,
     description: 'Navigate to parent context',
     hotkeyToken: TOKENS.unifiedList.navigation.parent,
@@ -1352,7 +1352,7 @@ export function createNavigationEntityListShortcut({
   });
 
   registerEntityHotkey({
-    hotkey: ['l', 'arrowright'],
+    hotkey: ['l'],
     scopeId: splitHotkeyScope,
     description: 'Navigate to child context',
     hotkeyToken: TOKENS.unifiedList.navigation.child,
