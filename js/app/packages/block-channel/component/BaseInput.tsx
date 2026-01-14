@@ -8,6 +8,11 @@ import {
   expandGroupParticipants,
   toSimpleMention,
 } from '@block-channel/utils/mentionExpansion';
+import {
+  createTasksFromPotential,
+  replaceCheckboxesWithMentions,
+} from '@block-channel/utils/taskModeConversion';
+import { useTaskMode } from '@block-channel/utils/useTaskMode';
 import { isInBlock } from '@core/block';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
@@ -27,6 +32,7 @@ import type { UploadInput } from '@core/util/upload';
 import { handleFileFolderDrop } from '@core/util/upload';
 import ArrowUp from '@icon/bold/arrow-up-bold.svg';
 import Spinner from '@icon/bold/spinner-gap-bold.svg';
+import CheckSquareIcon from '@icon/regular/check-square.svg';
 import PlusIcon from '@icon/regular/plus.svg';
 import FormatIcon from '@icon/regular/text-aa.svg';
 import Trash from '@icon/regular/trash.svg';
@@ -58,6 +64,7 @@ import { AttachMenu } from './AttachMenu';
 import { Attachment } from './Attachment';
 import { FormatRibbon } from './FormatRibbon';
 import { useChannelMarkdownArea } from './MarkdownArea';
+import { TaskPreviewPanel } from './TaskPreviewPanel';
 
 false && fileFolderDrop;
 
@@ -104,6 +111,10 @@ type BaseInputProps = {
   closeDraft?: () => void;
   /** whether this input is for a reply (affects styling) */
   isReplyInput?: boolean;
+  /** current user ID for task mode auto-assignment */
+  currentUserId?: string;
+  /** parent task ID for task mode (when in task block context) */
+  parentTaskId?: string;
 };
 
 /** the time after a user stops typing before we consider them idle. we want smooth remote changes, but local changes should happen more immediately. */
@@ -197,6 +208,10 @@ export function BaseInput(props: BaseInputProps) {
     editor,
     ref,
   } = useChannelMarkdownArea();
+
+  // Task mode state
+  const { taskModeEnabled, toggleTaskMode, potentialTasks } =
+    useTaskMode(markdownState);
 
   createRenderEffect(() => {
     const currentRef = ref();
@@ -342,10 +357,36 @@ export function BaseInput(props: BaseInputProps) {
     props.onChange(markdownState());
   }
 
-  function handleSend() {
+  async function handleSend() {
     if (isPendingSend()) return false;
     setIsPendingSend(true);
-    const content = markdownState();
+    let content = markdownState();
+    const originalContent = content;
+
+    // If task mode enabled and has tasks, create them first
+    if (taskModeEnabled() && potentialTasks().length > 0) {
+      try {
+        const results = await createTasksFromPotential(potentialTasks(), {
+          currentUserId: props.currentUserId,
+          parentTaskId: props.parentTaskId,
+        });
+
+        if (results.successes.length > 0) {
+          // Replace checkbox lines with task mentions in content
+          content = replaceCheckboxesWithMentions(content, results.successes);
+          toast.success(`Created ${results.successes.length} task(s)`);
+        }
+
+        if (results.errors.length > 0) {
+          logger.warn('Some tasks failed to create', {
+            errors: results.errors,
+          });
+        }
+      } catch (e) {
+        logger.error('Failed to create tasks', { error: e });
+        toast.failure('Failed to create tasks');
+      }
+    }
 
     const args = {
       content: content,
@@ -367,7 +408,7 @@ export function BaseInput(props: BaseInputProps) {
         // Restore the stashed editor state
         clearMarkdownArea();
         try {
-          setEditorStateFromMarkdown(editor, content);
+          setEditorStateFromMarkdown(editor, originalContent);
         } catch (e) {
           logger.error('Failed to restore editor state after send error', {
             error: e,
@@ -478,7 +519,9 @@ export function BaseInput(props: BaseInputProps) {
                   if (hasPendingAttachments() || isPendingSend()) {
                     return true;
                   }
-                  return handleSend();
+                  // Fire send async but return true to indicate handled
+                  handleSend();
+                  return true;
                 }
           }
           onBlur={() => {
@@ -530,6 +573,9 @@ export function BaseInput(props: BaseInputProps) {
           </For>
         </div>
       </Show>
+      <Show when={taskModeEnabled() && potentialTasks().length > 0}>
+        <TaskPreviewPanel tasks={potentialTasks()} />
+      </Show>
       <div class="flex flex-row w-full h-8 justify-between items-center p-2 mb-2 space-x-2 allow-css-brackets">
         <Show when={showAttachMenu()}>
           <AttachMenu
@@ -558,6 +604,16 @@ export function BaseInput(props: BaseInputProps) {
             clicked={showFormatRibbon()}
           >
             <FormatIcon width={20} height={20} />
+          </ActionButton>
+          <ActionButton
+            tooltip="Task Mode"
+            onClick={(e) => {
+              e.preventDefault();
+              toggleTaskMode();
+            }}
+            clicked={taskModeEnabled()}
+          >
+            <CheckSquareIcon width={20} height={20} />
           </ActionButton>
           <Show when={props.isReplyInput && props.closeDraft}>
             <ActionButton

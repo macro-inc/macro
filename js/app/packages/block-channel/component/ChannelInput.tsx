@@ -15,6 +15,7 @@ import type {
 } from '@core/store/cacheChannelInput';
 import type { IUser } from '@core/user';
 import { channelParticipantInfo } from '@core/user/util';
+import { useUserId } from '@service-gql/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { createMemo, createSignal, onMount } from 'solid-js';
 import type { SetStoreFunction } from 'solid-js/store';
@@ -32,6 +33,7 @@ export type ChannelInputProps = {
 
 export function ChannelInput(props: ChannelInputProps) {
   const channelId = useBlockId();
+  const userId = useUserId();
 
   const sendMessage = useSendChannelMessageAction(() => channelId);
 
@@ -86,6 +88,7 @@ export function ChannelInput(props: ChannelInputProps) {
       channelUsers={channelUsers}
       autoFocusOnMount={props.autoFocusOnMount}
       domRef={props.domRef}
+      currentUserId={userId()}
     />
   );
 }
