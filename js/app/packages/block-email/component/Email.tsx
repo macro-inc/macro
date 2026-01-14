@@ -393,6 +393,29 @@ function EmailContent(props: EmailViewProps) {
     hide: true,
   });
 
+  const emailReplyInfo = createMemo(() => {
+    const filtered = context.messages.list();
+
+    if (filtered.length !== 0) {
+      const lastMessage = filtered.at(-1);
+      if (!lastMessage || !lastMessage.db_id) return;
+      return {
+        replyingTo: lastMessage,
+        draft: context.drafts.getDraftForMessage(lastMessage.db_id),
+      };
+    }
+
+    const unfiltered = context.messages.unfiltered();
+
+    if (unfiltered.length === 0) return;
+
+    const latest = unfiltered.at(-1);
+
+    if (!latest || !latest.is_draft) return;
+
+    return { replyingTo: undefined, draft: latest };
+  });
+
   return (
     <EmailFormContextProvider
       formOptions={{
@@ -417,10 +440,10 @@ function EmailContent(props: EmailViewProps) {
           when={
             context.permissions().isOwner &&
             context.drafts.initialDraftsSettled() &&
-            context.messages.list().at(-1)
+            emailReplyInfo()
           }
         >
-          {(lastMessage) => {
+          {(info) => {
             return (
               <div class="shrink-0 w-full px-4 pb-2">
                 <div class="relative w-full flex flex-row justify-center bg-panel macro-message-width mx-auto">
@@ -429,14 +452,8 @@ function EmailContent(props: EmailViewProps) {
                     loadingText="Loading messages"
                   />
                   <EmailInput
-                    replyingTo={lastMessage}
-                    draft={
-                      lastMessage().db_id
-                        ? context.drafts.getDraftForMessage(
-                            lastMessage().db_id!
-                          )
-                        : undefined
-                    }
+                    replyingTo={() => info().replyingTo}
+                    draft={info().draft}
                     markdownDomRef={(el) => {
                       markdownDomRef = el;
                     }}
