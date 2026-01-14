@@ -48,7 +48,7 @@ import type {
   SearchLocation,
   WithSearch,
 } from '../types/search';
-import { KeyPropertiesGrid } from './KeyPropertiesGrid';
+import { KeyPropertiesGrid } from './EntityPropertyValues';
 
 export type EntityClickEvent = Parameters<
   JSX.EventHandler<HTMLDivElement, MouseEvent>
@@ -1091,6 +1091,7 @@ export function EntityWithEverything(
               )}
             </Show>
             <Show when={isTaskEntity(props.entity) && properties().length > 0}>
+              {/*<EntityPropertyValues*/}
               <KeyPropertiesGrid
                 properties={properties()}
                 entityId={props.entity.id}
