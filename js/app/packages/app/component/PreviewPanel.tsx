@@ -106,11 +106,11 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
 
   createRenderEffect(() => {
     // Temporary fix to prevent toolbarLeft overlapping right content
-    if (!splitPanelContext.layoutRefs.toolbarLeft) return;
-    splitPanelContext.layoutRefs.toolbarLeft.style.maxWidth = `${splitPanelContext.halfSplitState?.()?.percentage ?? 30}%`;
+    if (!scopedLayoutRefs.toolbarLeft) return;
+    scopedLayoutRefs.toolbarLeft.style.maxWidth = `${splitPanelContext.halfSplitState?.()?.percentage ?? 30}%`;
     onCleanup(() => {
-      if (!splitPanelContext.layoutRefs.toolbarLeft) return;
-      splitPanelContext.layoutRefs.toolbarLeft.style.maxWidth = '';
+      if (!scopedLayoutRefs.toolbarLeft) return;
+      scopedLayoutRefs.toolbarLeft.style.maxWidth = '';
     });
   });
 
@@ -157,6 +157,22 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
             }}
           />
         </div>
+      </div>
+
+      {/* Preview-specific toolbar slots so blocks can render the "share" bar (via SplitToolbarLeft/Right) */}
+      <div class="relative w-full flex items-center justify-between shrink-0 h-10 px-1 border-b border-edge-muted/50 bg-panel">
+        <div
+          class="flex h-full items-center flex-1"
+          ref={(ref) => {
+            scopedLayoutRefs.toolbarLeft = ref;
+          }}
+        />
+        <div
+          class="flex h-full items-center"
+          ref={(ref) => {
+            scopedLayoutRefs.toolbarRight = ref;
+          }}
+        />
       </div>
 
       <div class="flex-1 min-h-0">
