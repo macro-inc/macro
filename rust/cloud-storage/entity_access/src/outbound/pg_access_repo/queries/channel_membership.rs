@@ -1,5 +1,6 @@
 //! Query for channel membership check.
 
+use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -9,9 +10,10 @@ use uuid::Uuid;
 #[tracing::instrument(err, skip(pool))]
 pub async fn check_user_channel_membership(
     pool: &PgPool,
-    user_id: &str,
+    user_id: &MacroUserId<Lowercase<'_>>,
     channel_ids: &[Uuid],
 ) -> Result<Vec<Uuid>, sqlx::Error> {
+    let user_id = user_id.as_ref();
     let channels = sqlx::query_scalar!(
         r#"
         SELECT c.id

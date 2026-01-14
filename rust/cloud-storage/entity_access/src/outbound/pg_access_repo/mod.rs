@@ -32,10 +32,7 @@ impl AccessRepository for PgAccessRepository {
         document_id: &str,
         user_id: &MacroUserId<Lowercase<'_>>,
     ) -> Result<Option<AccessLevel>, AccessError> {
-        Ok(
-            queries::document_access::get_document_access(&self.pool, document_id, user_id.as_ref())
-                .await?,
-        )
+        Ok(queries::document_access::get_document_access(&self.pool, document_id, user_id).await?)
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -44,7 +41,7 @@ impl AccessRepository for PgAccessRepository {
         chat_id: &str,
         user_id: &MacroUserId<Lowercase<'_>>,
     ) -> Result<Option<AccessLevel>, AccessError> {
-        Ok(queries::chat_access::get_chat_access(&self.pool, chat_id, user_id.as_ref()).await?)
+        Ok(queries::chat_access::get_chat_access(&self.pool, chat_id, user_id).await?)
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -53,10 +50,7 @@ impl AccessRepository for PgAccessRepository {
         project_id: &str,
         user_id: &MacroUserId<Lowercase<'_>>,
     ) -> Result<Option<AccessLevel>, AccessError> {
-        Ok(
-            queries::project_access::get_project_access(&self.pool, project_id, user_id.as_ref())
-                .await?,
-        )
+        Ok(queries::project_access::get_project_access(&self.pool, project_id, user_id).await?)
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -65,10 +59,7 @@ impl AccessRepository for PgAccessRepository {
         thread_id: &str,
         user_id: &MacroUserId<Lowercase<'_>>,
     ) -> Result<Option<AccessLevel>, AccessError> {
-        Ok(
-            queries::thread_access::get_thread_access(&self.pool, thread_id, user_id.as_ref())
-                .await?,
-        )
+        Ok(queries::thread_access::get_thread_access(&self.pool, thread_id, user_id).await?)
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -79,9 +70,7 @@ impl AccessRepository for PgAccessRepository {
     ) -> Result<Vec<Uuid>, AccessError> {
         Ok(
             queries::channel_membership::check_user_channel_membership(
-                &self.pool,
-                user_id.as_ref(),
-                channel_ids,
+                &self.pool, user_id, channel_ids,
             )
             .await?,
         )
