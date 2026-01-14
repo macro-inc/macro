@@ -9,7 +9,6 @@ import {
   createMemo,
   createRenderEffect,
   createSignal,
-  onCleanup,
   onMount,
   Show,
 } from 'solid-js';

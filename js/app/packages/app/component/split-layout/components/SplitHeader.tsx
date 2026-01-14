@@ -111,7 +111,7 @@ function SplitCloseButton() {
   );
 }
 
-function SplitPreviewToggle() {
+function _SplitPreviewToggle() {
   const context = useContext(SplitPanelContext);
   if (!ENABLE_PREVIEW || !context || !context.previewState) return null;
 
@@ -148,7 +148,7 @@ function SplitPreviewToggle() {
   );
 }
 
-function SplitControlButtons() {
+function _SplitControlButtons() {
   return (
     <div class="flex flex-row items-center px-2 h-full shrink-0">
       <div class="touch:mobile-width:hidden">

@@ -14,6 +14,3 @@ describe('openInNewSplitForMention', () => {
     expect(openInNewSplitForMention(undefined, false)).toBe(false);
   });
 });
-
-
-

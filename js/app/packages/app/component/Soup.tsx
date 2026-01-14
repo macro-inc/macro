@@ -21,11 +21,10 @@ import {
   type ViewId,
   type ViewLabel,
 } from '@core/types/view';
-import { cornerClip } from '@core/util/clipPath';
 import { handleFileFolderDrop } from '@core/util/upload';
 import { Popover } from '@kobalte/core/popover';
 import { Tabs } from '@kobalte/core/tabs';
-import type { EntityData, ExpandedEntityType } from '@macro-entity';
+import type { ExpandedEntityType } from '@macro-entity';
 import {
   queryKeys,
   useQueryClient as useEntityQueryClient,
@@ -90,66 +89,66 @@ const ENTITY_TYPE_FILTERS: {
   enabled: boolean;
   shortcut: string;
 }[] = [
-    {
-      kind: 'documentPreset',
-      type: 'document',
-      documentTypes: ['md', 'canvas'],
-      label: 'Docs',
-      iconType: 'md',
-      enabled: true,
-      shortcut: 'd',
-    },
-    {
-      kind: 'entityType',
-      type: 'chat',
-      label: 'Agents',
-      iconType: 'chat',
-      enabled: true,
-      shortcut: 'a',
-    },
-    {
-      kind: 'channelCategory',
-      channelCategory: 'people',
-      label: 'People',
-      iconType: 'channel',
-      enabled: true,
-      shortcut: 'p',
-    },
-    {
-      kind: 'channelCategory',
-      channelCategory: 'groups',
-      label: 'Teams',
-      iconType: 'directMessage',
-      enabled: true,
-      shortcut: 'm',
-    },
-    {
-      kind: 'entityType',
-      type: 'task',
-      label: 'Tasks',
-      iconType: 'task',
-      enabled: ENABLE_TASKS_TABS,
-      shortcut: 't',
-    },
-    {
-      kind: 'entityType',
-      type: 'email',
-      label: 'Mail',
-      iconType: 'email',
-      enabled: true,
-      shortcut: 'l',
-    },
-    {
-      kind: 'documentPreset',
-      type: 'document',
-      // "Files" = everything except Notes + Canvases
-      documentTypes: ['code', 'image', 'pdf', 'unknown'],
-      label: 'Files',
-      iconType: 'project',
-      enabled: true,
-      shortcut: 'f',
-    },
-  ];
+  {
+    kind: 'documentPreset',
+    type: 'document',
+    documentTypes: ['md', 'canvas'],
+    label: 'Docs',
+    iconType: 'md',
+    enabled: true,
+    shortcut: 'd',
+  },
+  {
+    kind: 'entityType',
+    type: 'chat',
+    label: 'Agents',
+    iconType: 'chat',
+    enabled: true,
+    shortcut: 'a',
+  },
+  {
+    kind: 'channelCategory',
+    channelCategory: 'people',
+    label: 'People',
+    iconType: 'channel',
+    enabled: true,
+    shortcut: 'p',
+  },
+  {
+    kind: 'channelCategory',
+    channelCategory: 'groups',
+    label: 'Teams',
+    iconType: 'directMessage',
+    enabled: true,
+    shortcut: 'm',
+  },
+  {
+    kind: 'entityType',
+    type: 'task',
+    label: 'Tasks',
+    iconType: 'task',
+    enabled: ENABLE_TASKS_TABS,
+    shortcut: 't',
+  },
+  {
+    kind: 'entityType',
+    type: 'email',
+    label: 'Mail',
+    iconType: 'email',
+    enabled: true,
+    shortcut: 'l',
+  },
+  {
+    kind: 'documentPreset',
+    type: 'document',
+    // "Files" = everything except Notes + Canvases
+    documentTypes: ['code', 'image', 'pdf', 'unknown'],
+    label: 'Files',
+    iconType: 'project',
+    enabled: true,
+    shortcut: 'f',
+  },
+];
 
 function EntityTypeIconFilter() {
   const renderShortcutUnderlinedInLabel = (label: string, shortcut: string) => {
@@ -238,7 +237,8 @@ function EntityTypeIconFilter() {
 
   const documentTypeFilter = createMemo(
     () =>
-      view()?.filters?.documentTypeFilter ?? VIEWCONFIG_BASE.filters.documentTypeFilter
+      view()?.filters?.documentTypeFilter ??
+      VIEWCONFIG_BASE.filters.documentTypeFilter
   );
 
   const sameSet = (a: string[], b: string[]) => {
@@ -337,7 +337,12 @@ function EntityTypeIconFilter() {
     batch(() => {
       if (isInboxFilterActive()) {
         setViewDataStore(selectedView(), 'filters', 'focusFilters', []);
-        setViewDataStore(selectedView(), 'filters', 'notificationFilter', 'all');
+        setViewDataStore(
+          selectedView(),
+          'filters',
+          'notificationFilter',
+          'all'
+        );
         setViewDataStore(
           selectedView(),
           'display',
@@ -354,12 +359,7 @@ function EntityTypeIconFilter() {
         'notificationFilter',
         'notDone'
       );
-      setViewDataStore(
-        selectedView(),
-        'display',
-        'unrollNotifications',
-        true
-      );
+      setViewDataStore(selectedView(), 'display', 'unrollNotifications', true);
     });
   };
 
@@ -367,7 +367,12 @@ function EntityTypeIconFilter() {
     batch(() => {
       if (isOtherFilterActive()) {
         setViewDataStore(selectedView(), 'filters', 'focusFilters', []);
-        setViewDataStore(selectedView(), 'filters', 'notificationFilter', 'all');
+        setViewDataStore(
+          selectedView(),
+          'filters',
+          'notificationFilter',
+          'all'
+        );
         setViewDataStore(
           selectedView(),
           'display',
@@ -384,12 +389,7 @@ function EntityTypeIconFilter() {
         'notificationFilter',
         'notDone'
       );
-      setViewDataStore(
-        selectedView(),
-        'display',
-        'unrollNotifications',
-        true
-      );
+      setViewDataStore(selectedView(), 'display', 'unrollNotifications', true);
     });
   };
 
@@ -403,10 +403,20 @@ function EntityTypeIconFilter() {
 
     if (inboxActive || otherActive) {
       if (notificationFilter() !== 'notDone') {
-        setViewDataStore(selectedView(), 'filters', 'notificationFilter', 'notDone');
+        setViewDataStore(
+          selectedView(),
+          'filters',
+          'notificationFilter',
+          'notDone'
+        );
       }
       if (unrollNotifications() !== true) {
-        setViewDataStore(selectedView(), 'display', 'unrollNotifications', true);
+        setViewDataStore(
+          selectedView(),
+          'display',
+          'unrollNotifications',
+          true
+        );
       }
       return;
     }
@@ -487,58 +497,58 @@ function EntityTypeIconFilter() {
     description: string;
     handler: () => void;
   }[] = [
-      {
-        hotkey: 'i',
-        description: 'Toggle Inbox',
-        handler: () => toggleInboxFilter(),
+    {
+      hotkey: 'i',
+      description: 'Toggle Inbox',
+      handler: () => toggleInboxFilter(),
+    },
+    {
+      hotkey: 'o',
+      description: 'Toggle Other',
+      handler: () => toggleOtherFilter(),
+    },
+    ...ENTITY_TYPE_FILTERS.filter((f) => f.enabled).map((f) => ({
+      hotkey: f.shortcut as ValidHotkey,
+      description: `Filter by ${f.label}`,
+      handler: () => {
+        if (f.kind === 'documentPreset') {
+          toggleDocumentPreset(f.documentTypes!);
+          return;
+        }
+        if (f.kind === 'channelCategory') {
+          toggleChannelCategoryFilter(f.channelCategory!);
+          return;
+        }
+        setExclusiveEntityTypeFilter(f.type!);
       },
-      {
-        hotkey: 'o',
-        description: 'Toggle Other',
-        handler: () => toggleOtherFilter(),
+    })),
+    {
+      hotkey: 'u',
+      description: 'Filter by Unread',
+      handler: () => toggleUnreadFilter(),
+    },
+    {
+      hotkey: 's',
+      description: 'Open sort menu',
+      handler: () => setSortDropdownOpen((prev) => !prev),
+    },
+    {
+      hotkey: '/',
+      description: 'Clear filters',
+      handler: () => {
+        clearAllFilters();
+        setViewDataStore('all', 'searchText', '');
       },
-      ...ENTITY_TYPE_FILTERS.filter((f) => f.enabled).map((f) => ({
-        hotkey: f.shortcut as ValidHotkey,
-        description: `Filter by ${f.label}`,
-        handler: () => {
-          if (f.kind === 'documentPreset') {
-            toggleDocumentPreset(f.documentTypes!);
-            return;
-          }
-          if (f.kind === 'channelCategory') {
-            toggleChannelCategoryFilter(f.channelCategory!);
-            return;
-          }
-          setExclusiveEntityTypeFilter(f.type!);
-        },
-      })),
-      {
-        hotkey: 'u',
-        description: 'Filter by Unread',
-        handler: () => toggleUnreadFilter(),
+    },
+    {
+      hotkey: 'cmd+f',
+      description: 'Search',
+      handler: () => {
+        searchInputRef?.focus();
+        if (searchInputRef?.value) searchInputRef.select();
       },
-      {
-        hotkey: 's',
-        description: 'Open sort menu',
-        handler: () => setSortDropdownOpen((prev) => !prev),
-      },
-      {
-        hotkey: '/',
-        description: 'Clear filters',
-        handler: () => {
-          clearAllFilters();
-          setViewDataStore('all', 'searchText', '');
-        },
-      },
-      {
-        hotkey: 'cmd+f',
-        description: 'Search',
-        handler: () => {
-          searchInputRef?.focus();
-          if (searchInputRef?.value) searchInputRef.select();
-        },
-      },
-    ];
+    },
+  ];
 
   const hotkeyDisposers = hotkeyConfigs.map((config) =>
     registerHotkey({
@@ -652,7 +662,9 @@ function EntityTypeIconFilter() {
         <div class="mx-0.5 w-px h-5 bg-edge-muted/50 shrink-0" />
         {/* Unread filter */}
         <div class="flex items-center mr-0.5 shrink-0">
-          <Tooltip tooltip={<LabelAndHotKey label="Unread Only" shortcut="u" />}>
+          <Tooltip
+            tooltip={<LabelAndHotKey label="Unread Only" shortcut="u" />}
+          >
             <button
               type="button"
               class="flex items-center gap-1 h-[22px] pr-2.5 pl-1 active:bg-accent active:text-panel rounded-full"
@@ -1233,13 +1245,13 @@ export const useUpsertSavedViewMutation = () => {
     mutationFn: async (
       viewData:
         | {
-          config: ViewConfigBase;
-          id?: ViewId;
-          name: ViewLabel;
-        }
+            config: ViewConfigBase;
+            id?: ViewId;
+            name: ViewLabel;
+          }
         | {
-          id: ViewId;
-        }
+            id: ViewId;
+          }
     ) => {
       const isDefaultView = VIEWCONFIG_DEFAULTS_IDS.includes(
         viewData.id as DefaultView

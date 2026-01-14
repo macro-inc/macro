@@ -314,8 +314,10 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   // We do this in two phases:
   // - mark a reset as pending when filter inputs change
   // - once the entity list updates, select the first entity and clear the pending flag
-  const [pendingSelectFirstAfterFilterChange, setPendingSelectFirstAfterFilterChange] =
-    createSignal(false);
+  const [
+    pendingSelectFirstAfterFilterChange,
+    setPendingSelectFirstAfterFilterChange,
+  ] = createSignal(false);
 
   createEffect(
     on(
@@ -481,7 +483,9 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     Record<string, boolean | undefined>
   >({});
 
-  const getSourceHasValue = (props: Array<{ propertyDefinitionId: string } & any>) => {
+  const getSourceHasValue = (
+    props: Array<{ propertyDefinitionId: string } & any>
+  ) => {
     const sourceProp = props.find(
       (p) => p.propertyDefinitionId === SYSTEM_PROPERTY_IDS.SOURCE
     );
@@ -705,7 +709,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     SEARCH_SERVICE_DEBOUNCE_MS
   );
 
-  const [isSearchLoading, setIsSearchLoading] = createSignal(false);
+  const [, setIsSearchLoading] = createSignal(false);
 
   const currentViewConfigBase = createMemo(() => {
     const viewKey = selectedView();
@@ -863,13 +867,16 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       filterFns.push(noiseFilter.predicate);
     } else if (!hasSignalFilter && !hasNoiseFilter) {
       // Default: exclude explicit noise (promotional emails, etc.) but show everything else
-      filterFns.push((entity, ctx) => !explicitNoiseFilter.predicate(entity, ctx));
+      filterFns.push(
+        (entity, ctx) => !explicitNoiseFilter.predicate(entity, ctx)
+      );
       // Also exclude "email-sourced" extracted docs unless the user has explicitly
       // applied a type filter like Files.
       if (shouldHideEmailSourcedDocsByDefault()) {
         filterFns.push(
           (entity) =>
-            entity.type !== 'document' || emailSourcedDocById[entity.id] !== true
+            entity.type !== 'document' ||
+            emailSourcedDocById[entity.id] !== true
         );
       }
     }
@@ -2204,7 +2211,7 @@ const EntityTypeToggle = (props: {
   );
 };
 
-function SearchBar(props: {
+function _SearchBar(props: {
   isLoading: Accessor<boolean>;
   setIsLoading: Setter<boolean>;
 }) {

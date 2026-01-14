@@ -4,7 +4,6 @@ import { toast } from '@core/component/Toast/Toast';
 import { HotkeyTags } from '@core/hotkey/constants';
 import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
-import type { ValidHotkey } from '@core/hotkey/types';
 import { getActiveCommandByToken, runCommand } from '@core/hotkey/utils';
 import { isModality } from '@core/mobile/inputModality';
 import type { DefaultView, ViewId } from '@core/types/view';
@@ -313,7 +312,6 @@ export function createNavigationEntityListShortcut({
     entityListRefSignal: [entityListRef],
     virtualizerHandleSignal: [virtualizerHandle],
     selectedView,
-    setSelectedView,
     entitiesSignal: [entities],
     actionRegistry,
     parentContextSignal: [getParentContext],

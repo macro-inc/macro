@@ -14,6 +14,3 @@ export function openInNewSplitForMention(
 ): boolean {
   return altKey ? false : defaultOpenInNewSplit;
 }
-
-
-
