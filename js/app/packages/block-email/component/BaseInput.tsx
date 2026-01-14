@@ -928,9 +928,9 @@ export function BaseInput(props: {
               <Button
                 onclick={() => setAttachMenuOpen(true)}
                 tooltip="Attach"
-                class="aspect-square *:h-5 p-1"
+                class="aspect-square p-1"
               >
-                <Plus />
+                <Plus class="h-5"/>
               </Button>
 
               <AttachMenu
@@ -949,9 +949,9 @@ export function BaseInput(props: {
                 setShowFormatRibbon(!showFormatRibbon());
               }}
               tooltip="Show formatting toolbar"
-              class="aspect-square *:h-5 p-1"
+              class="aspect-square p-1"
             >
-              <TextAa />
+              <TextAa class="h-5"/>
             </Button>
 
             <Tooltip
@@ -994,9 +994,9 @@ export function BaseInput(props: {
               <Button
                 onclick={deleteDraftAndReset}
                 tooltip="Delete draft"
-                class="aspect-square *:h-5 p-1"
+                class="aspect-square p-1"
               >
-                <Trash />
+                <Trash class="h-5"/>
               </Button>
             </Show>
           </div>

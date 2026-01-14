@@ -280,7 +280,7 @@ export function Dock() {
             }}>
               <Show when={isSoupActive()}>
                 <Button
-                  class="p-1 *:h-4"
+                  class="p-1"
                   onClick={() => {
                     globalSplitManager()?.returnFocus();
                     const showHelp = getActiveCommandByToken(TOKENS.split.showHelpDrawer);
@@ -290,7 +290,7 @@ export function Dock() {
 
                   tooltip={<LabelAndHotKey label='Help' hotkeyToken={TOKENS.split.showHelpDrawer} />}
                 >
-                  <IconQuestion />
+                  <IconQuestion class="h-4"/>
                 </Button>
               </Show>
 
@@ -329,9 +329,9 @@ export function Dock() {
                     }
                   }
                 }}
-                class="p-1 *:h-4"
+                class="p-1"
               >
-                <SplitIcon />
+                <SplitIcon class="h-4"/>
               </Button>
               </div>
 

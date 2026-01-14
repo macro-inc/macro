@@ -38,14 +38,14 @@ function SplitBackButton() {
   if (!context) return null;
   return (
     <Button
-      class="p-1 *:h-4"
+      class="p-1"
       tooltip={
         <LabelAndHotKey label="Go Back" hotkeyToken={TOKENS.split.go.back} />
       }
       disabled={!context.handle.canGoBack()}
       onClick={context.handle.goBack}
     >
-      <CaretLeft />
+      <CaretLeft class="h-4"/>
     </Button>
   );
 }
@@ -55,7 +55,7 @@ function SplitForwardButton() {
   if (!context) return '';
   return (
     <Button
-      class="p-1 *:h-4"
+      class="p-1"
       tooltip={
         <LabelAndHotKey
           label="Go Forward"
@@ -65,7 +65,7 @@ function SplitForwardButton() {
       disabled={!context.handle.canGoForward()}
       onClick={context.handle.goForward}
     >
-      <CaretRight />
+      <CaretRight class="h-4"/>
     </Button>
   );
 }
@@ -77,7 +77,7 @@ function SplitSpotlightButton() {
   return (
     <Show when={canSpotlight(layout.manager)}>
       <Button
-        class="p-1 *:h-4"
+        class="p-1"
         tooltip={
           <LabelAndHotKey
             label={
@@ -90,7 +90,7 @@ function SplitSpotlightButton() {
         }
         onClick={() => context.handle.toggleSpotlight()}
       >
-        {context.handle.isSpotLight() ? <CollapseIcon /> : <ExpandIcon />}
+        {context.handle.isSpotLight() ? <CollapseIcon class="h-4"/> : <ExpandIcon class="h-4"/>}
       </Button>
     </Show>
   );
@@ -101,11 +101,11 @@ function SplitCloseButton() {
   if (!context) return null;
   return (
     <Button
-      class="p-1 *:h-4"
+      class="p-1"
       tooltip={<LabelAndHotKey label="Close" />}
       onClick={context.handle.close}
     >
-      <CloseIcon />
+      <CloseIcon class="h-4"/>
     </Button>
   );
 }
@@ -127,7 +127,7 @@ function SplitPreviewToggle() {
     <Show when={isUnifiedList()}>
       <div class="max-sm:rotate-90">
         <Button
-          class="p-1 *:h-4"
+          class="p-1"
           classList={{
             'bg-accent/20 text-accent': preview(),
           }}
@@ -140,7 +140,7 @@ function SplitPreviewToggle() {
           tabIndex={-1}
           onClick={() => setPreview((prev) => !prev)}
         >
-          <SplitIcon />
+          <SplitIcon class="h-4"/>
         </Button>
       </div>
     </Show>
@@ -170,7 +170,7 @@ function SplitSettingsButton() {
 
   return (
     <Button
-      class="p-1 *:h-4"
+      class="p-1"
       classList={{
         'bg-accent/20 text-accent': isSettingsSplitOpen(),
       }}
@@ -188,7 +188,7 @@ function SplitSettingsButton() {
         replaceSplit({ content: { type: 'component', id: 'settings' } });
       }}
     >
-      <IconGear />
+      <IconGear class="h-4" />
     </Button>
   );
 }
