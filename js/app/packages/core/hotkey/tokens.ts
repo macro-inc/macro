@@ -226,6 +226,7 @@ export const TOKENS = {
       toggle: 'chat-spotlight-toggle',
       close: 'chat-spotlight-close',
     },
+    new: 'chat-new',
   },
 } as const;
 
