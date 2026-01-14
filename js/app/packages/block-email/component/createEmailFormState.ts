@@ -119,10 +119,13 @@ export function createEmailFormState(
   });
 
   const [onDirtyCb, setOnDirtyCb] = createSignal<(() => void) | undefined>();
+
   const [onReplyTypeAppliedCb, setOnReplyTypeAppliedCb] = createSignal<
     ((rt: ReplyType | undefined) => void) | undefined
   >();
+
   const [capturedEditor, setCapturedEditor] = createSignal<LexicalEditor>();
+
   // We track the last reply type applied to replay against the current state when setOnReplyTypeApplied is attached
   const [lastReplyTypeApplied, setLastReplyTypeApplied] = createSignal<
     ReplyType | undefined
@@ -143,7 +146,6 @@ export function createEmailFormState(
     })) ?? []
   );
 
-  // A wrapper around setRecipientsInner that runs the side-effects alongside setting the store
   const setRecipients = (
     field: keyof EmailFormRecipients,
     value: EmailRecipient[]
@@ -161,7 +163,6 @@ export function createEmailFormState(
     return result;
   };
 
-  // A wrapper around setReplyTypeInner that runs the side-effects alongside setting the signal
   const setReplyType = (next: ReplyType) => {
     setState('replyType', next);
     const rt = state.replyType;
