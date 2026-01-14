@@ -17,6 +17,8 @@ export {
   createChatsInfiniteQuery,
   createDeleteDssItemMutation,
   createDssInfiniteQuery,
+  createMoveToProjectDssEntityMutation,
+  createCopyDssEntityMutation,
 } from './queries/dss';
 export { createEmailsInfiniteQuery } from './queries/email';
 export type { EntityInfiniteQuery, EntityQuery } from './queries/entity';

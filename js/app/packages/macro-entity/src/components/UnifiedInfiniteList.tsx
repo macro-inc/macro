@@ -715,7 +715,6 @@ export function createUnifiedInfiniteList<T extends EntityData>({
               {(viewId) => {
                 const droppable = createDroppable(viewId(), {
                   type: 'project',
-                  name: props.name ?? 'folder',
                   id: viewId(),
                 });
                 false && droppable;

@@ -1,5 +1,4 @@
 import { usePaywallState } from '@core/constant/PaywallState';
-import { createCopyName } from '@core/util/copyName';
 import { isPaymentError } from '@core/util/handlePaymentError';
 import { isErr, isOk } from '@core/util/maybeResult';
 import { cognitionApiServiceClient } from '@service-cognition/client';
@@ -318,9 +317,7 @@ export async function bulkMoveToFolder(
   };
 }
 
-/**
- * Note: Currently we do not support copying projects.
- */
+/** NOTE: Currently we do not support copying projects */
 export async function copyItem(args: {
   itemType: Exclude<ItemType, 'project'>;
   id: string;
@@ -328,6 +325,9 @@ export async function copyItem(args: {
 }): Promise<string | null> {
   const { itemType, id, name } = args;
   const { showPaywall } = usePaywallState();
+  const createCopyName = (originalName: string): string => {
+    return `${originalName} copy`;
+  };
 
   let newId = '';
   switch (itemType) {

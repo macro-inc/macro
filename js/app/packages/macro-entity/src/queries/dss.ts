@@ -680,12 +680,12 @@ export function createMoveToProjectDssEntityMutation() {
       entity: { id, type },
       project: { id: projectId },
     }: {
-      entity: EntityData & { name: string };
-      project: { id: string; name: string };
+      entity: EntityData & { type: 'document' | 'chat' | 'project' };
+      project: { id: string };
     }) => {
       const success = await moveToFolder({
-        itemType: type as 'document' | 'chat' | 'project',
-        id: id,
+        itemType: type,
+        id,
         folderId: projectId,
       });
 
@@ -695,8 +695,8 @@ export function createMoveToProjectDssEntityMutation() {
       entity: { id },
       project: { id: projectId },
     }: {
-      entity: EntityData & { name: string };
-      project: { id: string; name: string };
+      entity: EntityData;
+      project: { id: string };
     }) => {
       queryClient.cancelQueries({
         queryKey: queryKeys.dss({ infinite: true }),
@@ -716,12 +716,10 @@ export function createMoveToProjectDssEntityMutation() {
           pages,
         };
       }
-      queryClient.setQueriesData(
-        { queryKey: queryKeys.dss({ infinite: true }) },
-        (prev) =>
-          updateEntityProjectIdInQueryData(
-            prev as { pages: { items: EntityData[] }[] } | undefined
-          )
+      queryClient.setQueriesData({ queryKey: queryKeys.all.dss }, (prev) =>
+        updateEntityProjectIdInQueryData(
+          prev as { pages: { items: EntityData[] }[] } | undefined
+        )
       );
     },
     onSettled: (data, error, { entity: { id } }) => {
@@ -731,6 +729,7 @@ export function createMoveToProjectDssEntityMutation() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.dss({ infinite: true }),
       });
+      queryClient.invalidateQueries({ queryKey: ['entity'] });
     },
   }));
 }
@@ -740,24 +739,19 @@ export function createCopyDssEntityMutation() {
     mutationFn: async ({
       entity: { id, type, name },
     }: {
-      entity: EntityData & { name: string };
+      entity: EntityData & { type: 'document' | 'chat' };
     }) => {
-      if (type !== 'chat' && type !== 'document')
-        throw new Error(
-          `Unsupported entity type: ${type} for id ${id}. Projects cannot be copied.`
-        );
-
-      const success = await copyItem({
-        itemType: type as 'document' | 'chat',
+      const newId = await copyItem({
+        itemType: type,
         id,
         name,
       });
 
-      if (!success) {
+      if (!newId) {
         throw new Error(`Failed to copy ${type} with id ${id}`);
       }
 
-      return { success: true };
+      return newId;
     },
     onMutate: async () => {
       queryClient.cancelQueries({
@@ -768,10 +762,10 @@ export function createCopyDssEntityMutation() {
     },
     onSettled: (data, error, { entity: { id } }) => {
       if (error) console.error(`Failed to copy dss item ${id}`, data, error);
-
       queryClient.invalidateQueries({
         queryKey: queryKeys.dss({ infinite: true }),
       });
+      queryClient.invalidateQueries({ queryKey: ['entity'] });
     },
   }));
 }

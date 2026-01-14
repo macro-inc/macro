@@ -8,7 +8,6 @@ import { playSound } from '@app/util/sound';
 import { useIsAuthenticated } from '@core/auth';
 import type { BlockAliasContext } from '@core/block';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
-import { createCopyName } from '@core/util/copyName';
 import { DeprecatedButton } from '@core/component/FormControls/DeprecatedButton';
 import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { ContextMenuContent, MenuItem } from '@core/component/Menu';
@@ -30,10 +29,12 @@ import { ContextMenu } from '@kobalte/core/context-menu';
 import { Tabs } from '@kobalte/core/tabs';
 import type { EntityData } from '@macro-entity';
 import {
-  extractEntityId,
   isTaskEntity,
   queryKeys,
   useQueryClient as useEntityQueryClient,
+  type EntityDragEvent,
+  createMoveToProjectDssEntityMutation,
+  createCopyDssEntityMutation,
 } from '@macro-entity';
 import { createEffectOnEntityTypeNotification } from '@notifications';
 import { invalidateEntityNotifications } from '@queries/notification/user-notifications';
@@ -41,13 +42,6 @@ import { storageServiceClient } from '@service-storage/client';
 import { Navigate } from '@solidjs/router';
 import { useMutation, useQueryClient } from '@tanstack/solid-query';
 import { useDragDropContext } from '@thisbeyond/solid-dnd';
-import {
-  useCopyChatMutation,
-  useCopyDocumentMutation,
-  useMoveChatMutation,
-  useMoveDocumentMutation,
-  useMoveProjectMutation,
-} from '@queries/document/move';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import {
   type Component,
@@ -304,62 +298,55 @@ export function Soup() {
   const [isDragging, setIsDragging] = createSignal(false);
   const [isValidDrag, setIsValidDrag] = createSignal(true);
 
-  const moveDocumentMutation = useMoveDocumentMutation();
-  const moveProjectMutation = useMoveProjectMutation();
-  const moveChatMutation = useMoveChatMutation();
-  const copyDocumentMutation = useCopyDocumentMutation();
-  const copyChatMutation = useCopyChatMutation();
+  const moveMutation = createMoveToProjectDssEntityMutation();
+  const copyMutation = createCopyDssEntityMutation();
 
-  useDragDropContext()?.[1].onDragEnd((event) => {
+  useDragDropContext()?.[1].onDragEnd((event: EntityDragEvent) => {
     const droppable = event.droppable;
-    if (!droppable) return;
+    const targetProjectId = droppable?.data?.id;
+    if (!droppable || droppable.data?.type !== 'project' || !targetProjectId)
+      return;
 
     const draggable = event.draggable;
     if (!draggable?.data) return;
 
     const entityData = draggable.data;
-    const draggableId = draggable.id;
 
-    if (typeof draggableId !== 'string') return;
-
-    const entityId = extractEntityId(draggableId);
     const isCopyOperation = altKeyPressed();
 
-    if (droppable.data?.type === 'project' && droppable.data?.id) {
-      const targetProjectId = droppable.data.id;
-
-      if (entityData.type === 'document') {
-        if (isCopyOperation) {
-          copyDocumentMutation.mutate({
-            documentId: entityId,
-            documentName: createCopyName(entityData.name),
-            projectId: targetProjectId,
-          });
-        } else {
-          moveDocumentMutation.mutate({
-            documentId: entityId,
-            projectId: targetProjectId,
-          });
-        }
-      } else if (entityData.type === 'project') {
-        // Projects don't have a copy API, so always move
-        moveProjectMutation.mutate({
-          projectId: entityId,
-          parentProjectId: targetProjectId,
+    if (
+      entityData.type === 'document' ||
+      entityData.type === 'chat' ||
+      entityData.type === 'project'
+    ) {
+      if (isCopyOperation && entityData.type !== 'project') {
+        copyMutation.mutate(
+          {
+            entity: entityData,
+          },
+          {
+            onSuccess: (id: string) => {
+              // TODO: add project id as an argument to backend copy endpoint
+              // so we don't need multiple calls to copy and move
+              moveMutation.mutate({
+                entity: {
+                  ...entityData,
+                  id,
+                },
+                project: {
+                  id: targetProjectId,
+                },
+              });
+            },
+          }
+        );
+      } else {
+        moveMutation.mutate({
+          entity: entityData,
+          project: {
+            id: targetProjectId,
+          },
         });
-      } else if (entityData.type === 'chat') {
-        if (isCopyOperation) {
-          copyChatMutation.mutate({
-            chatId: entityId,
-            chatName: createCopyName(entityData.name),
-            projectId: targetProjectId,
-          });
-        } else {
-          moveChatMutation.mutate({
-            chatId: entityId,
-            projectId: targetProjectId,
-          });
-        }
       }
     }
 
