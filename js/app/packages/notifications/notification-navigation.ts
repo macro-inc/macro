@@ -3,16 +3,14 @@ import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import type { BlockAlias, BlockName } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { NotificationType } from '@core/types';
-import {
-  getNotificationById,
-  getNotificationFromCache,
-} from '@queries/notification/user-notifications';
+import { getNotificationById } from '@queries/notification/user-notifications';
 import { errAsync, ResultAsync } from 'neverthrow';
 import { match, P } from 'ts-pattern';
 import {
   tryToTypedNotification,
   type TypedNotification,
 } from './notification-metadata';
+import type { NotificationSource } from './notification-source';
 
 /**
  * Notification event types that are all handled by opening a channel
@@ -196,10 +194,13 @@ export function openNotification(
 
 export function openNotificationFromId(
   notificationId: string,
-  layoutManager: SplitManager
+  layoutManager: SplitManager,
+  notificationSource: NotificationSource
 ): ResultAsync<void, OpenNotificationFromIdError> {
-  // Check cache first
-  const cached = getNotificationFromCache(notificationId);
+  // Check notification source first
+  const cached = notificationSource
+    .notifications()
+    .find((n) => n.id === notificationId);
   if (cached) {
     const typed = tryToTypedNotification(cached);
     if (!typed) {
@@ -209,7 +210,7 @@ export function openNotificationFromId(
     return openNotification(typed, layoutManager);
   }
 
-  // Fetch if not in cache
+  // Fetch if not in notification source
   return ResultAsync.fromSafePromise(
     getNotificationById(notificationId)
   ).andThen((unified) => {
