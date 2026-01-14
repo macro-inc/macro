@@ -674,6 +674,37 @@ export function createBulkRenameDssEntityMutation() {
   }));
 }
 
+function createMoveOptimisticUpdate(entityIds: string[], projectId: string) {
+  return (
+    prev: { pages: { items: EntityData[] }[] } | undefined
+  ): { pages: { items: EntityData[] }[] } | undefined => {
+    if (!prev) return prev;
+    const pages = prev.pages.map((page) => ({
+      ...page,
+      items: page.items.map((item) =>
+        entityIds.includes(item.id) ? { ...item, projectId } : item
+      ),
+    }));
+    return {
+      ...prev,
+      pages,
+    };
+  };
+}
+
+function invalidateAfterMove(hasProjects: boolean) {
+  queryClient.invalidateQueries({
+    queryKey: queryKeys.all.dss,
+  });
+  queryClient.invalidateQueries({ queryKey: ['entity'] });
+  // If moving a project, invalidate all project queries since nested projects' breadcrumbs change too
+  if (hasProjects) {
+    queryClient.invalidateQueries({
+      queryKey: ['project'],
+    });
+  }
+}
+
 export function createMoveToProjectDssEntityMutation() {
   return useMutation(() => ({
     mutationFn: async ({
@@ -705,25 +736,9 @@ export function createMoveToProjectDssEntityMutation() {
       // Only do optimistic updates for documents and chats
       // Projects have complex path data that we can't compute client-side
       if (type !== 'project') {
-        function updateEntityProjectIdInQueryData(
-          prev: { pages: { items: EntityData[] }[] } | undefined
-        ): { pages: { items: EntityData[] }[] } | undefined {
-          if (!prev) return prev;
-          const pages = prev.pages.map((page) => ({
-            ...page,
-            items: page.items.map((item) =>
-              item.id === id ? { ...item, projectId: projectId } : item
-            ),
-          }));
-          return {
-            ...prev,
-            pages,
-          };
-        }
-        queryClient.setQueriesData({ queryKey: queryKeys.all.dss }, (prev) =>
-          updateEntityProjectIdInQueryData(
-            prev as { pages: { items: EntityData[] }[] } | undefined
-          )
+        queryClient.setQueriesData(
+          { queryKey: queryKeys.all.dss },
+          createMoveOptimisticUpdate([id], projectId)
         );
       }
     },
@@ -731,16 +746,7 @@ export function createMoveToProjectDssEntityMutation() {
       if (data?.success === false || error)
         console.error(`Failed to move dss item ${id}`, data, error);
 
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.all.dss,
-      });
-      queryClient.invalidateQueries({ queryKey: ['entity'] });
-      // If moving a project, invalidate all project queries since nested projects' breadcrumbs change too
-      if (type === 'project') {
-        queryClient.invalidateQueries({
-          queryKey: ['project'],
-        });
-      }
+      invalidateAfterMove(type === 'project');
     },
   }));
 }
@@ -886,34 +892,14 @@ export function createBulkMoveToProjectDssEntityMutation() {
 
       // Only do optimistic updates for documents and chats
       // Projects have complex path data that we can't compute client-side
-      const nonProjectEntities = entities.filter((e) => e.type !== 'project');
+      const nonProjectIds = entities
+        .filter((e) => e.type !== 'project')
+        .map((e) => e.id);
 
-      if (nonProjectEntities.length > 0) {
-        function updateEntityProjectIdInQueryData(
-          prev: { pages: { items: EntityData[] }[] } | undefined
-        ): { pages: { items: EntityData[] }[] } | undefined {
-          if (!prev) return prev;
-          const entityIds = nonProjectEntities.map((e) => e.id);
-          const pages = prev.pages.map((page) => ({
-            ...page,
-            items: page.items.map((item) =>
-              entityIds.includes(item.id)
-                ? { ...item, projectId: project.id }
-                : item
-            ),
-          }));
-          return {
-            ...prev,
-            pages,
-          };
-        }
-
+      if (nonProjectIds.length > 0) {
         queryClient.setQueriesData(
           { queryKey: queryKeys.dss({ infinite: true }) },
-          (prev) =>
-            updateEntityProjectIdInQueryData(
-              prev as { pages: { items: EntityData[] }[] } | undefined
-            )
+          createMoveOptimisticUpdate(nonProjectIds, project.id)
         );
       }
     },
@@ -922,18 +908,7 @@ export function createBulkMoveToProjectDssEntityMutation() {
       if (data?.success === false || error)
         console.error(`Failed to bulk move dss items`, entities, data, error);
 
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.all.dss,
-      });
-      queryClient.invalidateQueries({ queryKey: ['entity'] });
-
-      // If any moved entity is a project, invalidate all project queries
-      // since nested projects' breadcrumbs change too
-      if (entities.some((e) => e.type === 'project')) {
-        queryClient.invalidateQueries({
-          queryKey: ['project'],
-        });
-      }
+      invalidateAfterMove(entities.some((e) => e.type === 'project'));
     },
   }));
 }
