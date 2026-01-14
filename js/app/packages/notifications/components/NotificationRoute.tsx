@@ -1,3 +1,4 @@
+import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { LoadingBlock } from '@core/component/LoadingBlock';
@@ -38,13 +39,19 @@ export default function NotificationRoute() {
     onCleanup(() => window.clearTimeout(timeout));
   });
 
+  const notificationSource = useGlobalNotificationSource();
+
   createEffect(() => {
     const notificationId = getNotificationId();
     const layoutManager = globalSplitManager();
     if (!notificationId) return;
     if (!layoutManager) return;
 
-    openNotificationFromId(notificationId, layoutManager).match(
+    openNotificationFromId(
+      notificationId,
+      layoutManager,
+      notificationSource
+    ).match(
       () => {
         // We only use this route as a "bridge" from external navigation
         // (e.g. push tap / deep link) into the split layout.

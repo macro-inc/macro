@@ -109,13 +109,10 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
   }, props.selectedEntity.id);
 
   createRenderEffect(() => {
-    // Temporary fix to prevent toolbarLeft overlapping right content
-    if (!scopedLayoutRefs.toolbarLeft) return;
-    scopedLayoutRefs.toolbarLeft.style.maxWidth = `${splitPanelContext.halfSplitState?.()?.percentage ?? 30}%`;
-    onCleanup(() => {
-      if (!scopedLayoutRefs.toolbarLeft) return;
-      scopedLayoutRefs.toolbarLeft.style.maxWidth = '';
-    });
+    // noop: previously we constrained toolbarLeft width based on the main split's
+    // halfSplitState. This caused preview topbars (e.g. the hamburger menu) to
+    // appear "hung" from the middle in preview mode.
+    // Keeping this effect slot in case we need future layout hacks.
   });
 
   return (
@@ -146,11 +143,18 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
     >
       {/* Preview-specific toolbar slots so blocks can render the "share" bar (via SplitToolbarLeft/Right) */}
       <div
-        class="relative w-full flex items-center justify-between shrink-0 h-10 px-1 border-b border-edge-muted/50 bg-panel"
+        class="relative w-full flex items-center justify-between shrink-0 h-10 pr-1 border-b border-edge-muted/50 bg-panel"
+        classList={{
+          // In spotlight/fullscreen, avoid hugging the screen edge
+          'pl-2': splitPanelContext.handle.isSpotLight(),
+          'pl-1': !splitPanelContext.handle.isSpotLight(),
+        }}
         data-preview-split-toolbar
       >
         <div
-          class="flex h-full items-center flex-1"
+          // In preview mode, anchor left-side controls (e.g. file menu) to the top-left
+          // so the dropdown doesn't feel like it's "hanging" from the middle of the bar.
+          class="flex h-full items-start pt-1 flex-1"
           ref={(ref) => {
             scopedLayoutRefs.toolbarLeft = ref;
           }}
@@ -169,10 +173,10 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
             ...props.splitPanelContext,
             ...scopedSplitPanelContextType,
             layoutRefs: scopedLayoutRefs,
-            halfSplitState: () => ({
-              side: 'right',
-              percentage: 30,
-            }),
+            // Disable halfSplit positioning logic for preview topbars.
+            // The preview panel is already laid out by the outer split; applying halfSplitState
+            // here incorrectly shifts toolbar content towards the middle.
+            halfSplitState: undefined,
           }}
         >
           <Dynamic component={blockInstance().element} />

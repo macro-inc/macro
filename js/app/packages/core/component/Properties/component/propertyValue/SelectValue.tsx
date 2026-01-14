@@ -1,30 +1,21 @@
-import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { Component } from 'solid-js';
 import { createSignal, For, Show } from 'solid-js';
 import { usePropertiesContext } from '../../context/PropertiesContext';
 import { PROPERTY_STYLES } from '../../styles/styles';
-import type { Property } from '../../types';
 import { formatPropertyValue, getSelectValues } from '../../utils';
 import { PropertyValueIcon } from './PropertyValueIcon';
 import {
   AddPropertyValueButton,
   EmptyValue,
   PropertyValueDeleteButton,
+  type PropertyValueProps,
 } from './ValueComponents';
-
-type SelectValueProps = {
-  property: Property;
-  canEdit: boolean;
-  entityType: EntityType;
-  onEdit?: (property: Property, anchor?: HTMLElement) => void;
-  onRefresh?: () => void;
-};
 
 /**
  * Display component for select_string and select_number properties
  * Opens options modal on click
  */
-export const SelectValue: Component<SelectValueProps> = (props) => {
+export const SelectValue: Component<PropertyValueProps> = (props) => {
   const { saveHandler } = usePropertiesContext();
   const [hoveredValue, setHoveredValue] = createSignal<string | null>(null);
   const [isSaving, setIsSaving] = createSignal(false);

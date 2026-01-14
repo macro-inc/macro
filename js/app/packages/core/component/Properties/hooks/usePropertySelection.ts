@@ -1,9 +1,9 @@
 import { type Accessor, createMemo, createSignal } from 'solid-js';
-import type { PropertyDefinitionFlat } from '../types';
+import type { PropertyDefinitionDomain } from '../types';
 
 export function usePropertySelection(
   existingPropertyIds: () => string[],
-  availableProperties: Accessor<PropertyDefinitionFlat[]>,
+  availableProperties: Accessor<PropertyDefinitionDomain[]>,
   searchQuery?: () => string
 ) {
   const [selectedPropertyIds, setSelectedPropertyIds] = createSignal<
@@ -24,23 +24,23 @@ export function usePropertySelection(
         property.id &&
         !existingIds.has(property.id) &&
         // COMPANY entity properties not yet implemented
-        property.specific_entity_type !== 'COMPANY'
+        property.specificEntityType !== 'COMPANY'
     );
 
     // Then apply search filter
     if (!query) return filtered;
 
     return filtered.filter((property) => {
-      const name = property.display_name.toLowerCase();
+      const name = property.displayName.toLowerCase();
       if (name.includes(query)) {
         return true;
       }
 
-      const dataType = property.data_type;
+      const dataType = property.valueType;
       let typeDisplay = dataType;
 
-      if (dataType === 'ENTITY' && property.specific_entity_type) {
-        typeDisplay += ` ${property.specific_entity_type}`;
+      if (dataType === 'ENTITY' && property.specificEntityType) {
+        typeDisplay += ` ${property.specificEntityType}`;
       }
 
       return typeDisplay.toLowerCase().includes(query);

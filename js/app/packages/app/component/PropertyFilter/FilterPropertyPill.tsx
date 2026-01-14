@@ -1,7 +1,7 @@
+import type { PropertyDefinitionDomain } from '@core/component/Properties/types';
 import { PropertyDataTypeIcon } from '@core/component/Properties/utils/PropertyDataTypeIcon';
 import CheckIcon from '@phosphor-icons/core/assets/regular/check.svg';
 import XIcon from '@phosphor-icons/core/assets/regular/x.svg';
-import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import type { Component } from 'solid-js';
 import { createSignal, Match, Show, Switch } from 'solid-js';
 import type {
@@ -44,7 +44,7 @@ type FilterPillProps = {
   id: string;
   savedData: PropertyFilter | null; // null = pending, non-null = saved
   /** Property definition for restoring saved filters (looked up by parent) */
-  initialProperty?: PropertyDefinition;
+  initialProperty?: PropertyDefinitionDomain;
   onSave: (data: PropertyFilter) => void;
   onCancel: () => void;
 };
@@ -117,7 +117,9 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
 
   // Internal editing state - initialized from props
   const [selectedProperty, setSelectedProperty] =
-    createSignal<PropertyDefinition | null>(props.initialProperty ?? null);
+    createSignal<PropertyDefinitionDomain | null>(
+      props.initialProperty ?? null
+    );
   const [action, setAction] = createSignal<FilterAction | null>(
     props.savedData?.action ?? null
   );
@@ -147,7 +149,7 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
 
   // Track if user is editing property (to show search instead of pill)
   const [previousProperty, setPreviousProperty] =
-    createSignal<PropertyDefinition | null>(null);
+    createSignal<PropertyDefinitionDomain | null>(null);
 
   const isPending = () => props.savedData === null;
 
@@ -163,31 +165,31 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
     const property = selectedProperty();
     if (!property) return false;
 
-    if (property.data_type === 'BOOLEAN') {
+    if (property.valueType === 'BOOLEAN') {
       return booleanValue() !== null;
     }
-    if (property.data_type === 'DATE') {
+    if (property.valueType === 'DATE') {
       if (isComparisonAction(action())) {
         return dateValue() !== null;
       }
       return dateValues().length > 0; // Equality actions use multi-date
     }
-    if (property.data_type === 'NUMBER') {
+    if (property.valueType === 'NUMBER') {
       if (isComparisonAction(action())) {
         return numberValue() !== null;
       }
       return numberValues().length > 0; // Equality actions use multi-number
     }
     if (
-      property.data_type === 'SELECT_STRING' ||
-      property.data_type === 'SELECT_NUMBER'
+      property.valueType === 'SELECT_STRING' ||
+      property.valueType === 'SELECT_NUMBER'
     ) {
       if (isComparisonAction(action())) {
         return selectValue() !== null;
       }
       return selectValues().length > 0; // Equality actions use multi-select
     }
-    if (property.data_type === 'ENTITY') {
+    if (property.valueType === 'ENTITY') {
       return entityValues().length > 0;
     }
     return values().length > 0;
@@ -195,7 +197,7 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
 
   const canConfirm = () => selectedProperty() && action() && hasValue();
 
-  const handleSelectProperty = (property: PropertyDefinition) => {
+  const handleSelectProperty = (property: PropertyDefinitionDomain) => {
     // Only clear action/values if property actually changed
     const prev = previousProperty();
     if (prev && prev.id !== property.id) {
@@ -247,15 +249,15 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
     if (!property) return;
 
     // Set the appropriate value based on data type
-    if (property.data_type === 'BOOLEAN' && typeof value === 'boolean') {
+    if (property.valueType === 'BOOLEAN' && typeof value === 'boolean') {
       setBooleanValue(value);
-    } else if (property.data_type === 'DATE' && typeof value === 'string') {
+    } else if (property.valueType === 'DATE' && typeof value === 'string') {
       setDateValue(value);
-    } else if (property.data_type === 'NUMBER' && typeof value === 'number') {
+    } else if (property.valueType === 'NUMBER' && typeof value === 'number') {
       setNumberValue(value);
     } else if (
-      (property.data_type === 'SELECT_STRING' ||
-        property.data_type === 'SELECT_NUMBER') &&
+      (property.valueType === 'SELECT_STRING' ||
+        property.valueType === 'SELECT_NUMBER') &&
       typeof value === 'string'
     ) {
       setSelectValue(value);
@@ -346,11 +348,11 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
 
   // Build a PropertyFilter from the current state
   const buildPartialFilter = (
-    property: PropertyDefinition,
+    property: PropertyDefinitionDomain,
     filterAction: FilterAction,
     _filterValues: string[] = []
   ): PropertyFilter | null => {
-    const dataType = property.data_type;
+    const dataType = property.valueType;
     const propertyId = property.id;
 
     switch (dataType) {
@@ -480,7 +482,7 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
             class="size-3.5 shrink-0"
           />
           <span class="truncate max-w-[120px]">
-            {selectedProperty()!.display_name}
+            {selectedProperty()!.displayName}
           </span>
         </button>
 
@@ -505,7 +507,7 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
               </button>
             }
           >
-            <Match when={selectedProperty()?.data_type === 'BOOLEAN'}>
+            <Match when={selectedProperty()?.valueType === 'BOOLEAN'}>
               <FilterValueBoolean
                 value={booleanValue()}
                 onSelect={handleValueChange}
@@ -513,7 +515,7 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
             </Match>
             <Match
               when={
-                selectedProperty()?.data_type === 'DATE' &&
+                selectedProperty()?.valueType === 'DATE' &&
                 isComparisonAction(action())
               }
             >
@@ -524,7 +526,7 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
             </Match>
             <Match
               when={
-                selectedProperty()?.data_type === 'DATE' &&
+                selectedProperty()?.valueType === 'DATE' &&
                 !isComparisonAction(action())
               }
             >
@@ -535,7 +537,7 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
             </Match>
             <Match
               when={
-                selectedProperty()?.data_type === 'NUMBER' &&
+                selectedProperty()?.valueType === 'NUMBER' &&
                 isComparisonAction(action())
               }
             >
@@ -546,7 +548,7 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
             </Match>
             <Match
               when={
-                selectedProperty()?.data_type === 'NUMBER' &&
+                selectedProperty()?.valueType === 'NUMBER' &&
                 !isComparisonAction(action())
               }
             >
@@ -557,15 +559,15 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
             </Match>
             <Match
               when={
-                (selectedProperty()?.data_type === 'SELECT_STRING' ||
-                  selectedProperty()?.data_type === 'SELECT_NUMBER') &&
+                (selectedProperty()?.valueType === 'SELECT_STRING' ||
+                  selectedProperty()?.valueType === 'SELECT_NUMBER') &&
                 isComparisonAction(action())
               }
             >
               <FilterValueSelect
                 propertyId={selectedProperty()!.id}
                 dataType={
-                  selectedProperty()!.data_type as
+                  selectedProperty()!.valueType as
                     | 'SELECT_STRING'
                     | 'SELECT_NUMBER'
                 }
@@ -575,15 +577,15 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
             </Match>
             <Match
               when={
-                (selectedProperty()?.data_type === 'SELECT_STRING' ||
-                  selectedProperty()?.data_type === 'SELECT_NUMBER') &&
+                (selectedProperty()?.valueType === 'SELECT_STRING' ||
+                  selectedProperty()?.valueType === 'SELECT_NUMBER') &&
                 !isComparisonAction(action())
               }
             >
               <FilterValueSelectMulti
                 propertyId={selectedProperty()!.id}
                 dataType={
-                  selectedProperty()!.data_type as
+                  selectedProperty()!.valueType as
                     | 'SELECT_STRING'
                     | 'SELECT_NUMBER'
                 }
@@ -591,9 +593,9 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
                 onChange={handleSelectValuesChange}
               />
             </Match>
-            <Match when={selectedProperty()?.data_type === 'ENTITY'}>
+            <Match when={selectedProperty()?.valueType === 'ENTITY'}>
               <FilterValueEntity
-                specificEntityType={selectedProperty()!.specific_entity_type!}
+                specificEntityType={selectedProperty()!.specificEntityType!}
                 values={entityValues()}
                 onChange={handleEntityValuesChange}
               />

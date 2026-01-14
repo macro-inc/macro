@@ -1829,7 +1829,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       <span class="font-medium text-xs">From</span>
                       <RecipientSelector<'user' | 'contact'>
                         options={emailRecipientOptions}
-                        selectedOptions={fromFilterUsers}
+                        selectedOptions={fromFilterUsers()}
                         setSelectedOptions={setFromFilterUsers}
                         placeholder="Filter by user..."
                         includeSelf

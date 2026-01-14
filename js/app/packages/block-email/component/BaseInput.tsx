@@ -1,6 +1,10 @@
+import { fileSelector } from '@core/directive/fileSelector';
 import { FormatRibbon } from '@block-channel/component/FormatRibbon';
 import { MacroSignatureButton } from '@block-email/component/MacroSignatureButton';
-import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
+import {
+  MACRO_EMAIL_SIGNATURE,
+  MAX_ATTACHMENTS_BYTES_SIZE,
+} from '@block-email/constants';
 import { useHasPaidAccess } from '@core/auth';
 import { useBlockId } from '@core/block';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
@@ -34,20 +38,16 @@ import { ToggleButton as KToggleButton } from '@kobalte/core/toggle-button';
 import {
   $appendWatermarkNodeToLast,
   $removeAllWatermarkNodes,
-  type DocumentMentionInfo,
 } from '@lexical-core';
 import { logger } from '@observability';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { useSendMessageMutation } from '@queries/email/thread';
 import type {
   AttachmentMacro,
-  MessageToSend,
   MessageToSendDbId,
   MessageWithBodyReplyless,
 } from '@service-email/generated/schemas';
 import { useEmail, useUserId } from '@service-gql/client';
-import type { FileType } from '@service-storage/generated/schemas/fileType';
-import type { Item } from '@service-storage/generated/schemas/item';
 import { Button } from '@ui/components/Button';
 import {
   defaultSelectionData,
@@ -71,10 +71,12 @@ import {
   createMemo,
   createSignal,
   For,
+  Match,
   onCleanup,
   onMount,
   type Setter,
   Show,
+  Switch,
   untrack,
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
@@ -82,7 +84,6 @@ import { deleteEmailDraft, saveEmailDraft } from '../signal/emailDraft';
 import { makeAttachmentPublic } from '../util/makeAttachmentPublic';
 import { getFirstName } from '../util/name';
 import {
-  appendItemsAsMacroMentions,
   clearEmailBody,
   prepareEmailBody,
   prepareMacroBody,
@@ -91,11 +92,18 @@ import {
 } from '../util/prepareEmailBody';
 import { convertEmailRecipientToContactInfo } from '../util/recipientConversion';
 import { getReplyTypeFromDraft } from '../util/replyType';
-import { AttachMenu } from './AttachMenu';
 import { type EmailRecipient, useEmailContext } from './EmailContext';
 import { getOrInitEmailFormContext } from './EmailFormContext';
+import {
+  useRemoveDraftAttachmentMutation,
+  useUploadDraftAttachmentsMutation,
+} from '@queries/email/attachment';
+import { EmailAttachmentPill } from '@block-email/component/AttachmentPill';
+import type { DraftFormAttachment } from '@block-email/component/createEmailFormState';
+import { plural } from '@core/util/string';
 
 false && fileFolderDrop;
+false && fileSelector;
 
 const getRecipientDisplayName = (item: EmailRecipient): string => {
   switch (item.kind) {
@@ -149,7 +157,7 @@ export function BaseInput(props: {
 }) {
   const ctx = useEmailContext();
   const form = createMemo(() =>
-    getOrInitEmailFormContext(props.replyingTo().db_id!)()
+    getOrInitEmailFormContext(props.replyingTo().db_id!)
   );
   const blockId = useBlockId();
   const emailLinksQuery = useEmailLinksQuery();
@@ -159,11 +167,9 @@ export function BaseInput(props: {
     createSignal<HTMLDivElement>();
   const [editor, setEditor] = createSignal<LexicalEditor>();
   const [showSubject, _] = createSignal(props.newMessage ?? false);
-  const [attachMenuOpen, setAttachMenuOpen] = createSignal(false);
   const [showExpandedRecipients, setShowExpandedRecipients] =
     createSignal<boolean>(false);
   const [isDragging, setIsDragging] = createSignal<boolean>();
-  const [isPendingUpload, setIsPendingUpload] = createSignal<boolean>(false);
   const [showFormatRibbon, setShowFormatRibbon] = createSignal<boolean>(
     props.newMessage ?? false
   );
@@ -202,6 +208,8 @@ export function BaseInput(props: {
       toast.failure('Failed to send email');
     },
   });
+
+  const uploadAttachmentMutation = useUploadDraftAttachmentsMutation();
 
   function refetchThreadMessages() {
     ctx.query.refetch();
@@ -245,12 +253,10 @@ export function BaseInput(props: {
   const userId = useUserId();
   const [userName] = useDisplayName(tryMacroId(userId() ?? ''));
 
-  let bodyDiv!: HTMLDivElement;
-  let attachButtonRef!: HTMLDivElement;
   let draftSaveTimer: number | undefined;
   const DRAFT_DEBOUNCE_MS = 1000;
 
-  function collectDraft(): Omit<MessageToSend, 'link_id'> | null {
+  function collectDraft() {
     $removeAllWatermarkNodes(editor());
     const prepared = prepareEmailBody(editor());
     if (!prepared) {
@@ -259,20 +265,23 @@ export function BaseInput(props: {
       );
       return null;
     }
-    // Fail if no body text
-    if (prepared.bodyText.trim() === '') {
+    // Fail if no body text and no attachments
+    // You can have a draft with attachments and no body text
+    if (
+      prepared.bodyText.trim() === '' &&
+      form().attachments.list().length === 0
+    ) {
       return null;
     }
     // We attach the drafts entirely using bodyHTML (because this is how the appended reply parsing works) so we are not including bodyMacro or bodyText
     return {
-      bcc: form().recipients.bcc.map(convertEmailRecipientToContactInfo),
+      bcc: form().recipients().bcc.map(convertEmailRecipientToContactInfo),
       body_html: prepared.bodyHtml,
-      cc: form().recipients.cc.map(convertEmailRecipientToContactInfo),
-      // db_id: props.draft ? props.draft?.db_id : undefined,
+      cc: form().recipients().cc.map(convertEmailRecipientToContactInfo),
       provider_id: props.draft?.provider_id,
       replying_to_id: props.replyingTo()?.db_id,
       subject: form().subject(),
-      to: form().recipients.to.map(convertEmailRecipientToContactInfo),
+      to: form().recipients().to.map(convertEmailRecipientToContactInfo),
     };
   }
 
@@ -334,10 +343,34 @@ export function BaseInput(props: {
       provider_thread_id: currentThread?.provider_id,
       thread_db_id: currentThread?.db_id,
     });
+
     if (draftResponse) {
+      // If the email draft saved successfully, we want to upload the
+      // attachments as well. We should grab only the attachments that
+      // haven't been uploaded yet
+      const attachments = form()
+        .attachments.list()
+        .filter((a) => a.type === 'local' && !a.attachmentID) as Extract<
+        DraftFormAttachment,
+        { type: 'local' }
+      >[];
+
+      const uploaded = await uploadAttachmentMutation.mutateAsync({
+        draftID: draftResponse,
+        attachments: attachments.map((a) => a.file),
+      });
+
+      // Assign the attachment ids to attachments for later use
+      for (const attachment of uploaded.attachments) {
+        form().attachments.assignAttachmentID(
+          attachment.file,
+          attachment.attachmentID
+        );
+      }
+
       setSavedDraftId(draftResponse);
+      refetchThreadMessages();
     }
-    refetchThreadMessages();
   }
 
   function scheduleDraftSave() {
@@ -358,28 +391,6 @@ export function BaseInput(props: {
     untrack(scheduleDraftSave);
   };
 
-  function onAttach(items: Item[]) {
-    const documentMentionItems = items.map((item) => ({
-      documentId: item.id,
-      documentName: item.name,
-      blockName:
-        item.type === 'document' ? (item.fileType as FileType) : item.type,
-    }));
-    appendItemsAsMacroMentions(editor(), documentMentionItems);
-    items.forEach((item) => {
-      makeAttachmentPublic(item.id);
-    });
-    scheduleDraftSave();
-  }
-
-  function onAttachDocuments(items: DocumentMentionInfo[]) {
-    appendItemsAsMacroMentions(editor(), items);
-    items.forEach((item) => {
-      makeAttachmentPublic(item.documentId);
-    });
-    scheduleDraftSave();
-  }
-
   // Handles clicks outside of the expanded recipients area
   const expandedPointerDownHandler = (e: PointerEvent) => {
     if (showExpandedRecipients()) {
@@ -389,8 +400,8 @@ export function BaseInput(props: {
         !combobox?.contains(e.target as Node)
       ) {
         setShowExpandedRecipients(false);
-        setShowCc(form().recipients.cc.length > 0);
-        setShowBcc(form().recipients.bcc.length > 0);
+        setShowCc(form().recipients().cc.length > 0);
+        setShowBcc(form().recipients().bcc.length > 0);
       }
     }
   };
@@ -411,11 +422,11 @@ export function BaseInput(props: {
   let composeContainerRef: HTMLDivElement | undefined;
 
   const sendEmail = async (markDone = false) => {
-    if (sendMutation.isPending || isPendingUpload()) return;
+    if (sendMutation.isPending || uploadAttachmentMutation.isPending) return;
 
-    const to = form().recipients.to.map(convertEmailRecipientToContactInfo);
-    const cc = form().recipients.cc.map(convertEmailRecipientToContactInfo);
-    const bcc = form().recipients.bcc.map(convertEmailRecipientToContactInfo);
+    const to = form().recipients().to.map(convertEmailRecipientToContactInfo);
+    const cc = form().recipients().cc.map(convertEmailRecipientToContactInfo);
+    const bcc = form().recipients().bcc.map(convertEmailRecipientToContactInfo);
 
     if ((to?.length ?? 0) + (cc?.length ?? 0) + (bcc?.length ?? 0) === 0) {
       toast.failure('Email failed to send. No recipients provided');
@@ -482,8 +493,11 @@ export function BaseInput(props: {
 
     const processedMacroBody = prepareMacroBody(bodyMacro());
 
+    const currentDraftID = savedDraftId();
+
     sendMutation.mutate({
       message: {
+        db_id: currentDraftID,
         bcc,
         body_html: prepared.bodyHtml,
         body_macro: processedMacroBody,
@@ -528,17 +542,21 @@ export function BaseInput(props: {
     const mentionEmail = mention.mentions[0].split('|')[1];
 
     // Check if user already in To or CC
-    const isInTo = form().recipients.to.some((recipient: EmailRecipient) => {
-      const email = recipient.data.email;
-      if (!email) return false;
-      return email === mentionEmail;
-    });
+    const isInTo = form()
+      .recipients()
+      .to.some((recipient: EmailRecipient) => {
+        const email = recipient.data.email;
+        if (!email) return false;
+        return email === mentionEmail;
+      });
 
-    const isInCc = form().recipients.cc.some((recipient: EmailRecipient) => {
-      const email = recipient.data.email;
-      if (!email) return false;
-      return email === mentionEmail;
-    });
+    const isInCc = form()
+      .recipients()
+      .cc.some((recipient: EmailRecipient) => {
+        const email = recipient.data.email;
+        if (!email) return false;
+        return email === mentionEmail;
+      });
 
     // If not already in To or CC, add user to CC
     if (!isInTo && !isInCc) {
@@ -551,10 +569,7 @@ export function BaseInput(props: {
 
       if (userOption) {
         // Add to CC recipients
-        form().setRecipients('cc', (prev: EmailRecipient[]) => [
-          ...(prev ?? []),
-          userOption,
-        ]);
+        form().setRecipients('cc', [...form().recipients().cc, userOption]);
         toast.success(`${mentionEmail} added to CC`);
       }
     }
@@ -634,20 +649,60 @@ export function BaseInput(props: {
     }
   });
 
-  const ReplyIcon = createMemo(() => {
-    let Icon =
-      effectiveReplyType() === 'reply'
-        ? Reply
-        : effectiveReplyType() === 'reply-all'
-          ? ReplyAll
-          : Forward;
+  const handleAddAttachments = (files: File[]) => {
+    const currentAttachments = form().attachments.list();
 
-    return (
-      <Button showChevron>
-        <Icon class="h-7 p-1" />
-      </Button>
+    const attachmentsToAddByteSize = files.reduce((sum, f) => sum + f.size, 0);
+
+    if (attachmentsToAddByteSize >= MAX_ATTACHMENTS_BYTES_SIZE) {
+      toast.failure(`${plural('Attachment', files.length)} exceed 18MB`);
+      return;
+    }
+
+    const currentAttachmentsByteSize = currentAttachments.reduce(
+      (sum, a) => sum + (a.type === 'local' ? a.file.size : a.fileSize),
+      0
     );
-  });
+
+    if (
+      currentAttachmentsByteSize + attachmentsToAddByteSize >=
+      MAX_ATTACHMENTS_BYTES_SIZE
+    ) {
+      toast.failure(
+        "Can't add more attachments",
+        'Total attachments exceed 18MB limit'
+      );
+      return;
+    }
+
+    for (const file of files) {
+      form().attachments.add({
+        type: 'local',
+        file,
+      });
+    }
+
+    scheduleDraftSave();
+  };
+
+  const removeAttachmentMutation = useRemoveDraftAttachmentMutation();
+
+  const handleRemoveAttachment = (attachment: DraftFormAttachment) => {
+    if (attachment.type === 'local') {
+      form().attachments.removeByFile(attachment.file);
+    } else {
+      form().attachments.removeByID(attachment.attachmentID);
+    }
+
+    const currentDraftID = savedDraftId();
+
+    if (!currentDraftID || !attachment.attachmentID) return;
+
+    removeAttachmentMutation.mutate({
+      draftID: currentDraftID,
+      attachmentID: attachment.attachmentID,
+    });
+  };
 
   return (
     <div
@@ -660,7 +715,22 @@ export function BaseInput(props: {
       <div class="flex items-start gap-2 p-2">
         <DropdownMenu>
           <DropdownMenu.Trigger>
-            <div class="px-1">{ReplyIcon()}</div>
+            <div class="px-1">
+              <Button showChevron>
+                <Switch>
+                  <Match when={effectiveReplyType() === 'reply'}>
+                    <Reply class="h-7 p-1" />
+                  </Match>
+
+                  <Match when={effectiveReplyType() === 'reply-all'}>
+                    <ReplyAll class="h-7 p-1" />
+                  </Match>
+                  <Match when={effectiveReplyType() === 'forward'}>
+                    <Forward class="h-7 p-1" />
+                  </Match>
+                </Switch>
+              </Button>
+            </div>
           </DropdownMenu.Trigger>
           <DropdownMenu.Portal>
             <DropdownMenuContent>
@@ -699,9 +769,9 @@ export function BaseInput(props: {
             >
               <Show
                 when={
-                  form().recipients.to.length +
-                    form().recipients.cc.length +
-                    form().recipients.bcc.length >
+                  form().recipients().to.length +
+                    form().recipients().cc.length +
+                    form().recipients().bcc.length >
                   0
                 }
                 fallback={
@@ -710,23 +780,24 @@ export function BaseInput(props: {
               >
                 <Show
                   when={
-                    form().recipients.to.length + form().recipients.cc.length >
+                    form().recipients().to.length +
+                      form().recipients().cc.length >
                     0
                   }
                 >
                   <span>to&nbsp;</span>
                 </Show>
                 <RecipientList
-                  recipients={form().recipients.to}
-                  showTrailingComma={form().recipients.cc.length > 0}
+                  recipients={form().recipients().to}
+                  showTrailingComma={form().recipients().cc.length > 0}
                 />
                 <RecipientList
-                  recipients={form().recipients.cc}
+                  recipients={form().recipients().cc}
                   showTrailingComma={false}
                 />
-                <Show when={form().recipients.bcc.length > 0}>, bcc: </Show>
+                <Show when={form().recipients().bcc.length > 0}>, bcc: </Show>
                 <RecipientList
-                  recipients={form().recipients.bcc}
+                  recipients={form().recipients().bcc}
                   showTrailingComma={false}
                 />
               </Show>
@@ -748,20 +819,20 @@ export function BaseInput(props: {
               <RecipientSelector<EmailRecipient['kind']>
                 inputRef={setToRef}
                 options={ctx.recipientOptions}
-                selectedOptions={() => form().recipients.to}
+                selectedOptions={form().recipients().to}
                 setSelectedOptions={(v) => form().setRecipients('to', v)}
                 triggerMode="input"
                 hideBorder
               />
             </div>
             {/* Expanded CC */}
-            <Show when={showCc() || form().recipients.cc.length > 0}>
+            <Show when={showCc() || form().recipients().cc.length > 0}>
               <div class="flex flex-row items-start">
                 <div class="text-sm text-ink-muted min-w-8">cc</div>
                 <RecipientSelector<EmailRecipient['kind']>
                   inputRef={setCcRef}
                   options={ctx.recipientOptions}
-                  selectedOptions={() => form().recipients.cc}
+                  selectedOptions={form().recipients().cc}
                   setSelectedOptions={(v) => form().setRecipients('cc', v)}
                   triggerMode="input"
                   hideBorder
@@ -769,13 +840,13 @@ export function BaseInput(props: {
               </div>
             </Show>
             {/* Expanded BCC */}
-            <Show when={showBcc() || form().recipients.bcc.length > 0}>
+            <Show when={showBcc() || form().recipients().bcc.length > 0}>
               <div class="flex flex-row items-start">
                 <div class="text-sm text-ink-muted min-w-8">bcc</div>
                 <RecipientSelector<EmailRecipient['kind']>
                   inputRef={setBccRef}
                   options={ctx.recipientOptions}
-                  selectedOptions={() => form().recipients.bcc}
+                  selectedOptions={form().recipients().bcc}
                   setSelectedOptions={(v) => form().setRecipients('bcc', v)}
                   triggerMode="input"
                   hideBorder
@@ -839,8 +910,7 @@ export function BaseInput(props: {
           />
         </Show>
         <div
-          class="max-h-80 overflow-y-scroll w-full flex flex-col cursor-text placeholder:text-ink-placeholder placeholder:opacity-50 px-3"
-          ref={bodyDiv}
+          class="max-h-80 overflow-y-scroll w-full flex flex-col placeholder:text-ink-placeholder placeholder:opacity-50 px-3"
           onclick={() => {
             editor()?.focus();
           }}
@@ -881,7 +951,7 @@ export function BaseInput(props: {
               setEditor(editor);
               form().setCapturedEditor(editor);
             }}
-            class={`text-sm break-words text-ink ${isDragging() && 'blur'}`}
+            class={`cursor-text text-sm break-words text-ink ${isDragging() && 'blur'}`}
             editable={() => !sendMutation.isPending}
             initialValue={props.preloadedBody}
             initialHtml={props.preloadedHtml}
@@ -919,27 +989,54 @@ export function BaseInput(props: {
               );
             }}
           />
+          <div class="flex gap-1 flex-wrap w-full py-2">
+            <For each={form().attachments.list()}>
+              {(attachment) => (
+                <Switch>
+                  <Match when={attachment.type === 'local' && attachment}>
+                    {(attachment) => (
+                      <EmailAttachmentPill
+                        attachment={{
+                          fileName: attachment().file.name,
+                          mimeType: attachment().file.type,
+                        }}
+                        removable
+                        onRemove={() => handleRemoveAttachment(attachment())}
+                      />
+                    )}
+                  </Match>
+                  <Match when={attachment.type === 'remote' && attachment}>
+                    {(attachment) => (
+                      <EmailAttachmentPill
+                        attachment={{
+                          fileName: attachment().fileName,
+                          mimeType: attachment().contentType,
+                        }}
+                        removable
+                        onRemove={() => handleRemoveAttachment(attachment())}
+                      />
+                    )}
+                  </Match>
+                </Switch>
+              )}
+            </For>
+          </div>
         </div>
         <div class="flex flex-row w-full h-8 justify-between items-center py-2 px-2 mb-2 space-x-2 allow-css-brackets">
           <div class="flex flex-row items-center gap-2">
-            <div class="relative" ref={attachButtonRef}>
+            <div class="relative">
               <Button
-                onclick={() => setAttachMenuOpen(true)}
+                ref={(el) =>
+                  fileSelector(el, () => ({
+                    multiple: true,
+                    onSelect: handleAddAttachments,
+                  }))
+                }
                 tooltip="Attach"
-                class="aspect-square *:h-5 p-1"
+                class="aspect-square p-1"
               >
-                <Plus />
+                <Plus class="h-5" />
               </Button>
-
-              <AttachMenu
-                open={attachMenuOpen()}
-                close={() => setAttachMenuOpen(false)}
-                anchorRef={attachButtonRef}
-                containerRef={bodyDiv}
-                onAttach={onAttach}
-                onAttachDocuments={onAttachDocuments}
-                setIsPending={setIsPendingUpload}
-              />
             </div>
 
             <Button
@@ -1000,12 +1097,14 @@ export function BaseInput(props: {
           </div>
 
           <Button
-            disabled={isPendingUpload() || sendMutation.isPending}
+            disabled={
+              uploadAttachmentMutation.isPending || sendMutation.isPending
+            }
             onClick={() => sendEmail()}
-            class="text-ink-muted hover:scale-115 transition ease-in-out flex-col items-center rounded-full p-[0.25lh] hover:bg-transparent"
+            class="text-ink-muted hover:scale-115 transition ease-in-out flex-col items-center rounded-full p-[0.25lh] hover:bg-transparent disabled:opacity-30"
           >
             <Show
-              when={!isPendingUpload() && !sendMutation.isPending}
+              when={!sendMutation.isPending}
               fallback={<Spinner class="size-6 animate-spin cursor-disabled" />}
             >
               <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center p-0">

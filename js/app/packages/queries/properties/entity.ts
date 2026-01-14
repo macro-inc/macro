@@ -10,7 +10,10 @@ import type {
   Property,
   PropertyApiValues,
 } from '../../core/component/Properties/types';
-import { propertiesServiceClient } from '../../service-clients/service-properties/client';
+import {
+  type PropertiesEntityType,
+  propertiesServiceClient,
+} from '../../service-clients/service-properties/client';
 import type { EntityType } from '../../service-clients/service-properties/generated/schemas/entityType';
 import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
@@ -185,6 +188,42 @@ export function useAddEntityPropertyMutation(
         onError(error) {
           console.error('Failed to add property', error);
           toast.failure('Failed to add property');
+        },
+        onSettled: (_data, _error, variables) => {
+          invalidatePropertiesForEntity(
+            variables.entityType,
+            variables.entityId
+          );
+        },
+      },
+      callbacks
+    ),
+  }));
+}
+
+export type SetPropertyStatusCompleteParams = {
+  entityType: PropertiesEntityType;
+  entityId: string;
+};
+
+/** Sets the status property to complete for an entity (mark as done) */
+export function useSetPropertyStatusCompleteMutation(
+  callbacks?: MutationCallbacks<void, Error, SetPropertyStatusCompleteParams>
+) {
+  return useMutation(() => ({
+    mutationFn: async (vars: SetPropertyStatusCompleteParams) => {
+      await throwOnErr(
+        async () =>
+          await propertiesServiceClient.setPropertyStatusComplete({
+            entity_type: vars.entityType,
+            entity_id: vars.entityId,
+          })
+      );
+    },
+    ...withCallbacks<void, Error, SetPropertyStatusCompleteParams>(
+      {
+        onError(error) {
+          console.error('Failed to set status complete', error);
         },
         onSettled: (_data, _error, variables) => {
           invalidatePropertiesForEntity(

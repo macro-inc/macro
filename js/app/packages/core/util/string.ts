@@ -31,3 +31,14 @@ export function bufToString(buf: ArrayBuffer) {
   if (!decoder) decoder = new TextDecoder();
   return decoder.decode(buf);
 }
+
+/**
+ * Pluralize a string if the `length` is great than 1
+ */
+export function plural(singular: string, length: number, suffix = 's') {
+  if (!singular.length) return singular;
+
+  if (length === 1) return singular;
+
+  return `${singular}${suffix}`;
+}

@@ -1,12 +1,10 @@
 import { useUnfurl } from '@core/signal/unfurl';
 import LinkIcon from '@icon/regular/link.svg';
-import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { proxyResource } from '@service-unfurl/client';
 import type { Component } from 'solid-js';
 import { createSignal, For, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { usePropertiesContext } from '../../context/PropertiesContext';
-import type { Property } from '../../types';
 import {
   extractDomain,
   getLinkValues,
@@ -17,16 +15,10 @@ import {
   AddPropertyValueButton,
   EmptyValue,
   PropertyValueDeleteButton,
+  type PropertyValueProps,
 } from './ValueComponents';
 
-type LinkValueProps = {
-  property: Property;
-  canEdit: boolean;
-  entityType: EntityType;
-  onRefresh?: () => void;
-};
-
-export const LinkValue: Component<LinkValueProps> = (props) => {
+export const LinkValue: Component<PropertyValueProps> = (props) => {
   const { saveHandler } = usePropertiesContext();
   const [isAdding, setIsAdding] = createSignal(false);
   const [inputValue, setInputValue] = createSignal('');
