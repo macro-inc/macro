@@ -506,7 +506,7 @@ export function EmailCompose() {
                         placeholder="Subject"
                         class="w-full text-base resize-none placeholder:text-ink-placeholder p-1 ml-1"
                         onInput={(e) => {
-                          form.onSubjectChange(e.currentTarget.value);
+                          form.setSubject(e.currentTarget.value);
                         }}
                         disabled={hasLinkError()}
                       />

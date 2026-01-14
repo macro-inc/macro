@@ -213,7 +213,7 @@ export function NewMessage(props: NewMessageProps) {
             <div class="flex flex-col p-2 gap-2">
               <RecipientSelector<'user' | 'contact' | 'channel'>
                 options={destinationOptions}
-                selectedOptions={selectedOptions}
+                selectedOptions={selectedOptions()}
                 setSelectedOptions={setSelectedOptions}
                 placeholder="Add by email or channel"
                 triedToSubmit={triedToSubmit}
