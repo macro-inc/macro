@@ -915,7 +915,7 @@ export function BaseInput(props: {
         </Show>
       </div>
       <div class={`${showSubject() ? 'flex' : 'hidden'} flex-row items-center`}>
-        <div class="text-xs min-w-16">Subject</div>
+        <div class="text-sm min-w-16 pl-4">Subject</div>
         <input
           type="text"
           class="flex-1 text-sm bg-transparent outline-none border-0 px-3 py-1"
