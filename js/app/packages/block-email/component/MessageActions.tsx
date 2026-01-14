@@ -6,6 +6,7 @@ import type { MessageWithBodyReplyless } from '@service-email/generated/schemas'
 import { useEmail } from '@service-gql/client';
 import { type Setter, Show } from 'solid-js';
 import { getEmailFormRegistry } from './EmailFormContext';
+import type { ReplyType } from '@block-email/util/replyType';
 
 const EMAIL_MESSAGE_ACTIONS = ['reply', 'reply-all', 'forward'] as const;
 export type EmailMessageAction = (typeof EMAIL_MESSAGE_ACTIONS)[number];
@@ -39,6 +40,20 @@ export function MessageActions(props: {
     return !allActionsHidden;
   };
 
+  const onChangeReplyType = (type: ReplyType) => {
+    return () => {
+      if (!props.isLastMessage) {
+        props.setShowReply(true);
+      }
+      const form = formRegistry.getOrInit({
+        type: 'replying_to',
+        messageID: props.message.db_id ?? '',
+      });
+      form.setReplyType(type);
+      form.setShouldFocusInput(true);
+    };
+  };
+
   return (
     <div
       class="flex flex-row items-center gap-4 transition-opacity"
@@ -56,14 +71,7 @@ export function MessageActions(props: {
             <DeprecatedIconButton
               icon={ArrowBendUpLeft}
               theme="clear"
-              onClick={() => {
-                if (!props.isLastMessage) {
-                  props.setShowReply(true);
-                }
-                const form = formRegistry.getOrInit(props.message.db_id ?? '');
-                form.setReplyType('reply');
-                form.setShouldFocusInput(true);
-              }}
+              onClick={onChangeReplyType('reply')}
               tooltip={{
                 label: 'Reply',
               }}
@@ -74,14 +82,7 @@ export function MessageActions(props: {
         <DeprecatedIconButton
           icon={ArrowBendDoubleUpLeft}
           theme="clear"
-          onClick={() => {
-            if (!props.isLastMessage) {
-              props.setShowReply(true);
-            }
-            const form = formRegistry.getOrInit(props.message.db_id ?? '');
-            form.setReplyType('reply-all');
-            form.setShouldFocusInput(true);
-          }}
+          onClick={onChangeReplyType('reply-all')}
           tooltip={{
             label: 'Reply all',
           }}
@@ -91,14 +92,7 @@ export function MessageActions(props: {
         <DeprecatedIconButton
           icon={ArrowBendUpRight}
           theme="clear"
-          onClick={() => {
-            if (!props.isLastMessage) {
-              props.setShowReply(true);
-            }
-            const form = formRegistry.getOrInit(props.message.db_id ?? '');
-            form.setReplyType('forward');
-            form.setShouldFocusInput(true);
-          }}
+          onClick={onChangeReplyType('forward')}
           tooltip={{
             label: 'Forward',
           }}
