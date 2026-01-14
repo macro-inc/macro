@@ -363,6 +363,30 @@ export const useMarkNotificationsAsDoneMutation = createNotificationsMutation(
 type NotificationItem = GetAllUserNotificationsResponse['items'][number];
 
 /**
+ * Lookup a notification by id from the cache.
+ * Returns the notification if found, undefined otherwise.
+ */
+export function getNotificationFromCache(
+  notificationId: string
+): NotificationItem | undefined {
+  const allCachedData = queryClient.getQueriesData<
+    NotificationData<UserNotificationsPageParam>
+  >({
+    queryKey: notificationKeys.user._def,
+  });
+
+  for (const [, data] of allCachedData) {
+    if (!data) continue;
+    for (const page of data.pages) {
+      const found = page.items.find((n) => n.id === notificationId);
+      if (found) return found;
+    }
+  }
+
+  return undefined;
+}
+
+/**
  * Lookup a notification by id via the notification-service.
  */
 export async function getNotificationById(

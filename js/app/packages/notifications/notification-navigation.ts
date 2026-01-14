@@ -3,7 +3,10 @@ import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import type { BlockAlias, BlockName } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { NotificationType } from '@core/types';
-import { getNotificationById } from '@queries/notification/user-notifications';
+import {
+  getNotificationById,
+  getNotificationFromCache,
+} from '@queries/notification/user-notifications';
 import { errAsync, ResultAsync } from 'neverthrow';
 import { match, P } from 'ts-pattern';
 import {
@@ -195,6 +198,18 @@ export function openNotificationFromId(
   notificationId: string,
   layoutManager: SplitManager
 ): ResultAsync<void, OpenNotificationFromIdError> {
+  // Check cache first
+  const cached = getNotificationFromCache(notificationId);
+  if (cached) {
+    const typed = tryToTypedNotification(cached);
+    if (!typed) {
+      const err: NotTypedError = { tag: 'NotTypedError', notificationId };
+      return errAsync(err);
+    }
+    return openNotification(typed, layoutManager);
+  }
+
+  // Fetch if not in cache
   return ResultAsync.fromSafePromise(
     getNotificationById(notificationId)
   ).andThen((unified) => {
