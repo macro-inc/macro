@@ -17,8 +17,6 @@ import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-so
 import ArrowFatLineUp from '@phosphor-icons/core/fill/arrow-fat-line-up-fill.svg?component-solid';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
 import { useUserId } from '@service-gql/client';
-import type { FileType } from '@service-storage/generated/schemas/fileType';
-import type { Item } from '@service-storage/generated/schemas/item';
 import { defaultSelectionData } from 'core/component/LexicalMarkdown/plugins';
 import {
   NODE_TRANSFORM,
@@ -47,6 +45,7 @@ type ComposeEmailInputProps = {
   captureEditor?: (editor: LexicalEditor) => void;
   onSubmit: () => void;
   disabled?: boolean;
+  loading?: boolean;
   isSubmitting?: boolean;
   attachments?: DraftFormAttachment[];
   onAddAttachments?: (attachments: DraftFormAttachment[]) => void;
@@ -60,7 +59,6 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
   const [editor, setEditor] = createSignal<LexicalEditor>();
 
   const [isDragging, setIsDragging] = createSignal<boolean>();
-  const [isPendingUpload, setIsPendingUpload] = createSignal<boolean>(false);
 
   const [showFormatRibbon, setShowFormatRibbon] = createSignal<boolean>(false);
 
@@ -89,26 +87,6 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
 
   let bodyDiv!: HTMLDivElement;
   let attachButtonRef!: HTMLDivElement;
-
-  function onAttach(items: Item[]) {
-    const documentMentionItems = items.map((item) => ({
-      documentId: item.id,
-      documentName: item.name,
-      blockName:
-        item.type === 'document' ? (item.fileType as FileType) : item.type,
-    }));
-    appendItemsAsMacroMentions(editor(), documentMentionItems);
-    items.forEach((item) => {
-      makeAttachmentPublic(item.id);
-    });
-  }
-
-  function onAttachDocuments(items: DocumentMentionInfo[]) {
-    appendItemsAsMacroMentions(editor(), items);
-    items.forEach((item) => {
-      makeAttachmentPublic(item.documentId);
-    });
-  }
 
   // Set up hotkey scope for the compose message component
   const [attachComposeHotkeys, composeHotkeyScope] =
@@ -304,19 +282,19 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
       <div class="flex flex-row w-full h-8 justify-between items-center space-x-2 allow-css-brackets mt-2">
         <div class="flex flex-row items-center gap-2">
           <div class="relative" ref={attachButtonRef}>
-            <AttachMenu
-              trigger={
-                <DeprecatedIconButton
-                  theme="base"
-                  icon={PaperclipIcon}
-                  tooltip={{ label: 'Attach' }}
-                  disabled={props.disabled}
-                />
+            <Button
+              ref={(el) =>
+                fileSelector(el, () => ({
+                  multiple: true,
+                  onSelect: handleAddAttachments,
+                }))
               }
-              onAttach={onAttach}
-              onAttachDocuments={onAttachDocuments}
-              setIsPending={setIsPendingUpload}
-            />
+              tooltip="Attach"
+              class="aspect-square p-1"
+              disabled={props.disabled}
+            >
+              <PaperclipIcon class="h-5" />
+            </Button>
           </div>
           <DeprecatedIconButton
             theme="base"
@@ -329,14 +307,14 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
         </div>
         <button
           type="button"
-          disabled={isPendingUpload() || props.isSubmitting || props.disabled}
+          disabled={props.loading || props.isSubmitting || props.disabled}
           onClick={() => {
             handleSend();
           }}
           class="text-ink-muted focus:scale-110 hover:scale-110 transition ease-in-out delay-150 flex gap-2 justify-center items-center hover:bg-hover py-1 px-2 text-sm"
         >
           <Show
-            when={!isPendingUpload() && !props.isSubmitting}
+            when={!props.loading && !props.isSubmitting}
             fallback={<Spinner class="w-5 h-5 animate-spin cursor-disabled" />}
           >
             <span class="font-medium font-mono uppercase">Send</span>

@@ -1,7 +1,10 @@
 import { fileSelector } from '@core/directive/fileSelector';
 import { FormatRibbon } from '@block-channel/component/FormatRibbon';
 import { MacroSignatureButton } from '@block-email/component/MacroSignatureButton';
-import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
+import {
+  MACRO_EMAIL_SIGNATURE,
+  MAX_ATTACHMENTS_BYTES_SIZE,
+} from '@block-email/constants';
 import { useHasPaidAccess } from '@core/auth';
 import { useBlockId } from '@core/block';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
@@ -103,8 +106,6 @@ import { plural } from '@core/util/string';
 false && fileFolderDrop;
 false && fileSelector;
 
-const MAX_ATTACHMENTS_BYTES_SIZE = 18_000_000;
-
 const getRecipientDisplayName = (item: EmailRecipient): string => {
   switch (item.kind) {
     case 'user':
@@ -157,7 +158,7 @@ export function BaseInput(props: {
 }) {
   const ctx = useEmailContext();
   const form = createMemo(() =>
-    getOrInitEmailFormContext(props.replyingTo().db_id!)()
+    getOrInitEmailFormContext(props.replyingTo().db_id!)
   );
   const blockId = useBlockId();
   const emailLinksQuery = useEmailLinksQuery();
@@ -275,13 +276,13 @@ export function BaseInput(props: {
     }
     // We attach the drafts entirely using bodyHTML (because this is how the appended reply parsing works) so we are not including bodyMacro or bodyText
     return {
-      bcc: form().recipients.bcc.map(convertEmailRecipientToContactInfo),
+      bcc: form().recipients().bcc.map(convertEmailRecipientToContactInfo),
       body_html: prepared.bodyHtml,
-      cc: form().recipients.cc.map(convertEmailRecipientToContactInfo),
+      cc: form().recipients().cc.map(convertEmailRecipientToContactInfo),
       provider_id: props.draft?.provider_id,
       replying_to_id: props.replyingTo()?.db_id,
       subject: form().subject(),
-      to: form().recipients.to.map(convertEmailRecipientToContactInfo),
+      to: form().recipients().to.map(convertEmailRecipientToContactInfo),
     };
   }
 
@@ -400,8 +401,8 @@ export function BaseInput(props: {
         !combobox?.contains(e.target as Node)
       ) {
         setShowExpandedRecipients(false);
-        setShowCc(form().recipients.cc.length > 0);
-        setShowBcc(form().recipients.bcc.length > 0);
+        setShowCc(form().recipients().cc.length > 0);
+        setShowBcc(form().recipients().bcc.length > 0);
       }
     }
   };
@@ -424,9 +425,9 @@ export function BaseInput(props: {
   const sendEmail = async (markDone = false) => {
     if (sendMutation.isPending || uploadAttachmentMutation.isPending) return;
 
-    const to = form().recipients.to.map(convertEmailRecipientToContactInfo);
-    const cc = form().recipients.cc.map(convertEmailRecipientToContactInfo);
-    const bcc = form().recipients.bcc.map(convertEmailRecipientToContactInfo);
+    const to = form().recipients().to.map(convertEmailRecipientToContactInfo);
+    const cc = form().recipients().cc.map(convertEmailRecipientToContactInfo);
+    const bcc = form().recipients().bcc.map(convertEmailRecipientToContactInfo);
 
     if ((to?.length ?? 0) + (cc?.length ?? 0) + (bcc?.length ?? 0) === 0) {
       toast.failure('Email failed to send. No recipients provided');
@@ -542,17 +543,21 @@ export function BaseInput(props: {
     const mentionEmail = mention.mentions[0].split('|')[1];
 
     // Check if user already in To or CC
-    const isInTo = form().recipients.to.some((recipient: EmailRecipient) => {
-      const email = recipient.data.email;
-      if (!email) return false;
-      return email === mentionEmail;
-    });
+    const isInTo = form()
+      .recipients()
+      .to.some((recipient: EmailRecipient) => {
+        const email = recipient.data.email;
+        if (!email) return false;
+        return email === mentionEmail;
+      });
 
-    const isInCc = form().recipients.cc.some((recipient: EmailRecipient) => {
-      const email = recipient.data.email;
-      if (!email) return false;
-      return email === mentionEmail;
-    });
+    const isInCc = form()
+      .recipients()
+      .cc.some((recipient: EmailRecipient) => {
+        const email = recipient.data.email;
+        if (!email) return false;
+        return email === mentionEmail;
+      });
 
     // If not already in To or CC, add user to CC
     if (!isInTo && !isInCc) {
@@ -565,10 +570,7 @@ export function BaseInput(props: {
 
       if (userOption) {
         // Add to CC recipients
-        form().setRecipients('cc', (prev: EmailRecipient[]) => [
-          ...(prev ?? []),
-          userOption,
-        ]);
+        form().setRecipients('cc', [...form().recipients().cc, userOption]);
         toast.success(`${mentionEmail} added to CC`);
       }
     }
@@ -769,9 +771,9 @@ export function BaseInput(props: {
             >
               <Show
                 when={
-                  form().recipients.to.length +
-                    form().recipients.cc.length +
-                    form().recipients.bcc.length >
+                  form().recipients().to.length +
+                    form().recipients().cc.length +
+                    form().recipients().bcc.length >
                   0
                 }
                 fallback={
@@ -780,23 +782,24 @@ export function BaseInput(props: {
               >
                 <Show
                   when={
-                    form().recipients.to.length + form().recipients.cc.length >
+                    form().recipients().to.length +
+                      form().recipients().cc.length >
                     0
                   }
                 >
                   <span>to&nbsp;</span>
                 </Show>
                 <RecipientList
-                  recipients={form().recipients.to}
-                  showTrailingComma={form().recipients.cc.length > 0}
+                  recipients={form().recipients().to}
+                  showTrailingComma={form().recipients().cc.length > 0}
                 />
                 <RecipientList
-                  recipients={form().recipients.cc}
+                  recipients={form().recipients().cc}
                   showTrailingComma={false}
                 />
-                <Show when={form().recipients.bcc.length > 0}>, bcc: </Show>
+                <Show when={form().recipients().bcc.length > 0}>, bcc: </Show>
                 <RecipientList
-                  recipients={form().recipients.bcc}
+                  recipients={form().recipients().bcc}
                   showTrailingComma={false}
                 />
               </Show>
@@ -818,20 +821,20 @@ export function BaseInput(props: {
               <RecipientSelector<EmailRecipient['kind']>
                 inputRef={setToRef}
                 options={ctx.recipientOptions}
-                selectedOptions={() => form().recipients.to}
+                selectedOptions={form().recipients().to}
                 setSelectedOptions={(v) => form().setRecipients('to', v)}
                 triggerMode="input"
                 hideBorder
               />
             </div>
             {/* Expanded CC */}
-            <Show when={showCc() || form().recipients.cc.length > 0}>
+            <Show when={showCc() || form().recipients().cc.length > 0}>
               <div class="flex flex-row items-start">
                 <div class="text-sm text-ink-muted min-w-8">cc</div>
                 <RecipientSelector<EmailRecipient['kind']>
                   inputRef={setCcRef}
                   options={ctx.recipientOptions}
-                  selectedOptions={() => form().recipients.cc}
+                  selectedOptions={form().recipients().cc}
                   setSelectedOptions={(v) => form().setRecipients('cc', v)}
                   triggerMode="input"
                   hideBorder
@@ -839,13 +842,13 @@ export function BaseInput(props: {
               </div>
             </Show>
             {/* Expanded BCC */}
-            <Show when={showBcc() || form().recipients.bcc.length > 0}>
+            <Show when={showBcc() || form().recipients().bcc.length > 0}>
               <div class="flex flex-row items-start">
                 <div class="text-sm text-ink-muted min-w-8">bcc</div>
                 <RecipientSelector<EmailRecipient['kind']>
                   inputRef={setBccRef}
                   options={ctx.recipientOptions}
-                  selectedOptions={() => form().recipients.bcc}
+                  selectedOptions={form().recipients().bcc}
                   setSelectedOptions={(v) => form().setRecipients('bcc', v)}
                   triggerMode="input"
                   hideBorder

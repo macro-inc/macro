@@ -1,22 +1,15 @@
 import CheckIcon from '@icon/bold/check-bold.svg';
-import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { Component } from 'solid-js';
 import { Show } from 'solid-js';
 import { useBooleanEditor } from '../../hooks';
 import type { Property } from '../../types';
-
-type BooleanValueProps = {
-  property: Property;
-  canEdit: boolean;
-  entityType: EntityType;
-  onRefresh?: () => void;
-};
+import type { PropertyValueProps } from './ValueComponents';
 
 /**
  * Display component for boolean properties with instant toggle
  * Treats null as false (unchecked)
  */
-export const BooleanValue: Component<BooleanValueProps> = (props) => {
+export const BooleanValue: Component<PropertyValueProps> = (props) => {
   const { value, isSaving, toggle } = useBooleanEditor(
     props.property as Property & { valueType: 'BOOLEAN' },
     props.onRefresh

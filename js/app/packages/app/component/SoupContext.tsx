@@ -19,10 +19,8 @@ import { type EntityData, isTaskEntity } from '@macro-entity';
 import { entityHasUnreadNotifications } from '@notifications';
 import type { PreviewViewStandardLabel } from '@service-email/generated/schemas';
 import { useTutorialCompleted } from '@service-gql/client';
-import {
-  type PropertiesEntityType,
-  propertiesServiceClient,
-} from '@service-properties/client';
+import type { PropertiesEntityType } from '@service-properties/client';
+import { useSetPropertyStatusCompleteMutation } from '@queries/properties/entity';
 import { storageServiceClient } from '@service-storage/client';
 import { createLazyMemo } from '@solid-primitives/memo';
 import { useQuery } from '@tanstack/solid-query';
@@ -445,6 +443,9 @@ export function createNavigationEntityListShortcut({
     return undefined;
   };
 
+  const setPropertyStatusCompleteMutation =
+    useSetPropertyStatusCompleteMutation();
+
   actionRegistry.register(
     'mark_as_done',
     async (multiSelectEntities) => {
@@ -517,14 +518,10 @@ export function createNavigationEntityListShortcut({
           }
           const entityType = getPropertiesEntityType(entity);
           if (entityType) {
-            propertiesServiceClient
-              .setPropertyStatusComplete({
-                entity_type: entityType,
-                entity_id: entity.id,
-              })
-              .catch((err) =>
-                console.error('Failed to set status complete', err)
-              );
+            setPropertyStatusCompleteMutation.mutate({
+              entityType,
+              entityId: entity.id,
+            });
           }
         }
 

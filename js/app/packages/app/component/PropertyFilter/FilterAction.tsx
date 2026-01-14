@@ -1,4 +1,4 @@
-import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
+import type { PropertyDefinitionDomain } from '@core/component/Properties/types';
 import type { Component } from 'solid-js';
 import {
   createMemo,
@@ -16,7 +16,7 @@ import {
 } from '../PropertyFilterTypes';
 
 export type FilterActionSelectProps = {
-  property: PropertyDefinition;
+  property: PropertyDefinitionDomain;
   selectedAction: FilterAction | null;
   onSelectAction: (action: FilterAction) => void;
 };
@@ -31,8 +31,8 @@ export const FilterActionSelect: Component<FilterActionSelectProps> = (
 
   const validActions = createMemo(() => {
     return getValidFilterActions(
-      props.property.data_type,
-      props.property.is_multi_select ?? false
+      props.property.valueType,
+      props.property.isMultiSelect ?? false
     );
   });
 

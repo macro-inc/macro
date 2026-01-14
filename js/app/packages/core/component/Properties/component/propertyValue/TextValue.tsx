@@ -1,22 +1,13 @@
-import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { Component } from 'solid-js';
 import { Show } from 'solid-js';
 import { useInlineEditor } from '../../hooks';
-import type { Property } from '../../types';
 import { formatPropertyValue } from '../../utils';
-import { EmptyValue } from './ValueComponents';
-
-type TextValueProps = {
-  property: Property;
-  canEdit: boolean;
-  entityType: EntityType;
-  onRefresh?: () => void;
-};
+import { EmptyValue, type PropertyValueProps } from './ValueComponents';
 
 /**
  * Display component for string properties with inline editing
  */
-export const TextValue: Component<TextValueProps> = (props) => {
+export const TextValue: Component<PropertyValueProps> = (props) => {
   const editor = useInlineEditor(props.property, props.onRefresh);
 
   const supportsInline = () =>

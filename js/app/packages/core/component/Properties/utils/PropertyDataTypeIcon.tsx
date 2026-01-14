@@ -14,59 +14,49 @@ import PencilIcon from '@icon/regular/pencil.svg';
 import SimpleTagIcon from '@icon/regular/tag-simple.svg';
 import UserCircleIcon from '@icon/regular/user-circle.svg';
 import type { Component } from 'solid-js';
-import type { PropertyDefinitionFlat } from '../types';
+import type { Property } from '../types';
+import { match } from 'ts-pattern';
+import { twMerge } from 'tailwind-merge';
+import { Dynamic } from 'solid-js/web';
 
-type PropertyDataTypeIconProps = {
-  property: Pick<PropertyDefinitionFlat, 'data_type' | 'specific_entity_type'>;
+export const EntityDataTypeIcon: Component<{
+  property: Pick<Property, 'specificEntityType'>;
   class?: string;
+}> = (props) => {
+  const iconClass = () => twMerge('size-4 text-ink-muted', props.class);
+  const icon = () =>
+    match(props.property.specificEntityType)
+      .with('USER', () => UserCircleIcon)
+      .with('DOCUMENT', () => FileIcon)
+      .with('PROJECT', () => FolderIcon)
+      .with('CHAT', () => ChatIcon)
+      .with('CHANNEL', () => HashIcon)
+      .with('COMPANY', () => CompanyIcon)
+      .with('THREAD', () => ThreadIcon)
+      .with('TASK', () => TaskIcon)
+      .otherwise(() => SimpleTagIcon);
+
+  return <Dynamic component={icon()} class={iconClass()} />;
 };
 
-export const PropertyDataTypeIcon: Component<PropertyDataTypeIconProps> = (
-  props
-) => {
-  const dataTypeLower = props.property.data_type.toLowerCase();
-  const iconClasses = props.class ?? 'size-4 text-ink-muted';
+export const PropertyDataTypeIcon: Component<{
+  property: Pick<Property, 'valueType' | 'specificEntityType'>;
+  class?: string;
+}> = (props) => {
+  const iconClass = () => twMerge('size-4 text-ink-muted', props.class);
+  const icon = () =>
+    match(props.property.valueType)
+      .with('ENTITY', () => () => (
+        <EntityDataTypeIcon property={props.property} class={props.class} />
+      ))
+      .with('STRING', () => PencilIcon)
+      .with('NUMBER', () => CalculatorIcon)
+      .with('BOOLEAN', () => CheckSquareIcon)
+      .with('DATE', () => CalendarBlankIcon)
+      .with('LINK', () => LinkIcon)
+      .with('SELECT_STRING', () => ListBulletIcon)
+      .with('SELECT_NUMBER', () => ListBulletIcon)
+      .otherwise(() => SimpleTagIcon);
 
-  if (dataTypeLower === 'entity') {
-    const specificType = props.property.specific_entity_type?.toUpperCase();
-
-    switch (specificType) {
-      case 'USER':
-        return <UserCircleIcon class={iconClasses} />;
-      case 'DOCUMENT':
-        return <FileIcon class={iconClasses} />;
-      case 'PROJECT':
-        return <FolderIcon class={iconClasses} />;
-      case 'CHAT':
-        return <ChatIcon class={iconClasses} />;
-      case 'CHANNEL':
-        return <HashIcon class={iconClasses} />;
-      case 'COMPANY':
-        return <CompanyIcon class={iconClasses} />;
-      case 'THREAD':
-        return <ThreadIcon class={iconClasses} />;
-      case 'TASK':
-        return <TaskIcon class={iconClasses} />;
-      default:
-        return <SimpleTagIcon class={iconClasses} />;
-    }
-  }
-
-  switch (dataTypeLower) {
-    case 'string':
-      return <PencilIcon class={iconClasses} />;
-    case 'number':
-      return <CalculatorIcon class={iconClasses} />;
-    case 'boolean':
-      return <CheckSquareIcon class={iconClasses} />;
-    case 'date':
-      return <CalendarBlankIcon class={iconClasses} />;
-    case 'link':
-      return <LinkIcon class={iconClasses} />;
-    case 'select_string':
-    case 'select_number':
-      return <ListBulletIcon class={iconClasses} />;
-    default:
-      return null;
-  }
+  return <Dynamic component={icon()} class={iconClass()} />;
 };

@@ -13,11 +13,12 @@ import { usePropertiesContext } from '../../context/PropertiesContext';
 import { usePropertySelection } from '../../hooks/usePropertySelection';
 import { PROPERTY_STYLES } from '../../styles';
 import type {
-  PropertyDefinitionFlat,
+  PropertyDefinitionDomain,
   PropertySelectorProps,
 } from '../../types';
 import {
   getPropertyDefinitionTypeDisplay,
+  toPropertyDefinitionDomain,
   useSearchInputFocus,
 } from '../../utils';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
@@ -37,7 +38,7 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
     forEntityType: entityType,
   }));
 
-  const availableProperties = createMemo((): PropertyDefinitionFlat[] => {
+  const availableProperties = createMemo((): PropertyDefinitionDomain[] => {
     if (
       listPropertiesQuery.isLoading ||
       listPropertiesQuery.isError ||
@@ -51,15 +52,12 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
     const properties = Array.isArray(data) ? data : [];
     return properties.map((item) => {
       if ('definition' in item) {
-        return {
-          ...item.definition,
-          propertyOptions: item.property_options || [],
-        };
+        return toPropertyDefinitionDomain(
+          item.definition,
+          item.property_options || []
+        );
       }
-      return {
-        ...item,
-        propertyOptions: [],
-      };
+      return toPropertyDefinitionDomain(item);
     });
   });
 
@@ -256,15 +254,15 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
                                 <div class="flex-1">
                                   <div class="flex items-center gap-2">
                                     <h4 class="font-medium text-xs">
-                                      {property.display_name}
+                                      {property.displayName}
                                     </h4>
                                   </div>
                                   <div class="text-xs text-ink-muted mt-0.5">
                                     {getPropertyDefinitionTypeDisplay({
-                                      dataType: property.data_type,
+                                      dataType: property.valueType,
                                       specificEntityType:
-                                        property.specific_entity_type,
-                                      isMultiSelect: property.is_multi_select,
+                                        property.specificEntityType,
+                                      isMultiSelect: property.isMultiSelect,
                                     })}
                                   </div>
                                 </div>

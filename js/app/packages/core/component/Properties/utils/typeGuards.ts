@@ -1,42 +1,127 @@
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import type { PropertyDefinitionResponse } from '@service-properties/generated/schemas/propertyDefinitionResponse';
-import type { Property } from '../types';
+import type {
+  BooleanProperty,
+  DateProperty,
+  EntityProperty,
+  LinkProperty,
+  MultiValueProperty,
+  NumberProperty,
+  Property,
+  SelectNumberProperty,
+  SelectProperty,
+  SelectStringProperty,
+  SingleValueProperty,
+  StringProperty,
+} from '../types';
 
-/**
- * Type guard to check if property is a LINK type
- */
-export function isLinkProperty(
+export const isStringProperty = (
   property: Property
-): property is Property & { valueType: 'LINK'; value: string[] | null } {
-  return property.valueType === 'LINK';
-}
+): property is StringProperty => {
+  return property.valueType === 'STRING';
+};
 
-/**
- * Type guard to check if property is a SELECT_STRING or SELECT_NUMBER type
- */
-export function isSelectProperty(
+export const isNumberProperty = (
   property: Property
-): property is Property &
-  (
-    | { valueType: 'SELECT_STRING'; value: string[] | null }
-    | { valueType: 'SELECT_NUMBER'; value: string[] | null }
-  ) {
+): property is NumberProperty => {
+  return property.valueType === 'NUMBER';
+};
+
+export const isBooleanProperty = (
+  property: Property
+): property is BooleanProperty => {
+  return property.valueType === 'BOOLEAN';
+};
+
+export const isDateProperty = (
+  property: Property
+): property is DateProperty => {
+  return property.valueType === 'DATE';
+};
+
+export const isSelectStringProperty = (
+  property: Property
+): property is SelectStringProperty => {
+  return property.valueType === 'SELECT_STRING';
+};
+
+export const isSelectNumberProperty = (
+  property: Property
+): property is SelectNumberProperty => {
+  return property.valueType === 'SELECT_NUMBER';
+};
+
+export const isSelectProperty = (
+  property: Property
+): property is SelectProperty => {
   return (
     property.valueType === 'SELECT_STRING' ||
     property.valueType === 'SELECT_NUMBER'
   );
-}
+};
 
-/**
- * Type guard to check if property is an ENTITY type
- */
-export function isEntityProperty(property: Property): property is Property & {
-  valueType: 'ENTITY';
-  value: EntityReference[] | null;
-} {
+export const isEntityProperty = (
+  property: Property
+): property is EntityProperty => {
   return property.valueType === 'ENTITY';
-}
+};
+
+export const isLinkProperty = (
+  property: Property
+): property is LinkProperty => {
+  return property.valueType === 'LINK';
+};
+
+export const isSingleValueProperty = (
+  property: Property
+): property is SingleValueProperty => {
+  return (
+    property.valueType === 'STRING' ||
+    property.valueType === 'NUMBER' ||
+    property.valueType === 'BOOLEAN' ||
+    property.valueType === 'DATE'
+  );
+};
+
+export const isMultiValueProperty = (
+  property: Property
+): property is MultiValueProperty => {
+  return (
+    property.valueType === 'SELECT_STRING' ||
+    property.valueType === 'SELECT_NUMBER' ||
+    property.valueType === 'ENTITY' ||
+    property.valueType === 'LINK'
+  );
+};
+
+export const getStringValue = (property: StringProperty): string | null => {
+  return property.value;
+};
+
+export const getNumberValue = (property: NumberProperty): number | null => {
+  return property.value;
+};
+
+export const getBooleanValue = (property: BooleanProperty): boolean | null => {
+  return property.value;
+};
+
+export const getDateValue = (property: DateProperty): Date | null => {
+  return property.value;
+};
+
+export const getSelectStringValues = (
+  property: SelectStringProperty
+): string[] | null => {
+  return property.value;
+};
+
+export const getSelectNumberValues = (
+  property: SelectNumberProperty
+): string[] | null => {
+  return property.value;
+};
 
 /**
  * Safely extract link values from a property
@@ -106,3 +191,23 @@ export function isPropertyDefinition(
 ): p is PropertyDefinition {
   return !('definition' in p);
 }
+
+export const hasValue = (property: Property): boolean => {
+  if (property.value === null) {
+    return false;
+  }
+
+  if (Array.isArray(property.value)) {
+    return property.value.length > 0;
+  }
+
+  return true;
+};
+
+export const hasSingleValue = (property: MultiValueProperty): boolean => {
+  return property.value !== null && property.value.length === 1;
+};
+
+export const hasMultiValue = (property: MultiValueProperty): boolean => {
+  return property.value !== null && property.value.length > 1;
+};

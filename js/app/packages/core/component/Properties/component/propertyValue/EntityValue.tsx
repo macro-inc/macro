@@ -1,26 +1,20 @@
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
-import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { Component } from 'solid-js';
 import { createSignal, For, Show } from 'solid-js';
 import { usePropertiesContext } from '../../context/PropertiesContext';
-import type { Property } from '../../types';
 import { getEntityValues } from '../../utils';
 import { EntityIcon } from './EntityIcon';
-import { AddPropertyValueButton, EmptyValue } from './ValueComponents';
-
-type EntityValueProps = {
-  property: Property;
-  canEdit: boolean;
-  entityType: EntityType;
-  onEdit?: (property: Property, anchor?: HTMLElement) => void;
-  onRefresh?: () => void;
-};
+import {
+  AddPropertyValueButton,
+  EmptyValue,
+  type PropertyValueProps,
+} from './ValueComponents';
 
 /**
  * Display component for entity properties
  * Shows entity badges and opens modal on click
  */
-export const EntityValue: Component<EntityValueProps> = (props) => {
+export const EntityValue: Component<PropertyValueProps> = (props) => {
   const { saveHandler } = usePropertiesContext();
   const [isSaving, setIsSaving] = createSignal(false);
 
