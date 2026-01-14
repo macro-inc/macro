@@ -426,7 +426,14 @@ function EmailContent(props: EmailViewProps) {
       }}
     >
       <div class="w-full h-full bg-panel select-none overscroll-none overflow-hidden flex flex-col">
-        <TopBar id={props.threadId()} title={props.title} />
+        <TopBar
+          id={props.threadId()}
+          title={props.title}
+          isDraft={
+            emailReplyInfo()?.replyingTo == null &&
+            emailReplyInfo()?.draft !== null
+          }
+        />
         <div
           class="w-full flex-1 flex flex-col items-center overflow-hidden"
           ref={context.registerMessagesContainer}
