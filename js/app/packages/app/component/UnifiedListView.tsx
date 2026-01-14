@@ -2,7 +2,11 @@ import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
 } from '@app/component/GlobalAppState';
-import { noiseFilter, signalFilter } from '@app/component/soupFilters';
+import {
+  explicitNoiseFilter,
+  noiseFilter,
+  signalFilter,
+} from '@app/component/soupFilters';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { codeFileExtensions } from '@block-code/util/languageSupport';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
@@ -712,11 +716,14 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     // We only want to apply these filters when their opposite is not in the list
     // because the filters negate each other
     if (hasSignalFilter && !hasNoiseFilter) {
+      // Inbox: show only signal items
       filterFns.push(signalFilter.predicate);
-    }
-
-    if (hasNoiseFilter && !hasSignalFilter) {
+    } else if (hasNoiseFilter && !hasSignalFilter) {
+      // Other: show only noise items
       filterFns.push(noiseFilter.predicate);
+    } else if (!hasSignalFilter && !hasNoiseFilter) {
+      // Default: exclude explicit noise (promotional emails, etc.) but show everything else
+      filterFns.push((entity, ctx) => !explicitNoiseFilter.predicate(entity, ctx));
     }
 
     setRequiredFilters(filterFns);

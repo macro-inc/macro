@@ -843,7 +843,7 @@ function EntityTypeIconFilter() {
         <div class="flex items-center shrink-0">
           <Tooltip tooltip={<LabelAndHotKey label="Filter" shortcut="⌘F" />}>
             <div
-              class="relative flex items-center gap-1.5 h-[22px] px-2.5 rounded-full transition-colors"
+              class="relative flex items-center gap-1.5 h-[22px] px-2.5 rounded-full"
               classList={{
                 'bg-accent text-panel': !!searchText() && !searchFocused(),
                 'text-ink-muted hover:text-accent hover:bg-accent/20':
