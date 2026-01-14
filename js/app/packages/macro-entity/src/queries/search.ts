@@ -161,7 +161,7 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
 };
 
 const useMapSearchResponseItem = () => {
-  const channelsContext = useChannelsContext()!;
+  const channelsContext = useChannelsContext();
   const channels = channelsContext.channels;
 
   const history = useHistory();

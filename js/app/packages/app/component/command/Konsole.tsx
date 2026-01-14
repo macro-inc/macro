@@ -124,7 +124,7 @@ export function KommandMenuInner(props: {
     }
     return Array.from(allItemMap().values());
   });
-  const channelsContext = useChannelsContext()!;
+  const channelsContext = useChannelsContext();
 
   const freshSearchConfig = createMemo(() => {
     const query = debouncedLocalQuery();

@@ -29,7 +29,7 @@ function channelsIntoCategories(channels: Channel[]) {
 
 export function useCommandItems() {
   const historyQuery = useHistoryQuery();
-  const channelsContext = useChannelsContext()!;
+  const channelsContext = useChannelsContext();
   const channels = channelsContext.channels;
   const activeCommands = getActiveCommandsFromScope(activeScope(), {
     sortByScopeLevel: false,

@@ -86,7 +86,7 @@ export const FilterValueEntity: Component<FilterValueEntityProps> = (props) => {
 
   // Data sources (same pattern as PropertyEntitySelector)
   const contacts = useContacts();
-  const channelsContext = useChannelsContext()!;
+  const channelsContext = useChannelsContext();
   const channels = channelsContext.channels;
   const history = useHistory();
 

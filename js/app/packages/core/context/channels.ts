@@ -1,4 +1,3 @@
-import { createContextProvider } from '@solid-primitives/context';
 import { createMemo, type Accessor } from 'solid-js';
 import type {
   ApiActivity as ChannelsActivity,
@@ -6,6 +5,7 @@ import type {
 } from '@service-comms/generated/models';
 import { useListChannelsQuery } from '@queries/channel/channels';
 import { useChannelsActivityQuery } from '@queries/channel/activity';
+import { createAssertedContextProvider } from './createContext';
 
 type ChannelsContextValue = {
   channels: Accessor<ApiChannelWithLatest[]>;
@@ -17,7 +17,7 @@ type ChannelsContextValue = {
 };
 
 export const [ChannelsContextProvider, useChannelsContext] =
-  createContextProvider((): ChannelsContextValue => {
+  createAssertedContextProvider('ChannelsContext', (): ChannelsContextValue => {
     const channelsQuery = useListChannelsQuery();
     const activityQuery = useChannelsActivityQuery();
 
@@ -54,10 +54,10 @@ export const [ChannelsContextProvider, useChannelsContext] =
 
 export function useChannelName(channelId: string, fallback?: string) {
   const ctx = useChannelsContext();
-  return createMemo(() => ctx?.channelsById()[channelId]?.name ?? fallback);
+  return createMemo(() => ctx.channelsById()[channelId]?.name ?? fallback);
 }
 
 export function useChannelActivity(channelId: string) {
   const ctx = useChannelsContext();
-  return createMemo(() => ctx?.activityByChannelId()[channelId]);
+  return createMemo(() => ctx.activityByChannelId()[channelId]);
 }

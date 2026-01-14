@@ -93,7 +93,7 @@ function convertSplitToAttachment(
 
 export function useTabAttachments(): Accessor<ChatAttachmentWithName[]> {
   const history = useHistory();
-  const channelsContext = useChannelsContext()!;
+  const channelsContext = useChannelsContext();
   const channels = channelsContext.channels;
   const emails = useEmails();
 

@@ -468,7 +468,7 @@ function MentionsMenuInner(props: {
         []
     );
   } else {
-    const { channels: userChannels } = useChannelsContext()!;
+    const { channels: userChannels } = useChannelsContext();
     channels = createMemo(() => {
       if (!ENABLE_CHAT_CHANNEL_ATTACHMENT && props.block === 'chat') {
         return [];
