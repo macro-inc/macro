@@ -420,7 +420,7 @@ function EmailContent(props: EmailViewProps) {
     <EmailFormContextProvider
       formOptions={{
         getMessageByID: (id) =>
-          context.messages.list().find((m) => m.db_id === id),
+          context.messages.unfiltered().find((m) => m.db_id === id),
         getDraftForMessageReply: context.drafts.getDraftForMessage,
         onRecipientsChange: context.onRecipientsChange,
       }}
