@@ -930,7 +930,7 @@ export function BaseInput(props: {
                 tooltip="Attach"
                 class="aspect-square p-1"
               >
-                <Plus class="h-5"/>
+                <Plus class="h-5" />
               </Button>
 
               <AttachMenu
@@ -951,7 +951,7 @@ export function BaseInput(props: {
               tooltip="Show formatting toolbar"
               class="aspect-square p-1"
             >
-              <TextAa class="h-5"/>
+              <TextAa class="h-5" />
             </Button>
 
             <Tooltip
@@ -996,7 +996,7 @@ export function BaseInput(props: {
                 tooltip="Delete draft"
                 class="aspect-square p-1"
               >
-                <Trash class="h-5"/>
+                <Trash class="h-5" />
               </Button>
             </Show>
           </div>

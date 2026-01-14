@@ -45,7 +45,7 @@ function SplitBackButton() {
       disabled={!context.handle.canGoBack()}
       onClick={context.handle.goBack}
     >
-      <CaretLeft class="h-4"/>
+      <CaretLeft class="h-4" />
     </Button>
   );
 }
@@ -65,7 +65,7 @@ function SplitForwardButton() {
       disabled={!context.handle.canGoForward()}
       onClick={context.handle.goForward}
     >
-      <CaretRight class="h-4"/>
+      <CaretRight class="h-4" />
     </Button>
   );
 }
@@ -90,7 +90,11 @@ function SplitSpotlightButton() {
         }
         onClick={() => context.handle.toggleSpotlight()}
       >
-        {context.handle.isSpotLight() ? <CollapseIcon class="h-4"/> : <ExpandIcon class="h-4"/>}
+        {context.handle.isSpotLight() ? (
+          <CollapseIcon class="h-4" />
+        ) : (
+          <ExpandIcon class="h-4" />
+        )}
       </Button>
     </Show>
   );
@@ -105,7 +109,7 @@ function SplitCloseButton() {
       tooltip={<LabelAndHotKey label="Close" />}
       onClick={context.handle.close}
     >
-      <CloseIcon class="h-4"/>
+      <CloseIcon class="h-4" />
     </Button>
   );
 }
@@ -140,7 +144,7 @@ function SplitPreviewToggle() {
           tabIndex={-1}
           onClick={() => setPreview((prev) => !prev)}
         >
-          <SplitIcon class="h-4"/>
+          <SplitIcon class="h-4" />
         </Button>
       </div>
     </Show>

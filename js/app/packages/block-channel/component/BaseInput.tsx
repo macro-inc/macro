@@ -462,7 +462,7 @@ export function BaseInput(props: BaseInputProps) {
         />
       </Show>
       <div
-        class="transition-all duration-150 px-3 pt-2 sm:pb-4 overflow-y-auto placeholder:text-ink-placeholder text-ink w-full text-sm"
+        class="transition-all duration-150 px-3 pt-2 sm:pb-4 overflow-y-auto placeholder:text-ink-placeholder text-ink w-full text-sm touch:mobile-width:text-base"
         onClick={(e) => {
           e.stopPropagation();
           focusMarkdownArea();
@@ -551,7 +551,10 @@ export function BaseInput(props: BaseInputProps) {
               setShowAttachMenu((prev) => !prev);
             }}
           >
-            <Show when={showAttachMenu()} fallback={<PlusIcon width={20} height={20} />}>
+            <Show
+              when={showAttachMenu()}
+              fallback={<PlusIcon width={20} height={20} />}
+            >
               <XIcon width={20} height={20} />
             </Show>
           </Button>
@@ -585,14 +588,14 @@ export function BaseInput(props: BaseInputProps) {
           }}
           class="group transition ease-in-out hover:bg-transparent"
         >
-            <Show
-              when={!hasPendingAttachments() && !isPendingSend()}
-              fallback={<Spinner class="size-6 animate-spin cursor-disabled" />}
-            >
-              <div class="group-hover:scale-115 group-hover:bg-accent transition ease-in-out size-6 touch:size-8 border border-accent rounded-full flex items-center justify-center">
-                <ArrowUp class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
-              </div>
-            </Show>
+          <Show
+            when={!hasPendingAttachments() && !isPendingSend()}
+            fallback={<Spinner class="size-6 animate-spin cursor-disabled" />}
+          >
+            <div class="group-hover:scale-115 group-hover:bg-accent transition ease-in-out size-6 touch:size-8 border border-accent rounded-full flex items-center justify-center">
+              <ArrowUp class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
+            </div>
+          </Show>
         </Button>
       </div>
     </div>

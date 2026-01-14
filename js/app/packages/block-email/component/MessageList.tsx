@@ -23,7 +23,7 @@ export function MessageList(props: MessageListProps) {
 
   return (
     <div
-      class="pt-3 w-full flex flex-col-reverse items-center overflow-y-scroll overflow-x-hidden suppress-css-brackets"
+      class="pt-3 w-full flex flex-col-reverse items-center overflow-y-scroll overflow-x-hidden suppress-css-brackets text-sm touch:mobile-width:text-base"
       ref={context.registerMessagesList}
       onscroll={(e) => {
         // Don't load more if we're programmatically scrolling to a message

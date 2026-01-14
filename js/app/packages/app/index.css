@@ -505,6 +505,8 @@
     --font-mono: "Forma DJR Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     --font-serif: "Georgia", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
 
+    --text-xxs: 0.625rem;
+
     /* Colors */
     --color-macro-accent: #00c4ff;
     --color-macro-input-border: #e4e4e4;
@@ -582,6 +584,7 @@
 @layer base {
     html {
         overscroll-behavior: none;
+        font: -apple-system-body;
     }
 
     /* Custom cursor is set via JavaScript in index.tsx to match theme accent color */
@@ -598,7 +601,8 @@
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
 
-        font-size: 16.5px;
+        /* The only place this font-size should apply is to md docs. This was an adjustment to make Forma look good. If in future we switch from Forma, we should remove this. */
+        font-size: 1.03125rem;
         /* Need to set opsz here so that it will apply to MD */
         font-variation-settings: "opsz" 11;
         font-synthesis: none;
@@ -631,6 +635,7 @@
       font-feature-settings: "ss11" on, "ss19" on, "calt", "liga", "rlig", "rvrn", "kern", "rclt";
     }
 
+    /* Make Forma look good. If in future we switch from Forma, we should remove these. */
     .text-xs { @apply optical-9; }
     .text-sm { @apply optical-10; }
     .text-base { @apply optical-11; }
@@ -742,6 +747,24 @@ html[data-modality="keyboard"] [contenteditable="true"]:focus-visible::after {
     --documentation: "Set this element as a bounding scope for the ScopedPortal component";
 }
 
+/* MESSAGES */
+
+:root {
+  --thread-shift: 23px;
+  --user-icon-width: 30px;
+  --left-of-connector: 20px;
+  --left-of-user-icon: calc(var(--left-of-connector) - var(--user-icon-width) / 2);
+}
+
+@media (min-width: 640px) {
+  :root {
+    --thread-shift: 46px;
+    --user-icon-width: 40px;
+    --left-of-connector: 28px;
+    --left-of-user-icon: calc(var(--left-of-connector) - var(--user-icon-width) / 2);
+  }
+}
+
 @utility macro-message-width {
     @media (min-width: 640px) {
         max-width: 800px;
@@ -756,8 +779,6 @@ html[data-modality="keyboard"] [contenteditable="true"]:focus-visible::after {
     }
 
 }
-
-
 
 ::-webkit-scrollbar {
     height: 8px;
