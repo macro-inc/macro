@@ -897,6 +897,7 @@ export function BaseInput(props: {
           value={form().subject()}
           onInput={(e) => {
             form().setSubject(e.currentTarget.value);
+            scheduleDraftSave();
           }}
           placeholder="Subject"
         />
