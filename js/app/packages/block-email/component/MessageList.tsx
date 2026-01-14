@@ -23,7 +23,7 @@ export function MessageList(props: MessageListProps) {
 
   return (
     <div
-      class="pt-3 w-full h-full flex flex-col-reverse items-center overflow-y-scroll overflow-x-hidden suppress-css-brackets hide-scrollbar"
+      class="pt-3 w-full flex flex-col-reverse items-center overflow-y-scroll overflow-x-hidden suppress-css-brackets hide-scrollbar"
       ref={context.registerMessagesList}
       onscroll={(e) => {
         // Don't load more if we're programmatically scrolling to a message
@@ -49,12 +49,6 @@ export function MessageList(props: MessageListProps) {
         }
       }}
     >
-      {/* 
-        In `flex-col-reverse`, short threads naturally stick to the bottom.
-        This flexible spacer soaks up any extra space at the bottom, keeping
-        short threads top-aligned without affecting scroll behavior.
-      */}
-      <div class="flex-1 w-full" />
       <StaticMarkdownContext>
         <For each={context.messages.list().toReversed()}>
           {(message, index) => {
