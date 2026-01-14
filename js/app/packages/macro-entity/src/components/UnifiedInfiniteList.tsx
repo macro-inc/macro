@@ -455,8 +455,7 @@ export function createUnifiedInfiniteList<T extends EntityData>({
     searchText?: string;
     entityMinHeight?: number;
     viewType?: string;
-    projectId?: string;
-    projectName?: string;
+    name?: string;
     splitId?: string;
   }) => {
     const [scrollParentRef, setScrollParentRef] =
@@ -470,21 +469,10 @@ export function createUnifiedInfiniteList<T extends EntityData>({
       return draggable.data.type !== undefined;
     });
 
-    // Create droppable for project block
-    const droppable = props.projectId
-      ? createDroppable(props.projectId, {
-          type: 'project',
-          name: props.projectName ?? 'folder',
-          id: props.projectId,
-          isOwner: true,
-        })
-      : null;
-    false && droppable;
-
     const showProjectOverlay = createMemo(() => {
       if (!isDraggingSoupEntry()) return false;
       if (props.viewType !== 'project') return false;
-      if (!props.projectId) return false;
+      if (!props.viewId) return false;
 
       const draggable = state?.active.draggable;
       if (!draggable) return false;
@@ -512,12 +500,12 @@ export function createUnifiedInfiniteList<T extends EntityData>({
       if (!activeDroppable) return false;
 
       // Show overlay if dropping on this project or an entity within it
-      if (activeDroppable.id === props.projectId) return true;
+      if (activeDroppable.id === props.viewId) return true;
       if (
         activeDroppable.data &&
         typeof activeDroppable.data === 'object' &&
         'projectId' in activeDroppable.data &&
-        activeDroppable.data.projectId === props.projectId
+        activeDroppable.data.projectId === props.viewId
       ) {
         return true;
       }
@@ -705,17 +693,28 @@ export function createUnifiedInfiniteList<T extends EntityData>({
         </Match>
         <Match when={true}>
           <div class="flex size-full relative" ref={setListRef}>
-            <Show when={droppable}>
-              <div
-                use:droppable
-                class="absolute inset-0 pointer-events-none z-10"
-              />
+            <Show when={props.viewType === 'project' && props.viewId}>
+              {(viewId) => {
+                const droppable = createDroppable(viewId(), {
+                  type: 'project',
+                  name: props.name ?? 'folder',
+                  id: viewId(),
+                  isOwner: true,
+                });
+                false && droppable;
+                return (
+                  <div
+                    use:droppable
+                    class="absolute inset-0 pointer-events-none z-10"
+                  />
+                );
+              }}
             </Show>
             <Show when={showProjectOverlay()}>
               <div class="flex flex-col absolute top-0 left-0 w-full h-full backdrop-blur-sm bg-accent/10 items-center justify-center space-y-3 z-50 pointer-events-none">
                 <FolderOpen class="w-[80px] h-[80px] text-ink" />
                 <h3 class="text-2xl font-semibold text-ink">
-                  Move to {props.projectName ?? 'folder'}
+                  Move to {props.name ?? 'folder'}
                 </h3>
                 <p class="text-sm text-ink-muted">
                   Drop here to move items to this project

@@ -1761,10 +1761,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
               hasRefinementsFromBase={isViewConfigChanged()}
               entityMinHeight={ENTITY_HEIGHT}
               viewType={view()?.viewType}
-              projectId={
-                view()?.viewType === 'project' ? view()?.id : undefined
-              }
-              projectName={view()?.view}
+              name={view()?.view}
               splitId={splitContext.handle.id}
             >
               {(innerProps) => {
