@@ -5,18 +5,15 @@ import {
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
 import { playSound } from '@app/util/sound';
 import { useIsAuthenticated } from '@core/auth';
-import type { BlockAliasContext } from '@core/block';
 import { getIconConfig } from '@core/component/EntityIcon';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
-import { fileTypeToResolvedBlockName } from '@core/constant/allBlocks';
 import { ENABLE_TASKS_TABS } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { RegisterHotkeyReturn, ValidHotkey } from '@core/hotkey/types';
-import type { BlockOrchestrator } from '@core/orchestrator';
 import {
   DEFAULT_VIEWS,
   type DefaultView,
@@ -29,7 +26,6 @@ import { Popover } from '@kobalte/core/popover';
 import { Tabs } from '@kobalte/core/tabs';
 import type { EntityData, ExpandedEntityType } from '@macro-entity';
 import {
-  isTaskEntity,
   queryKeys,
   useQueryClient as useEntityQueryClient,
 } from '@macro-entity';
@@ -50,7 +46,6 @@ import {
   type Component,
   createEffect,
   createMemo,
-  createRenderEffect,
   createSignal,
   For,
   Match,
@@ -61,13 +56,13 @@ import {
   Switch,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { PreviewPanel } from './PreviewPanel';
 import { SuspenseContextComp } from './SuspenseContext';
 import {
   SplitHeaderLeft,
   SplitHeaderRight,
 } from './split-layout/components/SplitHeader';
 import { SplitToolbarRight } from './split-layout/components/SplitToolbar';
-import type { SplitPanelContextType } from './split-layout/context';
 import { SplitPanelContext } from './split-layout/context';
 import { useSplitLayout } from './split-layout/layout';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
@@ -897,102 +892,6 @@ const ViewWithSearch: Component<{
         </Match>
       </Switch>
     </ViewTab>
-  );
-};
-
-const PreviewPanelContent: Component<{
-  selectedEntity: EntityData;
-  orchestrator: BlockOrchestrator;
-  splitPanelContext: SplitPanelContextType;
-}> = (props) => {
-  const blockInstance = () => {
-    const aliasContext = isTaskEntity(props.selectedEntity)
-      ? ({
-          alias: 'task',
-          baseType: 'md',
-        } as BlockAliasContext)
-      : undefined;
-    return props.orchestrator.createBlockInstance(
-      props.selectedEntity.type === 'document'
-        ? fileTypeToResolvedBlockName(props.selectedEntity.fileType)
-        : props.selectedEntity.type,
-      props.selectedEntity.id,
-      { aliasContext }
-    );
-  };
-  const [interactedWith, setInteractedWith] = createSignal(false);
-
-  createRenderEffect((prevId: string) => {
-    const id = props.selectedEntity.id;
-    if (id !== prevId) {
-      setInteractedWith(false);
-    }
-    return id;
-  }, props.selectedEntity.id);
-
-  return (
-    <div
-      class="size-full"
-      onFocusIn={(event) => {
-        if (interactedWith()) return;
-        const relatedTarget = event.relatedTarget;
-        const currentTarget = event.currentTarget;
-
-        // TODO: use state instead to determine when preview block can recieve focus
-        if (event.target.hasAttribute('data-allow-focus-in-preview')) {
-          setInteractedWith(true);
-          return;
-        }
-
-        if (relatedTarget instanceof HTMLElement) {
-          if (!currentTarget.contains(relatedTarget)) {
-            relatedTarget.focus();
-          }
-        }
-      }}
-      onPointerDown={() => {
-        setInteractedWith(true);
-      }}
-    >
-      <SplitPanelContext.Provider
-        value={{
-          ...props.splitPanelContext,
-          layoutRefs: {
-            ...props.splitPanelContext.layoutRefs,
-            headerLeft: undefined,
-            headerRight: undefined,
-          },
-          halfSplitState: () => ({
-            side: 'right',
-            percentage: 30,
-          }),
-        }}
-      >
-        <Dynamic component={blockInstance().element} />
-      </SplitPanelContext.Provider>
-    </div>
-  );
-};
-
-const PreviewPanel: Component<{
-  selectedEntity: EntityData | undefined;
-  orchestrator: BlockOrchestrator;
-  splitPanelContext: SplitPanelContextType;
-}> = (props) => {
-  return (
-    <div class="flex flex-row size-full sm:w-[70%] max-sm:h-[50%] max-sm:border-t border-edge-muted shrink-0">
-      <Show
-        when={props.selectedEntity?.type !== 'project' && props.selectedEntity}
-      >
-        {(selectedEntity) => (
-          <PreviewPanelContent
-            selectedEntity={selectedEntity()}
-            orchestrator={props.orchestrator}
-            splitPanelContext={props.splitPanelContext}
-          />
-        )}
-      </Show>
-    </div>
   );
 };
 

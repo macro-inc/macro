@@ -91,6 +91,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "chrono",
+ "comms_service_client",
  "cool_asserts",
  "email",
  "email_service_client",

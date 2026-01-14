@@ -356,7 +356,10 @@ function SplitPanel(props: SplitPanelProps) {
   const panelSize = createElementSize(panelRef);
   const [contentOffsetTop, setContentOffsetTop] = createSignal(0);
 
-  const soupContext = createSoupContext();
+  const soupContext = createSoupContext({
+    splitId: props.split.id,
+    domRef: panelRef,
+  });
 
   const [previewState, setPreviewState] = createSignal(false);
 
@@ -380,13 +383,22 @@ function SplitPanel(props: SplitPanelProps) {
     },
   });
 
+  const splitName = createMemo(() => {
+    const { type, id } = props.split.content;
+    if (type === 'component') return id;
+
+    return type;
+  });
+
   createNavigationEntityListShortcut({
+    splitName,
     splitHandle: props.handle,
     splitHotkeyScope,
     soupContext,
     previewState: [previewState, setPreviewState],
     getSplitCount: () => splitLayoutHelpers.getSplitCount(),
   });
+
   return (
     <SplitPanelContext.Provider
       value={{

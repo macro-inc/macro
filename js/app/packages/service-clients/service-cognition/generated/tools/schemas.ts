@@ -219,6 +219,26 @@ export const SearchToolResponse = z.object({
   ),
 });
 
+export const ListChannels = z
+  .object({ unused: z.null().default(null) })
+  .strict();
+
+export const ListChannelsResponse = z.object({
+  channels: z.array(
+    z.object({
+      channelType: z.enum([
+        'public',
+        'organization',
+        'private',
+        'direct_message',
+      ]),
+      id: z.string().uuid(),
+      name: z.union([z.string(), z.null()]).optional(),
+    })
+  ),
+  total: z.number().int().gte(0),
+});
+
 export const ListDocuments = z
   .object({
     exhaustiveSearch: z.boolean().default(false),

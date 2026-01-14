@@ -10,6 +10,7 @@ import {
 } from '@service-cognition/generated/tools/tool';
 import { createStore } from 'solid-js/store';
 import { Dynamic, Show } from 'solid-js/web';
+import { listChannelsHandler } from './ListChannels';
 import { listDocumentsHandler } from './ListDocuments';
 import { listEmailsHandler } from './ListEmails';
 import { rewriteHandler } from './MarkdownRewrite';
@@ -30,6 +31,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   web_search: webSearchHandler,
   MarkdownRewrite: rewriteHandler,
   Read: readHandler,
+  ListChannels: listChannelsHandler,
   ListDocuments: listDocumentsHandler,
   ListEmails: listEmailsHandler,
 };

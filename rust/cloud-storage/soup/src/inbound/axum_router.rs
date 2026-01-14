@@ -9,7 +9,7 @@ use axum::{
     response::IntoResponse,
     routing::{get, post},
 };
-use axum_extra::extract::Cached;
+use axum_extra::{either::Either, extract::Cached};
 use email::{
     domain::{
         models::{Link, PreviewView},
@@ -25,8 +25,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
 use model_user::axum_extractor::MacroUserExtractor;
 use models_pagination::{
-    CursorExtractor, Either, EitherWrapper, Frecency, PaginatedOpaqueCursor, SimpleSortMethod,
-    SortMethod, TypeEraseCursor,
+    CursorExtractor, Frecency, PaginatedOpaqueCursor, SimpleSortMethod, SortMethod, TypeEraseCursor,
 };
 use models_soup::item::SoupItem;
 use serde::{Deserialize, Serialize};
@@ -140,13 +139,13 @@ where
             }
         };
 
-        let cursor = match cursor.0 {
-            Either::Left(l) => l
+        let cursor = match cursor {
+            Either::E1(l) => l
                 .into_option()
                 .map(models_pagination::Query::Cursor)
                 .map(SoupQuery::Simple)
                 .unwrap_or_else(create_fallback),
-            Either::Right(r) => r
+            Either::E2(r) => r
                 .into_option()
                 .map(models_pagination::Query::Cursor)
                 .map(SoupQuery::Frecency)
@@ -287,7 +286,7 @@ pub struct PostSoupRequest {
     email_view: PreviewView,
 }
 
-type SoupCursor = EitherWrapper<
+type SoupCursor = axum_extra::either::Either<
     CursorExtractor<Uuid, SimpleSortMethod, Option<EntityFilterAst>>,
     CursorExtractor<Uuid, Frecency, Option<EntityFilterAst>>,
 >;

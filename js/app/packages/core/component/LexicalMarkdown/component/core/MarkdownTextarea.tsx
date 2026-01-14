@@ -40,6 +40,7 @@ import {
   selectionDataPlugin,
   tabIndentationPlugin,
 } from '../../plugins';
+import { checkboxToTaskPlugin } from '../../plugins/checkbox-to-task';
 import { restoreFocusPlugin } from '../../plugins/restore-focus';
 import { createMenuOperations } from '../../shared/inlineMenu';
 import {
@@ -180,6 +181,7 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
     .state<string>(setMarkdownState, 'markdown')
     .history(400)
     .use(restoreFocusPlugin())
+    .use(checkboxToTaskPlugin())
     .use(mediaPlugin())
     .use(
       props.formatState && props.setFormatState

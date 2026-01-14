@@ -13,6 +13,10 @@ type ToolParserMap = {
     call: types.ContentSearch;
     response: types.SearchToolResponse;
   };
+  ListChannels: {
+    call: types.ListChannels;
+    response: types.ListChannelsResponse;
+  };
   ListDocuments: {
     call: types.ListDocuments;
     response: types.ListDocumentsResponse;
@@ -38,6 +42,10 @@ const toolParserMap = {
   ContentSearch: {
     call: schemas.ContentSearch,
     response: schemas.SearchToolResponse,
+  },
+  ListChannels: {
+    call: schemas.ListChannels,
+    response: schemas.ListChannelsResponse,
   },
   ListDocuments: {
     call: schemas.ListDocuments,
@@ -78,6 +86,10 @@ type ToolDataMap = {
   ContentSearch: {
     call: types.ContentSearch;
     response: types.SearchToolResponse;
+  };
+  ListChannels: {
+    call: types.ListChannels;
+    response: types.ListChannelsResponse;
   };
   ListDocuments: {
     call: types.ListDocuments;

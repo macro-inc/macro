@@ -3,7 +3,13 @@ import { keyNavigationPlugin } from '@block-md/plugins/keyboardNavigation';
 import { markdownBlockErrorSignal } from '@block-md/signal/error';
 import { FindAndReplaceStore } from '@block-md/signal/findAndReplaceStore';
 import { revisionsSignal, rewriteSignal } from '@block-md/signal/rewriteSignal';
-import { type BlockName, useBlockId } from '@core/block';
+import { useUserId } from '@service-gql/client';
+import {
+  type BlockName,
+  useBlockId,
+  useMaybeBlockAliasedName,
+} from '@core/block';
+import { IS_MAC } from '@core/constant/isMac';
 import type { DragEventWithData } from '@core/component/FileList/DraggableItem';
 import { DecoratorRenderer } from '@core/component/LexicalMarkdown/component/core/DecoratorRenderer';
 import { FocusClickTarget } from '@core/component/LexicalMarkdown/component/core/FocusClickTarget';
@@ -60,6 +66,10 @@ import {
   wordcountPlugin,
 } from '@core/component/LexicalMarkdown/plugins';
 import { actionsPlugin } from '@core/component/LexicalMarkdown/plugins/actions/actionsPlugin';
+import {
+  checkboxToTaskPlugin,
+  CONVERT_CHECKBOXES_TO_TASKS,
+} from '@core/component/LexicalMarkdown/plugins/checkbox-to-task';
 import { codePlugin } from '@core/component/LexicalMarkdown/plugins/code/codePlugin';
 import { emojisPlugin } from '@core/component/LexicalMarkdown/plugins/emojis/emojisPlugin';
 import {
@@ -178,6 +188,8 @@ const EDITOR_PADDING_BOTTOM = 200;
 export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
   const blockData = blockDataSignal.get;
   const blockId = useBlockId();
+  const userId = useUserId();
+  const blockName = useMaybeBlockAliasedName();
 
   const mdDocumentName = useBlockDocumentName('');
 
@@ -535,8 +547,29 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     .use(markdownPastePlugin())
     .use(normalizeEnterPlugin())
     .use(
+      checkboxToTaskPlugin({
+        currentUserId: userId(),
+        parentTaskId: blockName === 'task' ? blockId : undefined,
+      })
+    )
+    .use(
       keyboardShortcutsPlugin({
-        shortcuts: DefaultShortcuts,
+        shortcuts: [
+          ...DefaultShortcuts,
+          {
+            label: `${IS_MAC ? 'meta' : 'ctrl'}+shift+o`,
+            test: (e) =>
+              e.code === 'KeyO' &&
+              e.shiftKey &&
+              (IS_MAC ? e.metaKey : e.ctrlKey),
+            handler: (editor) => {
+              const userId = useUserId()();
+              if (!userId) return;
+              editor.dispatchCommand(CONVERT_CHECKBOXES_TO_TASKS, {});
+            },
+            priority: 0,
+          },
+        ],
       })
     )
     .use(
