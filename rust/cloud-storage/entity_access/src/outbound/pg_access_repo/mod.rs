@@ -68,11 +68,11 @@ impl AccessRepository for PgAccessRepository {
         user_id: &MacroUserId<Lowercase<'_>>,
         channel_ids: &[Uuid],
     ) -> Result<Vec<Uuid>, AccessError> {
-        Ok(
-            queries::channel_membership::check_user_channel_membership(
-                &self.pool, user_id, channel_ids,
-            )
-            .await?,
+        Ok(queries::channel_membership::check_user_channel_membership(
+            &self.pool,
+            user_id,
+            channel_ids,
         )
+        .await?)
     }
 }
