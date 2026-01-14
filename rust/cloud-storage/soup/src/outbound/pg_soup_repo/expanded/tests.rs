@@ -2080,3 +2080,95 @@ async fn test_dynamic_query_with_ast_and_frecency_exclusion(
 
     Ok(())
 }
+
+/// Test that system properties are populated on SoupItems (Documents and Projects)
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("soup_items_with_properties")
+    )
+)]
+async fn test_expanded_dynamic_cursor_populates_properties(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+
+    let items = expanded_dynamic_cursor_soup(
+        &pool,
+        ExpandedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 20,
+            cursor: Query::Sort(SimpleSortMethod::UpdatedAt, EntityFilterAst::default()),
+            exclude_frecency: false,
+        },
+    )
+    .await?;
+
+    // Should get 2 documents and 2 projects (A and B)
+    assert!(!items.is_empty(), "Should return some items");
+
+    // Check that Document in A has properties populated
+    let doc_a_uuid = Uuid::parse_str("11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa").unwrap();
+    let doc_a = items.iter().find(|item| item.id() == doc_a_uuid);
+    assert!(doc_a.is_some(), "Should find Document in A");
+
+    if let Some(SoupItem::Document(doc)) = doc_a {
+        assert!(
+            doc.properties.is_some(),
+            "Document in A should have properties populated"
+        );
+        let props = doc.properties.as_ref().unwrap();
+        // Document in A has Priority and Status properties
+        assert_eq!(props.len(), 2, "Document in A should have 2 properties");
+    } else {
+        panic!("Expected Document in A to be a SoupItem::Document");
+    }
+
+    // Check that Document in B has properties populated
+    let doc_b_uuid = Uuid::parse_str("11111111-bbbb-bbbb-bbbb-bbbbbbbbbbbb").unwrap();
+    let doc_b = items.iter().find(|item| item.id() == doc_b_uuid);
+    assert!(doc_b.is_some(), "Should find Document in B");
+
+    if let Some(SoupItem::Document(doc)) = doc_b {
+        assert!(
+            doc.properties.is_some(),
+            "Document in B should have properties populated"
+        );
+        let props = doc.properties.as_ref().unwrap();
+        // Document in B has Priority and Due Date properties
+        assert_eq!(props.len(), 2, "Document in B should have 2 properties");
+    } else {
+        panic!("Expected Document in B to be a SoupItem::Document");
+    }
+
+    // Check that Project A has properties populated
+    let proj_a_uuid = Uuid::parse_str("aaaaaaaa-ffff-ffff-ffff-ffffffffffff").unwrap();
+    let proj_a = items.iter().find(|item| item.id() == proj_a_uuid);
+    assert!(proj_a.is_some(), "Should find Project A");
+
+    if let Some(SoupItem::Project(proj)) = proj_a {
+        assert!(
+            proj.properties.is_some(),
+            "Project A should have properties populated"
+        );
+        let props = proj.properties.as_ref().unwrap();
+        // Project A has Priority property
+        assert_eq!(props.len(), 1, "Project A should have 1 property");
+    } else {
+        panic!("Expected Project A to be a SoupItem::Project");
+    }
+
+    // Check that Project B has no properties (none were added in fixture)
+    let proj_b_uuid = Uuid::parse_str("bbbbbbbb-ffff-ffff-ffff-ffffffffffff").unwrap();
+    let proj_b = items.iter().find(|item| item.id() == proj_b_uuid);
+    assert!(proj_b.is_some(), "Should find Project B");
+
+    if let Some(SoupItem::Project(proj)) = proj_b {
+        // Project B has no properties in the fixture, so it should be empty or None
+        let props_count = proj.properties.as_ref().map(|p| p.len()).unwrap_or(0);
+        assert_eq!(props_count, 0, "Project B should have 0 properties");
+    } else {
+        panic!("Expected Project B to be a SoupItem::Project");
+    }
+
+    Ok(())
+}

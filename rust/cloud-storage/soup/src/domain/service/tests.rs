@@ -124,6 +124,7 @@ fn soup_document_with_is_completed(
         updated_at,
         viewed_at: Default::default(),
         sub_type: is_completed.map(|is_completed| SoupDocumentSubType::Task { is_completed }),
+        properties: Default::default(),
     }
 }
 
