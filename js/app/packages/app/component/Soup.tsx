@@ -306,25 +306,6 @@ export function Soup() {
     });
   }
 
-  const [state] = dragDropContext ?? [];
-  const isDraggingSoupEntryInSameSplit = createMemo(() => {
-    if (!state) return false;
-
-    const draggable = state.active.draggable;
-    if (!draggable) return false;
-
-    // Check if dragging from same split
-    const draggableId = draggable.id;
-    if (typeof draggableId === 'string') {
-      const draggableSplitId = draggableId.split('-').pop();
-      if (draggableSplitId === handle.id) {
-        return true;
-      }
-    }
-
-    return false;
-  });
-
   const handleFileUpload = useHandleFileUpload();
 
   const notificationSource = useGlobalNotificationSource();
@@ -426,12 +407,7 @@ export function Soup() {
         onDragEnd: () => setIsDragging(false),
       }}
     >
-      <Show
-        when={
-          isDragging() ||
-          (droppable.isActiveDroppable && !isDraggingSoupEntryInSameSplit())
-        }
-      >
+      <Show when={isDragging()}>
         <FileDropOverlay valid={isValidDrag()}>
           <Show when={!isValidDrag()}>
             <div class="font-mono text-failure">[!] Invalid file type</div>
