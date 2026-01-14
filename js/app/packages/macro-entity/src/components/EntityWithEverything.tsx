@@ -831,8 +831,6 @@ export function EntityWithEverything(
 
   const draggable = createDraggable(props.entity.id, props.entity);
   false && draggable;
-  const droppable = createDroppable(props.entity.id, props.entity);
-  false && droppable;
 
   // The main click handler for the entity row should navigate to an entity
   // without forcing focus back to the source split until after navigation.
@@ -874,7 +872,6 @@ export function EntityWithEverything(
   return (
     <div
       use:draggable
-      use:droppable
       data-checked={props.checked}
       class="everything-entity w-full relative group/entity hover:bg-hover/30"
       style={{
