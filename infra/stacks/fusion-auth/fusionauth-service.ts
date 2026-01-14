@@ -133,7 +133,7 @@ export class FusionAuthService extends pulumi.ComponentResource {
           containers: {
             service: {
               name: BASE_NAME,
-              image: 'fusionauth/fusionauth-app:1.54.0',
+              image: stack === 'prod' ? 'fusionauth/fusionauth-app:1.54.0' : 'fusionauth/fusionauth-app:1.62.0',
               cpu: stack === 'prod' ? 2048 : 2048,
               memory: stack === 'prod' ? 4096 : 4096,
               environment: containerEnvVars,
@@ -150,11 +150,10 @@ export class FusionAuthService extends pulumi.ComponentResource {
           },
           runtimePlatform: {
             operatingSystemFamily: `${platform.family.toUpperCase()}`,
-            cpuArchitecture: `${
-              platform.architecture === 'amd64'
-                ? 'X86_64'
-                : platform.architecture.toUpperCase()
-            }`,
+            cpuArchitecture: `${platform.architecture === 'amd64'
+              ? 'X86_64'
+              : platform.architecture.toUpperCase()
+              }`,
           },
         },
         desiredCount: stack === 'prod' ? 2 : 1,
