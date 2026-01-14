@@ -60,13 +60,23 @@ type EmailFormState = {
  * @returns A state object for the email form.
  */
 export function createEmailFormState(
-  key?: string,
+  type?:
+    | { type: 'replying_to'; messageID: string }
+    | { type: 'draft'; messageID: string },
+
   options?: EmailFormStateOptions
 ) {
   const userEmail = useEmail();
 
-  const replyingTo = key ? options?.getMessageByID(key) : undefined;
-  const draft = key ? options?.getDraftForMessageReply(key) : undefined;
+  const replyingTo =
+    type && type.type === 'replying_to'
+      ? options?.getMessageByID(type.messageID)
+      : undefined;
+  const draft = type
+    ? type.type === 'draft'
+      ? options?.getMessageByID(type.messageID)
+      : options?.getDraftForMessageReply(type?.messageID)
+    : undefined;
 
   const draftContainsAppendedReply = () => {
     const encoded = draft?.body_html_sanitized;
