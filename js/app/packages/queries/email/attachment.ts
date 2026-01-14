@@ -1,6 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
 import { contentHash } from '@core/util/hash';
-import { throwOnErr } from '@core/util/maybeResult';
+import { isErr, throwOnErr, toHybridError } from '@core/util/maybeResult';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { emailClient } from '@service-email/client';
 import { uploadToPresignedUrl } from '@service-storage/util/uploadToPresignedUrl';
@@ -57,15 +57,15 @@ export const useUploadDraftAttachmentsMutation = (
           attachmentID: result.attachment_id,
         });
 
-        const uploaded = await uploadToPresignedUrl({
+        const uploadedResponse = await uploadToPresignedUrl({
           presignedUrl: result.upload_url,
           sha,
           buffer: arrayBuffer,
           type: result.content_type,
         });
 
-        if (uploaded.length && uploaded[0]?.length) {
-          const err = uploaded[0][0];
+        if (isErr(uploadedResponse)) {
+          const err = toHybridError(uploadedResponse);
           throw new UploadDraftAttachmentError(
             err.message,
             { cause: err.code },
