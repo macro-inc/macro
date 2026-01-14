@@ -356,17 +356,19 @@ export function BaseInput(props: {
         { type: 'local' }
       >[];
 
-      const uploaded = await uploadAttachmentMutation.mutateAsync({
-        draftID: draftResponse,
-        attachments: attachments.map((a) => a.file),
-      });
+      if (attachments.length) {
+        const uploaded = await uploadAttachmentMutation.mutateAsync({
+          draftID: draftResponse,
+          attachments: attachments.map((a) => a.file),
+        });
 
-      // Assign the attachment ids to attachments for later use
-      for (const attachment of uploaded.attachments) {
-        form().attachments.assignAttachmentID(
-          attachment.file,
-          attachment.attachmentID
-        );
+        // Assign the attachment ids to attachments for later use
+        for (const attachment of uploaded.attachments) {
+          form().attachments.assignAttachmentID(
+            attachment.file,
+            attachment.attachmentID
+          );
+        }
       }
 
       setSavedDraftId(draftResponse);
