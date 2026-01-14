@@ -2,7 +2,6 @@ import CaretDown from '@phosphor-icons/core/regular/caret-down.svg';
 import { cn } from '@ui/utils/classname';
 import { Tooltip } from 'core/component/Tooltip';
 import { type JSX, type ParentComponent, Show, splitProps } from 'solid-js';
-import { twMerge } from 'tailwind-merge';
 
 type ButtonProps = JSX.ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: 'primary' | 'secondary' | 'tertiary' | 'destructive';
@@ -40,7 +39,6 @@ export const Button: ParentComponent<ButtonProps> = (props) => {
     'variant',
     'class',
     'children',
-    'classList',
     'tooltip',
     'showChevron',
     'type',
@@ -63,19 +61,17 @@ export const Button: ParentComponent<ButtonProps> = (props) => {
           'focus:[--focus-border-inset:-4px]',
           'active:border-accent active:bg-accent active:text-panel',
           'disabled:opacity-50 disabled:cursor-not-allowed',
-
+          {
+            'bg-ink border-ink text-panel hover:bg-accent hover:opacity-80 active:opacity-100':
+              'primary' === local.variant,
+            'border-ink': 'secondary' === local.variant,
+            'border-failure text-failure active:bg-failure hover:bg-failure-bg':
+              'destructive' === local.variant,
+            'p-0 gap-0 items-stretch': local.showChevron,
+          },
           // Anything added by the caller will granularly override
           local.class
         )}
-        classList={{
-          'bg-ink border-ink text-panel hover:bg-accent! hover:opacity-80 active:opacity-100':
-            'primary' === local.variant,
-          'border-ink!': 'secondary' === local.variant,
-          'border-failure! text-failure active:bg-failure hover:bg-failure-bg!':
-            'destructive' === local.variant,
-          'p-0! gap-0! items-stretch': !!local.showChevron,
-          ...(local.classList ?? {}),
-        }}
         {...buttonAttributes}
       >
         {local.children}
