@@ -51,7 +51,7 @@ export function LiveIndicators(props: {
               .map((user) => user.split('|').at(1)?.split('@')[0])
               .join(', ')}
           >
-            <div class="size-6 bg-menu border-2 text-[10px] -mr-3 border-panel rounded-full flex flex-col justify-center items-center">
+            <div class="size-6 bg-menu border-2 text-xxs -mr-3 border-panel rounded-full flex flex-col justify-center items-center">
               <span>{`+${remaining()}`}</span>
             </div>
           </Tooltip>

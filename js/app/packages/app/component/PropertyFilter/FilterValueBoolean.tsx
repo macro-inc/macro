@@ -50,7 +50,7 @@ export const FilterValueBoolean: Component<FilterValueBooleanProps> = (
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen())}
-        class="h-6 px-2 w-fit text-[10px] border border-edge hover:bg-hover text-left font-mono flex items-center"
+        class="h-6 px-2 w-fit text-xxs border border-edge hover:bg-hover text-left font-mono flex items-center"
         classList={{
           'text-ink': props.value !== null,
           'text-ink-muted': props.value === null,
@@ -70,7 +70,7 @@ export const FilterValueBoolean: Component<FilterValueBooleanProps> = (
               e.stopPropagation();
               handleSelect(true);
             }}
-            class="w-full px-2 py-1.5 text-[10px] text-ink hover:bg-hover text-left"
+            class="w-full px-2 py-1.5 text-xxs text-ink hover:bg-hover text-left"
             classList={{ 'bg-hover': props.value === true }}
           >
             True
@@ -82,7 +82,7 @@ export const FilterValueBoolean: Component<FilterValueBooleanProps> = (
               e.stopPropagation();
               handleSelect(false);
             }}
-            class="w-full px-2 py-1.5 text-[10px] text-ink hover:bg-hover text-left"
+            class="w-full px-2 py-1.5 text-xxs text-ink hover:bg-hover text-left"
             classList={{ 'bg-hover': props.value === false }}
           >
             False

@@ -66,7 +66,7 @@ export const FilterValueNumber: Component<FilterValueNumberProps> = (props) => {
         <button
           type="button"
           onClick={handleClick}
-          class="h-6 px-2 w-fit text-[10px] border border-edge hover:bg-hover text-left font-mono flex items-center"
+          class="h-6 px-2 w-fit text-xxs border border-edge hover:bg-hover text-left font-mono flex items-center"
           classList={{
             'text-ink': props.value !== null,
             'text-ink-muted': props.value === null,
@@ -86,7 +86,7 @@ export const FilterValueNumber: Component<FilterValueNumberProps> = (props) => {
         onBlur={handleBlur}
         onKeyDown={handleKeyDown}
         placeholder="Enter value..."
-        class="h-6 px-2 min-w-8 w-fit text-[10px] text-ink border border-edge hover:bg-hover focus:ring-1 focus:ring-accent font-mono placeholder:text-ink-muted"
+        class="h-6 px-2 min-w-8 w-fit text-xxs text-ink border border-edge hover:bg-hover focus:ring-1 focus:ring-accent font-mono placeholder:text-ink-muted"
       />
     </Show>
   );

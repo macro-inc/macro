@@ -256,7 +256,7 @@ const UserEntityPill = (props: UserEntityPillProps) => {
         </For>
         <Show when={remaining()}>
           <div class="z-4">
-            <div class="size-6 bg-menu border-2 text-[10px] -mr-2 border-panel rounded-full flex flex-col justify-center items-center">
+            <div class="size-6 bg-menu border-2 text-xxs -mr-2 border-panel rounded-full flex flex-col justify-center items-center">
               <span>+{remaining()}</span>
             </div>
           </div>
