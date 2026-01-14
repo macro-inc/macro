@@ -42,7 +42,8 @@ pub async fn get_scheduled_message_no_auth(
     db: &sqlx::PgPool,
     message_id: sqlx::types::Uuid,
 ) -> anyhow::Result<Option<db::message::ScheduledMessage>> {
-    let record = sqlx::query!(
+    let record = sqlx::query_as!(
+        db::message::ScheduledMessage,
         r#"
         SELECT link_id, message_id, send_time, sent
         FROM email_scheduled_messages
@@ -50,16 +51,10 @@ pub async fn get_scheduled_message_no_auth(
         "#,
         message_id,
     )
-    .fetch_optional(db)
-    .await?;
+        .fetch_optional(db)
+        .await?;
 
-    // Convert the database record to a ScheduledMessage struct if found
-    Ok(record.map(|r| db::message::ScheduledMessage {
-        link_id: r.link_id,
-        message_id: r.message_id,
-        send_time: r.send_time,
-        sent: r.sent,
-    }))
+    Ok(record)
 }
 
 /// Fetches unsent scheduled messages for a link with pagination
