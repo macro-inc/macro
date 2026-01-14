@@ -5,11 +5,12 @@ import type {
 } from '@service-comms/generated/models';
 import { useListChannelsQuery } from '@queries/channel/channels';
 import { useChannelsActivityQuery } from '@queries/channel/activity';
+import { queryReadyGate } from '@queries/gate';
 import { createAssertedContextProvider } from './createContext';
 
 type ChannelsContextValue = {
   channels: Accessor<ApiChannelWithLatest[]>;
-  activity: Accessor<ChannelsActivity[] | undefined>;
+  activity: Accessor<ChannelsActivity[]>;
   channelsById: Accessor<Record<string, ApiChannelWithLatest>>;
   activityByChannelId: Accessor<Record<string, ChannelsActivity>>;
   isLoading: Accessor<boolean>;
@@ -21,25 +22,31 @@ export const [ChannelsContextProvider, useChannelsContext] =
     const channelsQuery = useListChannelsQuery();
     const activityQuery = useChannelsActivityQuery();
 
-    const channels = () => channelsQuery.data ?? [];
-    const activity = () => activityQuery.data;
+    const channels = () =>
+      queryReadyGate(channelsQuery) ? channelsQuery.data : [];
+    const activity = () =>
+      queryReadyGate(activityQuery) ? activityQuery.data : [];
 
     const channelsById = createMemo(() => {
-      const data = channelsQuery.data;
-      if (!data) return {};
-      return data.reduce<Record<string, ApiChannelWithLatest>>((acc, ch) => {
-        acc[ch.id] = ch;
-        return acc;
-      }, {});
+      if (!queryReadyGate(channelsQuery)) return {};
+      return channelsQuery.data.reduce<Record<string, ApiChannelWithLatest>>(
+        (acc, ch) => {
+          acc[ch.id] = ch;
+          return acc;
+        },
+        {}
+      );
     });
 
     const activityByChannelId = createMemo(() => {
-      const data = activityQuery.data;
-      if (!data) return {};
-      return data.reduce<Record<string, ChannelsActivity>>((acc, a) => {
-        acc[a.channel_id] = a;
-        return acc;
-      }, {});
+      if (!queryReadyGate(activityQuery)) return {};
+      return activityQuery.data.reduce<Record<string, ChannelsActivity>>(
+        (acc, a) => {
+          acc[a.channel_id] = a;
+          return acc;
+        },
+        {}
+      );
     });
 
     return {
