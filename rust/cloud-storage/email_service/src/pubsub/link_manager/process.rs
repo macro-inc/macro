@@ -139,7 +139,7 @@ async fn handle_delete(
             tracing::warn!(error=?e, link_id=?link.id, "Gmail call to stop watch failed");
         }
     } else {
-        tracing::info!(link_id=?link.id, "Skipping Gmail stop_watch - no access token available");
+        tracing::debug!(link_id=?link.id, "Skipping Gmail stop_watch - no access token available");
     }
 
     // remove google fusionauth link with gmail inbox permissions

@@ -80,10 +80,6 @@ async fn fetch_new_contacts_from_google(
     {
         Ok(response) => {
             all_new_contacts.push(response);
-            tracing::info!(
-                link_id = %link.id,
-                "Fetched own contact"
-            );
         }
         Err(e) => {
             tracing::error!(error = ?e, link_id = %link.id, "Failed to get own contact");
@@ -99,12 +95,6 @@ async fn fetch_new_contacts_from_google(
             let length = response.contacts.len();
             new_contacts_token = Some(response.next_sync_token);
             all_new_contacts.extend(response.contacts);
-            tracing::info!(
-                duration = ?primary_start.elapsed(),
-                num_contacts = length,
-                link_id = %link.id,
-                "Fetched primary contacts"
-            );
         }
         Err(e) => {
             tracing::debug!(error = ?e, link_id = %link.id, "Failed to get primary contacts");
@@ -124,12 +114,6 @@ async fn fetch_new_contacts_from_google(
             let length = response.contacts.len();
             new_other_contacts_token = Some(response.next_sync_token);
             all_new_contacts.extend(response.contacts);
-            tracing::info!(
-                duration = ?other_start.elapsed(),
-                num_contacts = length,
-                link_id = %link.id,
-                "Fetched other contacts"
-            );
         }
         Err(e) => {
             tracing::debug!(error = ?e, link_id = %link.id, "Failed to get other contacts");
@@ -196,8 +180,6 @@ async fn process_and_store_contacts(
         return Ok(());
     }
     // Async enqueue messages to sfs_uploader worker that populates the sfs_url for the contacts profile images
-    let sqs_start = Instant::now();
-    let link_id = link.id;
     let sqs_client = sqs_client.clone();
     let contacts_for_sqs = contacts.clone();
 
@@ -229,14 +211,6 @@ async fn process_and_store_contacts(
                 Err(_) => failed_enqueues += 1,
             }
         }
-
-        tracing::info!(
-            duration = ?sqs_start.elapsed(),
-            successful_enqueues = successful_enqueues,
-            failed_enqueues = failed_enqueues,
-            link_id = %link_id,
-            "Completed SQS enqueuing"
-        );
     });
 
     Ok(())
