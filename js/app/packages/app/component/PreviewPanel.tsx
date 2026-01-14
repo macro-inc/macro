@@ -42,6 +42,10 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
   const scopedLayoutRefs: SplitPanelContextType['layoutRefs'] = {
     ...props.splitPanelContext.layoutRefs,
   };
+  // In preview we intentionally do NOT render the split header/title row.
+  // We only provide toolbar slots (Share, etc).
+  scopedLayoutRefs.headerLeft = undefined;
+  scopedLayoutRefs.headerRight = undefined;
 
   if (props.selectedEntity.type === 'project') {
     const { getSplitCount } = useSplitLayout();
@@ -140,28 +144,6 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
       tabIndex={-1}
       ref={setContainerRef}
     >
-      {/* Preview-specific header slots so blocks can render their topbars (via SplitHeaderLeft/Right) */}
-      <div
-        class="isolate relative w-full h-10 overflow-clip text-ink shrink-0 border-b border-edge-muted/50 bg-panel"
-        data-preview-split-header
-      >
-        <div class="absolute inset-0 flex items-center">
-          <div
-            class="relative w-fit min-w-0 h-full shrink pl-2 flex items-center"
-            ref={(ref) => {
-              scopedLayoutRefs.headerLeft = ref;
-            }}
-          />
-          <div class="h-full grow-1" />
-          <div
-            class="min-w-4 h-full shrink-0 pr-2 flex items-center justify-end"
-            ref={(ref) => {
-              scopedLayoutRefs.headerRight = ref;
-            }}
-          />
-        </div>
-      </div>
-
       {/* Preview-specific toolbar slots so blocks can render the "share" bar (via SplitToolbarLeft/Right) */}
       <div
         class="relative w-full flex items-center justify-between shrink-0 h-10 px-1 border-b border-edge-muted/50 bg-panel"
