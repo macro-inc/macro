@@ -199,7 +199,7 @@ async fn process_and_store_contacts(
             })
             .buffer_unordered(MAX_CONCURRENT_ENQUEUES);
 
-            while stream.next().await.is_some() {}
+        while stream.next().await.is_some() {}
     });
 
     Ok(())
