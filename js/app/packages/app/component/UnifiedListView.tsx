@@ -406,11 +406,9 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     () => view()?.filters?.projectFilter ?? defaultFilterOptions.projectFilter
   );
 
-  const channelCategoryFilter = createMemo(
-    () =>
-      view()?.filters?.channelCategoryFilter ??
-      defaultFilterOptions.channelCategoryFilter
-  );
+  const channelCategoryFilter = () =>
+    view()?.filters?.channelCategoryFilter ??
+    defaultFilterOptions.channelCategoryFilter;
 
   const { all: emailRecipientOptions } = useCombinedRecipients(['user']);
   const fromFilter = createMemo(() => view()?.filters.fromFilter);
