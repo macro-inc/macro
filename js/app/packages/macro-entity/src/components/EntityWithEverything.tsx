@@ -458,6 +458,7 @@ interface EntityProps<T extends WithNotification<EntityData>>
   onChecked?: (checked: boolean, shiftKey?: boolean) => void;
   checked?: boolean;
   searchActive?: boolean;
+  splitId?: string;
 }
 
 const [hoveredEntityId, setHoveredEntityId] = createSignal<string | null>(null);
@@ -829,7 +830,10 @@ export function EntityWithEverything(
     );
   });
 
-  const draggable = createDraggable(props.entity.id, props.entity);
+  const draggableId = props.splitId
+    ? `${props.entity.id}-${props.splitId}`
+    : props.entity.id;
+  const draggable = createDraggable(draggableId, props.entity);
   false && draggable;
 
   // The main click handler for the entity row should navigate to an entity

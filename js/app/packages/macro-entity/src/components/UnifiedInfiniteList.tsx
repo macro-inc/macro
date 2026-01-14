@@ -457,6 +457,7 @@ export function createUnifiedInfiniteList<T extends EntityData>({
     viewType?: string;
     projectId?: string;
     projectName?: string;
+    splitId?: string;
   }) => {
     const [scrollParentRef, setScrollParentRef] =
       createSignal<HTMLDivElement>();

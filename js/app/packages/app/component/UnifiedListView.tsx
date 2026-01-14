@@ -1765,6 +1765,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                 view()?.viewType === 'project' ? view()?.id : undefined
               }
               projectName={view()?.view}
+              splitId={splitContext.handle.id}
             >
               {(innerProps) => {
                 const displayDoneButton = () => {
@@ -1815,6 +1816,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       }}
                       entity={innerProps.entity}
                       properties={properties()}
+                      splitId={splitContext.handle.id}
                       timestamp={timestamp()}
                       onClick={entityClickHandler}
                       onPointerDown={entityPointerDownHandler}
