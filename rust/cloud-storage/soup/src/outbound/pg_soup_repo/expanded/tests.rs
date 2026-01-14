@@ -2089,7 +2089,9 @@ async fn test_dynamic_query_with_ast_and_frecency_exclusion(
         scripts("soup_items_with_properties")
     )
 )]
-async fn test_expanded_dynamic_cursor_populates_properties(pool: Pool<Postgres>) -> anyhow::Result<()> {
+async fn test_expanded_dynamic_cursor_populates_properties(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
     let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
 
     let items = expanded_dynamic_cursor_soup(
@@ -2097,7 +2099,7 @@ async fn test_expanded_dynamic_cursor_populates_properties(pool: Pool<Postgres>)
         ExpandedDynamicCursorArgs {
             user_id: user_id.copied(),
             limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::UpdatedAt, EntityFilterAst::default()),
+            cursor: Query::Sort(SimpleSortMethod::UpdatedAt, EntityFilterAst::mock_empty()),
             exclude_frecency: false,
         },
     )
@@ -2113,12 +2115,15 @@ async fn test_expanded_dynamic_cursor_populates_properties(pool: Pool<Postgres>)
 
     if let Some(SoupItem::Document(doc)) = doc_a {
         assert!(
-            doc.properties.is_some(),
+            !doc.properties.is_empty(),
             "Document in A should have properties populated"
         );
-        let props = doc.properties.as_ref().unwrap();
         // Document in A has Priority and Status properties
-        assert_eq!(props.len(), 2, "Document in A should have 2 properties");
+        assert_eq!(
+            doc.properties.len(),
+            2,
+            "Document in A should have 2 properties"
+        );
     } else {
         panic!("Expected Document in A to be a SoupItem::Document");
     }
@@ -2130,12 +2135,15 @@ async fn test_expanded_dynamic_cursor_populates_properties(pool: Pool<Postgres>)
 
     if let Some(SoupItem::Document(doc)) = doc_b {
         assert!(
-            doc.properties.is_some(),
+            !doc.properties.is_empty(),
             "Document in B should have properties populated"
         );
-        let props = doc.properties.as_ref().unwrap();
         // Document in B has Priority and Due Date properties
-        assert_eq!(props.len(), 2, "Document in B should have 2 properties");
+        assert_eq!(
+            doc.properties.len(),
+            2,
+            "Document in B should have 2 properties"
+        );
     } else {
         panic!("Expected Document in B to be a SoupItem::Document");
     }
@@ -2147,12 +2155,11 @@ async fn test_expanded_dynamic_cursor_populates_properties(pool: Pool<Postgres>)
 
     if let Some(SoupItem::Project(proj)) = proj_a {
         assert!(
-            proj.properties.is_some(),
+            !proj.properties.is_empty(),
             "Project A should have properties populated"
         );
-        let props = proj.properties.as_ref().unwrap();
         // Project A has Priority property
-        assert_eq!(props.len(), 1, "Project A should have 1 property");
+        assert_eq!(proj.properties.len(), 1, "Project A should have 1 property");
     } else {
         panic!("Expected Project A to be a SoupItem::Project");
     }
@@ -2164,7 +2171,7 @@ async fn test_expanded_dynamic_cursor_populates_properties(pool: Pool<Postgres>)
 
     if let Some(SoupItem::Project(proj)) = proj_b {
         // Project B has no properties in the fixture, so it should be empty or None
-        let props_count = proj.properties.as_ref().map(|p| p.len()).unwrap_or(0);
+        let props_count = proj.properties.len();
         assert_eq!(props_count, 0, "Project B should have 0 properties");
     } else {
         panic!("Expected Project B to be a SoupItem::Project");

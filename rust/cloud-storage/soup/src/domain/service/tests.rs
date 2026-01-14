@@ -50,7 +50,7 @@ struct NoopCommsService;
 impl ChannelsService for NoopCommsService {
     async fn get_channels(
         &self,
-        req: GetChannelsRequest,
+        _req: GetChannelsRequest,
     ) -> Result<Vec<comms::domain::models::channel::ChannelWithLatest>, Report> {
         Ok(Vec::new())
     }
