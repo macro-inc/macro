@@ -3286,6 +3286,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "entity_access"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "axum-extra",
+ "comms_service_client",
+ "cool_asserts",
+ "macro_db_client",
+ "macro_user_id",
+ "mockall",
+ "model",
+ "model-error-response",
+ "model_user",
+ "models_permissions",
+ "models_properties",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "equator"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

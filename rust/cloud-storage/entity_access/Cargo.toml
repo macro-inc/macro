@@ -1,0 +1,54 @@
+[package]
+name = "entity_access"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[features]
+default = ["ports","inbound", "outbound", "axum"]
+ports = ["dep:tokio"]
+inbound = ["axum", "ports"]
+outbound = ["ports", "dep:sqlx", "dep:comms_service_client", "dep:macro_db_client"]
+axum = [
+    "dep:axum",
+    "dep:axum-extra",
+    "dep:model",
+    "dep:model_user",
+    "dep:model-error-response",
+]
+
+[dependencies]
+# Core
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Domain models (always included)
+models_permissions = { path = "../models_permissions" }
+macro_user_id = { path = "../macro_user_id" }
+
+# Async runtime (for ports)
+tokio = { workspace = true, optional = true }
+
+# Axum dependencies (for inbound)
+axum = { workspace = true, optional = true }
+axum-extra = { workspace = true, optional = true }
+model = { path = "../model", optional = true }
+model_user = { path = "../model_user", optional = true, features = ["axum"] }
+model-error-response = { path = "../model-error-response", optional = true }
+
+# Database (for outbound)
+sqlx = { workspace = true, optional = true }
+macro_db_client = { path = "../macro_db_client", optional = true }
+
+# External services (for outbound)
+comms_service_client = { path = "../comms_service_client", optional = true }
+models_properties = { path = "../models_properties" }
+
+[dev-dependencies]
+mockall = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+cool_asserts = "2"
