@@ -13,6 +13,10 @@ type ToolParserMap = {
     call: types.ContentSearch;
     response: types.SearchToolResponse;
   };
+  ListChannels: {
+    call: types.ListChannels;
+    response: types.ListChannelsResponse;
+  };
   ListDocuments: {
     call: types.ListDocuments;
     response: types.ListDocumentsResponse;
@@ -27,6 +31,7 @@ type ToolParserMap = {
   };
   NameSearch: { call: types.NameSearch; response: types.SearchToolResponse };
   Read: { call: types.Read; response: types.ReadResponse };
+  web_fetch: { call: types.WebFetchToolCall; response: types.WebFetchResponse };
   web_search: {
     call: types.WebSearchToolCall;
     response: types.WebSearchResponse;
@@ -37,6 +42,10 @@ const toolParserMap = {
   ContentSearch: {
     call: schemas.ContentSearch,
     response: schemas.SearchToolResponse,
+  },
+  ListChannels: {
+    call: schemas.ListChannels,
+    response: schemas.ListChannelsResponse,
   },
   ListDocuments: {
     call: schemas.ListDocuments,
@@ -55,6 +64,10 @@ const toolParserMap = {
     response: schemas.SearchToolResponse,
   },
   Read: { call: schemas.Read, response: schemas.ReadResponse },
+  web_fetch: {
+    call: schemas.WebFetchToolCall,
+    response: schemas.WebFetchResponse,
+  },
   web_search: {
     call: schemas.WebSearchToolCall,
     response: schemas.WebSearchResponse,
@@ -74,6 +87,10 @@ type ToolDataMap = {
     call: types.ContentSearch;
     response: types.SearchToolResponse;
   };
+  ListChannels: {
+    call: types.ListChannels;
+    response: types.ListChannelsResponse;
+  };
   ListDocuments: {
     call: types.ListDocuments;
     response: types.ListDocumentsResponse;
@@ -88,6 +105,7 @@ type ToolDataMap = {
   };
   NameSearch: { call: types.NameSearch; response: types.SearchToolResponse };
   Read: { call: types.Read; response: types.ReadResponse };
+  web_fetch: { call: types.WebFetchToolCall; response: types.WebFetchResponse };
   web_search: {
     call: types.WebSearchToolCall;
     response: types.WebSearchResponse;

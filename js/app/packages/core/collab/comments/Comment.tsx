@@ -9,10 +9,11 @@ import {
   untrack,
   useContext,
 } from 'solid-js';
+import { getAndClearCommentMentions } from '.';
 import type { Root } from './commentType';
 import { EditInput } from './Inputs';
 import { MessageTopRow } from './MessageTopRow';
-import { CommentsContext, sendMentions, ThreadContext } from './Thread';
+import { CommentsContext, ThreadContext } from './Thread';
 
 const ThreadLine = () => {
   return (
@@ -119,19 +120,11 @@ export function Comment(
           setIsEditing(false);
           setTextValue(newText);
           Promise.all([
-            commentOperations.updateComment({
+            commentOperations.updateComment(props.comment.id, {
               text: newText,
-              commentId: props.comment.id,
+              threadId: props.comment.threadId,
+              mentions: getAndClearCommentMentions(mentionsSignal),
             }),
-            sendMentions(
-              {
-                type: 'edit-comment',
-                commentId: props.comment.id,
-                threadId: props.comment.threadId,
-                text: newText,
-              },
-              mentionsSignal
-            ),
           ]);
         }}
         handleCancel={() => {

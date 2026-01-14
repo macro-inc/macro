@@ -30,7 +30,6 @@ mod health;
 mod history;
 mod instructions;
 mod internal;
-mod mentions;
 mod notification;
 mod pins;
 mod projects;
@@ -143,7 +142,6 @@ fn api_router(state: ApiContext) -> Router {
                 }),
             )),
         )
-        .nest("/mentions", mentions::router(state.clone()))
         .nest(
             "/annotations",
             annotations::router(state.clone()).layer(axum::middleware::from_fn(

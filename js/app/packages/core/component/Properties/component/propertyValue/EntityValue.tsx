@@ -1,27 +1,20 @@
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
-import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { Component } from 'solid-js';
 import { createSignal, For, Show } from 'solid-js';
 import { usePropertiesContext } from '../../context/PropertiesContext';
-import type { Property } from '../../types';
 import { getEntityValues } from '../../utils';
-import { ERROR_MESSAGES, handlePropertyError } from '../../utils/errorHandling';
 import { EntityIcon } from './EntityIcon';
-import { AddPropertyValueButton, EmptyValue } from './ValueComponents';
-
-type EntityValueProps = {
-  property: Property;
-  canEdit: boolean;
-  entityType: EntityType;
-  onEdit?: (property: Property, anchor?: HTMLElement) => void;
-  onRefresh?: () => void;
-};
+import {
+  AddPropertyValueButton,
+  EmptyValue,
+  type PropertyValueProps,
+} from './ValueComponents';
 
 /**
  * Display component for entity properties
  * Shows entity badges and opens modal on click
  */
-export const EntityValue: Component<EntityValueProps> = (props) => {
+export const EntityValue: Component<PropertyValueProps> = (props) => {
   const { saveHandler } = usePropertiesContext();
   const [isSaving, setIsSaving] = createSignal(false);
 
@@ -50,20 +43,13 @@ export const EntityValue: Component<EntityValueProps> = (props) => {
           entity.entity_type !== entityToRemove.entity_type
       );
 
-      const result = await saveHandler.saveProperty(props.property, {
+      await saveHandler.saveProperty(props.property, {
         valueType: 'ENTITY',
         refs: newValues.length > 0 ? newValues : null,
       });
-
-      if (
-        handlePropertyError(
-          result,
-          ERROR_MESSAGES.PROPERTY_SAVE,
-          'EntityValue.handleRemoveEntity'
-        )
-      ) {
-        props.onRefresh?.();
-      }
+      props.onRefresh?.();
+    } catch {
+      // Error toast is shown by mutation's onError callback
     } finally {
       setIsSaving(false);
     }

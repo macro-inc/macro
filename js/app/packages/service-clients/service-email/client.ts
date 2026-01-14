@@ -11,6 +11,8 @@ import {
 } from '@core/util/maybeResult';
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import type {
+  AddDraftAttachmentRequest,
+  AddDraftAttachmentResponse,
   ApiPaginatedThreadCursor,
   CreateDraftRequest,
   CreateDraftResponse,
@@ -201,6 +203,32 @@ export const emailClient = {
       await emailFetch<EmptyResponse>(`/email/drafts/${id}`, {
         method: 'DELETE',
       }),
+      (result) => result
+    );
+  },
+  async addDraftAttachment(args: {
+    draftID: string;
+    attachment: AddDraftAttachmentRequest;
+  }) {
+    return mapOk(
+      await emailFetch<AddDraftAttachmentResponse>(
+        `/email/drafts/${args.draftID}/attachments`,
+        {
+          method: 'POST',
+          body: JSON.stringify(args.attachment),
+        }
+      ),
+      (result) => result
+    );
+  },
+  async removeDraftAttachment(args: { draftID: string; attachmentID: string }) {
+    return mapOk(
+      await emailFetch<EmptyResponse>(
+        `/email/drafts/${args.draftID}/attachments/${args.attachmentID}`,
+        {
+          method: 'DELETE',
+        }
+      ),
       (result) => result
     );
   },

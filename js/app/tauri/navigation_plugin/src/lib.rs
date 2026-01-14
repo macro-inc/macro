@@ -6,6 +6,9 @@ use tauri::{Manager, Runtime, plugin::Plugin};
 use tauri_plugin_opener::OpenerExt;
 use url::Url;
 
+#[cfg(test)]
+mod tests;
+
 pub mod scheme;
 
 #[derive(Debug, Clone)]
@@ -108,34 +111,36 @@ impl MacroNavigationPlugin {
             .then_some(InternalUrl(Cow::Borrowed(url)))
             .ok_or(ExternalUrl(Cow::Borrowed(url)))
     }
+}
 
-    #[tracing::instrument(ret, level = tracing::Level::DEBUG, skip(self))]
-    fn transform_external(&self, mut url: Url) -> Url {
-        let Some(query) = url.query() else {
+#[tracing::instrument(ret, level = tracing::Level::DEBUG)]
+fn transform_external_url(mut url: Url) -> Url {
+    let Some(query) = url.query() else {
+        return url;
+    };
+
+    if let Ok(AuthCallbackQuery {
+        original_url: Some(cb),
+        remaining,
+    }) = serde_qs::from_str(query).log_err()
+    {
+        let Ok(macro_scheme) = MacroScheme::from_url(&cb) else {
             return url;
         };
 
-        if let Ok(AuthCallbackQuery {
-            original_url: Some(cb),
-            remaining,
-        }) = dbg!(serde_qs::from_str(query)).log_err()
-        {
-            let Ok(macro_scheme) = MacroScheme::from_url(&cb) else {
-                return url;
-            };
-
-            url.set_query(Some(dbg!(
-                serde_qs::to_string(&MacroCallbackQuery {
-                    original_url: macro_scheme,
-                    remaining,
-                })
-                .expect("serialization should not fail")
-                .as_str()
-            )));
-        }
-        url.query_pairs_mut().append_pair("is_mobile", "true");
-        url
+        url.set_query(Some(
+            serde_qs::to_string(&MacroCallbackQuery {
+                original_url: macro_scheme,
+                remaining,
+            })
+            .expect("serialization should not fail")
+            .as_str(),
+        ));
     }
+    if let None = url.query_pairs().find(|(k, _v)| k.as_ref() == "is_mobile") {
+        url.query_pairs_mut().append_pair("is_mobile", "true");
+    }
+    url
 }
 
 impl<R: Runtime> Plugin<R> for MacroNavigationPlugin {
@@ -154,11 +159,10 @@ impl<R: Runtime> Plugin<R> for MacroNavigationPlugin {
                 // on android this panics if called on the main thread
                 let app_handle = webview.app_handle().clone();
                 let url = external_url.0.into_owned();
-                let cloned = self.clone();
                 std::thread::spawn(move || {
                     app_handle
                         .opener()
-                        .open_url(cloned.transform_external(url).as_str(), None::<&str>)
+                        .open_url(transform_external_url(url).as_str(), None::<&str>)
                         .log_and_consume();
                 });
                 false

@@ -10,7 +10,7 @@ use thiserror::Error;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::domain::ports::ChannelsService;
+use crate::domain::{models::GetChannelsRequest, ports::ChannelsService};
 
 pub struct CommsRouterState<S> {
     pub inner: Arc<S>,
@@ -73,7 +73,14 @@ async fn get_channels_handler<S: ChannelsService>(
 ) -> Result<Json<Vec<ApiChannelWithLatest>>, CommsErr> {
     let res = service
         .inner
-        .get_channels(macro_user_id)
+        .get_channels(GetChannelsRequest {
+            macro_id: macro_user_id,
+            limit: None,
+            query: models_pagination::Query::Sort(
+                models_pagination::SimpleSortMethod::UpdatedAt,
+                None,
+            ),
+        })
         .await
         .map_err(|_| CommsErr::Internal)?;
 

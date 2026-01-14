@@ -1,4 +1,7 @@
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
+import type { EntityType } from '@service-properties/generated/schemas/entityType';
+import type { ItemType } from '@service-storage/client';
+import { match } from 'ts-pattern';
 
 /**
  * Converts EntityReference[] to Set of entity IDs for compatibility with EntityInput
@@ -42,4 +45,17 @@ export function updateEntityReferences(
   }
 
   return updatedRefs;
+}
+
+export function entityTypeToItemType(type: EntityType): ItemType | undefined {
+  return match(type)
+    .with('TASK', () => 'document' as ItemType)
+    .with('DOCUMENT', () => 'document' as ItemType)
+    .with('PROJECT', () => 'project' as ItemType)
+    .with('CHANNEL', () => 'channel' as ItemType)
+    .with('CHAT', () => 'chat' as ItemType)
+    .with('COMPANY', () => undefined) // huh
+    .with('USER', () => undefined) // huh
+    .with('THREAD', () => 'email' as ItemType)
+    .exhaustive();
 }

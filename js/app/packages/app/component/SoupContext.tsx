@@ -1,11 +1,11 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { useChannelsContext } from '@core/component/ChannelsProvider';
+import { useChannelsContext } from '@core/context/channels';
 import { toast } from '@core/component/Toast/Toast';
 import { HotkeyTags } from '@core/hotkey/constants';
 import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
-import { runCommand } from '@core/hotkey/utils';
+import { getActiveCommandByToken, runCommand } from '@core/hotkey/utils';
 import { isModality } from '@core/mobile/inputModality';
 import { DEFAULT_VIEWS, type DefaultView, type ViewId } from '@core/types/view';
 import { getActualTarget } from '@core/util/getActualTarget';
@@ -19,10 +19,8 @@ import { type EntityData, isTaskEntity } from '@macro-entity';
 import { entityHasUnreadNotifications } from '@notifications';
 import type { PreviewViewStandardLabel } from '@service-email/generated/schemas';
 import { useTutorialCompleted } from '@service-gql/client';
-import {
-  type PropertiesEntityType,
-  propertiesServiceClient,
-} from '@service-properties/client';
+import type { PropertiesEntityType } from '@service-properties/client';
+import { useSetPropertyStatusCompleteMutation } from '@queries/properties/entity';
 import { storageServiceClient } from '@service-storage/client';
 import { createLazyMemo } from '@solid-primitives/memo';
 import { useQuery } from '@tanstack/solid-query';
@@ -97,6 +95,7 @@ export type SoupContext = {
   showHelpDrawer: Accessor<Set<DefaultView>>;
   setShowHelpDrawer: Setter<Set<DefaultView>>;
   actionRegistry: EntityActionRegistry;
+  isRenderedFromPreview: boolean;
   navigateThroughList: NavigateListFn;
   // this is a private method that should be registered once by createNavigationEntityListShortcut
   _setNavigateThroughList: (fn: NavigateListFn) => void;
@@ -104,6 +103,10 @@ export type SoupContext = {
    * Optional hook to animate an entity row collapsing before the entity disappears from the list. This gets set by the EntityRowProvider.
    */
   collapseEntitySignal: Signal<CollapseEntityFn | undefined>;
+  parentContextSignal: Signal<SoupContext | undefined>;
+  childContextSignal: Signal<SoupContext | undefined>;
+  activeContextSignal: Signal<SoupContext | undefined>;
+  domRef: Accessor<HTMLDivElement | null>;
 };
 
 export function createStubSoupContext(): SoupContext {
@@ -126,6 +129,12 @@ export function createStubSoupContext(): SoupContext {
     }),
     _setNavigateThroughList: () => {},
     collapseEntitySignal: createSignal<CollapseEntityFn | undefined>(undefined),
+
+    isRenderedFromPreview: false,
+    parentContextSignal: createSignal<SoupContext | undefined>(undefined),
+    childContextSignal: createSignal<SoupContext | undefined>(undefined),
+    activeContextSignal: createSignal<SoupContext | undefined>(undefined),
+    domRef: () => null,
   };
 }
 
@@ -133,7 +142,16 @@ const DEFAULT_VIEW_ID: DefaultView = 'signal';
 
 const DEFAULT_VIEW_IDS_SET = new Set(VIEWCONFIG_DEFAULTS_IDS);
 
-export function createSoupContext(): SoupContext {
+type CreateSoupContextProps = {
+  splitId?: string;
+  domRef: Accessor<HTMLDivElement | null>;
+  isRenderedFromPreview?: boolean;
+  parentContext?: SoupContext;
+};
+
+const splitIdSoupContextMapper = new Map<string, SoupContext>();
+
+export function createSoupContext(props: CreateSoupContextProps): SoupContext {
   const [selectedView, setSelectedView] = createSignal<ViewId>(DEFAULT_VIEW_ID);
   const [viewsDataStore, setViewDataStore] = useAllViews({
     selectedViewSignal: [selectedView, setSelectedView],
@@ -151,7 +169,15 @@ export function createSoupContext(): SoupContext {
   );
   let navigateThroughListFn: NavigateListFn | undefined;
 
-  return {
+  const parentContextSignal = createSignal<SoupContext | undefined>(
+    props?.parentContext
+  );
+  const childContextSignal = createSignal<SoupContext | undefined>(undefined);
+  const activeContextSignal =
+    props?.parentContext?.activeContextSignal ??
+    createSignal<SoupContext | undefined>(undefined);
+
+  const context: SoupContext = {
     viewsDataStore,
     setViewDataStore,
     selectedView,
@@ -164,6 +190,10 @@ export function createSoupContext(): SoupContext {
     showHelpDrawer,
     setShowHelpDrawer,
     actionRegistry: createEntityActionRegistry(),
+    isRenderedFromPreview: props?.isRenderedFromPreview ?? false,
+    parentContextSignal,
+    childContextSignal,
+    activeContextSignal,
     navigateThroughList: (input) => {
       if (!navigateThroughListFn) {
         throw new Error('navigateThroughList not initialized');
@@ -176,7 +206,33 @@ export function createSoupContext(): SoupContext {
       }
       navigateThroughListFn = fn;
     },
+    domRef: props?.domRef!,
   };
+
+  if (props.splitId) {
+    splitIdSoupContextMapper.set(props.splitId, context);
+  }
+
+  onCleanup(() => {
+    const [parentContext] = parentContextSignal;
+    parentContext()?.childContextSignal[1](undefined);
+    if (activeContextSignal[0]() === context) {
+      activeContextSignal[1](parentContext);
+    }
+    if (props.splitId) {
+      splitIdSoupContextMapper.delete(props.splitId);
+    }
+  });
+
+  if (!activeContextSignal[0]()) {
+    activeContextSignal[1](context);
+  }
+
+  if (props?.parentContext) {
+    props.parentContext.childContextSignal[1](context);
+  }
+
+  return context;
 }
 
 function createViewData(
@@ -255,6 +311,7 @@ export function createNavigationEntityListShortcut({
   previewState,
   getSplitCount,
 }: {
+  splitName: Accessor<string>;
   splitHandle: SplitHandle;
   splitHotkeyScope: string;
   soupContext: SoupContext;
@@ -270,6 +327,9 @@ export function createNavigationEntityListShortcut({
     setSelectedView,
     entitiesSignal: [entities],
     actionRegistry,
+    parentContextSignal: [getParentContext],
+    childContextSignal: [getChildContext],
+    activeContextSignal: [, setActiveContext],
   } = soupContext;
   const viewData = createMemo(() => viewsData[selectedView()]);
   const viewIds = createMemo<ViewId[]>(() => Object.keys(viewsData));
@@ -291,7 +351,10 @@ export function createNavigationEntityListShortcut({
   const userId = useUserId();
 
   const isViewingList = createMemo(() => {
-    return splitHandle.content().id === 'unified-list';
+    return (
+      splitHandle.content().id === 'unified-list' ||
+      splitHandle.content().type === 'project'
+    );
   });
   const canAccessEntityList = () => {
     if (isViewingList()) return true;
@@ -380,6 +443,9 @@ export function createNavigationEntityListShortcut({
     return undefined;
   };
 
+  const setPropertyStatusCompleteMutation =
+    useSetPropertyStatusCompleteMutation();
+
   actionRegistry.register(
     'mark_as_done',
     async (multiSelectEntities) => {
@@ -452,14 +518,10 @@ export function createNavigationEntityListShortcut({
           }
           const entityType = getPropertiesEntityType(entity);
           if (entityType) {
-            propertiesServiceClient
-              .setPropertyStatusComplete({
-                entity_type: entityType,
-                entity_id: entity.id,
-              })
-              .catch((err) =>
-                console.error('Failed to set status complete', err)
-              );
+            setPropertyStatusCompleteMutation.mutate({
+              entityType,
+              entityId: entity.id,
+            });
           }
         }
 
@@ -1251,6 +1313,66 @@ export function createNavigationEntityListShortcut({
     hide: true,
   });
 
+  registerEntityHotkey({
+    hotkey: ['h'],
+    scopeId: splitHotkeyScope,
+    description: 'Navigate to parent context',
+    hotkeyToken: TOKENS.unifiedList.navigation.parent,
+    keyDownHandler: () => {
+      const parentContext = getParentContext();
+
+      if (!parentContext) {
+        const [preview] = previewState;
+        if (!preview()) {
+          const command = getActiveCommandByToken(TOKENS.split.goHome);
+          if (command) {
+            runCommand(command);
+          }
+        }
+        return true;
+      }
+      setActiveContext(parentContext);
+
+      const parentDomRef = parentContext.domRef();
+
+      if (parentDomRef) {
+        parentDomRef.focus();
+        return true;
+      }
+
+      return false;
+    },
+    canExecuteKeyDownHandler: () => {
+      return isViewingList();
+    },
+    hide: true,
+  });
+
+  registerEntityHotkey({
+    hotkey: ['l'],
+    scopeId: splitHotkeyScope,
+    description: 'Navigate to child context',
+    hotkeyToken: TOKENS.unifiedList.navigation.child,
+    keyDownHandler: () => {
+      const childContext = getChildContext();
+      if (!childContext) return false;
+      setActiveContext(childContext);
+
+      const childDomRef = childContext.domRef();
+
+      if (childDomRef) {
+        childDomRef.setAttribute('data-allow-focus-in-preview', '');
+        childDomRef.focus();
+        return true;
+      }
+      return false;
+    },
+    canExecuteKeyDownHandler: () => {
+      return isViewingList() && getChildContext() !== undefined;
+    },
+    hide: true,
+  });
+
   const navigateThroughViews = ({
     axis,
   }: {
@@ -1625,9 +1747,9 @@ function registerEntityHotkey(
       const currentActiveSplitId = globalSplitManager()?.activeSplitId();
 
       const getCommand = () => {
-        const splitScope = document.querySelector(
-          `[data-split-id="${currentActiveSplitId}"]`
-        );
+        const soupContext = splitIdSoupContextMapper.get(currentActiveSplitId!);
+        const activeSoupContext = soupContext?.activeContextSignal[0]?.();
+        const splitScope = activeSoupContext?.domRef();
         if (!splitScope || !(splitScope instanceof HTMLElement)) return;
         const scopeId = splitScope.dataset.hotkeyScope;
         if (!scopeId) return undefined;

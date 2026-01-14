@@ -18,7 +18,7 @@ use crate::{
                 validate_permissions_token::DocumentPermissionsTokenRequest,
             },
         },
-        health, history, instructions, mentions, pins,
+        health, history, instructions, pins,
         projects::{
             self,
             delete_project::{ProjectDeleteResponse, ProjectDeleteResponseData},
@@ -37,7 +37,6 @@ use crate::{
                 preview::GetBatchPreviewRequest,
                 save::{PreSaveDocumentRequest, SaveDocumentRequest},
                 user_document_view_location::UpsertUserDocumentViewLocationRequest,
-                user_mentions::UpsertUserMentionsRequest,
             },
             pins::{AddPinRequest, PinRequest},
         },
@@ -161,9 +160,6 @@ use utoipa::OpenApi;
         // instructions
         instructions::create_instructions::create_instructions_handler,
         instructions::get_instructions::get_instructions_handler,
-
-        // mentions
-        mentions::upsert_user_mentions::handler,
 
         // user_document_view_location
         user_document_view_location::get_user_document_view_location::handler,
@@ -337,9 +333,6 @@ use utoipa::OpenApi;
             UserDocumentViewLocation,
             UpsertUserDocumentViewLocationRequest,
             UserDocumentViewLocationResponse,
-
-            // Mentions
-            UpsertUserMentionsRequest,
 
             // Annotations
             AnnotationIncrementalUpdate,

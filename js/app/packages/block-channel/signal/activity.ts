@@ -1,8 +1,6 @@
 import { createBlockSignal } from '@core/block';
-import {
-  useChannelsContext,
-  useLatestActivityForChannel,
-} from '@core/component/ChannelsProvider';
+import { useChannelActivity } from '@core/context/channels';
+import { invalidateChannelsActivity } from '@queries/channel/activity';
 import { commsServiceClient } from '@service-comms/client';
 import type { Activity as ChannelActivity } from '@service-comms/generated/models/activity';
 
@@ -16,9 +14,7 @@ export async function updateActivityOnChannelOpen() {
   const channelId = channel?.channel?.id;
   if (!channelId) return;
 
-  const channelsContext = useChannelsContext();
-
-  const latestActivity = useLatestActivityForChannel(channelId);
+  const latestActivity = useChannelActivity(channelId);
 
   const setLatestActivity = latestActivitySignal.set;
   const setOpenedChannel = openedChannelSignal.set;
@@ -36,7 +32,7 @@ export async function updateActivityOnChannelOpen() {
     channel_id: channelId,
   });
 
-  channelsContext.refetchActivity();
+  invalidateChannelsActivity();
 }
 
 export async function updateActivityOnChannelClose() {
@@ -53,14 +49,12 @@ export async function updateActivityOnChannelClose() {
 export async function updateActivityOnMessageReceived(
   incomingChannelId: string
 ) {
-  const channelsContext = useChannelsContext();
   const channel = channelStore.get;
   const channelId = channel?.channel?.id;
   if (!channelId || channelId === incomingChannelId) return;
-  channelsContext.refetchActivity();
+  invalidateChannelsActivity();
 }
 
 export async function updateActivityOnMessageSend() {
-  const channelsContext = useChannelsContext();
-  channelsContext.refetchActivity();
+  invalidateChannelsActivity();
 }

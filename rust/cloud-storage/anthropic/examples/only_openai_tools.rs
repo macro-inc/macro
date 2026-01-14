@@ -51,7 +51,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .tools(tools.clone())
         .build()?;
 
-    let client = anthropic::client::Client::dangerously_try_from_env();
+    let client = anthropic::client::Client::dangerously_try_from_env(None);
     let mut stream = client.chat().create_stream_openai_lossy(request).await;
 
     let tool_call_states: Arc<Mutex<HashMap<(u32, u32), ChatCompletionMessageToolCall>>> =

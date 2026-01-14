@@ -20,6 +20,23 @@ use uuid::Uuid;
 #[cfg(test)]
 mod tests;
 
+macro_rules! impl_from {
+    (
+        $enum_name:ident,
+        $(
+            $variant:ident => $metadata:ident
+        ),* $(,)?
+    ) => {
+        $(
+            impl From<$metadata> for $enum_name {
+                fn from(value: $metadata) -> Self {
+                    $enum_name::$variant(value)
+                }
+            }
+        )*
+    };
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, EnumDiscriminants, ToSchema)]
 #[deny(missing_docs)]
 #[strum_discriminants(name(NotificationEventType))]
@@ -57,6 +74,20 @@ pub enum NotificationEvent {
     RejectTeamInvite,
     /// A user was assigned to a task
     TaskAssigned(TaskAssignedMetadata),
+}
+
+impl_from! {
+    NotificationEvent,
+    ItemSharedUser => ItemSharedMetadata,
+    ItemSharedOrganization => ItemSharedOrganizationMetadata,
+    ChannelMention => ChannelMentionMetadata,
+    DocumentMention => DocumentMentionMetadata,
+    ChannelInvite => ChannelInviteMetadata,
+    ChannelMessageSend => ChannelMessageSendMetadata,
+    ChannelMessageReply => ChannelReplyMetadata,
+    ChannelMessageDocument => ChannelMessageDocumentMetadata,
+    NewEmail => NewEmailMetadata,
+    InviteToTeam => InviteToTeamMetadata,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

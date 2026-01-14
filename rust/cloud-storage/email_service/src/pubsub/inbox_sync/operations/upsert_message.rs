@@ -10,7 +10,7 @@ use email_utils::dedupe_emails;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::contacts::ConnectionsMessage;
 use model_entity::EntityType;
-use model_notifications::{NewEmailMetadata, NotificationEvent, NotificationQueueMessage};
+use model_notifications::{NewEmailMetadata, NotificationQueueMessage};
 use models_email::db::address::EmailRecipientType;
 use models_email::email::service;
 use models_email::email::service::link;
@@ -505,7 +505,7 @@ async fn send_notifications(
 
     let notification_queue_message = NotificationQueueMessage {
         notification_entity: EntityType::Email.with_entity_string(message.db_id.to_string()),
-        notification_event: NotificationEvent::NewEmail(notification_metadata),
+        notification_event: notification_metadata.into(),
         sender_id,
         recipient_ids: Some(vec![link.macro_id.to_string()]),
     };

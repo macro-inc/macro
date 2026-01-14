@@ -11,8 +11,11 @@ import XIcon from '@phosphor-icons/core/assets/regular/x.svg';
 import { propertiesServiceClient } from '@service-properties/client';
 import { SegmentedControl } from 'core/component/FormControls/SegmentControls';
 import { ToggleButton } from 'core/component/FormControls/ToggleButton';
-import type { PropertyDefinitionFlat } from 'core/component/Properties/types';
-import { PropertyDataTypeIcon } from 'core/component/Properties/utils/PropertyDataTypeIcon';
+import type { PropertyDefinitionDomain } from 'core/component/Properties/types';
+import {
+  PropertyDataTypeIcon,
+  toPropertyDefinitionDomain,
+} from 'core/component/Properties/utils';
 import { isErr } from 'core/util/maybeResult';
 import {
   type Accessor,
@@ -36,12 +39,12 @@ export function Sort() {
 }
 
 type PropertySortSearchProps = {
-  onSelectProperty?: (property: PropertyDefinitionFlat) => void;
+  onSelectProperty?: (property: PropertyDefinitionDomain) => void;
 };
 
 function PropertySortSearch(props: PropertySortSearchProps) {
   const [availableProperties, setAvailableProperties] = createSignal<
-    PropertyDefinitionFlat[]
+    PropertyDefinitionDomain[]
   >([]);
   const [searchQuery, setSearchQuery] = createSignal('');
   const [isDropdownOpen, setIsDropdownOpen] = createSignal(false);
@@ -63,9 +66,10 @@ function PropertySortSearch(props: PropertySortSearchProps) {
 
       const [, data] = result;
       const properties = Array.isArray(data) ? data : [];
-      const normalizedProperties = properties.map((item) =>
-        'definition' in item ? item.definition : item
-      );
+      const normalizedProperties = properties.map((item) => {
+        const definition = 'definition' in item ? item.definition : item;
+        return toPropertyDefinitionDomain(definition);
+      });
       setAvailableProperties(normalizedProperties);
     } catch (_apiError) {
       // Silently fail
@@ -76,8 +80,8 @@ function PropertySortSearch(props: PropertySortSearchProps) {
   const sortableProperties = createMemo(() => {
     return availableProperties().filter((property) => {
       if (
-        ['BOOLEAN', 'ENTITY', 'LINK', 'STRING'].includes(property.data_type) ||
-        property.is_multi_select
+        ['BOOLEAN', 'ENTITY', 'LINK', 'STRING'].includes(property.valueType) ||
+        property.isMultiSelect
       )
         return false;
       return true;
@@ -91,12 +95,12 @@ function PropertySortSearch(props: PropertySortSearchProps) {
     if (!query) return properties;
 
     return properties.filter((property) => {
-      const name = property.display_name.toLowerCase();
+      const name = property.displayName.toLowerCase();
       return name.includes(query);
     });
   });
 
-  const handleSelectProperty = (property: PropertyDefinitionFlat) => {
+  const handleSelectProperty = (property: PropertyDefinitionDomain) => {
     props.onSelectProperty?.(property);
     setSearchQuery('');
     setIsDropdownOpen(false);
@@ -168,7 +172,7 @@ function PropertySortSearch(props: PropertySortSearchProps) {
                   class="w-full px-2 py-1.5 text-xs text-ink hover:bg-hover flex items-center gap-2 text-left"
                 >
                   <PropertyDataTypeIcon property={property} />
-                  <span class="truncate flex-1">{property.display_name}</span>
+                  <span class="truncate flex-1">{property.displayName}</span>
                 </button>
               )}
             </For>
@@ -337,7 +341,7 @@ export function createSort<
 
   // Track the full property object for display (fetched when needed)
   const [selectedProperty, setSelectedProperty] =
-    createSignal<PropertyDefinitionFlat | null>(null);
+    createSignal<PropertyDefinitionDomain | null>(null);
 
   // Fetch property details when propertyId changes
   createEffect(
@@ -350,9 +354,10 @@ export function createSort<
             if (isErr(result)) return;
             const [, data] = result;
             const properties = Array.isArray(data) ? data : [];
-            const normalizedProperties = properties.map((item) =>
-              'definition' in item ? item.definition : item
-            );
+            const normalizedProperties = properties.map((item) => {
+              const definition = 'definition' in item ? item.definition : item;
+              return toPropertyDefinitionDomain(definition);
+            });
             const property = normalizedProperties.find((p) => p.id === id);
             if (property) {
               setSelectedProperty(property);
@@ -368,7 +373,7 @@ export function createSort<
     return propertyId() !== null;
   });
 
-  const handleSelectProperty = (property: PropertyDefinitionFlat) => {
+  const handleSelectProperty = (property: PropertyDefinitionDomain) => {
     setPropertyId(property.id);
     setSelectedProperty(property);
   };
@@ -502,7 +507,7 @@ export function createSort<
                     class="text-panel size-3.5 shrink-0"
                   />
                   <span class="truncate">
-                    {selectedProperty()?.display_name}
+                    {selectedProperty()?.displayName}
                   </span>
                 </div>
               </Show>

@@ -49,10 +49,7 @@ pub fn create_notifications_from_item_shared(
             permission_level: permission_level.clone(),
         };
 
-        Some(build_message(
-            user_ids,
-            NotificationEvent::ItemSharedUser(metadata),
-        ))
+        Some(build_message(user_ids, metadata.into()))
     } else {
         None
     };
@@ -66,10 +63,7 @@ pub fn create_notifications_from_item_shared(
             shared_by: user_id.clone(),
             permission_level,
         };
-        Some(build_message(
-            user_ids,
-            NotificationEvent::ItemSharedOrganization(metadata),
-        ))
+        Some(build_message(user_ids, metadata.into()))
     } else {
         None
     };

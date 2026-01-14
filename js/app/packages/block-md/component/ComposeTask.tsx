@@ -368,14 +368,12 @@ export function ComposeTask(props: ComposeTaskProps) {
   const saveHandler: PropertySaveHandler = {
     saveProperty: async (property: Property, value: PropertyApiValues) => {
       setPropertyValues(property.propertyDefinitionId, value);
-      return { ok: true, value: undefined };
     },
     saveDate: async (property: Property, date: Date) => {
       setPropertyValues(property.propertyDefinitionId, {
         valueType: 'DATE',
         value: date.toISOString(),
       });
-      return { ok: true, value: undefined };
     },
   };
 

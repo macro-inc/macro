@@ -6,12 +6,12 @@ use models_comms::channel::{
 };
 use rootcause::Report;
 
-use crate::domain::models::UserName;
+use crate::domain::models::{GetChannelsParams, GetChannelsRequest, UserName};
 
 pub trait CommsRepo: Send + Sync + 'static {
     fn get_user_channels_with_participants(
         &self,
-        user_id: MacroUserIdStr<'_>,
+        req: GetChannelsParams,
     ) -> impl Future<Output = Result<Vec<ChannelWithParticipants>, Report>> + Send;
 
     fn get_latest_channel_messages_batch(
@@ -35,7 +35,7 @@ pub trait UserRepo: Send + Sync + 'static {
 pub trait ChannelsService: Send + Sync + 'static {
     fn get_channels(
         &self,
-        user: MacroUserIdStr<'_>,
+        req: GetChannelsRequest,
     ) -> impl Future<Output = Result<Vec<ChannelWithLatest>, Report>> + Send;
 
     fn get_activities(

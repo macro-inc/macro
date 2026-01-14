@@ -2,7 +2,7 @@ import type { ChannelData } from '@block-channel/definition';
 import { withAnalytics } from '@coparse/analytics';
 import { TrackingEvents } from '@coparse/analytics/src/types/TrackingEvents';
 import { createBlockMemo, createBlockStore } from '@core/block';
-import { useChannelsContext } from '@core/component/ChannelsProvider';
+import { invalidateListChannels } from '@queries/channel/channels';
 import {
   type InputAttachment,
   isStaticAttachmentType,
@@ -210,12 +210,11 @@ export type SendMessageArgs = {
 
 export function useSendChannelMessageAction(channelID: Accessor<string>) {
   const optimisticSend = createCallback(optimisticChannelMessage);
-  const channelsContext = useChannelsContext();
   const userId = useUserId();
 
   const mutation = useSendMessageMutation({
     onSettled() {
-      channelsContext.refetchChannels();
+      invalidateListChannels();
     },
     onSuccess(_, variables) {
       const message = variables.message;

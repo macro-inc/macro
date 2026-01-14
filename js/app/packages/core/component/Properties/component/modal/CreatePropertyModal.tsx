@@ -1,11 +1,10 @@
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { useOrganizationId } from '@core/user';
-import { isErr } from '@core/util/maybeResult';
 import { MODAL_VIEWPORT_CLASSES } from '@core/util/modalUtils';
 import LoadingSpinner from '@icon/regular/spinner.svg';
 import XIcon from '@icon/regular/x.svg';
+import { useCreatePropertyDefinitionMutation } from '@queries/properties/definitions';
 import { useUserId } from '@service-gql/client';
-import { propertiesServiceClient } from '@service-properties/client';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { PropertyDataType } from '@service-properties/generated/schemas/propertyDataType';
 import {
@@ -121,7 +120,6 @@ interface CreatePropertyModalProps {
 export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
   props
 ) => {
-  const [isCreatingProperty, setIsCreatingProperty] = createSignal(false);
   const [newPropertyName, setNewPropertyName] = createSignal('');
   const [selectedDataType, setSelectedDataType] =
     createSignal<DataTypeValue>('string');
@@ -133,6 +131,17 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
     Array<{ id: string; value: number; display_order: number }>
   >([]);
   const [error, setError] = createSignal<string | null>(null);
+
+  const createPropertyMutation = useCreatePropertyDefinitionMutation({
+    onSuccess: () => {
+      resetCreateForm();
+      props.onPropertyCreated?.();
+      props.onClose();
+    },
+    onError: () => {
+      setError(ERROR_MESSAGES.PROPERTY_CREATE);
+    },
+  });
 
   // Unified option management helpers
   type Option<T> = { id: string; value: T; display_order: number };
@@ -287,7 +296,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
     }
   };
 
-  const handleCreateProperty = async () => {
+  const handleCreateProperty = () => {
     const orgId = organizationId();
     const currentUserId = userId();
 
@@ -325,42 +334,24 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
       return;
     }
 
-    setIsCreatingProperty(true);
     setError(null);
 
-    try {
-      const bodyData = orgId
-        ? {
-            scope: 'user_and_organization' as const,
-            organization_id: Number(orgId),
-            user_id: currentUserId!,
-            display_name: newPropertyName().trim(),
-            data_type: buildDataType(),
-          }
-        : {
-            scope: 'user' as const,
-            user_id: currentUserId!,
-            display_name: newPropertyName().trim(),
-            data_type: buildDataType(),
-          };
+    const bodyData = orgId
+      ? {
+          scope: 'user_and_organization' as const,
+          organization_id: Number(orgId),
+          user_id: currentUserId!,
+          display_name: newPropertyName().trim(),
+          data_type: buildDataType(),
+        }
+      : {
+          scope: 'user' as const,
+          user_id: currentUserId!,
+          display_name: newPropertyName().trim(),
+          data_type: buildDataType(),
+        };
 
-      const result = await propertiesServiceClient.createPropertyDefinition({
-        body: bodyData,
-      });
-
-      if (isErr(result)) {
-        setError(ERROR_MESSAGES.PROPERTY_CREATE);
-        return;
-      }
-
-      resetCreateForm();
-      props.onPropertyCreated?.();
-      props.onClose();
-    } catch (_error) {
-      setError(ERROR_MESSAGES.PROPERTY_CREATE);
-    } finally {
-      setIsCreatingProperty(false);
-    }
+    createPropertyMutation.mutate({ body: bodyData });
   };
 
   const resetCreateForm = () => {
@@ -580,19 +571,21 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
                   resetCreateForm();
                   props.onClose();
                 }}
-                disabled={isCreatingProperty()}
+                disabled={createPropertyMutation.isPending}
               >
                 Cancel
               </button>
             </div>
             <button
               type="button"
-              class={`${PROPERTY_STYLES.button.base} ${PROPERTY_STYLES.button.accent} ${newPropertyName().trim() && !isCreatingProperty() ? '' : 'cursor-not-allowed'}`}
+              class={`${PROPERTY_STYLES.button.base} ${PROPERTY_STYLES.button.accent} ${newPropertyName().trim() && !createPropertyMutation.isPending ? '' : 'cursor-not-allowed'}`}
               onClick={handleCreateProperty}
-              disabled={!newPropertyName().trim() || isCreatingProperty()}
+              disabled={
+                !newPropertyName().trim() || createPropertyMutation.isPending
+              }
             >
               <Show
-                when={!isCreatingProperty()}
+                when={!createPropertyMutation.isPending}
                 fallback={
                   <div class="flex items-center gap-1.5">
                     <div class="w-3 h-3 animate-spin">

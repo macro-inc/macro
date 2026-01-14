@@ -1,4 +1,4 @@
-import { useChannelsContext } from '@core/component/ChannelsProvider';
+import { useChannelsContext } from '@core/context/channels';
 import {
   type CombinedEntity,
   ENTITY_SEARCH_CONFIG,
@@ -87,7 +87,7 @@ export const FilterValueEntity: Component<FilterValueEntityProps> = (props) => {
   // Data sources (same pattern as PropertyEntitySelector)
   const contacts = useContacts();
   const channelsContext = useChannelsContext();
-  const channels = () => channelsContext.channels();
+  const channels = channelsContext.channels;
   const history = useHistory();
 
   // Email queries for THREAD type or generic ENTITY (no specific type)

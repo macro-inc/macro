@@ -91,6 +91,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "chrono",
+ "comms_service_client",
  "cool_asserts",
  "email",
  "email_service_client",
@@ -242,6 +243,7 @@ dependencies = [
  "futures",
  "lazy_static",
  "rand 0.9.0",
+ "regex",
  "reqwest",
  "reqwest-eventsource",
  "schemars",
@@ -1833,16 +1835,20 @@ dependencies = [
 name = "comms"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "axum",
  "chrono",
  "doppleganger",
+ "filter_ast",
  "frecency",
  "item_filters",
+ "macro_db_migrator",
  "macro_user_id",
  "model-entity",
  "model_user",
  "models_comms",
  "models_pagination",
+ "recursion",
  "reqwest",
  "rootcause",
  "serde",
@@ -3106,6 +3112,7 @@ dependencies = [
  "aws_lambda_events",
  "chrono",
  "lambda_runtime",
+ "macro_db_migrator",
  "macro_entrypoint",
  "macro_env",
  "model",
@@ -3114,6 +3121,7 @@ dependencies = [
  "sqs_client",
  "tokio",
  "tracing",
+ "uuid",
 ]
 
 [[package]]

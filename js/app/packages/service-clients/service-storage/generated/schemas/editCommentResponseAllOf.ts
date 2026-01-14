@@ -4,7 +4,11 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { EditCommentResponseAllOfFileType } from './editCommentResponseAllOfFileType';
 
 export type EditCommentResponseAllOf = {
   documentId: string;
+  documentName: string;
+  documentOwner: string;
+  fileType?: EditCommentResponseAllOfFileType;
 };

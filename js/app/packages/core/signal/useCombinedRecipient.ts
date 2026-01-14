@@ -1,4 +1,4 @@
-import { useChannelsContext } from '@core/component/ChannelsProvider';
+import { useChannelsContext } from '@core/context/channels';
 import {
   type CombinedRecipientItem,
   recipientEntityMapper,
