@@ -611,7 +611,7 @@ export function createBulkRenameDssEntityMutation() {
       entities: (EntityData & { name: string })[];
       name: (oldName: string) => string | string;
     }) => {
-      if (entities.every(isEntityRenameSupported)) {
+      if (!entities.every(isEntityRenameSupported)) {
         throw new Error(`Unsupported entity type provided`);
       }
       return await Promise.all(
