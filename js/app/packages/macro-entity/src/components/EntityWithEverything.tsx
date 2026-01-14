@@ -1091,7 +1091,6 @@ export function EntityWithEverything(
               )}
             </Show>
             <Show when={isTaskEntity(props.entity) && properties().length > 0}>
-              {/*<EntityPropertyValues*/}
               <KeyPropertiesGrid
                 properties={properties()}
                 entityId={props.entity.id}
