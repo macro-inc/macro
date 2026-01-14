@@ -699,6 +699,7 @@ export function createUnifiedInfiniteList<T extends EntityData>({
                   type: 'project',
                   name: props.name ?? 'folder',
                   id: viewId(),
+                  // TODO: fix isOwner
                   isOwner: true,
                 });
                 false && droppable;
