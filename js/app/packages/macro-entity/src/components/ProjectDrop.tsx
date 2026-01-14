@@ -75,6 +75,14 @@ export const ProjectDropOverlay = (props: {
         );
         break;
       case 'move':
+        if (
+          entityData.type !== 'document' &&
+          entityData.type !== 'chat' &&
+          entityData.type !== 'project'
+        ) {
+          console.error('move only supported for document, chat, and project');
+          return;
+        }
         moveMutation.mutate({
           entity: entityData,
           project: {
