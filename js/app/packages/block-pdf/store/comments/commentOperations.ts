@@ -4,13 +4,15 @@ import type { PdfRootLayout } from '@block-pdf/type/comments';
 import { withAnalytics } from '@coparse/analytics';
 import { useBlockId } from '@core/block';
 import {
-  type CreateCommentInfo,
   type DeleteCommentInfo,
   isRoot,
-  type UpdateCommentInfo,
 } from '@core/collab/comments/commentType';
 import { threadMeasureContainerId } from '@core/collab/comments/Thread';
 import { blockElementSignal } from '@core/signal/blockElement';
+import type {
+  CreateCommentRequest,
+  EditCommentRequest,
+} from '@service-storage/generated/schemas';
 import type { CreateCommentResponse } from '@service-storage/generated/schemas/createCommentResponse';
 import { createCallback } from '@solid-primitives/rootless';
 import {
@@ -34,69 +36,69 @@ export function useCreateComment() {
   const attachHighlightComment = useAttachHighlightCommentResource();
   const createThreadReply = useCreateThreadReplyResource();
 
-  return createCallback(async (info: CreateCommentInfo) => {
-    track(TrackingEvents.BLOCKPDF.COMMENT.CREATE);
-    const { threadId, text } = info;
+  return createCallback(
+    async (info: CreateCommentRequest & { threadId: number }) => {
+      track(TrackingEvents.BLOCKPDF.COMMENT.CREATE);
+      const { threadId, text } = info;
 
-    // new thread + anchor
-    if (threadId === -1) {
-      const comment = commentsStore.get.find((c) => c.threadId === threadId);
-      if (!comment) {
-        console.error('Unable to comment');
-        return null;
-      }
+      // new thread + anchor
+      if (threadId === -1) {
+        const comment = commentsStore.get.find((c) => c.threadId === threadId);
+        if (!comment) {
+          console.error('Unable to comment');
+          return null;
+        }
 
-      let response: CreateCommentResponse | null = null;
-      switch (comment.type) {
-        case 'highlight':
-          const highlight = highlightsUuidMap()?.[comment.anchorId];
-          if (!highlight) {
-            console.error('Unable to find highlight');
+        let response: CreateCommentResponse | null = null;
+        switch (comment.type) {
+          case 'highlight':
+            const highlight = highlightsUuidMap()?.[comment.anchorId];
+            if (!highlight) {
+              console.error('Unable to find highlight');
+              return response;
+            }
+
+            if (highlight.existsOnServer) {
+              response = await attachHighlightComment(text, highlight.uuid);
+            } else {
+              response = await createHighlightComment(text, highlight);
+            }
+            break;
+          case 'free':
+            const newThreadPlaceable_ = newThreadPlaceable();
+            if (
+              !newThreadPlaceable_ ||
+              newThreadPlaceable_.internalId !== comment.anchorId
+            ) {
+              console.error('Unable to find new thread placeable');
+              return response;
+            }
+
+            response = await createFreeComment(text, newThreadPlaceable_);
+            break;
+          default:
+            console.error('invalid comment type', comment.type);
             return response;
-          }
+        }
 
-          if (highlight.existsOnServer) {
-            response = await attachHighlightComment(text, highlight.uuid);
-          } else {
-            response = await createHighlightComment(text, highlight);
-          }
-          break;
-        case 'free':
-          const newThreadPlaceable_ = newThreadPlaceable();
-          if (
-            !newThreadPlaceable_ ||
-            newThreadPlaceable_.internalId !== comment.anchorId
-          ) {
-            console.error('Unable to find new thread placeable');
-            return response;
-          }
+        if (response) {
+          deleteNewComments();
+        }
 
-          response = await createFreeComment(text, newThreadPlaceable_);
-          break;
-        default:
-          console.error('invalid comment type', comment.type);
-          return response;
+        return response;
       }
 
-      if (response) {
-        deleteNewComments();
-      }
-
-      return response;
+      return await createThreadReply(info);
     }
-
-    return await createThreadReply(text, threadId);
-  });
+  );
 }
 
 export function useUpdateComment() {
   const editComment = useEditCommentResource();
 
-  return createCallback((info: UpdateCommentInfo) => {
+  return createCallback((commentId: number, info: EditCommentRequest) => {
     track(TrackingEvents.BLOCKPDF.COMMENT.UPDATE);
-    return editComment(info.commentId, {
-      text: info.text,
-    });
+    return editComment(commentId, info);
   });
 }
 

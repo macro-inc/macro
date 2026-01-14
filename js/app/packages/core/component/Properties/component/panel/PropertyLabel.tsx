@@ -91,10 +91,7 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
         onMouseLeave={() => setIsHovered(false)}
       >
         <PropertyDataTypeIcon
-          property={{
-            data_type: props.property.valueType,
-            specific_entity_type: props.property.specificEntityType,
-          }}
+          property={props.property}
           class="size-4 shrink-0 opacity-40"
         />
         <span class="truncate flex-shrink min-w-0">

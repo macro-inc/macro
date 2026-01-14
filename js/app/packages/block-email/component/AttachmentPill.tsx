@@ -1,6 +1,5 @@
 import { EntityIcon } from '@core/component/EntityIcon';
 import X from '@icon/regular/x.svg';
-import type { Attachment } from '@service-email/generated/schemas/attachment';
 import { FileTypeMap } from '@service-storage/fileTypeMap';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import { Show } from 'solid-js';
@@ -9,17 +8,20 @@ const mimeToFileExtTypeMap = new Map<string, string>(
   Object.values(FileTypeMap).map((value) => [value.mime, value.extension])
 );
 
-export function EmailAttachmentPill(props: {
-  attachment: Attachment;
+type EmailAttachmentPillProps = {
+  attachment: { fileName: string; mimeType?: string };
   removable?: boolean;
   onRemove?: () => void;
-  onClick: (attachment: Attachment, fileType?: FileType) => void;
-}) {
+  onClick?: (fileType?: FileType) => void;
+};
+
+export function EmailAttachmentPill(props: EmailAttachmentPillProps) {
   let parentDiv!: HTMLDivElement;
 
-  const fileType = props.attachment.mime_type
-    ? (mimeToFileExtTypeMap.get(props.attachment.mime_type) as FileType)
-    : undefined;
+  const fileType = () =>
+    props.attachment.mimeType
+      ? (mimeToFileExtTypeMap.get(props.attachment.mimeType) as FileType)
+      : undefined;
 
   return (
     <div
@@ -28,15 +30,15 @@ export function EmailAttachmentPill(props: {
       classList={{
         'pl-2': props.removable,
       }}
-      onclick={() => props.onClick(props.attachment, fileType)}
+      onClick={() => props.onClick?.(fileType())}
     >
-      <Show when={fileType !== undefined || props.attachment.mime_type}>
+      <Show when={fileType() !== undefined || props.attachment.mimeType}>
         <EntityIcon
-          targetType={fileType ?? (props.attachment.mime_type as FileType)}
+          targetType={fileType() ?? (props.attachment.mimeType as FileType)}
           size="xs"
         />
       </Show>
-      <div class="truncate ml-1">{props.attachment.filename}</div>
+      <div class="truncate ml-1">{props.attachment.fileName}</div>
       <Show when={props.removable}>
         <div
           class="ml-auto p-2 hover:text-failure"

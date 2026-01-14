@@ -1,4 +1,5 @@
 use anyhow::{Result, bail};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model::annotations::{
     Comment,
     edit::{EditCommentRequest, EditCommentResponse},
@@ -11,18 +12,19 @@ pub async fn edit_document_comment(
     db: &Pool<Postgres>,
     comment_id: i64,
     user_id: &str,
-    req: EditCommentRequest,
+    req: &EditCommentRequest,
 ) -> Result<EditCommentResponse> {
-    let (comment_owner, document_id) = sqlx::query!(
+    let (comment_owner, document_id, document_name, file_type, document_owner) = sqlx::query!(
         r#"
-        SELECT c.owner, t."documentId" as document_id
+        SELECT c.owner, t."documentId" as document_id, d.name as document_name, d."fileType" as file_type, d.owner as document_owner
         FROM "Comment" c
         JOIN "Thread" t ON c."threadId" = t.id
+        JOIN "Document" d ON t."documentId" = d.id
         WHERE c.id = $1 and c."deletedAt" IS NULL AND t."deletedAt" IS NULL
         "#,
         comment_id
     )
-    .map(|row| (row.owner, row.document_id))
+    .map(|row| (row.owner, row.document_id, row.document_name, row.file_type, row.document_owner))
     .fetch_one(db)
     .await
     .map_err(|e| match e {
@@ -61,6 +63,9 @@ pub async fn edit_document_comment(
 
     Ok(EditCommentResponse {
         document_id,
+        document_name,
+        file_type,
+        document_owner: MacroUserIdStr::parse_from_str(&document_owner)?.into_owned(),
         comment,
     })
 }
@@ -80,15 +85,26 @@ mod tests {
         let req = EditCommentRequest {
             text: Some("Updated comment text".to_string()),
             metadata: None,
+            mentions: None,
+            thread_id: 42,
         };
 
-        let result = edit_document_comment(&pool, comment_id, owner, req).await;
+        let result = edit_document_comment(&pool, comment_id, owner, &req).await;
         let EditCommentResponse {
             comment,
             document_id,
+            document_name,
+            file_type,
+            document_owner,
         } = result.unwrap();
         assert_eq!(comment.text, "Updated comment text");
         assert_eq!(document_id, "document-with-comments");
+        assert_eq!(document_name, "Document With Comments");
+        assert_eq!(file_type, Some("pdf".to_string()));
+        assert_eq!(
+            document_owner,
+            MacroUserIdStr::parse_from_str("macro|user@user.com").unwrap()
+        );
     }
 
     #[sqlx::test(fixtures(
@@ -99,11 +115,13 @@ mod tests {
         let comment_id = 6543024; // should not exist
         let owner = "macro|user@user.com";
         let req = EditCommentRequest {
+            mentions: None,
             text: Some("Updated comment text".to_string()),
             metadata: None,
+            thread_id: 42,
         };
 
-        let result = edit_document_comment(&pool, comment_id, owner, req).await;
+        let result = edit_document_comment(&pool, comment_id, owner, &req).await;
         assert_eq!(result.unwrap_err().to_string(), "Comment not found");
     }
 
@@ -115,11 +133,13 @@ mod tests {
         let comment_id = 10007;
         let document_owner = "macro|user@user.com";
         let req = EditCommentRequest {
+            mentions: None,
             text: Some("Updated comment text".to_string()),
             metadata: None,
+            thread_id: 42,
         };
 
-        let result = edit_document_comment(&pool, comment_id, document_owner, req).await;
+        let result = edit_document_comment(&pool, comment_id, document_owner, &req).await;
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().to_string(), "Invalid permissions");
     }
@@ -132,11 +152,13 @@ mod tests {
         let comment_id = 10007;
         let owner = "macro|user2@user.com";
         let req = EditCommentRequest {
+            mentions: None,
             text: Some("Updated comment text".to_string()),
             metadata: None,
+            thread_id: 42,
         };
 
-        let result = edit_document_comment(&pool, comment_id, owner, req).await;
+        let result = edit_document_comment(&pool, comment_id, owner, &req).await;
         assert!(result.is_ok());
         assert_eq!(result.unwrap().comment.text, "Updated comment text");
     }
@@ -149,11 +171,13 @@ mod tests {
         let comment_id = 10007;
         let non_owner = "macro|user3@user.com";
         let req = EditCommentRequest {
+            mentions: None,
             text: Some("Updated comment text".to_string()),
             metadata: None,
+            thread_id: 42,
         };
 
-        let result = edit_document_comment(&pool, comment_id, non_owner, req).await;
+        let result = edit_document_comment(&pool, comment_id, non_owner, &req).await;
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().to_string(), "Invalid permissions");
     }

@@ -10,6 +10,7 @@ import {
   tryToTypedNotification,
   type TypedNotification,
 } from './notification-metadata';
+import type { NotificationSource } from './notification-source';
 
 /**
  * Notification event types that are all handled by opening a channel
@@ -193,8 +194,23 @@ export function openNotification(
 
 export function openNotificationFromId(
   notificationId: string,
-  layoutManager: SplitManager
+  layoutManager: SplitManager,
+  notificationSource: NotificationSource
 ): ResultAsync<void, OpenNotificationFromIdError> {
+  // Check notification source first
+  const cached = notificationSource
+    .notifications()
+    .find((n) => n.id === notificationId);
+  if (cached) {
+    const typed = tryToTypedNotification(cached);
+    if (!typed) {
+      const err: NotTypedError = { tag: 'NotTypedError', notificationId };
+      return errAsync(err);
+    }
+    return openNotification(typed, layoutManager);
+  }
+
+  // Fetch if not in notification source
   return ResultAsync.fromSafePromise(
     getNotificationById(notificationId)
   ).andThen((unified) => {

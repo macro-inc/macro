@@ -24,11 +24,7 @@ export function formatNumber(value: number): string {
 export function formatDate(value: Date | string): string {
   const date = typeof value === 'string' ? new Date(value) : value;
 
-  // Parse as local date to avoid timezone issues
-  const dateStr = date.toISOString().split('T')[0];
-  const localDate = new Date(dateStr + 'T00:00:00');
-
-  return localDate.toLocaleDateString('en-US', {
+  return date.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',

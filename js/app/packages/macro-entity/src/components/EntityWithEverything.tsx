@@ -48,7 +48,7 @@ import type {
   SearchLocation,
   WithSearch,
 } from '../types/search';
-import { KeyPropertiesGrid, PropertyPills } from './PropertyPills';
+import { EntityPropertyValues } from './EntityPropertyValues';
 
 export type EntityClickEvent = Parameters<
   JSX.EventHandler<HTMLDivElement, MouseEvent>
@@ -1064,7 +1064,11 @@ export function EntityWithEverything(
           </div>
           <EntityTitle />
           <Show when={isTaskEntity(props.entity) && properties().length > 0}>
-            <KeyPropertiesGrid properties={properties()} />
+            <EntityPropertyValues
+              properties={properties()}
+              entityId={props.entity.id}
+              entityType="TASK"
+            />
           </Show>
         </div>
         {/* Date and user - top right on mobile, end on desktop  */}
@@ -1075,14 +1079,6 @@ export function EntityWithEverything(
           }}
         >
           <div class="flex flex-row items-center justify-end gap-2 min-w-0 @max-md/uList:justify-start @max-md/uList:flex-wrap">
-            <Show when={properties().length > 0}>
-              <div class="pr-2 overflow-hidden shrink min-w-0">
-                <PropertyPills
-                  properties={properties()}
-                  excludeKeyProperties={isTaskEntity(props.entity)}
-                />
-              </div>
-            </Show>
             <Show when={sharedData()}>
               {(shared) => (
                 <Tooltip

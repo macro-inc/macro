@@ -2502,75 +2502,6 @@
         }
       }
     },
-    "/mentions/{document_id}": {
-      "post": {
-        "tags": ["mentions::upsert_user_mentions"],
-        "operationId": "upsert_user_mentions",
-        "parameters": [
-          {
-            "name": "document_id",
-            "in": "path",
-            "description": "Document ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpsertUserMentionsRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EmptyResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/pins": {
       "get": {
         "tags": ["pins::get_pins"],
@@ -5092,6 +5023,16 @@
               }
             ]
           },
+          "mentions": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Mentions"
+              }
+            ]
+          },
           "metadata": {},
           "text": {
             "type": "string"
@@ -5900,10 +5841,25 @@
       },
       "EditCommentRequest": {
         "type": "object",
+        "required": ["threadId"],
         "properties": {
+          "mentions": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Mentions"
+              }
+            ]
+          },
           "metadata": {},
           "text": {
             "type": ["string", "null"]
+          },
+          "threadId": {
+            "type": "integer",
+            "format": "int64"
           }
         }
       },
@@ -5914,10 +5870,19 @@
           },
           {
             "type": "object",
-            "required": ["documentId"],
+            "required": ["documentId", "documentName", "documentOwner"],
             "properties": {
               "documentId": {
                 "type": "string"
+              },
+              "documentName": {
+                "type": "string"
+              },
+              "documentOwner": {
+                "type": "string"
+              },
+              "fileType": {
+                "type": ["string", "null"]
               }
             }
           }
@@ -7225,6 +7190,21 @@
             }
           }
         ]
+      },
+      "Mentions": {
+        "type": "object",
+        "required": ["users", "mentionId"],
+        "properties": {
+          "mentionId": {
+            "type": "string"
+          },
+          "users": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
       },
       "Params": {
         "type": "object",
@@ -9211,22 +9191,6 @@
         "properties": {
           "location": {
             "type": "string"
-          }
-        }
-      },
-      "UpsertUserMentionsRequest": {
-        "type": "object",
-        "required": ["mentions"],
-        "properties": {
-          "mentions": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "List of user ids that are mentioned for this notification"
-          },
-          "metadata": {
-            "description": "Custom metadata that may be needed for the notification"
           }
         }
       },

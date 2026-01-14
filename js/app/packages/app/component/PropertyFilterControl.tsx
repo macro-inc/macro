@@ -1,6 +1,9 @@
-import { isPropertyDefinition } from '@core/component/Properties/utils';
+import type { PropertyDefinitionDomain } from '@core/component/Properties/types';
+import {
+  isPropertyDefinition,
+  toPropertyDefinitionDomain,
+} from '@core/component/Properties/utils';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
-import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import type { Accessor, Component } from 'solid-js';
 import { createEffect, createMemo, For, Show } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
@@ -31,14 +34,16 @@ export const PropertyFilterControl: Component<PropertyFilterControlProps> = (
     includeOptions: false,
   }));
 
-  const allProperties = createMemo((): PropertyDefinition[] => {
+  const allProperties = createMemo((): PropertyDefinitionDomain[] => {
     const data = propertiesQuery.data;
     if (!data) return [];
-    return (Array.isArray(data) ? data : []).filter(isPropertyDefinition);
+    return (Array.isArray(data) ? data : [])
+      .filter(isPropertyDefinition)
+      .map((def) => toPropertyDefinitionDomain(def));
   });
 
   // Look up property definition by ID
-  const getPropertyById = (id: string): PropertyDefinition | undefined =>
+  const getPropertyById = (id: string): PropertyDefinitionDomain | undefined =>
     allProperties().find((p) => p.id === id);
 
   // Simple incrementing ID generator (unique within component lifetime)

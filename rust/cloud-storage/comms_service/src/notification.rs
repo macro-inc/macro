@@ -49,13 +49,13 @@ fn create_notification_queue_message(
     channel_id: &Uuid,
     sender_id: MacroUserIdStr<'static>,
     recipients: &[String],
-    notification_event: NotificationEvent,
+    notification_event: impl Into<NotificationEvent>,
 ) -> NotificationQueueMessage {
     NotificationQueueMessage {
         notification_entity: EntityType::Channel.with_entity_string(channel_id.to_string()),
         sender_id: Some(sender_id),
         recipient_ids: Some(recipients.to_vec()),
-        notification_event,
+        notification_event: notification_event.into(),
     }
 }
 
@@ -71,10 +71,10 @@ impl<'a> ChannelInviteEvent<'a> {
                     self.recipient_user_ids.iter().map(|m| m.as_str()),
                     once(self.invited_by_user_id.as_ref()),
                 ),
-                NotificationEvent::ChannelInvite(ChannelInviteMetadata {
+                ChannelInviteMetadata {
                     invited_by: self.invited_by_user_id.clone(),
                     common: self.common.clone(),
-                }),
+                },
             ));
         }
 
@@ -94,12 +94,12 @@ impl ChannelMessageEvent<'_> {
                     self.user_mentions.iter().map(|m| m.as_str()),
                     once(self.message.sender_id.0.as_ref()),
                 ),
-                NotificationEvent::ChannelMention(ChannelMentionMetadata {
+                ChannelMentionMetadata {
                     message_content: self.message.content.clone(),
                     message_id: self.message.id.to_string(),
                     thread_id: self.message.thread_id.map(|t| t.to_string()),
                     common: self.channel_metadata.clone(),
-                }),
+                },
             ));
         }
 
@@ -114,14 +114,12 @@ impl ChannelMessageEvent<'_> {
                     self.channel_id,
                     self.message.sender_id.clone(),
                     &recipients_excluding_mentions,
-                    NotificationEvent::ChannelMessageDocument(ChannelMessageDocumentMetadata(
-                        DocumentMentionMetadata {
-                            document_name: mention.item_name.clone(),
-                            owner: mention.item_owner.clone(),
-                            file_type: mention.file_type.clone(),
-                            metadata: None,
-                        },
-                    )),
+                    ChannelMessageDocumentMetadata(DocumentMentionMetadata {
+                        document_name: mention.item_name.clone(),
+                        owner: mention.item_owner.clone(),
+                        file_type: mention.file_type.clone(),
+                        metadata: None,
+                    }),
                 ));
             }
         }
@@ -148,13 +146,13 @@ impl ChannelMessageEvent<'_> {
                             self.thread_participants.iter().map(|p| p.as_ref()),
                             sender_and_mentions,
                         ),
-                        NotificationEvent::ChannelMessageReply(ChannelReplyMetadata {
+                        ChannelReplyMetadata {
                             thread_id: thread_id.to_string(),
                             message_id: self.message.id.to_string(),
                             user_id: self.message.sender_id.clone(),
                             message_content: self.message.content.clone(),
                             common: self.channel_metadata.clone(),
-                        }),
+                        },
                     ));
                 } else {
                     tracing::warn!("thread participants is empty, but message has thread id");
@@ -166,10 +164,10 @@ impl ChannelMessageEvent<'_> {
                     self.channel_id,
                     self.message.sender_id.clone(),
                     &recipients_without_sender_and_mentions,
-                    NotificationEvent::ChannelInvite(ChannelInviteMetadata {
+                    ChannelInviteMetadata {
                         invited_by: self.message.sender_id.clone(),
                         common: self.channel_metadata.clone(),
-                    }),
+                    },
                 ));
             }
             // Channel has messages, send message send notification
@@ -178,12 +176,12 @@ impl ChannelMessageEvent<'_> {
                     self.channel_id,
                     self.message.sender_id.clone(),
                     &recipients_without_sender_and_mentions,
-                    NotificationEvent::ChannelMessageSend(ChannelMessageSendMetadata {
+                    ChannelMessageSendMetadata {
                         message_id: self.message.id.to_string(),
                         sender: self.message.sender_id.clone(),
                         message_content: self.message.content.to_string(),
                         common: self.channel_metadata.clone(),
-                    }),
+                    },
                 ));
             }
         }

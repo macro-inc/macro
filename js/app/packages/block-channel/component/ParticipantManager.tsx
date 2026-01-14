@@ -106,7 +106,7 @@ export function ParticipantManager(props: { participantCount: number }) {
                 <div class="flex flex-row justify-between gap-2 min-h-[40px] text-ink-muted border-b border-edge-muted/50 p-2 items-center">
                   <RecipientSelector<'user'>
                     setSelectedOptions={setUsersToInvite}
-                    selectedOptions={usersToInvite}
+                    selectedOptions={usersToInvite()}
                     placeholder={'Search'}
                     options={options}
                     hideBorder

@@ -3,3 +3,5 @@ export const URL_PARAMS = {
 };
 
 export const MACRO_EMAIL_SIGNATURE = '-- Sent with Macro';
+
+export const MAX_ATTACHMENTS_BYTES_SIZE = 18_000_000;
