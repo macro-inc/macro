@@ -16,7 +16,6 @@ use crate::domain::{
     ports::EntityAccessService,
 };
 use model::project::BasicProject;
-use model::user::UserContext;
 use model_user::axum_extractor::MacroUserExtractor;
 
 /// Validates that the user has at least the required access level to a project.
@@ -49,11 +48,7 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
 
-        let MacroUserExtractor {
-            macro_user_id,
-            user_context,
-            ..
-        } = parts
+        let MacroUserExtractor { macro_user_id, .. } = parts
             .extract()
             .await
             .map_err(|_| ExtractorError::Internal)?;
@@ -82,7 +77,7 @@ where
         let required_level = T::required_level();
         let access_level = service
             .check_access(
-                &user_context.user_id,
+                &macro_user_id,
                 &project_context.id,
                 EntityType::Project,
                 required_level,
@@ -192,7 +187,7 @@ where
     async fn from_request(mut req: Request, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
 
-        let user_context: Extension<UserContext> = req
+        let MacroUserExtractor { macro_user_id, .. } = req
             .extract_parts()
             .await
             .map_err(|_| ExtractorError::Internal)?;
@@ -218,7 +213,7 @@ where
         let required_level = T::required_level();
         let access_level = service
             .check_access(
-                &user_context.user_id,
+                &macro_user_id,
                 project.id(),
                 EntityType::Project,
                 required_level,

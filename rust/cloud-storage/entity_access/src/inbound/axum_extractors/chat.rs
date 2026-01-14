@@ -47,11 +47,7 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
 
-        let MacroUserExtractor {
-            macro_user_id,
-            user_context,
-            ..
-        } = parts
+        let MacroUserExtractor { macro_user_id, .. } = parts
             .extract()
             .await
             .map_err(|_| ExtractorError::Internal)?;
@@ -78,7 +74,7 @@ where
         let required_level = T::required_level();
         let access_level = service
             .check_access(
-                &user_context.user_id,
+                &macro_user_id,
                 &chat_context.id,
                 EntityType::Chat,
                 required_level,

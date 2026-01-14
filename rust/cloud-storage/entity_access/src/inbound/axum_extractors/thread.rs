@@ -15,7 +15,7 @@ use crate::domain::{
     ports::EntityAccessService,
 };
 use model::thread::EmailThreadPermission;
-use model::user::UserContext;
+use model_user::axum_extractor::MacroUserExtractor;
 
 /// Validates that the user has at least the required access level to an email thread.
 ///
@@ -47,7 +47,7 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
 
-        let user_context: Extension<UserContext> = parts
+        let MacroUserExtractor { macro_user_id, .. } = parts
             .extract()
             .await
             .map_err(|_| ExtractorError::Internal)?;
@@ -61,9 +61,9 @@ where
         let required_level = T::required_level();
         let access_level = service
             .check_access(
-                &user_context.user_id,
+                &macro_user_id,
                 &thread_context.thread_id,
-                EntityType::Thread,
+                EntityType::EmailThread,
                 required_level,
             )
             .await

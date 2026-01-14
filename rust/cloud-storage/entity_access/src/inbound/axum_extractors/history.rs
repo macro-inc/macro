@@ -4,7 +4,7 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use axum::{
-    Extension, async_trait,
+    RequestPartsExt, async_trait,
     extract::{FromRef, FromRequestParts, Path},
     http::request::Parts,
 };
@@ -14,7 +14,7 @@ use crate::domain::{
     models::{AccessLevel, EntityType},
     ports::EntityAccessService,
 };
-use model::user::UserContext;
+use model_user::axum_extractor::MacroUserExtractor;
 
 /// Path parameters for history routes.
 #[derive(serde::Deserialize)]
@@ -49,10 +49,10 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
 
-        let user_context: Extension<UserContext> =
-            <Extension<UserContext>>::from_request_parts(parts, state)
-                .await
-                .map_err(|_| ExtractorError::Internal)?;
+        let MacroUserExtractor { macro_user_id, .. } = parts
+            .extract()
+            .await
+            .map_err(|_| ExtractorError::Internal)?;
 
         let Path(HistoryParams { item_id, item_type }) =
             <Path<HistoryParams>>::from_request_parts(parts, state)
@@ -67,7 +67,7 @@ where
         // Check access via service
         let required_level = T::required_level();
         let access_level = service
-            .check_access(&user_context.user_id, &item_id, entity_type, required_level)
+            .check_access(&macro_user_id, &item_id, entity_type, required_level)
             .await
             .map_err(ExtractorError::from)?;
 

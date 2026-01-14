@@ -1,7 +1,7 @@
 //! Domain models for entity access.
 
+pub use model_entity::EntityType;
 pub use models_permissions::share_permission::access_level::AccessLevel;
-pub use models_properties::EntityType;
 
 /// Errors that can occur during access checking.
 #[derive(Debug, thiserror::Error)]
@@ -16,7 +16,7 @@ pub enum AccessError {
 
     /// Database error during access check.
     #[error("Database error: {0}")]
-    DatabaseError(#[source] anyhow::Error),
+    DatabaseError(#[from] sqlx::Error),
 
     /// Bad request parameters.
     #[error("Bad request: {0}")]

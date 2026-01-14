@@ -4,6 +4,7 @@ use crate::domain::{
     models::{AccessError, AccessLevel, EntityType},
     ports::{AccessRepository, EntityAccessService},
 };
+use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use std::str::FromStr;
 use uuid::Uuid;
 
@@ -32,14 +33,14 @@ where
     async fn get_optimized_access(
         &self,
         entity_id: &str,
-        user_id: &str,
+        user_id: &MacroUserId<Lowercase<'_>>,
         entity_type: EntityType,
     ) -> Result<Option<AccessLevel>, AccessError> {
         match entity_type {
             EntityType::Document => self.repo.get_document_access(entity_id, user_id).await,
             EntityType::Chat => self.repo.get_chat_access(entity_id, user_id).await,
             EntityType::Project => self.repo.get_project_access(entity_id, user_id).await,
-            EntityType::Thread => self.repo.get_thread_access(entity_id, user_id).await,
+            EntityType::EmailThread => self.repo.get_thread_access(entity_id, user_id).await,
             _ => unreachable!("Only optimized types should call this method"),
         }
     }
@@ -50,7 +51,7 @@ where
     async fn get_channel_access(
         &self,
         channel_id: &str,
-        user_id: &str,
+        user_id: &MacroUserId<Lowercase<'_>>,
     ) -> Result<Option<AccessLevel>, AccessError> {
         let channel_uuid = Uuid::from_str(channel_id)
             .map_err(|_| AccessError::BadRequest("Invalid channel ID format"))?;
@@ -75,25 +76,28 @@ where
     #[tracing::instrument(err, skip(self))]
     async fn get_access_level(
         &self,
-        user_id: &str,
+        user_id: &MacroUserId<Lowercase<'_>>,
         entity_id: &str,
         entity_type: EntityType,
     ) -> Result<Option<AccessLevel>, AccessError> {
         match entity_type {
-            EntityType::Document | EntityType::Chat | EntityType::Project | EntityType::Thread => {
+            EntityType::Document
+            | EntityType::Chat
+            | EntityType::Project
+            | EntityType::EmailThread => {
                 self.get_optimized_access(entity_id, user_id, entity_type)
                     .await
             }
             EntityType::Channel => self.get_channel_access(entity_id, user_id).await,
-            // These entity types don't have access checks implemented
-            EntityType::Company | EntityType::Task | EntityType::User => Ok(None),
+            // These entity types don't have access checks implemented yet
+            EntityType::Email | EntityType::Team | EntityType::User => Ok(None),
         }
     }
 
     #[tracing::instrument(err, skip(self))]
     async fn check_access(
         &self,
-        user_id: &str,
+        user_id: &MacroUserId<Lowercase<'_>>,
         entity_id: &str,
         entity_type: EntityType,
         required_level: AccessLevel,

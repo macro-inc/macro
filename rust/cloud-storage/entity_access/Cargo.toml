@@ -8,7 +8,7 @@ publish = false
 default = ["ports", "inbound", "outbound", "axum"]
 ports = ["dep:tokio"]
 inbound = ["axum", "ports"]
-outbound = ["ports", "dep:sqlx"]
+outbound = ["ports"]
 axum = [
     "dep:axum",
     "dep:axum-extra",
@@ -28,8 +28,8 @@ serde_json = { workspace = true }
 
 # Domain models (always included)
 models_permissions = { path = "../models_permissions" }
-models_properties = { path = "../models_properties" }
 macro_user_id = { path = "../macro_user_id" }
+model-entity = { path = "../model-entity"}
 
 # Async runtime (for ports)
 tokio = { workspace = true, optional = true }
@@ -41,8 +41,8 @@ model = { path = "../model", optional = true }
 model_user = { path = "../model_user", optional = true, features = ["axum"] }
 model-error-response = { path = "../model-error-response", optional = true }
 
-# Database (for outbound)
-sqlx = { workspace = true, optional = true }
+# Database
+sqlx = { workspace = true }
 
 [dev-dependencies]
 mockall = { workspace = true }
