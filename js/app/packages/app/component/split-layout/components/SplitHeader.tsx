@@ -1,6 +1,9 @@
 import EntityNavigationIndicator from '@app/component/EntityNavigationIndicator';
 import { LabelAndHotKey } from '@core/component/Tooltip';
-import { ENABLE_PREVIEW } from '@core/constant/featureFlags';
+import {
+  ENABLE_PREVIEW,
+  ENABLE_PROJECT_VIEW_PREVIEW,
+} from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
@@ -111,9 +114,10 @@ function SplitPreviewToggle() {
   const context = useContext(SplitPanelContext);
   if (!ENABLE_PREVIEW || !context || !context.previewState) return null;
 
-  // Only show toggle for unified-list component, not for blocks
+  // Only show toggle for unified-list component and project block
   const isUnifiedList = createMemo(() => {
     const content = context.handle.content();
+    if (ENABLE_PROJECT_VIEW_PREVIEW && content.type === 'project') return true;
     return content.type === 'component' && content.id === 'unified-list';
   });
 

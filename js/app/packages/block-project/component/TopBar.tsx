@@ -11,11 +11,15 @@ import {
   SplitToolbarLeft,
   SplitToolbarRight,
 } from '@app/component/split-layout/components/SplitToolbar';
+import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { getIsSpecialProject } from '@block-project/isSpecial';
 import { projectBlockDataSignal } from '@block-project/signal/projectBlockData';
 import { useBlockId } from '@core/block';
 import { ShareButton } from '@core/component/TopBar/ShareButton';
-import { ENABLE_PROJECT_SHARING } from '@core/constant/featureFlags';
+import {
+  ENABLE_PROJECT_SHARING,
+  ENABLE_PROJECT_VIEW_PREVIEW,
+} from '@core/constant/featureFlags';
 import {
   useCanEdit,
   useGetPermissions,
@@ -31,6 +35,8 @@ import { ProjectPropertiesModal } from './ProjectPropertiesModal';
 //     with folder block.
 
 export function TopBar() {
+  const splitPanelContext = useSplitPanelOrThrow();
+  const [preview] = splitPanelContext.previewState;
   const id = useBlockId();
   const isSpecialProject = getIsSpecialProject(id);
   const permissions = useGetPermissions();
@@ -62,6 +68,11 @@ export function TopBar() {
       : []),
   ]);
 
+  const showToolbarRight = () => {
+    if (!ENABLE_PROJECT_VIEW_PREVIEW) return true;
+    return !preview();
+  };
+
   return (
     <>
       <SplitHeaderLeft>
@@ -82,26 +93,28 @@ export function TopBar() {
           </Show>
         </div>
       </SplitToolbarLeft>
-      <SplitToolbarRight>
-        <div class="flex items-center p-1">
-          <div class="flex items-center">
-            <Show when={!isSpecialProject}>
-              <ProjectPropertiesModal buttonSize="sm" name={name()} />
-            </Show>
-            <SplitPermissionsBadge />
-            <Show when={ENABLE_PROJECT_SHARING && !isSpecialProject}>
-              <ShareButton
-                id={id}
-                name={name()}
-                userPermissions={permissions()}
-                copyLink={handleCopyLink}
-                itemType="project"
-                owner={owner()}
-              />
-            </Show>
+      <Show when={showToolbarRight()}>
+        <SplitToolbarRight>
+          <div class="flex items-center p-1">
+            <div class="flex items-center">
+              <Show when={!isSpecialProject}>
+                <ProjectPropertiesModal buttonSize="sm" name={name()} />
+              </Show>
+              <SplitPermissionsBadge />
+              <Show when={ENABLE_PROJECT_SHARING && !isSpecialProject}>
+                <ShareButton
+                  id={id}
+                  name={name()}
+                  userPermissions={permissions()}
+                  copyLink={handleCopyLink}
+                  itemType="project"
+                  owner={owner()}
+                />
+              </Show>
+            </div>
           </div>
-        </div>
-      </SplitToolbarRight>
+        </SplitToolbarRight>
+      </Show>
     </>
   );
 }
