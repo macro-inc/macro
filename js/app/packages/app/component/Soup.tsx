@@ -38,6 +38,11 @@ import { storageServiceClient } from '@service-storage/client';
 import { Navigate } from '@solidjs/router';
 import { useMutation, useQueryClient } from '@tanstack/solid-query';
 import { useDragDropContext } from '@thisbeyond/solid-dnd';
+import {
+  useMoveChatMutation,
+  useMoveDocumentMutation,
+  useMoveProjectMutation,
+} from '@queries/document/move';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import {
   type Component,
@@ -294,13 +299,47 @@ export function Soup() {
   const [isDragging, setIsDragging] = createSignal(false);
   const [isValidDrag, setIsValidDrag] = createSignal(true);
 
+  const moveDocumentMutation = useMoveDocumentMutation();
+  const moveProjectMutation = useMoveProjectMutation();
+  const moveChatMutation = useMoveChatMutation();
 
   const dragDropContext = useDragDropContext();
   if (dragDropContext) {
     dragDropContext[1].onDragEnd((event) => {
-      if (!event.droppable || event.droppable.id !== droppableId) return;
+      const droppable = event.droppable;
+      if (!droppable) return;
 
-      // TODO: moveToFolder action
+      const draggable = event.draggable;
+      if (!draggable?.data) return;
+
+      const entityData = draggable.data;
+      const draggableId = draggable.id;
+
+      if (typeof draggableId !== 'string') return;
+
+      // Extract entity ID by removing split ID suffix (format: entityId-splitId)
+      const entityId = draggableId.split('-').slice(0, -1).join('-');
+
+      if (droppable.data?.type === 'project' && droppable.data?.id) {
+        const targetProjectId = droppable.data.id;
+
+        if (entityData.type === 'document') {
+          moveDocumentMutation.mutate({
+            documentId: entityId,
+            projectId: targetProjectId,
+          });
+        } else if (entityData.type === 'project') {
+          moveProjectMutation.mutate({
+            projectId: entityId,
+            parentProjectId: targetProjectId,
+          });
+        } else if (entityData.type === 'chat') {
+          moveChatMutation.mutate({
+            chatId: entityId,
+            projectId: targetProjectId,
+          });
+        }
+      }
     });
   }
 
