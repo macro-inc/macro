@@ -39,7 +39,6 @@ impl SoupDocumentSubType {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
-#[cfg_attr(feature = "mock", derive(PartialEq, Eq))]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct SoupDocument {

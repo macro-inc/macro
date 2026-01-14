@@ -147,7 +147,6 @@ pub struct SoupEmailThreadPreview {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-#[cfg_attr(feature = "mock", derive(PartialEq, Eq))]
 #[serde(rename_all = "camelCase")]
 pub struct SoupEnrichedEmailThreadPreview {
     #[serde(flatten)]
