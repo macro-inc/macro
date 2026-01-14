@@ -152,6 +152,7 @@ export function File(props: { node: FileNode; mode: RenderMode }) {
             return 'channel';
         }
       case 'document':
+        // TODO: consolidate is task logic, see isTaskEntity
         if (
           currentItem.fileType === 'md' &&
           currentItem.subType?.type === 'task'

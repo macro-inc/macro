@@ -888,13 +888,11 @@ export function CanvasController(props: ParentProps) {
     setSelectedTool(Tools.Move);
   };
 
-  const attachFileOnDrag = async (
-    event: EntityDragEvent,
-    id: string,
-    entityType: 'document' | 'chat' | 'project' | 'channel' | 'email'
-  ) => {
+  const attachFileOnDrag = async (event: EntityDragEvent, id: string) => {
     if (!event.droppable) return;
     track(TrackingEvents.BLOCKCANVAS.FILES.SIDEBARDND);
+
+    const entityType = event.draggable.data.type;
 
     // Track document mention and get UUID
     let mentionUuid: string | undefined;
@@ -945,20 +943,12 @@ export function CanvasController(props: ParentProps) {
     if (res.blockName === undefined) return;
     if (!position) return;
 
-    const entityType = res.item.type;
-
     if (res.blockName === 'image') {
       attachImageOnDrag(event);
     } else if (res.blockName === 'video' && ENABLE_CANVAS_VIDEO) {
       attachVideoOnDrag(event);
-    } else if (
-      entityType === 'document' ||
-      entityType === 'chat' ||
-      entityType === 'project' ||
-      entityType === 'channel' ||
-      entityType === 'email'
-    ) {
-      attachFileOnDrag(event, res.id, entityType);
+    } else {
+      attachFileOnDrag(event, res.id);
     }
   };
 
