@@ -114,6 +114,8 @@ export function registerHotkey(
     runWithInputFocused,
     hotkeyToken,
     displayPriority,
+    handlerPriority,
+    addHandler = 'override',
     hide,
     icon,
     tags,
@@ -189,24 +191,28 @@ export function registerHotkey(
     activateCommandScopeId: commandScopeId,
     runWithInputFocused: runWithInputFocused ?? false,
     displayPriority: displayPriority ?? 0,
+    handlerPriority: handlerPriority ?? 0,
     hide,
     icon,
     tags,
     shouldReturnFocusOnClose,
   };
 
-  // Check for existing hotkeys in the scope
-  hotkeys?.forEach((h) => {
-    if (scopeNode.hotkeyCommands.has(h)) {
-      logger.log(
-        `Hotkey ${h} already registered in scope ${scopeId}. Previous hotkey is being overwritten.`,
-        {
-          level: 'warn',
-          error: new Error('Hotkey already registered in scope'),
-        }
-      );
-    }
-  });
+  // Check for existing hotkeys in the scope and warn if overriding
+  if (addHandler === 'override') {
+    hotkeys?.forEach((h) => {
+      const existingHandlers = scopeNode.hotkeyCommands.get(h);
+      if (existingHandlers && existingHandlers.length > 0) {
+        logger.log(
+          `Hotkey ${h} already registered in scope ${scopeId}. Previous hotkey is being overwritten.`,
+          {
+            level: 'warn',
+            error: new Error('Hotkey already registered in scope'),
+          }
+        );
+      }
+    });
+  }
 
   if (hotkeyToken) {
     setHotkeyTokenMap((prev) => {
@@ -221,7 +227,14 @@ export function registerHotkey(
     // Register each hotkey with the same command
     if (hotkeys) {
       hotkeys.forEach((h) => {
-        scopeNode.hotkeyCommands.set(h, command);
+        // Add to existing handlers array
+        const existingHandlers = scopeNode.hotkeyCommands.get(h) || [];
+        if (addHandler === 'add') {
+          scopeNode.hotkeyCommands.set(h, [...existingHandlers, command]);
+        } else {
+          // Override: replace with single-element array
+          scopeNode.hotkeyCommands.set(h, [command]);
+        }
       });
     } else {
       scopeNode.unkeyedCommands.push(command);
@@ -236,9 +249,8 @@ export function registerHotkey(
         setHotkeyTokenMap((prev) => {
           const newMap = new Map(prev);
           const existingCommands = newMap.get(hotkeyToken) || [];
-          const newCommands = existingCommands.filter(
-            (c) => c.scopeId !== scopeId
-          );
+          // Filter out this specific command instance
+          const newCommands = existingCommands.filter((c) => c !== command);
           if (newCommands.length > 0) {
             newMap.set(hotkeyToken, newCommands);
           } else {
@@ -248,11 +260,19 @@ export function registerHotkey(
         });
       }
 
-      // Remove hotkeys from scope
+      // Remove this specific command from scope's hotkey handlers
       const scope = hotkeyScopeTree.get(scopeId);
       if (scope && hotkeys) {
         hotkeys.forEach((h) => {
-          scope.hotkeyCommands.delete(h);
+          const existingHandlers = scope.hotkeyCommands.get(h);
+          if (existingHandlers) {
+            const newHandlers = existingHandlers.filter((c) => c !== command);
+            if (newHandlers.length > 0) {
+              scope.hotkeyCommands.set(h, newHandlers);
+            } else {
+              scope.hotkeyCommands.delete(h);
+            }
+          }
         });
       }
 
@@ -524,16 +544,36 @@ export function useHotKeyRoot() {
     let commandScopeActivated = false;
 
     while (scopeNode) {
-      const command = scopeNode.hotkeyCommands.get(pressedKeysString);
-      if (command && (command.runWithInputFocused || !isEditableFocused)) {
-        const result = runCommand(
-          command,
-          e,
-          pressedKeysString,
-          scopeNode.scopeId
+      const commands = scopeNode.hotkeyCommands.get(pressedKeysString);
+      if (commands && commands.length > 0) {
+        // Sort commands by handlerPriority (higher priority first)
+        const sortedCommands = [...commands].sort(
+          (a, b) => (b.handlerPriority ?? 0) - (a.handlerPriority ?? 0)
         );
-        commandCaptured = result.commandCaptured;
-        commandScopeActivated = result.commandScopeActivated;
+
+        // Run handlers in priority order
+        for (const command of sortedCommands) {
+          if (command.runWithInputFocused || !isEditableFocused) {
+            const result = runCommand(
+              command,
+              e,
+              pressedKeysString,
+              scopeNode.scopeId
+            );
+
+            if (result.commandCaptured) {
+              commandCaptured = result.commandCaptured;
+            }
+            if (result.commandScopeActivated) {
+              commandScopeActivated = true;
+            }
+
+            // Stop running remaining handlers if stopRunningHandlers was returned
+            if (result.stopRunningHandlers) {
+              break;
+            }
+          }
+        }
       }
 
       if (

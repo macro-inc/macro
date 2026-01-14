@@ -245,8 +245,10 @@ export function getActiveCommandByToken(
         while (currentAncestor) {
           const activationKey = currentCommandScope.activationKeys?.at(0);
           if (activationKey) {
-            const activationCommand =
+            // Get the first (highest priority) command for this activation key
+            const activationCommands =
               originalParentScope.hotkeyCommands.get(activationKey);
+            const activationCommand = activationCommands?.[0];
             if (activationCommand) {
               reverseActivationCommands.push(activationCommand);
             } else break;
@@ -309,7 +311,7 @@ export function getPrettyHotkeyStringByToken(token: HotkeyToken) {
  * @param e - The keyboard event.
  * @param pressedKeysString - The string of pressed keys.
  * @param scopeId - The id of the scope that the command is from.
- * @returns An object with the command captured and the command scope activated.
+ * @returns An object with the command captured, command scope activated, and propagation control flags.
  */
 export function runCommand(
   command: HotkeyCommand,
@@ -321,6 +323,8 @@ export function runCommand(
 
   let commandCaptured: HotkeyCommand | undefined;
   let commandScopeActivated = false;
+  let stopPropagation = false;
+  let stopRunningHandlers = false;
 
   if (!command.condition || command.condition()) {
     if (command.activateCommandScopeId) {
@@ -345,8 +349,18 @@ export function runCommand(
       }
     }
 
-    const captured = command.keyDownHandler?.(e);
-    if (captured) {
+    const result = command.keyDownHandler?.(e);
+
+    // Normalize the result to extract stopPropagation and stopRunningHandlers
+    if (typeof result === 'boolean') {
+      stopPropagation = result;
+      stopRunningHandlers = false;
+    } else if (result) {
+      stopPropagation = result.stopPropagation;
+      stopRunningHandlers = result.stopRunningHandlers;
+    }
+
+    if (stopPropagation) {
       setPressedKeys(new Set<string>());
       setLastExecutedCommand(command);
       commandCaptured = command;
@@ -378,8 +392,10 @@ export function runCommand(
   }
 
   return {
-    commandCaptured: commandCaptured,
-    commandScopeActivated: commandScopeActivated,
+    commandCaptured,
+    commandScopeActivated,
+    stopPropagation,
+    stopRunningHandlers,
   };
 }
 
