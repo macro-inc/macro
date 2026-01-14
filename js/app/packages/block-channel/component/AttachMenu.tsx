@@ -108,6 +108,8 @@ export function AttachMenu(props: AttachMenuProps) {
 
   const handleOverlayClick = (e: MouseEvent) => {
     if (e.target === e.currentTarget) {
+      e.preventDefault();
+      e.stopPropagation();
       props.close();
     }
   };
@@ -116,13 +118,16 @@ export function AttachMenu(props: AttachMenuProps) {
     <Show when={props.open}>
       <div
         class="fixed inset-0 bg-transparent z-item-options-menu"
-        onClick={handleOverlayClick}
-        onMouseDown={handleOverlayClick}
+        onPointerDown={handleOverlayClick}
       >
         <div
           class="absolute z-item-options-menu"
           ref={setPopupRef}
-          use:clickOutside={props.close}
+          use:clickOutside={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            props.close();
+          }}
           style={{
             left: `${position().x}px`,
             top: `${position().y}px`,
