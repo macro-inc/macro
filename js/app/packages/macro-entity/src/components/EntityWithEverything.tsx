@@ -9,7 +9,7 @@ import { tryToTypedNotification } from '@notifications';
 import { useEmail, useUserId } from '@service-gql/client';
 import { syncServiceClient } from '@service-sync/client';
 import { mergeRefs } from '@solid-primitives/refs';
-import { createDraggable, createDroppable } from '@thisbeyond/solid-dnd';
+import { createDraggable } from '@thisbeyond/solid-dnd';
 import { getIconConfig } from 'core/component/EntityIcon';
 import { StaticMarkdown } from 'core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from 'core/component/LexicalMarkdown/theme';

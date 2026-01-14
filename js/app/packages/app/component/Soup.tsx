@@ -37,7 +37,7 @@ import { invalidateEntityNotifications } from '@queries/notification/user-notifi
 import { storageServiceClient } from '@service-storage/client';
 import { Navigate } from '@solidjs/router';
 import { useMutation, useQueryClient } from '@tanstack/solid-query';
-import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
+import { useDragDropContext } from '@thisbeyond/solid-dnd';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import {
   type Component,
@@ -294,8 +294,6 @@ export function Soup() {
   const [isDragging, setIsDragging] = createSignal(false);
   const [isValidDrag, setIsValidDrag] = createSignal(true);
 
-  const droppableId = 'soup-drop-zone';
-  const droppable = createDroppable(droppableId);
 
   const dragDropContext = useDragDropContext();
   if (dragDropContext) {
@@ -395,7 +393,6 @@ export function Soup() {
   return (
     <div
       class="relative flex flex-col bg-panel size-full"
-      use:droppable
       use:fileFolderDrop={{
         onDrop: (fileEntries, folderEntries) => {
           handleFileFolderDrop(fileEntries, folderEntries, handleFileUpload);
