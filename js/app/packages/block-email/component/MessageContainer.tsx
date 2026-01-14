@@ -1,5 +1,4 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
-import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { EmailAttachmentPill } from '@block-email/component/AttachmentPill';
 import { CollapsedMessage } from '@block-email/component/CollapsedMessage';
 import { useEmailContext } from '@block-email/component/EmailContext';
@@ -153,13 +152,12 @@ export function MessageContainer(props: MessageContainerProps) {
     }
   });
 
-  const { insertSplit, replaceOrInsertSplit } = useSplitLayout();
+  const { replaceOrInsertSplit } = useSplitLayout();
   const entityQueryClient = useQueryClient();
 
   const onClickAttachment = async (
     attachment: Attachment,
-    fileType: FileType | undefined,
-    e: MouseEvent
+    fileType: FileType | undefined
   ) => {
     const dbId = attachment.db_id;
     if (!dbId) return;
@@ -198,9 +196,7 @@ export function MessageContainer(props: MessageContainerProps) {
     });
 
     const blockName = fileType ? fileTypeToBlockName(fileType) : 'unknown';
-    const inNewSplit = openInNewSplitForMention(e.altKey, true);
-    const open = inNewSplit ? insertSplit : replaceOrInsertSplit;
-    open({
+    replaceOrInsertSplit({
       type: blockName,
       id: document_id,
     })?.activate?.();

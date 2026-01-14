@@ -2,11 +2,7 @@ import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
 } from '@app/component/GlobalAppState';
-import {
-  explicitNoiseFilter,
-  noiseFilter,
-  signalFilter,
-} from '@app/component/soupFilters';
+import { VIEW_CLIENT_FILTERS } from '@app/component/ViewConfig';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { codeFileExtensions } from '@block-code/util/languageSupport';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
@@ -16,7 +12,6 @@ import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { ToggleButton } from '@core/component/FormControls/ToggleButton';
 import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
 import { ContextMenuContent, MenuSeparator } from '@core/component/Menu';
-import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 import { useTaskProperties } from '@core/component/Properties/hooks';
 import { getSuggestedProperties } from '@core/component/Properties/utils';
 import { RecipientSelector } from '@core/component/RecipientSelector';
@@ -41,7 +36,6 @@ import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import { arrayEquals } from '@core/util/compareUtils';
 import { debouncedDependent } from '@core/util/debounce';
 import { fuzzyMatch } from '@core/util/fuzzy';
-import { useBulkEntityPropertiesQuery } from '@queries/properties/bulk';
 import CheckIcon from '@icon/bold/check-bold.svg';
 import SearchIcon from '@icon/regular/magnifying-glass.svg?component-solid';
 import LoadingSpinner from '@icon/regular/spinner.svg?component-solid';
@@ -310,15 +304,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const rawSearchText = createMemo<string>(() => view()?.searchText ?? '');
   const searchText = createMemo(() => rawSearchText()?.trim() ?? '');
 
-  // When filters change we want to force selection to the first item in the *new* list.
-  // We do this in two phases:
-  // - mark a reset as pending when filter inputs change
-  // - once the entity list updates, select the first entity and clear the pending flag
-  const [
-    pendingSelectFirstAfterFilterChange,
-    setPendingSelectFirstAfterFilterChange,
-  ] = createSignal(false);
-
+  // Track entity list ref changes
   createEffect(
     on(
       [localEntityListRef, () => entities_()?.at(0), searchText],
@@ -326,10 +312,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
         if (!localEntityListRef) return;
         setEntityListRef(localEntityListRef);
 
-        if (view()?.hasUserInteractedEntity) {
-          return;
-        }
-
+        if (view()?.hasUserInteractedEntity) return;
         if (isTouchDevice()) return;
         if (!firstEntity) return;
 
@@ -338,40 +321,38 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     )
   );
 
-  const filterResetKey = createMemo(() => {
-    // IMPORTANT: do not include selectedEntity/hasUserInteractedEntity here
-    // or we'd create loops.
-    // Use `view()?.filters` directly to avoid referencing filter memos before they are
-    // initialized (TDZ).
-    return stringify({
-      viewId: selectedView(),
-      filters: view()?.filters,
-    });
+  // Stable key for filter state - changes trigger selection reset
+  const filterKey = createMemo(() =>
+    stringify({ viewId: selectedView(), filters: view()?.filters })
+  );
+
+  // Reset selection and scroll when filters change
+  createEffect(
+    on(
+      filterKey,
+      (_current, prev) => {
+        if (isTouchDevice()) return;
+        if (prev === undefined) return; // Skip initial run
+
+        batch(() => {
+          setViewDataStore(selectedView(), 'selectedEntity', undefined);
+          setViewDataStore(selectedView(), 'hasUserInteractedEntity', false);
+        });
+        virtualizerHandle()?.scrollToIndex(0);
+      },
+      { defer: true }
+    )
+  );
+
+  // Auto-select first entity when no selection exists
+  createEffect(() => {
+    if (isTouchDevice()) return;
+    if (view()?.hasUserInteractedEntity) return;
+    if (selectedEntity()) return;
+
+    const first = entities_()?.at(0);
+    if (first) setSelectedEntity(first);
   });
-
-  // Phase 1: on any filter change, arm a pending "select first" reset.
-  createEffect(
-    on(filterResetKey, () => {
-      if (isTouchDevice()) return;
-      setPendingSelectFirstAfterFilterChange(true);
-      setViewDataStore(selectedView(), 'selectedEntity', undefined);
-      // ensure the auto-selection logic isn't blocked
-      setViewDataStore(selectedView(), 'hasUserInteractedEntity', false);
-      virtualizerHandle()?.scrollToIndex(0);
-    })
-  );
-
-  // Phase 2: once the entity list updates after a filter change, select the first item.
-  createEffect(
-    on([entities_, pendingSelectFirstAfterFilterChange], ([list, pending]) => {
-      if (isTouchDevice()) return;
-      if (!pending) return;
-      const first = list?.at(0);
-      if (!first) return;
-      setSelectedEntity(first);
-      setPendingSelectFirstAfterFilterChange(false);
-    })
-  );
 
   // Always keep an entity selected when the list has items (e.g. after deletes).
   createEffect(
@@ -463,81 +444,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       defaultFilterOptions.documentTypeFilter
   );
 
-  // In the default "All" soup view (no explicit type filters), hide files that were
-  // auto-extracted from emails. These docs are tagged via the Properties system
-  // with the SOURCE system property.
-  const shouldHideEmailSourcedDocsByDefault = createMemo(() => {
-    // Only hide in the "no explicit type filters" case (the All soup view).
-    if (entityTypeFilter().length !== 0) return false;
-
-    // If Inbox/Other are active, their predicates define the list.
-    const focus = focusFilters() ?? [];
-    if (focus.includes('signal') || focus.includes('noise')) return false;
-
-    return true;
-  });
-
-  // Cache of docId -> isEmailSourced. We fill this incrementally via a capped bulk lookup
-  // to avoid turning "no filters" into an O(N) network call on every pagination step.
-  const [emailSourcedDocById, setEmailSourcedDocById] = createStore<
-    Record<string, boolean | undefined>
-  >({});
-
-  const getSourceHasValue = (
-    props: Array<{ propertyDefinitionId: string } & any>
-  ) => {
-    const sourceProp = props.find(
-      (p) => p.propertyDefinitionId === SYSTEM_PROPERTY_IDS.SOURCE
-    );
-    if (!sourceProp) return false;
-
-    // Treat "SOURCE is set" as "this file came from email extraction".
-    // Intentionally type-agnostic to support future schema changes.
-    switch (sourceProp.valueType) {
-      case 'STRING':
-        return !!sourceProp.value?.trim();
-      case 'NUMBER':
-      case 'DATE':
-        return sourceProp.value !== null;
-      case 'BOOLEAN':
-        return sourceProp.value === true;
-      case 'SELECT_STRING':
-      case 'SELECT_NUMBER':
-      case 'ENTITY':
-      case 'LINK':
-        return (sourceProp.value?.length ?? 0) > 0;
-    }
-  };
-
-  const CACHED_SOURCE_LOOKUP_LIMIT = 200;
-  const documentIdsNeedingSourceLookup = createMemo<readonly string[]>(() => {
-    if (!shouldHideEmailSourcedDocsByDefault()) return [];
-
-    const docs = (entities_() ?? [])
-      .filter((e) => e.type === 'document')
-      .slice(0, CACHED_SOURCE_LOOKUP_LIMIT);
-
-    return docs
-      .map((d) => d.id)
-      .filter((id) => emailSourcedDocById[id] === undefined);
-  });
-
-  const bulkDocSourceQuery = useBulkEntityPropertiesQuery(
-    'DOCUMENT',
-    documentIdsNeedingSourceLookup,
-    [SYSTEM_PROPERTY_IDS.SOURCE]
-  );
-
-  createEffect(() => {
-    const data = bulkDocSourceQuery.data;
-    if (!data) return;
-
-    batch(() => {
-      for (const [entityId, props] of Object.entries(data)) {
-        setEmailSourcedDocById(entityId, getSourceHasValue(props as any));
-      }
-    });
-  });
   const setFileTypeFilter: SetStoreFunction<
     ViewData['filters']['documentTypeFilter']
   > = (...args: any[]) => {
@@ -841,9 +747,21 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     };
   });
 
+  // Client filters from VIEW_CLIENT_FILTERS based on current view
+  const viewClientFilter = createMemo(() => {
+    const filters = VIEW_CLIENT_FILTERS[selectedView()] ?? [];
+    if (filters.length === 0) return undefined;
+    return (entity: WithNotification<EntityData>) =>
+      filters.every((f) => f.predicate(entity, { soupContext }));
+  });
+
   // NOTE: these filters are required because the backend doesn't support these filters yet
   createEffect(() => {
     const filterFns: EntityFilter<EntityData>[] = [];
+
+    // Apply view-specific client filters (signal/noise/explicitNoise)
+    const viewFilter = viewClientFilter();
+    if (viewFilter) filterFns.push(viewFilter);
 
     if (importantFilter()) filterFns.push(importantFilterFn);
 
@@ -852,34 +770,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     if (shouldFilterUnread) filterFns.push(unreadFilterFn);
 
     if (notificationFilter() === 'notDone') filterFns.push(notDoneFilterFn);
-
-    const focusFilters_ = focusFilters();
-    const hasSignalFilter = focusFilters_?.includes('signal') === true;
-    const hasNoiseFilter = focusFilters_?.includes('noise') === true;
-
-    // We only want to apply these filters when their opposite is not in the list
-    // because the filters negate each other
-    if (hasSignalFilter && !hasNoiseFilter) {
-      // Inbox: show only signal items
-      filterFns.push(signalFilter.predicate);
-    } else if (hasNoiseFilter && !hasSignalFilter) {
-      // Other: show only noise items
-      filterFns.push(noiseFilter.predicate);
-    } else if (!hasSignalFilter && !hasNoiseFilter) {
-      // Default: exclude explicit noise (promotional emails, etc.) but show everything else
-      filterFns.push(
-        (entity, ctx) => !explicitNoiseFilter.predicate(entity, ctx)
-      );
-      // Also exclude "email-sourced" extracted docs unless the user has explicitly
-      // applied a type filter like Files.
-      if (shouldHideEmailSourcedDocsByDefault()) {
-        filterFns.push(
-          (entity) =>
-            entity.type !== 'document' ||
-            emailSourcedDocById[entity.id] !== true
-        );
-      }
-    }
 
     setRequiredFilters(filterFns);
   });

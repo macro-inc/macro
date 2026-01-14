@@ -51,6 +51,7 @@ import {
   createSignal,
   For,
   Match,
+  on,
   onCleanup,
   onMount,
   type ParentComponent,
@@ -393,38 +394,31 @@ function EntityTypeIconFilter() {
     });
   };
 
-  // Keep Inbox/Other + unrollNotifications coupled, including on first load / hydration.
-  // If Inbox or Other is active, ensure the underlying filters are actually applied.
-  createEffect(() => {
-    if (!view()) return;
+  // Ensure state consistency when switching views (not continuous watching)
+  createEffect(
+    on(
+      selectedView,
+      (viewId) => {
+        const focus = focusFilters() ?? [];
+        if (!focus.includes('signal') && !focus.includes('noise')) return;
 
-    const inboxActive = isInboxFilterActive();
-    const otherActive = isOtherFilterActive();
-
-    if (inboxActive || otherActive) {
-      if (notificationFilter() !== 'notDone') {
-        setViewDataStore(
-          selectedView(),
-          'filters',
-          'notificationFilter',
-          'notDone'
-        );
-      }
-      if (unrollNotifications() !== true) {
-        setViewDataStore(
-          selectedView(),
-          'display',
-          'unrollNotifications',
-          true
-        );
-      }
-      return;
-    }
-
-    if (unrollNotifications() !== false) {
-      setViewDataStore(selectedView(), 'display', 'unrollNotifications', false);
-    }
-  });
+        batch(() => {
+          if (notificationFilter() !== 'notDone') {
+            setViewDataStore(
+              viewId,
+              'filters',
+              'notificationFilter',
+              'notDone'
+            );
+          }
+          if (!unrollNotifications()) {
+            setViewDataStore(viewId, 'display', 'unrollNotifications', true);
+          }
+        });
+      },
+      { defer: true }
+    )
+  );
 
   const isFilterActive = (type: ExpandedEntityType) => {
     const filter = entityTypeFilter();
