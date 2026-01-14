@@ -489,6 +489,16 @@ export function createUnifiedInfiniteList<T extends EntityData>({
       const draggable = state?.active.draggable;
       if (!draggable) return false;
 
+      // Only show overlay for entity types that can be added to projects
+      const entityType = draggable.data?.type;
+      if (
+        entityType !== 'document' &&
+        entityType !== 'chat' &&
+        entityType !== 'project'
+      ) {
+        return false;
+      }
+
       // Don't show overlay if dragging within the same split
       const draggableId = draggable.id;
       if (props.splitId && typeof draggableId === 'string') {
