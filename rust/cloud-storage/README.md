@@ -19,8 +19,12 @@ docker volume create macro_db_volume
 docker-compose up -d macrodb
 just setup_test_envs
 just initialize_dbs
-just test
+cargo test # NB: SQLX_OFFLINE should NOT be set
 ```
+
+## clean up
+
+To start with a fresh database in docker clear it with: `docker-compose down && docker rm $(docker ps -qa) && docker volume rm macro_db_volume`. Then run the setup above.
 
 ## Deployment
 
