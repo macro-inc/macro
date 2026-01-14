@@ -111,23 +111,23 @@ impl SystemPropertyKey {
     }
 
     /// Try to get a SystemPropertyKey from a UUID.
-    pub fn from_uuid(uuid: Uuid) -> Option<Self> {
+    pub const fn from_uuid(uuid: Uuid) -> Option<Self> {
         match uuid {
-            u if u == Self::ASSIGNEES_UUID => Some(Self::Assignees),
-            u if u == Self::STATUS_UUID => Some(Self::Status),
-            u if u == Self::PRIORITY_UUID => Some(Self::Priority),
-            u if u == Self::DUE_DATE_UUID => Some(Self::DueDate),
-            u if u == Self::PARENT_TASK_UUID => Some(Self::ParentTask),
-            u if u == Self::SUBTASKS_UUID => Some(Self::Subtasks),
-            u if u == Self::DEPENDS_ON_UUID => Some(Self::DependsOn),
-            u if u == Self::EFFORT_UUID => Some(Self::Effort),
-            u if u == Self::STORY_POINTS_UUID => Some(Self::StoryPoints),
-            u if u == Self::RELEVANT_DOCUMENTS_UUID => Some(Self::RelevantDocuments),
-            u if u == Self::SOURCE_UUID => Some(Self::Source),
-            u if u == Self::COMPANIES_UUID => Some(Self::Companies),
-            u if u == Self::SENDER_UUID => Some(Self::Sender),
-            u if u == Self::RECIPIENTS_UUID => Some(Self::Recipients),
-            u if u == Self::SUBJECT_UUID => Some(Self::Subject),
+            Self::ASSIGNEES_UUID => Some(Self::Assignees),
+            Self::STATUS_UUID => Some(Self::Status),
+            Self::PRIORITY_UUID => Some(Self::Priority),
+            Self::DUE_DATE_UUID => Some(Self::DueDate),
+            Self::PARENT_TASK_UUID => Some(Self::ParentTask),
+            Self::SUBTASKS_UUID => Some(Self::Subtasks),
+            Self::DEPENDS_ON_UUID => Some(Self::DependsOn),
+            Self::EFFORT_UUID => Some(Self::Effort),
+            Self::STORY_POINTS_UUID => Some(Self::StoryPoints),
+            Self::RELEVANT_DOCUMENTS_UUID => Some(Self::RelevantDocuments),
+            Self::SOURCE_UUID => Some(Self::Source),
+            Self::COMPANIES_UUID => Some(Self::Companies),
+            Self::SENDER_UUID => Some(Self::Sender),
+            Self::RECIPIENTS_UUID => Some(Self::Recipients),
+            Self::SUBJECT_UUID => Some(Self::Subject),
             _ => None,
         }
     }
