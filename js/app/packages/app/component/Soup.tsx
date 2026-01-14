@@ -578,7 +578,16 @@ const SuspenseUnifiedListFallback = () => {
 
   runWarningLog();
 
-  return null;
+  // Return a skeleton that maintains layout instead of null to avoid black flash
+  return (
+    <div class="size-full flex flex-col gap-1 p-2 animate-pulse">
+      <div class="h-12 bg-surface-2 rounded" />
+      <div class="h-12 bg-surface-2 rounded" />
+      <div class="h-12 bg-surface-2 rounded" />
+      <div class="h-12 bg-surface-2 rounded" />
+      <div class="h-12 bg-surface-2 rounded" />
+    </div>
+  );
 };
 
 const ViewWithSearch: Component<{
