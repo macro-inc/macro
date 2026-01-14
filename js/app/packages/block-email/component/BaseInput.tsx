@@ -157,9 +157,29 @@ export function BaseInput(props: {
   markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
 }) {
   const ctx = useEmailContext();
-  const form = createMemo(() =>
-    getOrInitEmailFormContext(props.replyingTo()?.db_id ?? undefined)
-  );
+  const form = createMemo(() => {
+    const replyingTo = props.replyingTo();
+
+    if (!replyingTo && !props.draft) {
+      return getOrInitEmailFormContext();
+    }
+
+    if (replyingTo && replyingTo.db_id) {
+      return getOrInitEmailFormContext({
+        type: 'replying_to',
+        messageID: replyingTo.db_id,
+      });
+    }
+
+    if (props.draft && props.draft.db_id) {
+      return getOrInitEmailFormContext({
+        type: 'draft',
+        messageID: props.draft.db_id,
+      });
+    }
+
+    return getOrInitEmailFormContext();
+  });
   const blockId = useBlockId();
   const emailLinksQuery = useEmailLinksQuery();
 
