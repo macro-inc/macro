@@ -42,6 +42,8 @@ export function EmailInput(props: EmailInputProps) {
         onMarkDone={ctx.archiveThread}
         setShowReply={props.setShowReply}
         markdownDomRef={props.markdownDomRef}
+        // This top level email message is considered new when it is not replying
+        // to something and there is a draft
         newMessage={props.replyingTo() == null && props.draft !== null}
       />
     </Show>
