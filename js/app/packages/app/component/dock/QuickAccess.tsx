@@ -186,11 +186,11 @@ function QuickAccessItem(props: QuickAccessItemProps) {
 }
 
 export function QuickAccess() {
-  const channelsContext = useChannelsContext();
+  const channelsContext = useChannelsContext()!;
   const notificationSource = useGlobalNotificationSource();
   const allNotifications = notificationSource.notifications;
   const channelsWithNotifications = createMemo(() => {
-    const channels_ = channelsContext.channels;
+    const channels_ = channelsContext.channels();
     const notifications = allNotifications();
 
     return channels_

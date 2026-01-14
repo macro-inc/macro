@@ -154,8 +154,8 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
   const history = useHistory();
   const contacts = useContacts();
-  const channelsContext = useChannelsContext();
-  const channels = () => channelsContext.channels;
+  const channelsContext = useChannelsContext()!;
+  const channels = channelsContext.channels;
 
   // Get current user info for injection into contacts
   const currentUserId = useUserId();

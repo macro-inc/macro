@@ -56,9 +56,8 @@ const createChatMentionXML = (chatId: string) => {
 };
 
 const createChannelMentionXML = (channelId: string) => {
-  const channelsContext = useChannelsContext();
-  const channels = () => channelsContext.channels;
-  const channel = channels().find((c) => c.id === channelId);
+  const channelsContext = useChannelsContext()!;
+  const channel = channelsContext.channels().find((c) => c.id === channelId);
   if (!channel) {
     if (import.meta.env.DEV) {
       console.error('Could not find channel', channelId);

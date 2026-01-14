@@ -34,7 +34,7 @@ type UseCombinedRecipients<K extends 'user' | 'channel'> = {
 
 const useCombinedRecipientsRoot = () => {
   const contacts = useContacts();
-  const channelsContext = useChannelsContext();
+  const channelsContext = useChannelsContext()!;
 
   const userContactEntities = createMemo<CombinedRecipientItem<'user'>[]>(() =>
     contacts().map(recipientEntityMapper('user'))
@@ -43,7 +43,8 @@ const useCombinedRecipientsRoot = () => {
   const channelsWithParticipants = createMemo<
     CombinedRecipientItem<'channel'>[]
   >(() =>
-    channelsContext.channels
+    channelsContext
+      .channels()
       .filter((channel) => channel.participants.length > 2)
       .map(recipientEntityMapper('channel'))
   );

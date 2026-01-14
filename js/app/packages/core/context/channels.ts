@@ -1,74 +1,63 @@
+import { createContextProvider } from '@solid-primitives/context';
+import { createMemo, type Accessor } from 'solid-js';
 import type {
   ApiActivity as ChannelsActivity,
   ApiChannelWithLatest,
 } from '@service-comms/generated/models';
-import { createSimpleContext } from '.';
 import { useListChannelsQuery } from '@queries/channel/channels';
 import { useChannelsActivityQuery } from '@queries/channel/activity';
-import { createMemo } from 'solid-js';
-import { queryReadyGate } from '@queries/gate';
 
-export const { use: useChannelsContext, provider: ChannelsContextProvider } =
-  createSimpleContext({
-    name: 'ChannelsContext',
-    init: () => {
-      const channelsQuery = useListChannelsQuery();
-      const activityQuery = useChannelsActivityQuery();
+type ChannelsContextValue = {
+  channels: Accessor<ApiChannelWithLatest[]>;
+  activity: Accessor<ChannelsActivity[] | undefined>;
+  channelsById: Accessor<Record<string, ApiChannelWithLatest>>;
+  activityByChannelId: Accessor<Record<string, ChannelsActivity>>;
+  isLoading: Accessor<boolean>;
+  error: Accessor<Error | null>;
+};
 
-      const channelsById = createMemo(() => {
-        if (!queryReadyGate(channelsQuery)) return {};
-        return channelsQuery.data.reduce<Record<string, ApiChannelWithLatest>>(
-          (acc, channel) => {
-            acc[channel.id] = channel;
-            return acc;
-          },
-          {}
-        );
-      });
+export const [ChannelsContextProvider, useChannelsContext] =
+  createContextProvider((): ChannelsContextValue => {
+    const channelsQuery = useListChannelsQuery();
+    const activityQuery = useChannelsActivityQuery();
 
-      const activityByChannelId = createMemo(() => {
-        if (!queryReadyGate(activityQuery)) return {};
-        return activityQuery.data.reduce<Record<string, ChannelsActivity>>(
-          (acc, channel) => {
-            acc[channel.id] = channel;
-            return acc;
-          },
-          {}
-        );
-      });
+    const channels = () => channelsQuery.data ?? [];
+    const activity = () => activityQuery.data;
 
-      return {
-        get isLoading() {
-          return channelsQuery.isLoading || activityQuery.isLoading;
-        },
-        get error() {
-          return channelsQuery.error ?? activityQuery.error;
-        },
-        get ready() {
-          return !channelsQuery.isLoading;
-        },
-        get channels() {
-          return channelsQuery.data ?? [];
-        },
-        get channelsById() {
-          return channelsById();
-        },
-        get activityByChannelId() {
-          return activityByChannelId();
-        },
-        get activity() {
-          return activityQuery.data;
-        },
-      };
-    },
+    const channelsById = createMemo(() => {
+      const data = channelsQuery.data;
+      if (!data) return {};
+      return data.reduce<Record<string, ApiChannelWithLatest>>((acc, ch) => {
+        acc[ch.id] = ch;
+        return acc;
+      }, {});
+    });
+
+    const activityByChannelId = createMemo(() => {
+      const data = activityQuery.data;
+      if (!data) return {};
+      return data.reduce<Record<string, ChannelsActivity>>((acc, a) => {
+        acc[a.channel_id] = a;
+        return acc;
+      }, {});
+    });
+
+    return {
+      channels,
+      activity,
+      channelsById,
+      activityByChannelId,
+      isLoading: () => channelsQuery.isLoading || activityQuery.isLoading,
+      error: () => channelsQuery.error ?? activityQuery.error ?? null,
+    };
   });
 
 export function useChannelName(channelId: string, fallback?: string) {
-  const { channelsById } = useChannelsContext();
-  return createMemo(() => channelsById[channelId]?.name ?? fallback);
+  const ctx = useChannelsContext();
+  return createMemo(() => ctx?.channelsById()[channelId]?.name ?? fallback);
 }
 
 export function useChannelActivity(channelId: string) {
-  const { activityByChannelId } = useChannelsContext();
-  return createMemo(() => activityByChannelId[channelId]);
+  const ctx = useChannelsContext();
+  return createMemo(() => ctx?.activityByChannelId()[channelId]);
 }

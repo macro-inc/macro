@@ -124,7 +124,7 @@ export function KommandMenuInner(props: {
     }
     return Array.from(allItemMap().values());
   });
-  const channelsContext = useChannelsContext();
+  const channelsContext = useChannelsContext()!;
 
   const freshSearchConfig = createMemo(() => {
     const query = debouncedLocalQuery();
@@ -161,7 +161,7 @@ export function KommandMenuInner(props: {
   });
 
   const paginatedSearch = usePaginatedSearchItems(fullTextQueryOrBlank);
-  const channelLookup = () => channelsContext.channelsById as ChannelLookup;
+  const channelLookup = () => channelsContext!.channelsById() as ChannelLookup;
 
   const handleLoadMore = async () => {
     const loadMoreIndex = filteredItems().length - 1; // Position of "Load More" button
