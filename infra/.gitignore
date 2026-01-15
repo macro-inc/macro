@@ -5,6 +5,7 @@
 !library.js
 !**/appRouteLambda/**/*.js
 !**/contentEncodingLambda/**/*.js
+package-lock.json
 
 node_modules
 dist
