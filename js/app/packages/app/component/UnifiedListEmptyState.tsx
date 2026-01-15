@@ -15,7 +15,6 @@ import Arcanum004 from '@macro-icons/arcanum/arcanum-004.svg';
 import Arcanum005 from '@macro-icons/arcanum/arcanum-005.svg';
 import Arcanum006 from '@macro-icons/arcanum/arcanum-006.svg';
 import Arcanum007 from '@macro-icons/arcanum/arcanum-007.svg';
-import Arcanum008 from '@macro-icons/arcanum/arcanum-008.svg';
 import Arcanum0010 from '@macro-icons/arcanum/arcanum-010.svg';
 
 false && fileSelector;
@@ -24,16 +23,16 @@ false && folderSelector;
 const DEFAULT_EMPTY_MESSAGE = 'No items to show.';
 
 function getRandomArcanumGraphic() {
+  const graphicStyle = "h-64 m-8 mt-32 opacity-60";
   const arcanumGraphics = [
-    <Arcanum001 class="h-58 m-8 mt-32 opacity-60" />,
-    <Arcanum002 class="h-58 m-8 mt-32 opacity-60" />,
-    <Arcanum003 class="h-58 m-8 mt-32 opacity-60" />,
-    <Arcanum004 class="h-58 m-8 mt-32 opacity-60" />,
-    <Arcanum005 class="h-58 m-8 mt-32 opacity-60" />,
-    <Arcanum006 class="h-58 m-8 mt-32 opacity-60" />,
-    <Arcanum007 class="h-58 m-8 mt-32 opacity-60" />,
-    <Arcanum008 class="h-58 m-8 mt-32 opacity-60" />,
-    <Arcanum0010 class="h-58 m-8 mt-32 opacity-60" />,
+    <Arcanum001 class={graphicStyle} />,
+    <Arcanum002 class={graphicStyle} />,
+    <Arcanum003 class={graphicStyle} />,
+    <Arcanum004 class={graphicStyle} />,
+    <Arcanum005 class={graphicStyle} />,
+    <Arcanum006 class={graphicStyle} />,
+    <Arcanum007 class={graphicStyle} />,
+    <Arcanum0010 class={graphicStyle} />,
   ];
   const randomIndex = Math.floor(Math.random() * arcanumGraphics.length);
   return arcanumGraphics[randomIndex];
