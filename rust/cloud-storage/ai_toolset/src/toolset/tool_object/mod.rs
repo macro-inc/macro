@@ -1,3 +1,8 @@
+//! Tool object types for runtime tool invocation.
+//!
+//! This module contains the compiled tool representations that enable
+//! runtime deserialization and invocation of tools.
+
 #[macro_use]
 mod util;
 

@@ -13,10 +13,12 @@ type Deserializer<Sc, Rc> = Box<
     dyn Fn(&serde_json::Value) -> Result<ToolTraitObject<Sc, Rc>, serde_json::Error> + Send + Sync,
 >;
 
+/// Type alias for a [`ToolObject`] configured for synchronous tools.
 pub type SyncToolObject<Context, RequestContext> =
     ToolObject<Deserializer<Context, RequestContext>>;
 
 impl<Sc, Rc> ToolObject<Deserializer<Sc, Rc>> {
+    /// Attempts to deserialize JSON input into a callable tool instance.
     pub fn try_deserialize(
         &self,
         data: &serde_json::Value,
@@ -25,6 +27,10 @@ impl<Sc, Rc> ToolObject<Deserializer<Sc, Rc>> {
         deserializer(data)
     }
 
+    /// Creates a new [`SyncToolObject`] from a tool type.
+    ///
+    /// The tool type must implement [`Tool`], [`JsonSchema`], and [`Deserialize`].
+    /// Returns an error if schema validation fails.
     pub fn try_from_tool<T>() -> Result<Self, ValidationError>
     where
         T: JsonSchema + Tool<Sc, Rc> + Send + Sync + for<'de> Deserialize<'de> + 'static,

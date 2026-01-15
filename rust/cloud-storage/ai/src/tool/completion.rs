@@ -1,10 +1,9 @@
 use super::types::ToolCall;
 use super::types::tool_object::ToolObject;
+use crate::openai_toolset::tool_object_to_chat_completion_tool;
 use crate::types::{AiError, Result};
 use crate::types::{ChatCompletionRequest, OpenRouterClient};
-use async_openai::types::{
-    ChatCompletionTool, ChatCompletionToolChoiceOption, CreateChatCompletionRequest,
-};
+use async_openai::types::{ChatCompletionToolChoiceOption, CreateChatCompletionRequest};
 
 #[tracing::instrument(skip(tool))]
 pub async fn tool_completion<T>(
@@ -12,7 +11,7 @@ pub async fn tool_completion<T>(
     tool: &ToolObject<T>,
 ) -> Result<ToolCall> {
     let mut request: CreateChatCompletionRequest = request.try_into()?;
-    request.tools = Some(vec![ChatCompletionTool::from(tool)]);
+    request.tools = Some(vec![tool_object_to_chat_completion_tool(tool)]);
     request.n = Some(1);
     request.tool_choice = Some(ChatCompletionToolChoiceOption::Required);
 
