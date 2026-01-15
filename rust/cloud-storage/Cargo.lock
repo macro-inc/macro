@@ -125,6 +125,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "futures",
+ "macro_user_id",
  "schemars",
  "serde",
  "serde_json",

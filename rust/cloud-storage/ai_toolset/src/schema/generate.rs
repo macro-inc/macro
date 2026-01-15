@@ -45,7 +45,7 @@ impl ToolSchemaGenerator for ToolSchemas {
     }
 }
 
-impl<C, R> ToolSchemaGenerator for AsyncToolSet<C, R> {
+impl<Context> ToolSchemaGenerator for AsyncToolSet<Context> {
     fn generate_schemas(&self) -> ToolSchemas {
         let schemas = self
             .tools

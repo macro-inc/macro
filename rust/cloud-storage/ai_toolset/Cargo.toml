@@ -13,3 +13,4 @@ schemars = { workspace = true }
 async-trait = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
+macro_user_id = { path = "../macro_user_id" }

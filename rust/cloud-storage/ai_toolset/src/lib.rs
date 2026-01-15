@@ -43,9 +43,11 @@
 
 #![deny(missing_docs)]
 
+mod context;
 pub mod schema;
 mod tool;
 mod toolset;
 
+pub use context::*;
 pub use tool::*;
 pub use toolset::*;

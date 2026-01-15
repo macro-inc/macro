@@ -1,9 +1,9 @@
+use crate::RequestContext;
 use async_trait::async_trait;
 use serde::Serialize;
 
 /// Result type for tool calls, containing either the output or a [`ToolCallError`].
 pub type ToolResult<T> = std::result::Result<T, ToolCallError>;
-
 /// A unit type for tools that don't require any context.
 pub struct NoContext();
 
@@ -28,20 +28,6 @@ impl std::fmt::Display for ToolCallError {
     }
 }
 
-/// Trait for synchronous tools that can be called by an AI model.
-///
-/// # Type Parameters
-///
-/// - `Sc`: Service context type (shared state like database connections)
-/// - `Rc`: Request context type (per-request data like user info)
-pub trait Tool<Sc, Rc>: Sync + Send {
-    /// The output type produced by this tool.
-    type Output: Serialize + 'static;
-
-    /// Execute the tool with the given contexts.
-    fn call(&self, service_context: Sc, request_context: Rc) -> ToolResult<Self::Output>;
-}
-
 /// Trait for asynchronous tools that can be called by an AI model.
 ///
 /// # Type Parameters
@@ -49,10 +35,14 @@ pub trait Tool<Sc, Rc>: Sync + Send {
 /// - `Sc`: Service context type (shared state like database connections)
 /// - `Rc`: Request context type (per-request data like user info)
 #[async_trait]
-pub trait AsyncTool<Sc, Rc>: Sync + Send {
+pub trait AsyncTool<Sc>: Sync + Send {
     /// The output type produced by this tool.
     type Output: Serialize + 'static;
 
     /// Execute the tool asynchronously with the given contexts.
-    async fn call(&self, service_context: Sc, request_context: Rc) -> ToolResult<Self::Output>;
+    async fn call(
+        &self,
+        service_context: Sc,
+        request_context: RequestContext,
+    ) -> ToolResult<Self::Output>;
 }
