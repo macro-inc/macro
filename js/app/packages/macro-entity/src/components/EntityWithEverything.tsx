@@ -480,11 +480,14 @@ interface EntityProps<T extends WithNotification<EntityData>>
   searchActive?: boolean;
 }
 
-const [hoveredEntityId, setHoveredEntityId] = createSignal<string | null>(null);
+const [hoveredComponentId, setHoveredComponentId] = createSignal<Symbol>(
+  Symbol()
+);
 
 export function EntityWithEverything(
   props: EntityProps<WithNotification<EntityData | WithSearch<EntityData>>>
 ) {
+  const id = Symbol();
   const [actionButtonRef, setActionButtonRef] =
     createSignal<HTMLButtonElement | null>(null);
   const [entityDivRef, setEntityDivRef] = createSignal<HTMLDivElement | null>(
@@ -915,7 +918,7 @@ export function EntityWithEverything(
       onMouseMove={() => {
         if (isTouchDevice()) return;
 
-        setHoveredEntityId(props.entity.id);
+        setHoveredComponentId(id);
         props.onMouseOver?.();
       }}
       onContextMenu={() => {
@@ -1106,8 +1109,7 @@ export function EntityWithEverything(
             </Show>
             <Show
               when={
-                (props.selected.active ||
-                  hoveredEntityId() === props.entity.id) &&
+                (props.selected.active || hoveredComponentId() === id) &&
                 props.onClickRowAction
               }
             >
