@@ -106,7 +106,7 @@ const Block: Component = () => {
 
   if (!isRenderedFromPreview) {
     registerHotkey({
-      hotkey: ['p'],
+      hotkey: ['space'],
       scopeId: splitPanelContext.splitHotkeyScope,
       description: 'Toggle Preview',
       hotkeyToken: TOKENS.unifiedList.togglePreview,
