@@ -396,6 +396,8 @@ function EmailContent(props: EmailViewProps) {
   const emailReplyInfo = createMemo(() => {
     const filtered = context.messages.list();
 
+    // If there are non draft messages in this thread, the bottom input will
+    // be for sending a reply to the last message
     if (filtered.length !== 0) {
       const lastMessage = filtered.at(-1);
       if (!lastMessage || !lastMessage.db_id) return;
@@ -405,6 +407,8 @@ function EmailContent(props: EmailViewProps) {
       };
     }
 
+    // Otherwise, if the other messages in the thread are drafts,
+    // the bottom input will be for editing and sending the latest/last draft
     const unfiltered = context.messages.unfiltered();
 
     if (unfiltered.length === 0) return;
