@@ -257,6 +257,7 @@ function EntityTypeIconFilter() {
         config.handler();
         return true;
       },
+      registrationType: 'add',
     })
   );
 
