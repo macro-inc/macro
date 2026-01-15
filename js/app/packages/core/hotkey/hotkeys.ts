@@ -568,8 +568,8 @@ export function useHotKeyRoot() {
               commandScopeActivated = true;
             }
 
-            // Stop running remaining handlers if stopRunningHandlers was returned
-            if (result.stopRunningHandlers) {
+            // stops running handlers up the scope and laterally
+            if (result.stopPropagation) {
               break;
             }
           }

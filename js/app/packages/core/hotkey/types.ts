@@ -1,20 +1,6 @@
 import type { Component, JSX } from 'solid-js';
 import type { HotkeyToken } from './tokens';
 
-/**
- * Return type for keyDownHandler.
- * - `boolean`: true stops propagation to parent scopes
- * - `object`: fine-grained control over propagation behavior
- */
-export type KeyDownHandlerResult =
-  | boolean
-  | {
-      /** If true, stops propagation to parent scopes (same as returning true) */
-      stopPropagation: boolean;
-      /** If true, stops running remaining handlers registered for the same hotkey in this scope */
-      stopRunningHandlers: boolean;
-    };
-
 export interface HotkeyCommand {
   // Used to identify the hotkey in UI elements. Needs to be unique to a particular scope.
   hotkeyToken?: HotkeyToken;
@@ -28,8 +14,8 @@ export interface HotkeyCommand {
   description: string | (() => string);
   // If true, the keyDownHandler will be run even if the input is focused.
   runWithInputFocused: boolean;
-  // If the keyDownHandler returns true (or { stopPropagation: true }), we won't look for other commands with same hotkey in parent scopes.
-  keyDownHandler?: (e?: KeyboardEvent) => KeyDownHandlerResult;
+  // If the keyDownHandler returns true, we won't look for other commands with same hotkey in parent scopes or lateral handlers.
+  keyDownHandler?: (e?: KeyboardEvent) => boolean;
   // Optional keyUpHandler: if the keys of this hotkey are satisfied in a particular scope, the keyUpHandler will be triggered when the key is released, even if focus is lost.
   keyUpHandler?: (e: KeyboardEvent) => void;
   // This hotkey will activate the command scope with the given id.
@@ -86,10 +72,9 @@ export interface HotkeyRegistrationOptions {
 
   /**
    * Function called when hotkey is pressed.
-   * If it returns true (or { stopPropagation: true }), the event will prevent default and stop propagation to parent scopes.
-   * If it returns { stopRunningHandlers: true }, remaining handlers for this hotkey won't run.
+   * If it returns true, the event will prevent default and stop propagation to parent scopes and registered handlers to same scope.
    */
-  keyDownHandler: (e?: KeyboardEvent) => KeyDownHandlerResult;
+  keyDownHandler: (e?: KeyboardEvent) => boolean;
 
   /**
    * Optional function called when hotkey is released.

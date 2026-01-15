@@ -1330,13 +1330,13 @@ export function createNavigationEntityListShortcut({
 
       const parentDomRef = parentContext.domRef();
       if (parentContext === activeContext()) {
-        return { stopPropagation: true, stopRunningHandlers: true };
+        return true;
       }
 
       if (parentDomRef) {
         setActiveContext(parentContext);
         parentDomRef.focus();
-        return { stopPropagation: true, stopRunningHandlers: true };
+        return true;
       }
 
       return false;
@@ -1372,7 +1372,7 @@ export function createNavigationEntityListShortcut({
         setActiveContext(childContext);
         childDomRef.setAttribute('data-allow-focus-in-preview', '');
         childDomRef.focus();
-        return { stopPropagation: true, stopRunningHandlers: true };
+        return true;
       }
       return false;
     },

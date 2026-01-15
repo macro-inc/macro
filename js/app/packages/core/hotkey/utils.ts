@@ -393,7 +393,6 @@ export function runCommand(
   let commandCaptured: HotkeyCommand | undefined;
   let commandScopeActivated = false;
   let stopPropagation = false;
-  let stopRunningHandlers = false;
 
   if (!command.condition || command.condition()) {
     if (command.activateCommandScopeId) {
@@ -418,18 +417,10 @@ export function runCommand(
       }
     }
 
-    const result = command.keyDownHandler?.(e);
+    const captured = command.keyDownHandler?.(e);
+    stopPropagation = captured ?? stopPropagation;
 
-    // Normalize the result to extract stopPropagation and stopRunningHandlers
-    if (typeof result === 'boolean') {
-      stopPropagation = result;
-      stopRunningHandlers = false;
-    } else if (result) {
-      stopPropagation = result.stopPropagation;
-      stopRunningHandlers = result.stopRunningHandlers;
-    }
-
-    if (stopPropagation) {
+    if (captured) {
       setPressedKeys(new Set<string>());
       setLastExecutedCommand(command);
       commandCaptured = command;
@@ -464,7 +455,6 @@ export function runCommand(
     commandCaptured,
     commandScopeActivated,
     stopPropagation,
-    stopRunningHandlers,
   };
 }
 
