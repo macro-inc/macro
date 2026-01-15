@@ -226,12 +226,14 @@ export function fileDrop(
   element.addEventListener('dragover', handleDragOver);
   element.addEventListener('dragenter', handleDragEnter);
   element.addEventListener('dragleave', handleDragLeave);
+  element.addEventListener('dragend', handleDragLeave);
   element.addEventListener('drop', handleDrop);
 
   onCleanup(() => {
     element.removeEventListener('dragover', handleDragOver);
     element.removeEventListener('dragenter', handleDragEnter);
     element.removeEventListener('dragleave', handleDragLeave);
+    element.removeEventListener('dragend', handleDragLeave);
     element.removeEventListener('drop', handleDrop);
   });
 }
