@@ -26,7 +26,6 @@ import { RightbarWrapper } from './rightbar/Rightbar';
 import { SettingsWrapper } from './settings/SettingsWrapper';
 import { ShortcutsHelper } from './settings/ShortcutsHelper';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import { info } from '@tauri-apps/plugin-log';
 import { setVirtualKeyboardVisible, virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { cn } from '@ui/utils/classname';
 
@@ -113,25 +112,31 @@ export function Layout(props: RouteSectionProps) {
   }
 
   if (isNativeMobilePlatform()) {
-    let initialViewportHeight = visualViewport?.height || 0;
-
     type VirtualKeyboardEvent = CustomEventInit<{
       height: number;
       duration: number;
     }>;
 
-    onMount(() => {
-      window.addEventListener('keyboardWillShow', (event: VirtualKeyboardEvent) => {
-        setVirtualKeyboardVisible(true);
-        const newViewportHeight =
-          (visualViewport?.height ?? 0) - (event.detail?.height ?? 0);
-        const vh = newViewportHeight * 0.01;
-        document.documentElement.style.setProperty('--dvh', `${vh}px`);
-      });
+    const handleKeyboardWillShow = (event: VirtualKeyboardEvent) => {
+      setVirtualKeyboardVisible(true);
+      const newViewportHeight =
+        (visualViewport?.height ?? 0) - (event.detail?.height ?? 0);
+      const vh = newViewportHeight * 0.01;
+      document.documentElement.style.setProperty('--dvh', `${vh}px`);
+    };
 
-      window.addEventListener('keyboardWillHide', (event: KeyboardEvent) => {
-        setVirtualKeyboardVisible(false);
-        document.documentElement.style.setProperty('--dvh', '1dvh');
+    const handleKeyboardWillHide = () => {
+      setVirtualKeyboardVisible(false);
+      document.documentElement.style.setProperty('--dvh', '1dvh');
+    };
+
+    onMount(() => {
+      window.addEventListener('keyboardWillShow', handleKeyboardWillShow);
+      window.addEventListener('keyboardWillHide', handleKeyboardWillHide);
+
+      onCleanup(() => {
+        window.removeEventListener('keyboardWillShow', handleKeyboardWillShow);
+        window.removeEventListener('keyboardWillHide', handleKeyboardWillHide);
       });
     });
   }
