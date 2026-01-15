@@ -69,3 +69,12 @@ pub struct ScheduledPubsubMessage {
 pub struct SFSUploaderMessage {
     pub contact: Contact,
 }
+
+/// The message we send to the sfs_delete
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
+pub struct SFSDeleteMessage {
+    /// The ID of the row in email_attachments_sfs
+    pub db_id: Uuid,
+    /// The ID of the item in SFS
+    pub sfs_id: Uuid,
+}

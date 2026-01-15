@@ -3235,6 +3235,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "email_sfs_delete_handler"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aws-config",
+ "aws-sdk-sqs",
+ "aws_lambda_events",
+ "chrono",
+ "lambda_runtime",
+ "macro_entrypoint",
+ "macro_env",
+ "models_email",
+ "sqlx",
+ "sqs_client",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "email_suppression_handler"
 version = "0.1.0"
 dependencies = [

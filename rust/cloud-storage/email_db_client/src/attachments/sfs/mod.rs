@@ -33,3 +33,23 @@ where
 
     Ok(())
 }
+
+/// Deletes an attachment SFS record from the database by its ID
+#[tracing::instrument(skip(executor))]
+pub async fn delete_attachment_sfs<'e, E>(executor: E, id: sqlx::types::Uuid) -> anyhow::Result<()>
+where
+    E: Executor<'e, Database = Postgres>,
+{
+    sqlx::query!(
+        r#"
+        DELETE FROM email_attachments_sfs
+        WHERE id = $1
+        "#,
+        id,
+    )
+    .execute(executor)
+    .await
+    .with_context(|| format!("Failed to delete attachment SFS record with id {}", id))?;
+
+    Ok(())
+}

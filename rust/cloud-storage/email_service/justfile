@@ -41,6 +41,8 @@ create-queues:
         	--queue-name sfs-uploader-queue --attributes VisibilityTimeout=60
     AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs create-queue \
         	--queue-name contacts-queue
+    AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs create-queue \
+        	--queue-name sfs-delete-queue
 
 purge-queues:
     AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs purge-queue \
@@ -59,6 +61,8 @@ purge-queues:
         --queue-url http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/sfs-uploader-queue
     AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs purge-queue \
         --queue-url http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/contacts-queue
+    AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs purge-queue \
+        --queue-url http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/sfs-delete-queue
 
 create-bucket:
     AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 s3 mb \
