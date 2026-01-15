@@ -8,7 +8,7 @@ import { type Accessor, createMemo } from 'solid-js';
 import type { EmailEntity } from '../types/entity';
 import {
   createApiTokenQuery,
-  FetchDocumentsError,
+  handleFetchResponse,
   withApiTokenRetry,
 } from './auth';
 import { queryKeys } from './key';
@@ -39,13 +39,7 @@ const fetchPaginatedEmails = async ({
     headers: { Authorization },
   });
 
-  if (!response.ok) {
-    const errorData =
-      response.status === 401
-        ? await response.json().catch(() => undefined)
-        : undefined;
-    throw new FetchDocumentsError('Failed to fetch email', response, errorData);
-  }
+  await handleFetchResponse(response, 'Failed to fetch email');
 
   const previews: ApiPaginatedThreadCursor = await response.json();
   return previews;

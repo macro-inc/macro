@@ -38,7 +38,7 @@ import type {
 } from '../types/entity';
 import {
   createApiTokenQuery,
-  FetchDocumentsError,
+  handleFetchResponse,
   withApiTokenRetry,
 } from './auth';
 import { queryClient } from './client';
@@ -76,18 +76,7 @@ const fetchPaginatedDocumentsGet = async ({
   });
 
   const response = await platformFetch(url, { headers: { Authorization } });
-
-  if (!response.ok) {
-    const errorData =
-      response.status === 401
-        ? await response.json().catch(() => undefined)
-        : undefined;
-    throw new FetchDocumentsError(
-      'Failed to fetch documents',
-      response,
-      errorData
-    );
-  }
+  await handleFetchResponse(response, 'Failed to fetch documents');
 
   const result: SoupPage = await response.json();
   return result;
@@ -121,17 +110,7 @@ const fetchPaginatedDocumentsPost = async ({
     signal,
   });
 
-  if (!response.ok) {
-    const errorData =
-      response.status === 401
-        ? await response.json().catch(() => undefined)
-        : undefined;
-    throw new FetchDocumentsError(
-      'Failed to fetch documents',
-      response,
-      errorData
-    );
-  }
+  await handleFetchResponse(response, 'Failed to fetch documents');
 
   const result: SoupPage = await response.json();
   return result;

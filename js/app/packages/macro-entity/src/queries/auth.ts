@@ -27,6 +27,19 @@ export class FetchDocumentsError extends Error {
   }
 }
 
+export async function handleFetchResponse(
+  response: Response,
+  errorMessage: string
+): Promise<void> {
+  if (!response.ok) {
+    const errorData =
+      response.status === 401
+        ? await response.json().catch(() => undefined)
+        : undefined;
+    throw new FetchDocumentsError(errorMessage, response, errorData);
+  }
+}
+
 export async function withApiTokenRetry<T>(
   authQuery: ReturnType<typeof createApiTokenQuery>,
   fetchFn: (apiToken: string) => Promise<T>
@@ -123,17 +136,7 @@ const fetchProfilePictures = async (
     ...credentials,
   });
 
-  if (!response.ok) {
-    const errorData =
-      response.status === 401
-        ? await response.json().catch(() => undefined)
-        : undefined;
-    throw new FetchDocumentsError(
-      'Failed to fetch profile picture',
-      response,
-      errorData
-    );
-  }
+  await handleFetchResponse(response, 'Failed to fetch profile picture');
 
   const { pictures }: ProfilePictures = await response.json();
   if (pictures.length === 0)

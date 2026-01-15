@@ -6,7 +6,7 @@ import type { Accessor } from 'solid-js';
 import type { ChannelEntity } from '../types/entity';
 import {
   createApiTokenQuery,
-  FetchDocumentsError,
+  handleFetchResponse,
   withApiTokenRetry,
 } from './auth';
 import { queryKeys } from './key';
@@ -22,17 +22,7 @@ const fetchChannels = async ({ apiToken }: { apiToken?: string }) => {
     }
   );
 
-  if (!response.ok) {
-    const errorData =
-      response.status === 401
-        ? await response.json().catch(() => undefined)
-        : undefined;
-    throw new FetchDocumentsError(
-      'Failed to fetch channels',
-      response,
-      errorData
-    );
-  }
+  await handleFetchResponse(response, 'Failed to fetch channels');
 
   const channels: ApiChannelWithLatest[] = await response.json();
   return channels;

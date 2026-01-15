@@ -14,7 +14,7 @@ import {
 } from '../types/entity';
 import {
   createApiTokenQuery,
-  FetchDocumentsError,
+  handleFetchResponse,
   withApiTokenRetry,
 } from './auth';
 import { queryKeys } from './key';
@@ -51,17 +51,7 @@ const fetchProjectData = async (
     }),
   });
 
-  if (!response.ok) {
-    const errorData =
-      response.status === 401
-        ? await response.json().catch(() => undefined)
-        : undefined;
-    throw new FetchDocumentsError(
-      'Failed to fetch project',
-      response,
-      errorData
-    );
-  }
+  await handleFetchResponse(response, 'Failed to fetch project');
 
   const json = (await response.json()) as GetBatchProjectPreviewResponse;
 
