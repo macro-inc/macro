@@ -4,8 +4,11 @@ name = "ai"
 publish = false
 version = "0.1.0"
 
+[[bin]]
+name = "cli"
+path = "src/bin/cli.rs"
+
 [dev-dependencies]
-tokio = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true }
