@@ -4,7 +4,7 @@ use crate::util::gmail::send::{
     cleanup_draft_attachments, fetch_and_attach_draft_attachments, generate_email_threading_headers,
 };
 use anyhow::Context;
-use email_db_client::messages::scheduled::get_scheduled_message;
+use email_db_client::messages::scheduled::get::get_scheduled_message;
 use models_email::service::message::MessageToSend;
 use models_email::service::pubsub::ScheduledPubsubMessage;
 use sqlx_core::any::AnyConnectionBackend;
@@ -172,7 +172,7 @@ async fn mark_messages_as_sent(
     message: &MessageToSend,
 ) -> anyhow::Result<()> {
     // mark scheduled message as sent
-    email_db_client::messages::scheduled::mark_scheduled_message_as_sent(
+    email_db_client::messages::scheduled::upsert::mark_scheduled_message_as_sent(
         tx.as_mut(),
         message.link_id,
         message.db_id.unwrap(),

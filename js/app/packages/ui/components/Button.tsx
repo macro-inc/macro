@@ -61,6 +61,8 @@ export const Button: ParentComponent<ButtonProps> = (props) => {
           'focus:[--focus-border-inset:-4px]',
           'active:border-accent active:bg-accent active:text-panel',
           'disabled:opacity-50 disabled:cursor-not-allowed',
+          'touch:min-h-11 touch:min-w-11 touch:[&_svg]:size-6',
+
           {
             'bg-ink border-ink text-panel hover:bg-accent hover:opacity-80 active:opacity-100':
               'primary' === local.variant,

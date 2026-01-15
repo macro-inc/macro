@@ -9,16 +9,11 @@ import { licenseChannel } from '@core/util/licenseUpdateBroadcastChannel';
 import { updateUserInfo } from '@service-gql/client';
 import { stripeServiceClient } from '@service-stripe/client';
 import { useNavigate, useSearchParams } from '@solidjs/router';
-import {
-  BrightJoins,
-  BrightJoinsProgressMeter,
-} from '@ui/components/BrightJoins';
-import { createEffect, createSignal, onCleanup, Show } from 'solid-js';
+import { createEffect, onCleanup, Show } from 'solid-js';
 
 export default function Onboarding() {
   const { track, TrackingEvents } = withAnalytics();
 
-  const [progress, setProgress] = createSignal(0);
   const authenticated = useIsAuthenticated();
   const connected = useEmailLinksStatus();
   const subscribed = useHasPaidAccess();
@@ -35,8 +30,6 @@ export default function Onboarding() {
     const p = steps
       .map((b) => +!!b) // unary + converts bool to int
       .reduce((a, b) => a + b);
-
-    setProgress((p / steps.length) * 100);
 
     if (p === steps.length) {
       complete();
@@ -132,9 +125,6 @@ export default function Onboarding() {
 
   return (
     <div class="relative flex flex-col gap-4 justify-between items-center p-4 md:p-8 m-1 md:m-8 border border-edge max-w-screen overflow-x-hidden">
-      <BrightJoins />
-      <BrightJoinsProgressMeter progress={progress()} />
-
       <header
         class="flex max-md:flex-col w-full items-center gap-8"
         classList={{

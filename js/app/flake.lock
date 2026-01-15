@@ -55,11 +55,28 @@
         "type": "github"
       }
     },
+    "nixpkgs-biome": {
+      "locked": {
+        "lastModified": 1760405615,
+        "narHash": "sha256-x8dOnMBX0X9L62O5J2Q/uweOROie/cmjg+Tzq+j2Ezw=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "af70ad706db919d644586e8f95c1d8d3d0a1ac56",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "af70ad706db919d644586e8f95c1d8d3d0a1ac56",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
         "fenix": "fenix",
         "flake-utils": "flake-utils",
-        "nixpkgs": "nixpkgs"
+        "nixpkgs": "nixpkgs",
+        "nixpkgs-biome": "nixpkgs-biome"
       }
     },
     "rust-analyzer-src": {

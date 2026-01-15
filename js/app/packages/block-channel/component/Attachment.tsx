@@ -14,6 +14,7 @@ import {
   STATIC_VIDEO,
 } from '@core/store/cacheChannelInput';
 import { matches } from '@core/util/match';
+import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { truncateString } from '@core/util/string';
 import XIcon from '@icon/regular/x.svg';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
@@ -26,7 +27,7 @@ type AttachmentProps = {
 };
 
 export function Attachment(props: AttachmentProps) {
-  const { insertSplit } = useSplitLayout();
+  const { insertSplit, replaceOrInsertSplit } = useSplitLayout();
   const [hover, setHover] = createSignal(false);
 
   const attachmentName = () => {
@@ -99,12 +100,14 @@ export function Attachment(props: AttachmentProps) {
                 )
               }
               text={truncateString(attachmentName(), 30)}
-              onClick={() => {
+              onClick={(e) => {
                 if (props.attachment.pending) return;
-                insertSplit({
+                const inNewSplit = openInNewSplitForMention(e.altKey, true);
+                const open = inNewSplit ? insertSplit : replaceOrInsertSplit;
+                open({
                   type: fileTypeToBlockName(blockName()),
                   id: props.attachment.id,
-                });
+                })?.activate?.();
               }}
             />
           )}

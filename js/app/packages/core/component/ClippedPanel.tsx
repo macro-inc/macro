@@ -1,10 +1,12 @@
+
 import { cornerClip } from '@core/util/clipPath';
-import { type JSXElement, type Ref } from 'solid-js';
+import { type JSX, type JSXElement, type Ref } from 'solid-js';
 import { beveledCorners } from '../../block-theme/signals/themeSignals';
 
 interface PanelProps {
   children?: JSXElement;
   active?: boolean;
+  edgeMutedColor?: JSX.CSSProperties['color'];
   tr?: boolean;
   tl?: boolean;
   bl?: boolean;
@@ -16,7 +18,7 @@ export function ClippedPanel(props: PanelProps) {
   return (
     <div
       style={{
-        'background-image': `linear-gradient(${props.active ? 'var(--color-accent), var(--color-edge-muted) 80%' : 'var(--color-edge-muted)'} )`,
+        'background-image': `linear-gradient(${props.active ? `var(--color-accent), ${props.edgeMutedColor || 'var(--color-edge-muted)'} 80%` : `${props.edgeMutedColor || 'var(--color-edge-muted)'}`} )`,
         'clip-path': !beveledCorners()
           ? cornerClip(
               props.tl ? '0.5rem' : 0,

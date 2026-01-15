@@ -53,20 +53,46 @@ type EmailFormState = {
   markdownBody: string;
 };
 
+const EMPTY_FORM_STATE: EmailFormState = {
+  recipients: {
+    to: [],
+    cc: [],
+    bcc: [],
+  },
+  replyType: 'reply',
+  withQuotedText: false,
+  subject: '',
+  markdownBody: '',
+};
+
 /**
  * Creates a state object for the email form.
- * @param key - The db_id of the email being replied to.
+ * @param purpose - The purpose of the form. Are we managing the state of a draft reply or just a draft message
  * @param options - Required options for the initial state to be calculated from
  * @returns A state object for the email form.
  */
 export function createEmailFormState(
-  key?: string,
+  purpose?:
+    | { type: 'replying_to'; messageID: string }
+    | { type: 'draft'; messageID: string },
+
   options?: EmailFormStateOptions
 ) {
   const userEmail = useEmail();
 
-  const replyingTo = key ? options?.getMessageByID(key) : undefined;
-  const draft = key ? options?.getDraftForMessageReply(key) : undefined;
+  let replyingTo: MessageWithBodyReplyless | undefined;
+
+  if (purpose?.type === 'replying_to') {
+    replyingTo = options?.getMessageByID(purpose.messageID);
+  }
+
+  let draft: MessageWithBodyReplyless | undefined;
+
+  if (purpose?.type === 'draft') {
+    draft = options?.getMessageByID(purpose.messageID);
+  } else if (purpose?.type === 'replying_to') {
+    draft = options?.getDraftForMessageReply(purpose?.messageID);
+  }
 
   const draftContainsAppendedReply = () => {
     const encoded = draft?.body_html_sanitized;
@@ -119,10 +145,13 @@ export function createEmailFormState(
   });
 
   const [onDirtyCb, setOnDirtyCb] = createSignal<(() => void) | undefined>();
+
   const [onReplyTypeAppliedCb, setOnReplyTypeAppliedCb] = createSignal<
     ((rt: ReplyType | undefined) => void) | undefined
   >();
+
   const [capturedEditor, setCapturedEditor] = createSignal<LexicalEditor>();
+
   // We track the last reply type applied to replay against the current state when setOnReplyTypeApplied is attached
   const [lastReplyTypeApplied, setLastReplyTypeApplied] = createSignal<
     ReplyType | undefined
@@ -143,7 +172,6 @@ export function createEmailFormState(
     })) ?? []
   );
 
-  // A wrapper around setRecipientsInner that runs the side-effects alongside setting the store
   const setRecipients = (
     field: keyof EmailFormRecipients,
     value: EmailRecipient[]
@@ -161,7 +189,6 @@ export function createEmailFormState(
     return result;
   };
 
-  // A wrapper around setReplyTypeInner that runs the side-effects alongside setting the signal
   const setReplyType = (next: ReplyType) => {
     setState('replyType', next);
     const rt = state.replyType;
@@ -221,6 +248,22 @@ export function createEmailFormState(
     callDirty();
   };
 
+  const clear = () => {
+    setState(reconcile({ ...EMPTY_FORM_STATE }));
+    const recipients = state.recipients;
+
+    // Notify context of the full recipient list after reset
+    const all = [...recipients.to, ...recipients.cc, ...recipients.bcc];
+    options?.onRecipientsChange?.(unwrap(all));
+
+    setShouldFocusInput(false);
+
+    setAttachments([]);
+
+    // Mark as dirty to propagate change
+    callDirty();
+  };
+
   const value = {
     draft,
     replyAppended: () => state.withQuotedText,
@@ -234,6 +277,7 @@ export function createEmailFormState(
     shouldFocusInput,
     setShouldFocusInput,
     reset,
+    clear,
     setOnDirty: (cb?: () => void) => {
       setOnDirtyCb(() => cb);
     },

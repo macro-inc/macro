@@ -2,6 +2,7 @@ import type { BlockAlias, BlockName } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { isAccessiblePreviewItem, useItemPreview } from '@core/signal/preview';
 import { matches } from '@core/util/match';
+import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { truncateString } from '@core/util/string';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import BuildingIcon from '@icon/duotone/building-office-duotone.svg';
@@ -80,7 +81,7 @@ function useItemPreviewData(props: ItemPreviewProps) {
     }
     const _type = subType ?? fileType ?? type;
     if (!_type) return;
-    openItem(_type, id, altKey);
+    openItem(_type, id, openInNewSplitForMention(altKey, true));
   }
 
   const name = () => {

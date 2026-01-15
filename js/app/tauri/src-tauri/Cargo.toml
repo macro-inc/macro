@@ -52,6 +52,7 @@ tauri-plugin-notification = "2"
 navigation_plugin = { path = "../navigation_plugin" }
 tauri-plugin-notifications = { git = "https://github.com/seanaye/tauri-plugins", branch = "seanaye+mnlphlp/add/android-notifications" }
 tauri-plugin-os = "2"
+tauri-plugin-virtual-keyboard = { git = "https://github.com/voxelbee/tauri-plugin-virtual-keyboard", branch = "main" }
 
 
 [target."cfg(any(target_os = \"macos\", windows, target_os = \"linux\"))".dependencies]

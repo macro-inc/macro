@@ -2,12 +2,15 @@ use super::StaticFileServiceClient;
 use anyhow::Result;
 
 impl StaticFileServiceClient {
-    pub async fn delete_file(&self, file_id: &str) -> Result<()> {
-        self.client
+    /// delete file. propagate error upwards - some callers might see 404 as error, and some as success
+    pub async fn delete_file(&self, file_id: &str) -> Result<reqwest::StatusCode> {
+        let response = self
+            .client
             .delete(format!("{}/internal/file/{}", self.url, file_id))
             .send()
-            .await?;
+            .await?
+            .error_for_status()?;
 
-        Ok(())
+        Ok(response.status())
     }
 }

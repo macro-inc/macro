@@ -48,7 +48,6 @@ import type {
   MessageWithBodyReplyless,
 } from '@service-email/generated/schemas';
 import { useEmail, useUserId } from '@service-gql/client';
-import { BrightJoins } from '@ui/components/BrightJoins';
 import { Button } from '@ui/components/Button';
 import {
   defaultSelectionData,
@@ -145,8 +144,10 @@ function RecipientList(props: {
 }
 
 export function BaseInput(props: {
-  replyingTo: Accessor<MessageWithBodyReplyless>;
+  replyingTo: Accessor<MessageWithBodyReplyless | undefined>;
+  // TODO: Remove `newMessage` props. It's not used...
   newMessage?: boolean;
+  isEditingExisting?: boolean;
   draft?: MessageWithBodyReplyless;
   preloadedBody?: string;
   preloadedHtml?: string;
@@ -157,9 +158,37 @@ export function BaseInput(props: {
   markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
 }) {
   const ctx = useEmailContext();
-  const form = createMemo(() =>
-    getOrInitEmailFormContext(props.replyingTo().db_id!)
-  );
+  const form = createMemo(() => {
+    const replyingTo = props.replyingTo();
+
+    // If neither `replyingTo` or `draft` exist, we'll have an empty
+    // initial state
+    if (!replyingTo && !props.draft) {
+      return getOrInitEmailFormContext();
+    }
+
+    // If we have `replyingTo`, we're going to be
+    // creating a reply to a message so we can derive our state
+    // from the `replyingTo` and a possible existing draft
+    if (replyingTo && replyingTo.db_id) {
+      return getOrInitEmailFormContext({
+        type: 'replying_to',
+        messageID: replyingTo.db_id,
+      });
+    }
+
+    // If we only have the draft available, then we're most likely
+    // editing a draft in a new thread with no other messages
+    if (props.draft && props.draft.db_id) {
+      return getOrInitEmailFormContext({
+        type: 'draft',
+        messageID: props.draft.db_id,
+      });
+    }
+
+    // Fallback to empty state
+    return getOrInitEmailFormContext();
+  });
   const blockId = useBlockId();
   const emailLinksQuery = useEmailLinksQuery();
 
@@ -167,7 +196,6 @@ export function BaseInput(props: {
   const [expandedRecipientsRef, setExpandedRecipientsRef] =
     createSignal<HTMLDivElement>();
   const [editor, setEditor] = createSignal<LexicalEditor>();
-  const [showSubject, _] = createSignal(props.newMessage ?? false);
   const [showExpandedRecipients, setShowExpandedRecipients] =
     createSignal<boolean>(false);
   const [isDragging, setIsDragging] = createSignal<boolean>();
@@ -356,17 +384,19 @@ export function BaseInput(props: {
         { type: 'local' }
       >[];
 
-      const uploaded = await uploadAttachmentMutation.mutateAsync({
-        draftID: draftResponse,
-        attachments: attachments.map((a) => a.file),
-      });
+      if (attachments.length) {
+        const uploaded = await uploadAttachmentMutation.mutateAsync({
+          draftID: draftResponse,
+          attachments: attachments.map((a) => a.file),
+        });
 
-      // Assign the attachment ids to attachments for later use
-      for (const attachment of uploaded.attachments) {
-        form().attachments.assignAttachmentID(
-          attachment.file,
-          attachment.attachmentID
-        );
+        // Assign the attachment ids to attachments for later use
+        for (const attachment of uploaded.attachments) {
+          form().attachments.assignAttachmentID(
+            attachment.file,
+            attachment.attachmentID
+          );
+        }
       }
 
       setSavedDraftId(draftResponse);
@@ -481,10 +511,17 @@ export function BaseInput(props: {
       !hasPaidAccess() ? MACRO_EMAIL_SIGNATURE : undefined
     );
 
-    const prepared = prepareEmailBody(currentEditor, {
-      replyType: effectiveReplyType(),
-      replyingTo: props.replyingTo(),
-    });
+    const replyingTo = props.replyingTo();
+
+    const prepared = prepareEmailBody(
+      currentEditor,
+      replyingTo
+        ? {
+            replyType: effectiveReplyType(),
+            replyingTo,
+          }
+        : undefined
+    );
     if (!prepared) {
       return;
     }
@@ -712,7 +749,6 @@ export function BaseInput(props: {
       }}
       class="relative flex flex-col flex-1 bg-input border-t border-x border-edge-muted rounded-t-[5px] -mb-[7px] max-w-full"
     >
-      <BrightJoins dots={[false, false, true, true]} />
       {/* Top Bar */}
       <div class="flex items-start gap-2 p-2">
         <DropdownMenu>
@@ -887,14 +923,17 @@ export function BaseInput(props: {
           </div>
         </Show>
       </div>
-      <div class={`${showSubject() ? 'flex' : 'hidden'} flex-row items-center`}>
-        <div class="text-xs min-w-16">Subject</div>
+      <div
+        class={`${props.isEditingExisting || props.newMessage ? 'flex' : 'hidden'} flex-row items-center`}
+      >
+        <div class="text-sm min-w-16 pl-4">Subject</div>
         <input
           type="text"
           class="flex-1 text-sm bg-transparent outline-none border-0 px-3 py-1"
           value={form().subject()}
           onInput={(e) => {
             form().setSubject(e.currentTarget.value);
+            scheduleDraftSave();
           }}
           placeholder="Subject"
         />
@@ -1046,9 +1085,9 @@ export function BaseInput(props: {
                 setShowFormatRibbon(!showFormatRibbon());
               }}
               tooltip="Show formatting toolbar"
-              class="aspect-square *:h-5 p-1"
+              class="aspect-square p-1"
             >
-              <TextAa />
+              <TextAa class="h-5" />
             </Button>
 
             <Tooltip
@@ -1091,9 +1130,9 @@ export function BaseInput(props: {
               <Button
                 onclick={deleteDraftAndReset}
                 tooltip="Delete draft"
-                class="aspect-square *:h-5 p-1"
+                class="aspect-square p-1"
               >
-                <Trash />
+                <Trash class="h-5" />
               </Button>
             </Show>
           </div>

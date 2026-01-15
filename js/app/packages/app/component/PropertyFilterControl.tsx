@@ -181,7 +181,7 @@ export const PropertyFilterControl: Component<PropertyFilterControlProps> = (
                 onCancel={() => removeFilter(filter.id)}
               />
               <Show when={index() < filters.length - 1}>
-                <span class="text-[10px] text-ink-muted font-mono pl-3 pt-0.25 leading-none">
+                <span class="text-xxs text-ink-muted font-mono pl-3 pt-0.25 leading-none">
                   AND
                 </span>
               </Show>

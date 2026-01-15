@@ -2,6 +2,7 @@ import { useSuspenseContext } from '@app/component/SuspenseContext';
 import { EmptyState } from '@app/component/UnifiedListEmptyState';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { toast } from '@core/component/Toast/Toast';
+import '@core/directive/dnd';
 import type { ViewId } from '@core/types/view';
 import { onElementConnect } from '@solid-primitives/lifecycle';
 import { debounce } from '@solid-primitives/scheduled';
@@ -42,6 +43,7 @@ import type {
 } from '../types/entity';
 import type { WithSearch } from '../types/search';
 import { Entity } from './Entity';
+import { ProjectDropOverlay } from './ProjectDrop';
 
 const DEBOUNCE_FETCH_MORE_MS = 50;
 
@@ -452,6 +454,9 @@ export function createUnifiedInfiniteList<T extends EntityData>({
     viewId?: ViewId;
     searchText?: string;
     entityMinHeight?: number;
+    viewType?: string;
+    name?: string;
+    splitId?: string;
   }) => {
     const [scrollParentRef, setScrollParentRef] =
       createSignal<HTMLDivElement>();
@@ -626,107 +631,118 @@ export function createUnifiedInfiniteList<T extends EntityData>({
     });
 
     return (
-      <Switch>
-        <Match when={showEmptyState()}>
-          <EmptyState
-            viewId={props.viewId}
-            search={!!props.searchText}
-            hasRefinementsFromBase={props.hasRefinementsFromBase}
-          />
-        </Match>
-        <Match when={true}>
-          <div class="flex size-full relative" ref={setListRef}>
-            <StaticMarkdownContext>
-              <div
-                class="size-full relative scrollbar-hidden"
-                data-unified-entity-list
-                ref={(el) => {
-                  onElementConnect(el, () => {
-                    setScrollParentRef(el as HTMLDivElement);
-                  });
-                }}
-                style={{
-                  overflow: 'auto',
-                }}
-              >
+      <>
+        <Show when={props.viewType === 'project' && props.viewId}>
+          {(id) => (
+            <ProjectDropOverlay
+              projectId={id()}
+              name={props.name}
+              splitId={props.splitId}
+            />
+          )}
+        </Show>
+        <Switch>
+          <Match when={showEmptyState()}>
+            <EmptyState
+              viewId={props.viewId}
+              search={!!props.searchText}
+              hasRefinementsFromBase={props.hasRefinementsFromBase}
+            />
+          </Match>
+          <Match when={true}>
+            <div class="flex size-full relative" ref={setListRef}>
+              <StaticMarkdownContext>
                 <div
+                  class="size-full relative scrollbar-hidden"
+                  data-unified-entity-list
                   ref={(el) => {
                     onElementConnect(el, () => {
-                      props.entityListRef?.(el as HTMLDivElement);
+                      setScrollParentRef(el as HTMLDivElement);
                     });
                   }}
                   style={{
-                    height: `${rowVirtualizer.getTotalSize()}px`,
-                    width: '100%',
-                    position: 'relative',
+                    overflow: 'auto',
                   }}
                 >
                   <div
+                    ref={(el) => {
+                      onElementConnect(el, () => {
+                        props.entityListRef?.(el as HTMLDivElement);
+                      });
+                    }}
                     style={{
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
+                      height: `${rowVirtualizer.getTotalSize()}px`,
                       width: '100%',
-                      transform: `translateY(${rowVirtualizer.getVirtualItems()?.[0]?.start}px)`,
+                      position: 'relative',
                     }}
                   >
-                    <For each={rowVirtualizer.getVirtualItems()}>
-                      {(virtualItem) => {
-                        if (
-                          untrack(() => virtualItem.index) >=
-                          Math.floor(untrack(sortedEntities).length * 0.9)
-                        ) {
-                          debouncedFetchMore();
-                        }
-
-                        return (
-                          <Show
-                            when={sortedEntitiesStore[virtualItem.index]?.id}
-                            keyed
-                          >
-                            {(_) => {
-                              const entity =
-                                sortedEntitiesStore[virtualItem.index];
-                              return (
-                                <Show when={entity}>
-                                  <div
-                                    data-index={virtualItem.index}
-                                    ref={(el) =>
-                                      queueMicrotask(() =>
-                                        rowVirtualizer.measureElement(el)
-                                      )
-                                    }
-                                  >
-                                    <EntityRenderer
-                                      entity={entity}
-                                      index={virtualItem.index}
-                                    />
-                                  </div>
-                                </Show>
-                              );
-                            }}
-                          </Show>
-                        );
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        transform: `translateY(${rowVirtualizer.getVirtualItems()?.[0]?.start}px)`,
                       }}
-                    </For>
+                    >
+                      <For each={rowVirtualizer.getVirtualItems()}>
+                        {(virtualItem) => {
+                          if (
+                            untrack(() => virtualItem.index) >=
+                            Math.floor(untrack(sortedEntities).length * 0.9)
+                          ) {
+                            debouncedFetchMore();
+                          }
+
+                          return (
+                            <Show
+                              when={sortedEntitiesStore[virtualItem.index]?.id}
+                              keyed
+                            >
+                              {(_) => {
+                                const entity =
+                                  sortedEntitiesStore[virtualItem.index];
+                                return (
+                                  <Show when={entity}>
+                                    <div
+                                      data-index={virtualItem.index}
+                                      ref={(el) =>
+                                        queueMicrotask(() =>
+                                          rowVirtualizer.measureElement(el)
+                                        )
+                                      }
+                                    >
+                                      <EntityRenderer
+                                        entity={entity}
+                                        index={virtualItem.index}
+                                      />
+                                    </div>
+                                  </Show>
+                                );
+                              }}
+                            </Show>
+                          );
+                        }}
+                      </For>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </StaticMarkdownContext>
-            <CustomScrollbar
-              scrollContainer={() => {
-                // Find the actual scroll container (VList creates its own scroll container)
-                const listEl = listRef();
-                if (!listEl) return undefined;
-                const scrollContainer = listEl.querySelector(
-                  '[data-unified-entity-list]'
-                ) as HTMLElement;
-                return scrollContainer || undefined;
-              }}
-            />
-          </div>
-        </Match>
-      </Switch>
+              </StaticMarkdownContext>
+              <CustomScrollbar
+                scrollContainer={() => {
+                  // Find the actual scroll container (VList creates its own scroll container)
+                  const listEl = listRef();
+                  if (!listEl) return undefined;
+                  const scrollContainer = listEl.querySelector(
+                    '[data-unified-entity-list]'
+                  ) as HTMLElement;
+                  return scrollContainer || undefined;
+                }}
+              />
+            </div>
+          </Match>
+        </Switch>
+      </>
     );
   };
 

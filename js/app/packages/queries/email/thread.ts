@@ -124,7 +124,7 @@ export function useThreadQuery<Options extends UseThreadQueryOptions>(
   threadId: Accessor<string>,
   options: Accessor<Options>
 ): UseInfiniteQueryResult<
-  Options['select'] extends undefined
+  Extract<Options, { select: unknown }> extends never
     ? ThreadQueryData
     : ReturnType<NonNullable<Options['select']>>,
   Error

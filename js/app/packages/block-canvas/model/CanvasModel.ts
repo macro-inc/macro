@@ -25,7 +25,7 @@ const looseNumber = z
 // Node Types
 export const NODE_TYPES = [
   'text',
-  'file',
+  'entitymention',
   'link',
   'shape',
   'pencil',
@@ -139,16 +139,40 @@ export const TextNodeSchema = BaseNodeSchema.extend({
   followTextWidth: z.boolean().optional(),
 });
 
-// File node schema
-export const FileNodeSchema = BaseNodeSchema.extend({
-  type: z.literal('file'),
-  isChat: z.boolean().optional(),
-  isRss: z.boolean().optional(),
-  isProject: z.boolean().optional(),
-  file: z.string(),
-  subpath: z.string().optional(),
-  mentionUuid: z.string().optional(),
-});
+// Entity mention node schema with backward compatibility
+export const EntityMentionSchema = z.preprocess(
+  (data: any) => {
+    // migrate old schema to new schema
+    if (data && typeof data === 'object') {
+      if (data.type === 'file') {
+        data.type = 'entitymention';
+      }
+
+      if (!data.entityType) {
+        if (data.isChat) {
+          data.entityType = 'chat';
+        } else if (data.isProject) {
+          data.entityType = 'project';
+        } else {
+          data.entityType = 'document';
+        }
+
+        // Remove old fields
+        delete data.isChat;
+        delete data.isRss;
+        delete data.isProject;
+      }
+    }
+    return data;
+  },
+  BaseNodeSchema.extend({
+    type: z.literal('entitymention'),
+    entityType: z.enum(['document', 'chat', 'project', 'channel', 'email']),
+    file: z.string(),
+    subpath: z.string().optional(),
+    mentionUuid: z.string().optional(),
+  })
+);
 
 // Link node schema
 export const LinkNodeSchema = BaseNodeSchema.extend({
@@ -187,7 +211,7 @@ export const PencilNodeSchema = BaseNodeSchema.extend({
 // Union of all node types
 export const NodeSchema = z.union([
   TextNodeSchema,
-  FileNodeSchema,
+  EntityMentionSchema,
   LinkNodeSchema,
   ShapeNodeSchema,
   ImageNodeSchema,
@@ -243,7 +267,7 @@ export const CanvasSchema = z.object({
 // Inferred Schemas Types
 export type BaseNode = z.infer<typeof BaseNodeSchema>;
 export type TextNode = z.infer<typeof TextNodeSchema>;
-export type FileNode = z.infer<typeof FileNodeSchema>;
+export type EntityMentionNode = z.infer<typeof EntityMentionSchema>;
 export type LinkNode = z.infer<typeof LinkNodeSchema>;
 export type ShapeNode = z.infer<typeof ShapeNodeSchema>;
 export type ImageNode = z.infer<typeof ImageNodeSchema>;
@@ -252,7 +276,7 @@ export type PencilNode = z.infer<typeof PencilNodeSchema>;
 export type CanvasNode =
   | BaseNode
   | TextNode
-  | FileNode
+  | EntityMentionNode
   | LinkNode
   | ShapeNode
   | ImageNode
@@ -276,8 +300,10 @@ export const isTextNode = (node: CanvasNode): node is TextNode => {
   return node.type === 'text';
 };
 
-export const isFileNode = (node: CanvasNode): node is FileNode => {
-  return node.type === 'file';
+export const isEntityMentionNode = (
+  node: CanvasNode
+): node is EntityMentionNode => {
+  return node.type === 'entitymention';
 };
 
 export const isLinkNode = (node: CanvasNode): node is LinkNode => {

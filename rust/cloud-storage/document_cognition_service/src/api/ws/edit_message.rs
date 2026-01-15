@@ -5,6 +5,7 @@ use crate::{
 };
 
 use macro_db_client::dcs::delete_chat_message::delete_chat_message;
+use macro_user_id::user_id::MacroUserIdStr;
 
 use super::chat_message::handle_send_chat_message;
 use super::connection::ws_send;
@@ -14,21 +15,21 @@ use std::sync::Arc;
 use tokio;
 use tokio::sync::mpsc::UnboundedSender;
 
-#[tracing::instrument(skip(ctx, sender, jwt_token, incoming_message))]
+#[tracing::instrument(skip(ctx, sender, jwt_token, incoming_message, user_id))]
 pub async fn handle_edit_last_user_message(
     ctx: Arc<ApiContext>,
     sender: &UnboundedSender<FromWebSocketMessage>,
     incoming_message: SendChatMessagePayload,
-    user_id: &str,
+    user_id: Arc<MacroUserIdStr<'static>>,
     connection_id: &str,
     jwt_token: &str,
 ) -> Result<(), StreamWebSocketError> {
-    let chat = get_chat(&ctx, &incoming_message.chat_id, user_id)
+    let chat = get_chat(&ctx, &incoming_message.chat_id, user_id.0.as_ref())
         .await
         .map_err(|err| {
             tracing::error!(
                 chat_id = %incoming_message.chat_id,
-                user_id,
+                user_id = %user_id,
                 error = %err,
                 "failed to get chat"
             );
@@ -69,7 +70,7 @@ pub async fn handle_edit_last_user_message(
     let mut tsx = ctx.db.begin().await.map_err(|err| {
         tracing::error!(
             chat_id = %incoming_message.chat_id,
-            user_id,
+            user_id = %user_id,
             error = %err,
             "error creating transaction"
         );
@@ -88,7 +89,7 @@ pub async fn handle_edit_last_user_message(
                 tracing::error!(
                     chat_id = %incoming_message.chat_id,
                     message_id = %first.id,
-                    user_id,
+                    user_id = %user_id,
                     error = %err,
                     "failed to delete message (i)"
                 );
@@ -107,7 +108,7 @@ pub async fn handle_edit_last_user_message(
                 tracing::error!(
                     chat_id = %incoming_message.chat_id,
                     message_id = %last.id,
-                    user_id,
+                    user_id = %user_id,
                     error = %err,
                     "failed to delete message (ii)"
                 );
@@ -122,7 +123,7 @@ pub async fn handle_edit_last_user_message(
     tsx.commit().await.map_err(|err| {
         tracing::error!(
             chat_id = %incoming_message.chat_id,
-            user_id,
+            user_id = %user_id,
             error = %err,
             "error committing transaction"
         );

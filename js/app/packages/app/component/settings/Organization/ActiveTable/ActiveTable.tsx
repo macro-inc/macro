@@ -161,7 +161,7 @@ const UserRow: Component<UserRowProps> = (props) => {
               onClick={patchUserAdmin}
             >
               <span class="font-semibold text-sm">Admin</span>
-              <p class="text-[10px] leading-[12px] mt-1 max-w-xs">
+              <p class="text-xxs leading-[12px] mt-1 max-w-xs">
                 Can change organization settings and invite new members to the
                 organization.
               </p>
@@ -175,7 +175,7 @@ const UserRow: Component<UserRowProps> = (props) => {
               onClick={patchUserMember}
             >
               <span class="font-semibold text-sm">Member</span>
-              <p class="text-[10px] leading-[12px] mt-1 max-w-xs">
+              <p class="text-xxs leading-[12px] mt-1 max-w-xs">
                 Cannot change organization settings or invite new members to the
                 organization.
               </p>

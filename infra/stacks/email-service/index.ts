@@ -109,6 +109,21 @@ const cloudStorageClusterName: pulumi.Output<string> = cloudStorageStack
   .getOutput('cloudStorageClusterName')
   .apply((arn) => arn as string);
 
+const sfsDeleteLambdaStack = new pulumi.StackReference(
+  'email-sfs-delete-handler-stack',
+  {
+    name: `macro-inc/email-sfs-delete-handler/${stack}`,
+  }
+);
+
+const sfsDeleteQueueArn: pulumi.Output<string> = sfsDeleteLambdaStack
+  .getOutput('sfsDeleteQueueArn')
+  .apply((arn) => arn as string);
+
+const sfsDeleteQueueName: pulumi.Output<string> = sfsDeleteLambdaStack
+  .getOutput('sfsDeleteQueueName')
+  .apply((name) => name as string);
+
 const { notificationQueueName, notificationQueueArn } = getMacroNotify();
 
 const emailServiceRedis = new Redis('email-service-redis', {
@@ -187,6 +202,8 @@ const sfs_uploader_queue = new Queue('email-service-sfs-mapper', {
 export const sfsUploaderQueueArn = pulumi.interpolate`${sfs_uploader_queue.queue.arn}`;
 export const sfsUploaderQueueName = pulumi.interpolate`${sfs_uploader_queue.queue.name}`;
 
+export { sfsDeleteQueueArn, sfsDeleteQueueName };
+
 const { searchEventQueueName, searchEventQueueArn } = getSearchEventQueue();
 
 // Retrieve name of queue used Contacts Service
@@ -236,6 +253,7 @@ const queueArns = [
   searchEventQueueArn,
   backfillQueueArn,
   sfsUploaderQueueArn,
+  sfsDeleteQueueArn,
   contactsQueueArn,
 ];
 
@@ -363,6 +381,10 @@ const containerEnvVars = [
   {
     name: 'SFS_UPLOADER_QUEUE',
     value: sfsUploaderQueueName,
+  },
+  {
+    name: 'SFS_DELETE_QUEUE',
+    value: sfsDeleteQueueName,
   },
   {
     name: 'GMAIL_GCP_QUEUE',

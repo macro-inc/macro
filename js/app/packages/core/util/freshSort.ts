@@ -4,6 +4,7 @@
  */
 import type { FilterResult } from 'fuzzy';
 import fuzzy from 'fuzzy';
+import { fuzzyScoreCommaSeparated } from './fuzzy';
 
 export interface FreshSortConfig {
   /** Weight for fuzzy match (0-1). Higher values prioritize search relevance. Default: 0.7 */
@@ -22,6 +23,8 @@ export interface FreshSortConfig {
   useViewedAt?: boolean;
   /** Boost multiplier for channel items when query is present. Default: 1.0 (no boost) */
   channelBoost?: number;
+  /** Enable comma-separated matching for channel names. When enabled, query "a,b" matches channel name "a,c,b". Default: false */
+  commaSeparatedChannelMatch?: boolean;
 }
 
 export interface TimestampedItem {
@@ -53,6 +56,7 @@ const DEFAULT_CONFIG: Required<FreshSortConfig> = {
   minFuzzyThreshold: 0.1,
   useViewedAt: false,
   channelBoost: 1.0,
+  commaSeparatedChannelMatch: false,
 };
 
 function extractTimestamp(
@@ -193,6 +197,42 @@ export function createFreshSearch<T extends TimestampedItem>(
   extractor: (item: T) => string
 ) {
   return (items: T[], query: string): FreshSortResult<T>[] => {
+    const finalConfig = { ...DEFAULT_CONFIG, ...config };
+    const useCommaSeparated =
+      finalConfig.commaSeparatedChannelMatch && query.includes(',');
+
+    if (useCommaSeparated) {
+      // For comma-separated queries, handle channel items specially
+      const channelResults: FilterResult<T>[] = [];
+      const nonChannelItems: T[] = [];
+
+      for (const item of items) {
+        if (isChannelItem(item)) {
+          const name = extractor(item);
+          const score = fuzzyScoreCommaSeparated(query, name);
+          if (score >= 0) {
+            channelResults.push({
+              original: item,
+              string: name,
+              score: score * 100, // Scale to match fuzzy library scoring
+              index: 0,
+            });
+          }
+        } else {
+          nonChannelItems.push(item);
+        }
+      }
+
+      // Get fuzzy results for non-channel items using regular matching
+      const nonChannelResults = fuzzy.filter(query, nonChannelItems, {
+        extract: extractor,
+      });
+
+      // Combine results
+      const allResults = [...channelResults, ...nonChannelResults];
+      return freshSort(allResults, config);
+    }
+
     const fuzzyResults = fuzzy.filter(query, items, {
       extract: extractor,
     });

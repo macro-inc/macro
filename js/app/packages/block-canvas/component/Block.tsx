@@ -22,10 +22,15 @@ import {
   createResource,
   createSignal,
   on,
+  onCleanup,
   Show,
 } from 'solid-js';
 import { blockDataSignal } from '../signal/canvasBlockData';
-import { useLoadCanvasData } from '../store/canvasData';
+import {
+  pendingUpdates,
+  useLoadCanvasData,
+  useSaveCanvasDataImmediate,
+} from '../store/canvasData';
 import { isAnimating, renderStateStore } from '../store/RenderState';
 import { CanvasController } from './CanvasController';
 import { CanvasRenderer } from './CanvasRenderer';
@@ -74,9 +79,31 @@ export default function BlockCanvas(props: BlockCanvasProps) {
   const isNestedBlock = useIsNestedBlock();
   const nestedContext = useBlockNestedContext<'canvas'>();
   const loadCanvasData = useLoadCanvasData();
+  const saveCanvasDataImmediate = useSaveCanvasDataImmediate();
+  const [pending] = pendingUpdates;
   const [, setRenderState] = renderStateStore;
   const [dataState, setDataState] = createSignal<BlockDataState>('loading');
   const [visible, setVisible] = createSignal(false);
+
+  // Flush pending saves on cleanup to prevent data loss when navigating away
+  onCleanup(() => {
+    if (pending()) {
+      saveCanvasDataImmediate();
+    }
+  });
+
+  // Also flush on page unload (refresh, close tab)
+  createEffect(() => {
+    const handleBeforeUnload = () => {
+      if (pending()) {
+        saveCanvasDataImmediate();
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    onCleanup(() => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    });
+  });
 
   createEffect(() => {
     const context = nestedContext?.parentContext;

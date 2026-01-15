@@ -96,3 +96,77 @@ export function fuzzyTest(query: string, text: string): boolean {
 
   return idxs !== null && idxs.length > 0;
 }
+
+/**
+ * Tests if a comma-separated query matches against a comma-separated text.
+ * Each query part must fuzzy-match at least one text part.
+ * e.g., query "nick,hutch" matches text "Nick Noble,teo,hutch"
+ */
+export function fuzzyTestCommaSeparated(query: string, text: string): boolean {
+  if (!query) return true;
+
+  const queryParts = query
+    .split(',')
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0);
+  const textParts = text
+    .split(',')
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0);
+
+  if (queryParts.length === 0) return true;
+  if (textParts.length === 0) return false;
+
+  // Every query part must match at least one text part
+  for (const queryPart of queryParts) {
+    let matchFound = false;
+    for (const textPart of textParts) {
+      if (fuzzyTest(queryPart, textPart)) {
+        matchFound = true;
+        break;
+      }
+    }
+    if (!matchFound) return false;
+  }
+
+  return true;
+}
+
+/**
+ * Calculates a score for comma-separated fuzzy matching.
+ * Returns the average of best match scores for each query part.
+ * Returns -1 if any query part fails to match (can be used instead of fuzzyTestCommaSeparated).
+ */
+export function fuzzyScoreCommaSeparated(query: string, text: string): number {
+  if (!query) return 1;
+
+  const queryParts = query
+    .split(',')
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0);
+  const textParts = text
+    .split(',')
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0);
+
+  if (queryParts.length === 0) return 1;
+  if (textParts.length === 0) return -1;
+
+  let totalScore = 0;
+
+  for (const queryPart of queryParts) {
+    let bestScore = -1;
+    for (const textPart of textParts) {
+      // Simple scoring: ratio of query length to text length when it matches
+      if (fuzzyTest(queryPart, textPart)) {
+        // Score based on how much of the text part the query covers
+        const score = queryPart.length / textPart.length;
+        bestScore = Math.max(bestScore, Math.min(1, score));
+      }
+    }
+    if (bestScore < 0) return -1;
+    totalScore += bestScore;
+  }
+
+  return totalScore / queryParts.length;
+}

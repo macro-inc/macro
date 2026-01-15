@@ -1,10 +1,5 @@
-import type { FileListSize } from '@core/component/FileList/constants';
-import type { DragEventWithData } from '@core/component/FileList/DraggableItem';
 import { TruncatedText } from '@core/component/FileList/TruncatedText';
-import { useItemOperations } from '@core/component/FileList/useItemOperations';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import { useHistoryTree } from '@service-storage/history';
-import { useProjects } from '@service-storage/projects';
 import {
   DragDropProvider,
   DragDropSensors,
@@ -13,15 +8,35 @@ import {
   useDragDropContext,
 } from '@thisbeyond/solid-dnd';
 import { EntityIcon } from 'core/component/EntityIcon';
-import { updateItemParentOnDrop } from 'core/component/FileList/updateItemParentOnDrop';
-import { createMemo, type JSXElement } from 'solid-js';
+import {
+  createContext,
+  createMemo,
+  createSignal,
+  type JSXElement,
+  onCleanup,
+  useContext,
+  type Accessor,
+} from 'solid-js';
+
+type DragOperationContextValue = {
+  isAltKey: Accessor<boolean>;
+};
+
+const DragOperationContext = createContext<DragOperationContextValue>();
+
+export function useDragOperation() {
+  const context = useContext(DragOperationContext);
+  if (!context) {
+    throw new Error('useDragOperation must be used within ItemDndProvider');
+  }
+  return context;
+}
 
 export function ItemDragOverlay() {
   const [state] = useDragDropContext() ?? [];
   const activeDraggable = createMemo(() => {
     return state?.active.draggable;
   });
-  const size: FileListSize = activeDraggable()?.data.size;
 
   const getEntityIconType = () => {
     const data = activeDraggable()?.data;
@@ -52,12 +67,10 @@ export function ItemDragOverlay() {
   return (
     <div class="w-auto max-w-[300px] flex flex-col gap-2 bg-active p-2 rounded-md z-drag shadow-sm pointer-events-none">
       <div class="flex flex-row items-center gap-2">
-        <EntityIcon size={size ?? 'sm'} targetType={getEntityIconType()} />
-        <TruncatedText size={size ?? 'sm'}>
-          {activeDraggable()?.data.name}
-        </TruncatedText>
+        <EntityIcon size="sm" targetType={getEntityIconType()} />
+        <TruncatedText size="sm">{activeDraggable()?.data.name}</TruncatedText>
       </div>
-      {/* TODO post- multiselect exists */}
+      {/* TODO: when multiselect exists */}
       {/* <Show when={activeDraggable()?.data.selectedItems.length > 1}>
         <div class={`${TEXT_SIZE_CLASSES[size ?? 'sm']} text-ink-muted pl-2`}>
           + {activeDraggable()?.data.selectedItems.length - 1} items
@@ -67,105 +80,38 @@ export function ItemDragOverlay() {
   );
 }
 
-export function ItemDragEndHandler() {
-  const historyTree = useHistoryTree();
-  const [, { onDragEnd }] = useDragDropContext() ?? [
-    undefined,
-    { onDragEnd: () => {} },
-  ];
-  const { deleteItem, bulkDelete } = useItemOperations();
+export function ItemDndProvider(props: { children: JSXElement }) {
+  const [isAltPressed, setIsAltPressed] = createSignal(false);
 
-  onDragEnd((event) => {
-    const { draggable, droppable } = event as DragEventWithData;
-    let parentId = '';
-    let parentName = '';
-
-    if (draggable.data.id === droppable?.data.id) {
-      return;
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.altKey && !isAltPressed()) {
+      setIsAltPressed(true);
     }
+  };
 
-    if (droppable && droppable.id === 'trash') {
-      return deleteItem({
-        itemType: draggable.data.type,
-        id: draggable.data.id,
-        itemName: draggable.data.name,
-      });
+  const handleKeyUp = (e: KeyboardEvent) => {
+    if (!e.altKey && isAltPressed()) {
+      setIsAltPressed(false);
     }
+  };
 
-    if (droppable && droppable.data.type === 'explorer-base') {
-      parentId = droppable.data.parentId ?? '';
-      parentName = droppable.data.parentName ?? 'root';
+  window.addEventListener('keydown', handleKeyDown);
+  window.addEventListener('keyup', handleKeyUp);
 
-      if (droppable.id === 'explorer-base-trash') {
-        if (draggable.data.isBulkMove) {
-          const items = draggable.data.selectedItems;
-          if (!items) {
-            return;
-          }
-
-          bulkDelete(items).then((result) => {
-            if (result.success) {
-              draggable.data.setSelectedItems?.([]);
-            } else {
-              draggable.data.setSelectedItems?.(result.failedItems);
-            }
-          });
-        } else {
-          // Handle single item deletion
-          deleteItem({
-            itemType: draggable.data.type,
-            id: draggable.data.id,
-            itemName: draggable.data.name,
-          });
-        }
-        return;
-      }
-    } else if (droppable && droppable.data.type === 'project') {
-      parentId = String(droppable.data.id);
-      parentName = droppable.data.name;
-    } else if (droppable && droppable.data.type !== 'project') {
-      // check if droppable is in user's root list
-      if (
-        historyTree().rootItems.find(
-          (item) => item.item.id === droppable.data.id
-        )
-      ) {
-        parentId = '';
-        parentName = 'root';
-      }
-      // if not, update parent to droppable parent
-      else {
-        const projects = useProjects();
-        const parentProject = projects().find(
-          (project) => project.id === droppable.data.parentId
-        );
-        if (!parentProject) {
-          return;
-        }
-        parentId = parentProject.id;
-        parentName = parentProject.name;
-      }
-    }
-
-    updateItemParentOnDrop({
-      draggable: draggable as DragEventWithData['draggable'],
-      parentId,
-      parentName,
-    });
+  onCleanup(() => {
+    window.removeEventListener('keydown', handleKeyDown);
+    window.removeEventListener('keyup', handleKeyUp);
   });
 
-  return '';
-}
-
-export function ItemDndProvider(props: { children: JSXElement }) {
   return (
-    <DragDropProvider collisionDetector={mostIntersecting}>
-      <DragDropSensors />
-      <ItemDragEndHandler />
-      {props.children}
-      <DragOverlay class="z-drag">
-        <ItemDragOverlay />
-      </DragOverlay>
-    </DragDropProvider>
+    <DragOperationContext.Provider value={{ isAltKey: isAltPressed }}>
+      <DragDropProvider collisionDetector={mostIntersecting}>
+        <DragDropSensors />
+        {props.children}
+        <DragOverlay class="z-drag">
+          <ItemDragOverlay />
+        </DragOverlay>
+      </DragDropProvider>
+    </DragOperationContext.Provider>
   );
 }

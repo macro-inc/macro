@@ -22,7 +22,6 @@ import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { toast } from '@core/component/Toast/Toast';
 import { observedSize } from '@core/directive/observedSize';
 import type { InputAttachment } from '@core/store/cacheChannelInput';
-import { clamp } from '@core/util/math';
 import SunIcon from '@icon/duotone/sun-horizon-duotone.svg';
 import ArrowDownIcon from '@icon/regular/arrow-down.svg';
 import XIcon from '@icon/regular/x.svg';
@@ -56,29 +55,6 @@ import { MessageContainer } from '../Message/MessageContainer';
 import { ReplyInputsPortaler } from '../ReplyInputsPortaler';
 
 false && observedSize;
-
-const SHORT_DATE_FORMATTER = new Intl.DateTimeFormat(undefined, {
-  month: 'short',
-  day: 'numeric',
-});
-
-const LONG_DATE_FORMATTER = new Intl.DateTimeFormat(undefined, {
-  month: 'short',
-  day: 'numeric',
-  year: 'numeric',
-});
-
-const toScrollHintDate = (isoDate?: string) => {
-  if (!isoDate) return '';
-  const date = new Date(isoDate);
-  if (Number.isNaN(date.getTime())) return '';
-  const now = new Date();
-  const formatter =
-    date.getFullYear() === now.getFullYear()
-      ? SHORT_DATE_FORMATTER
-      : LONG_DATE_FORMATTER;
-  return formatter.format(date).toUpperCase();
-};
 
 // Provide stable row models to VList so item instances are preserved across moves/insertions
 type RowModel = {
@@ -523,23 +499,6 @@ function MessageListImpl(props: MessageListProps) {
     setIsPrepend(false);
   });
 
-  const getScrollHint = () => {
-    if (!hasUserScrolled()) return;
-    const handle = virtualHandle();
-    const list = props.orderedMessages();
-    if (!handle || !list || list.length === 0) return;
-
-    const endIndex = handle.findItemIndex(handle.scrollOffset);
-
-    if (endIndex === undefined) return;
-
-    const index = clamp(endIndex, 0, list.length - 1);
-    const row = rows()[index];
-    const label = toScrollHintDate(row?.message.created_at);
-
-    return label;
-  };
-
   // Ensure thread view store store reflects drafts. Only sets when no entry exists to avoid overriding user actions.
   createEffect(() => {
     const base = filteredTopLevelMessages() ?? [];
@@ -895,7 +854,6 @@ function MessageListImpl(props: MessageListProps) {
         <CustomScrollbar
           reverse
           scrollContainer={listContext.scrollContainerRef}
-          getLabel={getScrollHint}
           enabled={hasUserScrolled()}
         />
       </div>

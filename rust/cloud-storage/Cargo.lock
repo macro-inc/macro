@@ -46,6 +46,7 @@ name = "ai"
 version = "0.1.0"
 dependencies = [
  "ai_format",
+ "ai_toolset",
  "anthropic",
  "anyhow",
  "async-openai",
@@ -87,9 +88,11 @@ version = "0.1.0"
 dependencies = [
  "ai",
  "ai_format",
+ "ai_toolset",
  "anthropic",
  "anyhow",
  "async-trait",
+ "axum",
  "chrono",
  "comms_service_client",
  "cool_asserts",
@@ -114,6 +117,23 @@ dependencies = [
  "tracing",
  "utoipa",
  "uuid",
+]
+
+[[package]]
+name = "ai_toolset"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum",
+ "axum-macros",
+ "futures",
+ "macro_user_id",
+ "schemars",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "utoipa",
 ]
 
 [[package]]
@@ -3230,6 +3250,23 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "email_sfs_delete_handler"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aws-config",
+ "aws-sdk-sqs",
+ "aws_lambda_events",
+ "lambda_runtime",
+ "macro_entrypoint",
+ "macro_env",
+ "sqlx",
+ "sqs_client",
  "tokio",
  "tracing",
 ]

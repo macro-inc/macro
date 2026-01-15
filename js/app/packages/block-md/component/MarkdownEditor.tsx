@@ -10,7 +10,7 @@ import {
   useMaybeBlockAliasedName,
 } from '@core/block';
 import { IS_MAC } from '@core/constant/isMac';
-import type { DragEventWithData } from '@core/component/FileList/DraggableItem';
+import type { EntityDragEvent } from '@macro-entity';
 import { DecoratorRenderer } from '@core/component/LexicalMarkdown/component/core/DecoratorRenderer';
 import { FocusClickTarget } from '@core/component/LexicalMarkdown/component/core/FocusClickTarget';
 import {
@@ -300,7 +300,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
   ];
 
   // turn the solid dnd events into something we can use.
-  const wrapDndEvent = (event: DragEventWithData) => {
+  const wrapDndEvent = (event: EntityDragEvent) => {
     const currentPos = dragDropState?.active.sensor?.coordinates?.current;
     if (!currentPos) return;
     const mousePos = {
@@ -318,7 +318,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     };
   };
 
-  const dndDragEnd = async (event: DragEventWithData) => {
+  const dndDragEnd = async (event: EntityDragEvent) => {
     if (!dragInsertStore.visible) return;
     setDragInsertStore({ visible: false });
     if (!canEdit()) return;
@@ -358,7 +358,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     });
   };
 
-  const dndDragMove = throttle((event: DragEventWithData) => {
+  const dndDragMove = throttle((event: EntityDragEvent) => {
     if (!droppable.isActiveDroppable) {
       return setDragInsertStore({ visible: false });
     }
@@ -371,12 +371,12 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     }
   }, 60);
 
-  onDragEnd((event) => {
-    dndDragEnd(event as DragEventWithData);
+  onDragEnd((event: EntityDragEvent) => {
+    dndDragEnd(event);
   });
 
-  onDragMove((event) => {
-    dndDragMove(event as DragEventWithData);
+  onDragMove((event: EntityDragEvent) => {
+    dndDragMove(event);
   });
 
   // handler for the find and replace directive

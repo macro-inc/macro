@@ -83,6 +83,8 @@ pub struct SQS {
     search_event_queue: Option<String>,
     #[cfg(feature = "sfs_uploader")]
     email_sfs_uploader_queue: Option<String>,
+    #[cfg(feature = "sfs_delete")]
+    email_sfs_delete_queue: Option<String>,
 }
 
 impl SQS {
@@ -117,6 +119,8 @@ impl SQS {
             search_event_queue: None,
             #[cfg(feature = "sfs_uploader")]
             email_sfs_uploader_queue: None,
+            #[cfg(feature = "sfs_delete")]
+            email_sfs_delete_queue: None,
         }
     }
 }

@@ -26,7 +26,7 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
   const [clientHeight, setClientHeight] = createSignal(0);
   const [isDragging, setIsDragging] = createSignal(false);
   const [scrollStartTop, setScrollStartTop] = createSignal(0);
-  const [scrollVelocity, setScrollVelocity] = createSignal(0);
+  const [isScrolling, setIsScrolling] = createSignal(false);
   const [isHovering, setIsHovering] = createSignal(false);
 
   const [scrollLabelVisible, setScrollLabelVisible] = createSignal(
@@ -38,9 +38,7 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
     props.labelVisibilityDebounceMs ?? 300
   );
 
-  let lastScrollTop = 0;
-  let lastScrollTime = Date.now();
-  let velocityTimeoutId: ReturnType<typeof setTimeout> | undefined;
+  const debouncedHideScrollbar = debounce(() => setIsScrolling(false), 800);
 
   const updateScrollMetrics = () => {
     const container = props.scrollContainer();
@@ -53,6 +51,31 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
     setClientHeight(clientHeight);
   };
 
+  const maxScroll = () => Math.max(0, scrollHeight() - clientHeight());
+
+  /**
+   * Maps the container's scroll position to an offset measured from the top of
+   * the content in the normal (non-reversed) coordinate space.
+   *
+   * When using reverse layouts (e.g. `flex-direction: column-reverse`), many
+   * browsers report `scrollTop` in the range `[-maxScroll..0]`. In that case:
+   * - at visual top: scrollTop === -maxScroll
+   * - at visual bottom: scrollTop === 0
+   *
+   * We map that into [0..maxScroll] so the thumb can correctly reach the top.
+   */
+  const scrollOffsetFromTop = () => {
+    const max = maxScroll();
+    if (max <= 0) return 0;
+
+    if (!props.reverse) {
+      return Math.max(0, Math.min(max, scrollTop()));
+    }
+
+    // For reversed scrollTop in [-max..0], this converts to [0..max]
+    return Math.max(0, Math.min(max, max + scrollTop()));
+  };
+
   // Calculate scrollbar metrics
   function thumbHeight() {
     const containerHeight = clientHeight();
@@ -62,24 +85,12 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
   }
   const thumbTop = () => {
     const containerHeight = clientHeight();
-    const contentHeight = scrollHeight();
-
-    let maxScroll = contentHeight;
-
-    if (!props.reverse) {
-      maxScroll -= containerHeight;
-    }
-
-    if (maxScroll <= 0) return 0;
+    const max = maxScroll();
+    if (max <= 0) return 0;
     const thumbH = thumbHeight();
-
-    // scrollTop is negative when reversed so adding to scrollHeight will
-    // set the scrollTop to be the total scrollable space - the current scroll position
-    const scrollOffset = props.reverse
-      ? scrollTop() + scrollHeight()
-      : scrollTop();
-
-    return (scrollOffset / maxScroll) * (containerHeight - thumbH);
+    const trackSpace = Math.max(0, containerHeight - thumbH);
+    const offset = scrollOffsetFromTop();
+    return (offset / max) * trackSpace;
   };
 
   const isVisible = () => scrollHeight() > clientHeight();
@@ -96,32 +107,14 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
         updateScrollMetrics();
       }
 
-      // Calculate scroll velocity
-      const now = Date.now();
-      const timeDelta = now - lastScrollTime;
-      const scrollDelta = Math.abs(container.scrollTop - lastScrollTop);
-      const velocity = timeDelta > 0 ? scrollDelta / timeDelta : 0;
-
-      lastScrollTop = container.scrollTop;
-      lastScrollTime = now;
-
-      setScrollVelocity(velocity);
+      // Show scrollbar while scrolling, hide after delay
+      setIsScrolling(true);
+      debouncedHideScrollbar();
 
       if (props.labelVisibilityDebounceMs !== Infinity) {
         setScrollLabelVisible(true);
         debouncedHideScrollLabel();
       }
-
-      // Gradually reduce velocity - slower fade out
-      if (velocityTimeoutId) clearTimeout(velocityTimeoutId);
-      velocityTimeoutId = setTimeout(() => {
-        setScrollVelocity((prev) => {
-          const newVel = prev * 0.85;
-          if (newVel < 0.05) return 0;
-          setTimeout(() => setScrollVelocity(0), 100);
-          return newVel;
-        });
-      }, 200);
     };
 
     const handleResize = () => {
@@ -135,7 +128,6 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
     onCleanup(() => {
       container.removeEventListener('scroll', handleScroll);
       resizeObserver.disconnect();
-      if (velocityTimeoutId) clearTimeout(velocityTimeoutId);
     });
   });
 
@@ -148,11 +140,8 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
     if (!container) return;
 
     setIsDragging(true);
-    setScrollStartTop(
-      props.reverse
-        ? container.scrollHeight + container.scrollTop
-        : container.scrollTop
-    );
+    // Store "offset from top" so dragging works consistently in reverse mode.
+    setScrollStartTop(scrollOffsetFromTop());
 
     let isDraggingLocal = true;
     const handleMouseMove = (moveEvent: MouseEvent) => {
@@ -160,24 +149,22 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
 
       const deltaY = moveEvent.clientY - e.clientY;
       const trackH = clientHeight();
-      const contentHeight = scrollHeight();
-
-      let maxScroll = contentHeight;
-
-      if (!props.reverse) {
-        maxScroll -= trackH;
-      }
+      const max = maxScroll();
+      if (max <= 0) return;
 
       const thumbH = thumbHeight();
+      const trackSpace = trackH - thumbH;
+      if (trackSpace <= 0) return;
 
-      const scrollRatio = deltaY / (trackH - thumbH);
+      const scrollRatio = deltaY / trackSpace;
       let newScrollTop = Math.max(
         0,
-        Math.min(maxScroll, scrollStartTop() + scrollRatio * maxScroll)
+        Math.min(max, scrollStartTop() + scrollRatio * max)
       );
 
       if (props.reverse) {
-        newScrollTop = newScrollTop - contentHeight;
+        // Convert [0..max] back into [-max..0] for reversed layouts.
+        newScrollTop = newScrollTop - max;
       }
 
       container.scrollTop = newScrollTop;
@@ -203,21 +190,14 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const clickY = e.clientY - rect.top;
     const trackH = clientHeight();
-    const contentHeight = scrollHeight();
-    let maxScroll = contentHeight;
-
-    if (!props.reverse) {
-      maxScroll -= trackH;
-    }
+    const max = maxScroll();
+    if (max <= 0) return;
 
     const scrollRatio = clickY / trackH;
-    let newScrollTop = Math.max(
-      0,
-      Math.min(maxScroll, scrollRatio * maxScroll)
-    );
+    let newScrollTop = Math.max(0, Math.min(max, scrollRatio * max));
 
     if (props.reverse) {
-      newScrollTop = newScrollTop - contentHeight;
+      newScrollTop = newScrollTop - max;
     }
 
     container.scrollTop = newScrollTop;
@@ -226,21 +206,16 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
 
   const getThumbOpacity = () => {
     if (isDragging()) return 1;
-    if (isHovering()) return 0.8;
-    const vel = scrollVelocity();
-    if (vel === 0) return 0;
-    // Normalize velocity (0-5px/ms is typical fast scroll)
-    const normalizedVel = Math.min(vel / 5, 1);
-    return normalizedVel;
+    if (isHovering()) return 1;
+    if (isScrolling()) return 1;
+    return 0;
   };
 
-  const getThumbTransform = () => {
-    if (isDragging()) return 'scaleX(1.6)';
-    const vel = scrollVelocity();
-    if (vel === 0) return 'scaleX(1)';
-    // Scale more aggressively with velocity - up to 2x width at high speeds
-    const normalizedVel = Math.min(vel / 5, 1);
-    return `scaleX(${1 + normalizedVel * 1.0})`;
+  const getThumbScale = () => {
+    if (isDragging()) return 'scaleX(4)';
+    if (isHovering()) return 'scaleX(2)';
+    if (isScrolling()) return 'scaleX(2)';
+    return 'scaleX(1)';
   };
 
   return (
@@ -257,7 +232,7 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
         />
         {/* Thumb */}
         <div
-          class="absolute right-0 cursor-grab active:cursor-grabbing transition-all duration-200 ease-out"
+          class="absolute right-0 cursor-grab active:cursor-grabbing"
           style={{
             top: `${thumbTop()}px`,
             height: `${thumbHeight()}px`,
@@ -265,8 +240,8 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
             'background-color': 'var(--color-accent)',
             'transform-origin': 'right center',
             opacity: getThumbOpacity(),
-            transform: getThumbTransform(),
-            'transition-property': 'opacity, transform',
+            transform: getThumbScale(),
+            transition: 'opacity 200ms ease-out, transform 200ms ease-out',
           }}
           onMouseDown={handleMouseDown}
         />
@@ -278,9 +253,7 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
               opacity: scrollLabelVisible() ? 1 : 0,
             }}
           >
-            {props.getLabel?.(
-              props.reverse ? scrollTop() + scrollHeight() : scrollTop()
-            )}
+            {props.getLabel?.(scrollOffsetFromTop())}
           </div>
         </Show>
       </div>

@@ -1,0 +1,3 @@
+name: email-sfs-delete-handler
+runtime: nodejs
+description: Email SFS Delete Lambda
