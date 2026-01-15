@@ -66,7 +66,7 @@ import {
   type WithNotification,
   type WithSearch,
 } from '@macro-entity';
-import { usePropertyEditorHotkeys } from '@macro-entity';
+import { usePropertyEditorHotkeys } from '../component/property-edit-modal/hooks/usePropertyEditorHotkeys';
 import {
   isChannelMention,
   isChannelMessageReply,
@@ -1290,7 +1290,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   usePropertyEditorHotkeys({
     scopeId: splitContext.splitHotkeyScope,
     getSelectedEntities: () => {
-      return [selectedEntity()];
+      return selectedEntity() ? [selectedEntity()!] : [];
     },
   });
 
