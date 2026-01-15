@@ -8,6 +8,7 @@ import { playSound } from '@app/util/sound';
 import { getIsSpecialProject } from '@block-project/isSpecial';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
+import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { ENABLE_PROJECT_VIEW_PREVIEW } from '@core/constant/featureFlags';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { fileSelector } from '@core/directive/fileSelector';
@@ -22,7 +23,6 @@ import {
   queryKeys,
   useQueryClient as useEntityQueryClient,
 } from '@macro-entity';
-import Files from '@phosphor-icons/core/duotone/files-duotone.svg?component-solid';
 import { refetchResources } from '@service-storage/util/refetchResources';
 import { toast } from 'core/component/Toast/Toast';
 import {
@@ -155,15 +155,7 @@ const Block: Component = () => {
         }}
       >
         <Show when={isDragging() && !isSpecialProject}>
-          <div class="hidden sm:flex flex-col absolute top-0 left-0 w-full h-full backdrop-blur-sm bg-accent/10 items-center justify-center space-y-3 z-3">
-            <Files class="w-[80px] h-[80px] text-ink" />
-            <h3 class="text-2xl font-semibold text-ink">
-              Upload to {name() ?? 'folder'}
-            </h3>
-            <p class="text-sm text-ink-muted">
-              Drop files or folders here to upload
-            </p>
-          </div>
+          <FileDropOverlay>Upload to this folder</FileDropOverlay>
         </Show>
         <TopBar />
         <Show when={ENABLE_PROJECT_VIEW_PREVIEW} fallback={<UnifiedListView />}>

@@ -293,11 +293,9 @@ export function Soup() {
       <Show when={isDragging()}>
         <FileDropOverlay valid={isValidDrag()}>
           <Show when={!isValidDrag()}>
-            <div class="font-mono text-failure">[!] Invalid file type</div>
+            <div class="text-failure">[!] Invalid file type</div>
           </Show>
-          <div class="font-mono">
-            Drop any file here to add it to your workspace
-          </div>
+          <div>Drop any file here to add it to your workspace</div>
         </FileDropOverlay>
       </Show>
 

@@ -1,4 +1,3 @@
-import FolderOpen from '@phosphor-icons/core/duotone/folder-open-duotone.svg?component-solid';
 import type { EntityDragData, EntityDragEvent } from '../types/drag';
 import {
   createCopyDssEntityMutation,
@@ -6,6 +5,7 @@ import {
 } from '../queries/dss';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
 import { createMemo, Show } from 'solid-js';
+import { FileDropOverlay } from '@core/component/FileDropOverlay';
 
 export type ProjectDropData = {
   dropType: 'project';
@@ -131,9 +131,9 @@ export const ProjectDropOverlay = (props: {
   const dropActionText = createMemo(() => {
     switch (entityDragData()?.operation?.()) {
       case 'copy':
-        return 'Copy';
+        return 'Copy to this folder';
       case 'move':
-        return 'Move';
+        return 'Move to this folder';
     }
   });
 
@@ -157,15 +157,7 @@ export const ProjectDropOverlay = (props: {
         }}
       </Show>
       <Show when={showProjectOverlay()}>
-        <div class="flex flex-col absolute top-0 left-0 w-full h-full backdrop-blur-sm bg-accent/10 items-center justify-center space-y-3 z-50 pointer-events-none">
-          <FolderOpen class="w-[80px] h-[80px] text-ink" />
-          <h3 class="text-2xl font-semibold text-ink">
-            {dropActionText()} to {props.name ?? 'folder'}
-          </h3>
-          <p class="text-sm text-ink-muted">
-            Drop here to add items to this folder
-          </p>
-        </div>
+        <FileDropOverlay>{dropActionText()}</FileDropOverlay>
       </Show>
     </>
   );
