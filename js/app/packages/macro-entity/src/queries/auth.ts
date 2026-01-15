@@ -27,6 +27,25 @@ export class FetchDocumentsError extends Error {
   }
 }
 
+export async function withApiTokenRetry<T>(
+  authQuery: ReturnType<typeof createApiTokenQuery>,
+  fetchFn: (apiToken: string) => Promise<T>
+): Promise<T> {
+  if (!authQuery.data) throw new Error('No API token available');
+
+  try {
+    return await fetchFn(authQuery.data);
+  } catch (error) {
+    if (error instanceof FetchDocumentsError && error.isJwtExpired()) {
+      const refetchResult = await authQuery.refetch();
+      if (refetchResult.isSuccess) {
+        return await fetchFn(refetchResult.data);
+      }
+    }
+    throw error;
+  }
+}
+
 export const fetchApiToken = async () => {
   const response = await platformFetch(`${authHost}/jwt/macro_api_token`, {
     credentials: 'include',
@@ -103,8 +122,18 @@ const fetchProfilePictures = async (
     body: JSON.stringify({ user_id_list }),
     ...credentials,
   });
-  if (!response.ok)
-    throw new Error('Failed to fetch profile picture', { cause: response });
+
+  if (!response.ok) {
+    const errorData =
+      response.status === 401
+        ? await response.json().catch(() => undefined)
+        : undefined;
+    throw new FetchDocumentsError(
+      'Failed to fetch profile picture',
+      response,
+      errorData
+    );
+  }
 
   const { pictures }: ProfilePictures = await response.json();
   if (pictures.length === 0)
@@ -117,7 +146,10 @@ export function createProfilePictureQuery(id: string) {
   const authQuery = createApiTokenQuery();
   return useQuery(() => ({
     queryKey: queryKeys.auth.profilePicture({ id }),
-    queryFn: () => fetchProfilePictures([id], authQuery.data),
+    queryFn: () =>
+      withApiTokenRetry(authQuery, (apiToken) =>
+        fetchProfilePictures([id], apiToken)
+      ),
     select: (pictures) => pictures.at(0),
     enabled: authQuery.isSuccess,
     retry: 1,

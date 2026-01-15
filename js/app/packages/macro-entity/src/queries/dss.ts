@@ -36,7 +36,11 @@ import type {
   EntityData,
   ProjectEntity,
 } from '../types/entity';
-import { createApiTokenQuery, FetchDocumentsError } from './auth';
+import {
+  createApiTokenQuery,
+  FetchDocumentsError,
+  withApiTokenRetry,
+} from './auth';
 import { queryClient } from './client';
 import { type DssQueryKey, dssQueryKeyHashFn, queryKeys } from './key';
 
@@ -72,8 +76,18 @@ const fetchPaginatedDocumentsGet = async ({
   });
 
   const response = await platformFetch(url, { headers: { Authorization } });
-  if (!response.ok)
-    throw new Error('Failed to fetch documents', { cause: response });
+
+  if (!response.ok) {
+    const errorData =
+      response.status === 401
+        ? await response.json().catch(() => undefined)
+        : undefined;
+    throw new FetchDocumentsError(
+      'Failed to fetch documents',
+      response,
+      errorData
+    );
+  }
 
   const result: SoupPage = await response.json();
   return result;
@@ -188,29 +202,15 @@ export function createDssInfiniteQuery(
     return {
       queryKey,
       queryKeyHashFn: hashKey,
-      queryFn: async ({ pageParam, signal }) => {
-        try {
-          return await fetchPaginatedDocumentsPost({
-            apiToken: authQuery.data,
+      queryFn: ({ pageParam, signal }) =>
+        withApiTokenRetry(authQuery, (apiToken) =>
+          fetchPaginatedDocumentsPost({
+            apiToken,
             requestBody,
             params: { cursor: pageParam.cursor },
             signal,
-          });
-        } catch (error) {
-          if (error instanceof FetchDocumentsError && error.isJwtExpired()) {
-            const refetchResult = await authQuery.refetch();
-            if (refetchResult.isSuccess) {
-              return await fetchPaginatedDocumentsPost({
-                apiToken: refetchResult.data,
-                requestBody,
-                params: { cursor: pageParam.cursor },
-                signal,
-              });
-            }
-          }
-          throw error;
-        }
-      },
+          })
+        ),
       initialPageParam: params(),
       getNextPageParam: ({ next_cursor: cursor }) =>
         cursor ? { ...params(), cursor } : undefined,
@@ -356,7 +356,9 @@ export function createChatsInfiniteQuery(
       queryKeys.chat({ infinite: true, ...params() }) as DssQueryKey
     ),
     queryFn: ({ pageParam }) =>
-      fetchPaginatedDocumentsGet({ apiToken: authQuery.data, ...pageParam }),
+      withApiTokenRetry(authQuery, (apiToken) =>
+        fetchPaginatedDocumentsGet({ apiToken, ...pageParam })
+      ),
     initialPageParam: params(),
     getNextPageParam: ({ next_cursor: cursor }) =>
       cursor ? { ...params(), cursor } : undefined,
