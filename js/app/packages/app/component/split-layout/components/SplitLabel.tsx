@@ -97,7 +97,7 @@ export function SplitLabel(props: {
 
 export function SplitHeaderBadge(props: { text: string; tooltip?: string }) {
   return (
-    <span class="mx-1 p-0.5 px-2 border border-edge-muted rounded-full text-[0.625rem] text-ink-muted">
+    <span class="mx-1 p-0.5 px-2 rounded-none text-[0.625rem] text-ink-muted">
       <Tooltip tooltip={props.tooltip} spanMode>
         <span class="font-mono uppercase">{props.text}</span>
       </Tooltip>

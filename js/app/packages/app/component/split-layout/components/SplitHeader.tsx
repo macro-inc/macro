@@ -11,7 +11,7 @@ import CollapseIcon from '@icon/regular/arrows-in.svg';
 import ExpandIcon from '@icon/regular/arrows-out.svg';
 import CaretLeft from '@icon/regular/caret-left.svg';
 import CaretRight from '@icon/regular/caret-right.svg';
-import SplitIcon from '@icon/regular/square-split-horizontal.svg';
+import SplitIcon from '@icon/regular/square-half.svg';
 import CloseIcon from '@icon/regular/x.svg';
 import IconGear from '@macro-icons/macro-gear.svg';
 import { Button } from '@ui/components/Button';
@@ -99,6 +99,7 @@ function SplitSpotlightButton() {
 function SplitCloseButton() {
   const context = useContext(SplitPanelContext);
   if (!context) return null;
+
   return (
     <Button
       class="p-1 *:h-4"
@@ -110,7 +111,7 @@ function SplitCloseButton() {
   );
 }
 
-function SplitPreviewToggle() {
+function _SplitPreviewToggle() {
   const context = useContext(SplitPanelContext);
   if (!ENABLE_PREVIEW || !context || !context.previewState) return null;
 
@@ -147,7 +148,7 @@ function SplitPreviewToggle() {
   );
 }
 
-function SplitControlButtons() {
+function _SplitControlButtons() {
   return (
     <div class="flex flex-row items-center px-2 h-full shrink-0">
       <div class="touch:mobile-width:hidden">
@@ -200,14 +201,20 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
 
   return (
     <div
-      class="isolate relative w-full h-10 overflow-clip text-ink shrink-0"
+      class="isolate relative w-full h-10 overflow-clip text-ink shrink-0 border-b border-edge-muted/50"
       data-split-header
       ref={props.ref}
     >
-      <div class="absolute inset-0 flex justify-start items-center bg-panel border-b border-b-edge-muted">
-        <SplitControlButtons />
+      <div class="absolute inset-0 flex justify-start items-center bg-panel">
+        <div class="z-2 relative flex items-center bg-panel pl-2 h-full">
+          <div class="touch:mobile-width:hidden">
+            <SplitCloseButton />
+          </div>
+          <SplitBackButton />
+          <SplitForwardButton />
+        </div>
         <div
-          class="relative w-fit min-w-0 h-full shrink"
+          class="relative w-fit min-w-0 h-full shrink pl-2"
           ref={(ref) => {
             ctx.layoutRefs.headerLeft = ref;
           }}
@@ -225,7 +232,6 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
           />
           <div class="z-2 relative flex items-center bg-panel pr-2 h-full">
             <EntityNavigationIndicator />
-            <SplitPreviewToggle />
             <SplitSpotlightButton />
           </div>
         </Show>

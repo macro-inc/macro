@@ -154,7 +154,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     blockName: 'email',
     hotkeyToken: TOKENS.create.email,
     altHotkeyToken: TOKENS.create.emailNewSplit,
-    hotkey: 'e',
+    hotkey: 'l',
     keyDownHandler: () => {
       createComponent({
         componentId: 'email-compose',
