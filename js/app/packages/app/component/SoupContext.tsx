@@ -1452,9 +1452,12 @@ export function createNavigationEntityListShortcut({
       const entity = getSelectedEntity()?.entity;
       if (!entity) return false;
 
-      const location = isSearchEntity(entity)
-        ? entity.search.contentHitData?.[0]?.location
+      const contentHitData = isSearchEntity(entity)
+        ? entity.search.contentHitData
         : undefined;
+      // Only navigate to specific location if there's exactly one hit
+      const location =
+        contentHitData?.length === 1 ? contentHitData[0]?.location : undefined;
 
       openEntityInSplitFromUnifiedList(entity, {
         splitHandle,
