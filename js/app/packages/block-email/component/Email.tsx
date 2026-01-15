@@ -395,11 +395,18 @@ function EmailContent(props: EmailViewProps) {
   });
 
   return (
-    <EmailFormContextProvider>
+    <EmailFormContextProvider
+      formOptions={{
+        getMessageByID: (id) =>
+          context.messages.list().find((m) => m.db_id === id),
+        getDraftForMessageReply: context.drafts.getDraftForMessage,
+        onRecipientsChange: context.onRecipientsChange,
+      }}
+    >
       <div class="w-full h-full bg-panel select-none overscroll-none overflow-hidden flex flex-col">
         <TopBar id={props.threadId()} title={props.title()} />
         <div
-          class="relative w-full flex-1 flex flex-col items-center overflow-hidden"
+          class="w-full flex-1 flex flex-col items-center overflow-hidden"
           ref={context.registerMessagesContainer}
         >
           <MessageList
