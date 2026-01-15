@@ -31,6 +31,7 @@ import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
 import PreviewIcon from '@macro-icons/wide/preview.svg';
 import NoiseIcon from '@macro-icons/wide/noise.svg';
 import SignalIcon from '@macro-icons/wide/signal.svg';
+import XIcon from '@icon/regular/x.svg?component-solid';
 import { createEffectOnEntityTypeNotification } from '@notifications';
 import { invalidateEntityNotifications } from '@queries/notification/user-notifications';
 import { storageServiceClient } from '@service-storage/client';
@@ -314,7 +315,7 @@ function EntityTypeIconFilter() {
         style={{ opacity: rightOpacity() }}
       />
       <div
-        class="flex items-center h-full overflow-x-auto scrollbar-hidden overscroll-none"
+        class="flex items-center h-full overflow-x-auto scrollbar-hidden overscroll-none text-xs touch:mobile-width:text-sm"
         ref={setScrollRef}
       >
         {/* Inbox toggle */}
@@ -358,7 +359,7 @@ function EntityTypeIconFilter() {
               >
                 <circle cx="12" cy="12" r="4" />
               </svg>
-              <span class="text-xs leading-none">
+              <span class="leading-none">
                 <ShortcutLabel label="Unread" shortcut="u" />
               </span>
             </button>
@@ -400,8 +401,8 @@ function EntityTypeIconFilter() {
               setPreview((prev) => !prev);
             }}
           >
-            <PreviewIcon class="size-3.5" />
-            <span class="text-xs leading-none">
+            <PreviewIcon class="size-4.5" />
+            <span class="leading-none">
               <ShortcutLabel label="Preview" shortcut="space" />
             </span>
           </button>
@@ -414,12 +415,14 @@ function EntityTypeIconFilter() {
           open={sortDropdownOpen}
           onOpenChange={setSortDropdownOpen}
         />
-        <FilterDivider />
+        <div class="touch:mobile-width:-order-1">
+          <FilterDivider />
+        </div>
         {/* Filter search bar */}
-        <div class="flex items-center shrink-0">
+        <div class="flex items-center shrink-0 touch:mobile-width:-order-2">
           <Tooltip tooltip={<LabelAndHotKey label="Filter" shortcut="⌘F" />}>
             <div
-              class="relative flex items-center gap-1.5 h-[22px] px-2.5 rounded-full"
+              class="relative flex items-center gap-1.5 h-[22px] px-2.5 rounded-full touch:mobile-width:min-w-35"
               classList={{
                 'bg-accent text-panel': !!searchText() && !searchFocused(),
                 'text-ink-muted hover:text-accent hover:bg-accent/20':
@@ -427,9 +430,9 @@ function EntityTypeIconFilter() {
               }}
               onClick={() => searchInputRef?.focus()}
             >
-              <SearchIcon class="size-3.5 shrink-0" />
+              <SearchIcon class="size-4.5 shrink-0" />
               <Show when={!searchText() && !searchFocused()}>
-                <span class="text-xs leading-none pointer-events-none">
+                <span class="leading-none pointer-events-none">
                   <span class="underline underline-offset-2 decoration-current/60">
                     {IS_MAC ? '⌘' : '^'}F
                   </span>
@@ -455,7 +458,7 @@ function EntityTypeIconFilter() {
                     e.currentTarget.blur();
                   }
                 }}
-                class="p-0 text-xs bg-transparent border-none outline-none ring-0 focus:outline-none focus:ring-0 cursor-default"
+                class="p-0 bg-transparent border-none outline-none ring-0 focus:outline-none focus:ring-0 cursor-default"
                 style={{
                   width:
                     !searchText() && !searchFocused()
@@ -494,11 +497,11 @@ function ClearFiltersButton() {
     <Tooltip tooltip={<LabelAndHotKey label="Clear filters" shortcut="/" />}>
       <button
         type="button"
-        class="flex items-center gap-1.5 h-[22px] px-2.5 rounded-full text-ink-muted hover:text-accent hover:bg-accent/20 active:bg-accent active:text-panel"
+        class="flex items-center gap-1.5 px-2.5 rounded-full text-ink-muted hover:text-accent hover:bg-accent/20 active:bg-accent active:text-panel"
         onClick={clearAllFilters}
       >
-        <span class="text-sm leading-none">✕</span>
-        <span class="text-xs leading-none">
+        <XIcon class="size-4.5" />
+        <span class="text-xs touch:mobile-width:text-sm leading-none">
           Clear
           <span class="ml-1 font-mono opacity-70">/</span>
         </span>
@@ -534,7 +537,7 @@ function SettingsButton() {
           }}
           onClick={() => toggleSettings()}
         >
-          <IconGear class="size-3.5" />
+          <IconGear class="size-4.5" />
         </button>
       </Tooltip>
     </Show>

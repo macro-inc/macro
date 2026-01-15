@@ -85,8 +85,8 @@ export const SortDropdown: Component<SortDropdownProps> = (props) => {
             'text-ink-muted hover:text-accent hover:bg-accent/20': !open(),
           }}
         >
-          <SortIcon class="size-3.5" />
-          <span class="text-xs leading-none">
+          <SortIcon class="size-4.5" />
+          <span class="leading-none">
             <ShortcutLabel label="Sort" shortcut="s" />
           </span>
         </Popover.Trigger>
