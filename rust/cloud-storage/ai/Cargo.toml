@@ -33,6 +33,7 @@ tracing = { workspace = true }
 utoipa = { workspace = true }
 anthropic = { path = "../anthropic" }
 ai_toolset = { path = "../ai_toolset" }
+macro_user_id = { path = "../macro_user_id" }
 base64 = { workspace = true }
 image = "0.25.9"
 webp = "0.3.1"

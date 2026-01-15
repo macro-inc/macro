@@ -58,6 +58,7 @@ dependencies = [
  "futures",
  "image",
  "lazy_static",
+ "macro_user_id",
  "model_file_type",
  "rand 0.9.0",
  "reqwest",

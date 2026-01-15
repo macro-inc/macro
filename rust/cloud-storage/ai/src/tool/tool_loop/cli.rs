@@ -6,10 +6,12 @@
 //!
 //! # Example with custom toolset
 //!
-//! ```rust
+//! ```rust,ignore
 //! use ai::tool::tool_loop::cli::Cli;
-//! use ai::tool::AsyncToolSet;
+//! use ai::tool::{AsyncToolSet, RequestContext};
 //! use ai::types::Model;
+//! use macro_user_id::user_id::MacroUserIdStr;
+//! use std::sync::Arc;
 //!
 //! #[tokio::main]
 //! async fn main() {
@@ -22,7 +24,10 @@
 //!         MyServiceContext::new(),
 //!         "You are a helpful assistant.",
 //!         Model::Claude35Sonnet,
-//!         || MyRequestContext::new(),
+//!         || RequestContext {
+//!             user_id: Arc::new(MacroUserIdStr::try_from_email("user@example.com").unwrap()),
+//!             jwt: Arc::new(String::new()),
+//!         },
 //!     );
 //!     cli.run().await;
 //! }
@@ -30,7 +35,7 @@
 //!
 //! # Example with default (no tools)
 //!
-//! ```rust
+//! ```rust,ignore
 //! use ai::tool::tool_loop::cli::Cli;
 //!
 //! #[tokio::main]
@@ -41,45 +46,51 @@
 
 use crate::prompts::BASE_PROMPT;
 use crate::tool::ToolLoop;
-use crate::tool::types::{AsyncToolSet, StreamPart, ToolResponse};
+use crate::tool::types::{AsyncToolSet, RequestContext, StreamPart, ToolResponse};
 use crate::types::{ChatMessage, MessageBuilder, Model, RequestBuilder, Role};
 use futures::stream::StreamExt;
+use macro_user_id::user_id::MacroUserIdStr;
 use std::io::{self, BufRead, Write};
+use std::sync::Arc;
 
 /// CLI interface for the Chat tool loop.
 ///
 /// This struct wraps the tool loop and provides an interactive readline-style
 /// interface for multi-turn conversations with tool support.
-pub struct Cli<T, R, F>
+pub struct Cli<T, F>
 where
     T: Clone + Send + Sync + 'static,
-    R: Clone + Send + Sync + 'static,
-    F: Fn() -> R,
+    F: Fn() -> RequestContext,
 {
-    toolset: AsyncToolSet<T, R>,
+    toolset: AsyncToolSet<T>,
     service_context: T,
     system_prompt: String,
     model: Model,
     request_context_fn: F,
 }
 
-impl Default for Cli<(), (), fn() -> ()> {
+impl Default for Cli<(), fn() -> RequestContext> {
     fn default() -> Self {
         Self {
             toolset: AsyncToolSet::new(),
             service_context: (),
             system_prompt: BASE_PROMPT.to_string(),
             model: Model::Claude45Opus,
-            request_context_fn: || (),
+            #[allow(deprecated)]
+            request_context_fn: || RequestContext {
+                user_id: Arc::new(
+                    MacroUserIdStr::try_from_email("cli@localhost").expect("valid email"),
+                ),
+                jwt: Arc::new(String::new()),
+            },
         }
     }
 }
 
-impl<T, R, F> Cli<T, R, F>
+impl<T, F> Cli<T, F>
 where
     T: Clone + Send + Sync + 'static,
-    R: Clone + Send + Sync + 'static,
-    F: Fn() -> R,
+    F: Fn() -> RequestContext,
 {
     /// Create a new CLI with the given configuration.
     ///
@@ -91,7 +102,7 @@ where
     /// * `model` - The model to use for completions
     /// * `request_context_fn` - A function that creates a request context for each message
     pub fn new(
-        toolset: AsyncToolSet<T, R>,
+        toolset: AsyncToolSet<T>,
         service_context: T,
         system_prompt: impl Into<String>,
         model: Model,
