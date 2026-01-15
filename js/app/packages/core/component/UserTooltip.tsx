@@ -11,7 +11,6 @@ import IconCheck from '@icon/regular/check.svg';
 import WideCopy from '@macro-icons/wide/copy.svg';
 import WideChat from '@macro-icons/wide/chat.svg'
 import WideTask from '@macro-icons/wide/task.svg'
-import Square from '@macro-icons/shape/square.svg';
 import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
 import { commsServiceClient } from '@service-comms/client';
 import { createTask } from '@core/util/create';
@@ -89,118 +88,96 @@ export function UserTooltip(props: UserTooltipProps) {
     }
   };
 
-  const fiducialSquares = () => {
-    return (
-      <div class="flex flex-col text-edge/20 justify-between h-full">
-        <div class="flex-col py-2 space-y-4">
-          <Square class="size-1 border-1 fill-none"/>
-          <Square class="size-1 border-1 fill-none"/>
-        </div>
-        <Square class="size-1 border-1 fill-none"/>
-        <div class="flex-col py-2 space-y-4">
-          <Square class="size-1 border-1 fill-none"/>
-          <Square class="size-1 border-1 fill-none"/>
-        </div>
-      </div>
-    );
-  };
+  const buttonStyle = "px-3 text-xs w-full justify-start hover:text-ink/60 hover:bg-panel active:bg-panel active:border-panel active:text-accent";
 
   return (
-    <div class="">
-      <ClippedPanel tl={!beveledCorners()} active>
-      <div class="bg-panel text-ink box-border border-accent overflow-hidden h-full w-full">
-        <div class="flex justify-between h-full w-full">
-          {/* {fiducialSquares()} */}
-          <div class="w-full">
-            <div class="flex items-center gap-2 p-2 w-full">
-              <div class="size-8 shrink-0 rounded-full bg-ink-extra-muted pointer-events-none">
-                <Switch>
-                  <Match when={props.isDeleted}>
-                    <div class="size-8 shrink-0 rounded-full bg-ink-extra-muted/50 flex items-center justify-center">
-                      <Trash class="w-4 h-4 shrink-0" />
-                    </div>
-                  </Match>
-                  <Match when={props.id}>
-                    <ProfilePicture
-                      id={props.id}
-                      sizeClass={{
-                        container: 'size-8',
-                        icon: 'w-4 h-4',
-                        text: 'text-lg text-panel leading-none',
-                      }}
-                    />
-                  </Match>
-                  <Match when={!props.id && props.email}>
-                    <ProfilePicture
-                      id={undefined}
-                      email={props.email}
-                      sizeClass={{
-                        container: 'size-8',
-                        icon: 'w-4 h-4',
-                        text: 'text-lg leading-none',
-                      }}
-                    />
-                  </Match>
-                </Switch>
-              </div>
-
-              <div class="flex-1 min-w-0">
-                <div class="text-sm font-medium truncate">
-                  {props.displayName}
+    <ClippedPanel tl={!beveledCorners()} active>
+      <div class="bg-panel text-ink box-border border-accent overflow-hidden">
+        <div class="flex items-center gap-2 p-2">
+          <div class="size-14 shrink-0 rounded-full bg-ink-extra-muted pointer-events-none">
+            <Switch>
+              <Match when={props.isDeleted}>
+                <div class="size-12 shrink-0 rounded-full bg-ink-extra-muted/50 flex items-center justify-center">
+                  <Trash class="w-4 h-4 shrink-0" />
                 </div>
-                <Show when={props.email && props.email !== props.displayName}>
-                  <div class="text-xs opacity-60 mt-0.5 truncate">
-                    {props.email}
-                  </div>
-                </Show>
-              </div>
-            </div>
+              </Match>
+              <Match when={props.id}>
+                <ProfilePicture
+                  id={props.id}
+                  sizeClass={{
+                    container: 'size-14',
+                    icon: 'w-4 h-4',
+                    text: 'text-lg text-panel leading-none',
+                  }}
+                />
+              </Match>
+              <Match when={!props.id && props.email}>
+                <ProfilePicture
+                  id={undefined}
+                  email={props.email}
+                  sizeClass={{
+                    container: 'size-14',
+                    icon: 'w-4 h-4',
+                    text: 'text-lg text-panel leading-none',
+                  }}
+                />
+              </Match>
+            </Switch>
+          </div>
 
-            <Show when={props.email || props.id}>
-              <div class="border-t border-edge/20"></div>
-              <div class="py-2 flex flex-col gap-0">
-                <Show when={props.email}>
-                  <Button
-                    onClick={props.onCopyEmail}
-                    class="px-3 text-xs w-full justify-start hover:text-ink/60 hover:bg-panel active:bg-panel active:border-panel active:text-accent"
-                  >
-                    {props.copied ? (
-                      <IconCheck class="w-3.5 h-3.5" />
-                    ) : (
-                      <WideCopy class="w-3.5 h-3.5" />
-                    )}
-                    Copy email
-                  </Button>
-                </Show>
-                <Show
-                  when={props.id && !props.isDeleted && props.id !== currentUserId()}
-                >
-                  <Button
-                    onClick={openDM}
-                    class="px-3 text-xs w-full justify-start hover:text-ink/60 hover:bg-panel active:bg-panel active:border-panel active:text-accent"
-                  >
-                    <WideChat class="w-3.5 h-3.5" />
-                    DM
-                  </Button>
-                </Show>
-                <Show
-                  when={props.id && !props.isDeleted && props.id !== currentUserId()}
-                >
-                  <Button
-                    onClick={createAndOpenTask}
-                    class="px-3 text-xs w-full justify-start hover:text-ink/60 hover:bg-panel active:bg-panel active:border-panel active:text-accent"
-                  >
-                    <WideTask class="w-3.5 h-3.5" />
-                    Assign Task
-                  </Button>
-                </Show>
+          <div class="flex-1 min-w-0">
+            <div class="text-sm font-medium truncate">
+              {props.displayName}
+            </div>
+            <Show when={props.email && props.email !== props.displayName}>
+              <div class="text-xs opacity-60 truncate">
+                {props.email}
               </div>
             </Show>
           </div>
-        {/* {fiducialSquares()} */}
         </div>
+
+        <Show when={props.email || props.id}>
+          <div class="border-t border-edge/20"></div>
+          <div class="py-2 flex flex-col gap-0">
+            <Show when={props.email}>
+              <Button
+                onClick={props.onCopyEmail}
+                class={buttonStyle}
+              >
+                {props.copied ? (
+                  <IconCheck class="w-3.5 h-3.5" />
+                ) : (
+                  <WideCopy class="w-3.5 h-3.5" />
+                )}
+                Copy email
+              </Button>
+            </Show>
+            <Show
+              when={props.id && !props.isDeleted && props.id !== currentUserId()}
+            >
+              <Button
+                onClick={openDM}
+                class={buttonStyle}
+              >
+                <WideChat class="w-3.5 h-3.5" />
+                DM
+              </Button>
+            </Show>
+            <Show
+              when={props.id && !props.isDeleted && props.id !== currentUserId()}
+            >
+              <Button
+                onClick={createAndOpenTask}
+                class={buttonStyle}
+              >
+                <WideTask class="w-3.5 h-3.5" />
+                Assign Task
+              </Button>
+            </Show>
+          </div>
+        </Show>
       </div>
-      </ClippedPanel>
-    </div>
+    </ClippedPanel>
   );
 }
