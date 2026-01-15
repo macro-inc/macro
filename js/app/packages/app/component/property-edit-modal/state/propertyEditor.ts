@@ -1,18 +1,20 @@
 import type { EntityData } from '@macro-entity';
 import type { Property } from '@core/component/Properties/types';
 import { createStore, reconcile } from 'solid-js/store';
+import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 
 export type PropertyEditorMode = 'selector' | 'direct';
 
+export const [propertyEditorOpen, setPropertyEditorOpen] =
+  createControlledOpenSignal();
+
 interface PropertyEditorState {
-  isOpen: boolean;
   mode: PropertyEditorMode;
   selectedEntities: EntityData[];
   targetProperty?: Property;
 }
 
 const [state, setState] = createStore<PropertyEditorState>({
-  isOpen: false,
   mode: 'selector',
   selectedEntities: [],
   targetProperty: undefined,
@@ -27,9 +29,9 @@ export function openPropertyEditor(
     console.warn('Cannot open property editor without entities');
     return;
   }
+  setPropertyEditorOpen(true);
   setState(
     reconcile({
-      isOpen: true,
       mode,
       selectedEntities: entities,
       targetProperty,
@@ -38,9 +40,9 @@ export function openPropertyEditor(
 }
 
 export function closePropertyEditor() {
+  setPropertyEditorOpen(false);
   setState(
     reconcile({
-      isOpen: false,
       mode: 'selector',
       selectedEntities: [],
       targetProperty: undefined,
@@ -50,7 +52,7 @@ export function closePropertyEditor() {
 }
 
 export function togglePropertyEditor(force?: boolean) {
-  setState('isOpen', force ?? !state.isOpen);
+  setPropertyEditorOpen(force ?? !propertyEditorOpen());
 }
 
 export function setPropertyEditorMode(mode: PropertyEditorMode) {
