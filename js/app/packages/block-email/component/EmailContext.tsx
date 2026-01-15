@@ -460,3 +460,7 @@ export function useEmailContext() {
   }
   return ctx;
 }
+
+export function useMaybeEmailContext() {
+  return useContext(EmailContext);
+}
