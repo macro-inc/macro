@@ -38,5 +38,8 @@ export function useTaskProperties(
     TASK_PROPERTY_DEFINITION_IDS
   );
 
-  return createMemo(() => query.data ?? {});
+  return () => {
+    if (query.isLoading || !query.data) return {};
+    return query.data;
+  };
 }

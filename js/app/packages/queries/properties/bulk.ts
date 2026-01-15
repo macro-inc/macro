@@ -65,7 +65,7 @@ export function useBulkEntityPropertiesQuery(
       }).queryKey,
       queryFn: () =>
         fetchBulkProperties(entityType, entityIds(), propertyDefinitionIds),
-      staleTime: 0,
+      refetchOnMount: false,
       enabled: entityIds().length > 0,
     }),
     () => queryClient

@@ -12,8 +12,10 @@ export function composeFilters<T extends EntityData>(
   return (entity: T) => filters.every((filter) => filter(entity));
 }
 
-export function createFilterComposer<T extends EntityData = EntityData>() {
-  const [filters, setFilters] = createSignal<EntityFilter<T>[]>([]);
+export function createFilterComposer<T extends EntityData = EntityData>(
+  initialFilters: EntityFilter<T>[] = []
+) {
+  const [filters, setFilters] = createSignal<EntityFilter<T>[]>(initialFilters);
 
   const filterFn = createMemo(() => composeFilters(...filters()));
 

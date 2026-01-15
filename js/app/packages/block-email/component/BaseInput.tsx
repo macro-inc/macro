@@ -48,7 +48,6 @@ import type {
   MessageWithBodyReplyless,
 } from '@service-email/generated/schemas';
 import { useEmail, useUserId } from '@service-gql/client';
-import { BrightJoins } from '@ui/components/BrightJoins';
 import { Button } from '@ui/components/Button';
 import {
   defaultSelectionData,
@@ -714,7 +713,6 @@ export function BaseInput(props: {
       }}
       class="relative flex flex-col flex-1 bg-input border-t border-x border-edge-muted rounded-t-[5px] -mb-[7px] max-w-full"
     >
-      <BrightJoins dots={[false, false, true, true]} />
       {/* Top Bar */}
       <div class="flex items-start gap-2 p-2">
         <DropdownMenu>

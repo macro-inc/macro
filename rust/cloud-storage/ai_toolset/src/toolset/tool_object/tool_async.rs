@@ -1,4 +1,4 @@
-use crate::tool::types::{AsyncTool, Tool, ToolResult};
+use crate::{AsyncTool, Tool, ToolResult};
 use async_trait::async_trait;
 use schemars::JsonSchema;
 use serde::Serialize;
@@ -17,10 +17,12 @@ type AsyncDeserializer<Sc, Rc> = Box<
         + Sync,
 >;
 
+/// Type alias for a [`ToolObject`] configured for asynchronous tools.
 pub type AsyncToolObject<Context, RequestContext> =
     ToolObject<AsyncDeserializer<Context, RequestContext>>;
 
 impl<Sc, Rc> ToolObject<AsyncDeserializer<Sc, Rc>> {
+    /// Attempts to deserialize JSON input into a callable async tool instance.
     pub fn try_deserialize(
         &self,
         data: &serde_json::Value,
@@ -31,6 +33,10 @@ impl<Sc, Rc> ToolObject<AsyncDeserializer<Sc, Rc>> {
 }
 
 impl<Sc, Rc> ToolObject<AsyncDeserializer<Sc, Rc>> {
+    /// Creates a new [`AsyncToolObject`] from an async tool type.
+    ///
+    /// The tool type must implement [`AsyncTool`], [`JsonSchema`], and [`Deserialize`].
+    /// Returns an error if schema validation fails.
     pub fn try_from_tool<T, O>() -> Result<Self, ValidationError>
     where
         T: JsonSchema
@@ -92,6 +98,7 @@ where
     }
 }
 
+/// Wrapper that adapts a synchronous [`Tool`] to implement [`AsyncTool`].
 pub struct AsyncToolWrapper<Sc, Rc, O>(pub Box<dyn Tool<Sc, Rc, Output = O> + Send + Sync>);
 
 #[async_trait]

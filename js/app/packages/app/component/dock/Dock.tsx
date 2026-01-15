@@ -10,7 +10,6 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { ClippedPanel } from '@core/component/ClippedPanel';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { PresentModeGlitch } from './PresentModeGlitch';
-import IconQuestion from '@icon/regular/question.svg';
 import { withAnalytics } from '@coparse/analytics';
 import SplitIcon from '@macro-icons/new-split.svg';
 import IconAI from '@macro-icons/wide/star.svg';
@@ -18,7 +17,6 @@ import IconGear from '@macro-icons/macro-gear.svg';
 import IconLogo from '@macro-icons/macro-logo.svg';
 import { BasicTierLimit } from './BasicTierLimit';
 import { setKonsoleOpen } from '../command/state';
-import { getActiveCommandByToken, runCommand } from '@core/hotkey/utils';
 import { Hotkey } from '@core/component/Hotkey';
 import { setCreateMenuOpen } from '../Launcher';
 import { useHasPaidAccess } from '@core/auth';
@@ -40,14 +38,6 @@ export function Dock() {
   const toggleRightPanel = useToggleRightPanel();
   const { settingsOpen, toggleSettings } = useSettingsState();
   const hasPaid = useHasPaidAccess();
-
-  const isSoupActive = createMemo(() => {
-    const splitId = globalSplitManager()?.activeSplitId();
-    if (!splitId) { return false };
-    const split = globalSplitManager()?.getSplit(splitId);
-    if (!split) { return false };
-    return split.content().id === 'unified-list';
-  });
 
   async function enterPresentMode() {
     try {
@@ -251,10 +241,6 @@ export function Dock() {
                   <BasicTierLimit />
                 </Show>
 
-                {/*<Show when={hasPaid()}>
-                  <Hints />
-                </Show>*/}
-
                 <div class="w-full"/>
 
                 <Show when={ENABLE_DOCK_NOTITIFCATIONS}>
@@ -278,22 +264,6 @@ export function Dock() {
               'height': '38px',
               'gap': '4px'
             }}>
-              <Show when={isSoupActive()}>
-                <Button
-                  class="p-1 *:h-4"
-                  onClick={() => {
-                    globalSplitManager()?.returnFocus();
-                    const showHelp = getActiveCommandByToken(TOKENS.split.showHelpDrawer);
-                    if (!showHelp) { return };
-                    runCommand(showHelp);
-                  }}
-
-                  tooltip={<LabelAndHotKey label='Help' hotkeyToken={TOKENS.split.showHelpDrawer} />}
-                >
-                  <IconQuestion />
-                </Button>
-              </Show>
-
               <Button
                 onClick={() => {
                   if (isRightPanelCollapsed()) { track(TrackingEvents.RIGHTBAR.OPEN) }

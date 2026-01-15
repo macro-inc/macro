@@ -5,10 +5,9 @@ import { folderSelector } from '@core/directive/folderSelector';
 import { useEmailLinksStatus } from '@core/email-link';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
-import type { DefaultView, ViewId } from '@core/types/view';
+import type { ViewId } from '@core/types/view';
 import { handleFolderSelect } from '@core/util/upload';
-import { createMemo, Match, onCleanup, onMount, Show, Switch } from 'solid-js';
-import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
+import { createMemo, Match, Show, Switch } from 'solid-js';
 import Arcanum001 from '@macro-icons/arcanum/arcanum-001.svg';
 import Arcanum002 from '@macro-icons/arcanum/arcanum-002.svg';
 import Arcanum003 from '@macro-icons/arcanum/arcanum-003.svg';
@@ -21,8 +20,6 @@ import Arcanum0010 from '@macro-icons/arcanum/arcanum-010.svg';
 
 false && fileSelector;
 false && folderSelector;
-
-const EMPTY_STATE_HELP_DRAWER_TIMEOUT_MS = 0;
 
 const DEFAULT_EMPTY_MESSAGE = 'No items to show.';
 
@@ -42,36 +39,6 @@ function getRandomArcanumGraphic() {
   return arcanumGraphics[randomIndex];
 }
 
-function EmptyStateHelpDrawer(props: {
-  message?: string;
-  helpDrawer: DefaultView;
-  showDropZone?: boolean;
-}) {
-  const {
-    soupContext: { setShowHelpDrawer },
-  } = useSplitPanelOrThrow();
-
-  let timeoutId: ReturnType<typeof setTimeout> | undefined;
-
-  // because the empty state can sometimes be mounted and unmounted rapidly, we need to
-  // ensure that the help drawer is only shown when this state is stable
-  onMount(() => {
-    timeoutId = setTimeout(() => {
-      setShowHelpDrawer((prev) => new Set([...prev, props.helpDrawer]));
-    }, EMPTY_STATE_HELP_DRAWER_TIMEOUT_MS);
-  });
-  onCleanup(() => {
-    clearTimeout(timeoutId);
-  });
-
-  return (
-    <EmptyStateInner
-      message={props.message}
-      showDropZone={props.showDropZone}
-    />
-  );
-}
-
 export function EmptyState(props: {
   viewId?: ViewId;
   search?: boolean;
@@ -88,10 +55,7 @@ export function EmptyState(props: {
         <EmptyStateInner />
       </Match>
       <Match when={props.viewId === 'noise' && !emailActive()}>
-        <EmptyStateHelpDrawer
-          message={'Email not connected.'}
-          helpDrawer={'noise'}
-        />
+        <EmptyStateInner message={'Email not connected.'} />
       </Match>
       <Match
         when={
@@ -104,45 +68,25 @@ export function EmptyState(props: {
         <EmptyStateInner message={'Inbox zero.'} />
       </Match>
       <Match when={props.viewId === 'signal' && !emailActive()}>
-        <EmptyStateHelpDrawer
-          message={'Nothing to show. Email not connected.'}
-          helpDrawer={'signal'}
-        />
+        <EmptyStateInner message={'Nothing to show. Email not connected.'} />
       </Match>
       <Match when={props.viewId === 'email' && !emailActive()}>
-        <EmptyStateHelpDrawer
-          message={'Nothing to show. Email not connected.'}
-          helpDrawer={'email'}
-        />
+        <EmptyStateInner message={'Nothing to show. Email not connected.'} />
       </Match>
       <Match when={props.viewId === 'people'}>
-        <EmptyStateHelpDrawer
-          message={'No messages to show.'}
-          helpDrawer={'people'}
-        />
+        <EmptyStateInner message={'No messages to show.'} />
       </Match>
       <Match when={props.viewId === 'files'}>
-        <EmptyStateHelpDrawer
-          message={'No files to show.'}
-          helpDrawer={'files'}
-          showDropZone
-        />
+        <EmptyStateInner message={'No files to show.'} showDropZone />
       </Match>
       <Match when={props.viewId === 'folders'}>
-        <EmptyStateHelpDrawer
-          message={'No folders to show.'}
-          helpDrawer={'folders'}
-          showDropZone
-        />
+        <EmptyStateInner message={'No folders to show.'} showDropZone />
       </Match>
       <Match when={props.viewId === 'tasks'}>
-        <EmptyStateHelpDrawer
-          message={'No tasks to show.'}
-          helpDrawer={'tasks'}
-        />
+        <EmptyStateInner message={'No tasks to show.'} />
       </Match>
       <Match when={props.viewId === 'all'}>
-        <EmptyStateHelpDrawer helpDrawer={'all'} />
+        <EmptyStateInner />
       </Match>
       <Match when={true}>
         <EmptyStateInner />

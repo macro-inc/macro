@@ -3,57 +3,26 @@ use schemars::{JsonSchema, schema_for};
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
-/// A tool that is not sent to AI but may be called by ai (built in tools)
-/// Generate schemas for these tools for the frontend
+/// A phantom tool for generating schemas without runtime tool instances.
+///
+/// This is useful for built-in tools that are not sent to the AI but may be
+/// called by the AI. The schemas can be generated for frontend display or
+/// documentation purposes.
 #[derive(Clone, Debug)]
 pub struct PhantomTool<I: Clone + Debug, O: Clone + Debug> {
     i: PhantomData<I>,
     o: PhantomData<O>,
+    /// The name of the phantom tool.
     pub name: &'static str,
 }
 
 impl<I: Clone + Debug, O: Clone + Debug> PhantomTool<I, O> {
+    /// Creates a new phantom tool with the given name.
     pub fn new(name: &'static str) -> Self {
         PhantomTool {
             i: PhantomData,
             o: PhantomData,
             name,
-        }
-    }
-}
-
-impl PhantomTool<(), ()> {
-    pub fn builder(name: &'static str) -> Self {
-        PhantomTool {
-            i: PhantomData,
-            o: PhantomData,
-            name,
-        }
-    }
-}
-
-impl<O: Clone + Debug> PhantomTool<(), O> {
-    pub fn with_input_schema<I>(self) -> PhantomTool<I, O>
-    where
-        I: JsonSchema + Clone + Debug,
-    {
-        PhantomTool {
-            i: PhantomData,
-            o: PhantomData,
-            name: self.name,
-        }
-    }
-}
-
-impl<I: Clone + Debug> PhantomTool<I, ()> {
-    pub fn with_output_schema<O>(self) -> PhantomTool<I, O>
-    where
-        O: Clone + Debug + JsonSchema,
-    {
-        PhantomTool {
-            i: PhantomData,
-            o: PhantomData,
-            name: self.name,
         }
     }
 }

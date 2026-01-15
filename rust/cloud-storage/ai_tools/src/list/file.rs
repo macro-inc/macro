@@ -1,5 +1,5 @@
 use crate::tool_context::{RequestContext, ToolServiceContext};
-use ai::tool::{AsyncTool, ToolCallError, ToolResult};
+use ai_toolset::{AsyncTool, ToolCallError, ToolResult};
 use async_trait::async_trait;
 use model::document::list::DocumentListItem;
 use models_permissions::share_permission::access_level::AccessLevel;
@@ -244,8 +244,8 @@ impl AsyncTool<ToolServiceContext, RequestContext> for ListDocuments {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ai::generate_tool_input_schema;
-    use ai::tool::types::tool_object::validate_tool_schema;
+    use ai_toolset::generate_tool_input_schema;
+    use ai_toolset::tool_object::validate_tool_schema;
 
     // run `cargo test -p ai_tools list::file::tests::print_input_schema -- --nocapture --include-ignored`
     #[test]
@@ -259,7 +259,7 @@ mod tests {
     #[test]
     #[ignore = "prints the output schema"]
     fn print_output_schema() {
-        let generator = ai::tool::minimized_output_schema_generator();
+        let generator = ai_toolset::tool_object::minimized_output_schema_generator();
         let schema = generator.into_root_schema_for::<ListDocumentsResponse>();
         println!("{}", serde_json::to_string_pretty(&schema).unwrap());
     }

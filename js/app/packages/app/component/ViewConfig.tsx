@@ -25,7 +25,6 @@ import stringify from 'json-stable-stringify';
 import { queryClient } from '../../macro-entity/src/queries/client';
 import type { PropertyFilter } from './PropertyFilterTypes';
 import type { SoupContext } from './SoupContext';
-import { noiseFilter, signalFilter } from './soupFilters';
 
 // for custom views that extend the unified list view
 export type ViewType = 'project';
@@ -69,6 +68,15 @@ export type FilterOptions = {
   projectFilter?: string;
   fromFilter?: WithCustomUserInput<'user' | 'contact'>[];
   focusFilters?: ('signal' | 'noise')[];
+  unreadOnly?: boolean;
+  /**
+   * Further refines `channel` entities:
+   * - `people`: direct messages
+   * - `groups`: non-DM channels (private / organization / public)
+   *
+   * Empty array means "no refinement" (i.e. include all channels).
+   */
+  channelCategoryFilter?: Array<'people' | 'groups'>;
   propertyFilters?: PropertyFilter[];
 };
 
@@ -144,6 +152,9 @@ export const VIEWCONFIG_BASE: ViewConfigBase = {
     documentTypeFilter: [],
     projectFilter: undefined,
     fromFilter: [],
+    focusFilters: ['signal'],
+    unreadOnly: false,
+    channelCategoryFilter: [],
     propertyFilters: [],
   },
   display: {
@@ -201,6 +212,7 @@ const ALL_VIEWCONFIG_DEFAULTS = {
           });
         }
         if (extra?.notificationSource) {
+          console.log('marking notification as done');
           markNotificationsForEntityAsDone(extra.notificationSource, entity);
         }
         return true;
@@ -301,9 +313,14 @@ const ALL_VIEWCONFIG_DEFAULTS = {
       sortBy: 'viewed_at',
     },
     hotkeyOptions: {
-      e: (entity: EntityData) => {
+      e: (entity, extra) => {
         if (entity.type === 'email') {
-          archiveEmail(entity.id, { isDone: entity.done });
+          archiveEmail(entity.id, {
+            isDone: entity.done,
+          });
+        }
+        if (extra?.notificationSource) {
+          markNotificationsForEntityAsDone(extra.notificationSource, entity);
         }
         return true;
       },
@@ -347,29 +364,6 @@ export const VIEWCONFIG_FILTER_DOCUMENT_TYPE_FILTER: readonly FilterOptions['doc
   ['md', 'pdf', 'canvas', 'code', 'image', 'unknown'] as const;
 export const VIEWCONFIG_FILTER_ENTITY_TYPE: readonly FilterOptions['typeFilter'][number][] =
   ['channel', 'chat', 'document', 'email', 'project', 'task'] as const;
-
-export const VIEW_CLIENT_FILTERS: Record<ViewId, ClientFilter[]> = {
-  signal: [signalFilter],
-  noise: [noiseFilter],
-  people: [],
-  files: [],
-  tasks: [],
-  folders: [],
-  all: [],
-};
-
-export function applyClientFilters(
-  entityList: WithNotification<EntityData>[],
-  viewId: ViewId,
-  ctx?: ClientFilterContext
-): WithNotification<EntityData>[] {
-  const filters = VIEW_CLIENT_FILTERS[viewId] ?? [];
-  if (filters.length === 0) return entityList;
-
-  return entityList.filter((entity) => {
-    return filters.every((filter) => filter.predicate(entity, ctx));
-  });
-}
 
 export async function archiveEmail(
   id: string,
