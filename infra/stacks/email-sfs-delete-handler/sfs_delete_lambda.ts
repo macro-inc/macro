@@ -25,7 +25,7 @@ type Args = {
   tags: { [key: string]: string };
 };
 
-export class EmailSfsDeletehandler extends pulumi.ComponentResource {
+export class EmailSfsDeleteHandler extends pulumi.ComponentResource {
   rule: aws.cloudwatch.EventRule;
   role: aws.iam.Role;
   lambda: aws.lambda.Function;

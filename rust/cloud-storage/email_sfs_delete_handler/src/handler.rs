@@ -4,7 +4,7 @@ use lambda_runtime::{
     Error, LambdaEvent,
     tracing::{self},
 };
-use models_email::email::service::pubsub::SFSDeleteMessage;
+use sqs_client::email::SFSDeleteMessage;
 
 #[tracing::instrument(skip(ctx, _event))]
 pub async fn handler(

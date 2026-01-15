@@ -23,7 +23,6 @@ import {
 } from './s3-cloudfront-distribution';
 import { EmailScheduledHandler } from './scheduled_lambda';
 import { EmailService } from './service';
-import { EmailSfsDeletehandler } from './sfs_delete_lambda';
 
 const tags = {
   environment: stack,
@@ -110,6 +109,18 @@ const cloudStorageClusterName: pulumi.Output<string> = cloudStorageStack
   .getOutput('cloudStorageClusterName')
   .apply((arn) => arn as string);
 
+const sfsDeleteLambdaStack = new pulumi.StackReference('email-sfs-delete-handler-stack', {
+  name: `macro-inc/email-sfs-delete-handler/${stack}`,
+});
+
+const sfsDeleteQueueArn: pulumi.Output<string> = sfsDeleteLambdaStack
+  .getOutput('sfsDeleteQueueArn')
+  .apply((arn) => arn as string);
+
+const sfsDeleteQueueName: pulumi.Output<string> = sfsDeleteLambdaStack
+  .getOutput('sfsDeleteQueueName')
+  .apply((name) => name as string);
+
 const { notificationQueueName, notificationQueueArn } = getMacroNotify();
 
 const emailServiceRedis = new Redis('email-service-redis', {
@@ -188,14 +199,7 @@ const sfs_uploader_queue = new Queue('email-service-sfs-mapper', {
 export const sfsUploaderQueueArn = pulumi.interpolate`${sfs_uploader_queue.queue.arn}`;
 export const sfsUploaderQueueName = pulumi.interpolate`${sfs_uploader_queue.queue.name}`;
 
-const sfs_delete_queue = new Queue('email-service-sfs-delete', {
-  tags,
-  maxReceiveCount: 5,
-  visibilityTimeoutSeconds: 60,
-});
-
-export const sfsDeleteQueueArn = pulumi.interpolate`${sfs_delete_queue.queue.arn}`;
-export const sfsDeleteQueueName = pulumi.interpolate`${sfs_delete_queue.queue.name}`;
+export { sfsDeleteQueueArn, sfsDeleteQueueName };
 
 const { searchEventQueueName, searchEventQueueArn } = getSearchEventQueue();
 
@@ -562,21 +566,6 @@ const emailScheduledHandler = new EmailScheduledHandler(
   }
 );
 
-const emailSfsDeleteHandler = new EmailSfsDeletehandler(
-  'email-sfs-delete-handler',
-  {
-    queueArns: [sfsDeleteQueueArn],
-    vpc: coparse_api_vpc,
-    envVars: {
-      DATABASE_URL: pulumi.interpolate`${MACRO_DB_URL}`,
-      ENVIRONMENT: stack,
-      RUST_LOG: 'email_sfs_delete_handler=info',
-      SFS_DELETE_QUEUE: pulumi.interpolate`${sfsDeleteQueueName}`,
-    },
-    tags,
-  }
-);
-
 export const emailRefreshHandlerRoleArn = emailRefreshHandler.role.arn;
 export const emailRefreshHandlerLambdaName = emailRefreshHandler.lambda.name;
 export const emailRefreshHandlerLambdaArn = emailRefreshHandler.lambda.arn;
@@ -585,8 +574,3 @@ export const emailScheduledHandlerRoleArn = emailScheduledHandler.role.arn;
 export const emailScheduledHandlerLambdaName =
   emailScheduledHandler.lambda.name;
 export const emailScheduledHandlerLambdaArn = emailScheduledHandler.lambda.arn;
-
-export const emailSfsDeleteHandlerRoleArn = emailSfsDeleteHandler.role.arn;
-export const emailSfsDeleteHandlerLambdaName =
-  emailSfsDeleteHandler.lambda.name;
-export const emailSfsDeleteHandlerLambdaArn = emailSfsDeleteHandler.lambda.arn;

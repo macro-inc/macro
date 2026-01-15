@@ -1,8 +1,8 @@
 use crate::pubsub::sfs_deleter::context::SFSDeleteContext;
 use anyhow::Context;
 use aws_sdk_sqs::types::Message;
-use models_email::email::service::pubsub::SFSDeleteMessage;
 use reqwest::StatusCode;
+use sqs_client::email::SFSDeleteMessage;
 use sqs_worker::cleanup_message;
 
 /// Delete attachment from SFS

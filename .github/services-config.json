@@ -127,6 +127,12 @@
       ],
       "stack_path": "infra/stacks/search-upload/**"
     },
+    "email-sfs-delete-handler": {
+      "source_paths": [
+        "rust/cloud-storage/email_sfs_delete_handler/**"
+      ],
+      "stack_path": "infra/stacks/email-sfs-delete-handler/**"
+    },
     "static-file-service": {
       "source_paths": [
         "rust/cloud-storage/static_file_service/**"
