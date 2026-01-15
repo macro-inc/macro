@@ -1,17 +1,13 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { ClippedPanel } from '@core/component/ClippedPanel';
 import { beveledCorners } from '../../block-theme/signals/themeSignals';
-import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
-import { EntityType } from '@service-storage/generated/schemas/entityType';
 import { toast } from '@core/component/Toast/Toast';
 import { isOk } from '@core/util/maybeResult';
 import IconCheck from '@icon/regular/check.svg';
 import WideCopy from '@macro-icons/wide/copy.svg';
 import WideChat from '@macro-icons/wide/chat.svg';
-import WideTask from '@macro-icons/wide/task.svg';
 import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
 import { commsServiceClient } from '@service-comms/client';
-import { createTask } from '@core/util/create';
 import { useUserId } from '@service-gql/client';
 import { Button } from '@ui/components/Button';
 import { Match, Show, Switch } from 'solid-js';
