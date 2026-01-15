@@ -1,23 +1,25 @@
-import type { Component, JSX } from 'solid-js';
+import type { Component } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
+
+interface ShortcutLabelProps {
+  label: string;
+  shortcut: string;
+}
 
 /**
  * Renders a label with the shortcut character underlined.
  * E.g., "Inbox" with shortcut "i" renders "Inbox" with "I" underlined.
  */
-export const renderShortcutUnderlinedInLabel = (
-  label: string,
-  shortcut: string
-): JSX.Element => {
-  const s = shortcut.trim();
-  if (!s) return <>{label}</>;
+export const ShortcutLabel: Component<ShortcutLabelProps> = (props) => {
+  const s = props.shortcut.trim();
+  if (!s) return <>{props.label}</>;
 
   // Special case for space shortcut
   if (s.toLowerCase() === 'space') {
     return (
       <>
-        {label}
+        {props.label}
         <span class="ml-1 font-mono opacity-70">␣</span>
       </>
     );
@@ -27,19 +29,19 @@ export const renderShortcutUnderlinedInLabel = (
   if (s === '/') {
     return (
       <>
-        {label}
+        {props.label}
         <span class="ml-1 font-mono opacity-70">/</span>
       </>
     );
   }
 
   // Find and underline the shortcut character in the label
-  const idx = label.toLowerCase().indexOf(s.toLowerCase());
-  if (idx === -1) return <>{label}</>;
+  const idx = props.label.toLowerCase().indexOf(s.toLowerCase());
+  if (idx === -1) return <>{props.label}</>;
 
-  const before = label.slice(0, idx);
-  const match = label.slice(idx, idx + s.length);
-  const after = label.slice(idx + s.length);
+  const before = props.label.slice(0, idx);
+  const match = props.label.slice(idx, idx + s.length);
+  const after = props.label.slice(idx + s.length);
 
   return (
     <>
@@ -67,10 +69,6 @@ export interface FilterButtonProps {
   paddingClass?: string;
 }
 
-/**
- * Reusable filter button component for the Soup topbar.
- * Renders a pill-shaped button with icon, label, and tooltip showing the shortcut.
- */
 export const FilterButton: Component<FilterButtonProps> = (props) => {
   const paddingClass = () => props.paddingClass ?? 'pl-2 pr-2.5';
 
@@ -93,7 +91,7 @@ export const FilterButton: Component<FilterButtonProps> = (props) => {
         >
           <Dynamic component={props.icon} class="size-4.5" />
           <span class="text-xs leading-none">
-            {renderShortcutUnderlinedInLabel(props.label, props.shortcut)}
+            <ShortcutLabel label={props.label} shortcut={props.shortcut} />
           </span>
         </button>
       </Tooltip>
@@ -101,9 +99,6 @@ export const FilterButton: Component<FilterButtonProps> = (props) => {
   );
 };
 
-/**
- * Divider component for separating filter button groups.
- */
 export const FilterDivider: Component = () => (
   <div class="mx-0.5 w-px h-5 bg-edge-muted/50 shrink-0" />
 );

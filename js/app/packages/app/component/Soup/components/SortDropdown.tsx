@@ -3,19 +3,13 @@ import { Popover } from '@kobalte/core/popover';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import SortIcon from '@macro-icons/wide/sort.svg';
 import type { SystemSortOption } from '../../ViewConfig';
-import { renderShortcutUnderlinedInLabel } from './FilterButton';
+import { ShortcutLabel } from './FilterButton';
 
-/**
- * Sort option configuration.
- */
 export interface SortOption {
   value: SystemSortOption;
   label: string;
 }
 
-/**
- * Default sort options for the Soup view.
- */
 export const SORT_OPTIONS: SortOption[] = [
   { value: 'viewed_at', label: 'Viewed' },
   { value: 'updated_at', label: 'Updated' },
@@ -35,11 +29,6 @@ export interface SortDropdownProps {
   onOpenChange?: (open: boolean) => void;
 }
 
-/**
- * Sort dropdown component with keyboard navigation support.
- * Renders a pill-shaped button that opens a dropdown menu for selecting sort order.
- * Supports both controlled and uncontrolled open state.
- */
 export const SortDropdown: Component<SortDropdownProps> = (props) => {
   // Internal state for uncontrolled mode
   const [internalOpen, setInternalOpen] = createSignal(false);
@@ -98,7 +87,7 @@ export const SortDropdown: Component<SortDropdownProps> = (props) => {
         >
           <SortIcon class="size-3.5" />
           <span class="text-xs leading-none">
-            {renderShortcutUnderlinedInLabel('Sort', 's')}
+            <ShortcutLabel label="Sort" shortcut="s" />
           </span>
         </Popover.Trigger>
       </Tooltip>

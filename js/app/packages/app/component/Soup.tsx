@@ -76,7 +76,7 @@ import { useFilterActions } from './Soup/hooks/useFilterActions';
 import {
   FilterButton,
   FilterDivider,
-  renderShortcutUnderlinedInLabel,
+  ShortcutLabel,
 } from './Soup/components/FilterButton';
 import { SortDropdown } from './Soup/components/SortDropdown';
 
@@ -189,7 +189,6 @@ function EntityTypeIconFilter() {
     });
   };
 
-  // Sort functionality (uses imported SORT_OPTIONS from SortDropdown)
   const sortType = createMemo(() => {
     const sort = view()?.sort;
     if (sort?.type === 'systemSortOption') {
@@ -369,7 +368,7 @@ function EntityTypeIconFilter() {
                 <circle cx="12" cy="12" r="4" />
               </svg>
               <span class="text-xs leading-none">
-                {renderShortcutUnderlinedInLabel('Unread', 'u')}
+                <ShortcutLabel label="Unread" shortcut="u" />
               </span>
             </button>
           </Tooltip>
@@ -412,7 +411,7 @@ function EntityTypeIconFilter() {
           >
             <PreviewIcon class="size-3.5" />
             <span class="text-xs leading-none">
-              {renderShortcutUnderlinedInLabel('Preview', 'space')}
+              <ShortcutLabel label="Preview" shortcut="space" />
             </span>
           </button>
         </Tooltip>
