@@ -32,10 +32,8 @@ function buildPropertyInputs(
   const properties: PropertyInput[] = [];
 
   for (const [propertyId, apiValue] of Object.entries(task.propertyValues)) {
-    const isMultiSelect =
-      propertyId === SYSTEM_PROPERTY_IDS.ASSIGNEES ||
-      apiValue.valueType === 'SELECT_STRING' ||
-      apiValue.valueType === 'SELECT_NUMBER';
+    // Only ASSIGNEES is multi-select; STATUS and PRIORITY are single-select
+    const isMultiSelect = propertyId === SYSTEM_PROPERTY_IDS.ASSIGNEES;
 
     const value = propertyValueToApi(apiValue, isMultiSelect);
     if (value !== null) {
