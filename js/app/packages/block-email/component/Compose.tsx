@@ -61,7 +61,6 @@ import {
 } from '@queries/email/attachment';
 import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
 import { useMaybeEmailContext } from '@block-email/component/EmailContext';
-import { parseEmailContent } from '@core/email';
 import { decodeBase64Utf8 } from '@block-email/util/decodeBase64';
 
 const DRAFT_DEBOUNCE_MS = 1000;
