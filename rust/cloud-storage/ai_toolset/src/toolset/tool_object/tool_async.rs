@@ -73,8 +73,7 @@ where
 }
 
 /// Trait object type for tools callable with `ToolSetContext`.
-type AsyncToolTraitObject<ToolSetContext> =
-    Box<dyn ToolSetCallable<ToolSetContext> + Send + Sync>;
+type AsyncToolTraitObject<ToolSetContext> = Box<dyn ToolSetCallable<ToolSetContext> + Send + Sync>;
 
 /// Deserializer function type that creates a callable tool from JSON.
 type AsyncDeserializer<ToolSetContext> = Box<
@@ -128,8 +127,9 @@ where
 
         let deserializer = Box::new(|data: &serde_json::Value| {
             serde_json::from_value::<T>(data.clone()).map(|tool| {
-                Box::new(ToolContextAdapter::<ToolSetContext, ToolContext, T>::new(tool))
-                    as AsyncToolTraitObject<ToolSetContext>
+                Box::new(ToolContextAdapter::<ToolSetContext, ToolContext, T>::new(
+                    tool,
+                )) as AsyncToolTraitObject<ToolSetContext>
             })
         });
 
