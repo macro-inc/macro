@@ -257,36 +257,4 @@ export default function GlobalShortcuts() {
     },
     runWithInputFocused: true,
   });
-
-  registerHotkey({
-    scopeId: 'global',
-    description: 'Toggle beveled corners',
-    keyDownHandler: () => {
-      setBeveledCorners(!beveledCorners());
-      return true;
-    },
-    runWithInputFocused: true,
-  });
-
-  registerHotkey({
-    scopeId: 'global',
-    description: 'Toggle black bezels',
-    keyDownHandler: () => {
-      setBlackBezels(!blackBezels());
-      return true;
-    },
-    runWithInputFocused: true,
-  });
-
-  registerHotkey({
-    scopeId: 'global',
-    description: 'Toggle gutter size',
-    keyDownHandler: () => {
-      toggleGutterSize();
-      return true;
-    },
-    runWithInputFocused: true,
-  });
-
-  return '';
 }

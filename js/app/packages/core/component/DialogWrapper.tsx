@@ -17,14 +17,8 @@ export function DialogWrapper(props: DialogWrapperProps) {
       ref={props.overlayRef}
     >
       <div
-        style={{
-          'max-width': 'calc(100vw - (var(--gutter-size) * 2))',
-          margin: '160px auto 0 auto',
-          'max-height': '75vh',
-          overflow: 'hidden',
-          width: width,
-        }}
-        class={props.class}
+        class={`max-w-[calc(100vw-16px)] mt-20 sm:mt-40 mx-auto max-h-[75vh] overflow-hidden ${props.class ?? ''}`}
+        style={{ width: width }}
         ref={props.contentRef}
       >
         {props.children}
