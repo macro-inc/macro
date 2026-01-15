@@ -1,6 +1,6 @@
 import { URL_PARAMS as MD_URL_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_URL_PARAMS } from '@block-pdf/signal/location';
-import { useChannelsContext } from '@core/component/ChannelsProvider';
+import { useChannelsContext } from '@core/context/channels';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import { isOk } from '@core/util/maybeResult';
 import { cognitionApiServiceClient } from '@service-cognition/client';
@@ -57,8 +57,7 @@ const createChatMentionXML = (chatId: string) => {
 
 const createChannelMentionXML = (channelId: string) => {
   const channelsContext = useChannelsContext();
-  const channels = () => channelsContext.channels();
-  const channel = channels().find((c) => c.id === channelId);
+  const channel = channelsContext.channels().find((c) => c.id === channelId);
   if (!channel) {
     if (import.meta.env.DEV) {
       console.error('Could not find channel', channelId);

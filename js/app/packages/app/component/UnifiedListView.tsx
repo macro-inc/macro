@@ -107,6 +107,7 @@ import {
   type Setter,
   Show,
   type Signal,
+  Suspense,
 } from 'solid-js';
 import {
   createStore,
@@ -1489,6 +1490,18 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     }
   });
 
+  createEffect(
+    on(splitContext.isPanelActive, () => {
+      if (splitContext.isPanelActive()) {
+        if (activeSoupContext() !== soupContext) return;
+        const domEl = activeSoupContext()?.domRef();
+        setTimeout(() => {
+          domEl?.focus();
+        });
+      }
+    })
+  );
+
   return (
     <>
       <Show when={!props.hideToolbar}>
@@ -1661,19 +1674,21 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                     </section>
                   </Show>
                   <Show when={ENABLE_PROPERTY_FILTER}>
-                    <section class="gap-1 grid p-2">
-                      <span class="font-medium text-xs">Property</span>
-                      <PropertyFilterControl
-                        propertyFilters={propertyFilters}
-                        setPropertyFilters={setPropertyFilters}
-                        onIncompleteFiltersChange={
-                          setHasIncompletePropertyFilters
-                        }
-                        registerClearHandler={(fn) => {
-                          clearPropertyFilters = fn;
-                        }}
-                      />
-                    </section>
+                    <Suspense>
+                      <section class="gap-1 grid p-2">
+                        <span class="font-medium text-xs">Property</span>
+                        <PropertyFilterControl
+                          propertyFilters={propertyFilters}
+                          setPropertyFilters={setPropertyFilters}
+                          onIncompleteFiltersChange={
+                            setHasIncompletePropertyFilters
+                          }
+                          registerClearHandler={(fn) => {
+                            clearPropertyFilters = fn;
+                          }}
+                        />
+                      </section>
+                    </Suspense>
                   </Show>
                 </div>
               </div>

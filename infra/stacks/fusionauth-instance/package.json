@@ -1,0 +1,10 @@
+{
+  "name": "fusionauth-instance-stack",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "main": "index.ts",
+  "dependencies": {
+    "pulumi-fusionauth": "6.0.2"
+  }
+}

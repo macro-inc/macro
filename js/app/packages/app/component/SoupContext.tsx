@@ -1,11 +1,11 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { useChannelsContext } from '@core/component/ChannelsProvider';
+import { useChannelsContext } from '@core/context/channels';
 import { toast } from '@core/component/Toast/Toast';
 import { HotkeyTags } from '@core/hotkey/constants';
 import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
-import type { ValidHotkey } from '@core/hotkey/types';
-import { getActiveCommandByToken, runCommand } from '@core/hotkey/utils';
+import { HOTKEY_PRIORITY_LOW, type ValidHotkey } from '@core/hotkey/types';
+import { getHotkeyCommand, runCommand } from '@core/hotkey/utils';
 import { isModality } from '@core/mobile/inputModality';
 import { DEFAULT_VIEWS, type DefaultView, type ViewId } from '@core/types/view';
 import { getActualTarget } from '@core/util/getActualTarget';
@@ -329,7 +329,7 @@ export function createNavigationEntityListShortcut({
     actionRegistry,
     parentContextSignal: [getParentContext],
     childContextSignal: [getChildContext],
-    activeContextSignal: [, setActiveContext],
+    activeContextSignal: [activeContext, setActiveContext],
   } = soupContext;
   const viewData = createMemo(() => viewsData[selectedView()]);
   const viewIds = createMemo<ViewId[]>(() => Object.keys(viewsData));
@@ -1314,7 +1314,7 @@ export function createNavigationEntityListShortcut({
   });
 
   registerEntityHotkey({
-    hotkey: ['h'],
+    hotkey: ['h', 'arrowleft'],
     scopeId: splitHotkeyScope,
     description: 'Navigate to parent context',
     hotkeyToken: TOKENS.unifiedList.navigation.parent,
@@ -1322,20 +1322,16 @@ export function createNavigationEntityListShortcut({
       const parentContext = getParentContext();
 
       if (!parentContext) {
-        const [preview] = previewState;
-        if (!preview()) {
-          const command = getActiveCommandByToken(TOKENS.split.goHome);
-          if (command) {
-            runCommand(command);
-          }
-        }
-        return true;
+        return false;
       }
-      setActiveContext(parentContext);
 
       const parentDomRef = parentContext.domRef();
+      if (parentContext === activeContext()) {
+        return true;
+      }
 
       if (parentDomRef) {
+        setActiveContext(parentContext);
         parentDomRef.focus();
         return true;
       }
@@ -1345,22 +1341,32 @@ export function createNavigationEntityListShortcut({
     canExecuteKeyDownHandler: () => {
       return isViewingList();
     },
+    registrationType: 'add',
+    handlerPriority: HOTKEY_PRIORITY_LOW,
     hide: true,
   });
 
   registerEntityHotkey({
-    hotkey: ['l'],
+    hotkey: ['l', 'arrowright'],
     scopeId: splitHotkeyScope,
     description: 'Navigate to child context',
     hotkeyToken: TOKENS.unifiedList.navigation.child,
     keyDownHandler: () => {
       const childContext = getChildContext();
       if (!childContext) return false;
-      setActiveContext(childContext);
 
       const childDomRef = childContext.domRef();
 
+      if (!childDomRef) {
+        return false;
+      }
+
+      if (childContext === activeContext()) {
+        return false;
+      }
+
       if (childDomRef) {
+        setActiveContext(childContext);
         childDomRef.setAttribute('data-allow-focus-in-preview', '');
         childDomRef.focus();
         return true;
@@ -1370,6 +1376,8 @@ export function createNavigationEntityListShortcut({
     canExecuteKeyDownHandler: () => {
       return isViewingList() && getChildContext() !== undefined;
     },
+    registrationType: 'add',
+    handlerPriority: HOTKEY_PRIORITY_LOW,
     hide: true,
   });
 
@@ -1466,7 +1474,9 @@ export function createNavigationEntityListShortcut({
       return true;
     },
     displayPriority: 4,
+    registrationType: 'add',
   });
+
   registerEntityHotkey({
     hotkey: ['cmd+enter'],
     scopeId: splitHotkeyScope,
@@ -1500,9 +1510,8 @@ export function createNavigationEntityListShortcut({
               return;
             const scopeId = closestBlockScope.dataset.hotkeyScope;
             if (!scopeId) return undefined;
-            const splitNode = hotkeyScopeTree.get(scopeId);
-            if (!splitNode) return undefined;
-            return splitNode.hotkeyCommands.get('enter');
+
+            return getHotkeyCommand(scopeId, 'enter');
           };
           const command = getEnterCommand();
           if (command) {
@@ -1721,6 +1730,8 @@ function registerEntityHotkey(
     hotkeyToken: undefined,
     tags: undefined,
     condition: undefined,
+    registrationType: undefined,
+    handlerPriority: undefined,
     keyDownHandler: (event) => {
       globalKeyboardEvent = event;
       queueMicrotask(() => {
@@ -1752,10 +1763,10 @@ function registerEntityHotkey(
         const splitScope = activeSoupContext?.domRef();
         if (!splitScope || !(splitScope instanceof HTMLElement)) return;
         const scopeId = splitScope.dataset.hotkeyScope;
-        if (!scopeId) return undefined;
-        const splitNode = hotkeyScopeTree.get(scopeId);
-        if (!splitNode) return undefined;
-        return splitNode.hotkeyCommands.get(
+        if (!scopeId || !opts.hotkey) return undefined;
+
+        return getHotkeyCommand(
+          scopeId,
           // @ts-expect-error
           opts.hotkey[0]
         );

@@ -14,6 +14,7 @@ import {
 import { PropertyTooltip } from './PropertyTooltip';
 import CircleDashedEmpty from '@icon/regular/circle-dashed.svg';
 import { UserGroup } from './UserGroup';
+import { cn } from '@ui/utils/classname';
 
 type CondensedPropertyValueProps = {
   property: Property;
@@ -57,12 +58,14 @@ export const CondensedPropertyValue: Component<CondensedPropertyValueProps> = (
       class="flex items-center"
     >
       <div
-        class="inline-flex items-center text-xs leading-none text-ink-muted shrink-0 p-1.5 h-6.5 transition-colors"
-        classList={{
-          'cursor-pointer hover:border-edge-muted hover:bg-hover/50': canEdit,
-          'opacity-50': !validValue(),
-          'border border-edge-muted/50': !isUserProperty(),
-        }}
+        class={cn(
+          'inline-flex items-center text-xs leading-none text-ink-muted shrink-0 py-1.5 h-6.5 transition-colors',
+          {
+            'cursor-pointer hover:border-edge-muted hover:bg-hover/50': canEdit,
+            'opacity-50': !validValue(),
+            'border border-edge-muted/50 px-1.5': !isUserProperty(),
+          }
+        )}
         onClick={handleClick}
         role={canEdit ? 'button' : undefined}
         tabIndex={canEdit ? 0 : undefined}
@@ -79,7 +82,7 @@ const CondensedIcon = (props: { property: Property }) => {
 
     if (isEntityProperty(props.property)) {
       if (props.property.specificEntityType === 'USER') {
-        return <UserGroup entities={props.property.value ?? []} />;
+        return <UserGroup entities={props.property.value ?? []} maxUsers={2} />;
       }
     }
 

@@ -4,7 +4,7 @@ import {
 } from '@app/component/GlobalAppState';
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
-import { useChannelsContext } from '@core/component/ChannelsProvider';
+import { useChannelsContext } from '@core/context/channels';
 import { Tooltip } from '@core/component/Tooltip';
 import { UserIcon } from '@core/component/UserIcon';
 import {
@@ -187,11 +187,10 @@ function QuickAccessItem(props: QuickAccessItemProps) {
 
 export function QuickAccess() {
   const channelsContext = useChannelsContext();
-  const channels = channelsContext.channels;
   const notificationSource = useGlobalNotificationSource();
   const allNotifications = notificationSource.notifications;
   const channelsWithNotifications = createMemo(() => {
-    const channels_ = channels();
+    const channels_ = channelsContext.channels();
     const notifications = allNotifications();
 
     return channels_

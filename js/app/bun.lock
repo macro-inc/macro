@@ -39,6 +39,7 @@
         "@panzoom/panzoom": "^4.6.0",
         "@phosphor-icons/core": "^2.1.1",
         "@solid-primitives/audio": "^1.4.2",
+        "@solid-primitives/context": "^0.3.2",
         "@solid-primitives/deep": "^0.3.3",
         "@solid-primitives/event-bus": "^1.1.2",
         "@solid-primitives/event-listener": "^2.4.3",
@@ -1023,6 +1024,8 @@
     "@solid-primitives/audio": ["@solid-primitives/audio@1.4.2", "", { "dependencies": { "@solid-primitives/static-store": "^0.1.2", "@solid-primitives/utils": "^6.3.2" }, "peerDependencies": { "solid-js": "^1.6.12" } }, "sha512-UMD3ORQfI5Ky8yuKPxidDiEazsjv/dsoiKK5yZxLnsgaeNR1Aym3/77h/qT1jBYeXUgj4DX6t7NMpFUSVr14OQ=="],
 
     "@solid-primitives/bounds": ["@solid-primitives/bounds@0.1.1", "", { "dependencies": { "@solid-primitives/event-listener": "^2.4.1", "@solid-primitives/resize-observer": "^2.1.1", "@solid-primitives/static-store": "^0.1.1", "@solid-primitives/utils": "^6.3.1" }, "peerDependencies": { "solid-js": "^1.6.12" } }, "sha512-b4s8JClkRq2RQlU3K4qeCVASdtct5gfg3HNfWGeD7oPjWlSkp2RyDHJwt9ZtPaXOEOIHhNBbLgjtLax/4B6VUQ=="],
+
+    "@solid-primitives/context": ["@solid-primitives/context@0.3.2", "", { "peerDependencies": { "solid-js": "^1.6.12" } }, "sha512-6fvTtpK17PFHnUf/UOc1TzBjd+kLFjtA62aRFEm1kDP9ufTo7FYW2kUzQAWbfbRHi30yjBJtopbR8qd6nShwyg=="],
 
     "@solid-primitives/deep": ["@solid-primitives/deep@0.3.3", "", { "dependencies": { "@solid-primitives/memo": "^1.4.3" }, "peerDependencies": { "solid-js": "^1.6.12" } }, "sha512-YnCV2OFbBlNYlww0lSD7oDpk9zN20KQWr699s6euwd6+oRE1nbI+vqrfYuqC7E0WPDfk0DIG+ylY1xvY31ZlTg=="],
 

@@ -1,6 +1,7 @@
 use crate::attachments::{marco, provider};
 use crate::messages::replying_to_id;
-use crate::messages::scheduled::{delete_scheduled_message, upsert_scheduled_message};
+use crate::messages::scheduled::delete::delete_scheduled_message;
+use crate::messages::scheduled::upsert::upsert_scheduled_message;
 use crate::parse::service_to_db::{addresses_from_message, map_message_to_send_to_db};
 use crate::{contacts, labels, parse, threads};
 use anyhow::Context;
@@ -224,24 +225,15 @@ pub async fn insert_message_to_send(
     thread_id: Uuid,
     from_contact_id: Option<Uuid>,
     is_draft: bool,
+    // recipients need to be inserted ahead of time outside the tx, as they are shared
+    // across messages and can cause deadlocks if inserted within.
+    recipients: UpsertedRecipients,
 ) -> anyhow::Result<()> {
     let message_db_id = service_message
         .db_id
         .unwrap_or_else(macro_uuid::generate_uuid_v7);
 
-    // Generate and insert recipients for message before sending.
-    // This ensures recipients are accessible to the frontend before Gmail sync message arrives with
-    // complete message details.
-    let addresses = addresses_from_message(service_message);
-
     let db_message_to_send = map_message_to_send_to_db(service_message, message_db_id, thread_id);
-
-    let recipients = contacts::upsert_message::parse_and_upsert_message_contacts(
-        &mut *tx,
-        db_message_to_send.link_id,
-        addresses,
-    )
-    .await?;
 
     // Insert the message into the database
     sqlx::query!(

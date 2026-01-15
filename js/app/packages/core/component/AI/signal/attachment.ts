@@ -4,11 +4,10 @@ import {
 } from '@core/component/AI/constant';
 import type { Attachment, Attachments } from '@core/component/AI/types';
 import { asFileType } from '@core/component/AI/util';
-import { useChannelsContext } from '@core/component/ChannelsProvider';
+import { useChannelsContext } from '@core/context/channels';
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins/mentions';
 import { ENABLE_CHAT_CHANNEL_ATTACHMENT } from '@core/constant/featureFlags';
 import { getItemBlockName } from '@core/util/getItemBlockName';
-import { useEmails } from '@macro-entity';
 import { useHistory } from '@service-storage/history';
 import { createMemo, createSignal } from 'solid-js';
 
@@ -56,7 +55,6 @@ export const useChatAttachableHistory = () => {
 export const useGetChatAttachmentInfo = () => {
   const history = useChatAttachableHistory();
   const { channels } = useChannelsContext();
-  const _emails = useEmails();
 
   const getDocumentAttachment = (id: string): Attachment | undefined => {
     const item = history().find((item) => item.id === id);
