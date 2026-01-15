@@ -55,12 +55,12 @@ type EmailFormState = {
 
 /**
  * Creates a state object for the email form.
- * @param key - The db_id of the email being replied to.
+ * @param purpose - The purpose of the form. Are we managing the state of a draft reply or just a draft message
  * @param options - Required options for the initial state to be calculated from
  * @returns A state object for the email form.
  */
 export function createEmailFormState(
-  type?:
+  purpose?:
     | { type: 'replying_to'; messageID: string }
     | { type: 'draft'; messageID: string },
 
@@ -68,15 +68,19 @@ export function createEmailFormState(
 ) {
   const userEmail = useEmail();
 
-  const replyingTo =
-    type && type.type === 'replying_to'
-      ? options?.getMessageByID(type.messageID)
-      : undefined;
-  const draft = type
-    ? type.type === 'draft'
-      ? options?.getMessageByID(type.messageID)
-      : options?.getDraftForMessageReply(type?.messageID)
-    : undefined;
+  let replyingTo: MessageWithBodyReplyless | undefined;
+
+  if (purpose?.type === 'replying_to') {
+    replyingTo = options?.getMessageByID(purpose.messageID);
+  }
+
+  let draft: MessageWithBodyReplyless | undefined;
+
+  if (purpose?.type === 'draft') {
+    draft = options?.getMessageByID(purpose.messageID);
+  } else if (purpose?.type === 'replying_to') {
+    options?.getDraftForMessageReply(purpose?.messageID);
+  }
 
   const draftContainsAppendedReply = () => {
     const encoded = draft?.body_html_sanitized;
