@@ -1,15 +1,15 @@
-import type { PotentialTask } from '@core/util/taskExtraction';
+import type { PropertyApiValues } from '@core/component/Properties/types';
+import type { TaskWithProperties } from '@block-channel/utils/useTaskMode';
 import { For } from 'solid-js';
 import { TaskPreviewRow } from './TaskPreviewRow';
 
 type TaskPreviewPanelProps = {
-  tasks: PotentialTask[];
-  onUpdateTaskProperty: (
+  tasks: TaskWithProperties[];
+  onUpdatePropertyValue: (
     lineIndex: number,
-    property: 'statusOptionId' | 'priorityOptionId' | 'dueDate',
-    value: string | null
+    propertyDefinitionId: string,
+    value: PropertyApiValues
   ) => void;
-  onUpdateTaskAssignees: (lineIndex: number, assigneeUserIds: string[]) => void;
 };
 
 /**
@@ -30,11 +30,12 @@ export function TaskPreviewPanel(props: TaskPreviewPanelProps) {
           {(task) => (
             <TaskPreviewRow
               task={task}
-              onUpdateProperty={(prop, value) =>
-                props.onUpdateTaskProperty(task.lineIndex, prop, value)
-              }
-              onUpdateAssignees={(assigneeUserIds) =>
-                props.onUpdateTaskAssignees(task.lineIndex, assigneeUserIds)
+              onUpdatePropertyValue={(propertyDefinitionId, value) =>
+                props.onUpdatePropertyValue(
+                  task.lineIndex,
+                  propertyDefinitionId,
+                  value
+                )
               }
             />
           )}

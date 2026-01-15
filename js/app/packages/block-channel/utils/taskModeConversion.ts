@@ -1,8 +1,8 @@
-import type { PotentialTask } from '@core/util/taskExtraction';
-import {
-  createTaskFromData,
-  type TaskCreationOptions,
-} from '@core/util/taskCreation';
+import type { TaskWithProperties } from './useTaskMode';
+import { propertyValueToApi } from '@core/component/Properties/api/converters';
+import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
+import { createTask } from '@core/util/create';
+import type { PropertyInput } from '@service-storage/generated/schemas/propertyInput';
 
 export type TaskCreationSuccess = {
   lineIndex: number;
@@ -20,24 +20,119 @@ export type TaskCreationResults = {
   errors: TaskCreationError[];
 };
 
+export type TaskCreationOptions = {
+  currentUserId?: string;
+  parentTaskId?: string;
+};
+
 /**
- * Create a single task from a potential task
+ * Convert TaskWithProperties to PropertyInput[] for task creation API.
+ * Follows the same pattern as ComposeTask.
  */
-async function createTaskFromPotential(
-  task: PotentialTask,
+function buildPropertyInputs(
+  task: TaskWithProperties,
+  options: TaskCreationOptions
+): PropertyInput[] {
+  const properties: PropertyInput[] = [];
+
+  // Convert stored PropertyApiValues to API format
+  for (const [propertyId, apiValue] of Object.entries(task.propertyValues)) {
+    // Determine if multi-select based on property type
+    const isMultiSelect =
+      propertyId === SYSTEM_PROPERTY_IDS.ASSIGNEES ||
+      apiValue.valueType === 'SELECT_STRING' ||
+      apiValue.valueType === 'SELECT_NUMBER';
+
+    const value = propertyValueToApi(apiValue, isMultiSelect);
+    if (value !== null) {
+      properties.push({ propertyId, value });
+    }
+  }
+
+  // Add assignees from extracted mentions if not already set
+  if (
+    task.assigneeUserIds.length > 0 &&
+    !task.propertyValues[SYSTEM_PROPERTY_IDS.ASSIGNEES]
+  ) {
+    properties.push({
+      propertyId: SYSTEM_PROPERTY_IDS.ASSIGNEES,
+      value: {
+        type: 'multi_entity_reference',
+        references: task.assigneeUserIds.map((id) => ({
+          entity_id: id,
+          entity_type: 'USER' as const,
+        })),
+      },
+    });
+  } else if (
+    !task.propertyValues[SYSTEM_PROPERTY_IDS.ASSIGNEES] &&
+    options.currentUserId
+  ) {
+    // Fall back to current user if no assignees
+    properties.push({
+      propertyId: SYSTEM_PROPERTY_IDS.ASSIGNEES,
+      value: {
+        type: 'multi_entity_reference',
+        references: [
+          { entity_id: options.currentUserId, entity_type: 'USER' as const },
+        ],
+      },
+    });
+  }
+
+  // Add due date from extracted mention if not already set
+  if (task.dueDate && !task.propertyValues[SYSTEM_PROPERTY_IDS.DUE_DATE]) {
+    properties.push({
+      propertyId: SYSTEM_PROPERTY_IDS.DUE_DATE,
+      value: { type: 'date', value: task.dueDate },
+    });
+  }
+
+  // Add parent task if specified
+  if (options.parentTaskId) {
+    properties.push({
+      propertyId: SYSTEM_PROPERTY_IDS.PARENT_TASK,
+      value: {
+        type: 'entity_reference',
+        reference: {
+          entity_id: options.parentTaskId,
+          entity_type: 'TASK' as const,
+        },
+      },
+    });
+  }
+
+  return properties;
+}
+
+/**
+ * Create a single task from TaskWithProperties
+ */
+async function createSingleTask(
+  task: TaskWithProperties,
   options: TaskCreationOptions
 ): Promise<TaskCreationSuccess | TaskCreationError> {
-  try {
-    const result = await createTaskFromData(task, options);
+  if (!task.title.trim()) {
+    return { lineIndex: task.lineIndex, error: 'Empty task title' };
+  }
 
-    if (!result) {
-      return { lineIndex: task.lineIndex, error: 'Empty task title' };
+  try {
+    const propertyValues = buildPropertyInputs(task, options);
+
+    const documentId = await createTask({
+      title: task.title,
+      content: '',
+      propertyValues: propertyValues.length > 0 ? propertyValues : undefined,
+    });
+
+    if (!documentId) {
+      return { lineIndex: task.lineIndex, error: 'Failed to create task' };
     }
 
     return {
       lineIndex: task.lineIndex,
-      documentId: result.documentId,
-      title: result.title,
+      documentId,
+      title: task.title,
     };
   } catch (error) {
     return {
@@ -54,14 +149,14 @@ function isSuccess(
 }
 
 /**
- * Create tasks from all potential tasks in parallel
+ * Create tasks from TaskWithProperties array in parallel
  */
 export async function createTasksFromPotential(
-  tasks: PotentialTask[],
+  tasks: TaskWithProperties[],
   options: TaskCreationOptions
 ): Promise<TaskCreationResults> {
   const results = await Promise.all(
-    tasks.map((task) => createTaskFromPotential(task, options))
+    tasks.map((task) => createSingleTask(task, options))
   );
 
   const successes: TaskCreationSuccess[] = [];
@@ -92,7 +187,6 @@ function createTaskMentionMarkdown(documentId: string, title: string): string {
 
 /**
  * Replace checkbox lines in markdown with task mentions.
- * Lines that had tasks created are replaced with task mention markup.
  */
 export function replaceCheckboxesWithMentions(
   markdown: string,
@@ -100,13 +194,11 @@ export function replaceCheckboxesWithMentions(
 ): string {
   const lines = markdown.split('\n');
 
-  // Create a map of line index to created task for quick lookup
   const taskByLine = new Map<number, TaskCreationSuccess>();
   for (const task of createdTasks) {
     taskByLine.set(task.lineIndex, task);
   }
 
-  // Replace checkbox lines with task mentions
   const resultLines = lines.map((line, index) => {
     const task = taskByLine.get(index);
     if (task) {

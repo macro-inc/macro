@@ -1,3 +1,4 @@
+import type { PropertyApiValues } from '@core/component/Properties/types';
 import {
   extractCheckboxesFromMarkdown,
   type PotentialTask,
@@ -14,12 +15,9 @@ import { createStore, reconcile } from 'solid-js/store';
 
 const DEBOUNCE_MS = 300;
 
-/** Local property edits for a task */
-type TaskPropertyEdits = {
-  statusOptionId?: string | null;
-  priorityOptionId?: string | null;
-  dueDate?: string | null;
-  assigneeUserIds?: string[];
+/** Extended task with property values in API format */
+export type TaskWithProperties = PotentialTask & {
+  propertyValues: Record<string, PropertyApiValues>;
 };
 
 type UseTaskModeReturn = {
@@ -30,15 +28,13 @@ type UseTaskModeReturn = {
   /** Set task mode enabled state directly */
   setTaskModeEnabled: (enabled: boolean) => void;
   /** Potential tasks detected in current content (debounced) */
-  potentialTasks: Accessor<PotentialTask[]>;
-  /** Update a property on a specific task */
-  updateTaskProperty: (
+  potentialTasks: Accessor<TaskWithProperties[]>;
+  /** Update a property value on a specific task */
+  updateTaskPropertyValue: (
     lineIndex: number,
-    property: 'statusOptionId' | 'priorityOptionId' | 'dueDate',
-    value: string | null
+    propertyDefinitionId: string,
+    value: PropertyApiValues
   ) => void;
-  /** Update assignees on a specific task */
-  updateTaskAssignees: (lineIndex: number, assigneeUserIds: string[]) => void;
 };
 
 /**
@@ -55,9 +51,9 @@ export function useTaskMode(
   const [taskModeEnabled, setTaskModeEnabled] = createSignal(false);
   const [debouncedMarkdown, setDebouncedMarkdown] = createSignal('');
 
-  // Store for local property edits (keyed by lineIndex)
-  const [taskEdits, setTaskEdits] = createStore<
-    Record<number, TaskPropertyEdits>
+  // Store property values per task (keyed by lineIndex, then propertyDefinitionId)
+  const [taskPropertyValues, setTaskPropertyValues] = createStore<
+    Record<number, Record<string, PropertyApiValues>>
   >({});
 
   // Debounce the markdown state updates
@@ -67,7 +63,6 @@ export function useTaskMode(
   );
 
   // Track markdown changes when task mode is enabled
-  // Use createEffect with explicit dependency tracking to avoid interference with editor
   createEffect(
     on(
       () => (taskModeEnabled() ? markdownState() : null),
@@ -80,53 +75,39 @@ export function useTaskMode(
     )
   );
 
-  // Extract potential tasks from debounced markdown, merged with local edits
-  const potentialTasks = createMemo<PotentialTask[]>(() => {
+  // Extract potential tasks from debounced markdown, merged with property values
+  const potentialTasks = createMemo<TaskWithProperties[]>(() => {
     if (!taskModeEnabled()) return [];
     const markdown = debouncedMarkdown();
     if (!markdown) return [];
 
     const extracted = extractCheckboxesFromMarkdown(markdown);
 
-    // Merge extracted tasks with any local property edits
+    // Merge extracted tasks with stored property values
     return extracted.map((task) => ({
       ...task,
-      ...taskEdits[task.lineIndex],
+      propertyValues: taskPropertyValues[task.lineIndex] ?? {},
     }));
   });
 
   const toggleTaskMode = () => {
     const newState = !taskModeEnabled();
     setTaskModeEnabled(newState);
-    // When enabling, immediately update with current content
     if (newState) {
       setDebouncedMarkdown(markdownState());
     } else {
-      // Clear edits when disabling task mode
-      setTaskEdits(reconcile({}));
+      setTaskPropertyValues(reconcile({}));
     }
   };
 
-  // Update a property on a specific task
-  const updateTaskProperty = (
+  const updateTaskPropertyValue = (
     lineIndex: number,
-    property: 'statusOptionId' | 'priorityOptionId' | 'dueDate',
-    value: string | null
+    propertyDefinitionId: string,
+    value: PropertyApiValues
   ) => {
-    setTaskEdits(lineIndex, (prev) => ({
+    setTaskPropertyValues(lineIndex, (prev) => ({
       ...prev,
-      [property]: value,
-    }));
-  };
-
-  // Update assignees on a specific task
-  const updateTaskAssignees = (
-    lineIndex: number,
-    assigneeUserIds: string[]
-  ) => {
-    setTaskEdits(lineIndex, (prev) => ({
-      ...prev,
-      assigneeUserIds,
+      [propertyDefinitionId]: value,
     }));
   };
 
@@ -135,7 +116,6 @@ export function useTaskMode(
     toggleTaskMode,
     setTaskModeEnabled,
     potentialTasks,
-    updateTaskProperty,
-    updateTaskAssignees,
+    updateTaskPropertyValue,
   };
 }

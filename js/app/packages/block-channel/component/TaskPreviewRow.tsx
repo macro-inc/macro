@@ -1,4 +1,6 @@
+import type { TaskWithProperties } from '@block-channel/utils/useTaskMode';
 import { EntityIcon } from '@core/component/EntityIcon';
+import { propertyApiValuesToNormalized } from '@core/component/Properties/api/converters';
 import { Modals } from '@core/component/Properties/component/modal';
 import { PropertyValue } from '@core/component/Properties/component/propertyValue/PropertyValue';
 import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
@@ -10,29 +12,63 @@ import {
 import type {
   Property,
   PropertyApiValues,
+  PropertyOption,
 } from '@core/component/Properties/types';
-import type { PotentialTask } from '@core/util/taskExtraction';
+import { filterMap } from '@core/util/list';
+import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
 import { createMemo, For, Show } from 'solid-js';
 
+// Properties to show in the task preview row
+const PREVIEW_PROPERTIES = [
+  SYSTEM_PROPERTY_IDS.STATUS,
+  SYSTEM_PROPERTY_IDS.PRIORITY,
+  SYSTEM_PROPERTY_IDS.DUE_DATE,
+  SYSTEM_PROPERTY_IDS.ASSIGNEES,
+];
+
 type TaskPreviewRowProps = {
-  task: PotentialTask;
-  onUpdateProperty: (
-    property: 'statusOptionId' | 'priorityOptionId' | 'dueDate',
-    value: string | null
+  task: TaskWithProperties;
+  onUpdatePropertyValue: (
+    propertyDefinitionId: string,
+    value: PropertyApiValues
   ) => void;
-  onUpdateAssignees: (assigneeUserIds: string[]) => void;
 };
 
-// System owner for system properties
-const SYSTEM_OWNER = { scope: 'system' as const };
+/**
+ * Extract display value from stored PropertyApiValues (from ComposeTask pattern)
+ */
+function extractPropertyValue(
+  definition: PropertyDefinition,
+  savedValues: Record<string, PropertyApiValues>,
+  options: Map<string, PropertyOption[]>
+) {
+  const { type, value } = propertyApiValuesToNormalized(
+    savedValues[definition.id]
+  );
+  if (type === 'EMPTY') return null;
+  if (
+    definition.data_type === 'SELECT_NUMBER' ||
+    definition.data_type === 'SELECT_STRING'
+  ) {
+    const opts = options.get(definition.id);
+    if (!opts) return null;
+    if (Array.isArray(value)) {
+      return filterMap(value as string[], (id) => {
+        const opt = opts.find((opt) => opt.id === id);
+        return opt ? opt.id : undefined;
+      });
+    }
+  } else {
+    return value;
+  }
+}
 
 /**
  * Inner component that renders task row with property pills.
- * Uses context to wire up date picker for DATE properties.
  */
 function TaskPropertyRow(props: {
-  task: PotentialTask;
+  task: TaskWithProperties;
   properties: Property[];
 }) {
   const { openDatePicker, openPropertyEditor } = usePropertiesContext();
@@ -68,10 +104,9 @@ function TaskPropertyRow(props: {
 
 /**
  * Individual task row in the preview panel.
- * Shows task title with editable status/priority/due date pills and assignee avatars.
+ * Shows task title with editable property pills (status, priority, due date, assignees).
  */
 export function TaskPreviewRow(props: TaskPreviewRowProps) {
-  // Fetch system properties with options
   const systemPropertiesQuery = useListPropertiesQuery(
     () => ({
       scope: 'system',
@@ -81,10 +116,9 @@ export function TaskPreviewRow(props: TaskPreviewRowProps) {
     () => true
   );
 
-  // Extract definitions and options from query
-  const definitionsMap = createMemo(() => {
+  const definitions = createMemo(() => {
     if (!systemPropertiesQuery.isSuccess || !systemPropertiesQuery.data)
-      return new Map();
+      return new Map<string, PropertyDefinition>();
     return new Map(
       systemPropertiesQuery.data.map((p) => {
         const definition = 'definition' in p ? p.definition : p;
@@ -93,136 +127,82 @@ export function TaskPreviewRow(props: TaskPreviewRowProps) {
     );
   });
 
-  const optionsMap = createMemo(() => {
+  const options = createMemo(() => {
     if (!systemPropertiesQuery.isSuccess || !systemPropertiesQuery.data)
-      return new Map();
+      return new Map<string, PropertyOption[]>();
     return new Map(
       systemPropertiesQuery.data.map((p) => {
         const definition = 'definition' in p ? p.definition : p;
-        const options = 'property_options' in p ? p.property_options : [];
-        return [definition.id, options];
+        const opts = 'property_options' in p ? p.property_options : [];
+        return [definition.id, opts];
       })
     );
   });
 
-  // Build properties from task data and fetched definitions
-  const properties = createMemo((): Property[] => {
-    const now = new Date().toISOString();
-    const defs = definitionsMap();
-    const opts = optionsMap();
-    const result: Property[] = [];
+  // Merge extracted values with stored property values
+  const mergedPropertyValues = createMemo(
+    (): Record<string, PropertyApiValues> => {
+      const values: Record<string, PropertyApiValues> = {};
 
-    // Status property
-    const statusDef = defs.get(SYSTEM_PROPERTY_IDS.STATUS);
-    if (statusDef) {
-      result.push({
-        propertyId: `preview-status-${props.task.lineIndex}`,
-        propertyDefinitionId: SYSTEM_PROPERTY_IDS.STATUS,
-        displayName: statusDef.display_name,
-        isMultiSelect: statusDef.is_multi_select,
-        owner: SYSTEM_OWNER,
-        specificEntityType: statusDef.specific_entity_type ?? null,
-        createdAt: now,
-        updatedAt: now,
-        valueType: 'SELECT_STRING',
-        value: props.task.statusOptionId ? [props.task.statusOptionId] : null,
-        options: opts.get(SYSTEM_PROPERTY_IDS.STATUS) ?? [],
-      });
+      // Add extracted assignees from @mentions
+      if (props.task.assigneeUserIds.length > 0) {
+        values[SYSTEM_PROPERTY_IDS.ASSIGNEES] = {
+          valueType: 'ENTITY',
+          refs: props.task.assigneeUserIds.map((id) => ({
+            entity_id: id,
+            entity_type: 'USER' as const,
+          })),
+        };
+      }
+
+      // Add extracted due date from date mention
+      if (props.task.dueDate) {
+        values[SYSTEM_PROPERTY_IDS.DUE_DATE] = {
+          valueType: 'DATE',
+          value: props.task.dueDate,
+        };
+      }
+
+      // Override with any user-edited values
+      return { ...values, ...props.task.propertyValues };
     }
+  );
 
-    // Priority property
-    const priorityDef = defs.get(SYSTEM_PROPERTY_IDS.PRIORITY);
-    if (priorityDef) {
-      result.push({
-        propertyId: `preview-priority-${props.task.lineIndex}`,
-        propertyDefinitionId: SYSTEM_PROPERTY_IDS.PRIORITY,
-        displayName: priorityDef.display_name,
-        isMultiSelect: priorityDef.is_multi_select,
-        owner: SYSTEM_OWNER,
-        specificEntityType: priorityDef.specific_entity_type ?? null,
-        createdAt: now,
-        updatedAt: now,
-        valueType: 'SELECT_STRING',
-        value: props.task.priorityOptionId
-          ? [props.task.priorityOptionId]
-          : null,
-        options: opts.get(SYSTEM_PROPERTY_IDS.PRIORITY) ?? [],
-      });
-    }
-
-    // Due date property
-    const dueDateDef = defs.get(SYSTEM_PROPERTY_IDS.DUE_DATE);
-    if (dueDateDef) {
-      result.push({
-        propertyId: `preview-duedate-${props.task.lineIndex}`,
-        propertyDefinitionId: SYSTEM_PROPERTY_IDS.DUE_DATE,
-        displayName: dueDateDef.display_name,
-        isMultiSelect: dueDateDef.is_multi_select,
-        owner: SYSTEM_OWNER,
-        specificEntityType: dueDateDef.specific_entity_type ?? null,
-        createdAt: now,
-        updatedAt: now,
-        valueType: 'DATE',
-        value: props.task.dueDate ? new Date(props.task.dueDate) : null,
-      });
-    }
-
-    // Assignees property
-    const assigneesDef = defs.get(SYSTEM_PROPERTY_IDS.ASSIGNEES);
-    if (assigneesDef) {
-      result.push({
-        propertyId: `preview-assignees-${props.task.lineIndex}`,
-        propertyDefinitionId: SYSTEM_PROPERTY_IDS.ASSIGNEES,
-        displayName: assigneesDef.display_name,
-        isMultiSelect: assigneesDef.is_multi_select,
-        owner: SYSTEM_OWNER,
-        specificEntityType: assigneesDef.specific_entity_type ?? null,
-        createdAt: now,
-        updatedAt: now,
-        valueType: 'ENTITY',
-        value:
-          props.task.assigneeUserIds.length > 0
-            ? props.task.assigneeUserIds.map((id) => ({
-                entity_id: id,
-                entity_type: 'USER' as const,
-              }))
-            : null,
-      });
-    }
-
-    return result;
+  // Build properties from definitions (following ComposeTask pattern)
+  const properties = createMemo(() => {
+    return filterMap(PREVIEW_PROPERTIES, (id) => {
+      const definition = definitions().get(id);
+      if (!definition) return;
+      return {
+        propertyId: `preview-${props.task.lineIndex}-${definition.id}`,
+        propertyDefinitionId: definition.id,
+        displayName: definition.display_name,
+        isMultiSelect: definition.is_multi_select,
+        owner: definition.owner,
+        specificEntityType: definition.specific_entity_type ?? null,
+        updatedAt: '',
+        createdAt: '',
+        valueType: definition.data_type,
+        value: extractPropertyValue(
+          definition,
+          mergedPropertyValues(),
+          options()
+        ),
+        options: options().get(definition.id),
+      } as Property;
+    });
   });
 
+  // Simple save handler (following ComposeTask pattern)
   const saveHandler: PropertySaveHandler = {
     saveProperty: async (property: Property, value: PropertyApiValues) => {
-      if (property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.STATUS) {
-        const optionId =
-          value.valueType === 'SELECT_STRING' && value.values?.[0]
-            ? value.values[0]
-            : null;
-        props.onUpdateProperty('statusOptionId', optionId);
-      } else if (
-        property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PRIORITY
-      ) {
-        const optionId =
-          value.valueType === 'SELECT_STRING' && value.values?.[0]
-            ? value.values[0]
-            : null;
-        props.onUpdateProperty('priorityOptionId', optionId);
-      } else if (
-        property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.ASSIGNEES
-      ) {
-        const userIds =
-          value.valueType === 'ENTITY' && value.refs
-            ? value.refs.map((r) => r.entity_id)
-            : [];
-        props.onUpdateAssignees(userIds);
-      }
+      props.onUpdatePropertyValue(property.propertyDefinitionId, value);
     },
     saveDate: async (property: Property, date: Date) => {
-      if (property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.DUE_DATE) {
-        props.onUpdateProperty('dueDate', date.toISOString());
-      }
+      props.onUpdatePropertyValue(property.propertyDefinitionId, {
+        valueType: 'DATE',
+        value: date.toISOString(),
+      });
     },
   };
 

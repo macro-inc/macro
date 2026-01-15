@@ -30,10 +30,6 @@ export type PotentialTask = {
   dueDate: string | null;
   /** Whether the checkbox is checked [x] or unchecked [ ] */
   isChecked: boolean;
-  /** Local edit: status option ID (not extracted from markdown) */
-  statusOptionId?: string | null;
-  /** Local edit: priority option ID (not extracted from markdown) */
-  priorityOptionId?: string | null;
 };
 
 // Pattern to match checkbox lines: "- [ ] text" or "- [x] text"

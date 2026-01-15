@@ -214,8 +214,7 @@ export function BaseInput(props: BaseInputProps) {
     taskModeEnabled,
     toggleTaskMode,
     potentialTasks,
-    updateTaskProperty,
-    updateTaskAssignees,
+    updateTaskPropertyValue,
   } = useTaskMode(markdownState);
 
   createRenderEffect(() => {
@@ -579,8 +578,7 @@ export function BaseInput(props: BaseInputProps) {
         <Suspense>
           <TaskPreviewPanel
             tasks={potentialTasks()}
-            onUpdateTaskProperty={updateTaskProperty}
-            onUpdateTaskAssignees={updateTaskAssignees}
+            onUpdatePropertyValue={updateTaskPropertyValue}
           />
         </Suspense>
       </Show>
