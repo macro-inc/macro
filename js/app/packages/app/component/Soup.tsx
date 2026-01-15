@@ -342,7 +342,7 @@ function EntityTypeIconFilter() {
           >
             <button
               type="button"
-              class="flex items-center gap-1 h-[22px] pr-2.5 pl-1 active:bg-accent active:text-panel rounded-full"
+              class="flex items-center gap-1 h-[22px] touch:mobile-width:h-9 pr-2.5 pl-1 active:bg-accent active:text-panel rounded-full"
               classList={{
                 'bg-accent text-panel': isUnreadFilterActive(),
                 'text-ink-muted hover:text-accent hover:bg-accent/20':
@@ -391,7 +391,7 @@ function EntityTypeIconFilter() {
         >
           <button
             type="button"
-            class="flex items-center gap-1.5 h-[22px] px-2.5 active:bg-accent active:text-panel rounded-full"
+            class="flex items-center gap-1.5 h-[22px] touch:mobile-width:h-9 px-2.5 active:bg-accent active:text-panel rounded-full"
             classList={{
               'bg-accent text-panel': preview(),
               'text-ink-muted hover:text-accent hover:bg-accent/20': !preview(),
@@ -422,7 +422,7 @@ function EntityTypeIconFilter() {
         <div class="flex items-center shrink-0 touch:mobile-width:-order-2">
           <Tooltip tooltip={<LabelAndHotKey label="Filter" shortcut="⌘F" />}>
             <div
-              class="relative flex items-center gap-1.5 h-[22px] px-2.5 rounded-full touch:mobile-width:min-w-35"
+              class="relative flex items-center gap-1.5 h-[22px] touch:mobile-width:h-9 px-2.5 rounded-full touch:mobile-width:min-w-35"
               classList={{
                 'bg-accent text-panel': !!searchText() && !searchFocused(),
                 'text-ink-muted hover:text-accent hover:bg-accent/20':

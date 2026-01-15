@@ -50,7 +50,7 @@ export const FilterButton: Component<FilterButtonProps> = (props) => (
     >
       <button
         type="button"
-        class={`flex items-center gap-1 h-[22px] touch:mobile-width:h-11 ${props.paddingClass ?? 'pl-2 pr-2.5'} active:bg-accent active:text-panel rounded-full`}
+        class={`flex items-center gap-1 h-[22px] touch:mobile-width:h-9 ${props.paddingClass ?? 'pl-2 pr-2.5'} active:bg-accent active:text-panel rounded-full`}
         classList={{
           'bg-accent text-panel': props.isActive(),
           'text-ink-muted hover:text-accent hover:bg-accent/20':
