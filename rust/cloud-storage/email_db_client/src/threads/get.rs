@@ -1,13 +1,11 @@
+use crate::messages::get::{convert_db_messages_to_service, get_messages_by_thread_id};
 use crate::parse::db_to_service;
-use crate::parse::db_to_service::map_attachmentless_db_message_to_service;
-use crate::{attachments, contacts, labels, messages};
 use anyhow::{Context, anyhow};
-use futures::future::try_join_all;
 use models_email::email::db;
+use models_email::email::service::thread;
 use models_email::email::service::thread::{
     ThreadProviderMap, ThreadUserInfo, UserThreadIds, UserThreadsPage,
 };
-use models_email::email::service::{message, thread};
 use sqlx::PgPool;
 use sqlx::types::Uuid;
 use std::collections::{HashMap, HashSet};
@@ -39,7 +37,7 @@ pub async fn get_paginated_thread_ids_with_macro_user_id(
 }
 
 /// fetch thread with number of most recent messages specified by limit and offset
-#[tracing::instrument(skip(pool), level = "info")]
+#[tracing::instrument(skip(pool), err)]
 pub async fn fetch_thread_with_messages_paginated(
     pool: &PgPool,
     thread_db_id: Uuid,
@@ -69,118 +67,9 @@ pub async fn fetch_thread_with_messages_paginated(
         return Ok(None);
     };
 
-    let db_messages = sqlx::query_as!(
-        db::message::Message,
-        r#"
-        SELECT 
-            id,
-            provider_id,
-            global_id,
-            thread_id,
-            provider_thread_id,
-            replying_to_id,
-            link_id,
-            provider_history_id,
-            internal_date_ts,
-            snippet,
-            size_estimate,
-            subject,
-            from_name,
-            from_contact_id,
-            sent_at,
-            has_attachments,
-            is_read,
-            is_starred,
-            is_sent,
-            is_draft,
-            body_text,
-            body_html_sanitized,
-            body_macro,
-            headers_jsonb,
-            created_at,
-            updated_at
-        FROM email_messages
-        WHERE thread_id = $1
-        ORDER BY internal_date_ts DESC
-        LIMIT $2 OFFSET $3
-        "#,
-        thread_db_id,
-        limit,
-        offset
-    )
-    .fetch_all(pool)
-    .await
-    .with_context(|| {
-        format!(
-            "Failed to fetch paginated messages for thread DB ID {}",
-            thread_db_id
-        )
-    })?;
+    let db_messages = get_messages_by_thread_id(pool, thread_db_id, offset, limit).await?;
 
-    // concurrently fetch data for each message
-    let mut message_processing_futures = Vec::new();
-
-    for db_message in db_messages {
-        let pool_clone = pool.clone();
-        message_processing_futures.push(async move {
-            // fetch data from each table concurrently
-            let (
-                sender_res,
-                recipients_res,
-                scheduled_res,
-                labels_res,
-                attachments_res,
-                macro_attachments_res,
-                draft_attachments_res,
-            ) = tokio::try_join!(
-                contacts::get::get_sender_by_message_id(&pool_clone, db_message.id),
-                contacts::get::fetch_db_recipients(&pool_clone, db_message.id),
-                messages::scheduled::get_scheduled_message_no_auth(&pool_clone, db_message.id),
-                labels::get::fetch_message_labels(&pool_clone, db_message.id),
-                async {
-                    if db_message.has_attachments {
-                        attachments::provider::fetch_db_attachments(&pool_clone, db_message.id)
-                            .await
-                    } else {
-                        Ok(Vec::new())
-                    }
-                },
-                async {
-                    attachments::marco::fetch_db_macro_attachments(&pool_clone, db_message.id).await
-                },
-                async {
-                    // only need to check if the message is a draft created in Macro
-                    if db_message.is_draft && db_message.provider_id.is_none() {
-                        attachments::draft::fetch_db_draft_attachments(&pool_clone, db_message.id)
-                            .await
-                    } else {
-                        Ok(Vec::new())
-                    }
-                },
-            )?;
-
-            let service_message = map_attachmentless_db_message_to_service(
-                db_message,
-                sender_res,
-                recipients_res,
-                scheduled_res,
-                labels_res,
-            );
-
-            // parse db-layer structs into service-layer message struct
-            db_to_service::map_db_message_attachments_to_service(
-                service_message,
-                attachments_res,
-                macro_attachments_res,
-                draft_attachments_res,
-            )
-        });
-    }
-
-    // Wait for all message processing futures to complete
-    let processed_messages: Vec<message::Message> = try_join_all(message_processing_futures)
-        .await
-        .context("Failed processing messages concurrently")?;
+    let processed_messages = convert_db_messages_to_service(pool, db_messages).await?;
 
     let full_thread = db_to_service::map_db_thread_to_service(db_thread, processed_messages);
 

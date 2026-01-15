@@ -34,8 +34,31 @@ import {
   Switch,
 } from 'solid-js';
 import { beveledCorners } from '../../block-theme/signals/themeSignals';
-import { ComposeEmailInput, type ComposeInputData } from './ComposeEmailInput';
-import { createEmailFormState } from '@block-email/component/createEmailFormState';
+import { ComposeEmailInput } from './ComposeEmailInput';
+import {
+  createEmailFormState,
+  type DraftFormAttachment,
+} from '@block-email/component/createEmailFormState';
+import { logger } from '@observability/logger';
+import { debounce } from '@solid-primitives/scheduled';
+import type { LexicalEditor } from 'lexical';
+import {
+  $appendWatermarkNodeToLast,
+  $removeAllWatermarkNodes,
+} from '@lexical-core';
+import { prepareEmailBody } from '@block-email/util/prepareEmailBody';
+import { convertEmailRecipientToContactInfo } from '@block-email/util/recipientConversion';
+import {
+  deleteEmailDraft,
+  saveEmailDraft,
+} from '@block-email/signal/emailDraft';
+import {
+  useRemoveDraftAttachmentMutation,
+  useUploadDraftAttachmentsMutation,
+} from '@queries/email/attachment';
+import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
+
+const DRAFT_DEBOUNCE_MS = 1000;
 
 type EmailComposeErrors =
   | 'no_recipient'
@@ -102,6 +125,140 @@ export function EmailCompose() {
   const { users: destinationOptions } = useCombinedRecipients();
 
   const form = createEmailFormState();
+
+  const [editor, setEditor] = createSignal<LexicalEditor | undefined>();
+
+  const [content, setContent] = createSignal('');
+  const [currentDraftID, setCurrentDraftID] = createSignal<
+    string | undefined
+  >();
+
+  const uploadAttachmentMutation = useUploadDraftAttachmentsMutation();
+
+  function collectDraft() {
+    $removeAllWatermarkNodes(editor());
+    const prepared = prepareEmailBody(editor());
+    if (!prepared) {
+      logger.error(
+        new Error('Unable to prepare email body for draft collection.')
+      );
+      return null;
+    }
+    // Fail if no body text and no attachments
+    // You can have a draft with attachments and no body text
+    if (
+      prepared.bodyText.trim() === '' &&
+      form.attachments.list().length === 0
+    ) {
+      return null;
+    }
+    // We attach the drafts entirely using bodyHTML (because this is how the appended reply parsing works) so we are not including bodyMacro or bodyText
+    return {
+      bcc: form.recipients().bcc.map(convertEmailRecipientToContactInfo),
+      body_html: prepared.bodyHtml,
+      cc: form.recipients().cc.map(convertEmailRecipientToContactInfo),
+      subject: form.subject(),
+      to: form.recipients().to.map(convertEmailRecipientToContactInfo),
+    };
+  }
+
+  async function executeSaveDraft() {
+    if (sendMutation.isPending) {
+      return;
+    }
+    const draftToSave = collectDraft();
+    if (!draftToSave) {
+      const draftID = currentDraftID();
+      if (draftID) {
+        await deleteEmailDraft(draftID);
+      }
+      setCurrentDraftID(undefined);
+      return;
+    }
+
+    const linkID = link()?.id;
+    if (!linkID || hasLinkError()) {
+      logger.error(
+        new Error('Failed to save email draft: could not load email links')
+      );
+      return false;
+    }
+
+    const draftResponse = await saveEmailDraft({
+      ...draftToSave,
+      link_id: linkID,
+    });
+
+    if (draftResponse) {
+      // If the email draft saved successfully, we want to upload the
+      // attachments as well. We should grab only the attachments that
+      // haven't been uploaded yet
+      const attachments = form.attachments
+        .list()
+        .filter((a) => a.type === 'local' && !a.attachmentID) as Extract<
+        DraftFormAttachment,
+        { type: 'local' }
+      >[];
+
+      if (attachments.length) {
+        const uploaded = await uploadAttachmentMutation.mutateAsync({
+          draftID: draftResponse,
+          attachments: attachments.map((a) => a.file),
+        });
+
+        // Assign the attachment ids to attachments for later use
+        for (const attachment of uploaded.attachments) {
+          form.attachments.assignAttachmentID(
+            attachment.file,
+            attachment.attachmentID
+          );
+        }
+      }
+
+      setCurrentDraftID(draftResponse);
+    }
+  }
+
+  const scheduleDraftSave = debounce(() => {
+    void executeSaveDraft();
+  }, DRAFT_DEBOUNCE_MS);
+
+  const onAddAttachments = (attachments: DraftFormAttachment[]) => {
+    for (const attachment of attachments) {
+      form.attachments.add(attachment);
+    }
+    scheduleDraftSave();
+  };
+
+  const removeAttachmentMutation = useRemoveDraftAttachmentMutation();
+
+  const handleRemoveAttachment = (attachment: DraftFormAttachment) => {
+    if (attachment.type === 'local') {
+      form.attachments.removeByFile(attachment.file);
+    } else {
+      form.attachments.removeByID(attachment.attachmentID);
+    }
+
+    const savedDraftID = currentDraftID();
+
+    if (!savedDraftID || !attachment.attachmentID) return;
+
+    removeAttachmentMutation.mutate({
+      draftID: savedDraftID,
+      attachmentID: attachment.attachmentID,
+    });
+  };
+
+  // We are consuming the first change, because it is the initial value
+  let firstChangeConsumed = false;
+  const onContentChange = (content: string) => {
+    setContent(content);
+    if (!firstChangeConsumed) {
+      firstChangeConsumed = true;
+      return;
+    }
+    scheduleDraftSave();
+  };
 
   const [showCc, setShowCc] = createSignal(false);
   const [showBcc, setShowBcc] = createSignal(false);
@@ -248,8 +405,29 @@ export function EmailCompose() {
     },
   });
 
-  const onSubmit = (data: ComposeInputData) => {
+  const onSubmit = () => {
     setValidationError(null);
+
+    const currentEditor = editor();
+
+    // We handle cleaning up the signature after we've sent the request because
+    // otherwise the `bodyMacro` signal would update after the clean up call and
+    // not contain the signature in the request data
+    const cleanupWatermark = $appendWatermarkNodeToLast(
+      currentEditor,
+      !hasPaidAccess() ? MACRO_EMAIL_SIGNATURE : undefined
+    );
+
+    const prepared = prepareEmailBody(currentEditor, undefined);
+    if (!prepared) return;
+
+    const bodyMacro = content();
+
+    const data = {
+      text: prepared.bodyText,
+      html: prepared.bodyHtml,
+      raw: bodyMacro,
+    };
 
     const currentLink = link();
 
@@ -265,7 +443,7 @@ export function EmailCompose() {
       return;
     }
 
-    if (!data.body.raw.trim()) {
+    if (!data.raw.trim()) {
       setValidationError(
         new EmailComposeError('no_message', 'Please enter a message')
       );
@@ -299,12 +477,14 @@ export function EmailCompose() {
             ? convertToContactInfoArray(recipients.bcc)
             : [],
         subject: form.subject(),
-        body_text: data.body.text,
-        body_html: data.body.html,
-        body_macro: data.body.raw,
-        attachments: [],
+        body_text: data.text,
+        body_html: data.html,
+        body_macro: data.raw,
+        db_id: currentDraftID(),
       },
     });
+
+    cleanupWatermark();
   };
 
   const withValidationError = (type: EmailComposeErrors) => {
@@ -507,6 +687,7 @@ export function EmailCompose() {
                         class="w-full text-base resize-none placeholder:text-ink-placeholder p-1 ml-1"
                         onInput={(e) => {
                           form.setSubject(e.currentTarget.value);
+                          scheduleDraftSave();
                         }}
                         disabled={hasLinkError()}
                       />
@@ -530,10 +711,15 @@ export function EmailCompose() {
                 }}
               >
                 <ComposeEmailInput
+                  captureEditor={setEditor}
                   inputRef={registerRef('messageInput')}
+                  onContentChange={onContentChange}
+                  onAddAttachments={onAddAttachments}
+                  onRemoveAttachment={handleRemoveAttachment}
+                  attachments={form.attachments.list()}
                   onSubmit={onSubmit}
                   isSubmitting={sendMutation.isPending}
-                  disabled={hasLinkError()}
+                  disabled={hasLinkError() || sendMutation.isPending}
                 />
                 <Show when={withValidationError('no_message')}>
                   {(err) => (

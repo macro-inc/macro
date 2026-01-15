@@ -4,7 +4,7 @@ import {
   isValidChannelData,
 } from '@block-channel/signal/channel';
 import { useBlockId } from '@core/block';
-import { useChannelName } from '@core/component/ChannelsProvider';
+import { useChannelName } from '@core/context/channels';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { useChannelQuery } from '@queries/channel/channel';
 import { commsServiceClient } from '@service-comms/client';

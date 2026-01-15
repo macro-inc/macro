@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT \n            id,\n            provider_id,\n            global_id,\n            thread_id,\n            provider_thread_id,\n            replying_to_id,\n            link_id,\n            provider_history_id,\n            internal_date_ts,\n            snippet,\n            size_estimate,\n            subject,\n            from_name,\n            from_contact_id,\n            sent_at,\n            has_attachments,\n            is_read,\n            is_starred,\n            is_sent,\n            is_draft,\n            body_text,\n            body_html_sanitized,\n            body_macro,\n            headers_jsonb,\n            created_at,\n            updated_at\n        FROM email_messages\n        WHERE thread_id = $1\n        ORDER BY internal_date_ts DESC\n        LIMIT $2 OFFSET $3\n        ",
+  "query": "\n        SELECT\n            m.id,\n            m.provider_id,\n            m.global_id,\n            m.thread_id,\n            m.provider_thread_id,\n            m.replying_to_id,\n            m.link_id,\n            m.provider_history_id,\n            m.internal_date_ts,\n            m.snippet,\n            m.size_estimate,\n            m.subject,\n            m.from_name,\n            m.from_contact_id,\n            m.sent_at,\n            m.has_attachments,\n            m.is_read,\n            m.is_starred,\n            m.is_sent,\n            m.is_draft,\n            m.body_text,\n            m.body_html_sanitized,\n            m.body_macro,\n            m.headers_jsonb,\n            m.created_at,\n            m.updated_at\n        FROM email_messages m\n        JOIN email_scheduled_messages sm ON m.id = sm.message_id\n        WHERE m.link_id = $1 AND sm.sent = false\n        ORDER BY m.created_at DESC\n        LIMIT $2 OFFSET $3\n        ",
   "describe": {
     "columns": [
       {
@@ -170,5 +170,5 @@
       false
     ]
   },
-  "hash": "326921c8d4c376b76fec155370092b00ce0572b34c5a6243ef9001fd4a9f1a75"
+  "hash": "ac72213b35da176efad40d8acc0b77bede612a071cd8b18bb8d68965c1414204"
 }

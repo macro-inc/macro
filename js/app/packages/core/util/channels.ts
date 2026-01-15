@@ -2,7 +2,7 @@ import { useGlobalBlockOrchestrator } from '@app/component/GlobalAppState';
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { withAnalytics } from '@coparse/analytics';
 import { TrackingEvents } from '@coparse/analytics/src/types/TrackingEvents';
-import { useChannelsContext } from '@core/component/ChannelsProvider';
+import { invalidateListChannels } from '@queries/channel/channels';
 import { toast } from '@core/component/Toast/Toast';
 import { refetchContacts } from '@core/user/contactService';
 import { isErr } from '@core/util/maybeResult';
@@ -36,7 +36,6 @@ export type SendToChannelArgs = SendContent & {
 
 export function useSendMessageToPeople() {
   const { track } = withAnalytics();
-  const channelsContext = useChannelsContext();
   const { replaceSplit } = useSplitLayout();
   const orchestrator = useGlobalBlockOrchestrator();
 
@@ -64,7 +63,7 @@ export function useSendMessageToPeople() {
 
     const messageResponse = message.at(1) as IdResponse;
 
-    channelsContext.refetchChannels();
+    invalidateListChannels();
     refetchContacts();
 
     const navigateToChannel = async () => {

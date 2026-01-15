@@ -43,10 +43,14 @@ export function getActiveCommandsFromScope(
   const commands: CommandWithInfo[] = [];
   let scopeLevel = 0;
   while (currentScopeNode) {
-    const scopeCommands = Array.from([
-      ...(currentScopeNode?.hotkeyCommands.values() ?? []),
+    // Flatten the arrays of commands from hotkeyCommands (each hotkey can have multiple handlers)
+    const allHotkeyCommands = Array.from(
+      currentScopeNode?.hotkeyCommands.values() ?? []
+    ).flat();
+    const scopeCommands = [
+      ...allHotkeyCommands,
       ...(currentScopeNode?.unkeyedCommands ?? []),
-    ])
+    ]
       .filter(filterCommands(displayOptions))
       .map((command) => {
         const hotkeys = command.hotkeys ?? [];

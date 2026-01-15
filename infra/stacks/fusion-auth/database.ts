@@ -104,7 +104,7 @@ export class Database extends pulumi.ComponentResource {
         {
           identifier: `${name}-${stack}`,
           engine: 'postgres',
-          engineVersion: '16.2',
+          engineVersion: '16.8',
           instanceClass,
           storageType: 'gp3',
           allocatedStorage,

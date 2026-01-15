@@ -423,7 +423,7 @@ impl SNS {
     ///
     /// * `Ok(())` if the notification was sent successfully
     /// * `Err` if there was an error sending the notification
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err(Debug), skip(self))]
     pub async fn push_notification<T>(
         &self,
         endpoint_arn: &str,
