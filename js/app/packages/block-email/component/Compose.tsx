@@ -57,6 +57,7 @@ import {
   useUploadDraftAttachmentsMutation,
 } from '@queries/email/attachment';
 import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
+import { useMaybeEmailContext } from '@block-email/component/EmailContext';
 
 const DRAFT_DEBOUNCE_MS = 1000;
 
@@ -82,7 +83,11 @@ type EmailComposeElementRefs = {
   messageInput: HTMLElement | undefined;
 };
 
-export function EmailCompose() {
+type EmailComposeProps = {
+  draftID?: string;
+};
+
+export function EmailCompose(props: EmailComposeProps) {
   const hasPaidAccess = useHasPaidAccess();
   const { showPaywall } = usePaywallState();
 
@@ -124,14 +129,31 @@ export function EmailCompose() {
 
   const { users: destinationOptions } = useCombinedRecipients();
 
-  const form = createEmailFormState();
+  const emailContext = useMaybeEmailContext();
+
+  const form = createEmailFormState(
+    props.draftID
+      ? {
+          type: 'draft',
+          messageID: props.draftID,
+        }
+      : undefined,
+    emailContext
+      ? {
+          getMessageByID: (id) =>
+            emailContext.messages.unfiltered().find((m) => m.db_id === id),
+          getDraftForMessageReply: emailContext.drafts.getDraftForMessage,
+          onRecipientsChange: emailContext.onRecipientsChange,
+        }
+      : undefined
+  );
 
   const [editor, setEditor] = createSignal<LexicalEditor | undefined>();
 
   const [content, setContent] = createSignal('');
-  const [currentDraftID, setCurrentDraftID] = createSignal<
-    string | undefined
-  >();
+  const [currentDraftID, setCurrentDraftID] = createSignal<string | undefined>(
+    props.draftID
+  );
 
   const uploadAttachmentMutation = useUploadDraftAttachmentsMutation();
 
