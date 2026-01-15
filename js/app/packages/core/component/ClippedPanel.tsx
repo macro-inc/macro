@@ -1,6 +1,5 @@
-
 import { cornerClip } from '@core/util/clipPath';
-import { type JSX, type JSXElement, type Ref } from 'solid-js';
+import type { JSX, JSXElement, Ref } from 'solid-js';
 import { beveledCorners } from '../../block-theme/signals/themeSignals';
 
 interface PanelProps {

@@ -7,18 +7,13 @@ import { AiInstructionsIcon } from '@service-storage/instructionsMd';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import { createMemo } from 'solid-js';
 import {
-  beveledCorners,
-  blackBezels,
   monochromeIcons,
-  setBeveledCorners,
-  setBlackBezels,
   setDarkModeTheme,
   setLightModeTheme,
   setMonochromeIcons,
   setThemeShouldMatchSystem,
   themeShouldMatchSystem,
   themes,
-  toggleGutterSize,
 } from '../../block-theme/signals/themeSignals';
 import { applyTheme } from '../../block-theme/utils/themeUtils';
 import { globalSplitManager } from '../signal/splitLayout';
