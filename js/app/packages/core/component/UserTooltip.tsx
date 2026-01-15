@@ -89,7 +89,7 @@ export function UserTooltip(props: UserTooltipProps) {
   };
 
   const buttonStyle =
-    'px-3 text-xs w-full justify-start hover:text-ink/60 hover:bg-panel active:bg-panel active:border-panel active:text-accent';
+    'px-3 text-xs w-full justify-start hover-transition-bg hover:bg-hover';
 
   return (
     <ClippedPanel tl={!beveledCorners()} active>
