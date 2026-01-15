@@ -1005,6 +1005,7 @@ export function EntityWithEverything(
           class="min-h-10 min-w-[50px] flex flex-row items-center gap-2 col-2 @max-md/uList:col-auto @max-md/uList:w-full @max-md/uList:min-h-0 @max-md/uList:items-start"
           classList={{
             grow: props.contentPlacement === 'bottom-row',
+            'opacity-70': props.fadeIfRead && !props.unreadIndicatorActive,
           }}
         >
           {/* When the left checkbox column is hidden in narrow split containers, we still want
