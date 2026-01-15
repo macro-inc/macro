@@ -46,7 +46,10 @@ import {
   $appendWatermarkNodeToLast,
   $removeAllWatermarkNodes,
 } from '@lexical-core';
-import { prepareEmailBody } from '@block-email/util/prepareEmailBody';
+import {
+  clearEmailBody,
+  prepareEmailBody,
+} from '@block-email/util/prepareEmailBody';
 import { convertEmailRecipientToContactInfo } from '@block-email/util/recipientConversion';
 import {
   deleteEmailDraft,
@@ -509,6 +512,21 @@ export function EmailCompose(props: EmailComposeProps) {
     cleanupWatermark();
   };
 
+  const resetState = () => {
+    clearEmailBody(editor());
+    setContent('');
+    setCurrentDraftID(undefined);
+    form.clear();
+  };
+
+  const deleteDraftAndReset = async () => {
+    const draftId = currentDraftID();
+    if (draftId) {
+      await deleteEmailDraft(draftId);
+    }
+    resetState();
+  };
+
   const withValidationError = (type: EmailComposeErrors) => {
     const error = validationError();
     if (error?.type === type) return error;
@@ -741,6 +759,8 @@ export function EmailCompose(props: EmailComposeProps) {
                   attachments={form.attachments.list()}
                   onSubmit={onSubmit}
                   isSubmitting={sendMutation.isPending}
+                  hasDraft={currentDraftID() != null}
+                  onDraftDeletePress={deleteDraftAndReset}
                   disabled={hasLinkError() || sendMutation.isPending}
                 />
                 <Show when={withValidationError('no_message')}>
