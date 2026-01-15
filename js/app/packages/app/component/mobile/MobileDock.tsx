@@ -46,10 +46,8 @@ export function MobileDock() {
   const view = () => viewsDataStore[selectedView()];
   const filters = () => view()?.filters ?? VIEWCONFIG_BASE.filters;
   const typeFilter = () => filters().typeFilter ?? [];
-  const documentTypeFilter = () => filters().documentTypeFilter ?? [];
   const channelCategoryFilter = () => filters().channelCategoryFilter ?? [];
   const focusFilters = () => filters().focusFilters ?? [];
-  const unreadOnly = () => filters().unreadOnly ?? false;
 
   const splitIsUnifiedList = () =>
     splitContent().type === 'component' && splitContent().id === 'unified-list';
