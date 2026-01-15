@@ -149,7 +149,7 @@ export function UserIcon(props: UserIconProps) {
       fallback={icon()}
     >
       <Tooltip
-        placement="bottom-start"
+        placement="left"
         class={sizeClasses().container}
         unstyled
         tooltip={

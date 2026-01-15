@@ -1,4 +1,6 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
+import { ClippedPanel } from '@core/component/ClippedPanel';
+import { beveledCorners } from '../../block-theme/signals/themeSignals';
 import {
   SYSTEM_PROPERTY_IDS,
 } from '@core/component/Properties/constants';
@@ -9,10 +11,8 @@ import IconCheck from '@icon/regular/check.svg';
 import WideCopy from '@macro-icons/wide/copy.svg';
 import WideChat from '@macro-icons/wide/chat.svg'
 import WideTask from '@macro-icons/wide/task.svg'
-import RightTriangle from '@macro-icons/shape/right-triangle.svg';
 import Square from '@macro-icons/shape/square.svg';
 import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
-import UserIcon from '@macro-icons/square/user.svg';
 import { commsServiceClient } from '@service-comms/client';
 import { createTask } from '@core/util/create';
 import { useUserId } from '@service-gql/client';
@@ -106,8 +106,9 @@ export function UserTooltip(props: UserTooltipProps) {
   };
 
   return (
-    <div class="h-40 w-64">
-      <div class="bg-panel text-ink border-t-1 border-b-1 border-edge overflow-hidden h-full w-full">
+    <div class="">
+      <ClippedPanel tl={!beveledCorners()} active>
+      <div class="bg-panel text-ink box-border border-accent overflow-hidden h-full w-full">
         <div class="flex justify-between h-full w-full">
           {/* {fiducialSquares()} */}
           <div class="w-full">
@@ -157,11 +158,11 @@ export function UserTooltip(props: UserTooltipProps) {
 
             <Show when={props.email || props.id}>
               <div class="border-t border-edge/20"></div>
-              <div class="pt-2 flex flex-col gap-0">
+              <div class="py-2 flex flex-col gap-0">
                 <Show when={props.email}>
                   <Button
                     onClick={props.onCopyEmail}
-                    class="text-xs w-full justify-start"
+                    class="px-3 text-xs w-full justify-start hover:text-ink/60 hover:bg-panel active:bg-panel active:border-panel active:text-accent"
                   >
                     {props.copied ? (
                       <IconCheck class="w-3.5 h-3.5" />
@@ -176,7 +177,7 @@ export function UserTooltip(props: UserTooltipProps) {
                 >
                   <Button
                     onClick={openDM}
-                    class="text-xs w-full justify-start"
+                    class="px-3 text-xs w-full justify-start hover:text-ink/60 hover:bg-panel active:bg-panel active:border-panel active:text-accent"
                   >
                     <WideChat class="w-3.5 h-3.5" />
                     DM
@@ -187,7 +188,7 @@ export function UserTooltip(props: UserTooltipProps) {
                 >
                   <Button
                     onClick={createAndOpenTask}
-                    class="text-xs w-full justify-start"
+                    class="px-3 text-xs w-full justify-start hover:text-ink/60 hover:bg-panel active:bg-panel active:border-panel active:text-accent"
                   >
                     <WideTask class="w-3.5 h-3.5" />
                     Assign Task
@@ -195,22 +196,11 @@ export function UserTooltip(props: UserTooltipProps) {
                 </Show>
               </div>
             </Show>
-                    <div class="isolate relative opacity-20 pointer-events-none">
-          <div class="-right-6 -bottom-8 absolute mix-blend-multiply">
-            <ProfilePicture
-              id={props.id}
-              sizeClass={{
-                container: 'size-32',
-                icon: 'w-16 h-16 bg-panel',
-                text: 'text-lg text-panel leading-none',
-              }}
-            />
-          </div>
-        </div>
           </div>
         {/* {fiducialSquares()} */}
         </div>
       </div>
+      </ClippedPanel>
     </div>
   );
 }
