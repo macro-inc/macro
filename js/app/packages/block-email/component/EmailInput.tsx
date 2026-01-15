@@ -42,7 +42,7 @@ export function EmailInput(props: EmailInputProps) {
         onMarkDone={ctx.archiveThread}
         setShowReply={props.setShowReply}
         markdownDomRef={props.markdownDomRef}
-        isEditingExisting={props.replyingTo() == null && props.draft !== null}
+        isEditingExisting={props.replyingTo() == null && props.draft != null}
       />
     </Show>
   );

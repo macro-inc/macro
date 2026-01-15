@@ -79,7 +79,7 @@ export function createEmailFormState(
   if (purpose?.type === 'draft') {
     draft = options?.getMessageByID(purpose.messageID);
   } else if (purpose?.type === 'replying_to') {
-    options?.getDraftForMessageReply(purpose?.messageID);
+    draft = options?.getDraftForMessageReply(purpose?.messageID);
   }
 
   const draftContainsAppendedReply = () => {
