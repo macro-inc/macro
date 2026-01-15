@@ -7,17 +7,22 @@ mod test;
 
 use crate::domain::ports::SoupService;
 use ai::tool::AsyncToolSet;
-use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Arc;
 
-pub use list_entities::{
-    EntityItem, ItemType, ListEntities, ListEntitiesResponse, SortBy,
-};
+pub use list_entities::{EntityItem, ItemType, ListEntities, ListEntitiesResponse, SortBy};
 
 /// Service context for soup AI tools
-#[derive(Clone)]
 pub struct SoupToolContext<T> {
+    /// The soup service instance
     pub service: Arc<T>,
+}
+
+impl<T> Clone for SoupToolContext<T> {
+    fn clone(&self) -> Self {
+        Self {
+            service: self.service.clone(),
+        }
+    }
 }
 
 impl<T> SoupToolContext<T> {
@@ -29,18 +34,12 @@ impl<T> SoupToolContext<T> {
     }
 }
 
-/// Request context for soup AI tools
-#[derive(Debug, Clone)]
-pub struct SoupRequestContext {
-    pub user_id: MacroUserIdStr<'static>,
-}
-
 /// Create a soup toolset
-pub fn soup_toolset<T>() -> AsyncToolSet<SoupToolContext<T>, SoupRequestContext>
+pub fn soup_toolset<T>() -> AsyncToolSet<SoupToolContext<T>>
 where
     T: SoupService,
 {
     AsyncToolSet::new()
-        .add_tool::<ListEntities>()
+        .add_tool::<ListEntities, SoupToolContext<T>>()
         .expect("failed to add ListEntities tool")
 }

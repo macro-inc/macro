@@ -4,7 +4,7 @@ use crate::domain::{
     models::{FrecencySoupItem, SoupQuery, SoupRequest, SoupType},
     ports::SoupService,
 };
-use ai::tool::{AsyncTool, ToolCallError, ToolResult};
+use ai::tool::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
 use email::domain::models::PreviewView;
 use models_pagination::{Query, SimpleSortMethod, TypeEraseCursor};
@@ -13,7 +13,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::{SoupRequestContext, SoupToolContext};
+use super::SoupToolContext;
 
 /// Internal limit for results - not exposed to agents
 const RESULT_LIMIT: u16 = 50;
@@ -129,7 +129,7 @@ pub struct ListEntities {
 }
 
 #[async_trait]
-impl<T> AsyncTool<SoupToolContext<T>, SoupRequestContext> for ListEntities
+impl<T> AsyncTool<SoupToolContext<T>> for ListEntities
 where
     T: SoupService,
 {
@@ -138,20 +138,20 @@ where
     #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id), err)]
     async fn call(
         &self,
-        context: SoupToolContext<T>,
-        request_context: SoupRequestContext,
+        service_context: ServiceContext<SoupToolContext<T>>,
+        request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         tracing::info!(params=?self, "List entities");
 
         let sort_method = SimpleSortMethod::from(self.sort_by);
 
-        let result = context
+        let result = service_context
             .service
             .get_user_soup(SoupRequest {
                 soup_type: SoupType::Expanded,
                 limit: RESULT_LIMIT,
                 cursor: SoupQuery::Simple(Query::Sort(sort_method, None)),
-                user: request_context.user_id,
+                user: (*request_context.user_id).clone(),
                 email_preview_view: PreviewView::default(),
                 link_id: None,
             })
