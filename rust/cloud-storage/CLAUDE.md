@@ -94,7 +94,7 @@ just test                    # Run tests
 ### Pre Commit
 ```bash
 cargo fmt                   # format
-cargo clippy                # extra lints / best practices
+just clippy                 # extra lints / best practices
 ```
 
 ### Database Management

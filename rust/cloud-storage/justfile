@@ -6,11 +6,14 @@ mod sqlx './sqlx.just'
 check:
     RUSTFLAGS=-Dwarnings RUSTDOCFLAGS=-Dwarnings CARGO_TERM_COLOR=always SQLX_OFFLINE=true cargo check
 
+clippy:
+    RUSTFLAGS=-Dwarnings RUSTDOCFLAGS=-Dwarnings CARGO_TERM_COLOR=always SQLX_OFFLINE=true cargo clippy
+
 # This can be used in any crate that uses macrodb under the hood
 [no-cd]
 prepare_db:
     just sqlx::prepare_db {{ MACRODB }}
-    
+
 format:
     SQLX_OFFLINE=true cargo fmt
 
@@ -67,7 +70,7 @@ setup_test_envs:
     echo "DATABASE_URL={{ MACRODB }}" >> ./system_properties/.env
     echo "DATABASE_URL={{ MACRODB }}" >> ./properties/.env
     echo "DATABASE_URL={{ MACRODB }}" >> ./name_search/.env
-    echo "DATABASE_URL={{ MACRODB }}" >> ./email_contact_search/.env 
+    echo "DATABASE_URL={{ MACRODB }}" >> ./email_contact_search/.env
 
 setup_macrodb:
     just macro_db_client/create_db
