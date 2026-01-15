@@ -10,3 +10,6 @@ pub mod tool;
 pub mod traits;
 pub mod types;
 pub mod web_search;
+
+pub use ai_toolset::generate_tool_input_schema;
+pub use ai_toolset::generate_tool_output_schema;
