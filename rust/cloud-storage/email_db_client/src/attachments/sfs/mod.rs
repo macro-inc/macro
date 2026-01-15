@@ -3,7 +3,7 @@ use models_email::{db, service};
 use sqlx::{Executor, Postgres};
 
 /// Inserts an attachment SFS record into the database
-#[tracing::instrument(skip(executor))]
+#[tracing::instrument(skip(executor), err)]
 pub async fn insert_attachment_sfs<'e, E>(
     executor: E,
     attachment_sfs: &service::attachment::AttachmentSfs,
@@ -23,19 +23,13 @@ where
         db_attachment_sfs.sfs_id,
     )
     .execute(executor)
-    .await
-    .with_context(|| {
-        format!(
-            "Failed to insert attachment SFS record with id {}",
-            attachment_sfs.id
-        )
-    })?;
+    .await?;
 
     Ok(())
 }
 
 /// Deletes an attachment SFS record from the database by its ID
-#[tracing::instrument(skip(executor))]
+#[tracing::instrument(skip(executor), err)]
 pub async fn delete_attachment_sfs<'e, E>(executor: E, id: sqlx::types::Uuid) -> anyhow::Result<()>
 where
     E: Executor<'e, Database = Postgres>,
@@ -48,8 +42,7 @@ where
         id,
     )
     .execute(executor)
-    .await
-    .with_context(|| format!("Failed to delete attachment SFS record with id {}", id))?;
+    .await?;
 
     Ok(())
 }
