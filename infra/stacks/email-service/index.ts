@@ -109,9 +109,12 @@ const cloudStorageClusterName: pulumi.Output<string> = cloudStorageStack
   .getOutput('cloudStorageClusterName')
   .apply((arn) => arn as string);
 
-const sfsDeleteLambdaStack = new pulumi.StackReference('email-sfs-delete-handler-stack', {
-  name: `macro-inc/email-sfs-delete-handler/${stack}`,
-});
+const sfsDeleteLambdaStack = new pulumi.StackReference(
+  'email-sfs-delete-handler-stack',
+  {
+    name: `macro-inc/email-sfs-delete-handler/${stack}`,
+  }
+);
 
 const sfsDeleteQueueArn: pulumi.Output<string> = sfsDeleteLambdaStack
   .getOutput('sfsDeleteQueueArn')
