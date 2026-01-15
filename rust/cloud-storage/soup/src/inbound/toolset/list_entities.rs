@@ -1,19 +1,19 @@
-//! AI tools inbound adapter for the Soup service.
+//! ListEntities tool for browsing workspace items.
 
 use crate::domain::{
     models::{FrecencySoupItem, SoupQuery, SoupRequest, SoupType},
     ports::SoupService,
 };
-use ai::tool::{AsyncTool, AsyncToolSet, ToolCallError, ToolResult};
+use ai::tool::{AsyncTool, ToolCallError, ToolResult};
 use async_trait::async_trait;
 use email::domain::models::PreviewView;
-use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{Query, SimpleSortMethod, TypeEraseCursor};
 use models_soup::item::SoupItem;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use uuid::Uuid;
+
+use super::{SoupRequestContext, SoupToolContext};
 
 /// Internal limit for results - not exposed to agents
 const RESULT_LIMIT: u16 = 50;
@@ -49,7 +49,7 @@ pub enum ItemType {
 
 #[derive(Debug, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase", tag = "type")]
-pub enum WorkspaceItem {
+pub enum EntityItem {
     #[serde(rename_all = "camelCase")]
     Document { id: Uuid, name: String },
     #[serde(rename_all = "camelCase")]
@@ -62,38 +62,38 @@ pub enum WorkspaceItem {
     Channel { id: Uuid, name: Option<String> },
 }
 
-impl WorkspaceItem {
+impl EntityItem {
     fn item_type(&self) -> ItemType {
         match self {
-            WorkspaceItem::Document { .. } => ItemType::Document,
-            WorkspaceItem::AiChat { .. } => ItemType::AiChat,
-            WorkspaceItem::Project { .. } => ItemType::Project,
-            WorkspaceItem::Email { .. } => ItemType::Email,
-            WorkspaceItem::Channel { .. } => ItemType::Channel,
+            EntityItem::Document { .. } => ItemType::Document,
+            EntityItem::AiChat { .. } => ItemType::AiChat,
+            EntityItem::Project { .. } => ItemType::Project,
+            EntityItem::Email { .. } => ItemType::Email,
+            EntityItem::Channel { .. } => ItemType::Channel,
         }
     }
 }
 
-impl From<SoupItem> for WorkspaceItem {
+impl From<SoupItem> for EntityItem {
     fn from(item: SoupItem) -> Self {
         match item {
-            SoupItem::Document(doc) => WorkspaceItem::Document {
+            SoupItem::Document(doc) => EntityItem::Document {
                 id: doc.id,
                 name: doc.name,
             },
-            SoupItem::Chat(chat) => WorkspaceItem::AiChat {
+            SoupItem::Chat(chat) => EntityItem::AiChat {
                 id: chat.id,
                 name: chat.name,
             },
-            SoupItem::Project(project) => WorkspaceItem::Project {
+            SoupItem::Project(project) => EntityItem::Project {
                 id: project.id,
                 name: project.name,
             },
-            SoupItem::EmailThread(thread) => WorkspaceItem::Email {
+            SoupItem::EmailThread(thread) => EntityItem::Email {
                 id: thread.thread.id,
                 subject: thread.thread.name,
             },
-            SoupItem::Channel(channel) => WorkspaceItem::Channel {
+            SoupItem::Channel(channel) => EntityItem::Channel {
                 id: channel.channel.channel.id.0,
                 name: channel.channel.channel.name.clone(),
             },
@@ -103,18 +103,18 @@ impl From<SoupItem> for WorkspaceItem {
 
 #[derive(Debug, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct BrowseWorkspaceResponse {
-    pub items: Vec<WorkspaceItem>,
+pub struct ListEntitiesResponse {
+    pub items: Vec<EntityItem>,
     pub summary: String,
 }
 
 #[derive(Debug, Deserialize, JsonSchema, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 #[schemars(
-    title = "BrowseWorkspace",
+    title = "ListEntities",
     description = "Browse the user's workspace to see recent items they have access to. Returns documents, AI conversations, projects, emails, and chat channels. Use this to get an overview of what the user has been working on or to find items by type. For finding specific items by name or content, use the search tool instead."
 )]
-pub struct BrowseWorkspace {
+pub struct ListEntities {
     #[schemars(
         description = "Filter to specific item types. If not provided, returns all types. Example: [\"document\", \"email\"] returns only documents and emails."
     )]
@@ -128,33 +128,12 @@ pub struct BrowseWorkspace {
     pub sort_by: SortBy,
 }
 
-/// Service context for soup AI tools
-#[derive(Clone)]
-pub struct SoupToolContext<T> {
-    pub service: Arc<T>,
-}
-
-impl<T> SoupToolContext<T> {
-    /// Create a new soup tool context
-    pub fn new(service: T) -> Self {
-        Self {
-            service: Arc::new(service),
-        }
-    }
-}
-
-/// Request context for soup AI tools
-#[derive(Debug, Clone)]
-pub struct SoupRequestContext {
-    pub user_id: MacroUserIdStr<'static>,
-}
-
 #[async_trait]
-impl<T> AsyncTool<SoupToolContext<T>, SoupRequestContext> for BrowseWorkspace
+impl<T> AsyncTool<SoupToolContext<T>, SoupRequestContext> for ListEntities
 where
     T: SoupService,
 {
-    type Output = BrowseWorkspaceResponse;
+    type Output = ListEntitiesResponse;
 
     #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id), err)]
     async fn call(
@@ -162,7 +141,7 @@ where
         context: SoupToolContext<T>,
         request_context: SoupRequestContext,
     ) -> ToolResult<Self::Output> {
-        tracing::info!(params=?self, "Browse workspace");
+        tracing::info!(params=?self, "List entities");
 
         let sort_method = SimpleSortMethod::from(self.sort_by);
 
@@ -178,7 +157,7 @@ where
             })
             .await
             .map_err(|e| ToolCallError {
-                description: format!("Failed to browse workspace: {e}"),
+                description: format!("Failed to list entities: {e}"),
                 internal_error: e.into(),
             })?;
 
@@ -186,13 +165,13 @@ where
         let has_more = paginated.next_cursor.is_some();
 
         // Convert and filter items
-        let all_items: Vec<WorkspaceItem> = paginated
+        let all_items: Vec<EntityItem> = paginated
             .items
             .into_iter()
-            .map(|FrecencySoupItem { item, .. }| WorkspaceItem::from(item))
+            .map(|FrecencySoupItem { item, .. }| EntityItem::from(item))
             .collect();
 
-        let items: Vec<WorkspaceItem> = match &self.include_types {
+        let items: Vec<EntityItem> = match &self.include_types {
             Some(types) if !types.is_empty() => all_items
                 .into_iter()
                 .filter(|item| types.contains(&item.item_type()))
@@ -203,12 +182,12 @@ where
         // Build summary
         let summary = build_summary(&items, has_more, &self.include_types);
 
-        Ok(BrowseWorkspaceResponse { items, summary })
+        Ok(ListEntitiesResponse { items, summary })
     }
 }
 
-fn build_summary(
-    items: &[WorkspaceItem],
+pub(super) fn build_summary(
+    items: &[EntityItem],
     has_more: bool,
     filter: &Option<Vec<ItemType>>,
 ) -> String {
@@ -230,11 +209,11 @@ fn build_summary(
 
     for item in items {
         match item {
-            WorkspaceItem::Document { .. } => docs += 1,
-            WorkspaceItem::AiChat { .. } => chats += 1,
-            WorkspaceItem::Project { .. } => projects += 1,
-            WorkspaceItem::Email { .. } => emails += 1,
-            WorkspaceItem::Channel { .. } => channels += 1,
+            EntityItem::Document { .. } => docs += 1,
+            EntityItem::AiChat { .. } => chats += 1,
+            EntityItem::Project { .. } => projects += 1,
+            EntityItem::Email { .. } => emails += 1,
+            EntityItem::Channel { .. } => channels += 1,
         }
     }
 
@@ -277,16 +256,3 @@ fn build_summary(
         format!("Found {counts}.")
     }
 }
-
-/// Create a soup toolset
-pub fn soup_toolset<T>() -> AsyncToolSet<SoupToolContext<T>, SoupRequestContext>
-where
-    T: SoupService,
-{
-    AsyncToolSet::new()
-        .add_tool::<BrowseWorkspace>()
-        .expect("failed to add BrowseWorkspace tool")
-}
-
-#[cfg(test)]
-mod test;

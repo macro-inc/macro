@@ -1,17 +1,19 @@
+use super::list_entities::build_summary;
 use super::*;
 use ai::generate_tool_input_schema;
 use ai::tool::types::tool_object::validate_tool_schema;
+use uuid::Uuid;
 
 #[test]
-fn test_browse_workspace_schema_validation() {
-    let schema = generate_tool_input_schema!(BrowseWorkspace);
+fn test_list_entities_schema_validation() {
+    let schema = generate_tool_input_schema!(ListEntities);
 
     let result = validate_tool_schema(&schema);
     assert!(result.is_ok(), "{:?}", result);
 
     let (name, description) = result.unwrap();
     assert_eq!(
-        name, "BrowseWorkspace",
+        name, "ListEntities",
         "Tool name should match the schemars title"
     );
     assert!(
@@ -22,9 +24,9 @@ fn test_browse_workspace_schema_validation() {
 
 #[test]
 fn test_default_values() {
-    let browse = BrowseWorkspace::default();
-    assert!(browse.include_types.is_none());
-    assert!(matches!(browse.sort_by, SortBy::RecentlyViewed));
+    let list = ListEntities::default();
+    assert!(list.include_types.is_none());
+    assert!(matches!(list.sort_by, SortBy::RecentlyViewed));
 }
 
 #[test]
@@ -39,15 +41,15 @@ fn test_build_summary_empty() {
 #[test]
 fn test_build_summary_with_items() {
     let items = vec![
-        WorkspaceItem::Document {
+        EntityItem::Document {
             id: Uuid::new_v4(),
             name: "test.md".to_string(),
         },
-        WorkspaceItem::Document {
+        EntityItem::Document {
             id: Uuid::new_v4(),
             name: "other.md".to_string(),
         },
-        WorkspaceItem::Email {
+        EntityItem::Email {
             id: Uuid::new_v4(),
             subject: Some("Hello".to_string()),
         },
@@ -62,19 +64,19 @@ fn test_build_summary_with_items() {
     assert!(summary.contains("More items available"));
 }
 
-// run `cargo test -p soup inbound::ai_tools::test::print_input_schema -- --nocapture --include-ignored`
+// run `cargo test -p soup inbound::toolset::test::print_input_schema -- --nocapture --include-ignored`
 #[test]
 #[ignore = "prints the input schema"]
 fn print_input_schema() {
-    let schema = generate_tool_input_schema!(BrowseWorkspace);
+    let schema = generate_tool_input_schema!(ListEntities);
     println!("{}", serde_json::to_string_pretty(&schema).unwrap());
 }
 
-// run `cargo test -p soup inbound::ai_tools::test::print_output_schema -- --nocapture --include-ignored`
+// run `cargo test -p soup inbound::toolset::test::print_output_schema -- --nocapture --include-ignored`
 #[test]
 #[ignore = "prints the output schema"]
 fn print_output_schema() {
     let generator = ai::tool::minimized_output_schema_generator();
-    let schema = generator.into_root_schema_for::<BrowseWorkspaceResponse>();
+    let schema = generator.into_root_schema_for::<ListEntitiesResponse>();
     println!("{}", serde_json::to_string_pretty(&schema).unwrap());
 }
