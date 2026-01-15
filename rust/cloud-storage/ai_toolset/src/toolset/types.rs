@@ -1,6 +1,7 @@
 use super::tool_object::{AsyncToolObject, ValidationError};
 use crate::RequestContext;
 use crate::{AsyncTool, ToolResult};
+use axum::extract::FromRef;
 use schemars::{JsonSchema, Schema};
 use serde::Serialize;
 use serde::de::Deserialize;
@@ -30,7 +31,7 @@ pub enum ToolSetError {
 }
 
 /// Type alias for a toolset containing asynchronous tools.
-pub type AsyncToolSet<Context> = ToolSet<AsyncToolObject<Context>>;
+pub type AsyncToolSet<ToolSetContext> = ToolSet<AsyncToolObject<ToolSetContext>>;
 
 /// Represents the schema information for a tool.
 pub struct ToolSchema {
@@ -87,20 +88,25 @@ impl<T> ToolSet<T> {
     }
 }
 
-impl<Context> AsyncToolSet<Context>
+impl<ToolSetContext> AsyncToolSet<ToolSetContext>
 where
-    Context: Sync + Send + 'static,
+    ToolSetContext: Sync + Send + 'static,
 {
     /// Adds an asynchronous tool to this toolset.
     ///
     /// The tool type must implement [`AsyncTool`], [`JsonSchema`], and [`Deserialize`].
+    /// The tool's context type (`ToolContext`) must be extractable from `ToolSetContext`
+    /// using `FromRef`, providing a compile-time guarantee that the toolset context
+    /// can be narrowed to the specific context required by each tool.
+    ///
     /// Returns an error if schema validation fails or a tool with the same name exists.
-    pub fn add_tool<T>(mut self) -> Result<Self, ToolSetCreationError>
+    pub fn add_tool<T, ToolContext>(mut self) -> Result<Self, ToolSetCreationError>
     where
-        T: JsonSchema + AsyncTool<Context> + for<'de> Deserialize<'de> + 'static + Send + Sync,
+        ToolContext: Sync + Send + FromRef<ToolSetContext> + 'static,
+        T: JsonSchema + AsyncTool<ToolContext> + for<'de> Deserialize<'de> + 'static + Send + Sync,
         T::Output: Serialize + JsonSchema + 'static,
     {
-        let tool_object = AsyncToolObject::try_from_tool::<T, T::Output>()
+        let tool_object = AsyncToolObject::try_from_tool::<T, ToolContext, T::Output>()
             .map_err(ToolSetCreationError::Validation)?;
         if self.tools.contains_key(&tool_object.name) {
             Err(ToolSetCreationError::NameConflict(tool_object.name.clone()))
@@ -112,10 +118,14 @@ where
 
     /// Attempts to call a tool by name with the given JSON input.
     ///
+    /// The tool will automatically extract its specific context from the provided
+    /// `ToolSetContext` using the `FromRef` implementation captured when the tool
+    /// was added.
+    ///
     /// Returns an error if the tool is not found or if deserialization fails.
     pub async fn try_tool_call(
         &self,
-        context: Context,
+        context: ToolSetContext,
         request_context: RequestContext,
         tool_name: &str,
         json: &serde_json::Value,

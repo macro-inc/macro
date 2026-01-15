@@ -1,5 +1,5 @@
 use crate::{AsyncTool, ToolResult};
-use crate::{RequestContext, ToolCallError};
+use crate::{RequestContext, ServiceContext, ToolCallError};
 
 /// Wrapper that converts an asynchronous tool's output to JSON.
 /// This wraps an [`AsyncTool`] and serializes its output to a [`serde_json::Value`].
@@ -25,7 +25,7 @@ where
     type Output = serde_json::Value;
     async fn call(
         &self,
-        service_context: Context,
+        service_context: ServiceContext<Context>,
         request_context: RequestContext,
     ) -> ToolResult<serde_json::Value> {
         self.0

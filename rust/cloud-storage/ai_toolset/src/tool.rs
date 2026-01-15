@@ -1,4 +1,4 @@
-use crate::RequestContext;
+use crate::{RequestContext, ServiceContext};
 use async_trait::async_trait;
 use serde::Serialize;
 
@@ -32,17 +32,16 @@ impl std::fmt::Display for ToolCallError {
 ///
 /// # Type Parameters
 ///
-/// - `Sc`: Service context type (shared state like database connections)
-/// - `Rc`: Request context type (per-request data like user info)
+/// - `Context`: Service context type (shared state like database connections)
 #[async_trait]
-pub trait AsyncTool<Sc>: Sync + Send {
+pub trait AsyncTool<Context>: Sync + Send {
     /// The output type produced by this tool.
     type Output: Serialize + 'static;
 
     /// Execute the tool asynchronously with the given contexts.
     async fn call(
         &self,
-        service_context: Sc,
+        service_context: ServiceContext<Context>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output>;
 }

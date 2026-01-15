@@ -252,6 +252,8 @@ The migration included comprehensive indexes:
 
 - Add `#![deny(missing_docs)]` to `lib.rs` in new crates to enforce documentation on all public items
 - This ensures all public functions, structs, enums, and modules have documentation comments
+- Do not use `ignore` to except code blocks from doc tests unless explicitely directed
+
 
 ### Test File Organization
 
