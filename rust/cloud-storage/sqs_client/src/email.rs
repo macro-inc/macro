@@ -95,7 +95,7 @@ impl SQS {
         if let Some(queue) = &self.email_sfs_delete_queue {
             return enqueue_sfs_delete_message(&self.inner, queue, message).await;
         }
-        Err(anyhow::anyhow!("email_sfs_delete_queue is not configured"))
+        anyhow::bail!("email_sfs_delete_queue is not configured")
     }
 }
 

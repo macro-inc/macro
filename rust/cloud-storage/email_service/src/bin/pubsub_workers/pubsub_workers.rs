@@ -392,9 +392,8 @@ async fn main() -> anyhow::Result<()> {
             )
             .await;
         });
+        tracing::info!("sfs delete worker started");
     }
-
-    tracing::info!("sfs delete worker started");
 
     tracing::info!("All workers started successfully");
 
