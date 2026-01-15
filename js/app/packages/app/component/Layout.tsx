@@ -19,7 +19,6 @@ import GlobalShortcuts from './GlobalHotkeys';
 import { ItemDndProvider } from './ItemDragAndDrop';
 import { createMenuOpen, Launcher, setCreateMenuOpen } from './Launcher';
 import { Paywall } from './paywall/Paywall';
-import { QuickCreateMenu } from './QuickCreateMenu';
 import { RightbarWrapper } from './rightbar/Rightbar';
 import { SettingsWrapper } from './settings/SettingsWrapper';
 import { ShortcutsHelper } from './settings/ShortcutsHelper';
@@ -130,7 +129,6 @@ export function Layout(props: RouteSectionProps) {
           <Suspense>
             <KommandMenu />
           </Suspense>
-          <QuickCreateMenu />
           <GlobalBulkEditEntityModal />
           <ShortcutsHelper />
         </Show>

@@ -157,7 +157,7 @@ export function MessageContainer(props: MessageContainerProps) {
 
   const onClickAttachment = async (
     attachment: Attachment,
-    fileType?: FileType
+    fileType: FileType | undefined
   ) => {
     const dbId = attachment.db_id;
     if (!dbId) return;
@@ -199,7 +199,7 @@ export function MessageContainer(props: MessageContainerProps) {
     replaceOrInsertSplit({
       type: blockName,
       id: document_id,
-    });
+    })?.activate?.();
   };
 
   const handleExpand = () => {

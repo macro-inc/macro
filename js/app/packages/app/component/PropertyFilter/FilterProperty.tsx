@@ -109,7 +109,7 @@ export const FilterPropertySelect: Component<FilterPropertySelectProps> = (
         }}
         onFocus={() => setIsDropdownOpen(true)}
         placeholder="Search Properties..."
-        class="w-full h-full pl-6 pr-2 font-mono text-[10px] text-ink placeholder-ink-muted bg-transparent border border-edge focus:ring-2 focus:ring-accent/50 focus:border-accent"
+        class="w-full h-full pl-6 pr-2 font-mono text-xxs text-ink placeholder-ink-muted bg-transparent border border-edge focus:ring-2 focus:ring-accent/50 focus:border-accent"
       />
       <Show when={isDropdownOpen()}>
         <div
@@ -119,7 +119,7 @@ export const FilterPropertySelect: Component<FilterPropertySelectProps> = (
           <Show
             when={filteredProperties().length > 0}
             fallback={
-              <div class="px-3 py-2 text-[10px] text-ink-muted text-center">
+              <div class="px-3 py-2 text-xxs text-ink-muted text-center">
                 No filterable properties found
               </div>
             }
@@ -133,7 +133,7 @@ export const FilterPropertySelect: Component<FilterPropertySelectProps> = (
                     e.stopPropagation();
                     handleSelectProperty(property);
                   }}
-                  class="w-full px-2 py-1.5 text-[10px] text-ink hover:bg-hover flex items-center gap-2 text-left"
+                  class="w-full px-2 py-1.5 text-xxs text-ink hover:bg-hover flex items-center gap-2 text-left"
                 >
                   <PropertyDataTypeIcon property={property} />
                   <span class="truncate flex-1">{property.displayName}</span>

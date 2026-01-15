@@ -75,19 +75,12 @@ export const ENTITY_HEIGHT = 40;
 function UnreadIndicator(props: { active?: boolean }) {
   return (
     <div class="flex size-4 items-center justify-center">
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
+      <div
         classList={{
-          'fill-accent': true,
+          'bg-accent rounded-full size-2': true,
           'opacity-0': !props.active,
         }}
-        viewBox="0 0 8 8"
-        width="75%"
-        height="75%"
-        fill="none"
-      >
-        <path d="M3.39622 8C3.29136 8 3.23894 7.94953 3.23894 7.84858L3.33068 5.13565L0.932129 6.58675C0.836012 6.63722 0.76174 6.6204 0.709312 6.53628L0.0801831 5.56467C0.0190178 5.47213 0.0364936 5.40063 0.132611 5.35016L2.58359 4.07571L0.09329 2.88959C-0.00282696 2.83912 -0.0246717 2.77182 0.0277557 2.6877L0.59135 1.58991C0.643778 1.49737 0.71805 1.47634 0.814167 1.52681L3.31758 2.95268L3.21272 0.151421C3.21272 0.0504735 3.26515 0 3.37 0H4.57583C4.68069 0 4.73312 0.0504735 4.73312 0.151421L4.64137 2.94006L7.14478 1.40063C7.2409 1.34175 7.3108 1.35857 7.35449 1.4511L7.97051 2.46057C8.02294 2.5531 8.00546 2.6204 7.91808 2.66246L5.40157 4L7.82633 5.18612C7.91371 5.23659 7.93556 5.30389 7.89187 5.38801L7.36759 6.4858C7.32391 6.58675 7.25837 6.60778 7.17099 6.54889L4.6938 5.13565L4.78554 7.84858C4.79428 7.94953 4.74185 8 4.62826 8H3.39622Z" />
-      </svg>
+      />
     </div>
   );
 }
@@ -103,7 +96,7 @@ function SharedBadge(props: { ownerId: string }) {
 
 function GenericContentHit(props: { data: ContentHitData }) {
   return (
-    <div class="text-sm text-ink-muted truncate flex items-center">
+    <div class="text-ink-muted truncate flex items-center">
       <StaticMarkdown
         markdown={props.data.content}
         theme={unifiedListMarkdownTheme}
@@ -121,14 +114,12 @@ function ChannelMessageContentHit(props: { data: ChannelContentHitData }) {
       <div class="flex size-5 shrink-0 items-center justify-center">
         <UserIcon id={props.data.senderId} size="xs" />
       </div>
-      <div class="flex gap-2 text-sm w-full min-w-0 overflow-hidden items-baseline">
-        <div class="text-sm shrink-0 truncate min-w-0 font-medium">
-          {userName()}
-        </div>
-        <div class="shrink-0 font-mono text-xs uppercase text-ink-extra-muted">
+      <div class="flex gap-2 w-full min-w-0 overflow-hidden items-baseline">
+        <div class="shrink-0 truncate min-w-0 font-medium">{userName()}</div>
+        <div class="shrink-0 font-mono text-xs touch:mobile-width:text-sm uppercase text-ink-extra-muted">
           {createFormattedDate(props.data.sentAt)}
         </div>
-        <div class="text-sm text-ink-muted truncate flex items-center flex-1 min-w-0">
+        <div class="text-ink-muted truncate flex items-center flex-1 min-w-0">
           <StaticMarkdown
             markdown={props.data.content}
             theme={unifiedListMarkdownTheme}
@@ -167,18 +158,18 @@ function EmailMessageContentHit(props: {
       <div class="flex size-5 shrink-0 items-center justify-center">
         <UserIcon id={props.data.senderId} size="xs" />
       </div>
-      <div class="flex gap-2 text-sm w-full min-w-0 overflow-hidden items-baseline">
+      <div class="flex gap-2 w-full min-w-0 overflow-hidden items-baseline">
         <Show when={!isSingleMatch() && !isSingleSender()}>
-          <div class="text-sm shrink-0 truncate min-w-0 font-medium">
+          <div class="shrink-0 truncate min-w-0 font-medium">
             {props.data.sender}
           </div>
         </Show>
         <Show when={!isSingleMatch() && !isSingleSentAt()}>
-          <div class="shrink-0 font-mono text-xs uppercase text-ink-extra-muted">
+          <div class="shrink-0 font-mono text-xs touch:mobile-width:text-sm uppercase text-ink-extra-muted">
             {createFormattedDate(props.data.sentAt)}
           </div>
         </Show>
-        <div class="text-sm text-ink-muted truncate flex items-center flex-1 min-w-0">
+        <div class="text-ink-muted truncate flex items-center flex-1 min-w-0">
           <StaticMarkdown
             markdown={props.data.content}
             theme={unifiedListMarkdownTheme}
@@ -264,7 +255,7 @@ function CollapsibleList<T>(props: {
             <ThreadBorder />
           </Show>
           <button
-            class="block w-fit px-2 py-0.5 text-[10px] border border-edge uppercase font-mono hover:font-medium"
+            class="block w-fit px-2 py-0.5 text-xxs border border-edge uppercase font-mono hover:font-medium"
             onClick={(e) => {
               e.stopPropagation();
               setShowAll((prev) => !prev);
@@ -367,8 +358,8 @@ function NotificationRow(props: {
       <div class="flex size-5 shrink-0 items-center justify-center mr-1">
         <UserIcon id={props.notification.senderId!} size="xs" />
       </div>
-      <div class="flex gap-1 text-sm w-full min-w-0 overflow-hidden items-baseline">
-        <div class="text-sm w-[20cqw] shrink-0 truncate min-w-0">
+      <div class="flex gap-1 w-full min-w-0 overflow-hidden items-baseline">
+        <div class="w-[20cqw] shrink-0 truncate min-w-0">
           {userName()}{' '}
           <span class="opacity-70 uppercase font-mono text-[0.625rem] ml-2">
             {ActionContent()}
@@ -376,7 +367,7 @@ function NotificationRow(props: {
         </div>
         <MessageContent />
       </div>
-      <div class="shrink-0 font-mono text-xs uppercase text-ink-extra-muted ml-2">
+      <div class="shrink-0 font-mono text-xs touch:mobile-width:text-sm uppercase text-ink-extra-muted ml-2">
         {createFormattedDate(props.notification.createdAt)}
       </div>
     </CollapsibleListRow>
@@ -421,7 +412,7 @@ function ContentHitRow(props: {
             <Show when={match()}>
               {(match) => {
                 return (
-                  <span class="font-mono text-xs text-ink-disabled/50">
+                  <span class="font-mono text-xs touch:mobile-width:text-sm text-ink-disabled/50">
                     {match()[0] + 1}/{match()[1]}
                   </span>
                 );
@@ -600,7 +591,7 @@ export function EntityWithEverything(
       };
 
       return (
-        <div class="flex gap-1 items-center text-sm min-w-0 w-full truncate overflow-hidden @max-md/uList:flex-col @max-md/uList:items-start @max-md/uList:gap-1 @max-md/uList:truncate-none">
+        <div class="flex gap-1 items-center min-w-0 w-full truncate overflow-hidden @max-md/uList:flex-col @max-md/uList:items-start @max-md/uList:gap-1 @max-md/uList:truncate-none">
           {/* sometimes senderName and senderEmail are the same */}
           <div
             class="flex gap-2 items-center font-semibold shrink-0 @max-md/uList:w-full @max-md/uList:truncate"
@@ -698,14 +689,14 @@ export function EntityWithEverything(
               {/* Timestamp inline with subject in narrow mode */}
               <Show when={props.timestamp ?? props.entity.updatedAt}>
                 {(date) => (
-                  <span class="hidden @max-md/uList:inline shrink-0 whitespace-nowrap text-xs font-mono uppercase text-ink-extra-muted">
+                  <span class="hidden @max-md/uList:inline shrink-0 whitespace-nowrap text-xs touch:mobile-width:text-sm font-mono uppercase text-ink-extra-muted">
                     {createFormattedDate(date())}
                   </span>
                 )}
               </Show>
             </div>
             {/* Body snippet - below subject in narrow mode */}
-            <div class="hidden @max-md/uList:block truncate w-full text-xs opacity-60">
+            <div class="hidden @max-md/uList:block truncate w-full text-xs touch:mobile-width:text-sm opacity-60">
               {props.entity.snippet}
             </div>
           </div>
@@ -736,7 +727,7 @@ export function EntityWithEverything(
 
     return (
       <div class="flex gap-2 items-center min-w-0 w-fit max-w-full overflow-hidden @max-md/uList:flex-col @max-md/uList:items-start @max-md/uList:w-full @max-md/uList:gap-1">
-        <span class="flex gap-1 truncate font-medium text-sm shrink-0 items-center @max-md/uList:w-full @max-md/uList:flex-col @max-md/uList:items-start @max-md/uList:gap-1">
+        <span class="flex gap-1 truncate font-medium shrink-0 items-center @max-md/uList:w-full @max-md/uList:flex-col @max-md/uList:items-start @max-md/uList:gap-1">
           <div class="flex items-center gap-2 w-full @max-md/uList:justify-between @max-md/uList:min-w-0">
             {/* Icon inline with title in narrow mode */}
             <div class="hidden @max-md/uList:flex size-[1em] shrink-0 items-center justify-center relative group/icon-checkbox-nonemail">
@@ -809,7 +800,7 @@ export function EntityWithEverything(
             {/* Timestamp inline with title in narrow mode */}
             <Show when={props.timestamp ?? props.entity.updatedAt}>
               {(date) => (
-                <span class="hidden @max-md/uList:inline shrink-0 whitespace-nowrap text-xs font-mono uppercase text-ink-extra-muted">
+                <span class="hidden @max-md/uList:inline shrink-0 whitespace-nowrap text-xs touch:mobile-width:text-sm font-mono uppercase text-ink-extra-muted">
                   {createFormattedDate(date())}
                 </span>
               )}
@@ -824,7 +815,7 @@ export function EntityWithEverything(
               </span>
               <Show when={latestMessage()}>
                 {(lastMessage) => (
-                  <div class="truncate shrink grow opacity-60 flex items-center @max-md/uList:w-full @max-md/uList:text-xs">
+                  <div class="truncate shrink grow opacity-60 flex items-center @max-md/uList:w-full @max-md/uList:text-xs @max-md/uList:touch:mobile-width:text-sm">
                     {/* TODO (seamus): Channels endpoint does not return any information about attachments. If we have an empty message, assume it's attachments.*/}
                     <Show
                       when={lastMessage().content.trim()}
@@ -899,7 +890,7 @@ export function EntityWithEverything(
       use:draggable
       use:droppable
       data-checked={props.checked}
-      class="everything-entity w-full relative group/entity hover:bg-hover/30"
+      class="everything-entity w-full relative group/entity hover:bg-hover/30 text-sm touch:mobile-width:text-base mx-[1px]"
       style={{
         'min-height': `${ENTITY_HEIGHT}px`,
       }}
@@ -972,7 +963,7 @@ export function EntityWithEverything(
       >
         <button
           type="button"
-          class="col-1 size-full relative group/button flex items-center justify-center bracket-never @max-md/uList:hidden"
+          class="col-1 size-full relative group/button flex items-center justify-center bracket-never @max-md/uList:hidden touch:hidden"
           onMouseDown={(e) => {
             e.stopPropagation();
           }}
@@ -1012,9 +1003,21 @@ export function EntityWithEverything(
           class="min-h-10 min-w-[50px] flex flex-row items-center gap-2 col-2 @max-md/uList:col-auto @max-md/uList:w-full @max-md/uList:min-h-0 @max-md/uList:items-start"
           classList={{
             grow: props.contentPlacement === 'bottom-row',
-            'opacity-70': props.fadeIfRead && !props.unreadIndicatorActive,
           }}
         >
+          {/* When the left checkbox column is hidden in narrow split containers, we still want
+              unread indicators to be visible. */}
+          <Show
+            when={
+              props.showLeftColumnIndicator &&
+              !props.checked &&
+              !props.highlighted
+            }
+          >
+            <div class="flex size-4 items-center justify-center @min-md/split:hidden">
+              <UnreadIndicator active={props.unreadIndicatorActive} />
+            </div>
+          </Show>
           {/* Icon/Checkbox container - in narrow mode, shows icon by default, checkbox on hover */}
           {/* For emails, icon is inline with sender, so hide this container in narrow mode */}
           <div class="flex size-5 shrink-0 items-center justify-center relative group/icon-checkbox @max-md/uList:hidden">
@@ -1102,7 +1105,7 @@ export function EntityWithEverything(
             </Show>
             <Show when={props.timestamp ?? props.entity.updatedAt}>
               {(date) => (
-                <span class="w-[8ch] text-right shrink-0 whitespace-nowrap text-xs font-mono uppercase text-ink-extra-muted @max-md/uList:hidden">
+                <span class="w-[8ch] text-right shrink-0 whitespace-nowrap text-xs touch:mobile-width:text-sm font-mono uppercase text-ink-extra-muted @max-md/uList:hidden">
                   {createFormattedDate(date())}
                 </span>
               )}
@@ -1301,7 +1304,7 @@ function EntityProject(props: {
       onPointerDown={(e) =>
         openProjectEntity({ event: e, eventHandler: props.onPointerdown })
       }
-      class="flex gap-1 items-center text-xs text-ink-extra-muted min-w-0"
+      class="flex gap-1 items-center text-xs touch:mobile-width:text-sm text-ink-extra-muted min-w-0"
       classList={{
         'hover:text-accent': projectQuery.isSuccess,
       }}

@@ -101,6 +101,10 @@ const stripePriceIdArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: STRIPE_PRICE_ID_KEY })
   .apply((secret) => secret.arn);
 
+const MACRO_API_TOKEN_EXPIRY_SECONDS = config.require(
+  `macro_api_token_expiry_seconds`
+);
+
 const MACRO_API_TOKEN_PRIVATE_SECRET_KEY = config.require(
   `macro_api_token_private_secret_key`
 );
@@ -267,6 +271,10 @@ const service = new AuthenticationService('authentication-service', {
     {
       name: 'MACRO_API_TOKEN_PRIVATE_SECRET_KEY',
       value: pulumi.interpolate`${macroApiTokenSecretPrivateKeyArn}`,
+    },
+    {
+      name: 'MACRO_API_TOKEN_EXPIRY_SECONDS',
+      value: MACRO_API_TOKEN_EXPIRY_SECONDS,
     },
     {
       name: 'STRIPE_WEBHOOK_SECRET_KEY',

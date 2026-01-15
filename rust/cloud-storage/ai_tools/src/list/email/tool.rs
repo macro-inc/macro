@@ -1,5 +1,5 @@
 use crate::{RequestContext, ToolServiceContext};
-use ai::tool::{AsyncTool, ToolCallError, ToolResult};
+use ai_toolset::{AsyncTool, ToolCallError, ToolResult};
 use async_trait::async_trait;
 use email::inbound::ApiPaginatedThreadCursor;
 use models_email::{

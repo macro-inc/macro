@@ -4,10 +4,10 @@ import { toast } from '@core/component/Toast/Toast';
 import { HotkeyTags } from '@core/hotkey/constants';
 import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
-import { HOTKEY_PRIORITY_LOW, type ValidHotkey } from '@core/hotkey/types';
+import { HOTKEY_PRIORITY_LOW } from '@core/hotkey/types';
 import { getHotkeyCommand, runCommand } from '@core/hotkey/utils';
 import { isModality } from '@core/mobile/inputModality';
-import { DEFAULT_VIEWS, type DefaultView, type ViewId } from '@core/types/view';
+import type { DefaultView, ViewId } from '@core/types/view';
 import { getActualTarget } from '@core/util/getActualTarget';
 import { isInteractiveElement } from '@core/util/isInteractiveElement';
 import { filterMap } from '@core/util/list';
@@ -18,7 +18,6 @@ import { waitForFrames } from '@core/util/sleep';
 import { type EntityData, isTaskEntity } from '@macro-entity';
 import { entityHasUnreadNotifications } from '@notifications';
 import type { PreviewViewStandardLabel } from '@service-email/generated/schemas';
-import { useTutorialCompleted } from '@service-gql/client';
 import type { PropertiesEntityType } from '@service-properties/client';
 import { useSetPropertyStatusCompleteMutation } from '@queries/properties/entity';
 import { storageServiceClient } from '@service-storage/client';
@@ -92,8 +91,6 @@ export type SoupContext = {
   entityListRefSignal: Signal<HTMLDivElement | undefined>;
   entitiesSignal: Signal<EntityData[] | undefined>;
   emailViewSignal: Signal<PreviewViewStandardLabel>;
-  showHelpDrawer: Accessor<Set<DefaultView>>;
-  setShowHelpDrawer: Setter<Set<DefaultView>>;
   actionRegistry: EntityActionRegistry;
   isRenderedFromPreview: boolean;
   navigateThroughList: NavigateListFn;
@@ -119,8 +116,6 @@ export function createStubSoupContext(): SoupContext {
     entityListRefSignal: createSignal(),
     entitiesSignal: createSignal(),
     emailViewSignal: createSignal<PreviewViewStandardLabel>('all'),
-    showHelpDrawer: () => new Set(),
-    setShowHelpDrawer: () => {},
     actionRegistry: createEntityActionRegistry(),
     navigateThroughList: async () => ({
       success: false,
@@ -138,7 +133,7 @@ export function createStubSoupContext(): SoupContext {
   };
 }
 
-const DEFAULT_VIEW_ID: DefaultView = 'signal';
+const DEFAULT_VIEW_ID: DefaultView = 'all';
 
 const DEFAULT_VIEW_IDS_SET = new Set(VIEWCONFIG_DEFAULTS_IDS);
 
@@ -163,10 +158,6 @@ export function createSoupContext(props: CreateSoupContextProps): SoupContext {
   const collapseEntitySignal = createSignal<CollapseEntityFn | undefined>(
     undefined
   );
-  const tutorialCompleted = useTutorialCompleted();
-  const [showHelpDrawer, setShowHelpDrawer] = createSignal<Set<DefaultView>>(
-    !tutorialCompleted() ? new Set(DEFAULT_VIEWS) : new Set()
-  );
   let navigateThroughListFn: NavigateListFn | undefined;
 
   const parentContextSignal = createSignal<SoupContext | undefined>(
@@ -187,8 +178,6 @@ export function createSoupContext(props: CreateSoupContextProps): SoupContext {
     entitiesSignal,
     emailViewSignal,
     collapseEntitySignal,
-    showHelpDrawer,
-    setShowHelpDrawer,
     actionRegistry: createEntityActionRegistry(),
     isRenderedFromPreview: props?.isRenderedFromPreview ?? false,
     parentContextSignal,
@@ -324,7 +313,6 @@ export function createNavigationEntityListShortcut({
     entityListRefSignal: [entityListRef],
     virtualizerHandleSignal: [virtualizerHandle],
     selectedView,
-    setSelectedView,
     entitiesSignal: [entities],
     actionRegistry,
     parentContextSignal: [getParentContext],
@@ -332,7 +320,6 @@ export function createNavigationEntityListShortcut({
     activeContextSignal: [activeContext, setActiveContext],
   } = soupContext;
   const viewData = createMemo(() => viewsData[selectedView()]);
-  const viewIds = createMemo<ViewId[]>(() => Object.keys(viewsData));
 
   const [attachEntityHotkeys, _entityHotkeyScope] = useHotkeyDOMScope('entity');
   const selectedEntity = () => viewData().selectedEntity;
@@ -449,6 +436,7 @@ export function createNavigationEntityListShortcut({
   actionRegistry.register(
     'mark_as_done',
     async (multiSelectEntities) => {
+      console.log(selectedView());
       const handler =
         VIEWCONFIG_DEFAULTS[selectedView() as DefaultView]?.hotkeyOptions?.e;
 
@@ -527,6 +515,7 @@ export function createNavigationEntityListShortcut({
 
         setViewDataStore(selectedView(), 'multiSelectEntities', []);
 
+        console.log('marked as done');
         toast.success('Marked as done');
       }
 
@@ -1381,66 +1370,9 @@ export function createNavigationEntityListShortcut({
     hide: true,
   });
 
-  const navigateThroughViews = ({
-    axis,
-  }: {
-    axis: 'start' | 'end'; // movement direction
-  }) => {
-    let index = viewIds().indexOf(selectedView());
-    const maxLength = viewIds().length;
-    index = (index + (axis === 'start' ? -1 : 1) + maxLength) % maxLength;
-    const newViewId = viewIds()[index];
-    setSelectedView(newViewId);
-  };
-
   const splitIsUnifiedList = createMemo(
     () => splitHandle.content().id === 'unified-list'
   );
-
-  for (let i = 0; i < viewIds().length && i < 9; i++) {
-    const viewId = viewIds()[i];
-    const viewData = viewsData[viewId];
-    registerHotkey({
-      hotkeyToken:
-        TOKENS.soup.tabs[i.toString() as keyof typeof TOKENS.soup.tabs],
-      hotkey: [(i + 1).toString() as ValidHotkey],
-      scopeId: splitHotkeyScope,
-      description: viewData.view,
-      condition: splitIsUnifiedList,
-      keyDownHandler: () => {
-        setSelectedView(viewData.id);
-        return true;
-      },
-      // displayPriority: 0,
-      hide: true,
-    });
-  }
-  1;
-
-  registerHotkey({
-    hotkey: 'tab',
-    scopeId: splitHotkeyScope,
-    description: 'Next View',
-    condition: splitIsUnifiedList,
-    keyDownHandler: () => {
-      navigateThroughViews({ axis: 'end' });
-      return true;
-    },
-    // displayPriority: 0,
-    hide: true,
-  });
-  registerHotkey({
-    hotkey: 'shift+tab',
-    scopeId: splitHotkeyScope,
-    description: 'Previous View',
-    condition: splitIsUnifiedList,
-    keyDownHandler: () => {
-      navigateThroughViews({ axis: 'start' });
-      return true;
-    },
-    // displayPriority: 0,
-    hide: true,
-  });
 
   registerEntityHotkey({
     hotkey: ['enter'],

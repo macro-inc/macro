@@ -14,5 +14,6 @@ config:
   authentication-service:google_client_id: google-client-id-prod
   authentication-service:google_client_secret_key: google-client-secret-prod
   authentication-service:macro_api_token_private_secret_key: macro-api-token-private-key-prod
+  authentication-service:macro_api_token_expiry_seconds: 3600
   authentication-service:stripe_webhook_secret_key: stripe-webhook-secret-prod
   authentication-service:stripe_price_id: stripe-price-id-prod

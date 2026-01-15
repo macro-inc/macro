@@ -2,7 +2,6 @@ import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { TOKENS } from '@core/hotkey/tokens';
 import CloseIcon from '@icon/regular/x.svg';
-import { BrightJoins } from '@ui/components/BrightJoins';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import { type JSX, type ParentProps, Show } from 'solid-js';
 import { useSplitPanel } from '../layoutUtils';
@@ -122,7 +121,6 @@ export function SplitDrawer(
         />
         <div class={getPositionClasses()} style={{ ...getSizeStyle() }}>
           <div class={getGradientMaskClasses()} />
-          <BrightJoins dots={[true, true, true, true]} />
           <div class="flex items-center justify-start gap-2 shrink-0">
             <Show when={props.title}>
               <h3 class="text-md font-medium text-content-secondary shrink truncate m-3">

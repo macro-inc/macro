@@ -5,6 +5,7 @@ members = [
   "ai",
   "ai_format",
   "ai_tools",
+  "ai_toolset",
   "anthropic",
   "authentication_service",
   "authentication_service_client",

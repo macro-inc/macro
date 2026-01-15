@@ -1,4 +1,4 @@
-use ai::tool::schema::PhantomTool;
+use ai_toolset::schema::PhantomTool;
 use anthropic::types::response::web_search::{WebSearchResponse, WebSearchToolCall};
 use lazy_static::lazy_static;
 

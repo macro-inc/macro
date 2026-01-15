@@ -96,6 +96,7 @@ pub async fn handler(
                 .macro_api_token_private_key
                 .as_ref()
                 .to_string(),
+            expiry_seconds: macro_api_token_context.expiry_seconds,
         })
         .map_err(|e| {
             tracing::error!(error=?e, "unable to encode macro-api-token");

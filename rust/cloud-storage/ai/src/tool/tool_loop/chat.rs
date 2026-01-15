@@ -1,4 +1,5 @@
 use super::constant::MAX_RECURSIONS;
+use crate::openai_toolset::OpenAIToolSetExt;
 use crate::tool::types::{AsyncToolSet, PartialToolCall, StreamPart, ToolCall, ToolResult};
 use crate::tool::types::{ChatCompletionStream, ExtendedPartStream, PartOrExt, ToolResponse};
 use crate::types::openai::message::convert_message;
