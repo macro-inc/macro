@@ -9,7 +9,7 @@ use axum::{
     response::IntoResponse,
 };
 use dashmap::DashMap;
-use macro_user_id::user_id::MacroUserId;
+use macro_user_id::user_id::{MacroUserId, MacroUserIdStr};
 use model::{chat::AttachmentType, user::UserContext};
 use models_permissions::share_permission::access_level::AccessLevel;
 use std::sync::Arc;
@@ -226,10 +226,24 @@ async fn handle_websocket_connection(
                         continue;
                     }
 
-                    let user_id = user_context_clone.user_id.clone();
+                    let user_id = match MacroUserIdStr::try_from(user_context_clone.user_id.clone())
+                    {
+                        Ok(id) => Arc::new(id),
+                        Err(_) => {
+                            ws_send(
+                                &message_sender_clone,
+                                FromWebSocketMessage::Error(WebSocketError::StreamError(
+                                    StreamError::InternalError {
+                                        stream_id: payload.stream_id.clone(),
+                                    },
+                                )),
+                            );
+                            continue;
+                        }
+                    };
                     let jwt_token = payload.jwt.token.clone();
                     let cancel_token = cancel_token.clone();
-                    tracing::debug!(user_id=?user_id, chat_id=?payload.chat_id, "handling chat message");
+                    tracing::debug!(user_id=?user_id.as_ref(), chat_id=?payload.chat_id, "handling chat message");
                     let ctx = ctx.clone();
                     match chat_permissions::chat_access(
                         &ctx,
@@ -267,7 +281,7 @@ async fn handle_websocket_connection(
                                 ctx,
                                 message_id,
                                 payload,
-                                user_id.as_str(),
+                                user_id,
                                 &connection_id,
                                 &jwt_token
                             )) => {
@@ -279,9 +293,23 @@ async fn handle_websocket_connection(
                     });
                 }
                 ToWebSocketMessage::EditChatMessage(payload) => {
-                    let user_id: String = user_context_clone.user_id.clone();
+                    let user_id = match MacroUserIdStr::try_from(user_context_clone.user_id.clone())
+                    {
+                        Ok(id) => Arc::new(id),
+                        Err(_) => {
+                            ws_send(
+                                &message_sender_clone,
+                                FromWebSocketMessage::Error(WebSocketError::StreamError(
+                                    StreamError::InternalError {
+                                        stream_id: payload.stream_id.clone(),
+                                    },
+                                )),
+                            );
+                            continue;
+                        }
+                    };
                     let jwt_token = payload.jwt.token.clone();
-                    tracing::debug!(user_id=?user_id, chat_id=?payload.chat_id, "handling edit message");
+                    tracing::debug!(user_id=?user_id.as_ref(), chat_id=?payload.chat_id, "handling edit message");
                     let ctx = ctx.clone();
 
                     match chat_permissions::chat_access(
@@ -316,7 +344,7 @@ async fn handle_websocket_connection(
                             ctx,
                             &message_sender_clone,
                             payload,
-                            user_id.as_str(),
+                            user_id,
                             &connection_id,
                             &jwt_token,
                         )

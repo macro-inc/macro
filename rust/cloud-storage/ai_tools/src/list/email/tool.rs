@@ -1,13 +1,14 @@
-use crate::{RequestContext, ToolServiceContext};
-use ai_toolset::{AsyncTool, ToolCallError, ToolResult};
+use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
 use email::inbound::ApiPaginatedThreadCursor;
+use email_service_client::EmailServiceClientExternal;
 use models_email::{
     email::service::thread::PreviewView, service::thread::PreviewViewStandardLabel,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(rename_all = "camelCase")]
@@ -93,13 +94,14 @@ impl ListEmails {
 }
 
 #[async_trait]
-impl AsyncTool<ToolServiceContext, RequestContext> for ListEmails {
+impl AsyncTool<Arc<EmailServiceClientExternal>> for ListEmails {
     type Output = ApiPaginatedThreadCursor;
 
-    #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id), err)]
+    #[allow(deprecated)]
+    #[tracing::instrument(skip_all, fields(user_id=?(*request_context.user_id).as_ref()), err)]
     async fn call(
         &self,
-        service_context: ToolServiceContext,
+        email_client: ServiceContext<Arc<EmailServiceClientExternal>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         tracing::info!(self=?self, "List emails params");
@@ -118,9 +120,8 @@ impl AsyncTool<ToolServiceContext, RequestContext> for ListEmails {
                 .map(|label| PreviewView::UserLabel(label.clone())))
             .unwrap_or(default_view());
 
-        service_context
-            .email_service_client
-            .get_thread_previews_external(self.iter_params(), view, &request_context.jwt_token)
+        email_client
+            .get_thread_previews_external(self.iter_params(), view, &request_context.jwt)
             .await
             .map_err(|err| ToolCallError {
                 description: format!("something went wrong fetching emails {:?}", err),

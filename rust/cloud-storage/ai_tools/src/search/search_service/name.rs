@@ -1,13 +1,14 @@
 use super::types::{PAGE_SIZE, SearchToolResponse};
-use crate::tool_context::{RequestContext, ToolServiceContext};
-use ai_toolset::{AsyncTool, ToolCallError, ToolResult};
+use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
 use models_search::{
     MatchType,
     unified::{UnifiedSearchIndex, UnifiedSearchRequest},
 };
 use schemars::JsonSchema;
+use search_service_client::SearchServiceClient;
 use serde::Deserialize;
+use std::sync::Arc;
 
 #[derive(Debug, JsonSchema, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -29,13 +30,13 @@ pub struct NameSearch {
 }
 
 #[async_trait]
-impl AsyncTool<ToolServiceContext, RequestContext> for NameSearch {
+impl AsyncTool<Arc<SearchServiceClient>> for NameSearch {
     type Output = SearchToolResponse;
 
-    #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id), err)]
+    #[tracing::instrument(skip_all, fields(user_id=?(*request_context.user_id).as_ref()), err)]
     async fn call(
         &self,
-        context: ToolServiceContext,
+        search_client: ServiceContext<Arc<SearchServiceClient>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         tracing::info!(self=?self, "Name search params");
@@ -58,9 +59,13 @@ impl AsyncTool<ToolServiceContext, RequestContext> for NameSearch {
             disable_recency: false,
         };
 
-        let response = context
-            .search_service_client
-            .search_unified(&request_context.user_id, search_request, None, PAGE_SIZE)
+        let response = search_client
+            .search_unified(
+                (*request_context.user_id).as_ref(),
+                search_request,
+                None,
+                PAGE_SIZE,
+            )
             .await
             .map_err(|e| ToolCallError {
                 description: format!("failed to perform name search: {}", e),

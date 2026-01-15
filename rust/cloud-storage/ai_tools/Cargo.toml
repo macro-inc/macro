@@ -9,6 +9,7 @@ ai = { path = "../ai" }
 ai_toolset = { path = "../ai_toolset" }
 anyhow.workspace = true
 async-trait.workspace = true
+axum = { workspace = true, features = ["macros"] }
 chrono.workspace = true
 comms_service_client = { path = "../comms_service_client" }
 email = { path = "../email", features = ["ai_schema", "axum"] }

@@ -1,9 +1,10 @@
-use crate::tool_context::{RequestContext, ToolServiceContext};
-use ai_toolset::{AsyncTool, ToolCallError, ToolResult};
+use crate::tool_context::ToolScribe;
+use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
 use model::comms::ChannelType;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use uuid::Uuid;
 
 /// A channel item returned by the list channels tool
@@ -41,21 +42,21 @@ pub struct ListChannels {
 }
 
 #[async_trait]
-impl AsyncTool<ToolServiceContext, RequestContext> for ListChannels {
+impl AsyncTool<Arc<ToolScribe>> for ListChannels {
     type Output = ListChannelsResponse;
 
-    #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id), err)]
+    #[allow(deprecated)]
+    #[tracing::instrument(skip_all, fields(user_id=?(*request_context.user_id).as_ref()), err)]
     async fn call(
         &self,
-        context: ToolServiceContext,
+        scribe: ServiceContext<Arc<ToolScribe>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         tracing::info!("List channels");
 
-        let channels = context
-            .scribe
+        let channels = scribe
             .channel
-            .list_channels(&request_context.jwt_token)
+            .list_channels(&request_context.jwt)
             .await
             .map_err(|e| ToolCallError {
                 description: format!("failed to list channels: {}", e),

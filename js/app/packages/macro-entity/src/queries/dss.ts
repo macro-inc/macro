@@ -36,7 +36,11 @@ import type {
   EntityData,
   ProjectEntity,
 } from '../types/entity';
-import { createApiTokenQuery } from './auth';
+import {
+  createApiTokenQuery,
+  handleFetchResponse,
+  withApiTokenRetry,
+} from './auth';
 import { queryClient } from './client';
 import { type DssQueryKey, dssQueryKeyHashFn, queryKeys } from './key';
 
@@ -72,8 +76,7 @@ const fetchPaginatedDocumentsGet = async ({
   });
 
   const response = await platformFetch(url, { headers: { Authorization } });
-  if (!response.ok)
-    throw new Error('Failed to fetch documents', { cause: response });
+  await handleFetchResponse(response, 'Failed to fetch documents');
 
   const result: SoupPage = await response.json();
   return result;
@@ -106,8 +109,8 @@ const fetchPaginatedDocumentsPost = async ({
     body: requestBody ? JSON.stringify(requestBody) : undefined,
     signal,
   });
-  if (!response.ok)
-    throw new Error('Failed to fetch documents', { cause: response });
+
+  await handleFetchResponse(response, 'Failed to fetch documents');
 
   const result: SoupPage = await response.json();
   return result;
@@ -178,14 +181,15 @@ export function createDssInfiniteQuery(
     return {
       queryKey,
       queryKeyHashFn: hashKey,
-      queryFn: ({ pageParam, signal }) => {
-        return fetchPaginatedDocumentsPost({
-          apiToken: authQuery.data,
-          requestBody,
-          params: { cursor: pageParam.cursor },
-          signal,
-        });
-      },
+      queryFn: ({ pageParam, signal }) =>
+        withApiTokenRetry(authQuery, (apiToken) =>
+          fetchPaginatedDocumentsPost({
+            apiToken,
+            requestBody,
+            params: { cursor: pageParam.cursor },
+            signal,
+          })
+        ),
       initialPageParam: params(),
       getNextPageParam: ({ next_cursor: cursor }) =>
         cursor ? { ...params(), cursor } : undefined,
@@ -331,7 +335,9 @@ export function createChatsInfiniteQuery(
       queryKeys.chat({ infinite: true, ...params() }) as DssQueryKey
     ),
     queryFn: ({ pageParam }) =>
-      fetchPaginatedDocumentsGet({ apiToken: authQuery.data, ...pageParam }),
+      withApiTokenRetry(authQuery, (apiToken) =>
+        fetchPaginatedDocumentsGet({ apiToken, ...pageParam })
+      ),
     initialPageParam: params(),
     getNextPageParam: ({ next_cursor: cursor }) =>
       cursor ? { ...params(), cursor } : undefined,

@@ -1,11 +1,12 @@
-use crate::tool_context::{RequestContext, ToolServiceContext};
-use ai_toolset::{AsyncTool, ToolCallError, ToolResult};
+use crate::tool_context::ToolScribe;
+use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
 use model::document::list::DocumentListItem;
 use models_permissions::share_permission::access_level::AccessLevel;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::cmp::min;
+use std::sync::Arc;
 
 /// Maximum number of results to return to the AI client
 const TRUNCATED_RESULTS_LIMIT: usize = 150;
@@ -109,7 +110,7 @@ impl ListDocuments {
 
     async fn fetch_all_pages(
         &self,
-        context: &ToolServiceContext,
+        scribe: &ToolScribe,
         request_context: &RequestContext,
         min_access_level: AccessLevel,
         page_size: i64,
@@ -119,12 +120,11 @@ impl ListDocuments {
 
         loop {
             let page = page_offset / page_size;
-            let response = context
-                .scribe
+            let response = scribe
                 .document
                 .dss_client
                 .list_documents_with_access(
-                    &request_context.user_id,
+                    (*request_context.user_id).as_ref(),
                     self.file_types.clone(),
                     Some(min_access_level),
                     page,
@@ -158,13 +158,13 @@ impl ListDocuments {
 }
 
 #[async_trait]
-impl AsyncTool<ToolServiceContext, RequestContext> for ListDocuments {
+impl AsyncTool<Arc<ToolScribe>> for ListDocuments {
     type Output = ListDocumentsResponse;
 
-    #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id), err)]
+    #[tracing::instrument(skip_all, fields(user_id=?(*request_context.user_id).as_ref()), err)]
     async fn call(
         &self,
-        context: ToolServiceContext,
+        scribe: ServiceContext<Arc<ToolScribe>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         tracing::info!(self=?self, "List documents params");
@@ -175,7 +175,7 @@ impl AsyncTool<ToolServiceContext, RequestContext> for ListDocuments {
         if self.exhaustive_search {
             // Use exhaustive search to get all results
             return match self
-                .fetch_all_pages(&context, &request_context, min_access_level, page_size)
+                .fetch_all_pages(&scribe, &request_context, min_access_level, page_size)
                 .await
             {
                 Ok(all_results) => {
@@ -204,12 +204,11 @@ impl AsyncTool<ToolServiceContext, RequestContext> for ListDocuments {
 
         // Non-exhaustive search - single page
         let page = page_offset / page_size;
-        match context
-            .scribe
+        match scribe
             .document
             .dss_client
             .list_documents_with_access(
-                &request_context.user_id,
+                (*request_context.user_id).as_ref(),
                 self.file_types.clone(),
                 Some(min_access_level),
                 page,

@@ -1,5 +1,7 @@
-use super::tool_object::{AsyncToolObject, SyncToolObject, ValidationError};
-use crate::{AsyncTool, Tool, ToolResult};
+use super::tool_object::{AsyncToolObject, ValidationError};
+use crate::RequestContext;
+use crate::{AsyncTool, ToolResult};
+use axum::extract::FromRef;
 use schemars::{JsonSchema, Schema};
 use serde::Serialize;
 use serde::de::Deserialize;
@@ -28,11 +30,8 @@ pub enum ToolSetError {
     NotFound(String),
 }
 
-/// Type alias for a toolset containing synchronous tools.
-pub type SyncToolSet<Context, RequestContext> = ToolSet<SyncToolObject<Context, RequestContext>>;
-
 /// Type alias for a toolset containing asynchronous tools.
-pub type AsyncToolSet<Context, RequestContext> = ToolSet<AsyncToolObject<Context, RequestContext>>;
+pub type AsyncToolSet<ToolSetContext> = ToolSet<AsyncToolObject<ToolSetContext>>;
 
 /// Represents the schema information for a tool.
 pub struct ToolSchema {
@@ -74,52 +73,6 @@ impl<T> ToolSet<T> {
     }
 }
 
-impl<Sc, Rc> ToolSet<SyncToolObject<Sc, Rc>>
-where
-    Rc: Sync + Send + 'static,
-    Sc: Sync + Send + 'static,
-{
-    /// Adds a synchronous tool to this toolset.
-    ///
-    /// The tool type must implement [`Tool`], [`JsonSchema`], and [`Deserialize`].
-    /// Returns an error if schema validation fails or a tool with the same name exists.
-    pub fn add_tool<T>(mut self) -> Result<Self, ToolSetCreationError>
-    where
-        T: JsonSchema + Tool<Sc, Rc> + for<'de> Deserialize<'de> + 'static + Send + Sync,
-        T::Output: Serialize + JsonSchema + 'static,
-    {
-        let tool_object =
-            SyncToolObject::try_from_tool::<T>().map_err(ToolSetCreationError::Validation)?;
-        if self.tools.contains_key(&tool_object.name) {
-            Err(ToolSetCreationError::NameConflict(tool_object.name.clone()))
-        } else {
-            self.tools.insert(tool_object.name.clone(), tool_object);
-            Ok(self)
-        }
-    }
-
-    /// Attempts to call a tool by name with the given JSON input.
-    ///
-    /// Returns an error if the tool is not found or if deserialization fails.
-    pub fn try_tool_call(
-        &self,
-        context: Sc,
-        request_context: Rc,
-        tool_name: &str,
-        json: &serde_json::Value,
-    ) -> Result<ToolResult<serde_json::Value>, ToolSetError> {
-        let tool = self
-            .tools
-            .get(tool_name)
-            .ok_or_else(|| ToolSetError::NotFound(tool_name.to_owned()))
-            .and_then(|tool| {
-                tool.try_deserialize(json)
-                    .map_err(ToolSetError::Deserialization)
-            })?;
-        Ok(tool.call(context, request_context))
-    }
-}
-
 impl<T> ToolSet<T> {
     /// Merges another toolset into this one.
     ///
@@ -135,40 +88,25 @@ impl<T> ToolSet<T> {
     }
 }
 
-impl<Sc, Rc> SyncToolSet<Sc, Rc>
+impl<ToolSetContext> AsyncToolSet<ToolSetContext>
 where
-    Sc: Send + Sync + 'static,
-    Rc: Send + Sync + 'static,
-{
-    /// Converts this synchronous toolset into an asynchronous toolset.
-    ///
-    /// Each synchronous tool is wrapped to be callable in an async context.
-    pub fn into_async(self) -> AsyncToolSet<Sc, Rc> {
-        AsyncToolSet {
-            tools: self
-                .tools
-                .into_iter()
-                .map(|(name, obj)| (name, AsyncToolObject::from(obj)))
-                .collect(),
-        }
-    }
-}
-
-impl<Sc, Rc> AsyncToolSet<Sc, Rc>
-where
-    Rc: Sync + Send + 'static,
-    Sc: Sync + Send + 'static,
+    ToolSetContext: Sync + Send + 'static,
 {
     /// Adds an asynchronous tool to this toolset.
     ///
     /// The tool type must implement [`AsyncTool`], [`JsonSchema`], and [`Deserialize`].
+    /// The tool's context type (`ToolContext`) must be extractable from `ToolSetContext`
+    /// using `FromRef`, providing a compile-time guarantee that the toolset context
+    /// can be narrowed to the specific context required by each tool.
+    ///
     /// Returns an error if schema validation fails or a tool with the same name exists.
-    pub fn add_tool<T>(mut self) -> Result<Self, ToolSetCreationError>
+    pub fn add_tool<T, ToolContext>(mut self) -> Result<Self, ToolSetCreationError>
     where
-        T: JsonSchema + AsyncTool<Sc, Rc> + for<'de> Deserialize<'de> + 'static + Send + Sync,
+        ToolContext: Sync + Send + FromRef<ToolSetContext> + 'static,
+        T: JsonSchema + AsyncTool<ToolContext> + for<'de> Deserialize<'de> + 'static + Send + Sync,
         T::Output: Serialize + JsonSchema + 'static,
     {
-        let tool_object = AsyncToolObject::try_from_tool::<T, T::Output>()
+        let tool_object = AsyncToolObject::try_from_tool::<T, ToolContext, T::Output>()
             .map_err(ToolSetCreationError::Validation)?;
         if self.tools.contains_key(&tool_object.name) {
             Err(ToolSetCreationError::NameConflict(tool_object.name.clone()))
@@ -180,11 +118,15 @@ where
 
     /// Attempts to call a tool by name with the given JSON input.
     ///
+    /// The tool will automatically extract its specific context from the provided
+    /// `ToolSetContext` using the `FromRef` implementation captured when the tool
+    /// was added.
+    ///
     /// Returns an error if the tool is not found or if deserialization fails.
     pub async fn try_tool_call(
         &self,
-        context: Sc,
-        request_context: Rc,
+        context: ToolSetContext,
+        request_context: RequestContext,
         tool_name: &str,
         json: &serde_json::Value,
     ) -> Result<ToolResult<serde_json::Value>, ToolSetError> {
@@ -197,21 +139,5 @@ where
                     .map_err(ToolSetError::Deserialization)
             })?;
         Ok(tool.call(context, request_context).await)
-    }
-}
-
-impl<T> std::fmt::Debug for ToolSet<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut list = f.debug_list();
-        list.entries(self.tools.keys());
-        list.finish()
-    }
-}
-
-impl<T: Clone> Clone for ToolSet<T> {
-    fn clone(&self) -> Self {
-        Self {
-            tools: self.tools.clone(),
-        }
     }
 }

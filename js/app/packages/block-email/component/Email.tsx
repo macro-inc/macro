@@ -2,6 +2,7 @@ import {
   EmailProvider,
   useEmailContext,
 } from '@block-email/component/EmailContext';
+import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { FloatingInputLoader } from '@core/component/FloatingInputLoader';
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerScopeSignalHotkey } from '@core/hotkey/utils';
@@ -460,6 +461,10 @@ function EmailContent(props: EmailViewProps) {
               <MessageList
                 initialLoadComplete={context.initialLoadComplete()}
                 title={props.title}
+              />
+              <CustomScrollbar
+                reverse
+                scrollContainer={context.messagesListRef}
               />
             </div>
             <Show

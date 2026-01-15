@@ -1,7 +1,7 @@
 import { useEmailContext } from '@block-email/component/EmailContext';
 import { isScrollingToMessage } from '@block-email/signal/scrollState';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { createMemo, createSelector, For, Show } from 'solid-js';
+import { createMemo, createSelector, Index, Show } from 'solid-js';
 import { MessageContainer } from './MessageContainer';
 
 interface MessageListProps {
@@ -23,7 +23,7 @@ export function MessageList(props: MessageListProps) {
 
   return (
     <div
-      class="pt-3 w-full flex flex-col-reverse items-center overflow-y-scroll overflow-x-hidden suppress-css-brackets text-sm touch:mobile-width:text-base"
+      class="pt-3 w-full flex flex-col-reverse items-center overflow-y-scroll overflow-x-hidden suppress-css-brackets hide-scrollbar text-sm touch:mobile-width:text-base"
       ref={context.registerMessagesList}
       onscroll={(e) => {
         // Don't load more if we're programmatically scrolling to a message
@@ -50,13 +50,16 @@ export function MessageList(props: MessageListProps) {
       }}
     >
       <StaticMarkdownContext>
-        <For each={context.messages.list().toReversed()}>
+        {/* We use Index because the index of the messages should always be stable and
+          only the value changes. This also helps prevent nested inputs from rerendering
+        */}
+        <Index each={context.messages.list().toReversed()}>
           {(message, index) => {
             // We need the index as if the list was not reversed
             const normalizedIndex = createMemo(() => {
               const listLength = context.messages.list().length;
 
-              const normalized = listLength - 1 - index();
+              const normalized = listLength - 1 - index;
 
               // The element at the 0th index isn't actually the first message
               // if there is more data to load so we return -1 so that `isFirstMessage`
@@ -76,13 +79,13 @@ export function MessageList(props: MessageListProps) {
                   normalizedIndex() ===
                   (context.messages.list().length ?? 0) - 1
                 }
-                isFocused={isFocusedSelector(message.db_id ?? undefined)}
-                isTarget={isTargetSelector(message.db_id ?? undefined)}
-                message={message}
+                isFocused={isFocusedSelector(message().db_id ?? undefined)}
+                isTarget={isTargetSelector(message().db_id ?? undefined)}
+                message={message()}
               />
             );
           }}
-        </For>
+        </Index>
       </StaticMarkdownContext>
       <Show when={props.title}>
         <div class="shrink-0 w-full flex justify-center pb-4">

@@ -271,7 +271,7 @@ export const signalFilter: ClientFilter = {
         return hasRecentlyViewed(entity);
       }
       case 'email': {
-        return isSignalEmail(entity);
+        return isSignalEmail(entity) || entity.isDraft;
       }
       case 'project': {
         return hasRecentlyViewed(entity);

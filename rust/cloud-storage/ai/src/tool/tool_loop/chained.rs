@@ -1,7 +1,9 @@
 use crate::generate_tool_input_schema;
 use crate::tool::completion::tool_completion;
 use crate::tool::tool_loop::constant::{MAX_RECURSIONS, TOOL_GENERATOR};
-use crate::tool::types::{AsyncToolSet, PartialToolCall, StreamPart, ToolCall, ToolResult};
+use crate::tool::types::{
+    AsyncToolSet, PartialToolCall, RequestContext, StreamPart, ToolCall, ToolResult,
+};
 use crate::tool::types::{ChatCompletionStream, ToolResponse};
 
 use crate::types::openai::message::convert_message;
@@ -68,7 +70,7 @@ impl ChainedTool {
     }
 }
 
-fn build_tool_prompt<T, R>(toolset: &AsyncToolSet<T, R>) -> String {
+fn build_tool_prompt<T>(toolset: &AsyncToolSet<T>) -> String {
     toolset
         .tools
         .values()
@@ -85,14 +87,13 @@ description: {}
         .join("\n")
 }
 
-pub struct Chained<I, T, R>
+pub struct Chained<I, T>
 where
     I: ExtendedClient + Send + Sync + Clone,
     T: Clone + Send + Sync + 'static,
-    R: Send + Sync + 'static,
 {
     inner: I,
-    toolset: Arc<AsyncToolSet<T, R>>,
+    toolset: Arc<AsyncToolSet<T>>,
     request: CreateChatCompletionRequest,
     messages: Vec<ChatCompletionRequestMessage>,
     context: T,
@@ -101,13 +102,12 @@ where
     tool_call_count: usize,
 }
 
-impl<I, T, R> Chained<I, T, R>
+impl<I, T> Chained<I, T>
 where
     I: ExtendedClient + Send + Sync + Clone,
     T: Clone + Send + Sync,
-    R: Clone + Send + Sync,
 {
-    pub fn new(client: I, toolset: Arc<AsyncToolSet<T, R>>, context: T) -> Chained<I, T, R> {
+    pub fn new(client: I, toolset: Arc<AsyncToolSet<T>>, context: T) -> Chained<I, T> {
         Self {
             inner: client,
             toolset,
@@ -123,7 +123,7 @@ where
     pub async fn send_message(
         &mut self,
         mut request: ChatCompletionRequest,
-        request_context: R,
+        request_context: RequestContext,
     ) -> Result<ChatCompletionStream<'_>> {
         // tell the primary model how all the tools will work
         request
@@ -150,7 +150,7 @@ where
     }
 
     async fn route_chained_calls(
-        toolset: &Arc<AsyncToolSet<T, R>>,
+        toolset: &Arc<AsyncToolSet<T>>,
         part: ToolCall,
     ) -> Result<ToolCall> {
         tracing::debug!("route chained call {:#?}", part);
@@ -186,7 +186,7 @@ where
 
     async fn make_chat_completion_stream(
         &mut self,
-        request_context: R,
+        request_context: RequestContext,
     ) -> Result<ChatCompletionStream<'_>> {
         let item_stream = stream!({
             let mut stream_parts = vec![];
@@ -244,7 +244,7 @@ where
     async fn process_stream_parts(
         &mut self,
         stream_parts: Vec<StreamPart>,
-        request_context: R,
+        request_context: RequestContext,
     ) -> ProcessedStream {
         // list of all tool calls
         let mut tool_calls = vec![];

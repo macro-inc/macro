@@ -92,6 +92,7 @@ dependencies = [
  "anthropic",
  "anyhow",
  "async-trait",
+ "axum",
  "chrono",
  "comms_service_client",
  "cool_asserts",
@@ -124,7 +125,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "axum",
+ "axum-macros",
  "futures",
+ "macro_user_id",
  "schemars",
  "serde",
  "serde_json",

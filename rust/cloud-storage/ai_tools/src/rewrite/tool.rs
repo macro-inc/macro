@@ -1,14 +1,15 @@
 use super::types::AIDiffResponse;
 use super::types::{PROMPT, REWRITE_MODEL};
-use crate::tool_context::{RequestContext, ToolScribe, ToolServiceContext};
+use crate::tool_context::ToolScribe;
 use ai::types::{MessageBuilder, RequestBuilder};
 use ai_format::document::Document;
-use ai_toolset::{AsyncTool, ToolCallError, ToolResult};
+use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use anyhow::Error;
 use async_trait::async_trait;
 use model::document::FileType;
 use schemars::JsonSchema;
 use serde::Deserialize;
+use std::sync::Arc;
 
 #[derive(Deserialize, JsonSchema, Debug, Clone)]
 #[schemars(
@@ -27,22 +28,23 @@ pub struct MarkdownRewrite {
 }
 
 #[async_trait]
-impl AsyncTool<ToolServiceContext, RequestContext> for MarkdownRewrite {
+impl AsyncTool<Arc<ToolScribe>> for MarkdownRewrite {
     type Output = AIDiffResponse;
 
-    #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id), err)]
+    #[allow(deprecated)]
+    #[tracing::instrument(skip_all, fields(user_id=?(*request_context.user_id).as_ref()), err)]
     async fn call(
         &self,
-        sc: ToolServiceContext,
+        scribe: ServiceContext<Arc<ToolScribe>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         tracing::info!(markdown_file_id=?self.markdown_file_id, "Rewrite params");
 
         rewrite_markdown(
             self.clone(),
-            &sc.scribe,
-            &request_context.user_id,
-            request_context.jwt_token.clone(),
+            &scribe,
+            (*request_context.user_id).as_ref(),
+            (*request_context.jwt).clone(),
         )
         .await
         .map_err(|err| ToolCallError {
