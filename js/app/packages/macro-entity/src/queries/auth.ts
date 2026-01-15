@@ -6,6 +6,8 @@ import {
   useQuery,
 } from '@tanstack/solid-query';
 import { SERVER_HOSTS } from 'core/constant/servers';
+import { fetchWithToken } from 'core/util/fetchWithToken';
+import { isOk } from 'core/util/maybeResult';
 import { platformFetch } from 'core/util/platformFetch';
 import { createMemo } from 'solid-js';
 import { queryKeys } from './key';
@@ -60,14 +62,15 @@ export async function withApiTokenRetry<T>(
 }
 
 export const fetchApiToken = async () => {
-  const response = await platformFetch(`${authHost}/jwt/macro_api_token`, {
-    credentials: 'include',
-  });
-  if (!response.ok)
-    throw new Error('Failed to fetch API token', { cause: response });
+  const result = await fetchWithToken<MacroApiTokenResponse>(
+    `${authHost}/jwt/macro_api_token`
+  );
 
-  const { macro_api_token }: MacroApiTokenResponse = await response.json();
-  return macro_api_token;
+  if (!isOk(result)) {
+    throw new Error('Failed to fetch API token', { cause: result[0] });
+  }
+
+  return result[1].macro_api_token;
 };
 
 type ApiTokenQueryOptions = SolidQueryOptions<
@@ -81,6 +84,7 @@ type ApiTokenQueryOptions = SolidQueryOptions<
 export function createApiTokenQueryOptions(): ApiTokenQueryOptions {
   return queryOptions({
     queryKey: queryKeys.auth.apiToken,
+    queryFn: fetchApiToken,
   });
 }
 
