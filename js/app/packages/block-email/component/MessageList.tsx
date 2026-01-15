@@ -50,6 +50,9 @@ export function MessageList(props: MessageListProps) {
       }}
     >
       <StaticMarkdownContext>
+        {/* We use Index because the index of the messages should always be stable and
+          only the value changes. This also helps prevent nested inputs from rerendering
+        */}
         <Index each={context.messages.list().toReversed()}>
           {(message, index) => {
             // We need the index as if the list was not reversed
