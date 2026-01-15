@@ -438,7 +438,11 @@ export function BaseInput(props: BaseInputProps) {
         },
       }}
     >
-      <Show when={isDraggedOver() || isDraggingOverChannel()}>
+      <Show
+        when={
+          isDraggedOver() || (isDraggingOverChannel() && !props.isReplyInput)
+        }
+      >
         <FileDropOverlay valid={isValidChannelDrag()}>
           <Show when={!isValidChannelDrag()}>
             <div class="font-mono text-failure">
