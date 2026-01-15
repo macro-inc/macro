@@ -1029,7 +1029,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       limit: props.defaultDisplayOptions?.limit ?? 100,
       emailView: importantFilter()
         ? 'important'
-        : view().id === VIEWCONFIG_DEFAULTS_IDS_ENUM.all
+        : view().filters.focusFilters?.includes('signal')
           ? 'all'
           : view().id === VIEWCONFIG_DEFAULTS_IDS_ENUM.email
             ? emailView()
