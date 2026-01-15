@@ -100,6 +100,18 @@ export function fileDrop(
     }
   };
 
+  const handleDragEnd = (e: DragEvent) => {
+    if (accessor()?.disabled) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    dragCounter--;
+
+    // Always call drag end
+    const options = accessor();
+    options?.onDragEnd?.();
+  };
+
   const isFileTypeValid = (fileType?: string): boolean | undefined => {
     if (!fileType) {
       return undefined;
@@ -226,14 +238,14 @@ export function fileDrop(
   element.addEventListener('dragover', handleDragOver);
   element.addEventListener('dragenter', handleDragEnter);
   element.addEventListener('dragleave', handleDragLeave);
-  element.addEventListener('dragend', handleDragLeave);
+  element.addEventListener('dragend', handleDragEnd);
   element.addEventListener('drop', handleDrop);
 
   onCleanup(() => {
     element.removeEventListener('dragover', handleDragOver);
     element.removeEventListener('dragenter', handleDragEnter);
     element.removeEventListener('dragleave', handleDragLeave);
-    element.removeEventListener('dragend', handleDragLeave);
+    element.removeEventListener('dragend', handleDragEnd);
     element.removeEventListener('drop', handleDrop);
   });
 }
