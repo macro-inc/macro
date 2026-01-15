@@ -12,6 +12,21 @@ import { queryKeys } from './key';
 
 const authHost = SERVER_HOSTS['auth-service'];
 
+export class FetchDocumentsError extends Error {
+  constructor(
+    message: string,
+    public readonly response: Response,
+    public readonly data?: { message?: string }
+  ) {
+    super(message);
+    this.name = 'FetchDocumentsError';
+  }
+
+  isJwtExpired(): boolean {
+    return this.response.status === 401 && this.data?.message === 'jwt expired';
+  }
+}
+
 export const fetchApiToken = async () => {
   const response = await platformFetch(`${authHost}/jwt/macro_api_token`, {
     credentials: 'include',

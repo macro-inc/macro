@@ -36,7 +36,7 @@ import type {
   EntityData,
   ProjectEntity,
 } from '../types/entity';
-import { createApiTokenQuery } from './auth';
+import { createApiTokenQuery, FetchDocumentsError } from './auth';
 import { queryClient } from './client';
 import { type DssQueryKey, dssQueryKeyHashFn, queryKeys } from './key';
 
@@ -106,8 +106,18 @@ const fetchPaginatedDocumentsPost = async ({
     body: requestBody ? JSON.stringify(requestBody) : undefined,
     signal,
   });
-  if (!response.ok)
-    throw new Error('Failed to fetch documents', { cause: response });
+
+  if (!response.ok) {
+    const errorData =
+      response.status === 401
+        ? await response.json().catch(() => undefined)
+        : undefined;
+    throw new FetchDocumentsError(
+      'Failed to fetch documents',
+      response,
+      errorData
+    );
+  }
 
   const result: SoupPage = await response.json();
   return result;
@@ -178,13 +188,28 @@ export function createDssInfiniteQuery(
     return {
       queryKey,
       queryKeyHashFn: hashKey,
-      queryFn: ({ pageParam, signal }) => {
-        return fetchPaginatedDocumentsPost({
-          apiToken: authQuery.data,
-          requestBody,
-          params: { cursor: pageParam.cursor },
-          signal,
-        });
+      queryFn: async ({ pageParam, signal }) => {
+        try {
+          return await fetchPaginatedDocumentsPost({
+            apiToken: authQuery.data,
+            requestBody,
+            params: { cursor: pageParam.cursor },
+            signal,
+          });
+        } catch (error) {
+          if (error instanceof FetchDocumentsError && error.isJwtExpired()) {
+            const refetchResult = await authQuery.refetch();
+            if (refetchResult.isSuccess) {
+              return await fetchPaginatedDocumentsPost({
+                apiToken: refetchResult.data,
+                requestBody,
+                params: { cursor: pageParam.cursor },
+                signal,
+              });
+            }
+          }
+          throw error;
+        }
       },
       initialPageParam: params(),
       getNextPageParam: ({ next_cursor: cursor }) =>
