@@ -1,5 +1,4 @@
-use crate::{RequestContext, ToolServiceContext};
-use ai_toolset::{AsyncTool, ToolCallError, ToolResult};
+use ai_toolset::{AsyncTool, NoContext, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -48,13 +47,13 @@ pub struct PerplexitySearch {
 }
 
 #[async_trait]
-impl AsyncTool<ToolServiceContext, RequestContext> for PerplexitySearch {
+impl AsyncTool<NoContext> for PerplexitySearch {
     type Output = SearchResults;
 
-    #[tracing::instrument(skip_all, fields(user_id=?_request_context.user_id), err)]
+    #[tracing::instrument(skip_all, fields(user_id=?(*_request_context.user_id).as_ref()), err)]
     async fn call(
         &self,
-        _service_context: ToolServiceContext,
+        _service_context: ServiceContext<NoContext>,
         _request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         let client = ai::web_search::PerplexityClient::from_env().map_err(|err| ToolCallError {

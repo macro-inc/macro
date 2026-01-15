@@ -6,7 +6,11 @@ import { SERVER_HOSTS } from 'core/constant/servers';
 import { platformFetch } from 'core/util/platformFetch';
 import { type Accessor, createMemo } from 'solid-js';
 import type { EmailEntity } from '../types/entity';
-import { createApiTokenQuery } from './auth';
+import {
+  createApiTokenQuery,
+  handleFetchResponse,
+  withApiTokenRetry,
+} from './auth';
 import { queryKeys } from './key';
 
 export type FetchPaginatedEmailsParams = PreviewsInboxCursorParams & {
@@ -34,8 +38,8 @@ const fetchPaginatedEmails = async ({
   const response = await platformFetch(url.toString(), {
     headers: { Authorization },
   });
-  if (!response.ok)
-    throw new Error('Failed to fetch email', { cause: response });
+
+  await handleFetchResponse(response, 'Failed to fetch email');
 
   const previews: ApiPaginatedThreadCursor = await response.json();
   return previews;
@@ -70,7 +74,9 @@ export function createEmailsInfiniteQuery(
     return {
       queryKey: queryKeys.email({ infinite: true, ...params() }),
       queryFn: ({ pageParam }) =>
-        fetchPaginatedEmails({ apiToken: authQuery.data, ...pageParam }),
+        withApiTokenRetry(authQuery, (apiToken) =>
+          fetchPaginatedEmails({ apiToken, ...pageParam })
+        ),
       initialPageParam: params(),
       getNextPageParam: ({ next_cursor: cursor }) =>
         cursor ? { ...params(), cursor } : undefined,

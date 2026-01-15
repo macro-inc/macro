@@ -1,5 +1,6 @@
 import CheckCircle from '@icon/regular/check-circle.svg';
 import Spinner from '@icon/regular/spinner.svg';
+import { cn } from '@ui/utils/classname';
 import {
   type Accessor,
   createEffect,
@@ -17,6 +18,7 @@ interface FloatingInputLoaderProps {
   successDuration?: number;
   loadingText?: string;
   successText?: string;
+  class?: string;
 }
 
 export function FloatingInputLoader(props: FloatingInputLoaderProps) {
@@ -82,11 +84,13 @@ export function FloatingInputLoader(props: FloatingInputLoaderProps) {
 
   return (
     <div
-      class={`absolute bottom-full left-1/2 -translate-x-1/2 mb-2 transition-all duration-200 ease-out ${
+      class={cn(
+        'absolute bottom-full left-1/2 -translate-x-1/2 mb-2 transition-all duration-200 ease-out',
         isVisible()
           ? 'opacity-100 translate-y-0'
-          : 'opacity-0 translate-y-1 pointer-events-none'
-      }`}
+          : 'opacity-0 translate-y-1 pointer-events-none',
+        props.class
+      )}
     >
       <div class="flex items-center gap-2 px-3 py-1.5 rounded-md bg-panel border border-edge-muted shadow-sm">
         <Show

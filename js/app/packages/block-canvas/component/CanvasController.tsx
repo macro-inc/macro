@@ -7,7 +7,7 @@ import { useRenderMermaid } from '@block-canvas/util/mermaid';
 import { withAnalytics } from '@coparse/analytics';
 import { type BlockName, useBlockId, useIsNestedBlock } from '@core/block';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
-import type { DragEventWithData } from '@core/component/FileList/DraggableItem';
+import type { EntityDragEvent } from '@macro-entity';
 import { BasicHotkey } from '@core/component/Hotkey';
 import { OldMenu, OldMenuItem } from '@core/component/OldMenu';
 import {
@@ -816,7 +816,7 @@ export function CanvasController(props: ParentProps) {
     },
   ];
 
-  const wrapDndEvent = (event: DragEventWithData) => {
+  const wrapDndEvent = (event: EntityDragEvent) => {
     const currentPos = dragDropState?.active.sensor?.coordinates?.current;
     if (!currentPos) return;
     const mousePos = {
@@ -834,7 +834,7 @@ export function CanvasController(props: ParentProps) {
     };
   };
 
-  const attachImageOnDrag = (event: DragEventWithData) => {
+  const attachImageOnDrag = (event: EntityDragEvent) => {
     if (!event.droppable) return;
     track(TrackingEvents.BLOCKCANVAS.IMAGES.DSSIMAGE, {
       method: 'drag from sidebar',
@@ -860,7 +860,7 @@ export function CanvasController(props: ParentProps) {
     setSelectedTool(Tools.Select);
   };
 
-  const attachVideoOnDrag = (event: DragEventWithData) => {
+  const attachVideoOnDrag = (event: EntityDragEvent) => {
     if (!event.droppable) return;
     track(TrackingEvents.BLOCKCANVAS.VIDEOS.DSSVIDEO, {
       method: 'drag from sidebar',
@@ -888,29 +888,23 @@ export function CanvasController(props: ParentProps) {
     setSelectedTool(Tools.Move);
   };
 
-  const attachFileOnDrag = async (
-    event: DragEventWithData,
-    id: string,
-    isChat = false,
-    isRss = false,
-    isProject = false
-  ) => {
+  const attachFileOnDrag = async (event: EntityDragEvent, id: string) => {
     if (!event.droppable) return;
     track(TrackingEvents.BLOCKCANVAS.FILES.SIDEBARDND);
 
+    const entityType = event.draggable.data.type;
+
     // Track document mention and get UUID
     let mentionUuid: string | undefined;
-    if (blockId && !isChat && !isRss) {
+    if (blockId && entityType === 'document') {
       mentionUuid = await trackMention(blockId, 'document', id);
     }
 
     nodes.createNode(
       {
-        type: 'file',
+        type: 'entitymention',
         file: id,
-        isChat,
-        isRss,
-        isProject,
+        entityType,
         mentionUuid,
         x: (dragPosition()?.x ?? centerVec().x) - fileWidth / 2,
         y: (dragPosition()?.y ?? centerVec().y) - fileHeight / 2,
@@ -927,7 +921,7 @@ export function CanvasController(props: ParentProps) {
     setSelectedTool(Tools.Select);
   };
 
-  const dndDragMove = throttle((event: DragEventWithData) => {
+  const dndDragMove = throttle((event: EntityDragEvent) => {
     if (!droppable.isActiveDroppable) {
       setDragPosition();
       return;
@@ -938,7 +932,7 @@ export function CanvasController(props: ParentProps) {
     setDragPosition(clientToCanvas(mousePos));
   }, 60);
 
-  const dndDragEnd = (event: DragEventWithData) => {
+  const dndDragEnd = (event: EntityDragEvent) => {
     if (!dragPosition()) return;
     if (!canEdit()) return;
 
@@ -953,22 +947,18 @@ export function CanvasController(props: ParentProps) {
       attachImageOnDrag(event);
     } else if (res.blockName === 'video' && ENABLE_CANVAS_VIDEO) {
       attachVideoOnDrag(event);
-    } else if (res.blockName === 'chat') {
-      attachFileOnDrag(event, res.id, true, false);
-    } else if (res.blockName === 'project') {
-      attachFileOnDrag(event, res.id, false, false, true);
     } else {
-      attachFileOnDrag(event, res.id, false, false);
+      attachFileOnDrag(event, res.id);
     }
   };
 
   onDragEnd((event) => {
     if (event.droppable?.id !== 'canvas-input-' + _id) return;
-    dndDragEnd(event as DragEventWithData);
+    dndDragEnd(event as EntityDragEvent);
   });
 
   onDragMove((event) => {
-    dndDragMove(event as DragEventWithData);
+    dndDragMove(event as EntityDragEvent);
   });
 
   const [_mouseDownPos, setMouseDownPos] = mouseDownPositionSignal;

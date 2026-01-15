@@ -32,6 +32,7 @@ members = [
   "email_db_client",
   "email_refresh_handler",
   "email_scheduled_handler",
+  "email_sfs_delete_handler",
   "email_service",
   "email_service_client",
   "email_suppression_handler",

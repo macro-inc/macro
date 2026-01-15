@@ -4,7 +4,11 @@ import { SERVER_HOSTS } from 'core/constant/servers';
 import { platformFetch } from 'core/util/platformFetch';
 import type { Accessor } from 'solid-js';
 import type { ChannelEntity } from '../types/entity';
-import { createApiTokenQuery } from './auth';
+import {
+  createApiTokenQuery,
+  handleFetchResponse,
+  withApiTokenRetry,
+} from './auth';
 import { queryKeys } from './key';
 
 const fetchChannels = async ({ apiToken }: { apiToken?: string }) => {
@@ -17,8 +21,8 @@ const fetchChannels = async ({ apiToken }: { apiToken?: string }) => {
       headers: { Authorization },
     }
   );
-  if (!response.ok)
-    throw new Error('Failed to fetch channels', { cause: response });
+
+  await handleFetchResponse(response, 'Failed to fetch channels');
 
   const channels: ApiChannelWithLatest[] = await response.json();
   return channels;
@@ -30,7 +34,8 @@ export function createChannelsQuery(options?: {
   const authQuery = createApiTokenQuery();
   return useQuery(() => ({
     queryKey: queryKeys.all.channel,
-    queryFn: () => fetchChannels({ apiToken: authQuery.data }),
+    queryFn: () =>
+      withApiTokenRetry(authQuery, (apiToken) => fetchChannels({ apiToken })),
     select: (data) =>
       data.map(
         (channel): ChannelEntity => ({

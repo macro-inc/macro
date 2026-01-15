@@ -1,6 +1,8 @@
 use super::constant::MAX_RECURSIONS;
 use crate::openai_toolset::OpenAIToolSetExt;
-use crate::tool::types::{AsyncToolSet, PartialToolCall, StreamPart, ToolCall, ToolResult};
+use crate::tool::types::{
+    AsyncToolSet, PartialToolCall, RequestContext, StreamPart, ToolCall, ToolResult,
+};
 use crate::tool::types::{ChatCompletionStream, ExtendedPartStream, PartOrExt, ToolResponse};
 use crate::types::openai::message::convert_message;
 use crate::types::traits::{ExtendedOpenAIStream, ExtendedOpenAIStreamItem};
@@ -22,14 +24,13 @@ struct ProcessedStream {
     pub tool_responses: Vec<ToolResponse>,
 }
 
-pub struct Chat<I, T, R>
+pub struct Chat<I, T>
 where
     I: ExtendedClient + Send + Sync,
     T: Clone + Send + Sync + 'static,
-    R: Send + Sync + 'static,
 {
     client: I,
-    toolset: Arc<AsyncToolSet<T, R>>,
+    toolset: Arc<AsyncToolSet<T>>,
     request: CreateChatCompletionRequest,
     messages: Vec<ChatCompletionRequestMessage>,
     context: T,
@@ -38,13 +39,12 @@ where
     user_id: String,
 }
 
-impl<I, T, R> Chat<I, T, R>
+impl<I, T> Chat<I, T>
 where
     I: ExtendedClient + Send + Sync,
     T: Clone + Send + Sync,
-    R: Clone + Send + Sync,
 {
-    pub fn new(client: I, toolset: Arc<AsyncToolSet<T, R>>, context: T) -> Chat<I, T, R> {
+    pub fn new(client: I, toolset: Arc<AsyncToolSet<T>>, context: T) -> Chat<I, T> {
         Chat {
             client,
             toolset,
@@ -60,7 +60,7 @@ where
     pub async fn send_message(
         &mut self,
         request: ChatCompletionRequest,
-        request_context: R,
+        request_context: RequestContext,
         user_id: String,
     ) -> Result<ChatCompletionStream<'_>> {
         self.request = request.try_into()?;
@@ -84,7 +84,7 @@ where
 
     async fn make_chat_completion_stream(
         &mut self,
-        request_context: R,
+        request_context: RequestContext,
     ) -> Result<ChatCompletionStream<'_>> {
         let item_stream = stream!({
             let mut stream_parts = vec![];
@@ -144,7 +144,7 @@ where
     async fn process_stream_parts(
         &mut self,
         stream_parts: Vec<PartOrExt<I::ResponseExtension>>,
-        request_context: R,
+        request_context: RequestContext,
     ) -> ProcessedStream {
         let mut messages: Vec<ChatCompletionRequestMessage> = vec![];
         let mut tool_stream_parts: Vec<ToolResponse> = vec![];
@@ -405,7 +405,7 @@ mod tests {
     };
     use serde_json::json;
 
-    fn create_mock_chat() -> Chat<NoOpClient, String, String> {
+    fn create_mock_chat() -> Chat<NoOpClient, String> {
         let client = NoOpClient;
         let toolset = Arc::new(AsyncToolSet::new());
         Chat::new(client, toolset, "test_context".to_string())

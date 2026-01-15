@@ -299,9 +299,9 @@ export function Dock() {
                     }
                   }
                 }}
-                class="p-1 *:h-4"
+                class="p-1"
               >
-                <SplitIcon />
+                <SplitIcon class="h-4"/>
               </Button>
               </div>
 

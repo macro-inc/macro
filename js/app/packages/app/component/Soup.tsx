@@ -37,7 +37,6 @@ import { storageServiceClient } from '@service-storage/client';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Navigate } from '@solidjs/router';
 import { useMutation, useQueryClient } from '@tanstack/solid-query';
-import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import {
   batch,
@@ -257,6 +256,7 @@ function EntityTypeIconFilter() {
         config.handler();
         return true;
       },
+      registrationType: 'add',
     })
   );
 
@@ -657,18 +657,6 @@ export function Soup() {
   const [isDragging, setIsDragging] = createSignal(false);
   const [isValidDrag, setIsValidDrag] = createSignal(true);
 
-  const droppableId = 'soup-drop-zone';
-  const droppable = createDroppable(droppableId);
-
-  const dragDropContext = useDragDropContext();
-  if (dragDropContext) {
-    dragDropContext[1].onDragEnd((event) => {
-      if (!event.droppable || event.droppable.id !== droppableId) return;
-
-      // TODO: moveToFolder action
-    });
-  }
-
   const handleFileUpload = useHandleFileUpload();
 
   const notificationSource = useGlobalNotificationSource();
@@ -678,6 +666,9 @@ export function Soup() {
     (notification) => {
       entityQueryClient.invalidateQueries({
         queryKey: queryKeys.all.channel,
+      });
+      entityQueryClient.invalidateQueries({
+        queryKey: queryKeys.all.dss,
       });
       invalidateEntityNotifications(notification.entity_id);
     }
@@ -714,7 +705,6 @@ export function Soup() {
   return (
     <div
       class="relative flex flex-col bg-panel size-full"
-      use:droppable
       use:fileFolderDrop={{
         onDrop: (fileEntries, folderEntries) => {
           handleFileFolderDrop(fileEntries, folderEntries, handleFileUpload);
@@ -726,14 +716,12 @@ export function Soup() {
         onDragEnd: () => setIsDragging(false),
       }}
     >
-      <Show when={isDragging() || droppable.isActiveDroppable}>
+      <Show when={isDragging()}>
         <FileDropOverlay valid={isValidDrag()}>
           <Show when={!isValidDrag()}>
-            <div class="font-mono text-failure">[!] Invalid file type</div>
+            <div class="text-failure">[!] Invalid file type</div>
           </Show>
-          <div class="font-mono">
-            Drop any file here to add it to your workspace
-          </div>
+          <div>Drop any file here to add it to your workspace</div>
         </FileDropOverlay>
       </Show>
 

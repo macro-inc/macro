@@ -6,6 +6,7 @@
     "packages/*"
   ],
   "scripts": {
+    "preinstall": "node -e \"if (process.env.npm_execpath && !process.env.npm_execpath.includes('bun')) { console.error('Please use bun as the package manager'); process.exit(1); }\"",
     "lint": "biome check .",
     "format": "biome check --write .",
     "check": "tsc --noEmit"

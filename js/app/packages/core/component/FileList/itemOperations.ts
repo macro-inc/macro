@@ -317,9 +317,7 @@ export async function bulkMoveToFolder(
   };
 }
 
-/**
- * Note: Currently we do not support copying projects.
- */
+/** NOTE: Currently we do not support copying projects */
 export async function copyItem(args: {
   itemType: Exclude<ItemType, 'project'>;
   id: string;
@@ -327,13 +325,16 @@ export async function copyItem(args: {
 }): Promise<string | null> {
   const { itemType, id, name } = args;
   const { showPaywall } = usePaywallState();
+  const createCopyName = (originalName: string): string => {
+    return `${originalName} copy`;
+  };
 
   let newId = '';
   switch (itemType) {
     case 'document': {
       const result = await storageServiceClient.copyDocument({
         documentId: id,
-        documentName: `${name} copy`,
+        documentName: createCopyName(name),
       });
       if (isErr(result)) return null;
       newId = result[1].documentId;
@@ -342,7 +343,7 @@ export async function copyItem(args: {
     case 'chat': {
       const result = await cognitionApiServiceClient.copyChat({
         chat_id: id,
-        name,
+        name: createCopyName(name),
       });
       if (isPaymentError(result)) {
         showPaywall();

@@ -6,18 +6,24 @@ import { CircleSpinner } from '@core/component/CircleSpinner';
 import { PopupPreview } from '@core/component/DocumentPreview';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { floatWithElement } from '@core/component/LexicalMarkdown/directive/floatWithElement';
-import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { itemToBlockName } from '@core/constant/allBlocks';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { type PreviewItemNoAccess, useItemPreview } from '@core/signal/preview';
 import { matches } from '@core/util/match';
 import LockKey from '@phosphor-icons/core/regular/lock-key.svg';
 import Question from '@phosphor-icons/core/regular/question.svg';
-import type { FileType } from '@service-storage/generated/schemas/fileType';
 import { debounce } from '@solid-primitives/scheduled';
-import { createEffect, createSignal, Match, Show, Switch } from 'solid-js';
-import { useSplitLayout } from '../../../app/component/split-layout/layout';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js';
+import { useSplitLayout } from 'app/component/split-layout/layout';
 import { DRAG_THRESHOLD, type RenderMode, Tools } from '../../constants';
-import type { FileNode } from '../../model/CanvasModel';
+import type { EntityMentionNode } from '../../model/CanvasModel';
 import { fileWidth } from '../../operation/file';
 import { type Vector2, vec2 } from '../../util/vector2';
 import { BaseCanvasRectangle } from './BaseCanvasRectangle';
@@ -27,7 +33,7 @@ false && floatWithElement;
 const { track, TrackingEvents } = withAnalytics();
 
 function ErrorMessage(props: {
-  node: FileNode;
+  node: EntityMentionNode;
   error: 'UNAUTHORIZED' | 'MISSING' | 'INVALID' | 'LOADING' | undefined;
 }) {
   const { currentScale } = useRenderState();
@@ -83,16 +89,13 @@ function ErrorMessage(props: {
   );
 }
 
-export function File(props: { node: FileNode; mode: RenderMode }) {
+export function File(props: { node: EntityMentionNode; mode: RenderMode }) {
   let fileRef!: HTMLDivElement;
 
   const [error, setError] = createSignal<
     'UNAUTHORIZED' | 'MISSING' | 'INVALID' | 'LOADING' | undefined
   >('LOADING');
 
-  const [fileName, setFileName] = createSignal<string>();
-  const [fileType, setFileType] = createSignal<FileType | 'chat'>();
-  const [blockName, setBlockName] = createSignal<string>();
   const blockId = useBlockId();
 
   const [previewOpen, setPreviewOpen] = createSignal(false);
@@ -105,11 +108,7 @@ export function File(props: { node: FileNode; mode: RenderMode }) {
 
   const [item] = useItemPreview({
     id: props.node.file,
-    type: props.node.isChat
-      ? 'chat'
-      : props.node.isProject
-        ? 'project'
-        : 'document',
+    type: props.node.entityType,
   });
 
   createEffect(() => {
@@ -128,22 +127,73 @@ export function File(props: { node: FileNode; mode: RenderMode }) {
     }
     if (currentItem.access === 'access') {
       setError();
-      if (currentItem.type === 'document') {
-        setFileName(currentItem.name);
-        setFileType(currentItem.fileType);
-        setBlockName(fileTypeToBlockName(currentItem.fileType!));
-      } else if (currentItem.type === 'chat') {
-        setFileName(currentItem.name);
-        setFileType('chat');
-        setBlockName('chat');
-        setError();
-      } else if (currentItem.type === 'project') {
-        setFileName(currentItem.name);
-        setFileType('project' as FileType);
-        setBlockName('project');
-        setError();
-      }
     }
+  });
+
+  // Get icon type using the same logic as EntityWithEverything
+  const iconType = createMemo(() => {
+    const currentItem = item();
+    if (
+      !currentItem ||
+      currentItem.loading ||
+      currentItem.access !== 'access'
+    ) {
+      return 'default';
+    }
+
+    switch (currentItem.type) {
+      case 'channel':
+        switch (currentItem.channelType) {
+          case 'direct_message':
+            return 'directMessage';
+          case 'organization':
+            return 'company';
+          default:
+            return 'channel';
+        }
+      case 'document':
+        // TODO: consolidate is task logic, see isTaskEntity
+        if (
+          currentItem.fileType === 'md' &&
+          currentItem.subType?.type === 'task'
+        ) {
+          return 'task';
+        }
+        if (currentItem.fileType) return currentItem.fileType;
+        return 'default';
+      case 'chat':
+        return 'chat';
+      case 'project':
+        return 'project';
+      case 'email':
+        return 'email';
+      default:
+        return 'default';
+    }
+  });
+
+  const fileName = createMemo(() => {
+    const currentItem = item();
+    if (
+      !currentItem ||
+      currentItem.loading ||
+      currentItem.access !== 'access'
+    ) {
+      return '';
+    }
+    return currentItem.name;
+  });
+
+  const blockName = createMemo(() => {
+    const currentItem = item();
+    if (
+      !currentItem ||
+      currentItem.loading ||
+      currentItem.access !== 'access'
+    ) {
+      return undefined;
+    }
+    return itemToBlockName(currentItem);
   });
 
   const { selectedTool, mouseIsDown, activeTool } = useToolManager();
@@ -210,7 +260,7 @@ export function File(props: { node: FileNode; mode: RenderMode }) {
         useSimpleSelectionBox={true}
       >
         <Show
-          when={!error() && fileType()}
+          when={!error()}
           fallback={<ErrorMessage error={error()} node={props.node} />}
         >
           <div
@@ -233,11 +283,11 @@ export function File(props: { node: FileNode; mode: RenderMode }) {
                       height: 18 * (props.node.width / fileWidth) + 'px',
                     }}
                   >
-                    <EntityIcon targetType={fileType()} size={'fill'} />
+                    <EntityIcon targetType={iconType()} size={'fill'} />
                   </div>
                   {fileName()}
                 </div>
-                <Show when={previewOpen()}>
+                <Show when={previewOpen() && blockName()}>
                   <PopupPreview
                     item={item}
                     floatRef={fileRef}

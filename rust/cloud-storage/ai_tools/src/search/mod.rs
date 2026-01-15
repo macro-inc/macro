@@ -6,8 +6,8 @@ pub mod web;
 
 pub fn search_toolset() -> AiToolSet {
     AsyncToolSet::new()
-        .add_tool::<search_service::name::NameSearch>()
+        .add_tool::<search_service::name::NameSearch, _>()
         .expect("failed to add name search tool")
-        .add_tool::<search_service::content::ContentSearch>()
+        .add_tool::<search_service::content::ContentSearch, _>()
         .expect("failed to add content search tool")
 }

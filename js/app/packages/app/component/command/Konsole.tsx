@@ -135,6 +135,7 @@ export function KommandMenuInner(props: {
       fuzzyWeight: hasQuery ? 0.7 : 0.1,
       timeWeight: hasQuery ? 0.3 : 0.9,
       minFuzzyThreshold: hasQuery ? 0.1 : 0,
+      commaSeparatedChannelMatch: true,
     };
   });
 

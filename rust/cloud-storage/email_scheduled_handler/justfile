@@ -10,7 +10,7 @@ check:
   SQLX_OFFLINE=true cargo check
 
 create-queues:
-	AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name my-test-scheduled-queue.fifo
+	AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name sfs-delete-queue.fifo
 
 prepare_db:
 	DATABASE_URL=postgres://user:password@localhost:5432/macrodb cargo sqlx prepare

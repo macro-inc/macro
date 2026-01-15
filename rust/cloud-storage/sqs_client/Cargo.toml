@@ -18,15 +18,17 @@ default = [
   "gmail",
   "organization_retention",
   "search",
+  "sfs_delete",
   "sfs_uploader",
   "upload_extractor",
 ]
 document = []
 document_text_extractor = []
-email = ["model", "models_email"]
+email = ["models_email"]
 gmail = ["model", "uuid"]
 organization_retention = []
 search = ["chrono", "model", "models_opensearch", "uuid", "futures"]
+sfs_delete = []
 sfs_uploader = []
 upload_extractor = []
 

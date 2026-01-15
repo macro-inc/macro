@@ -356,12 +356,9 @@ export const MoveToProjectView = (props: {
         props.entity.type === 'chat' ||
         props.entity.type === 'project'
       ) {
-        // Find the project name for the toast message
-        const projectName = selectedProject()?.name || 'Unknown Project';
-
         await moveToProjectMutation.mutateAsync({
           entity: props.entity,
-          project: { id: projectId, name: projectName },
+          project: { id: projectId },
         });
       }
     }

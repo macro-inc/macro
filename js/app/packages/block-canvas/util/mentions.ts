@@ -1,4 +1,7 @@
-import { type CanvasNode, isFileNode } from '@block-canvas/model/CanvasModel';
+import {
+  type CanvasNode,
+  isEntityMentionNode,
+} from '@block-canvas/model/CanvasModel';
 import { useTextNodeEditors } from '@block-canvas/store/textNodeEditors';
 import { untrackMention } from '@core/signal/mention';
 import {
@@ -46,7 +49,7 @@ export async function untrackMentionsInTextNode(
   nodeId: string
 ) {
   const getTextNodeEditor = useTextNodeEditors().getEditor;
-  if (isFileNode(node) && !node.isChat && !node.isRss) {
+  if (isEntityMentionNode(node) && node.entityType === 'document') {
     if (node.mentionUuid) {
       await untrackMention(blockId, node.mentionUuid);
     }

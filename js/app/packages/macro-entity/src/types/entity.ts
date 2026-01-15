@@ -76,6 +76,7 @@ export const getEntityProjectId = (e: EntityData): string | false => {
 export type EmailEntity = EntityBase & {
   type: 'email';
   isRead: boolean;
+  isDraft: boolean;
   snippet?: string;
   isImportant: boolean;
   done: boolean;

@@ -133,14 +133,14 @@ export const FilterValueSelectMulti: Component<FilterValueSelectMultiProps> = (
       <Show
         when={!isLoading() || props.values.length === 0}
         fallback={
-          <div class="h-6 px-1.5 text-[10px] text-ink-muted border border-edge font-mono flex items-center">
+          <div class="h-6 px-1.5 text-xxs text-ink-muted border border-edge font-mono flex items-center">
             ...
           </div>
         }
       >
         <For each={props.values}>
           {(optionId) => (
-            <div class="group relative h-6 px-1.5 text-[10px] text-ink border border-edge bg-panel font-mono flex items-center">
+            <div class="group relative h-6 px-1.5 text-xxs text-ink border border-edge bg-panel font-mono flex items-center">
               <span class="whitespace-nowrap">{getDisplayValue(optionId)}</span>
               {/* X shows on hover, overlays the text */}
               <button
@@ -163,7 +163,7 @@ export const FilterValueSelectMulti: Component<FilterValueSelectMultiProps> = (
             <button
               type="button"
               onClick={handleAddClick}
-              class="h-6 px-2 text-[10px] text-ink-muted border border-edge hover:bg-hover font-mono flex items-center"
+              class="h-6 px-2 text-xxs text-ink-muted border border-edge hover:bg-hover font-mono flex items-center"
             >
               {isLoading()
                 ? '...'
@@ -179,7 +179,7 @@ export const FilterValueSelectMulti: Component<FilterValueSelectMultiProps> = (
             value={searchQuery()}
             onInput={(e) => setSearchQuery(e.currentTarget.value)}
             placeholder="Search..."
-            class="h-6 px-2 min-w-16 w-fit text-[10px] text-ink border border-edge hover:bg-hover focus:ring-1 focus:ring-accent font-mono placeholder:text-ink-muted"
+            class="h-6 px-2 min-w-16 w-fit text-xxs text-ink border border-edge hover:bg-hover focus:ring-1 focus:ring-accent font-mono placeholder:text-ink-muted"
           />
           <div
             ref={dropdownRef}
@@ -188,7 +188,7 @@ export const FilterValueSelectMulti: Component<FilterValueSelectMultiProps> = (
             <Show
               when={availableOptions().length > 0}
               fallback={
-                <div class="px-3 py-2 text-[10px] text-ink-muted text-center">
+                <div class="px-3 py-2 text-xxs text-ink-muted text-center">
                   {isLoading()
                     ? 'Loading...'
                     : options().length === 0
@@ -208,7 +208,7 @@ export const FilterValueSelectMulti: Component<FilterValueSelectMultiProps> = (
                       e.stopPropagation();
                       handleSelectOption(option);
                     }}
-                    class="w-full px-2 py-1.5 text-[10px] text-ink hover:bg-hover text-left"
+                    class="w-full px-2 py-1.5 text-xxs text-ink hover:bg-hover text-left"
                   >
                     {getOptionDisplayValue(option)}
                   </button>
