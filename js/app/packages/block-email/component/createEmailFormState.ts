@@ -53,6 +53,18 @@ type EmailFormState = {
   markdownBody: string;
 };
 
+const EMPTY_FORM_STATE: EmailFormState = {
+  recipients: {
+    to: [],
+    cc: [],
+    bcc: [],
+  },
+  replyType: 'reply',
+  withQuotedText: false,
+  subject: '',
+  markdownBody: '',
+};
+
 /**
  * Creates a state object for the email form.
  * @param purpose - The purpose of the form. Are we managing the state of a draft reply or just a draft message
@@ -236,6 +248,22 @@ export function createEmailFormState(
     callDirty();
   };
 
+  const clear = () => {
+    setState(reconcile({ ...EMPTY_FORM_STATE }));
+    const recipients = state.recipients;
+
+    // Notify context of the full recipient list after reset
+    const all = [...recipients.to, ...recipients.cc, ...recipients.bcc];
+    options?.onRecipientsChange?.(unwrap(all));
+
+    setShouldFocusInput(false);
+
+    setAttachments([]);
+
+    // Mark as dirty to propagate change
+    callDirty();
+  };
+
   const value = {
     draft,
     replyAppended: () => state.withQuotedText,
@@ -249,6 +277,7 @@ export function createEmailFormState(
     shouldFocusInput,
     setShouldFocusInput,
     reset,
+    clear,
     setOnDirty: (cb?: () => void) => {
       setOnDirtyCb(() => cb);
     },
