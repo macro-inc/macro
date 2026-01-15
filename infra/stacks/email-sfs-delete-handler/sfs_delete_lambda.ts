@@ -111,8 +111,7 @@ export class EmailSfsDeleteHandler extends pulumi.ComponentResource {
       {
         name: `${EMAIL_LAMBDA_BASE_NAME}-rule-${stack}`,
         // run at 7am UTC every day, when people be sleepin
-        scheduleExpression:
-          stack === 'prod' ? 'cron(0 8 * * ? *)' : 'rate(5 minutes)',
+        scheduleExpression: 'cron(0 8 * * ? *)',
         tags: this.tags,
       },
       { parent: this }
