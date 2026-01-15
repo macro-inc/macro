@@ -25,6 +25,10 @@ import { QuickCreateMenu } from './QuickCreateMenu';
 import { RightbarWrapper } from './rightbar/Rightbar';
 import { SettingsWrapper } from './settings/SettingsWrapper';
 import { ShortcutsHelper } from './settings/ShortcutsHelper';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { info } from '@tauri-apps/plugin-log';
+import { setVirtualKeyboardVisible, virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
+import { cn } from '@ui/utils/classname';
 
 const AUTH_URLS = [
   '/app/login',
@@ -59,17 +63,18 @@ export function Layout(props: RouteSectionProps) {
   if (isIOS) {
     // We are tracking viewport height, and using that to set a CSS variable and the viewport offset, so that we can properly constrain the viewport-height for mobile in response to changes such as the virtual keyboard appearing
     let previousViewportHeight = visualViewport?.height || 0;
-    console.log('previousViewportHeight', previousViewportHeight);
     const handleResize = () => {
       if (window.visualViewport) {
         const newViewportHeight = window.visualViewport.height;
         if (newViewportHeight < previousViewportHeight) {
+          setVirtualKeyboardVisible(true);
           const vh = newViewportHeight * 0.01;
           document.documentElement.style.setProperty('--dvh', `${vh}px`);
           setTimeout(() => {
             window.scrollTo(0, 0);
           });
         } else {
+          setVirtualKeyboardVisible(false);
           document.documentElement.style.setProperty('--dvh', '1dvh');
         }
         previousViewportHeight = newViewportHeight;
@@ -85,6 +90,7 @@ export function Layout(props: RouteSectionProps) {
             !isEditableInput(e.relatedTarget)))
       ) {
         document.documentElement.style.setProperty('--dvh', '1dvh');
+        setVirtualKeyboardVisible(false);
       }
     };
 
@@ -102,6 +108,30 @@ export function Layout(props: RouteSectionProps) {
           window.visualViewport.removeEventListener('scroll', handleResize);
         }
         document.removeEventListener('focusout', handleFocusOut);
+      });
+    });
+  }
+
+  if (isNativeMobilePlatform()) {
+    let initialViewportHeight = visualViewport?.height || 0;
+
+    type VirtualKeyboardEvent = CustomEventInit<{
+      height: number;
+      duration: number;
+    }>;
+
+    onMount(() => {
+      window.addEventListener('keyboardWillShow', (event: VirtualKeyboardEvent) => {
+        setVirtualKeyboardVisible(true);
+        const newViewportHeight =
+          (visualViewport?.height ?? 0) - (event.detail?.height ?? 0);
+        const vh = newViewportHeight * 0.01;
+        document.documentElement.style.setProperty('--dvh', `${vh}px`);
+      });
+
+      window.addEventListener('keyboardWillHide', (event: KeyboardEvent) => {
+        setVirtualKeyboardVisible(false);
+        document.documentElement.style.setProperty('--dvh', '1dvh');
       });
     });
   }
@@ -140,12 +170,16 @@ export function Layout(props: RouteSectionProps) {
 
   return (
     <div
-      class="relative flex flex-col justify-between w-dvw h-[calc(var(--dvh,1dvh)*100)]"
+      class={cn(
+        'relative flex flex-col justify-between w-dvw h-[calc(var(--dvh,1dvh)*100)]',
+        {
+          'pb-[max(env(safe-area-inset-bottom,0px),var(--tauri-inset-bottom,0px))]':
+            !virtualKeyboardVisible(),
+        }
+      )}
       style={{
         'padding-top':
           'max(env(safe-area-inset-top, 0px), var(--tauri-inset-top, 0px))',
-        'padding-bottom':
-          'max(env(safe-area-inset-bottom, 0px), var(--tauri-inset-bottom, 0px))',
         'padding-left':
           'max(env(safe-area-inset-left, 0px), var(--tauri-inset-left, 0px))',
         'padding-right':

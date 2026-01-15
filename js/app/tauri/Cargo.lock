@@ -100,6 +100,7 @@ dependencies = [
  "tauri-plugin-os",
  "tauri-plugin-safe-area-insets",
  "tauri-plugin-single-instance",
+ "tauri-plugin-virtual-keyboard",
  "tauri-plugin-websocket",
  "thiserror 2.0.17",
  "tokio",
@@ -4723,6 +4724,17 @@ dependencies = [
  "tracing",
  "windows-sys 0.60.2",
  "zbus",
+]
+
+[[package]]
+name = "tauri-plugin-virtual-keyboard"
+version = "0.1.0"
+source = "git+https://github.com/voxelbee/tauri-plugin-virtual-keyboard?branch=main#70e8e8325b5ff7d681ef5f3b996ac083d4fc5a01"
+dependencies = [
+ "serde",
+ "tauri",
+ "tauri-plugin",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
