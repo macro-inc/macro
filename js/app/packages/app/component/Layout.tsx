@@ -64,7 +64,7 @@ export function Layout(props: RouteSectionProps) {
 
   if (isIOS) {
     // We are tracking viewport height, and using that to set a CSS variable and the viewport offset, so that we can properly constrain the viewport-height for mobile in response to changes such as the virtual keyboard appearing
-    let previousViewportHeight = visualViewport?.height || 0;
+    let previousViewportHeight = window.visualViewport?.height || 0;
     const handleResize = () => {
       if (window.visualViewport) {
         const newViewportHeight = window.visualViewport.height;
@@ -123,7 +123,7 @@ export function Layout(props: RouteSectionProps) {
     const handleKeyboardWillShow = (event: VirtualKeyboardEvent) => {
       setVirtualKeyboardVisible(true);
       const newViewportHeight =
-        (visualViewport?.height ?? 0) - (event.detail?.height ?? 0);
+        (window.visualViewport?.height ?? 0) - (event.detail?.height ?? 0);
       const vh = newViewportHeight * 0.01;
       document.documentElement.style.setProperty('--dvh', `${vh}px`);
     };
