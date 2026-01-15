@@ -1,5 +1,5 @@
 use crate::tool_context::{RequestContext, ToolServiceContext};
-use ai::tool::{AsyncTool, ToolCallError, ToolResult};
+use ai_toolset::{AsyncTool, ToolCallError, ToolResult};
 use anyhow::anyhow;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -472,8 +472,8 @@ impl Read {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ai::tool::types::tool_object::validate_tool_schema;
-    use ai::{generate_tool_input_schema, generate_tool_output_schema};
+    use ai_toolset::tool_object::validate_tool_schema;
+    use ai_toolset::{generate_tool_input_schema, generate_tool_output_schema};
 
     // run `cargo test -p ai_tools read::tests::print_input_schema -- --nocapture --include-ignored`
     #[test]

@@ -1,6 +1,6 @@
 use super::types::{PAGE_SIZE, SearchToolResponse};
 use crate::tool_context::{RequestContext, ToolServiceContext};
-use ai::tool::{AsyncTool, ToolCallError, ToolResult};
+use ai_toolset::{AsyncTool, ToolCallError, ToolResult};
 use async_trait::async_trait;
 use models_search::{
     MatchType,
@@ -76,8 +76,8 @@ impl AsyncTool<ToolServiceContext, RequestContext> for ContentSearch {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ai::generate_tool_input_schema;
-    use ai::tool::types::tool_object::validate_tool_schema;
+    use ai_toolset::generate_tool_input_schema;
+    use ai_toolset::tool_object::validate_tool_schema;
 
     #[test]
     fn test_content_search_schema_validation() {
