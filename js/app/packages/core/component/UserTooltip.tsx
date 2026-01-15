@@ -53,40 +53,7 @@ export function UserTooltip(props: UserTooltipProps) {
     }
   };
 
-  const createAndOpenTask = async (e: PointerEvent | MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (props.id) {
-      try {
-        const documentId = await createTask({
-          propertyValues: [
-            {
-              propertyId: SYSTEM_PROPERTY_IDS.ASSIGNEES,
-              value: {
-                type: 'multi_entity_reference',
-                references: [
-                  {
-                    entity_id: props.id,
-                    entity_type: EntityType.USER,
-                  },
-                ],
-              },
-            },
-          ],
-        });
-        if (documentId) {
-          replaceOrInsertSplit({
-            type: 'task',
-            id: documentId,
-          });
-        } else {
-          toast.failure('Failed to create task');
-        }
-      } catch {
-        toast.failure('Failed to create task');
-      }
-    }
-  };
+  // TODO (seamus): add assign task button once launch popovet split with state is possible
 
   const buttonStyle =
     'px-3 text-xs w-full justify-start hover-transition-bg hover:bg-hover';
@@ -155,16 +122,6 @@ export function UserTooltip(props: UserTooltipProps) {
               <Button onClick={openDM} class={buttonStyle}>
                 <WideChat class="w-3.5 h-3.5" />
                 DM
-              </Button>
-            </Show>
-            <Show
-              when={
-                props.id && !props.isDeleted && props.id !== currentUserId()
-              }
-            >
-              <Button onClick={createAndOpenTask} class={buttonStyle}>
-                <WideTask class="w-3.5 h-3.5" />
-                Assign Task
               </Button>
             </Show>
           </div>
