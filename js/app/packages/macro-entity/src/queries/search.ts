@@ -249,6 +249,9 @@ const useMapSearchResponseItem = () => {
           isImportant: singleMessage
             ? messageHits[0].labels.includes('IMPORTANT')
             : false,
+          isDraft: singleMessage
+            ? messageHits[0].labels.includes('DRAFT')
+            : false,
           done: singleMessage
             ? !messageHits[0].labels.includes('INBOX')
             : false,
