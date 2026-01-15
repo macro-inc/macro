@@ -416,7 +416,7 @@ function EmailContent(props: EmailViewProps) {
         <FloatingInputLoader
           isLoading={context.query.isFetching}
           loadingText="Loading messages"
-          class="top-0"
+          class="top-2"
         />
         <Show
           when={
