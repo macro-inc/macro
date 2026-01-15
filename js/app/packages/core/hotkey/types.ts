@@ -1,6 +1,22 @@
 import type { Component, JSX } from 'solid-js';
 import type { HotkeyToken } from './tokens';
 
+export const HOTKEY_PRIORITY_DEFAULT = 0;
+export const HOTKEY_PRIORITY_LOW = 1;
+export const HOTKEY_PRIORITY_NORMAL = 2;
+export const HOTKEY_PRIORITY_HIGH = 3;
+export const HOTKEY_PRIORITY_CRITICAL = 4;
+
+const HOTKEY_TYPE = [
+  HOTKEY_PRIORITY_DEFAULT,
+  HOTKEY_PRIORITY_LOW,
+  HOTKEY_PRIORITY_NORMAL,
+  HOTKEY_PRIORITY_HIGH,
+  HOTKEY_PRIORITY_CRITICAL,
+] as const;
+
+type HotkeyPriority = (typeof HOTKEY_TYPE)[number];
+
 export interface HotkeyCommand {
   // Used to identify the hotkey in UI elements. Needs to be unique to a particular scope.
   hotkeyToken?: HotkeyToken;
@@ -14,7 +30,7 @@ export interface HotkeyCommand {
   description: string | (() => string);
   // If true, the keyDownHandler will be run even if the input is focused.
   runWithInputFocused: boolean;
-  // If the keyDownHandler returns true, we won't look for other commands with same hotkey.
+  // If the keyDownHandler returns true, we won't look for other commands with same hotkey in parent scopes or lateral handlers.
   keyDownHandler?: (e?: KeyboardEvent) => boolean;
   // Optional keyUpHandler: if the keys of this hotkey are satisfied in a particular scope, the keyUpHandler will be triggered when the key is released, even if focus is lost.
   keyUpHandler?: (e: KeyboardEvent) => void;
@@ -22,6 +38,8 @@ export interface HotkeyCommand {
   activateCommandScopeId?: string;
   // The priority of the command for ordering hotkey display lists. Note: registerHotkey only accepts number 1-10, but here we allow any number, so that we can sort as needed.
   displayPriority?: number;
+  // Priority for ordering handler execution. Higher priority handlers run first. Defaults to 0.
+  handlerPriority?: HotkeyPriority;
   // If true, hotkey command can be hidden from the UI. It will still run, but will not be displayed.
   hide?: boolean | (() => boolean);
   // Optional icon to display in the command palette.
@@ -70,7 +88,7 @@ export interface HotkeyRegistrationOptions {
 
   /**
    * Function called when hotkey is pressed.
-   * If it returns true, the event will prevent default and stop propagation.
+   * If it returns true, the event will prevent default and stop propagation to parent scopes and registered handlers to same scope.
    */
   keyDownHandler: (e?: KeyboardEvent) => boolean;
 
@@ -100,6 +118,21 @@ export interface HotkeyRegistrationOptions {
    * 1: Minimal priority.
    */
   displayPriority?: CommandDisplayPriority;
+
+  /**
+   * Priority for ordering handler execution when multiple handlers are registered for the same hotkey.
+   * Higher priority handlers run first. Defaults to 0.
+   */
+  handlerPriority?: HotkeyPriority;
+
+  /**
+   * Controls how this handler is added when a handler for the same hotkey already exists.
+   * - 'override': Replace existing handler (default behavior)
+   * - 'add': Add this handler to the list of handlers for this hotkey
+   * @default 'override'
+   */
+  registrationType?: 'add' | 'override';
+
   /**
    * If true, hotkey command can be hidden from the UI. It will still run, but may not be displayed.
    * Can be either a boolean or a function that returns a boolean for reactive behavior.
@@ -131,8 +164,8 @@ export type ScopeNodeBase = {
   description?: string;
   parentScopeId?: string;
   childScopeIds: string[];
-  // Map of hotkey -> commands
-  hotkeyCommands: Map<ValidHotkey, HotkeyCommand>;
+  // Map of hotkey -> array of commands (multiple handlers can be registered for the same hotkey)
+  hotkeyCommands: Map<ValidHotkey, HotkeyCommand[]>;
   // A list of commands that don't have hotkeys.
   unkeyedCommands: HotkeyCommand[];
   // If true, this scope is detached from the DOM tree, it's parent is global.

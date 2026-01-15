@@ -501,7 +501,7 @@
 
 @theme default {
     /* Font families */
-    --font-sans: "Forma Macro", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    --font-sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
     --font-mono: "Forma DJR Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     --font-serif: "Georgia", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
 
@@ -598,7 +598,7 @@
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
 
-        font-size: 16.5px;
+        font-size: 16px;
         /* Need to set opsz here so that it will apply to MD */
         font-variation-settings: "opsz" 11;
         font-synthesis: none;

@@ -26,6 +26,7 @@
     "@pulumi/docker-build": "^0.0.15",
     "@pulumi/pulumi": "^3.209.0",
     "@pulumi/tls": "*",
+    "dotenv": "^17.2.3",
     "minimist": "^1.2.8"
   },
   "resolutions": {

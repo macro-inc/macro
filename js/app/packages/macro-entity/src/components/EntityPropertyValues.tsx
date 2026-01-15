@@ -41,7 +41,7 @@ function sortProperties(properties: Property[]): Property[] {
   });
 }
 
-type EntityPropertyValuesProps = {
+export type EntityPropertyValuesProps = {
   properties: Property[];
   entityId: string;
   entityType: EntityType;
@@ -93,6 +93,72 @@ export const EntityPropertyValues = (props: EntityPropertyValuesProps) => {
       >
         <div class="flex items-center gap-1 justify-start overflow-hidden">
           <For each={displayProperties()}>
+            {(property) => (
+              <div class="relative">
+                <PropertyValue property={property} condensed />
+              </div>
+            )}
+          </For>
+        </div>
+        <Modals />
+      </PropertiesProvider>
+    </Show>
+  );
+};
+
+export const KeyPropertiesGrid = (props: EntityPropertyValuesProps) => {
+  const keyProperties = createMemo(() => {
+    const filtered = props.properties.filter((prop) =>
+      PROPERTY_SORT_ORDER.includes(
+        prop.propertyDefinitionId as (typeof PROPERTY_SORT_ORDER)[number]
+      )
+    );
+
+    return filtered.sort((a, b) => {
+      const aIndex = PROPERTY_SORT_ORDER.indexOf(
+        a.propertyDefinitionId as (typeof PROPERTY_SORT_ORDER)[number]
+      );
+      const bIndex = PROPERTY_SORT_ORDER.indexOf(
+        b.propertyDefinitionId as (typeof PROPERTY_SORT_ORDER)[number]
+      );
+      return aIndex - bIndex;
+    });
+  });
+
+  const saveMutation = useSaveEntityPropertyMutation();
+  const saveHandler: PropertySaveHandler = {
+    saveProperty: (property: Property, value: PropertyApiValues) =>
+      saveMutation.mutateAsync({
+        entityId: props.entityId,
+        entityType: props.entityType,
+        property,
+        apiValues: value,
+      }),
+    saveDate: (property: Property, date: Date) =>
+      saveMutation.mutateAsync({
+        entityId: props.entityId,
+        entityType: props.entityType,
+        property,
+        apiValues: {
+          valueType: 'DATE',
+          value: date.toISOString(),
+        },
+      }),
+  };
+
+  return (
+    <Show when={keyProperties().length > 0}>
+      <PropertiesProvider
+        entityType={props.entityType}
+        canEdit={true}
+        properties={keyProperties}
+        onRefresh={() => {}}
+        onPropertyAdded={() => {}}
+        onPropertyDeleted={() => {}}
+        saveHandler={saveHandler}
+      >
+        <div class="grid grid-cols-[auto_auto_2.4rem] gap-1 items-center">
+          <For each={keyProperties()}>
             {(property) => (
               <div class="relative">
                 <PropertyValue property={property} condensed />

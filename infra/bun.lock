@@ -12,6 +12,7 @@
         "@pulumi/docker-build": "^0.0.15",
         "@pulumi/pulumi": "^3.209.0",
         "@pulumi/tls": "*",
+        "dotenv": "^17.2.3",
         "minimist": "^1.2.8",
       },
       "devDependencies": {
@@ -117,6 +118,13 @@
     "stacks/fusion-auth": {
       "name": "fusion-auth",
       "version": "0.0.0",
+    },
+    "stacks/fusionauth-instance": {
+      "name": "fusionauth-instance-stack",
+      "version": "0.0.0",
+      "dependencies": {
+        "pulumi-fusionauth": "6.0.2",
+      },
     },
     "stacks/link-sharing": {
       "name": "link-sharing-stack",
@@ -616,6 +624,8 @@
 
     "document-text-extractor-stack": ["document-text-extractor-stack@workspace:stacks/document-text-extractor"],
 
+    "dotenv": ["dotenv@17.2.3", "", {}, "sha512-JVUnt+DUIzu87TABbhPmNfVdBDt18BLOWjMUFJMSi/Qqg7NTYtabbvSNJGOJ7afbRuv9D/lngizHtP7QyLQ+9w=="],
+
     "eastasianwidth": ["eastasianwidth@0.2.0", "", {}, "sha512-I88TYZWc9XiYHRQ4/3c5rjjfgkjhLyW2luGIheGERbNQ6OY7yTybanSpDXZa8y7VUP9YmDcYa+eyq4ca7iLqWA=="],
 
     "email-service-stack": ["email-service-stack@workspace:stacks/email-service"],
@@ -655,6 +665,8 @@
     "function-bind": ["function-bind@1.1.2", "", {}, "sha512-7XHNxH7qX9xG5mIwxkhumTox/MIRNcOgDrxWsMt2pAr23WHp6MrRlN7FBSFpCpr+oVO0F744iUgR82nJMfG2SA=="],
 
     "fusion-auth": ["fusion-auth@workspace:stacks/fusion-auth"],
+
+    "fusionauth-instance-stack": ["fusionauth-instance-stack@workspace:stacks/fusionauth-instance"],
 
     "get-caller-file": ["get-caller-file@2.0.5", "", {}, "sha512-DyFP3BM/3YHTQOCUL/w0OZHR0lpKeGrxotcHWcqNEdnltqFwXVfhEBQ94eIo34AfQpo0rGki4cyIiftY06h2Fg=="],
 
@@ -859,6 +871,8 @@
     "properties-service-stack": ["properties-service-stack@workspace:stacks/properties-service"],
 
     "protobufjs": ["protobufjs@7.4.0", "", { "dependencies": { "@protobufjs/aspromise": "^1.1.2", "@protobufjs/base64": "^1.1.2", "@protobufjs/codegen": "^2.0.4", "@protobufjs/eventemitter": "^1.1.0", "@protobufjs/fetch": "^1.1.0", "@protobufjs/float": "^1.0.2", "@protobufjs/inquire": "^1.1.0", "@protobufjs/path": "^1.1.2", "@protobufjs/pool": "^1.1.0", "@protobufjs/utf8": "^1.1.0", "@types/node": ">=13.7.0", "long": "^5.0.0" } }, "sha512-mRUWCc3KUU4w1jU8sGxICXH/gNS94DvI1gxqDvBzhj1JpcsimQkYiOJfwsPUykUI5ZaspFbSgmBLER8IrQ3tqw=="],
+
+    "pulumi-fusionauth": ["pulumi-fusionauth@6.0.2", "", { "dependencies": { "@pulumi/pulumi": "^3.0.0" } }, "sha512-9By39HUEnap5kCasy7a1ELXEDDeWvBqBY4h7rS/knWUWemoMuaVYaF4YH/qGOR85Gw6AdLRzP6WFqfU7m6j/kw=="],
 
     "pump": ["pump@3.0.2", "", { "dependencies": { "end-of-stream": "^1.1.0", "once": "^1.3.1" } }, "sha512-tUPXtzlGM8FE3P0ZL6DVs/3P58k9nk8/jZeQCurTJylQA8qFYzHFfhBJkuqyE0FifOsQ0uKWekiZ5g8wtr28cw=="],
 

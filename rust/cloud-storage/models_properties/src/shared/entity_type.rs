@@ -1,7 +1,7 @@
 //! Entity type shared across database, service, and API layers.
 
 use serde::{Deserialize, Serialize};
-use std::fmt;
+use std::{fmt, str::FromStr};
 use utoipa::ToSchema;
 
 /// Type of entity that can be referenced by entity properties.
@@ -33,6 +33,27 @@ impl fmt::Display for EntityType {
             EntityType::Task => write!(f, "task"),
             EntityType::Thread => write!(f, "thread"),
             EntityType::User => write!(f, "user"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, thiserror::Error)]
+#[error("No conversion from {0}")]
+pub struct NoConversion(pub String);
+
+impl FromStr for EntityType {
+    type Err = NoConversion;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "channel" => Ok(Self::Channel),
+            "chat" => Ok(Self::Chat),
+            "company" => Ok(Self::Company),
+            "document" => Ok(Self::Document),
+            "project" => Ok(Self::Project),
+            "task" => Ok(Self::Task),
+            "thread" => Ok(Self::Thread),
+            "user" => Ok(Self::User),
+            other => Err(NoConversion(other.to_owned())),
         }
     }
 }

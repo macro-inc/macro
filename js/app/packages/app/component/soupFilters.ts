@@ -195,7 +195,7 @@ const getMetadataValue = (
   return undefined;
 };
 
-const isSignalEmail = (entity: Extract<EntityData, { type: 'email' }>) => {
+const getEmailSignalInfo = (entity: Extract<EntityData, { type: 'email' }>) => {
   const labelTokens = getLabelTokens(entity.labels);
   const priorityLabels = SIGNAL_PRIORITY_LABELS();
   const depriorityLabels = SIGNAL_DEPRIORITY_LABELS();
@@ -220,11 +220,22 @@ const isSignalEmail = (entity: Extract<EntityData, { type: 'email' }>) => {
       )
     : false;
 
-  return (
-    hasPriorityMetadata ||
-    hasPriorityLabel ||
-    (!hasDeprioritizingLabel && !hasDeprioritizingMetadata)
-  );
+  return {
+    hasPriority: hasPriorityMetadata || hasPriorityLabel,
+    hasDepriority: hasDeprioritizingLabel || hasDeprioritizingMetadata,
+  };
+};
+
+const isSignalEmail = (entity: Extract<EntityData, { type: 'email' }>) => {
+  const { hasPriority, hasDepriority } = getEmailSignalInfo(entity);
+  // Signal = has priority indicators OR has no depriority indicators
+  return hasPriority || !hasDepriority;
+};
+
+const isNoiseEmail = (entity: Extract<EntityData, { type: 'email' }>) => {
+  const { hasPriority, hasDepriority } = getEmailSignalInfo(entity);
+  // Noise = has depriority indicators AND no priority indicators
+  return hasDepriority && !hasPriority;
 };
 
 const hasRecentlyViewed = (entity: EntityData) => {
@@ -273,5 +284,21 @@ export const noiseFilter: ClientFilter = {
   id: 'noise',
   predicate: (entity, ctx) => {
     return !signalFilter.predicate(entity, ctx);
+  },
+};
+
+/**
+ * Explicit noise filter - only returns true for items with explicit noise indicators.
+ * Currently only emails can be "explicit noise" (those with depriority labels/metadata).
+ * Non-email items are never considered explicit noise (they're neutral).
+ */
+export const explicitNoiseFilter: ClientFilter = {
+  id: 'explicitNoise',
+  predicate: (entity, _ctx) => {
+    if (entity.type === 'email') {
+      return isNoiseEmail(entity);
+    }
+    // Non-email items are never explicit noise
+    return false;
   },
 };
