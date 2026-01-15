@@ -91,6 +91,12 @@ just initialize_dbs          # Initialize all databases
 just test                    # Run tests
 ```
 
+### Pre Commit
+```bash
+cargo fmt                   # format
+cargo clippy                # extra lints / best practices
+```
+
 ### Database Management
 
 ```bash
