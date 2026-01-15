@@ -23,7 +23,7 @@ false && folderSelector;
 const DEFAULT_EMPTY_MESSAGE = 'No items to show.';
 
 function getRandomArcanumGraphic() {
-  const graphicStyle = "h-64 m-8 mt-32 opacity-60";
+  const graphicStyle = 'h-64 m-8 mt-32 opacity-60';
   const arcanumGraphics = [
     <Arcanum001 class={graphicStyle} />,
     <Arcanum002 class={graphicStyle} />,
