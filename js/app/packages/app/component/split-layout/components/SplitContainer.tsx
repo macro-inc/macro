@@ -111,7 +111,13 @@ export function SplitContainer(
               <Show when={panel.handle.isSpotLight()}>
                 <MacroJump tabbableParent={ref} />
               </Show>
-              <Show when={isTouchDevice() && isMobileWidth() && !virtualKeyboardVisible()}>
+              <Show
+                when={
+                  isTouchDevice() &&
+                  isMobileWidth() &&
+                  !virtualKeyboardVisible()
+                }
+              >
                 <MobileDock />
               </Show>
             </div>

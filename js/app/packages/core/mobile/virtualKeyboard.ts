@@ -1,3 +1,4 @@
-import { createSignal } from "solid-js";
+import { createSignal } from 'solid-js';
 
-export const [virtualKeyboardVisible, setVirtualKeyboardVisible] = createSignal(false);
+export const [virtualKeyboardVisible, setVirtualKeyboardVisible] =
+  createSignal(false);

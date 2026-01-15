@@ -26,7 +26,10 @@ import { RightbarWrapper } from './rightbar/Rightbar';
 import { SettingsWrapper } from './settings/SettingsWrapper';
 import { ShortcutsHelper } from './settings/ShortcutsHelper';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import { setVirtualKeyboardVisible, virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
+import {
+  setVirtualKeyboardVisible,
+  virtualKeyboardVisible,
+} from '@core/mobile/virtualKeyboard';
 import { cn } from '@ui/utils/classname';
 
 const AUTH_URLS = [
