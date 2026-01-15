@@ -8,6 +8,7 @@ pub mod search;
 mod tool_context;
 pub mod web_fetch;
 use search::web::anthropic_web_search::anthropic_web_search_tool;
+use std::sync::Arc;
 use web_fetch::anthropic_web_fetch_tool;
 
 pub use search::search_toolset;
@@ -15,7 +16,7 @@ pub use tool_context::*;
 
 use crate::list::list_toolset;
 
-pub type AiToolSet = AsyncToolSet<ToolServiceContext, RequestContext>;
+pub type AiToolSet = AsyncToolSet<ToolServiceContext>;
 
 pub struct ToolSetWithPrompt {
     pub toolset: AiToolSet,
@@ -35,9 +36,9 @@ pub fn all_tools() -> ToolSetWithPrompt {
         .expect("failed to add search toolset")
         .add_toolset(list_toolset())
         .expect("failed to add list toolset")
-        .add_tool::<read::Read>()
+        .add_tool::<read::Read, Arc<ToolScribe>>()
         .expect("read tool")
-        .add_tool::<rewrite::MarkdownRewrite>()
+        .add_tool::<rewrite::MarkdownRewrite, Arc<ToolScribe>>()
         .expect("markdown revision tool");
     let prompt = prompts::TOOLS_PROMPT;
     ToolSetWithPrompt { toolset, prompt }
