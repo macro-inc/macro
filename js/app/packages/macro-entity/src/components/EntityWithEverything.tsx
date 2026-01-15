@@ -521,13 +521,29 @@ export function EntityWithEverything(
     }
   });
 
-  const hasNotifications = () =>
-    !!props.entity.notifications && props.entity.notifications().length > 0;
+  /**
+   * TODO (seamus + teo) : These notifications are being attached to the wrong
+   *     entity - ie the channel and not the document being shared. this means
+   *     we have notification rows that point to a channel but do not have a
+   *     message_id to link to. These notifications result in 2 notifications
+   *     on a channel when an item is shared. One for the message, and this
+   *     weird busted one. Needs to be fixed in the service, then I will delete
+   *     this logic.
+   */
+  const validNotifications = () => {
+    return (
+      props.entity.notifications?.().filter((notification) => {
+        return (
+          notification.notificationEventType !== 'channel_message_document'
+        );
+      }) ?? []
+    );
+  };
+
+  const hasNotifications = () => validNotifications().length > 0;
 
   const notDoneNotifications = () => {
-    const notifications = props.entity.notifications?.();
-    if (!notifications) return [];
-    return notifications.filter(({ done }) => !done);
+    return validNotifications().filter(({ done }) => !done);
   };
 
   const isSearch = createMemo(

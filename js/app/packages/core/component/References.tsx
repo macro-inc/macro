@@ -20,6 +20,7 @@ import { createMemo, createResource, For, Show } from 'solid-js';
 import { InlineItemPreview } from './ItemPreview';
 import { StaticMarkdown } from './LexicalMarkdown/component/core/StaticMarkdown';
 import { UserIcon } from './UserIcon';
+import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 
 export type ReferenceProps = {
   documentId: string;
@@ -76,8 +77,8 @@ export function References(props: ReferenceProps) {
   ) => {
     const blockHandle = await blockOrchestrator.getBlockHandle(channelId);
     await blockHandle?.goToLocationFromParams({
-      message_id: messageId,
-      thread_id: threadId,
+      [CHANNEL_PARAMS.message]: messageId,
+      [CHANNEL_PARAMS.thread]: threadId,
     });
   };
 
