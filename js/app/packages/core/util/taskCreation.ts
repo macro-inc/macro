@@ -6,43 +6,25 @@ export type TaskData = {
   title: string;
   assigneeUserIds: string[];
   dueDate: string | null;
-  /** Optional status option ID */
-  statusOptionId?: string | null;
-  /** Optional priority option ID */
-  priorityOptionId?: string | null;
 };
 
 export type TaskCreationOptions = {
-  /** Current user ID for auto-assignment when no assignees specified */
   currentUserId?: string;
-  /** Parent task ID to associate created tasks with */
   parentTaskId?: string;
 };
 
-export type CreatedTask = {
-  documentId: string;
-  title: string;
-};
-
-function maybeFallbackToCurrentAssignee(
-  assigneeUserIds: string[],
-  currentUserId?: string
-): string[] {
-  if (assigneeUserIds.length > 0) return assigneeUserIds;
-  if (currentUserId) return [currentUserId];
-  return [];
-}
-
-function buildTaskPropertyValues(
+function buildPropertyInputs(
   task: TaskData,
   options: TaskCreationOptions
 ): PropertyInput[] {
   const properties: PropertyInput[] = [];
 
-  const assigneeIds = maybeFallbackToCurrentAssignee(
-    task.assigneeUserIds,
-    options.currentUserId
-  );
+  const assigneeIds =
+    task.assigneeUserIds.length > 0
+      ? task.assigneeUserIds
+      : options.currentUserId
+        ? [options.currentUserId]
+        : [];
 
   if (assigneeIds.length > 0) {
     properties.push({
@@ -60,30 +42,7 @@ function buildTaskPropertyValues(
   if (task.dueDate) {
     properties.push({
       propertyId: SYSTEM_PROPERTY_IDS.DUE_DATE,
-      value: {
-        type: 'date',
-        value: task.dueDate,
-      },
-    });
-  }
-
-  if (task.statusOptionId) {
-    properties.push({
-      propertyId: SYSTEM_PROPERTY_IDS.STATUS,
-      value: {
-        type: 'select_option',
-        option_id: task.statusOptionId,
-      },
-    });
-  }
-
-  if (task.priorityOptionId) {
-    properties.push({
-      propertyId: SYSTEM_PROPERTY_IDS.PRIORITY,
-      value: {
-        type: 'select_option',
-        option_id: task.priorityOptionId,
-      },
+      value: { type: 'date', value: task.dueDate },
     });
   }
 
@@ -106,25 +65,16 @@ function buildTaskPropertyValues(
 export async function createTaskFromData(
   task: TaskData,
   options: TaskCreationOptions
-): Promise<CreatedTask | null> {
-  if (!task.title.trim()) {
-    return null;
-  }
+): Promise<string | null> {
+  if (!task.title.trim()) return null;
 
-  const propertyValues = buildTaskPropertyValues(task, options);
+  const propertyValues = buildPropertyInputs(task, options);
 
   const documentId = await createTask({
     title: task.title,
     content: '',
-    propertyValues,
+    propertyValues: propertyValues.length > 0 ? propertyValues : undefined,
   });
 
-  if (!documentId) {
-    return null;
-  }
-
-  return {
-    documentId,
-    title: task.title,
-  };
+  return documentId ?? null;
 }

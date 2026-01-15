@@ -39,6 +39,7 @@ import Trash from '@icon/regular/trash.svg';
 import XIcon from '@icon/regular/x.svg';
 import { logger } from '@observability';
 import type { SimpleMention } from '@service-comms/generated/models/simpleMention';
+import { useUserId } from '@service-gql/client';
 import { staticFileClient } from '@service-static-files/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { leading, throttle } from '@solid-primitives/scheduled';
@@ -111,10 +112,6 @@ type BaseInputProps = {
   closeDraft?: () => void;
   /** whether this input is for a reply (affects styling) */
   isReplyInput?: boolean;
-  /** current user ID for task mode auto-assignment */
-  currentUserId?: string;
-  /** parent task ID for task mode (when in task block context) */
-  parentTaskId?: string;
 };
 
 /** the time after a user stops typing before we consider them idle. we want smooth remote changes, but local changes should happen more immediately. */
@@ -122,6 +119,7 @@ const REMOTE_ACTIVITY_TIMEOUT_MS = 2000;
 const LOCAL_ACTIVITY_TIMEOUT_MS = 500;
 
 export function BaseInput(props: BaseInputProps) {
+  const userId = useUserId();
   let containerRef!: HTMLDivElement;
   const key = props.inputAttachments.key;
   const [showFormatRibbon, setShowFormatRibbon] = createSignal(false);
@@ -367,25 +365,13 @@ export function BaseInput(props: BaseInputProps) {
     const originalContent = content;
 
     if (taskModeEnabled() && potentialTasks().length > 0) {
-      try {
-        const results = await createTasksFromPotential(potentialTasks(), {
-          currentUserId: props.currentUserId,
-          parentTaskId: props.parentTaskId,
-        });
+      const results = await createTasksFromPotential(potentialTasks(), {
+        currentUserId: userId(),
+      });
 
-        if (results.successes.length > 0) {
-          content = replaceCheckboxesWithMentions(content, results.successes);
-          toast.success(`Created ${results.successes.length} task(s)`);
-        }
-
-        if (results.errors.length > 0) {
-          logger.warn('Some tasks failed to create', {
-            errors: results.errors,
-          });
-        }
-      } catch (e) {
-        logger.error('Failed to create tasks', { error: e });
-        toast.failure('Failed to create tasks');
+      if (results.successes.length > 0) {
+        content = replaceCheckboxesWithMentions(content, results.successes);
+        toast.success(`Created ${results.successes.length} task(s)`);
       }
     }
 

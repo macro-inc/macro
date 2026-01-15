@@ -36,19 +36,19 @@ async function createTaskFromCheckbox(
   parentTaskId?: string
 ): Promise<TaskCreationResult> {
   try {
-    const result = await createTaskFromData(checkbox, {
+    const documentId = await createTaskFromData(checkbox, {
       currentUserId,
       parentTaskId,
     });
 
-    if (!result) {
+    if (!documentId) {
       return err({ tag: 'EmptyCheckbox', nodeKey: checkbox.nodeKey });
     }
 
     return ok({
       nodeKey: checkbox.nodeKey,
-      documentId: result.documentId,
-      taskTitle: result.title,
+      documentId,
+      taskTitle: checkbox.title,
     });
   } catch (error) {
     return err({
