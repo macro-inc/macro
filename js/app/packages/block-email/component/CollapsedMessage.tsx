@@ -7,7 +7,6 @@ import {
   getSenderDisplayName,
   isMessageFromCurrentUser,
 } from '../util/emailUser';
-import { NestedConnectorLines } from '@core/component/Message';
 
 interface CollapsedMessageProps {
   message: MessageWithBodyReplyless;
