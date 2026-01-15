@@ -18,6 +18,8 @@ import { SplitDrawerGroup } from './SplitDrawerContext';
 import { SplitHeader } from './SplitHeader';
 import { SplitModalProvider } from './SplitModalContext';
 import { SplitToolbar } from './SplitToolbar';
+import { ClippedPanel } from '@core/component/ClippedPanel';
+import { globalSplitManager } from '@app/signal/splitLayout';
 
 export function SplitContainer(
   props: ParentProps<{
@@ -53,6 +55,11 @@ export function SplitContainer(
     return offset;
   });
 
+  function multipleSplits() {
+    const splits = globalSplitManager()?.splits?.();
+    return Boolean(splits && splits.length > 1);
+  }
+
   return (
     <SplitModalProvider>
       <SplitDrawerGroup
@@ -86,19 +93,28 @@ export function SplitContainer(
           data-modal={panel.handle.isSpotLight()}
           tabindex={-1}
         >
-          <div class="flex flex-col min-h-0 size-full bg-panel">
-            <SplitHeader ref={setHeaderRef} />
-            <SplitToolbar ref={setToolbarRef} />
-            <div class="@container/split size-full overflow-hidden">
-              {props.children}
+          <ClippedPanel
+            active={
+              panel.handle.isActive() &&
+              multipleSplits() &&
+              !panel.handle.isSpotLight()
+            }
+            edgeMutedColor="transparent"
+          >
+            <div class="flex flex-col min-h-0 size-full bg-panel">
+              <SplitHeader ref={setHeaderRef} />
+              <SplitToolbar ref={setToolbarRef} />
+              <div class="@container/split size-full overflow-hidden">
+                {props.children}
+              </div>
+              <Show when={panel.handle.isSpotLight()}>
+                <MacroJump tabbableParent={ref} />
+              </Show>
+              <Show when={isTouchDevice() && isMobileWidth()}>
+                <MobileDock />
+              </Show>
             </div>
-            <Show when={panel.handle.isSpotLight()}>
-              <MacroJump tabbableParent={ref} />
-            </Show>
-            <Show when={isTouchDevice() && isMobileWidth()}>
-              <MobileDock />
-            </Show>
-          </div>
+          </ClippedPanel>
         </div>
       </SplitDrawerGroup>
     </SplitModalProvider>
