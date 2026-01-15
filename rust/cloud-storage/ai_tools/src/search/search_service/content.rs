@@ -60,7 +60,12 @@ impl AsyncTool<Arc<SearchServiceClient>> for ContentSearch {
         };
 
         let response = search_client
-            .search_unified((*request_context.user_id).as_ref(), search_request, None, PAGE_SIZE)
+            .search_unified(
+                (*request_context.user_id).as_ref(),
+                search_request,
+                None,
+                PAGE_SIZE,
+            )
             .await
             .map_err(|e| ToolCallError {
                 description: format!("failed to perform content search: {}", e),
