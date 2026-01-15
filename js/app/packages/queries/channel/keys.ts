@@ -4,4 +4,6 @@ export const channelKeys = createQueryKeys('channel', {
   withID: (channelID: string) => ({
     queryKey: [channelID],
   }),
+  activity: null,
+  listChannels: null,
 });

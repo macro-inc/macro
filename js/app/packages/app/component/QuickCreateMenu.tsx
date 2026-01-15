@@ -643,7 +643,7 @@ export function QuickCreateMenuInner(props: QuickCreateMenuProps) {
             <div class="flex w-full focus-within:bracket">
               <RecipientSelector<'user' | 'contact'>
                 options={usersAndContacts}
-                selectedOptions={selectedEmailOptions}
+                selectedOptions={selectedEmailOptions()}
                 setSelectedOptions={setSelectedEmailOptions}
                 placeholder="Add recipients by email"
                 triedToSubmit={triedToSubmitEmail}
@@ -654,7 +654,7 @@ export function QuickCreateMenuInner(props: QuickCreateMenuProps) {
             <div class="flex w-full focus-within:bracket">
               <RecipientSelector<'user' | 'contact' | 'channel'>
                 options={destinationOptions}
-                selectedOptions={selectedOptions}
+                selectedOptions={selectedOptions()}
                 setSelectedOptions={setSelectedOptions}
                 placeholder="Add by email or channel"
                 triedToSubmit={triedToSubmit}

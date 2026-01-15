@@ -1,9 +1,6 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import {
-  BASE_DOMAIN,
-  stack,
-} from '../../packages/shared/src';
+import { BASE_DOMAIN, stack } from '../../packages/shared/src';
 
 const BASE_NAME = 'preview-deploy';
 
@@ -30,16 +27,13 @@ const previewCert = new aws.acm.Certificate(
 const zone = aws.route53.getZoneOutput({ name: BASE_DOMAIN });
 
 // Create DNS validation record
-const certValidation = new aws.route53.Record(
-  `${BASE_NAME}-cert-validation`,
-  {
-    name: previewCert.domainValidationOptions[0].resourceRecordName,
-    type: previewCert.domainValidationOptions[0].resourceRecordType,
-    zoneId: zone.zoneId,
-    records: [previewCert.domainValidationOptions[0].resourceRecordValue],
-    ttl: 60,
-  }
-);
+const certValidation = new aws.route53.Record(`${BASE_NAME}-cert-validation`, {
+  name: previewCert.domainValidationOptions[0].resourceRecordName,
+  type: previewCert.domainValidationOptions[0].resourceRecordType,
+  zoneId: zone.zoneId,
+  records: [previewCert.domainValidationOptions[0].resourceRecordValue],
+  ttl: 60,
+});
 
 // Wait for certificate validation
 const certValidated = new aws.acm.CertificateValidation(
@@ -127,26 +121,28 @@ const viewerRequestLambda = new aws.lambda.Function(
   }
 );
 
-
 const bucketRegionalDomainName = pulumi.interpolate`${previewBucket.bucket}.s3.us-east-1.amazonaws.com`;
 
-const cachePolicy = new aws.cloudfront.CachePolicy(`${BASE_NAME}-cache-policy`, {
-  name: `${BASE_NAME}-cache-policy-${stack}`,
-  defaultTtl: 60, // 1 minute default
-  minTtl: 0,
-  maxTtl: 86400, // 1 day max
-  parametersInCacheKeyAndForwardedToOrigin: {
-    cookiesConfig: {
-      cookieBehavior: 'none',
+const cachePolicy = new aws.cloudfront.CachePolicy(
+  `${BASE_NAME}-cache-policy`,
+  {
+    name: `${BASE_NAME}-cache-policy-${stack}`,
+    defaultTtl: 60, // 1 minute default
+    minTtl: 0,
+    maxTtl: 86400, // 1 day max
+    parametersInCacheKeyAndForwardedToOrigin: {
+      cookiesConfig: {
+        cookieBehavior: 'none',
+      },
+      headersConfig: {
+        headerBehavior: 'none',
+      },
+      queryStringsConfig: {
+        queryStringBehavior: 'none',
+      },
     },
-    headersConfig: {
-      headerBehavior: 'none',
-    },
-    queryStringsConfig: {
-      queryStringBehavior: 'none',
-    },
-  },
-});
+  }
+);
 
 const responseHeadersPolicy = new aws.cloudfront.ResponseHeadersPolicy(
   `${BASE_NAME}-response-headers-policy`,

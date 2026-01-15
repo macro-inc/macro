@@ -1,8 +1,21 @@
 import SwapIcon from '@icon/bold/swap-bold.svg';
 import DeleteIcon from '@icon/bold/x-bold.svg';
+import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { Button } from '@ui/components/Button';
 import type { Component, JSX } from 'solid-js';
 import { twMerge } from 'tailwind-merge';
+import type { Property } from '../../types';
+
+/**
+ * Shared props type for all property value display components
+ */
+export type PropertyValueProps = {
+  property: Property;
+  canEdit: boolean;
+  entityType: EntityType;
+  onEdit?: (property: Property, anchor?: HTMLElement) => void;
+  onRefresh?: () => void;
+};
 
 /**
  * Shared UI primitives for property value display components

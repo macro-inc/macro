@@ -4,10 +4,13 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
+use email_db_client::contacts::upsert_message::parse_and_upsert_message_contacts;
 use email_db_client::messages::insert::insert_message_to_send;
+use email_db_client::parse::service_to_db::addresses_from_message;
 use email_db_client::user_history::upsert_user_history;
 use model::response::ErrorResponse;
 use model::user::UserContext;
+use models_email::email::db::address::UpsertedRecipients;
 use models_email::service::link::Link;
 use models_email::service::{message, thread};
 use sqlx::types::chrono::{DateTime, Utc};
@@ -96,9 +99,16 @@ pub async fn handler(
 
     let from_email = link.email_address.0.as_ref();
 
+    // Parse and upsert contacts before starting the transaction to avoid deadlocks.
+    // Contacts are shared across messages so they must be inserted outside the transaction.
+    let addresses = addresses_from_message(&draft);
+    let recipients = parse_and_upsert_message_contacts(&ctx.db, link.id, addresses)
+        .await
+        .map_err(CreateDraftError::InsertError)?;
+
     let mut tx = ctx.db.begin().await?;
 
-    let result = insert_draft(&mut tx, &mut draft, from_email).await;
+    let result = insert_draft(&mut tx, &mut draft, from_email, recipients).await;
 
     match result {
         Ok(_) => {
@@ -114,11 +124,12 @@ pub async fn handler(
     }
 }
 
-#[tracing::instrument(skip(tx), err)]
+#[tracing::instrument(skip(tx, recipients), err)]
 async fn insert_draft(
     tx: &mut sqlx::PgConnection,
     draft: &mut message::MessageToSend,
     from_email: &str,
+    recipients: UpsertedRecipients,
 ) -> anyhow::Result<()> {
     let link_id = draft.link_id;
     let now: DateTime<Utc> = Utc::now();
@@ -151,7 +162,7 @@ async fn insert_draft(
     let from_email_id =
         email_db_client::contacts::get::fetch_id_by_email(tx, link_id, from_email).await?;
 
-    insert_message_to_send(tx, draft, thread_db_id, from_email_id, true).await?;
+    insert_message_to_send(tx, draft, thread_db_id, from_email_id, true, recipients).await?;
 
     upsert_user_history(tx, link_id, thread_db_id).await?;
 

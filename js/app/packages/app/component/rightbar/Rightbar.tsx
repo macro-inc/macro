@@ -64,6 +64,8 @@ import {
   untrack,
 } from 'solid-js';
 import { SplitlikeContainer } from '../split-layout/components/SplitContainer';
+import { Button } from '@ui/components/Button';
+import { Hotkey } from '@core/component/Hotkey';
 
 type ChatData = {
   messages: ChatMessageWithAttachments[];
@@ -177,11 +179,9 @@ function TopBar(props: {
       class="h-10 border-b border-edge-muted flex items-center w-full px-2 shrink-0 grow-0"
       data-split-panel
     >
-      <DeprecatedIconButton
-        size="sm"
-        icon={XIcon}
-        tooltip={{ label: 'Close Assistant Panel' }}
-        theme="current"
+      <Button
+        tooltip="Close Assistant Panel"
+        class="p-1 size-6"
         onClick={() => {
           if (bigChatOpen()) {
             setBigChatOpen(false);
@@ -189,16 +189,23 @@ function TopBar(props: {
             toggleRightPanel();
           }
         }}
-      />
-      <DeprecatedIconButton
-        size="sm"
-        icon={PlusIcon}
-        tooltip={{ label: 'Create New Chat' }}
-        theme="current"
-        onClick={() => {
-          createNewRightbarChat();
-        }}
-      />
+      >
+        <XIcon />
+      </Button>
+      <Button
+        tooltip={
+          <div class="flex flex-row gap-x-1">
+            <div>Create New Chat</div>
+            <div class="flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1.5 py-0.25 font-normal">
+              <Hotkey shortcut="ctrl+t" />
+            </div>
+          </div>
+        }
+        class="p-1 size-6"
+        onClick={createNewRightbarChat}
+      >
+        <PlusIcon />
+      </Button>
       <div class="grow" />
       <Show when={ENABLE_REFERENCES_MODAL && props.chatId}>
         <ReferencesModal
@@ -611,6 +618,19 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
       } else {
         toggleRightPanel(false);
       }
+      return true;
+    },
+  });
+
+  registerHotkey({
+    scopeId,
+    hotkey: 'ctrl+t',
+    hotkeyToken: TOKENS.chat.new,
+    description: 'Create a new chat',
+    runWithInputFocused: true,
+    keyDownHandler: () => {
+      console.log('create new chat');
+      setChatId(undefined);
       return true;
     },
   });

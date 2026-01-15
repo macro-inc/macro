@@ -1,5 +1,8 @@
-import type { PropertyDefinitionFlat } from '@core/component/Properties/types';
-import { PropertyDataTypeIcon } from '@core/component/Properties/utils';
+import type { PropertyDefinitionDomain } from '@core/component/Properties/types';
+import {
+  PropertyDataTypeIcon,
+  toPropertyDefinitionDomain,
+} from '@core/component/Properties/utils';
 import { ERROR_MESSAGES } from '@core/component/Properties/utils/errorHandling';
 import { toast } from '@core/component/Toast/Toast';
 import { isErr } from '@core/util/maybeResult';
@@ -25,22 +28,22 @@ type PropertyDisplayControlProps = {
   setSelectedPropertyIds: (
     properties: DisplayOptions['displayProperties']
   ) => void;
-  suggestedProperties?: PropertyDefinitionFlat[];
+  suggestedProperties?: PropertyDefinitionDomain[];
 };
 
 type PropertyPillProps = {
-  property: PropertyDefinitionFlat;
+  property: PropertyDefinitionDomain;
   onRemove: () => void;
 };
 
 type SuggestedPillProps = {
-  property: PropertyDefinitionFlat;
+  property: PropertyDefinitionDomain;
   onClick: () => void;
 };
 
 type PropertyDropdownProps = {
-  filteredProperties: Accessor<PropertyDefinitionFlat[]>;
-  onSelectProperty: (property: PropertyDefinitionFlat) => void;
+  filteredProperties: Accessor<PropertyDefinitionDomain[]>;
+  onSelectProperty: (property: PropertyDefinitionDomain) => void;
   dropdownRef: (el: HTMLDivElement) => void;
   isOpen: Accessor<boolean>;
 };
@@ -79,7 +82,7 @@ const PropertyDropdown: Component<PropertyDropdownProps> = (props) => {
                        text-left"
               >
                 <PropertyDataTypeIcon property={property} />
-                <span class="truncate flex-1">{property.display_name}</span>
+                <span class="truncate flex-1">{property.displayName}</span>
               </button>
             )}
           </For>
@@ -106,7 +109,7 @@ const SuggestedPill: Component<SuggestedPillProps> = (props) => {
     >
       <PropertyDataTypeIcon property={props.property} />
       <span class="truncate flex-1 font-mono">
-        {props.property.display_name}
+        {props.property.displayName}
       </span>
     </button>
   );
@@ -128,7 +131,7 @@ const PropertyPill: Component<PropertyPillProps> = (props) => {
           property={props.property}
           class="size-4 text-ink-muted shrink-0"
         />
-        <span class="truncate font-mono">{props.property.display_name}</span>
+        <span class="truncate font-mono">{props.property.displayName}</span>
       </div>
       <button
         type="button"
@@ -148,7 +151,7 @@ export const PropertyDisplayControl: Component<PropertyDisplayControlProps> = (
   props
 ) => {
   const [availableProperties, setAvailableProperties] = createSignal<
-    PropertyDefinitionFlat[]
+    PropertyDefinitionDomain[]
   >([]);
   const [_isLoading, setIsLoading] = createSignal(false);
   const [_error, setError] = createSignal<string | null>(null);
@@ -178,9 +181,10 @@ export const PropertyDisplayControl: Component<PropertyDisplayControlProps> = (
       const [, data] = result;
       const properties = Array.isArray(data) ? data : [];
 
-      const normalizedProperties = properties.map((item) =>
-        'definition' in item ? item.definition : item
-      );
+      const normalizedProperties = properties.map((item) => {
+        const definition = 'definition' in item ? item.definition : item;
+        return toPropertyDefinitionDomain(definition);
+      });
 
       setAvailableProperties(normalizedProperties);
       setIsLoading(false);
@@ -204,7 +208,7 @@ export const PropertyDisplayControl: Component<PropertyDisplayControlProps> = (
     return allSuggested.filter((property) => !selectedIds.has(property.id));
   });
 
-  const handleSuggestedSelect = (property: PropertyDefinitionFlat) => {
+  const handleSuggestedSelect = (property: PropertyDefinitionDomain) => {
     const currentIds = props.selectedPropertyIds();
     if (!currentIds.includes(property.id)) {
       const currentIds = props.selectedPropertyIds();
@@ -223,7 +227,7 @@ export const PropertyDisplayControl: Component<PropertyDisplayControlProps> = (
     props.setSelectedPropertyIds(currentIds.filter((id) => id !== propertyId));
   };
 
-  const handleSelectProperty = (property: PropertyDefinitionFlat) => {
+  const handleSelectProperty = (property: PropertyDefinitionDomain) => {
     const currentIds = props.selectedPropertyIds();
     // Enforce max 4 properties
     if (currentIds.length >= MAX_DISPLAY_PROPERTIES) {
@@ -250,14 +254,14 @@ export const PropertyDisplayControl: Component<PropertyDisplayControlProps> = (
     if (!query) return available;
 
     return available.filter((property) => {
-      const name = property.display_name.toLowerCase();
+      const name = property.displayName.toLowerCase();
       if (name.includes(query)) return true;
 
-      const dataType = property.data_type;
+      const dataType = property.valueType;
       let typeDisplay = dataType;
 
-      if (dataType === 'ENTITY' && property.specific_entity_type) {
-        typeDisplay += ` ${property.specific_entity_type}`;
+      if (dataType === 'ENTITY' && property.specificEntityType) {
+        typeDisplay += ` ${property.specificEntityType}`;
       }
 
       return typeDisplay.toLowerCase().includes(query);

@@ -1,0 +1,24 @@
+{
+  "apiKeys": [
+    {
+      "key": "bf69486b-4733-4954-a44e-2e1b5f2c8a91",
+      "description": "Local Development API Key"
+    }
+  ],
+  "requests": [
+    {
+      "method": "POST",
+      "url": "/api/user/registration",
+      "body": {
+        "user": {
+          "email": "admin@macro.com",
+          "password": "macroIsGreat!"
+        },
+        "registration": {
+          "applicationId": "3c219e58-ed0e-4b18-ad48-f4f92793ae32",
+          "roles": ["admin"]
+        }
+      }
+    }
+  ]
+}

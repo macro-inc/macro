@@ -1,4 +1,4 @@
-import { useChannelsContext } from '@core/component/ChannelsProvider';
+import { useChannelsContext } from '@core/context/channels';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { ENABLE_SEARCH_SERVICE } from '@core/constant/featureFlags';
 import { emailToId } from '@core/user';
@@ -162,7 +162,7 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
 
 const useMapSearchResponseItem = () => {
   const channelsContext = useChannelsContext();
-  const channels = () => channelsContext.channels();
+  const channels = channelsContext.channels;
 
   const history = useHistory();
 

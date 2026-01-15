@@ -1,5 +1,4 @@
 use crate::pubsub::scheduled::context::ScheduledContext;
-use crate::pubsub::util::fetch_link;
 use crate::util::gmail::auth::fetch_gmail_access_token_from_link;
 use crate::util::gmail::send::{
     cleanup_draft_attachments, fetch_and_attach_draft_attachments, generate_email_threading_headers,
@@ -18,7 +17,14 @@ pub async fn process_message(
     // Parse the incoming message
     let data = extract_scheduled_message(message)?;
 
-    let link = fetch_link(&ctx.db, data.link_id).await?;
+    let link = email_db_client::links::get::fetch_link_by_id(&ctx.db, data.link_id).await?;
+
+    let Some(link) = link else {
+        tracing::debug!(link_id=%data.link_id, "Link not found - skipping");
+        cleanup_message(&ctx.sqs_worker, message).await?;
+        return Ok(());
+    };
+
     let gmail_access_token =
         fetch_gmail_access_token_from_link(&link, &ctx.redis_client, &ctx.auth_service_client)
             .await?;

@@ -7,10 +7,13 @@ use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use email_db_client::contacts::upsert_message::parse_and_upsert_message_contacts;
 use email_db_client::messages::insert::insert_message_to_send;
+use email_db_client::parse::service_to_db::addresses_from_message;
 use email_service::util::gmail::send;
 use model::response::ErrorResponse;
 use model::user::UserContext;
+use models_email::email::db::address::UpsertedRecipients;
 use models_email::email::service::address::ContactInfo;
 use models_email::email::service::{message, thread};
 use models_email::service::link::Link;
@@ -175,10 +178,23 @@ pub async fn send_handler(
         )
         .await?;
 
+    // Parse and upsert contacts before starting the transaction to avoid deadlocks.
+    // Contacts are shared across messages so they must be inserted outside the transaction.
+    let addresses = addresses_from_message(&message_to_send);
+    let recipients = parse_and_upsert_message_contacts(&ctx.db, link.id, addresses)
+        .await
+        .context("Failed to upsert message contacts")?;
+
     let mut tx = ctx.db.begin().await?;
 
-    let result =
-        insert_sent_message(&mut tx, &mut message_to_send, from_contact, before_send_ts).await;
+    let result = insert_sent_message(
+        &mut tx,
+        &mut message_to_send,
+        from_contact,
+        before_send_ts,
+        recipients,
+    )
+    .await;
 
     match result {
         Ok(_) => {
@@ -224,6 +240,7 @@ async fn insert_sent_message(
     message_to_send: &mut message::MessageToSend,
     from_contact: ContactInfo,
     before_send_ts: DateTime<Utc>,
+    recipients: UpsertedRecipients,
 ) -> anyhow::Result<()> {
     let mut thread_db_id = message_to_send.thread_db_id;
     let thread_provider_id = message_to_send.provider_thread_id.clone();
@@ -284,6 +301,7 @@ async fn insert_sent_message(
         thread_db_id.unwrap(),
         from_email_id,
         false,
+        recipients,
     )
     .await
     .context("unable to insert message to send")?;

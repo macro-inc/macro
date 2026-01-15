@@ -10,5 +10,6 @@ export * from './formatting';
 export { PropertyDataTypeIcon } from './PropertyDataTypeIcon';
 export * from './position';
 export * from './suggestedProperties';
+export * from './transforms';
 export * from './typeGuards';
 export * from './validation';
