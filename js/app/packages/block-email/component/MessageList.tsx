@@ -1,7 +1,7 @@
 import { useEmailContext } from '@block-email/component/EmailContext';
 import { isScrollingToMessage } from '@block-email/signal/scrollState';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { createMemo, createSelector, For, Show } from 'solid-js';
+import { createMemo, createSelector, Index, Show } from 'solid-js';
 import { MessageContainer } from './MessageContainer';
 
 interface MessageListProps {
@@ -50,13 +50,13 @@ export function MessageList(props: MessageListProps) {
       }}
     >
       <StaticMarkdownContext>
-        <For each={context.messages.list().toReversed()}>
+        <Index each={context.messages.list().toReversed()}>
           {(message, index) => {
             // We need the index as if the list was not reversed
             const normalizedIndex = createMemo(() => {
               const listLength = context.messages.list().length;
 
-              const normalized = listLength - 1 - index();
+              const normalized = listLength - 1 - index;
 
               // The element at the 0th index isn't actually the first message
               // if there is more data to load so we return -1 so that `isFirstMessage`
@@ -76,13 +76,13 @@ export function MessageList(props: MessageListProps) {
                   normalizedIndex() ===
                   (context.messages.list().length ?? 0) - 1
                 }
-                isFocused={isFocusedSelector(message.db_id ?? undefined)}
-                isTarget={isTargetSelector(message.db_id ?? undefined)}
-                message={message}
+                isFocused={isFocusedSelector(message().db_id ?? undefined)}
+                isTarget={isTargetSelector(message().db_id ?? undefined)}
+                message={message()}
               />
             );
           }}
-        </For>
+        </Index>
       </StaticMarkdownContext>
       <Show when={props.title}>
         <div class="shrink-0 w-full flex justify-center pb-4">
