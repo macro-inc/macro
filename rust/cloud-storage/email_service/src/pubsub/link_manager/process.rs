@@ -1,5 +1,4 @@
 use crate::pubsub::link_manager::context::LinkManagerContext;
-use crate::pubsub::util::fetch_link;
 use crate::util::gmail::auth::{
     fetch_gmail_access_token_from_link, fetch_token_or_delete_on_revocation,
 };
@@ -21,7 +20,14 @@ pub async fn process_message(
     let notification_data = extract_message(message)?;
 
     // Step 2: Fetch the user's link details from the database
-    let link = fetch_link(&ctx.db, notification_data.link_id).await?;
+    let link =
+        email_db_client::links::get::fetch_link_by_id(&ctx.db, notification_data.link_id).await?;
+
+    let Some(link) = link else {
+        tracing::debug!(link_id=%notification_data.link_id, "Link not found - skipping");
+        cleanup_message(&ctx.sqs_worker, message).await?;
+        return Ok(());
+    };
 
     // Step 3: Execute the appropriate operation
     match notification_data.operation {
@@ -133,7 +139,7 @@ async fn handle_delete(
             tracing::warn!(error=?e, link_id=?link.id, "Gmail call to stop watch failed");
         }
     } else {
-        tracing::info!(link_id=?link.id, "Skipping Gmail stop_watch - no access token available");
+        tracing::debug!(link_id=?link.id, "Skipping Gmail stop_watch - no access token available");
     }
 
     // remove google fusionauth link with gmail inbox permissions

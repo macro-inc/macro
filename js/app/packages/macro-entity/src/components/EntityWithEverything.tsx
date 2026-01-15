@@ -48,7 +48,7 @@ import type {
   SearchLocation,
   WithSearch,
 } from '../types/search';
-import { EntityPropertyValues } from './EntityPropertyValues';
+import { KeyPropertiesGrid } from './EntityPropertyValues';
 
 export type EntityClickEvent = Parameters<
   JSX.EventHandler<HTMLDivElement, MouseEvent>
@@ -1063,13 +1063,6 @@ export function EntityWithEverything(
             </div>
           </div>
           <EntityTitle />
-          <Show when={isTaskEntity(props.entity) && properties().length > 0}>
-            <EntityPropertyValues
-              properties={properties()}
-              entityId={props.entity.id}
-              entityType="TASK"
-            />
-          </Show>
         </div>
         {/* Date and user - top right on mobile, end on desktop  */}
         <div
@@ -1097,9 +1090,16 @@ export function EntityWithEverything(
                 />
               )}
             </Show>
+            <Show when={isTaskEntity(props.entity) && properties().length > 0}>
+              <KeyPropertiesGrid
+                properties={properties()}
+                entityId={props.entity.id}
+                entityType="TASK"
+              />
+            </Show>
             <Show when={props.timestamp ?? props.entity.updatedAt}>
               {(date) => (
-                <span class="shrink-0 whitespace-nowrap text-xs font-mono uppercase text-ink-extra-muted @max-md/uList:hidden">
+                <span class="w-[8ch] text-right shrink-0 whitespace-nowrap text-xs font-mono uppercase text-ink-extra-muted @max-md/uList:hidden">
                   {createFormattedDate(date())}
                 </span>
               )}
