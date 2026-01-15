@@ -4,7 +4,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { HotkeyTags } from '@core/hotkey/constants';
 import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
-import type { ValidHotkey } from '@core/hotkey/types';
+import { HOTKEY_PRIORITY_LOW, type ValidHotkey } from '@core/hotkey/types';
 import { getHotkeyCommand, runCommand } from '@core/hotkey/utils';
 import { isModality } from '@core/mobile/inputModality';
 import { DEFAULT_VIEWS, type DefaultView, type ViewId } from '@core/types/view';
@@ -1345,7 +1345,7 @@ export function createNavigationEntityListShortcut({
       return isViewingList();
     },
     registrationType: 'add',
-    handlerPriority: 10,
+    handlerPriority: HOTKEY_PRIORITY_LOW,
     hide: true,
   });
 
@@ -1380,7 +1380,7 @@ export function createNavigationEntityListShortcut({
       return isViewingList() && getChildContext() !== undefined;
     },
     registrationType: 'add',
-    handlerPriority: 10,
+    handlerPriority: HOTKEY_PRIORITY_LOW,
     hide: true,
   });
 

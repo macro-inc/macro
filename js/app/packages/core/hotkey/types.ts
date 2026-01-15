@@ -1,6 +1,22 @@
 import type { Component, JSX } from 'solid-js';
 import type { HotkeyToken } from './tokens';
 
+export declare const HOTKEY_PRIORITY_DEFAULT = 0;
+export declare const HOTKEY_PRIORITY_LOW = 1;
+export declare const HOTKEY_PRIORITY_NORMAL = 2;
+export declare const HOTKEY_PRIORITY_HIGH = 3;
+export declare const HOTKEY_PRIORITY_CRITICAL = 4;
+
+const HOTKEY_TYPE = [
+  HOTKEY_PRIORITY_DEFAULT,
+  HOTKEY_PRIORITY_LOW,
+  HOTKEY_PRIORITY_NORMAL,
+  HOTKEY_PRIORITY_HIGH,
+  HOTKEY_PRIORITY_CRITICAL,
+] as const;
+
+type HotkeyPriority = (typeof HOTKEY_TYPE)[number];
+
 export interface HotkeyCommand {
   // Used to identify the hotkey in UI elements. Needs to be unique to a particular scope.
   hotkeyToken?: HotkeyToken;
@@ -23,7 +39,7 @@ export interface HotkeyCommand {
   // The priority of the command for ordering hotkey display lists. Note: registerHotkey only accepts number 1-10, but here we allow any number, so that we can sort as needed.
   displayPriority?: number;
   // Priority for ordering handler execution. Higher priority handlers run first. Defaults to 0.
-  handlerPriority?: number;
+  handlerPriority?: HotkeyPriority;
   // If true, hotkey command can be hidden from the UI. It will still run, but will not be displayed.
   hide?: boolean | (() => boolean);
   // Optional icon to display in the command palette.
@@ -107,7 +123,7 @@ export interface HotkeyRegistrationOptions {
    * Priority for ordering handler execution when multiple handlers are registered for the same hotkey.
    * Higher priority handlers run first. Defaults to 0.
    */
-  handlerPriority?: number;
+  handlerPriority?: HotkeyPriority;
 
   /**
    * Controls how this handler is added when a handler for the same hotkey already exists.

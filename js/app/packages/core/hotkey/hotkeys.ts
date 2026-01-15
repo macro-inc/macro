@@ -22,6 +22,7 @@ import {
   setPressedKeys,
 } from './state';
 import {
+  HOTKEY_PRIORITY_DEFAULT,
   type HotkeyCommand,
   type HotkeyRegistrationOptions,
   isBaseKeyboardValue,
@@ -191,7 +192,7 @@ export function registerHotkey(
     activateCommandScopeId: commandScopeId,
     runWithInputFocused: runWithInputFocused ?? false,
     displayPriority: displayPriority ?? 0,
-    handlerPriority: handlerPriority ?? 0,
+    handlerPriority: handlerPriority ?? HOTKEY_PRIORITY_DEFAULT,
     hide,
     icon,
     tags,
