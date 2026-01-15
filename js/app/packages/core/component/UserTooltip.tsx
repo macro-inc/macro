@@ -1,16 +1,14 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { ClippedPanel } from '@core/component/ClippedPanel';
 import { beveledCorners } from '../../block-theme/signals/themeSignals';
-import {
-  SYSTEM_PROPERTY_IDS,
-} from '@core/component/Properties/constants';
+import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 import { EntityType } from '@service-storage/generated/schemas/entityType';
 import { toast } from '@core/component/Toast/Toast';
 import { isOk } from '@core/util/maybeResult';
 import IconCheck from '@icon/regular/check.svg';
 import WideCopy from '@macro-icons/wide/copy.svg';
-import WideChat from '@macro-icons/wide/chat.svg'
-import WideTask from '@macro-icons/wide/task.svg'
+import WideChat from '@macro-icons/wide/chat.svg';
+import WideTask from '@macro-icons/wide/task.svg';
 import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
 import { commsServiceClient } from '@service-comms/client';
 import { createTask } from '@core/util/create';
@@ -61,18 +59,20 @@ export function UserTooltip(props: UserTooltipProps) {
     if (props.id) {
       try {
         const documentId = await createTask({
-          propertyValues: [{
-            propertyId: SYSTEM_PROPERTY_IDS.ASSIGNEES,
-            value: {
-              type: 'multi_entity_reference',
-              references: [
-                {
-                  entity_id: props.id,
-                  entity_type: EntityType.USER,
-                },
-              ],
+          propertyValues: [
+            {
+              propertyId: SYSTEM_PROPERTY_IDS.ASSIGNEES,
+              value: {
+                type: 'multi_entity_reference',
+                references: [
+                  {
+                    entity_id: props.id,
+                    entity_type: EntityType.USER,
+                  },
+                ],
+              },
             },
-          }]
+          ],
         });
         if (documentId) {
           replaceOrInsertSplit({
@@ -88,7 +88,8 @@ export function UserTooltip(props: UserTooltipProps) {
     }
   };
 
-  const buttonStyle = "px-3 text-xs w-full justify-start hover:text-ink/60 hover:bg-panel active:bg-panel active:border-panel active:text-accent";
+  const buttonStyle =
+    'px-3 text-xs w-full justify-start hover:text-ink/60 hover:bg-panel active:bg-panel active:border-panel active:text-accent';
 
   return (
     <ClippedPanel tl={!beveledCorners()} active>
@@ -126,13 +127,9 @@ export function UserTooltip(props: UserTooltipProps) {
           </div>
 
           <div class="flex-1 min-w-0">
-            <div class="text-sm font-medium truncate">
-              {props.displayName}
-            </div>
+            <div class="text-sm font-medium truncate">{props.displayName}</div>
             <Show when={props.email && props.email !== props.displayName}>
-              <div class="text-xs opacity-60 truncate">
-                {props.email}
-              </div>
+              <div class="text-xs opacity-60 truncate">{props.email}</div>
             </Show>
           </div>
         </div>
@@ -141,10 +138,7 @@ export function UserTooltip(props: UserTooltipProps) {
           <div class="border-t border-edge/20"></div>
           <div class="py-2 flex flex-col gap-0">
             <Show when={props.email}>
-              <Button
-                onClick={props.onCopyEmail}
-                class={buttonStyle}
-              >
+              <Button onClick={props.onCopyEmail} class={buttonStyle}>
                 {props.copied ? (
                   <IconCheck class="w-3.5 h-3.5" />
                 ) : (
@@ -154,23 +148,21 @@ export function UserTooltip(props: UserTooltipProps) {
               </Button>
             </Show>
             <Show
-              when={props.id && !props.isDeleted && props.id !== currentUserId()}
+              when={
+                props.id && !props.isDeleted && props.id !== currentUserId()
+              }
             >
-              <Button
-                onClick={openDM}
-                class={buttonStyle}
-              >
+              <Button onClick={openDM} class={buttonStyle}>
                 <WideChat class="w-3.5 h-3.5" />
                 DM
               </Button>
             </Show>
             <Show
-              when={props.id && !props.isDeleted && props.id !== currentUserId()}
+              when={
+                props.id && !props.isDeleted && props.id !== currentUserId()
+              }
             >
-              <Button
-                onClick={createAndOpenTask}
-                class={buttonStyle}
-              >
+              <Button onClick={createAndOpenTask} class={buttonStyle}>
                 <WideTask class="w-3.5 h-3.5" />
                 Assign Task
               </Button>
