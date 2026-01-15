@@ -335,9 +335,8 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   createEffect(
     on(
       filterKey,
-      (_current, prev) => {
+      () => {
         if (isTouchDevice()) return;
-        if (prev === undefined) return; // Skip initial run
 
         batch(() => {
           setViewDataStore(selectedView(), 'selectedEntity', undefined);
